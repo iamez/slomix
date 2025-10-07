@@ -1,0 +1,10 @@
+# ET:Legacy Discord Stats Bot
+
+discord.py>=2.3.0
+aiosqlite>=0.19.0
+
+# Optional: SSH Monitoring Features
+paramiko>=3.0.0
+
+# Optional: Timezone Support
+pytz>=2023.3
