@@ -1,0 +1,2445 @@
+{
+  "databases": [
+    {
+      "path": "G:\\VisualStudio\\Python\\stats\\etlegacy_comprehensive.db",
+      "name": "etlegacy_comprehensive.db",
+      "tables": [
+        "sessions",
+        "sqlite_sequence",
+        "player_comprehensive_stats",
+        "weapon_comprehensive_stats",
+        "player_links",
+        "processed_files"
+      ],
+      "row_counts": {
+        "sessions": 5,
+        "sqlite_sequence": 4,
+        "player_comprehensive_stats": 50,
+        "weapon_comprehensive_stats": 300,
+        "player_links": 4,
+        "processed_files": 0
+      },
+      "schema": {
+        "sessions": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "session_date",
+            "type": "DATE",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "map_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "round_number",
+            "type": "INTEGER",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "server_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "config_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "defender_team",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "winner_team",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_limit",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "next_time_limit",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "sqlite_sequence": [
+          {
+            "name": "name",
+            "type": "",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "seq",
+            "type": "",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "player_comprehensive_stats": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "session_id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "player_guid",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "player_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "clean_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "team",
+            "type": "INTEGER",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "rounds",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "deaths",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "damage_given",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "damage_received",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "team_damage_given",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "team_damage_received",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "gibs",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "self_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "team_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "team_gibs",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_axis",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_allies",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_played",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_played_minutes",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "xp",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "killing_spree_best",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "death_spree_worst",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kill_assists",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kill_steals",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "headshot_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "objectives_stolen",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "objectives_returned",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "dynamites_planted",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "dynamites_defused",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "times_revived",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "bullets_fired",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "dpm",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "tank_meatshield",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_dead_ratio",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "most_useful_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "denied_playtime",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "useless_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "full_selfkills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "repairs_constructions",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "double_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "triple_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "quad_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "penta_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "hexa_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kd_ratio",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "accuracy",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "headshot_percentage",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "efficiency",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "processed_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "weapon_comprehensive_stats": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "player_stats_id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "weapon_id",
+            "type": "INTEGER",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "weapon_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "hits",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "attempts",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "deaths",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "headshots",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "accuracy",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "damage_dealt",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "player_links": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "et_guid",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "discord_id",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "discord_username",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "player_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "linked_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "processed_files": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "filename",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "file_hash",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "processed_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "G:\\VisualStudio\\Python\\stats\\etlegacy_discord_ready.db",
+      "name": "etlegacy_discord_ready.db",
+      "tables": [
+        "sessions",
+        "sqlite_sequence",
+        "player_round_stats",
+        "player_links",
+        "processed_files"
+      ],
+      "row_counts": {
+        "sessions": 3,
+        "sqlite_sequence": 1,
+        "player_round_stats": 0,
+        "player_links": 0,
+        "processed_files": 0
+      },
+      "schema": {
+        "sessions": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "session_date",
+            "type": "DATE",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "start_time",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "end_time",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "total_rounds",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "total_maps",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "players_count",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "session_mvp_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "session_mvp_guid",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "status",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "sqlite_sequence": [
+          {
+            "name": "name",
+            "type": "",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "seq",
+            "type": "",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "player_round_stats": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "session_id",
+            "type": "INTEGER",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "round_id",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "player_guid",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "player_clean_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "clean_name_final",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "deaths",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "headshots",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kd_ratio",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "accuracy",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "damage_given",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "damage_received",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "dpm",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "mp40_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "thompson_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "fg42_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "sniper_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "panzerfaust_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "grenade_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "killing_spree_best",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kill_assists",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "multikills_3",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "round_duration_minutes",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "team",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "round_outcome",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "processed_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "player_links": [
+          {
+            "name": "discord_id",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "et_guid",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "et_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "discord_username",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "linked_date",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "processed_files": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "filename",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "file_hash",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "processed_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "G:\\VisualStudio\\Python\\stats\\etlegacy_fixed_bulk.db",
+      "name": "etlegacy_fixed_bulk.db",
+      "tables": [],
+      "row_counts": {},
+      "schema": {}
+    },
+    {
+      "path": "G:\\VisualStudio\\Python\\stats\\etlegacy_perfect.db",
+      "name": "etlegacy_perfect.db",
+      "tables": [
+        "sessions",
+        "sqlite_sequence",
+        "player_links",
+        "player_stats",
+        "awards",
+        "weapon_stats",
+        "gather_matches",
+        "player_round_stats",
+        "processed_files"
+      ],
+      "row_counts": {
+        "sessions": 8,
+        "sqlite_sequence": 2,
+        "player_links": 0,
+        "player_stats": 52,
+        "awards": 0,
+        "weapon_stats": 0,
+        "gather_matches": 0,
+        "player_round_stats": 0,
+        "processed_files": 0
+      },
+      "schema": {
+        "sessions": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "start_time",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "end_time",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "date",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "map_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "status",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "total_rounds",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "sqlite_sequence": [
+          {
+            "name": "name",
+            "type": "",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "seq",
+            "type": "",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "player_links": [
+          {
+            "name": "discord_id",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "etlegacy_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "display_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "link_date",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "verified",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "total_matches",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "player_stats": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "session_id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "player_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "discord_id",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "round_type",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "team",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "deaths",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "damage",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_played",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_minutes",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "dpm",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kd_ratio",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "mvp_points",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "weapon_stats",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "achievements",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "awards",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "awards": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "player_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "award_type",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "description",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "value",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "session_id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "date_awarded",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "weapon_stats": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "player_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "session_id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "weapon_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "accuracy",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "headshots",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "gather_matches": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "type",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "players",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "status",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "player_round_stats": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "session_id",
+            "type": "INTEGER",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "round_id",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "player_guid",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "player_clean_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "clean_name_final",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "deaths",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "headshots",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kd_ratio",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "accuracy",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "damage_given",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "damage_received",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "dpm",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "mp40_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "thompson_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "fg42_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "sniper_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "panzerfaust_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "grenade_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "killing_spree_best",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kill_assists",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "multikills_3",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "round_duration_minutes",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "team",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "round_outcome",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "processed_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "processed_files": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "filename",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "file_hash",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "processed_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "G:\\VisualStudio\\Python\\stats\\asdf\\etlegacy_fixed_bulk.db",
+      "name": "etlegacy_fixed_bulk.db",
+      "tables": [],
+      "row_counts": {},
+      "schema": {}
+    },
+    {
+      "path": "G:\\VisualStudio\\Python\\stats\\asdf\\etlegacy_perfect.db",
+      "name": "etlegacy_perfect.db",
+      "tables": [
+        "sessions",
+        "sqlite_sequence",
+        "player_links",
+        "player_stats",
+        "awards",
+        "weapon_stats",
+        "gather_matches"
+      ],
+      "row_counts": {
+        "sessions": 0,
+        "sqlite_sequence": 0,
+        "player_links": 0,
+        "player_stats": 0,
+        "awards": 0,
+        "weapon_stats": 0,
+        "gather_matches": 0
+      },
+      "schema": {
+        "sessions": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "start_time",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "end_time",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "date",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "map_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "status",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "total_rounds",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "sqlite_sequence": [
+          {
+            "name": "name",
+            "type": "",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "seq",
+            "type": "",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "player_links": [
+          {
+            "name": "discord_id",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "etlegacy_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "display_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "link_date",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "verified",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "total_matches",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "player_stats": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "session_id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "player_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "discord_id",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "round_type",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "team",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "deaths",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "damage",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_played",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_minutes",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "dpm",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kd_ratio",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "mvp_points",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "weapon_stats",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "achievements",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "awards",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "awards": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "player_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "award_type",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "description",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "value",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "session_id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "date_awarded",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "weapon_stats": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "player_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "session_id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "weapon_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "accuracy",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "headshots",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "gather_matches": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "type",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "players",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "status",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "G:\\VisualStudio\\Python\\stats\\dev\\etlegacy_comprehensive.db",
+      "name": "etlegacy_comprehensive.db",
+      "tables": [
+        "sessions",
+        "sqlite_sequence",
+        "player_comprehensive_stats",
+        "weapon_comprehensive_stats",
+        "player_links"
+      ],
+      "row_counts": {
+        "sessions": 5,
+        "sqlite_sequence": 3,
+        "player_comprehensive_stats": 48,
+        "weapon_comprehensive_stats": 0,
+        "player_links": 10
+      },
+      "schema": {
+        "sessions": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "session_date",
+            "type": "DATE",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "map_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "round_number",
+            "type": "INTEGER",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "server_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "config_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "defender_team",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "winner_team",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_limit",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "next_time_limit",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "sqlite_sequence": [
+          {
+            "name": "name",
+            "type": "",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "seq",
+            "type": "",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "player_comprehensive_stats": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "session_id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "player_guid",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "player_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "clean_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "team",
+            "type": "INTEGER",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "rounds",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "deaths",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "damage_given",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "damage_received",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "team_damage_given",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "team_damage_received",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "gibs",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "self_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "team_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "team_gibs",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_axis",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_allies",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_played",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_played_minutes",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "xp",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "killing_spree_best",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "death_spree_worst",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kill_assists",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kill_steals",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "headshot_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "objectives_stolen",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "objectives_returned",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "dynamites_planted",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "dynamites_defused",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "times_revived",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "bullets_fired",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "dpm",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "tank_meatshield",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "time_dead_ratio",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "most_useful_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "denied_playtime",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "useless_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "full_selfkills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "repairs_constructions",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "double_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "triple_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "quad_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "multi_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "mega_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "ultra_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "monster_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "ludicrous_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "holy_shit_kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "kd_ratio",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "accuracy",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "headshot_ratio",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "weapon_comprehensive_stats": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "session_id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "player_guid",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "weapon_id",
+            "type": "INTEGER",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "weapon_name",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "kills",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "deaths",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "hits",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "shots",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "headshots",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "accuracy",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "headshot_ratio",
+            "type": "REAL",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ],
+        "player_links": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "pk": 1
+          },
+          {
+            "name": "player_guid",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "discord_id",
+            "type": "TEXT",
+            "notnull": 1,
+            "pk": 0
+          },
+          {
+            "name": "discord_username",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "player_name",
+            "type": "TEXT",
+            "notnull": 0,
+            "pk": 0
+          },
+          {
+            "name": "linked_at",
+            "type": "TIMESTAMP",
+            "notnull": 0,
+            "pk": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "G:\\VisualStudio\\Python\\stats\\dev\\etlegacy_perfect.db",
+      "name": "etlegacy_perfect.db",
+      "tables": [],
+      "row_counts": {},
+      "schema": {}
+    }
+  ],
+  "parser_tests": [
+    {
+      "filename": "2025-01-01-211921-etl_adlernest-round-1.txt",
+      "path": "G:\\VisualStudio\\Python\\stats\\local_stats\\2025-01-01-211921-etl_adlernest-round-1.txt",
+      "success": true,
+      "players": 6,
+      "weapons_found": 5,
+      "fields_extracted": {
+        "killing_spree_best": "MISSING",
+        "death_spree_worst": "MISSING",
+        "kill_assists": "MISSING",
+        "headshot_kills": "MISSING",
+        "objectives_stolen": "MISSING",
+        "dynamites_planted": "MISSING",
+        "double_kills": "MISSING",
+        "triple_kills": "MISSING",
+        "dpm": 304.4
+      },
+      "issues": [],
+      "map_name": "etl_adlernest",
+      "round_num": 1
+    },
+    {
+      "filename": "2025-01-01-213008-etl_adlernest-round-2.txt",
+      "path": "G:\\VisualStudio\\Python\\stats\\local_stats\\2025-01-01-213008-etl_adlernest-round-2.txt",
+      "success": true,
+      "players": 6,
+      "weapons_found": 7,
+      "fields_extracted": {
+        "killing_spree_best": "MISSING",
+        "death_spree_worst": "MISSING",
+        "kill_assists": "MISSING",
+        "headshot_kills": "MISSING",
+        "objectives_stolen": "MISSING",
+        "dynamites_planted": "MISSING",
+        "double_kills": "MISSING",
+        "triple_kills": "MISSING",
+        "dpm": 581.2
+      },
+      "issues": [],
+      "map_name": "etl_adlernest",
+      "round_num": 2
+    },
+    {
+      "filename": "2025-01-01-214308-supply-round-1.txt",
+      "path": "G:\\VisualStudio\\Python\\stats\\local_stats\\2025-01-01-214308-supply-round-1.txt",
+      "success": true,
+      "players": 6,
+      "weapons_found": 8,
+      "fields_extracted": {
+        "killing_spree_best": "MISSING",
+        "death_spree_worst": "MISSING",
+        "kill_assists": "MISSING",
+        "headshot_kills": "MISSING",
+        "objectives_stolen": "MISSING",
+        "dynamites_planted": "MISSING",
+        "double_kills": "MISSING",
+        "triple_kills": "MISSING",
+        "dpm": 308.9166666666667
+      },
+      "issues": [],
+      "map_name": "supply",
+      "round_num": 1
+    },
+    {
+      "filename": "2025-01-01-215456-supply-round-2.txt",
+      "path": "G:\\VisualStudio\\Python\\stats\\local_stats\\2025-01-01-215456-supply-round-2.txt",
+      "success": true,
+      "players": 6,
+      "weapons_found": 11,
+      "fields_extracted": {
+        "killing_spree_best": "MISSING",
+        "death_spree_worst": "MISSING",
+        "kill_assists": "MISSING",
+        "headshot_kills": "MISSING",
+        "objectives_stolen": "MISSING",
+        "dynamites_planted": "MISSING",
+        "double_kills": "MISSING",
+        "triple_kills": "MISSING",
+        "dpm": 307.1720116618076
+      },
+      "issues": [],
+      "map_name": "supply",
+      "round_num": 2
+    },
+    {
+      "filename": "2025-01-01-215921-etl_sp_delivery-round-1.txt",
+      "path": "G:\\VisualStudio\\Python\\stats\\local_stats\\2025-01-01-215921-etl_sp_delivery-round-1.txt",
+      "success": true,
+      "players": 6,
+      "weapons_found": 6,
+      "fields_extracted": {
+        "killing_spree_best": "MISSING",
+        "death_spree_worst": "MISSING",
+        "kill_assists": "MISSING",
+        "headshot_kills": "MISSING",
+        "objectives_stolen": "MISSING",
+        "dynamites_planted": "MISSING",
+        "double_kills": "MISSING",
+        "triple_kills": "MISSING",
+        "dpm": 139.42857142857142
+      },
+      "issues": [],
+      "map_name": "etl_sp_delivery",
+      "round_num": 1
+    }
+  ],
+  "recommendations": [
+    "\u26a0\ufe0f  Multiple databases found - consolidate to single production DB",
+    "\u2705 Parser working correctly - ready for bulk import"
+  ],
+  "issues": []
+}
