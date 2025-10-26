@@ -1,0 +1,7 @@
+discord.py>=2.3.0
+python-dotenv>=1.0.0
+aiofiles>=23.2.0
+aiosqlite>=0.19.0
+paramiko>=3.4.0
+trueskill>=0.4.5
+watchdog>=3.0.0
