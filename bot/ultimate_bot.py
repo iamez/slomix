@@ -1665,6 +1665,516 @@ class ETLegacyCommands(commands.Cog):
             logger.error(f"Error in stats command: {e}", exc_info=True)
             await ctx.send(f"❌ Error retrieving stats: {e}")
 
+    @commands.command(name='last_session', aliases=['last', 'latest', 'recent'])
+    async def last_session(self, ctx, subcommand: str = None):
+        """🎮 Show the most recent session/match
+
+        Usage:
+        - !last_session      → Quick session summary
+        - !last_session more → Detailed analytics (graphs, weapons, DPM)
+        """
+        try:
+            async with aiosqlite.connect(self.bot.db_path) as db:
+                # Get most recent session date
+                async with db.execute('''
+                    SELECT DISTINCT DATE(session_date) as date
+                    FROM player_comprehensive_stats
+                    ORDER BY date DESC
+                    LIMIT 1
+                ''') as cursor:
+                    row = await cursor.fetchone()
+                    if not row:
+                        await ctx.send("❌ No sessions found")
+                        return
+                    latest_date = row[0]
+
+                # Get all session IDs for this date
+                async with db.execute(
+                    '''
+                    SELECT id, map_name, round_number, session_date
+                    FROM sessions
+                    WHERE DATE(session_date) = ?
+                    ORDER BY id ASC
+                    ''',
+                    (latest_date,),
+                ) as cursor:
+                    sessions = await cursor.fetchall()
+
+                if not sessions:
+                    await ctx.send("❌ No sessions found for latest date")
+                    return
+
+                session_ids = [s[0] for s in sessions]
+                session_ids_str = ','.join('?' * len(session_ids))
+
+                # If no subcommand: show compact summary
+                if not subcommand:
+                    query = f'''
+                        SELECT COUNT(DISTINCT player_guid)
+                        FROM player_comprehensive_stats
+                        WHERE session_id IN ({session_ids_str})
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        player_count = (await cursor.fetchone())[0]
+
+                    query = f'''
+                        SELECT COUNT(DISTINCT session_id) / 2 as total_maps,
+                               COUNT(DISTINCT session_id) as total_rounds
+                        FROM player_comprehensive_stats
+                        WHERE session_id IN ({session_ids_str})
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        result = await cursor.fetchone()
+                        total_maps, total_rounds = result
+
+                    # Try to get hardcoded teams, but be tolerant if helper missing
+                    try:
+                        hardcoded_teams = await self.get_hardcoded_teams(db, latest_date)
+                    except Exception:
+                        hardcoded_teams = []
+
+                    team_1_name, team_2_name, team_1_score, team_2_score = "Team 1", "Team 2", 0, 0
+                    if hardcoded_teams:
+                        team_1_name = hardcoded_teams[0][0] if hardcoded_teams else "Team 1"
+                        team_2_name = hardcoded_teams[0][1] if len(hardcoded_teams[0]) > 1 else "Team 2"
+
+                        async with db.execute(f'''
+                            SELECT map_name, round_number, team
+                            FROM player_comprehensive_stats
+                            WHERE session_id IN ({session_ids_str})
+                            AND map_name IS NOT NULL
+                            GROUP BY session_id, team
+                        ''', session_ids) as cursor:
+                            round_results = await cursor.fetchall()
+
+                        for map_name, round_num, team in round_results:
+                            if team == 1:
+                                team_1_score += 0.5
+                            elif team == 2:
+                                team_2_score += 0.5
+
+                    # Aggregate player data
+                    query = f'''
+                        SELECT p.player_name,
+                               SUM(p.kills) as kills,
+                               SUM(p.deaths) as deaths,
+                               CASE
+                                   WHEN SUM(p.time_played_seconds) > 0
+                                   THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                                   ELSE 0
+                               END as weighted_dpm,
+                               COALESCE(SUM(w.hits), 0) as total_hits,
+                               COALESCE(SUM(w.shots), 0) as total_shots,
+                               COALESCE(SUM(w.headshots), 0) as total_headshots,
+                               SUM(p.headshot_kills) as headshot_kills,
+                               SUM(p.time_played_seconds) as total_seconds,
+                               CAST(SUM(p.time_played_seconds * p.time_dead_ratio / 100.0) AS INTEGER) as total_time_dead
+                        FROM player_comprehensive_stats p
+                        LEFT JOIN (
+                            SELECT session_id, player_guid,
+                                   SUM(hits) as hits,
+                                   SUM(shots) as shots,
+                                   SUM(headshots) as headshots
+                            FROM weapon_comprehensive_stats
+                            WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
+                            GROUP BY session_id, player_guid
+                        ) w ON p.session_id = w.session_id AND p.player_guid = w.player_guid
+                        WHERE p.session_id IN ({session_ids_str})
+                        GROUP BY p.player_name
+                        ORDER BY kills DESC
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        all_players = await cursor.fetchall()
+
+                    maps_played = total_maps
+                    rounds_played = len(sessions)
+
+                    description = (
+                        f"**{maps_played} maps** • **{rounds_played} rounds** • "
+                        f"**{player_count} players**"
+                    )
+                    if team_1_score > 0 or team_2_score > 0:
+                        winner_icon = "🏆" if team_1_score > team_2_score else ("🏆" if team_2_score > team_1_score else "🤝")
+                        description += f"\n\n**🎯 FINAL SCORE:** {winner_icon}\n"
+                        description += f"**{team_1_name}:** {team_1_score} points\n"
+                        description += f"**{team_2_name}:** {team_2_score} points"
+                        if team_1_score == team_2_score:
+                            description += " *(TIE)*"
+
+                    embed1 = discord.Embed(
+                        title=f"📊 Session Summary: {latest_date}",
+                        description=description,
+                        color=0x5865F2,
+                        timestamp=datetime.now(),
+                    )
+
+                    # Maps list
+                    maps_text = ""
+                    map_play_counts = {}
+                    for session_id, map_name, round_num, actual_time in sessions:
+                        if round_num == 2:
+                            map_play_counts[map_name] = map_play_counts.get(map_name, 0) + 1
+
+                    for map_name, plays in map_play_counts.items():
+                        rounds = plays * 2
+                        maps_text += f"• **{map_name}** ({rounds} rounds)\n"
+
+                    if maps_text:
+                        embed1.add_field(name="🗺️ Maps Played", value=maps_text, inline=False)
+
+                    # Top players
+                    if all_players:
+                        medals = ["🥇", "🥈", "🥉"]
+                        # Build lines for each player entry so we can chunk safely
+                        player_lines = []
+                        for i, player in enumerate(all_players):
+                            name, kills, deaths, dpm, hits, shots, total_hs, hsk, total_seconds, total_time_dead = player
+                            kd_ratio = kills / deaths if deaths and deaths > 0 else (kills or 0)
+                            acc = (hits / shots * 100) if shots and shots > 0 else 0
+                            hsk_rate = (hsk / kills * 100) if kills and kills > 0 else 0
+                            hs_rate = (total_hs / hits * 100) if hits and hits > 0 else 0
+                            hours = total_seconds // 3600
+                            minutes = (total_seconds % 3600) // 60
+                            time_display = f"{hours}h{minutes}m" if hours > 0 else f"{minutes}m"
+                            dead_hours = total_time_dead // 3600
+                            dead_minutes = (total_time_dead % 3600) // 60
+                            time_dead_display = f"{dead_hours}h{dead_minutes}m" if dead_hours > 0 else f"{dead_minutes}m"
+                            medal = medals[i] if i < 3 else f"{i+1}."
+                            entry = (
+                                f"{medal} **{name}**\n"
+                                f"`{kills}K/{deaths}D ({kd_ratio:.2f})` • `{dpm:.0f} DPM` • `{acc:.1f}% ACC ({hits}/{shots})`\n"
+                                f"`{hsk} HSK ({hsk_rate:.1f}%)` • `{total_hs} HS ({hs_rate:.1f}%)` • ⏱️ `{time_display}` • 💀 `{time_dead_display}`\n\n"
+                            )
+                            player_lines.append(entry)
+
+                        # Chunk the player_lines into field-sized strings (<1024 chars)
+                        chunks = []
+                        current = ""
+                        for line in player_lines:
+                            if len(current) + len(line) > 900:  # keep buffer
+                                chunks.append(current.rstrip())
+                                current = line
+                            else:
+                                current += line
+                        if current:
+                            chunks.append(current.rstrip())
+
+                        # If too many fields would be created for a single embed, split across embeds
+                        # Start with embed1 as the first; if more chunks exist, create continuation embeds
+                        field_count = 0
+                        max_fields = 25
+                        embeds_to_send = [embed1]
+                        current_embed = embed1
+
+                        for idx, chunk in enumerate(chunks):
+                            # If current embed would exceed field limit, create a new embed
+                            if field_count >= max_fields:
+                                new_embed = discord.Embed(
+                                    title="📊 Session Summary (continued)",
+                                    description=f"Additional players (continued)",
+                                    color=0x5865F2,
+                                    timestamp=datetime.now(),
+                                )
+                                embeds_to_send.append(new_embed)
+                                current_embed = new_embed
+                                field_count = 0
+
+                            name = "🏆 All Players" if idx == 0 else f"🏆 All Players (cont. {idx+1})"
+                            current_embed.add_field(name=name, value=chunk, inline=False)
+                            field_count += 1
+
+                        # If there are multiple embeds, send them sequentially (caller code will send embed1 now)
+                        # Store embeds_to_send on the context for the caller to send after embed1
+                        # We'll attach them to ctx._last_session_continuation for later sending
+                        ctx._last_session_continuation = embeds_to_send[1:]
+
+                    embed1.set_footer(text="💡 Use !last_session more for detailed analytics (graphs, weapons, DPM)")
+                    await ctx.send(embed=embed1)
+                    return
+
+                # Detailed analytics
+                if subcommand and subcommand.lower() == "more":
+                    await ctx.send("🔄 **Loading detailed analytics...**")
+                    # (Detailed analytics implementation is large; reuse provided logic)
+                    # For brevity keep the existing approach from the supplied fix file
+                    # We'll replicate the key parts (DPM, Weapon Mastery, Graphs)
+
+                    # Get player count
+                    query = f'''
+                        SELECT COUNT(DISTINCT player_guid)
+                        FROM player_comprehensive_stats
+                        WHERE session_id IN ({session_ids_str})
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        player_count = (await cursor.fetchone())[0]
+
+                    # All players detailed
+                    query = f'''
+                        SELECT p.player_name,
+                               SUM(p.kills) as kills,
+                               SUM(p.deaths) as deaths,
+                               CASE
+                                   WHEN SUM(p.time_played_seconds) > 0
+                                   THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                                   ELSE 0
+                               END as weighted_dpm,
+                               COALESCE(SUM(w.hits), 0) as total_hits,
+                               COALESCE(SUM(w.shots), 0) as total_shots,
+                               COALESCE(SUM(w.headshots), 0) as total_headshots,
+                               SUM(p.headshot_kills) as headshot_kills,
+                               SUM(p.time_played_seconds) as total_seconds,
+                               CAST(SUM(p.time_played_seconds * p.time_dead_ratio / 100.0) AS INTEGER) as total_time_dead,
+                               SUM(p.damage_given) as total_damage,
+                               SUM(p.time_played_seconds * (100 - p.time_dead_ratio) / 100.0) as time_alive,
+                               SUM(p.denied_playtime) as denied_playtime
+                        FROM player_comprehensive_stats p
+                        LEFT JOIN (
+                            SELECT session_id, player_guid,
+                                   SUM(hits) as hits,
+                                   SUM(shots) as shots,
+                                   SUM(headshots) as headshots
+                            FROM weapon_comprehensive_stats
+                            WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
+                            GROUP BY session_id, player_guid
+                        ) w ON p.session_id = w.session_id AND p.player_guid = w.player_guid
+                        WHERE p.session_id IN ({session_ids_str})
+                        GROUP BY p.player_name
+                        ORDER BY kills DESC
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        all_players_detailed = await cursor.fetchall()
+
+                    # Player weapons
+                    query = f'''
+                        SELECT p.player_name, w.weapon_name,
+                               SUM(w.kills) as weapon_kills,
+                               SUM(w.hits) as hits,
+                               SUM(w.shots) as shots,
+                               SUM(w.headshots) as headshots
+                        FROM weapon_comprehensive_stats w
+                        JOIN player_comprehensive_stats p
+                            ON w.session_id = p.session_id
+                            AND w.player_guid = p.player_guid
+                        WHERE w.session_id IN ({session_ids_str})
+                        GROUP BY p.player_name, w.weapon_name
+                        HAVING weapon_kills > 0
+                        ORDER BY p.player_name, weapon_kills DESC
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        player_weapons = await cursor.fetchall()
+
+                    # DPM leaders
+                    query = f'''
+                        SELECT player_name,
+                               CASE
+                                   WHEN SUM(time_played_seconds) > 0
+                                   THEN (SUM(damage_given) * 60.0) / SUM(time_played_seconds)
+                                   ELSE 0
+                               END as weighted_dpm,
+                               SUM(kills) as total_kills,
+                               SUM(deaths) as total_deaths
+                        FROM player_comprehensive_stats
+                        WHERE session_id IN ({session_ids_str})
+                        GROUP BY player_name
+                        ORDER BY weighted_dpm DESC
+                        LIMIT 10
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        dpm_leaders = await cursor.fetchall()
+
+                    # Build and send DPM embed
+                    embed_dpm = discord.Embed(
+                        title="💥 DPM Analytics - Damage Per Minute",
+                        description="Enhanced DPM with Kill/Death Details",
+                        color=0xFEE75C,
+                        timestamp=datetime.now(),
+                    )
+                    if dpm_leaders:
+                        dpm_text = ""
+                        for i, (player, dpm, kills, deaths) in enumerate(dpm_leaders[:10], 1):
+                            kd = kills / deaths if deaths else kills
+                            dpm_text += f"{i}. **{player}**\n"
+                            dpm_text += f"   💥 `{dpm:.0f} DPM` • 💀 `{kd:.1f} K/D` ({kills}K/{deaths}D)\n"
+                        embed_dpm.add_field(name="🏆 Enhanced DPM Leaderboard", value=dpm_text.rstrip(), inline=False)
+                        avg_dpm = sum(p[1] for p in dpm_leaders) / len(dpm_leaders)
+                        highest_dpm = dpm_leaders[0][1] if dpm_leaders else 0
+                        leader_name = dpm_leaders[0][0] if dpm_leaders else "N/A"
+                        insights = (
+                            f"📊 **Enhanced Session DPM Stats:**\n"
+                            f"• Average DPM: `{avg_dpm:.1f}`\n"
+                            f"• Highest DPM: `{highest_dpm:.0f}`\n"
+                            f"• DPM Leader: **{leader_name}**\n"
+                            f"• Formula: `(Total Damage × 60) / Time Played (seconds)`"
+                        )
+                        embed_dpm.add_field(name="💥 DPM Insights", value=insights, inline=False)
+                    embed_dpm.set_footer(text=f"Session: {latest_date}")
+                    await ctx.send(embed=embed_dpm)
+                    await asyncio.sleep(2)
+
+                    # Weapon Mastery - SIMPLE fix: send ALL weapons and split fields when needed
+                    # Get player revives (used in weapon summary per player)
+                    # Use revives_given (times the player revived others) for weapon summaries
+                    query = f'''
+                        SELECT player_name, SUM(revives_given) as revives
+                        FROM player_comprehensive_stats
+                        WHERE session_id IN ({session_ids_str})
+                        GROUP BY player_name
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        player_revives_raw = await cursor.fetchall()
+
+                    player_revives = {player: revives for player, revives in player_revives_raw}
+
+                    # Group by player and keep ALL weapons
+                    player_weapon_map = {}
+                    for player, weapon, kills, hits, shots, hs in player_weapons:
+                        if player not in player_weapon_map:
+                            player_weapon_map[player] = []
+                        acc = (hits / shots * 100) if shots > 0 else 0
+                        hs_pct = (hs / hits * 100) if hits > 0 else 0
+                        weapon_clean = weapon.replace('WS_', '').replace('_', ' ').title()
+                        player_weapon_map[player].append((weapon_clean, kills, acc, hs_pct, hs, hits, shots))
+
+                    # Sort players by total kills - SHOW ALL PLAYERS
+                    sorted_players = sorted(
+                        player_weapon_map.items(),
+                        key=lambda x: sum(w[1] for w in x[1]),
+                        reverse=True
+                    )
+
+                    # Create weapon mastery embeds - SPLIT AS NEEDED
+                    weapon_embeds = []
+                    current_embed = discord.Embed(
+                        title="🎯 Weapon Mastery Breakdown",
+                        description=f"Complete weapon statistics for all {len(sorted_players)} players",
+                        color=0x57F287,
+                        timestamp=datetime.now(),
+                    )
+
+                    current_field_count = 0
+
+                    for player, weapons in sorted_players:
+                        total_kills = sum(w[1] for w in weapons)
+                        total_shots = sum(w[6] for w in weapons)
+                        total_hits = sum(w[5] for w in weapons)
+                        overall_acc = (total_hits / total_shots * 100) if total_shots > 0 else 0
+                        revives = player_revives.get(player, 0)
+
+                        # Build weapon text for this player - SHOW ALL WEAPONS
+                        weapon_text = f"**{total_kills} kills** • **{overall_acc:.1f}% ACC**"
+                        if revives > 0:
+                            weapon_text += f" • 💉 **{revives} revived**"
+                        weapon_text += "\n"
+
+                        # Add ALL weapons (not just top 3)
+                        for weapon, kills, acc, hs_pct, hs, hits, shots in weapons:
+                            weapon_text += f"• {weapon}: `{kills}K` `{acc:.0f}% ACC` `{hs} HS ({hs_pct:.0f}%)`\n"
+
+                        # If this field itself is too large, split it into chunks
+                        if current_field_count >= 25 or len(weapon_text) > 1024:
+                            # Save current embed and start a new one
+                            weapon_embeds.append(current_embed)
+                            current_embed = discord.Embed(
+                                title="🎯 Weapon Mastery Breakdown (continued)",
+                                description=f"Part {len(weapon_embeds) + 1}",
+                                color=0x57F287,
+                                timestamp=datetime.now(),
+                            )
+                            current_field_count = 0
+
+                        # If a SINGLE player's weapons exceed 1024 chars, split their weapons across embeds
+                        if len(weapon_text) > 1024:
+                            weapon_chunks = []
+                            current_chunk = f"**{total_kills} kills** • **{overall_acc:.1f}% ACC**"
+                            if revives > 0:
+                                current_chunk += f" • 💉 **{revives} revived**"
+                            current_chunk += "\n"
+
+                            for weapon, kills, acc, hs_pct, hs, hits, shots in weapons:
+                                weapon_line = f"• {weapon}: `{kills}K` `{acc:.0f}% ACC` `{hs} HS ({hs_pct:.0f}%)`\n"
+                                if len(current_chunk) + len(weapon_line) > 900:  # leave buffer
+                                    weapon_chunks.append(current_chunk)
+                                    current_chunk = ""
+                                current_chunk += weapon_line
+
+                            if current_chunk:
+                                weapon_chunks.append(current_chunk)
+
+                            for i, chunk in enumerate(weapon_chunks):
+                                if current_field_count >= 25:
+                                    weapon_embeds.append(current_embed)
+                                    current_embed = discord.Embed(
+                                        title="🎯 Weapon Mastery Breakdown (continued)",
+                                        description=f"Part {len(weapon_embeds) + 1}",
+                                        color=0x57F287,
+                                        timestamp=datetime.now(),
+                                    )
+                                    current_field_count = 0
+
+                                field_name = f"⚔️ {player}" if i == 0 else f"⚔️ {player} (continued)"
+                                current_embed.add_field(name=field_name, value=chunk.rstrip(), inline=False)
+                                current_field_count += 1
+                        else:
+                            current_embed.add_field(name=f"⚔️ {player}", value=weapon_text.rstrip(), inline=False)
+                            current_field_count += 1
+
+                    # Add the last embed if it has content
+                    if current_field_count > 0:
+                        weapon_embeds.append(current_embed)
+
+                    # Send ALL weapon embeds with delays to avoid rate limits
+                    for i, embed in enumerate(weapon_embeds):
+                        embed.set_footer(text=f"Session: {latest_date} • Page {i+1}/{len(weapon_embeds)}")
+                        await ctx.send(embed=embed)
+                        if i < len(weapon_embeds) - 1:
+                            await asyncio.sleep(3)
+
+                    logger.info(f"✅ Sent {len(weapon_embeds)} weapon mastery embeds")
+
+                    # Graphs (attempt, skip if matplotlib missing)
+                    try:
+                        import matplotlib.pyplot as plt
+                        import io
+                        player_names = [p[0] for p in all_players_detailed[:6]]
+                        kills = [p[1] for p in all_players_detailed[:6]]
+                        deaths = [p[2] for p in all_players_detailed[:6]]
+                        dpm = [p[3] for p in all_players_detailed[:6]]
+                        time_played = [p[8] / 60 for p in all_players_detailed[:6]]
+                        time_dead = [p[9] / 60 for p in all_players_detailed[:6]]
+                        denied = [p[12] for p in all_players_detailed[:6]]
+                        fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+                        axes[0,0].bar(range(len(player_names)), kills, color='#57F287')
+                        axes[0,1].bar(range(len(player_names)), deaths, color='#ED4245')
+                        axes[0,2].bar(range(len(player_names)), dpm, color='#FEE75C')
+                        axes[1,0].bar(range(len(player_names)), time_played, color='#5865F2')
+                        axes[1,1].bar(range(len(player_names)), time_dead, color='#EB459E')
+                        axes[1,2].bar(range(len(player_names)), denied, color='#9B59B6')
+                        plt.tight_layout()
+                        buf = io.BytesIO()
+                        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+                        buf.seek(0)
+                        plt.close()
+                        file = discord.File(buf, filename='performance_analytics.png')
+                        await ctx.send("📊 **Visual Performance Analytics**", file=file)
+                    except ImportError:
+                        logger.warning("⚠️ matplotlib not installed - skipping graphs")
+                    except Exception as e:
+                        logger.error(f"❌ Error generating graphs: {e}", exc_info=True)
+
+                    final_embed = discord.Embed(title="✅ Detailed Analytics Complete", description="All detailed statistics have been displayed above.", color=0x00FF00)
+                    await ctx.send(embed=final_embed)
+                    return
+
+                # Unknown subcommand
+                await ctx.send(
+                    "❌ Unknown option. Use:\n"
+                    "• `!last_session` - Quick summary\n"
+                    "• `!last_session more` - Detailed analytics"
+                )
+        except Exception as e:
+            logger.error(f"Error in last_session command: {e}", exc_info=True)
+            await ctx.send(f"❌ Error retrieving last session: {e}")
+
     @commands.command(name='leaderboard', aliases=['lb', 'top'])
     async def leaderboard(self, ctx, stat_type: str = 'kills', page: int = 1):
         """🏆 Show players leaderboard with pagination
@@ -1887,7 +2397,7 @@ class ETLegacyCommands(commands.Cog):
                              WHERE player_guid = p.player_guid 
                              GROUP BY player_name 
                              ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
-                            SUM(p.times_revived) as total_revives,
+                            SUM(p.revives_given) as total_revives,
                             SUM(p.kills) as total_kills,
                             COUNT(DISTINCT p.session_id) as games,
                             p.player_guid
@@ -2312,6 +2822,531 @@ class ETLegacyCommands(commands.Cog):
                 async with db.execute(query, session_ids) as cursor:
                     player_count = (await cursor.fetchone())[0]
 
+                # Early short-circuit: objectives-only view (minimal queries, no other embeds)
+                if subcommand and subcommand.lower() in ('obj', 'objectives'):
+                    # Fetch awards/objective stats only and return a compact embed
+                    query = f'''
+                        SELECT clean_name, xp, kill_assists, objectives_stolen, objectives_returned,
+                               dynamites_planted, dynamites_defused, times_revived,
+                               double_kills, triple_kills, quad_kills, multi_kills, mega_kills,
+                               denied_playtime, most_useful_kills, useless_kills, gibs,
+                               killing_spree_best, death_spree_worst
+                        FROM player_comprehensive_stats
+                        WHERE session_id IN ({session_ids_str})
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        awards_rows = await cursor.fetchall()
+
+                    if not awards_rows:
+                        await ctx.send("❌ No objective/support data available for latest session")
+                        return
+
+                    # Also fetch revives GIVEN per player (distinct from times_revived which is times the player was revived)
+                    # Use clean_name and SUM(revives_given) so the keys match the awards rows (which use clean_name)
+                    rev_query = f'''
+                        SELECT clean_name, SUM(revives_given) as revives_given
+                        FROM player_comprehensive_stats
+                        WHERE session_id IN ({session_ids_str})
+                        GROUP BY clean_name
+                    '''
+                    async with db.execute(rev_query, session_ids) as cursor:
+                        rev_rows = await cursor.fetchall()
+                    revives_map = {r[0]: (r[1] or 0) for r in rev_rows}
+
+                    # Aggregate per-player across rounds (same logic as the full flow)
+                    player_objectives_local = {}
+                    for row in awards_rows:
+                        name = row[0]
+                        if name not in player_objectives_local:
+                            player_objectives_local[name] = {
+                                'xp': 0,
+                                'assists': 0,
+                                'obj_stolen': 0,
+                                'obj_returned': 0,
+                                'dyn_planted': 0,
+                                'dyn_defused': 0,
+                                'times_revived': 0,    # times the player WAS revived
+                                'revives_given': 0,    # will merge from revives_map
+                                'multi_2x': 0,
+                                'multi_3x': 0,
+                                'multi_4x': 0,
+                                'multi_5x': 0,
+                                'multi_6x': 0,
+                                'denied_time': 0,
+                                'useful_kills': 0,
+                                'useless_kills': 0,
+                                'gibs': 0,
+                                'best_spree': 0,
+                                'worst_spree': 0,
+                            }
+
+                        player_objectives_local[name]['xp'] += row[1] or 0
+                        player_objectives_local[name]['assists'] += row[2] or 0
+                        player_objectives_local[name]['obj_stolen'] += row[3] or 0
+                        player_objectives_local[name]['obj_returned'] += row[4] or 0
+                        player_objectives_local[name]['dyn_planted'] += row[5] or 0
+                        player_objectives_local[name]['dyn_defused'] += row[6] or 0
+                        player_objectives_local[name]['times_revived'] += row[7] or 0
+                        player_objectives_local[name]['multi_2x'] += row[8] or 0
+                        player_objectives_local[name]['multi_3x'] += row[9] or 0
+                        player_objectives_local[name]['multi_4x'] += row[10] or 0
+                        player_objectives_local[name]['multi_5x'] += row[11] or 0
+                        player_objectives_local[name]['multi_6x'] += row[12] or 0
+                        player_objectives_local[name]['denied_time'] += row[13] or 0
+                        player_objectives_local[name]['useful_kills'] += row[14] or 0
+                        player_objectives_local[name]['useless_kills'] += row[15] or 0
+                        player_objectives_local[name]['gibs'] += row[16] or 0
+                        player_objectives_local[name]['best_spree'] = max(
+                            player_objectives_local[name]['best_spree'], row[17] or 0
+                        )
+                        player_objectives_local[name]['worst_spree'] = max(
+                            player_objectives_local[name]['worst_spree'], row[18] or 0
+                        )
+
+                    # Merge revives_given into the aggregated structure
+                    for pname, gv in revives_map.items():
+                        if pname not in player_objectives_local:
+                            player_objectives_local[pname] = {
+                                'xp': 0,
+                                'assists': 0,
+                                'obj_stolen': 0,
+                                'obj_returned': 0,
+                                'dyn_planted': 0,
+                                'dyn_defused': 0,
+                                'times_revived': 0,
+                                'revives_given': gv or 0,
+                                'multi_2x': 0,
+                                'multi_3x': 0,
+                                'multi_4x': 0,
+                                'multi_5x': 0,
+                                'multi_6x': 0,
+                                'denied_time': 0,
+                                'useful_kills': 0,
+                                'useless_kills': 0,
+                                'gibs': 0,
+                                'best_spree': 0,
+                                'worst_spree': 0,
+                            }
+                        else:
+                            player_objectives_local[pname]['revives_given'] = gv or 0
+
+                    # Build compact embed showing more objective/support fields
+                    top_n_local = min(8, len(player_objectives_local))
+                    sorted_players_local = sorted(
+                        player_objectives_local.items(), key=lambda x: x[1]['xp'], reverse=True
+                    )[:top_n_local]
+
+                    compact = discord.Embed(
+                        title=f"🎯 Objective & Support - {latest_date}",
+                        description=f"Top objective contributors • {player_count} players",
+                        color=0x00D166,
+                        timestamp=datetime.now(),
+                    )
+
+                    # Helper to split long field values by lines (safe margin)
+                    def _local_split(s: str, max_len: int = 900):
+                        lines = s.splitlines(keepends=True)
+                        chunks = []
+                        cur = ''
+                        for line in lines:
+                            if len(cur) + len(line) > max_len:
+                                chunks.append(cur.rstrip())
+                                cur = line
+                            else:
+                                cur += line
+                        if cur:
+                            chunks.append(cur.rstrip())
+                        return chunks
+
+                    continuation_embeds = []
+
+                    for i, (player, stats) in enumerate(sorted_players_local, 1):
+                        # Compose a richer objective/support summary per player
+                        txt_lines = []
+                        txt_lines.append(f"XP: `{stats.get('xp',0)}`")
+                        # Distinguish revives given vs times revived
+                        txt_lines.append(f"Revives Given: `{stats.get('revives_given',0)}` • Times Revived: `{stats.get('times_revived',0)}`")
+                        txt_lines.append(
+                            f"Dyns P/D: `{stats.get('dyn_planted',0)}/{stats.get('dyn_defused',0)}` • S/R: `{stats.get('obj_stolen',0)}/{stats.get('obj_returned',0)}`"
+                        )
+                        txt_lines.append(f"Useful/Useless Kills: `{stats.get('useful_kills',0)}/{stats.get('useless_kills',0)}` (parser noisy)" )
+                        if stats.get('gibs',0) > 0:
+                            txt_lines.append(f"Gibs: `{stats.get('gibs',0)}`")
+                        # Best/Worst spree
+                        txt_lines.append(f"Best Spree: `{stats.get('best_spree',0)}` • Worst Spree: `{stats.get('worst_spree',0)}`")
+                        # Denied playtime as MM:SS
+                        if stats.get('denied_time',0) > 0:
+                            dt = int(stats.get('denied_time',0))
+                            dm = dt // 60
+                            ds = dt % 60
+                            txt_lines.append(f"Enemy Denied: `{dm}:{ds:02d}`")
+
+                        field_value = "\n".join(txt_lines)
+
+                        # If the field gets too long, split into continuation embeds
+                        if len(field_value) > 900:
+                            chunks = _local_split(field_value, max_len=900)
+                            compact.add_field(name=f"{i}. {player}", value=chunks[0], inline=False)
+                            for idx_chunk, ch in enumerate(chunks[1:], start=2):
+                                cont = discord.Embed(
+                                    title=f"🎯 Objective & Support - {latest_date} (cont.)",
+                                    color=0x00D166,
+                                    timestamp=datetime.now(),
+                                )
+                                cont.add_field(name=f"{i}. {player} (cont. {idx_chunk})", value=ch, inline=False)
+                                continuation_embeds.append(cont)
+                        else:
+                            compact.add_field(name=f"{i}. {player}", value=field_value, inline=False)
+
+                    compact.set_footer(text=f"Session: {latest_date} • Use !last_session for full report")
+
+                    # Send main compact and any continuation embeds
+                    await ctx.send(embed=compact)
+                    for j, cont in enumerate(continuation_embeds):
+                        try:
+                            cont.set_footer(text=f"Session: {latest_date} • Page {j+2}/{len(continuation_embeds)+1}")
+                        except Exception:
+                            pass
+                        await ctx.send(embed=cont)
+                        await asyncio.sleep(1.2)
+
+                    return
+
+                # Early short-circuit: combat-only view (minimal queries, no other embeds)
+                if subcommand and subcommand.lower() in ('combat',):
+                    # Fetch combat-focused aggregates and return a compact embed
+                    query = f'''
+                        SELECT p.player_name,
+                               SUM(p.kills) as kills,
+                               SUM(p.deaths) as deaths,
+                               SUM(p.damage_given) as damage_given,
+                               SUM(p.damage_received) as damage_received,
+                               SUM(p.gibs) as gibs,
+                               SUM(p.headshot_kills) as headshot_kills,
+                               CASE
+                                   WHEN SUM(p.time_played_seconds) > 0
+                                   THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                                   ELSE 0
+                               END as weighted_dpm
+                        FROM player_comprehensive_stats p
+                        WHERE p.session_id IN ({session_ids_str})
+                        GROUP BY p.player_name
+                        ORDER BY kills DESC
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        combat_rows = await cursor.fetchall()
+
+                    if not combat_rows:
+                        await ctx.send("❌ No combat data available for latest session")
+                        return
+
+                    embed = discord.Embed(
+                        title=f"⚔️ Combat Stats - {latest_date}",
+                        description=f"Combat leaders • {player_count} players",
+                        color=0xED4245,
+                        timestamp=datetime.now(),
+                    )
+
+                    medals = ["🥇", "🥈", "🥉"]
+                    for i, row in enumerate(combat_rows, 1):
+                        name, kills, deaths, dmg_g, dmg_r, gibs, hsk, dpm = row
+                        kd = kills / deaths if deaths and deaths > 0 else (kills or 0)
+                        hours = int((0 if row[7] is None else 0))
+                        time_display = ""
+                        player_text = (
+                            f"{medals[i-1] if i <=3 else f'{i}.'} **{name}**\n"
+                            f"💀 `{kills}K/{deaths}D ({kd:.2f})` • `{dpm:.0f} DPM`\n"
+                            f"💥 Damage: `{(dmg_g or 0):,}` given • `{(dmg_r or 0):,}` received\n"
+                        )
+                        if gibs and gibs > 0:
+                            player_text += f"🦴 `{gibs} Gibs`"
+                        if hsk and hsk > 0:
+                            player_text += f" • 🎯 `{hsk} Headshot Kills`"
+
+                        embed.add_field(name="\u200b", value=player_text, inline=False)
+
+                    embed.set_footer(text=f"Session: {latest_date} • Use !last_session for full report")
+                    await _log_and_send(embed, 'combat')
+                    return
+
+                # Early short-circuit: weapons-only view (minimal queries)
+                if subcommand and subcommand.lower() in ('weapons','weapon','weap'):
+                    query = f'''
+                        SELECT p.player_name, w.weapon_name,
+                               SUM(w.kills) as weapon_kills,
+                               SUM(w.hits) as hits,
+                               SUM(w.shots) as shots,
+                               SUM(w.headshots) as headshots
+                        FROM weapon_comprehensive_stats w
+                        JOIN player_comprehensive_stats p
+                            ON w.session_id = p.session_id
+                            AND w.player_guid = p.player_guid
+                        WHERE w.session_id IN ({session_ids_str})
+                        GROUP BY p.player_name, w.weapon_name
+                        HAVING weapon_kills > 0
+                        ORDER BY p.player_name, weapon_kills DESC
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        pw_rows = await cursor.fetchall()
+
+                    if not pw_rows:
+                        await ctx.send("❌ No weapon data available for latest session")
+                        return
+
+                    # Group by player
+                    player_weapon_map = {}
+                    for player, weapon, kills, hits, shots, hs in pw_rows:
+                        if player not in player_weapon_map:
+                            player_weapon_map[player] = []
+                        acc = (hits / shots * 100) if shots and shots > 0 else 0
+                        hs_pct = (hs / hits * 100) if hits and hits > 0 else 0
+                        weapon_clean = weapon.replace('WS_', '').replace('_', ' ').title()
+                        player_weapon_map[player].append((weapon_clean, kills, acc, hs_pct, hs, hits, shots))
+
+                    # Build embed with top players
+                    embed = discord.Embed(
+                        title=f"🔫 Weapon Mastery - {latest_date}",
+                        description=f"Top weapons per player • {len(player_weapon_map)} players",
+                        color=0x5865F2,
+                        timestamp=datetime.now(),
+                    )
+
+                    for player, weapons in player_weapon_map.items():
+                        text = ''
+                        for weapon, kills, acc, hs_pct, hs, hits, shots in weapons[:6]:
+                            text += f"**{weapon}**: `{kills}K` • `{acc:.1f}% ACC` • `{hs} HS ({hs_pct:.1f}%)`\n"
+                        embed.add_field(name=f"⚔️ {player}", value=text.rstrip(), inline=False)
+
+                    embed.set_footer(text=f"Session: {latest_date} • Use !last_session for full report")
+
+                    # Manually chunk player weapon fields if any field is too long
+                    weapon_conts = []
+                    safe_embed = discord.Embed(
+                        title=embed.title,
+                        description=embed.description,
+                        color=embed.color,
+                        timestamp=embed.timestamp,
+                    )
+
+                    def _split_lines(s: str, max_len: int = 900):
+                        lines = s.splitlines(keepends=True)
+                        chunks = []
+                        cur = ''
+                        for line in lines:
+                            if len(cur) + len(line) > max_len:
+                                chunks.append(cur.rstrip())
+                                cur = line
+                            else:
+                                cur += line
+                        if cur:
+                            chunks.append(cur.rstrip())
+                        return chunks
+
+                    for player, weapons in player_weapon_map.items():
+                        text = ''
+                        for weapon, kills, acc, hs_pct, hs, hits, shots in weapons:
+                            text += f"**{weapon}**: `{kills}K` • `{acc:.1f}% ACC` • `{hs} HS ({hs_pct:.1f}%)`\n"
+
+                        if len(text) > 900:
+                            chunks = _split_lines(text, max_len=900)
+                            safe_embed.add_field(name=f"⚔️ {player}", value=chunks[0], inline=False)
+                            for idx_ch, ch in enumerate(chunks[1:], start=2):
+                                cont = discord.Embed(
+                                    title=f"🔫 Weapon Mastery - {latest_date} (cont.)",
+                                    color=0x5865F2,
+                                    timestamp=datetime.now(),
+                                )
+                                cont.add_field(name=f"⚔️ {player} (cont. {idx_ch})", value=ch, inline=False)
+                                weapon_conts.append(cont)
+                        else:
+                            safe_embed.add_field(name=f"⚔️ {player}", value=text.rstrip(), inline=False)
+
+                    await ctx.send(embed=safe_embed)
+                    for i, cont in enumerate(weapon_conts):
+                        try:
+                            cont.set_footer(text=f"Session: {latest_date} • Page {i+2}/{len(weapon_conts)+1}")
+                        except Exception:
+                            pass
+                        await ctx.send(embed=cont)
+                        await asyncio.sleep(1.2)
+                    return
+
+                # Early short-circuit: support-only view (medpacks, revives, etc.)
+                if subcommand and subcommand.lower() in ('support',):
+                    query = f'''
+                        SELECT p.player_name,
+                               SUM(p.revives_given) as revives_given,
+                               SUM(p.times_revived) as times_revived,
+                               SUM(p.kills) as kills,
+                               SUM(p.deaths) as deaths
+                        FROM player_comprehensive_stats p
+                        WHERE p.session_id IN ({session_ids_str})
+                        GROUP BY p.player_name
+                        ORDER BY revives_given DESC
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        sup_rows = await cursor.fetchall()
+
+                    if not sup_rows:
+                        await ctx.send("❌ No support data available for latest session")
+                        return
+
+                    sup_embed = discord.Embed(
+                        title=f"💉 Support Stats - {latest_date}",
+                        description=f"Support activity • {player_count} players",
+                        color=0x57F287,
+                        timestamp=datetime.now(),
+                    )
+
+                    for name, revives_given, times_revived, kills, deaths in sup_rows:
+                        txt = f"Revives Given: `{revives_given or 0}` • Times Revived: `{times_revived or 0}`\n"
+                        txt += f"Kills: `{kills or 0}` • Deaths: `{deaths or 0}`"
+                        sup_embed.add_field(name=f"{name}", value=txt, inline=False)
+
+                    sup_embed.set_footer(text=f"Session: {latest_date}")
+                    await ctx.send(embed=sup_embed)
+                    return
+
+                # Early short-circuit: sprees-only view (multikills, megas, best sprees)
+                if subcommand and subcommand.lower() in ('sprees','spree'):
+                    query = f'''
+                        SELECT p.player_name,
+                               SUM(p.killing_spree_best) as best_spree,
+                               SUM(p.double_kills) as doubles,
+                               SUM(p.triple_kills) as triples,
+                               SUM(p.quad_kills) as quads,
+                               SUM(p.multi_kills) as multis,
+                               SUM(p.mega_kills) as megas,
+                               SUM(p.kills) as total_kills
+                        FROM player_comprehensive_stats p
+                        WHERE p.session_id IN ({session_ids_str})
+                        GROUP BY p.player_name
+                        ORDER BY best_spree DESC, megas DESC
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        spree_rows = await cursor.fetchall()
+
+                    if not spree_rows:
+                        await ctx.send("❌ No spree data available for latest session")
+                        return
+
+                    spree_embed = discord.Embed(
+                        title=f"🔥 Killing Sprees & Multi-Kills - {latest_date}",
+                        description=f"Sprees and monster kills • {player_count} players",
+                        color=0xFEE75C,
+                        timestamp=datetime.now(),
+                    )
+
+                    for i, (name, best_spree, doubles, triples, quads, multis, megas, total_kills) in enumerate(spree_rows,1):
+                        if best_spree == 0 and doubles == 0 and triples == 0 and quads == 0 and multis == 0 and megas == 0:
+                            continue
+                        txt = f"Best Spree: `{best_spree}` • MEGA: `{megas}` • Multis: `{multis}`\n"
+                        txt += f"Doubles/Triples/Quads: `{doubles}/{triples}/{quads}` • Kills: `{total_kills}`"
+                        spree_embed.add_field(name=f"{i}. {name}", value=txt, inline=False)
+
+                    spree_embed.set_footer(text=f"Session: {latest_date}")
+                    await ctx.send(embed=spree_embed)
+                    return
+
+                    # Early short-circuit: graphs-only view (generate visuals and return)
+                    if subcommand and subcommand.lower() in ('graphs', 'graph', 'charts'):
+                        try:
+                            import matplotlib
+
+                            matplotlib.use('Agg')
+                            import io
+                            import matplotlib.pyplot as plt
+
+                            query = f'''
+                                SELECT p.player_name,
+                                       SUM(p.kills) as kills,
+                                       SUM(p.deaths) as deaths,
+                                       CASE
+                                           WHEN SUM(p.time_played_seconds) > 0
+                                           THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                                           ELSE 0
+                                       END as dpm,
+                                       SUM(p.time_played_seconds) as time_played,
+                                       CAST(SUM(p.time_played_seconds * p.time_dead_ratio / 100.0) AS INTEGER) as time_dead,
+                                       SUM(p.denied_playtime) as denied
+                                FROM player_comprehensive_stats p
+                                WHERE p.session_id IN ({session_ids_str})
+                                GROUP BY p.player_name
+                                ORDER BY kills DESC
+                                LIMIT 6
+                            '''
+                            async with db.execute(query, session_ids) as cursor:
+                                top_players = await cursor.fetchall()
+
+                            if not top_players:
+                                await ctx.send("❌ No graph data available for latest session")
+                                return
+
+                            player_names = [p[0] for p in top_players]
+                            kills = [p[1] or 0 for p in top_players]
+                            deaths = [p[2] or 0 for p in top_players]
+                            dpm = [p[3] or 0 for p in top_players]
+                            time_played = [p[4] / 60 if p[4] else 0 for p in top_players]
+                            time_dead = [p[5] / 60 if p[5] else 0 for p in top_players]
+                            denied = [p[6] or 0 for p in top_players]
+
+                            fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+                            fig.suptitle(f'Visual Performance Analytics - {latest_date}', fontsize=16, fontweight='bold')
+
+                            # Graph 1: Kills
+                            axes[0, 0].bar(range(len(player_names)), kills, color='#57F287')
+                            axes[0, 0].set_title('Kills', fontweight='bold')
+                            axes[0, 0].set_xticks(range(len(player_names)))
+                            axes[0, 0].set_xticklabels(player_names, rotation=45, ha='right')
+
+                            # Graph 2: Deaths
+                            axes[0, 1].bar(range(len(player_names)), deaths, color='#ED4245')
+                            axes[0, 1].set_title('Deaths', fontweight='bold')
+                            axes[0, 1].set_xticks(range(len(player_names)))
+                            axes[0, 1].set_xticklabels(player_names, rotation=45, ha='right')
+
+                            # Graph 3: DPM
+                            axes[0, 2].bar(range(len(player_names)), dpm, color='#FEE75C')
+                            axes[0, 2].set_title('DPM (Damage Per Minute)', fontweight='bold')
+                            axes[0, 2].set_xticks(range(len(player_names)))
+                            axes[0, 2].set_xticklabels(player_names, rotation=45, ha='right')
+
+                            # Graph 4: Time Played
+                            axes[1, 0].bar(range(len(player_names)), time_played, color='#5865F2')
+                            axes[1, 0].set_title('Time Played (minutes)', fontweight='bold')
+                            axes[1, 0].set_xticks(range(len(player_names)))
+                            axes[1, 0].set_xticklabels(player_names, rotation=45, ha='right')
+
+                            # Graph 5: Time Dead
+                            axes[1, 1].bar(range(len(player_names)), time_dead, color='#EB459E')
+                            axes[1, 1].set_title('Time Dead (minutes)', fontweight='bold')
+                            axes[1, 1].set_xticks(range(len(player_names)))
+                            axes[1, 1].set_xticklabels(player_names, rotation=45, ha='right')
+
+                            # Graph 6: Time Denied
+                            axes[1, 2].bar(range(len(player_names)), denied, color='#9B59B6')
+                            axes[1, 2].set_title('Time Denied (seconds)', fontweight='bold')
+                            axes[1, 2].set_xticks(range(len(player_names)))
+                            axes[1, 2].set_xticklabels(player_names, rotation=45, ha='right')
+
+                            plt.tight_layout()
+
+                            buf = io.BytesIO()
+                            plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+                            buf.seek(0)
+                            plt.close()
+
+                            file = discord.File(buf, filename='performance_analytics.png')
+                            await ctx.send("📊 **Visual Performance Analytics**", file=file)
+                            return
+                        except ImportError:
+                            await ctx.send("⚠️ matplotlib not installed - graphs unavailable")
+                            return
+                        except Exception as e:
+                            logger.exception(f"Error generating quick graphs: {e}")
+                            await ctx.send(f"⚠️ Could not generate graphs: {str(e)[:120]}")
+                            return
+
                 # Get ALL players (aggregated across all rounds)
                 # Calculate WEIGHTED DPM using actual playtime per round
                 query = f'''
@@ -2328,7 +3363,8 @@ class ETLegacyCommands(commands.Cog):
                            COALESCE(SUM(w.headshots), 0) as total_headshots,
                            SUM(p.headshot_kills) as headshot_kills,
                            SUM(p.time_played_seconds) as total_seconds,
-                           CAST(SUM(p.time_played_seconds * p.time_dead_ratio / 100.0) AS INTEGER) as total_time_dead
+                  CAST(SUM(p.time_played_seconds * p.time_dead_ratio / 100.0) AS INTEGER) as total_time_dead,
+                  SUM(p.denied_playtime) as total_denied
                     FROM player_comprehensive_stats p
                     LEFT JOIN (
                         SELECT session_id, player_guid,
@@ -2414,6 +3450,70 @@ class ETLegacyCommands(commands.Cog):
                 '''
                 async with db.execute(query, session_ids) as cursor:
                     dpm_leaders = await cursor.fetchall()
+
+                # Quick incremental 'top' view (from ULTIMATE) - return early for testing
+                if subcommand and subcommand.lower() in ('top', 'top10'):
+                    # Fetch top 10 players (by kills)
+                    query = f'''
+                        SELECT p.player_name,
+                               SUM(p.kills) as kills,
+                               SUM(p.deaths) as deaths,
+                               CASE
+                                   WHEN SUM(p.time_played_seconds) > 0
+                                   THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                                   ELSE 0
+                               END as weighted_dpm,
+                               SUM(p.damage_given) as total_damage,
+                               SUM(p.headshot_kills) as headshot_kills,
+                               SUM(p.gibs) as gibs,
+                               SUM(p.time_played_seconds) as total_seconds
+                        FROM player_comprehensive_stats p
+                        WHERE p.session_id IN ({session_ids_str})
+                        GROUP BY p.player_name
+                        ORDER BY kills DESC
+                        LIMIT 10
+                    '''
+                    async with db.execute(query, session_ids) as cursor:
+                        top_players = await cursor.fetchall()
+
+                    embed = discord.Embed(
+                        title=f"🏆 Top 10 Players - {latest_date}",
+                        description=f"Best performers from {total_maps} maps • {player_count} total players",
+                        color=0xFEE75C,
+                        timestamp=datetime.now(),
+                    )
+
+                    medals = ["🥇", "🥈", "🥉", "4.", "5.", "6.", "7.", "8.", "9.", "10."]
+                    for i, player in enumerate(top_players):
+                        name, kills, deaths, dpm, damage, hsk, gibs, seconds = player
+                        kd = kills / deaths if deaths > 0 else kills
+                        hours = int((seconds or 0) // 3600)
+                        minutes = int(((seconds or 0) % 3600) // 60)
+                        time_display = f"{hours}h{minutes}m" if hours > 0 else f"{minutes}m"
+
+                        player_stats = (
+                            f"{medals[i]} **{name}**\n"
+                            f"`{kills}K/{deaths}D ({kd:.2f})` • `{dpm:.0f} DPM` • `{damage:,} DMG`\n"
+                            f"`{hsk} HSK` • `{gibs} Gibs` • ⏱️ `{time_display}`\n"
+                        )
+
+                        embed.add_field(name="\u200b", value=player_stats, inline=False)
+
+                    embed.set_footer(text="💡 Use !last_session for full session or !last_session help for more views")
+
+                    # Log field lengths and send
+                    try:
+                        for idx, fld in enumerate(embed.fields):
+                            val = fld.value or ''
+                            ln = len(val)
+                            logger.debug(f"[last_session/top] field[{idx}] '{fld.name}' length={ln}")
+                            if ln > 1024:
+                                logger.warning(f"[last_session/top] field[{idx}] '{fld.name}' LENGTH {ln} > 1024")
+                    except Exception:
+                        logger.exception("Error while logging top view embed fields")
+
+                    await ctx.send(embed=embed)
+                    return
 
                 # 🎯 TRY TO GET HARDCODED TEAMS FIRST
                 hardcoded_teams = await self.get_hardcoded_teams(db, latest_date)
@@ -2614,7 +3714,7 @@ class ETLegacyCommands(commands.Cog):
                                         ELSE 0
                                     END as weighted_dpm,
                                     SUM(deaths),
-                                    SUM(times_revived),
+                                    SUM(revives_given),
                                     SUM(gibs)
                                 FROM player_comprehensive_stats
                                 WHERE session_id IN ({session_ids_str})
@@ -2642,7 +3742,7 @@ class ETLegacyCommands(commands.Cog):
                                     ELSE 0
                                 END as weighted_dpm,
                                 SUM(deaths),
-                                SUM(times_revived),
+                                SUM(revives_given),
                                 SUM(gibs)
                             FROM player_comprehensive_stats
                             WHERE session_id IN ({session_ids_str})
@@ -2670,7 +3770,7 @@ class ETLegacyCommands(commands.Cog):
                                     ELSE 0
                                 END as weighted_dpm,
                                 SUM(deaths),
-                                SUM(times_revived),
+                                SUM(revives_given),
                                 SUM(gibs)
                             FROM player_comprehensive_stats
                             WHERE session_id IN ({session_ids_str})
@@ -2709,7 +3809,7 @@ class ETLegacyCommands(commands.Cog):
 
                 # Fetch player revives for weapon mastery embed
                 query = f'''
-                    SELECT player_name, SUM(times_revived) as revives
+                    SELECT player_name, SUM(revives_given) as revives
                     FROM player_comprehensive_stats
                     WHERE session_id IN ({session_ids_str})
                     GROUP BY player_name
@@ -2824,13 +3924,13 @@ class ETLegacyCommands(commands.Cog):
             if maps_text:
                 embed1.add_field(name="🗺️ Maps Played", value=maps_text, inline=False)
 
-            # All players on embed1
+            # All players on embed1 (chunk into safe-sized fields to avoid Discord limits)
             if all_players:
                 top_text = ""
                 medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
                 for i, player in enumerate(all_players):
                     name, kills, deaths, dpm, hits, shots = player[0:6]
-                    total_hs, hsk, total_seconds, total_time_dead = player[6:10]
+                    total_hs, hsk, total_seconds, total_time_dead, total_denied = player[6:11]
 
                     # Handle NULL values from database
                     kills = kills or 0
@@ -2853,11 +3953,15 @@ class ETLegacyCommands(commands.Cog):
                     dead_seconds = int(time_dead_seconds % 60)
                     time_dead_display = f"{dead_minutes}:{dead_seconds:02d}"
 
+                    # Calculate time denied (NEW)
+                    total_denied = int(total_denied or 0)
+                    denied_minutes = int(total_denied // 60)
+                    denied_seconds = int(total_denied % 60)
+                    time_denied_display = f"{denied_minutes}:{denied_seconds:02d}"
+
                     # Calculate metrics
                     kd_ratio = kills / deaths if deaths > 0 else kills
                     acc = (hits / shots * 100) if shots and shots > 0 else 0
-                    # HSK rate = headshot kills / total kills
-                    hsk_rate = (hsk / kills * 100) if kills and kills > 0 else 0
                     # HS rate = headshots / hits
                     hs_rate = (total_hs / hits * 100) if hits and hits > 0 else 0
 
@@ -2869,17 +3973,146 @@ class ETLegacyCommands(commands.Cog):
                         f"`{dpm:.0f} DPM` • "
                         f"`{acc:.1f}% ACC ({hits}/{shots})`\n"
                     )
-                    # Line 2: Advanced stats with time alive and time dead
+                    # Line 2: Time stats and headshots (UPDATED: removed HSK, added time denied)
                     top_text += (
-                        f"`{hsk} HSK ({hsk_rate:.1f}%)` • "
                         f"`{total_hs} HS ({hs_rate:.1f}%)` • "
-                        f"⏱️ `{time_display}` • 💀 `{time_dead_display}`\n\n"
+                        f"⏱️ `{time_display}` • 💀 `{time_dead_display}` • ⏳ `{time_denied_display}`\n\n"
                     )
 
-                embed1.add_field(name="🏆 All Players", value=top_text.rstrip(), inline=False)
+                # Split into safe-sized chunks (keep a margin under Discord's 1024 limit)
+                def _split_chunks(s: str, max_len: int = 900):
+                    lines = s.splitlines(keepends=True)
+                    chunks = []
+                    cur = ''
+                    for line in lines:
+                        if len(cur) + len(line) > max_len:
+                            chunks.append(cur.rstrip())
+                            cur = line
+                        else:
+                            cur += line
+                    if cur:
+                        chunks.append(cur.rstrip())
+                    return chunks
+
+                chunks = _split_chunks(top_text.rstrip(), max_len=900)
+
+                if len(chunks) == 1:
+                    embed1.add_field(name="🏆 All Players", value=chunks[0], inline=False)
+                else:
+                    # First chunk goes into the primary embed
+                    embed1.add_field(name="🏆 All Players", value=chunks[0], inline=False)
+                    # Build continuation embeds for the rest and attach to ctx for later sending
+                    cont_embeds = []
+                    for ch in chunks[1:]:
+                        cont = discord.Embed(
+                            title=f"📊 Session Summary: {latest_date} (cont.)",
+                            color=0x5865F2,
+                            timestamp=datetime.now(),
+                        )
+                        cont.add_field(name="🏆 All Players (cont.)", value=ch, inline=False)
+                        cont_embeds.append(cont)
+
+                    # Save on ctx so the existing send loop below will pick them up
+                    setattr(ctx, '_last_session_continuation', cont_embeds)
 
             embed1.set_footer(text=f"Session: {latest_date}")
-            await ctx.send(embed=embed1)
+            # Lightweight helper to log field lengths before sending embeds.
+            async def _log_and_send(embed_obj, name=None):
+                """Log embed field lengths and automatically chunk any overly-large field.
+
+                Behavior:
+                - Any field with length > 900 will be split by lines into ~900-char chunks.
+                - The primary embed will contain the first chunk for each long field.
+                - Remaining chunks become continuation embeds stored locally and sent immediately after.
+                """
+                nm = name or 'embed'
+                try:
+                    # Prepare fields for the main embed and collect continuation embeds
+                    main_fields = []
+                    continuation_embeds = []
+
+                    for idx, fld in enumerate(list(embed_obj.fields)):
+                        try:
+                            val = fld.value or ''
+                            ln = len(val)
+                        except Exception:
+                            val = ''
+                            ln = 0
+
+                        logger.debug(f"[last_session] {nm} field[{idx}] '{fld.name}' length={ln}")
+                        if ln > 1024:
+                            logger.warning(f"[last_session] {nm} field[{idx}] '{fld.name}' LENGTH {ln} > 1024 - will chunk to avoid HTTP 400")
+
+                        # Auto-chunk if the field is getting large (keep margin under 1024)
+                        if ln > 900:
+                            chunks = _split_chunks(val, max_len=900)
+                            # first chunk stays in the main embed
+                            first_chunk = chunks[0] if chunks else ''
+                            main_fields.append((fld.name, first_chunk, fld.inline))
+
+                            # Remaining chunks become continuation embeds (one field per embed)
+                            for i, ch in enumerate(chunks[1:], start=2):
+                                cont = discord.Embed(
+                                    title=(embed_obj.title + " (cont.)") if embed_obj.title else "(cont.)",
+                                    description=None,
+                                    color=getattr(embed_obj, 'colour', getattr(embed_obj, 'color', None)) or 0x2b2d31,
+                                    timestamp=getattr(embed_obj, 'timestamp', None),
+                                )
+                                cont.add_field(name=f"{fld.name} (cont. {i})", value=ch, inline=False)
+                                continuation_embeds.append(cont)
+                        else:
+                            main_fields.append((fld.name, val, fld.inline))
+
+                    # Rebuild a main embed preserving basic attributes
+                    main = discord.Embed(
+                        title=embed_obj.title,
+                        description=embed_obj.description,
+                        color=getattr(embed_obj, 'colour', getattr(embed_obj, 'color', None)) or 0x2b2d31,
+                        timestamp=getattr(embed_obj, 'timestamp', None),
+                    )
+
+                    # Add prepared fields
+                    for name_f, value_f, inline_f in main_fields:
+                        main.add_field(name=name_f, value=value_f, inline=inline_f)
+
+                    # Preserve footer if present
+                    try:
+                        if embed_obj.footer and getattr(embed_obj.footer, 'text', None):
+                            main.set_footer(text=embed_obj.footer.text)
+                    except Exception:
+                        pass
+
+                except Exception as e:
+                    logger.exception(f"[last_session] error while preparing embed for send: {e}")
+                    # Fallback to sending original embed if something went wrong
+                    await ctx.send(embed=embed_obj)
+                    return
+
+                # Send main embed
+                await ctx.send(embed=main)
+
+                # Send any continuation embeds (add page footers)
+                if continuation_embeds:
+                    total_pages = 1 + len(continuation_embeds)
+                    for i, cont in enumerate(continuation_embeds):
+                        try:
+                            cont.set_footer(text=(f"Session: {latest_date} • Page {i+2}/{total_pages}"))
+                        except Exception:
+                            pass
+                        await ctx.send(embed=cont)
+                        await asyncio.sleep(1.2)
+
+            await _log_and_send(embed1, 'embed1')
+
+            # Send any continuation embeds created when chunking large fields
+            if hasattr(ctx, '_last_session_continuation') and ctx._last_session_continuation:
+                cont_embeds = getattr(ctx, '_last_session_continuation')
+                for i, cont in enumerate(cont_embeds):
+                    # Page numbering: first embed is embed1, continuations start at page 2
+                    cont.set_footer(text=f"Session: {latest_date} • Page {i+2}/{len(cont_embeds)+1}")
+                    await _log_and_send(cont, f"cont_{i+2}")
+                    await asyncio.sleep(1.5)
+
             await asyncio.sleep(2)  # Rate limit protection
 
             # ═══════════════════════════════════════════════════════
@@ -3034,7 +4267,7 @@ class ETLegacyCommands(commands.Cog):
                 embed2.add_field(name=f"🔵 {team_2_name} MVP", value=team_2_mvp_text, inline=True)
 
             embed2.set_footer(text=f"Session: {latest_date}")
-            await ctx.send(embed=embed2)
+            await _log_and_send(embed2, 'embed2')
             await asyncio.sleep(4)  # Rate limit protection
 
             # ═══════════════════════════════════════════════════════
@@ -3138,7 +4371,7 @@ class ETLegacyCommands(commands.Cog):
             )
 
             embed3.set_footer(text=f"Session: {latest_date}")
-            await ctx.send(embed=embed3)
+            await _log_and_send(embed3, 'embed3')
             await asyncio.sleep(8)  # Rate limit protection
 
             # ═══════════════════════════════════════════════════════
@@ -3180,7 +4413,7 @@ class ETLegacyCommands(commands.Cog):
                 embed4.add_field(name="💥 DPM Insights", value=insights, inline=False)
 
             embed4.set_footer(text="💥 Enhanced with Kill/Death Details")
-            await ctx.send(embed=embed4)
+            await _log_and_send(embed4, 'embed4')
             await asyncio.sleep(16)  # Rate limit protection
 
             # ═══════════════════════════════════════════════════════
@@ -3237,7 +4470,7 @@ class ETLegacyCommands(commands.Cog):
                 )
 
             embed5.set_footer(text=f"Session: {latest_date}")
-            await ctx.send(embed=embed5)
+            await _log_and_send(embed5, 'embed5')
             await asyncio.sleep(2)
 
             # ═══════════════════════════════════════════════════════
@@ -3307,10 +4540,47 @@ class ETLegacyCommands(commands.Cog):
                         player_objectives[player_name]['worst_spree'], row[18] or 0
                     )
 
-                # Sort players by XP and show top 6
+                # Sort players by XP and show top N (default 8)
+                top_n = min(8, len(player_objectives))
                 sorted_players = sorted(
                     player_objectives.items(), key=lambda x: x[1]['xp'], reverse=True
-                )[:6]
+                )[:top_n]
+
+                # If user requested objectives-only view, send a compact embed now
+                if subcommand and subcommand.lower() in ('obj', 'objectives'):
+                    try:
+                        compact = discord.Embed(
+                            title=f"🎯 Objective & Support - {latest_date}",
+                            description=f"Top objective contributors • {player_count} players",
+                            color=0x00D166,
+                            timestamp=datetime.now(),
+                        )
+
+                        for i, (player, stats) in enumerate(sorted_players, 1):
+                            text = f"XP: `{stats['xp']}` • Revives: `{stats.get('revived', 0)}`\n"
+                            text += (
+                                f"Dyns: `{stats.get('dyn_planted', 0)}/{stats.get('dyn_defused', 0)}` • "
+                                f"S/R: `{stats.get('obj_stolen', 0)}/{stats.get('obj_returned', 0)}`\n"
+                            )
+                            text += (
+                                f"Useful/Useless: `{stats.get('useful_kills', 0)}/{stats.get('useless_kills', 0)}` • "
+                                f"Gibs: `{stats.get('gibs', 0)}` • BestSpree: `{stats.get('best_spree', 0)}`"
+                            )
+                            compact.add_field(name=f"{i}. {player}", value=text, inline=False)
+
+                        compact.set_footer(text=f"Session: {latest_date} • Use !last_session for full report")
+
+                        # Log field lengths and send
+                        for idx, fld in enumerate(compact.fields):
+                            ln = len(fld.value or '')
+                            logger.debug(f"[last_session/obj] field[{idx}] '{fld.name}' length={ln}")
+                            if ln > 1024:
+                                logger.warning(f"[last_session/obj] field[{idx}] '{fld.name}' LENGTH {ln} > 1024")
+
+                        await ctx.send(embed=compact)
+                        return
+                    except Exception:
+                        logger.exception("Error while building compact objectives view")
 
                 for i, (player, stats) in enumerate(sorted_players, 1):
                     obj_text = f"**XP:** `{stats['xp']}`\n"
@@ -3377,7 +4647,7 @@ class ETLegacyCommands(commands.Cog):
                     embed6.add_field(name=f"{i}. {player}", value=obj_text.rstrip(), inline=True)
 
                 embed6.set_footer(text="🎯 S/R = Stolen/Returned | P/D = Planted/Defused")
-                await ctx.send(embed=embed6)
+                await _log_and_send(embed6, 'embed6')
                 await asyncio.sleep(2)  # Rate limit before awards
 
             # ═══════════════════════════════════════════════════════
@@ -3548,7 +4818,7 @@ class ETLegacyCommands(commands.Cog):
                 embed7.description = "*No notable awards this session*"
 
             embed7.set_footer(text="🎉 Keep up the good work... or not!")
-            await ctx.send(embed=embed7)
+            await _log_and_send(embed7, 'embed7')
             await asyncio.sleep(2)
 
             # ═══════════════════════════════════════════════════════
@@ -3646,7 +4916,7 @@ class ETLegacyCommands(commands.Cog):
                 )
 
             embed8.set_footer(text="😈 Embrace the chaos!")
-            await ctx.send(embed=embed8)
+            await _log_and_send(embed8, 'embed8')
             await asyncio.sleep(2)  # Rate limit before graphs
 
             # ═══════════════════════════════════════════════════════
@@ -5375,11 +6645,51 @@ class UltimateETLegacyBot(commands.Bot):
         parent_dir = os.path.dirname(bot_dir)
         
         # ✅ Try multiple database locations
+        # Prefer the DB inside the bot directory by default (local dev copy)
         possible_paths = [
+            os.path.join(bot_dir, 'etlegacy_production.db'),     # Bot directory (preferred)
             os.path.join(parent_dir, 'etlegacy_production.db'),  # Project root
-            os.path.join(bot_dir, 'etlegacy_production.db'),     # Bot directory
             'etlegacy_production.db',                             # Current dir
         ]
+
+        # Allow explicit override via environment variable.
+        # By default prefer the bot-local DB if it exists. To force the env
+        # override, set ETLEGACY_DB_FORCE=true in the environment.
+        env_db = os.getenv('ETLEGACY_DB_PATH') or os.getenv('DB_PATH')
+        force_override = os.getenv('ETLEGACY_DB_FORCE', 'false').lower() == 'true'
+        bot_db = os.path.join(bot_dir, 'etlegacy_production.db')
+
+        if env_db:
+            # Expand user and make absolute for clarity
+            env_db = os.path.abspath(os.path.expanduser(env_db))
+            # If force flag set, honor env var; otherwise prefer local bot DB when present
+            if force_override:
+                logger.info(f"🔧 DB override provided via env and forced: {env_db} (will be preferred)")
+                if env_db not in possible_paths:
+                    possible_paths.insert(0, env_db)
+            else:
+                # If the bot-local DB exists, prefer it and keep env_db as fallback
+                if os.path.exists(bot_db):
+                    logger.warning(
+                        f"⚠️ ETLEGACY_DB_PATH is set to {env_db} but a local bot DB was found at {bot_db}."
+                        " Using the local bot DB by default. To force the env path set ETLEGACY_DB_FORCE=true."
+                    )
+                    # Ensure bot_db is first (possible_paths already has bot_db first by default)
+                    if possible_paths[0] != bot_db:
+                        # Remove bot_db if it appears later and put it first
+                        try:
+                            possible_paths.remove(bot_db)
+                        except ValueError:
+                            pass
+                        possible_paths.insert(0, bot_db)
+                    # Add env_db as a fallback if it's not already listed
+                    if env_db not in possible_paths:
+                        possible_paths.append(env_db)
+                else:
+                    # No local bot DB found - fall back to env_db
+                    logger.info(f"🔧 ETLEGACY_DB_PATH provided: {env_db} (no local bot DB found)")
+                    if env_db not in possible_paths:
+                        possible_paths.insert(0, env_db)
         
         self.db_path = None
         for path in possible_paths:
@@ -5956,7 +7266,13 @@ class UltimateETLegacyBot(commands.Bot):
                 stats_data,
                 filename
             )
-            
+            # Mark file as processed only after successful import
+            try:
+                await self._mark_file_processed(filename, success=True)
+                self.processed_files.add(filename)
+            except Exception as e:
+                logger.debug(f"Failed to mark {filename} as processed: {e}")
+
             return {
                 'success': True,
                 'session_id': session_id,
@@ -5986,6 +7302,8 @@ class UltimateETLegacyBot(commands.Bot):
             date_part = '-'.join(filename.split('-')[:3])  # Date for stats
             
             async with aiosqlite.connect(self.db_path) as db:
+                # Start an explicit transaction so we can rollback on error
+                await db.execute('BEGIN')
                 # Insert session
                 cursor = await db.execute('''
                     SELECT id FROM sessions
@@ -6027,6 +7345,13 @@ class UltimateETLegacyBot(commands.Bot):
                 return session_id
                 
         except Exception as e:
+            # Attempt a rollback to ensure partial writes are not committed
+            try:
+                async with aiosqlite.connect(self.db_path) as db:
+                    await db.execute('ROLLBACK')
+            except Exception:
+                logger.debug("Rollback failed or not required")
+
             logger.error(f"❌ Database import failed: {e}")
             raise
     
