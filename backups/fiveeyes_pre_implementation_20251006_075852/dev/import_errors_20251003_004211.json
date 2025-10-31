@@ -1,0 +1,38 @@
+[
+  {
+    "file": "2025-01-01-213008-etl_adlernest-round-2.txt",
+    "error": "Failed to create session"
+  },
+  {
+    "file": "2025-01-01-214308-supply-round-1.txt",
+    "error": "Failed to create session"
+  },
+  {
+    "file": "2025-01-01-215456-supply-round-2.txt",
+    "error": "Failed to create session"
+  },
+  {
+    "file": "2025-01-01-215921-etl_sp_delivery-round-1.txt",
+    "error": "Failed to create session"
+  },
+  {
+    "file": "2025-01-01-220412-etl_sp_delivery-round-2.txt",
+    "error": "Failed to create session"
+  },
+  {
+    "file": "2025-01-01-221414-te_escape2-round-1.txt",
+    "error": "Failed to create session"
+  },
+  {
+    "file": "2025-01-01-221818-te_escape2-round-2.txt",
+    "error": "Failed to create session"
+  },
+  {
+    "file": "2025-01-01-222512-te_escape2-round-1.txt",
+    "error": "Failed to create session"
+  },
+  {
+    "file": "2025-01-01-223307-te_escape2-round-2.txt",
+    "error": "Failed to create session"
+  }
+]
