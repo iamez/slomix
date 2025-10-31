@@ -20,7 +20,11 @@ class SimpleBulkImporter:
     """Simple bulk importer using existing parser"""
 
     def __init__(
+<<<<<<< HEAD
         self, db_path="etlegacy_production.db", stats_dir="local_stats", file_patterns=None
+=======
+        self, db_path="bot/etlegacy_production.db", stats_dir="local_stats", file_patterns=None
+>>>>>>> clean-restructure
     ):
         self.db_path = db_path
         self.stats_dir = stats_dir
@@ -28,6 +32,10 @@ class SimpleBulkImporter:
         self.parser = C0RNP0RN3StatsParser()
         self.processed = 0
         self.failed = 0
+<<<<<<< HEAD
+=======
+        self.skipped = 0
+>>>>>>> clean-restructure
         self.failed_files = []
 
     def get_stats_files(self):
@@ -75,13 +83,24 @@ class SimpleBulkImporter:
             '''
             INSERT INTO sessions (
                 session_date, map_name, round_number,
+<<<<<<< HEAD
                 time_limit, actual_time
             ) VALUES (?, ?, ?, ?, ?)
+=======
+                defender_team, winner_team,
+                time_limit, actual_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+>>>>>>> clean-restructure
         ''',
             (
                 timestamp,  # Use full timestamp for uniqueness
                 result['map_name'],
                 result['round_num'],
+<<<<<<< HEAD
+=======
+                result.get('defender_team', 0),
+                result.get('winner_team', 0),
+>>>>>>> clean-restructure
                 result.get('map_time', ''),
                 result.get('actual_time', ''),
             ),
@@ -241,12 +260,51 @@ class SimpleBulkImporter:
                 ),
             )
 
+<<<<<<< HEAD
     def process_file(self, file_path):
         """Process a single stats file"""
         try:
             # Extract date from filename: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
             filename = file_path.name
             date_part = '-'.join(filename.split('-')[:3])  # YYYY-MM-DD for stats
+=======
+    def is_file_processed(self, conn, filename):
+        """Check if file was already processed"""
+        cursor = conn.cursor()
+        result = cursor.execute(
+            'SELECT 1 FROM processed_files WHERE filename = ?',
+            (filename,)
+        ).fetchone()
+        return result is not None
+
+    def mark_file_processed(self, conn, filename, success=True, error_msg=None):
+        """Mark file as processed in database"""
+        cursor = conn.cursor()
+        cursor.execute(
+            '''INSERT INTO processed_files 
+               (filename, success, error_message) 
+               VALUES (?, ?, ?)''',
+            (filename, 1 if success else 0, error_msg)
+        )
+
+    def process_file(self, file_path):
+        """Process a single stats file"""
+        filename = file_path.name
+        
+        # Connect to database first to check if already processed
+        conn = sqlite3.connect(self.db_path)
+        
+        try:
+            # Check if already processed
+            if self.is_file_processed(conn, filename):
+                self.skipped += 1
+                if self.skipped <= 5:  # Show first 5 skips
+                    print(f"⏭️  Skipping {filename} (already processed)")
+                return
+            
+            # Extract date from filename: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+            date_part = '-'.join(filename.split('-')[:3])  # YYYY-MM-DD
+>>>>>>> clean-restructure
 
             # Parse file
             result = self.parser.parse_stats_file(str(file_path))
@@ -255,6 +313,7 @@ class SimpleBulkImporter:
                 error_msg = result.get('error', 'Unknown error')
                 raise Exception(f"Parser failed: {error_msg}")
 
+<<<<<<< HEAD
             # Connect to database
             conn = sqlite3.connect(self.db_path)
 
@@ -277,12 +336,53 @@ class SimpleBulkImporter:
 
             finally:
                 conn.close()
+=======
+            # Insert session
+            session_id = self.insert_session(conn, date_part, result, filename)
+
+            # Insert all players and their weapon stats
+            for player in result.get('players', []):
+                self.insert_player_stats(
+                    conn, session_id, date_part, result, player
+                )
+                self.insert_weapon_stats(
+                    conn, session_id, date_part, result, player
+                )
+
+            # Mark as processed
+            self.mark_file_processed(conn, filename, success=True)
+            
+            conn.commit()
+
+            self.processed += 1
+
+            # Progress update every 50 files
+            if self.processed % 50 == 0:
+                print(f"✅ Processed {self.processed} files...")
+>>>>>>> clean-restructure
 
         except Exception as e:
             self.failed += 1
             self.failed_files.append((str(file_path), str(e)))
+<<<<<<< HEAD
             if self.failed <= 10:  # Only show first 10 errors
                 print(f"❌ Error processing {file_path.name}: {e}")
+=======
+            
+            # Try to mark as failed
+            try:
+                self.mark_file_processed(conn, filename, success=False, 
+                                        error_msg=str(e))
+                conn.commit()
+            except:
+                pass  # Ignore errors marking failed files
+            
+            if self.failed <= 10:  # Only show first 10 errors
+                print(f"❌ Error processing {file_path.name}: {e}")
+        
+        finally:
+            conn.close()
+>>>>>>> clean-restructure
 
     def import_all(self):
         """Import all stats files"""
@@ -311,10 +411,19 @@ class SimpleBulkImporter:
         print("\n" + "=" * 60)
         print("📊 IMPORT COMPLETE")
         print("=" * 60)
+<<<<<<< HEAD
         print(f"✅ Successfully processed: {self.processed}/{total} files")
         print(f"❌ Failed: {self.failed}/{total} files")
         print(f"⏱️  Duration: {duration:.1f} seconds")
         print(f"⚡ Average: {duration / total:.2f} seconds per file")
+=======
+        print(f"✅ Successfully imported: {self.processed}/{total} files")
+        print(f"⏭️  Skipped (already processed): {self.skipped}/{total} files")
+        print(f"❌ Failed: {self.failed}/{total} files")
+        print(f"⏱️  Duration: {duration:.1f} seconds")
+        if total > 0:
+            print(f"⚡ Average: {duration / total:.2f} seconds per file")
+>>>>>>> clean-restructure
 
         if self.failed_files:
             print(f"\n⚠️  Failed files ({len(self.failed_files)}):")

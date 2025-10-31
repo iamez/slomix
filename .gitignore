@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Python
 __pycache__/
 *.py[cod]
@@ -39,11 +40,46 @@ local_stats/
 !requirements.txt
 
 # IDE
+=======
+# ET:Legacy Discord Bot - .gitignore
+
+# Environment files
+.env
+*.env
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+logs/
+
+# Stats files (too many, too large)
+*.txt
+!requirements.txt
+stats_cache/
+local_stats/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# IDE files
+>>>>>>> clean-restructure
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+<<<<<<< HEAD
 .DS_Store
 
 # Logs
@@ -57,3 +93,13 @@ backups/
 .pytest_cache/
 .coverage
 htmlcov/
+=======
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+>>>>>>> clean-restructure
