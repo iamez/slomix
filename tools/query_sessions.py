@@ -1,0 +1,11 @@
+import sqlite3, pprint
+con = sqlite3.connect('bot/etlegacy_production.db')
+cur = con.cursor()
+cur.execute('SELECT count(*) FROM sessions')
+print('sessions:', cur.fetchone()[0])
+cur.execute('SELECT id, started_at, map_name FROM sessions ORDER BY started_at DESC LIMIT 5')
+rows = cur.fetchall()
+print('\nrecent sessions:')
+pp = pprint.PrettyPrinter(depth=4)
+pp.pprint(rows)
+con.close()

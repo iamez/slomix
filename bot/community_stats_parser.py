@@ -556,8 +556,8 @@ class C0RNP0RN3StatsParser:
             map_name = header_parts[1]
             header_parts[2]
             round_num = int(header_parts[3]) if header_parts[3].isdigit() else 1
-            int(header_parts[4]) if header_parts[4].isdigit() else 1
-            int(header_parts[5]) if header_parts[5].isdigit() else 1
+            defender_team = int(header_parts[4]) if len(header_parts) > 4 and header_parts[4].isdigit() else 1
+            winner_team = int(header_parts[5]) if len(header_parts) > 5 and header_parts[5].isdigit() else 0
             map_time = header_parts[6]
             actual_time = header_parts[7] if len(header_parts) > 7 else "Unknown"
 
@@ -619,6 +619,8 @@ class C0RNP0RN3StatsParser:
                 'success': True,
                 'map_name': map_name,
                 'round_num': round_num,
+                'defender_team': defender_team,
+                'winner_team': winner_team,
                 'map_time': map_time,
                 'actual_time': actual_time,
                 'round_outcome': round_outcome,

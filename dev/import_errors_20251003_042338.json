@@ -1,0 +1,22 @@
+[
+  {
+    "file": "2024-03-20-073917-radar-round-2.txt",
+    "error": "Parse error: insufficient lines"
+  },
+  {
+    "file": "2024-03-20-080016-radar-round-2.txt",
+    "error": "Parse error: insufficient lines"
+  },
+  {
+    "file": "2024-03-20-092144-supply-round-2.txt",
+    "error": "Parse error: insufficient lines"
+  },
+  {
+    "file": "2024-03-20-102219-supply-round-2.txt",
+    "error": "Parse error: insufficient lines"
+  },
+  {
+    "file": "2024-03-24-190028-radar-round-2.txt",
+    "error": "Parse error: insufficient lines"
+  }
+]

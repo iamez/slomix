@@ -1,0 +1,22 @@
+# ET:Legacy Discord Bot V2 - Python Dependencies
+
+# Discord
+discord.py==2.3.2
+
+# Database
+aiosqlite==0.19.0
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Optional: SSH Support (uncomment if using SSH monitoring)
+# asyncssh==2.14.0
+
+# Optional: Better logging (uncomment if desired)
+# colorlog==6.8.0
+
+# Development Dependencies (optional)
+# pytest==7.4.3
+# pytest-asyncio==0.21.1
+# black==23.12.0
+# flake8==6.1.0
