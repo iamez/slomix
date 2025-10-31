@@ -1,0 +1,97 @@
+{
+	"folders": [
+		{
+			"name": "ET:Legacy Discord Bot",
+			"path": "."
+		}
+	],
+	"settings": {
+		"python.defaultInterpreterPath": "python",
+		"python.terminal.activateEnvironment": true,
+		"files.exclude": {
+			"**/__pycache__": true,
+			"**/*.pyc": true,
+			"**/.pytest_cache": true,
+			"**/node_modules": true
+		},
+		"files.associations": {
+			"*.txt": "plaintext",
+			"*.log": "log"
+		},
+		"editor.rulers": [88],
+		"python.formatting.provider": "black",
+		"python.linting.enabled": true,
+		"python.linting.pylintEnabled": false,
+		"python.linting.flake8Enabled": true,
+		"terminal.integrated.defaultProfile.windows": "PowerShell",
+		"workbench.startupEditor": "readme"
+	},
+	"extensions": {
+		"recommendations": [
+			"ms-python.python",
+			"ms-python.flake8",
+			"ms-python.black-formatter",
+			"ms-toolsai.jupyter",
+			"github.vscode-pull-request-github",
+			"eamodio.gitlens"
+		]
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Run Simple Bot",
+				"type": "debugpy",
+				"request": "launch",
+				"program": "${workspaceFolder}/simple_bot.py",
+				"console": "integratedTerminal",
+				"envFile": "${workspaceFolder}/.env"
+			},
+			{
+				"name": "Run Enhanced Bot",
+				"type": "debugpy",
+				"request": "launch",
+				"program": "${workspaceFolder}/enhanced_bot.py",
+				"console": "integratedTerminal",
+				"envFile": "${workspaceFolder}/.env"
+			},
+			{
+				"name": "Run Bot with Awards",
+				"type": "debugpy",
+				"request": "launch",
+				"program": "${workspaceFolder}/src/bot_with_awards.py",
+				"console": "integratedTerminal",
+				"envFile": "${workspaceFolder}/.env"
+			}
+		]
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "Install Dependencies",
+				"type": "shell",
+				"command": "pip",
+				"args": ["install", "-r", "requirements.txt"],
+				"group": "build",
+				"detail": "Install all Python dependencies"
+			},
+			{
+				"label": "Run Tests",
+				"type": "shell",
+				"command": "python",
+				"args": ["-m", "pytest"],
+				"group": "test",
+				"detail": "Run all project tests"
+			},
+			{
+				"label": "Start Bot (Simple)",
+				"type": "shell",
+				"command": "python",
+				"args": ["simple_bot.py"],
+				"group": "build",
+				"detail": "Start the simple Discord bot"
+			}
+		]
+	}
+}
