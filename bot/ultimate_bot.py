@@ -25,7 +25,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools.stopwatch_scoring import StopwatchScoring
 
 # Import extracted core classes
-from bot.core import StatsCache
+from bot.core import StatsCache, SeasonManager
 
 # Load environment variables if available
 try:
@@ -122,133 +122,11 @@ def _split_chunks(s: str, max_len: int = 900):
 # 🚀 PERFORMANCE: QUERY CACHE
 # ============================================================================
 # NOTE: StatsCache has been extracted to bot/core/stats_cache.py
-# Imported at top of file: from bot.core import StatsCache
-
-
 # ============================================================================
 # 📅 SEASON SYSTEM: QUARTERLY COMPETITION RESETS
 # ============================================================================
-class SeasonManager:
-    """
-    Manages quarterly competitive seasons with leaderboard resets.
-
-    Features:
-    - Automatic season calculation (Q1: Jan-Mar, Q2: Apr-Jun, Q3: Jul-Sep, Q4: Oct-Dec)
-    - Season-filtered queries for leaderboards
-    - All-time stats preservation
-    - Season transition detection
-
-    Season Format: "2025-Q4" (Year-Quarter)
-
-    Usage:
-        sm = SeasonManager()
-        current = sm.get_current_season()  # "2025-Q4"
-        start, end = sm.get_season_dates(current)
-        is_new = sm.is_new_season("2025-Q3")
-    """
-
-    def __init__(self):
-        self.season_names = {1: "Spring", 2: "Summer", 3: "Fall", 4: "Winter"}
-        logger.info(
-            f"📅 SeasonManager initialized - Current: {self.get_current_season()}"
-        )
-
-    def get_current_season(self):
-        """Get current season identifier (e.g., '2025-Q4')"""
-        now = datetime.now()
-        quarter = (now.month - 1) // 3 + 1
-        return f"{now.year}-Q{quarter}"
-
-    def get_season_name(self, season_id=None):
-        """Get friendly season name (e.g., '2025 Winter (Q4)')"""
-        if season_id is None:
-            season_id = self.get_current_season()
-
-        year, quarter = season_id.split("-Q")
-        quarter_num = int(quarter)
-        season_name = self.season_names.get(quarter_num, f"Q{quarter_num}")
-        return f"{year} {season_name} (Q{quarter_num})"
-
-    def get_season_dates(self, season_id=None):
-        """Get start and end dates for a season"""
-        if season_id is None:
-            season_id = self.get_current_season()
-
-        year, quarter = season_id.split("-Q")
-        year = int(year)
-        quarter = int(quarter)
-
-        # Calculate start month
-        start_month = (quarter - 1) * 3 + 1
-
-        # Start: First day of first month
-        start_date = datetime(year, start_month, 1)
-
-        # End: Last day of last month in quarter
-        if quarter == 4:
-            end_date = datetime(year, 12, 31, 23, 59, 59)
-        else:
-            end_month = start_month + 2
-            # Get last day of end month
-            if end_month == 12:
-                end_date = datetime(year, 12, 31, 23, 59, 59)
-            else:
-                # First day of next month minus 1 second
-                next_month = datetime(year, end_month + 1, 1)
-                end_date = datetime(
-                    year,
-                    end_month,
-                    (next_month - datetime(year, end_month, 1)).days,
-                    23,
-                    59,
-                    59,
-                )
-
-        return start_date, end_date
-
-    def get_season_sql_filter(self, season_id=None):
-        """Get SQL WHERE clause for filtering by season"""
-        if season_id is None or season_id.lower() == "current":
-            season_id = self.get_current_season()
-
-        if season_id.lower() == "alltime":
-            return ""  # No filter for all-time stats
-
-        start_date, end_date = self.get_season_dates(season_id)
-        return f"AND s.session_date >= '{start_date.strftime('%Y-%m-%d')}' AND s.session_date <= '{end_date.strftime('%Y-%m-%d')}'"
-
-    def is_new_season(self, last_known_season):
-        """Check if we've transitioned to a new season"""
-        current = self.get_current_season()
-        return current != last_known_season
-
-    def get_all_seasons(self):
-        """Get list of all available seasons (for dropdown/selection)"""
-        # For now, just return current season
-        # In future, could query database for actual seasons with data
-        current = self.get_current_season()
-        year, quarter = current.split("-Q")
-        year = int(year)
-        quarter = int(quarter)
-
-        seasons = []
-        # Generate last 4 quarters (1 year of seasons)
-        for i in range(4):
-            q = quarter - i
-            y = year
-            if q <= 0:
-                q += 4
-                y -= 1
-            seasons.append(f"{y}-Q{q}")
-
-        return seasons
-
-    def get_days_until_season_end(self):
-        """Get number of days until current season ends"""
-        _, end_date = self.get_season_dates()
-        now = datetime.now()
-        delta = end_date - now
-        return delta.days
+# EXTRACTED: SeasonManager class moved to bot/core/season_manager.py
+# Imported at top of file: from bot.core import SeasonManager
 
 
 # ============================================================================
