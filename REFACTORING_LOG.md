@@ -83,16 +83,63 @@ assert cache.stats()['total_keys'] == 1
 
 ---
 
-## ⏳ Extraction #2: SeasonManager (TODO)
+## ✅ Extraction #2: SeasonManager (COMPLETE)
 
-**Original Location:** `ultimate_bot.py` Lines 191-316 (126 lines)  
-**Target Location:** `bot/core/season_manager.py`
+**Original Location:** `ultimate_bot.py` Lines 125-223 (99 lines)  
+**New Location:** `bot/core/season_manager.py` (244 lines with docs)  
+**Extracted:** 2025-11-01  
+**Commit:** TBD
 
-### What to Extract
-- `class SeasonManager` - Quarterly season/competition management
-- Season start/end date calculations
-- Current season detection
-- Season leaderboard generation
+### What Was Extracted
+- ✅ `class SeasonManager` - Quarterly season/competition management
+- ✅ Season start/end date calculations (`get_season_dates()`)
+- ✅ Current season detection (`get_current_season()`)
+- ✅ Season SQL filter generation (`get_season_sql_filter()`)
+- ✅ Season transition detection (`is_new_season()`)
+- ✅ Season list generation (`get_all_seasons()`)
+- ✅ Days until season end (`get_days_until_season_end()`)
+
+### Enhancements Made
+- ✅ Added comprehensive type hints (all methods)
+- ✅ Added detailed docstrings with examples
+- ✅ Documented season format: "YYYY-QN" (e.g., "2025-Q4")
+- ✅ Added return type annotations
+- ✅ Enhanced module-level documentation
+
+### Import Changes
+**Added to `bot/ultimate_bot.py` line 28:**
+```python
+from bot.core import StatsCache, SeasonManager
+```
+
+**Updated `bot/core/__init__.py`:**
+```python
+from .season_manager import SeasonManager
+__all__ = ["StatsCache", "SeasonManager"]
+```
+
+### Testing Results
+```bash
+✅ Syntax validation passed
+✅ Import test passed
+✅ Season calculation verified:
+   - Current: 2025-Q4
+   - Name: 2025 Winter (Q4)
+   - Dates: 2025-10-01 00:00:00 to 2025-12-31 23:59:59
+   - All Seasons: ['2025-Q4', '2025-Q3', '2025-Q2', '2025-Q1']
+   - Days Left: 60
+   - SQL Filter: AND s.session_date >= '2025-10-01' AND s.session_date <= '2025-12-31'
+```
+
+### Line Count Impact
+- **Before:** 10,768 lines
+- **After:** 10,646 lines
+- **Reduction:** -122 lines (1.1%)
+
+### Path Notes
+- ✅ Using proper package import: `from bot.core import SeasonManager`
+- ✅ No hardcoded paths or relative imports
+- ✅ Module works from project root
 
 ---
 
@@ -113,11 +160,17 @@ assert cache.stats()['total_keys'] == 1
 
 | Metric | Before | Current | Target |
 |--------|--------|---------|--------|
-| **Main file lines** | 10,828 | 10,828 | ~500 |
-| **Number of files** | 1 | 3 | ~20 |
-| **Classes extracted** | 0 | 1 | 3 (core) |
+| **Main file lines** | 10,828 | 10,646 | ~500 |
+| **Number of files** | 1 | 4 | ~20 |
+| **Classes extracted** | 0 | 2 | 3 (core) |
 | **Cogs created** | 0 | 0 | 4-5 |
-| **Progress** | 0% | 5% | 100% |
+| **Progress** | 0% | 10% | 100% |
+
+### Extraction Summary
+- ✅ **Extraction #1:** StatsCache (-60 lines)
+- ✅ **Extraction #2:** SeasonManager (-122 lines)
+- ⏳ **Extraction #3:** AchievementSystem (next)
+- **Total Reduction:** -182 lines (1.7%)
 
 ---
 

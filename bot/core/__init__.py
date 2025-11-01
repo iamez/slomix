@@ -6,10 +6,11 @@ during the modular refactoring to improve maintainability.
 
 Modules:
     stats_cache: High-performance caching system for database queries
-    season_manager: Quarterly season/competition management (TODO)
+    season_manager: Quarterly season/competition management
     achievement_system: Player achievement tracking (TODO)
 """
 
 from .stats_cache import StatsCache
+from .season_manager import SeasonManager
 
-__all__ = ["StatsCache"]
+__all__ = ["StatsCache", "SeasonManager"]
