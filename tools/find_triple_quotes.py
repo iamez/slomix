@@ -1,6 +1,8 @@
 import sys
-p = r'g:\VisualStudio\Python\stats\bot\ultimate_bot.py'
-with open(p, 'rb') as f:
+from pathlib import Path
+# Resolve path to ultimate_bot.py relative to project root
+p = Path(__file__).resolve().parent.parent / 'bot' / 'ultimate_bot.py'
+with open(str(p), 'rb') as f:
     s = f.read().decode('utf-8', 'replace')
 lines = s.splitlines()
 count = 0

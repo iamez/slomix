@@ -1,0 +1,174 @@
+
+    async def should_process_file(self, filename):
+        """
+        Smart file processing decision (Hybrid Approach)
+        
+        Checks multiple sources to avoid re-processing:
+        1. In-memory cache (fastest)
+        2. Local file exists (fast)
+        3. Processed files table (fast, persistent)
+        4. Sessions table (slower, definitive)
+        
+        Returns:
+            bool: True if file should be processed, False if already done
+        """
+        try:
+            # 1. Check in-memory cache
+            if filename in self.processed_files:
+                return False
+            
+            # 2. Check if local file exists
+            local_path = os.path.join('local_stats', filename)
+            if os.path.exists(local_path):
+                logger.debug(f"⏭️ {filename} exists locally, marking processed")
+                self.processed_files.add(filename)
+                await self._mark_file_processed(filename, success=True)
+                return False
+            
+            # 3. Check processed_files table
+            if await self._is_in_processed_files_table(filename):
+                logger.debug(f"⏭️ {filename} in processed_files table")
+                self.processed_files.add(filename)
+                return False
+            
+            # 4. Check if session exists in database
+            if await self._session_exists_in_db(filename):
+                logger.debug(f"⏭️ {filename} session exists in DB")
+                self.processed_files.add(filename)
+                await self._mark_file_processed(filename, success=True)
+                return False
+            
+            # File is truly new!
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error checking if should process {filename}: {e}")
+            return False  # Skip on error to be safe
+    
+    async def _is_in_processed_files_table(self, filename):
+        """Check if filename exists in processed_files table"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute(
+                    '''SELECT 1 FROM processed_files 
+                       WHERE filename = ? AND success = 1''',
+                    (filename,)
+                )
+                result = await cursor.fetchone()
+                return result is not None
+        except Exception as e:
+            logger.debug(f"Error checking processed_files table: {e}")
+            return False
+    
+    async def _session_exists_in_db(self, filename):
+        """
+        Check if session exists in database by parsing filename
+        
+        Filename format: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+        """
+        try:
+            file_info = self.parse_gamestats_filename(filename)
+            if not file_info:
+                return False
+            
+            # Use full timestamp for unique identification
+            timestamp = '-'.join(filename.split('-')[:4])
+            
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute('''
+                    SELECT 1 FROM sessions
+                    WHERE session_date = ? 
+                      AND map_name = ? 
+                      AND round_number = ?
+                    LIMIT 1
+                ''', (timestamp, 
+                      file_info['map_name'], 
+                      file_info['round_number']))
+                
+                result = await cursor.fetchone()
+                return result is not None
+                
+        except Exception as e:
+            logger.debug(f"Error checking session in DB: {e}")
+            return False
+    
+    async def _mark_file_processed(self, filename, success=True, 
+                                    error_msg=None):
+        """
+        Mark a file as processed in the processed_files table
+        
+        Args:
+            filename: Name of the processed file
+            success: Whether processing was successful
+            error_msg: Error message if processing failed
+        """
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute('''
+                    INSERT OR REPLACE INTO processed_files 
+                    (filename, success, error_message, processed_at)
+                    VALUES (?, ?, ?, ?)
+                ''', (
+                    filename,
+                    1 if success else 0,
+                    error_msg,
+                    datetime.now().isoformat()
+                ))
+                await db.commit()
+                
+        except Exception as e:
+            logger.debug(f"Error marking file as processed: {e}")
+    
+    async def sync_local_files_to_processed_table(self):
+        """
+        One-time sync: Add existing local_stats files to processed_files
+        
+        Call this during bot startup to populate the table with 
+        already-downloaded files
+        """
+        try:
+            local_dir = 'local_stats'
+            if not os.path.exists(local_dir):
+                return
+            
+            files = [f for f in os.listdir(local_dir) if f.endswith('.txt')]
+            
+            if not files:
+                return
+            
+            logger.info(
+                f"🔄 Syncing {len(files)} local files to "
+                f"processed_files table..."
+            )
+            
+            synced = 0
+            async with aiosqlite.connect(self.db_path) as db:
+                for filename in files:
+                    # Check if already in table
+                    cursor = await db.execute(
+                        'SELECT 1 FROM processed_files WHERE filename = ?',
+                        (filename,)
+                    )
+                    if await cursor.fetchone():
+                        continue  # Already tracked
+                    
+                    # Add to table
+                    await db.execute('''
+                        INSERT INTO processed_files 
+                        (filename, success, error_message, processed_at)
+                        VALUES (?, 1, NULL, ?)
+                    ''', (filename, datetime.now().isoformat()))
+                    
+                    self.processed_files.add(filename)
+                    synced += 1
+                
+                await db.commit()
+            
+            if synced > 0:
+                logger.info(
+                    f"✅ Synced {synced} local files to "
+                    f"processed_files table"
+                )
+            
+        except Exception as e:
+            logger.error(f"Error syncing local files: {e}")

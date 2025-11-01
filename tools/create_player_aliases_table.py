@@ -17,6 +17,7 @@ Date: October 4, 2025
 
 import sqlite3
 import os
+from pathlib import Path
 from datetime import datetime
 
 
@@ -26,8 +27,9 @@ DATABASE_PATH = "etlegacy_production.db"
 def check_database_exists():
     """Verify database file exists"""
     if not os.path.exists(DATABASE_PATH):
+        expected = Path(__file__).resolve().parent.parent / DATABASE_PATH
         print(f"❌ Database not found: {DATABASE_PATH}")
-        print("   Expected location: g:\\VisualStudio\\Python\\stats\\etlegacy_production.db")
+        print(f"   Expected location: {expected}")
         return False
     
     print(f"✅ Database found: {DATABASE_PATH}")

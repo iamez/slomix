@@ -3,7 +3,9 @@ Deep dive into time calculation pipeline.
 Let's verify EXACTLY what the numbers mean.
 """
 import sys
-sys.path.insert(0, 'G:\\VisualStudio\\Python\\stats')
+from pathlib import Path
+# Add project root to sys.path (relative, portable)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 def check_raw_file_directly():
     """Read raw file and check actual values."""
