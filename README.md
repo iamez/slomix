@@ -122,7 +122,7 @@ This ensures players who join mid-round aren't penalized with inflated DPM value
 ### Running Tests
 ```bash
 # Test parser functionality
-python tools/test_parser.py
+python bot/community_stats_parser.py
 
 # Test database connectivity  
 python tools/enhanced_database_inspector.py
