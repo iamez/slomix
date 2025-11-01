@@ -24,6 +24,9 @@ from discord.ext import commands, tasks
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools.stopwatch_scoring import StopwatchScoring
 
+# Import extracted core classes
+from bot.core import StatsCache
+
 # Load environment variables if available
 try:
     from dotenv import load_dotenv
@@ -118,71 +121,8 @@ def _split_chunks(s: str, max_len: int = 900):
 # ============================================================================
 # 🚀 PERFORMANCE: QUERY CACHE
 # ============================================================================
-class StatsCache:
-    """
-    High-performance caching system for database queries.
-    Reduces repeated queries by 80% during active sessions.
-
-    Features:
-    - TTL-based expiration (default 5 minutes)
-    - Automatic cache invalidation
-    - Memory-efficient storage
-
-    Usage:
-        cache = StatsCache(ttl_seconds=300)
-        cached = cache.get("stats_player123")
-        if not cached:
-            cached = await fetch_from_db()
-            cache.set("stats_player123", cached)
-    """
-
-    def __init__(self, ttl_seconds=300):
-        self.cache = {}
-        self.timestamps = {}
-        self.ttl = ttl_seconds
-        logger.info(f"📦 StatsCache initialized (TTL: {ttl_seconds}s)")
-
-    def get(self, key):
-        """Get cached value if still valid, None otherwise"""
-        if key in self.cache:
-            age = (datetime.now() - self.timestamps[key]).total_seconds()
-            if age < self.ttl:
-                logger.debug(f"✅ Cache HIT: {key} (age: {age:.1f}s)")
-                return self.cache[key]
-            else:
-                logger.debug(f"⏰ Cache EXPIRED: {key} (age: {age:.1f}s)")
-                del self.cache[key]
-                del self.timestamps[key]
-        return None
-
-    def set(self, key, value):
-        """Store value in cache with current timestamp"""
-        self.cache[key] = value
-        self.timestamps[key] = datetime.now()
-        logger.debug(f"💾 Cache SET: {key} (total keys: {len(self.cache)})")
-
-    def clear(self):
-        """Clear all cached data"""
-        count = len(self.cache)
-        self.cache.clear()
-        self.timestamps.clear()
-        logger.info(f"🗑️  Cache CLEARED: {count} keys removed")
-
-    def stats(self):
-        """Get cache statistics"""
-        total = len(self.cache)
-        expired = sum(
-            1
-            for k in self.cache
-            if (datetime.now() - self.timestamps[k]).total_seconds()
-            >= self.ttl
-        )
-        return {
-            "total_keys": total,
-            "valid_keys": total - expired,
-            "expired_keys": expired,
-            "ttl_seconds": self.ttl,
-        }
+# NOTE: StatsCache has been extracted to bot/core/stats_cache.py
+# Imported at top of file: from bot.core import StatsCache
 
 
 # ============================================================================
