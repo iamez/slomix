@@ -1,0 +1,122 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# VISUAL COMPARISON: Before vs After
+# ═══════════════════════════════════════════════════════════════════════════
+
+"""
+This shows exactly how your Session Summary will look after the changes.
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ❌ BEFORE (Current format with HSK)
+# ═══════════════════════════════════════════════════════════════════════════
+
+"""
+🗺️ Session Summary: 2025-10-02
+10 maps • 20 rounds • 6 players
+
+🏆 All Players
+
+🥇 **vid**
+`183K/138D (1.41)` • `284 DPM` • `39.2% ACC (1498/3819)`
+`269 HSK (114.2%)` • `209 HS (14.0%)` • ⏱️ `114:36` • 💀 `23:26`
+
+🥈 **SuperBoyy**
+`166K/142D (1.17)` • `315 DPM` • `43.1% ACC (1784/4143)`
+`158 HSK (95.2%)` • `158 HS (8.9%)` • ⏱️ `114:36` • 💀 `27:17`
+
+🥉 **SmetarskiPioner**
+`163K/177D (0.92)` • `274 DPM` • `36.2% ACC (1442/3985)`
+`200 HSK (122.7%)` • `200 HS (13.9%)` • ⏱️ `114:36` • 💀 `29:31`
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ✅ AFTER (New format with Time Denied, no HSK)
+# ═══════════════════════════════════════════════════════════════════════════
+
+"""
+🗺️ Session Summary: 2025-10-02
+10 maps • 20 rounds • 6 players
+
+🏆 All Players
+
+🥇 **vid**
+`183K/138D (1.41)` • `284 DPM` • `39.2% ACC (1498/3819)`
+`209 HS (14.0%)` • ⏱️ `114:36` • 💀 `23:26` • ⏳ `5:12`
+
+🥈 **SuperBoyy**
+`166K/142D (1.17)` • `315 DPM` • `43.1% ACC (1784/4143)`
+`158 HS (8.9%)` • ⏱️ `114:36` • 💀 `27:17` • ⏳ `3:45`
+
+🥉 **SmetarskiPioner**
+`163K/177D (0.92)` • `274 DPM` • `36.2% ACC (1442/3985)`
+`200 HS (13.9%)` • ⏱️ `114:36` • 💀 `29:31` • ⏳ `4:28`
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════
+# KEY DIFFERENCES
+# ═══════════════════════════════════════════════════════════════════════════
+
+"""
+REMOVED:
+❌ HSK (Headshot Kills) - This was confusing because:
+   - You said you don't know what it represents
+   - The percentage was often over 100% (like 122.7%), which doesn't make sense
+   - It was redundant with the HS (Headshots) stat
+
+ADDED:
+✅ ⏳ Time Denied - Shows how much time you denied enemies from respawning
+   - This is a strategic stat showing how effective you were at controlling spawns
+   - Calculated from the denied_playtime field in your database
+   - Shows in MM:SS format for easy reading
+
+KEPT:
+✓ HS (Headshots) - Raw headshot count with percentage
+✓ ⏱️ Time Played - Total active playing time
+✓ 💀 Time Dead - Time spent waiting to respawn
+
+LAYOUT IMPROVED:
+- Second line is cleaner without the confusing HSK stat
+- All time-based stats are together with emoji indicators
+- Easier to scan and compare player performance
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════
+# WHAT THE STATS MEAN
+# ═══════════════════════════════════════════════════════════════════════════
+
+"""
+LINE 1 - Combat Stats:
+• 183K/138D (1.41) = 183 Kills, 138 Deaths, 1.41 K/D ratio
+• 284 DPM = Damage Per Minute (higher is better)
+• 39.2% ACC (1498/3819) = Accuracy: 1498 hits out of 3819 shots
+
+LINE 2 - Time & Precision Stats:
+• 209 HS (14.0%) = 209 Headshots, which is 14.0% of total hits
+• ⏱️ 114:36 = Time Played: 114 minutes and 36 seconds alive
+• 💀 23:26 = Time Dead: 23 minutes and 26 seconds waiting to respawn
+• ⏳ 5:12 = Time Denied: Denied enemies 5 minutes and 12 seconds of spawn time
+
+STRATEGY INSIGHTS:
+- Low Time Dead = You're staying alive well
+- High Time Denied = You're controlling spawns effectively
+- High HS% = Good accuracy and headshot precision
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════
+# WHY HSK WAS CONFUSING
+# ═══════════════════════════════════════════════════════════════════════════
+
+"""
+Looking at your screenshot, HSK showed percentages over 100%:
+• vid: 269 HSK (114.2%) 
+• SmetarskiPioner: 200 HSK (122.7%)
+
+This doesn't make sense because:
+1. A percentage over 100% suggests more headshot kills than total kills
+2. But you can't have more headshot kills than total kills
+3. The calculation might be: (headshot_kills / headshots) * 100
+   - This would give you "what % of your headshots resulted in kills"
+   - But this is a weird stat that's hard to interpret
+
+By removing it, your stats are cleaner and more understandable!
+"""

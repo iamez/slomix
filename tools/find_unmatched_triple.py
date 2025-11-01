@@ -1,5 +1,6 @@
-p = r'g:\VisualStudio\Python\stats\bot\ultimate_bot.py'
-with open(p, 'rb') as f:
+from pathlib import Path
+p = Path(__file__).resolve().parent.parent / 'bot' / 'ultimate_bot.py'
+with open(str(p), 'rb') as f:
     data = f.read().decode('utf-8','replace')
 i = 0
 n = len(data)

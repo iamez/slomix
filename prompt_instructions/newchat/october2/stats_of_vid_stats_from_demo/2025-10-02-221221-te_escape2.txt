@@ -1,0 +1,52 @@
+>>> Map: te_escape2
+
+
+Overall stats for: vid (1 Round)
+
+Weapon      Acrcy Hits/Shts Kills Deaths Headshots
+--------------------------------------------------
+Knife     :   0.0    0/1        0      0
+Ka-Bar    :   0.0    0/2        0      0
+Colt      :   0.0    0/2        0      0         0
+MP 40     :  30.0    3/10       0      7         0
+Thompson  :  42.0   60/143      5      0        11
+Grenade   :  40.0    2/5        0      0
+Dynamite  :   0.0    0/1        0      0
+
+Damage Given:   1435     Team Damage Given:      0
+Damage Recvd:   1390     Team Damage Recvd:      0
+
+Kills:    5   Team Kills:   0   Accuracy:    40.6%
+Deaths:   7   Self Kills:   4   Headshots:   17.5%
+Gibs:     1   Team Gibs:    0   Playtime:    80.1%
+                  Assists:      0                          
+
+Rank: Private (43 XP)
+
+Skills         Level/Points
+---------------------------
+Battle Sense   4 (8)       
+Engineering    4 (20)      
+Light Weapons  4 (15)      
+
+GUID      TEAM       Player          TmX TmL TmP Kll Ast Dth Gib  SK  TK  TG Eff    DG    DR  TDG  TDR  Score  Rating  Delta
+----------------------------------------------------------------------------------------------------------------------------
+EDBB5DA9* Axis       SuperBoyy         4   0  83  11   5   4   3   6   0   0  73  2146  1247    0    0     46    0.00  +0.00
+1C747DF1* Axis       SmetarskiProner   4   0  71   5   5   6   3   0   0   0  45  1125  1036   75    0     34    0.00  +0.00
+652EB4A6* Axis       qmr               4   0  70   7   2   5   1   3   0   0  58  1174   979    0   75     28    0.00  +0.00
+----------------------------------------------------------------------------------------------------------------------------
+          Axis       Totals           13   0  75  23  12  15   7   9   0   0  60  4445  3262   75   75    108
+
+GUID      TEAM       Player          TmX TmL TmP Kll Ast Dth Gib  SK  TK  TG Eff    DG    DR  TDG  TDR  Score  Rating  Delta
+----------------------------------------------------------------------------------------------------------------------------
+D8423F90* Allies     vid               0   4  80   5   0   7   1   4   0   0  41  1435  1390    0    0     43    0.00  +0.00
+5D989160* Allies     .olz              0   4  73   4   0   6   2   3   0   0  40   885  1401    0    0     41    0.00  +0.00
+7B84BE88* Allies     endekk            0   4  72   6   1  10   5   3   0   0  37   942  1654    0    0     22    0.00  +0.00
+----------------------------------------------------------------------------------------------------------------------------
+          Allies     Totals            0  13  75  15   1  23   8  10   0   0  39  3262  4445    0    0    106
+
+
+
+Stats recorded: 22:12:21 (02 Oct 2025)
+
+

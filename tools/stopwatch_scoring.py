@@ -2,15 +2,17 @@
 """
 Stopwatch Scoring Calculator
 
-Calculates map scores based on ET:Legacy Stopwatch mode rules:
+Correct Stopwatch scoring (independent round scoring):
 
-SCORING (per map):
-- R2 beat R1 time: 2-0 win for R2 attackers
-- R1 = R2 = max time: 1-1 tie (both fullhold)
-- R1 = R2 (not max): 1-1 tie (same time)
-- R2 >= R1 (not equal): 2-0 win for R1 attackers
+- Each map has two rounds with a shared time limit.
+- Round 1: Team1 attacks vs Team2 defends.
+  - If attackers complete under time limit → Team1 gets 1 point
+  - If time runs out (fullhold) → Team2 gets 1 point
+- Round 2: Team2 attacks vs Team1 defends.
+  - If attackers complete under time limit → Team2 gets 1 point
+  - If time runs out (fullhold) → Team1 gets 1 point
 
-Points are awarded AFTER Round 2 completes.
+Map score = sum of the two round results (0, 1, or 2 points per team).
 """
 
 import sqlite3
@@ -43,47 +45,57 @@ class StopwatchScoring:
         round2_actual_time: str
     ) -> Tuple[int, int, str]:
         """
-        Calculate map score using CORRECT Stopwatch rules
-        
-        Scoring happens AFTER Round 2:
-        - R2 beat R1 time: 2-0 win for R2 attackers
-        - R1 = R2 = max time: 1-1 tie (double fullhold)
-        - R1 = R2 (not max): 1-1 tie (same time)
-        - R2 didn't beat R1: 2-0 win for R1 attackers
-        
+        Calculate map score using independent round scoring.
+
         Args:
             round1_time_limit: Max map time (MM:SS)
             round1_actual_time: R1 completion time (MM:SS)
             round2_actual_time: R2 completion time (MM:SS)
-        
+
         Returns:
             (team1_score, team2_score, description)
             team1 = R1 attackers, team2 = R2 attackers
         """
-        
+
         # Parse times to seconds
-        r1_limit_sec = self.parse_time_to_seconds(round1_time_limit)
-        r1_actual_sec = self.parse_time_to_seconds(round1_actual_time)
-        r2_actual_sec = self.parse_time_to_seconds(round2_actual_time)
-        
-        # Check for tie scenarios
-        if r1_actual_sec == r2_actual_sec:
-            # Times are equal → 1-1 tie
-            if r1_actual_sec >= r1_limit_sec:
-                description = "Double fullhold (1-1 tie)"
-            else:
-                description = f"Same time ({round1_actual_time}, 1-1 tie)"
-            return (1, 1, description)
-        
-        # One team beat the other's time
-        if r2_actual_sec < r1_actual_sec:
-            # R2 attackers won → 2-0
-            description = f"R2 beat time ({round2_actual_time} < {round1_actual_time})"
-            return (0, 2, description)
+        limit_sec = self.parse_time_to_seconds(round1_time_limit)
+        r1_sec = self.parse_time_to_seconds(round1_actual_time)
+        r2_sec = self.parse_time_to_seconds(round2_actual_time)
+
+        # Determine round outcomes
+        r1_attackers_succeed = (r1_sec > 0) and (r1_sec < limit_sec)
+        r2_attackers_succeed = (r2_sec > 0) and (r2_sec < limit_sec)
+
+        # Award points independently per round
+        team1_points = 0
+        team2_points = 0
+
+        # Round 1: Team1 attacks
+        if r1_attackers_succeed:
+            team1_points += 1
+            r1_desc = f"R1: attackers completed in {round1_actual_time} (Team1 +1)"
         else:
-            # R1 attackers won (R2 didn't beat time) → 2-0
-            description = f"R1 held ({round2_actual_time} >= {round1_actual_time})"
-            return (2, 0, description)
+            team2_points += 1
+            r1_desc = (
+                f"R1: fullhold at {round1_time_limit} (Team2 +1)"
+                if limit_sec > 0
+                else "R1: fullhold (Team2 +1)"
+            )
+
+        # Round 2: Team2 attacks
+        if r2_attackers_succeed:
+            team2_points += 1
+            r2_desc = f"R2: attackers completed in {round2_actual_time} (Team2 +1)"
+        else:
+            team1_points += 1
+            r2_desc = (
+                f"R2: fullhold at {round1_time_limit} (Team1 +1)"
+                if limit_sec > 0
+                else "R2: fullhold (Team1 +1)"
+            )
+
+        description = f"{r1_desc}; {r2_desc}"
+        return (team1_points, team2_points, description)
     
     def calculate_session_scores(
         self, 

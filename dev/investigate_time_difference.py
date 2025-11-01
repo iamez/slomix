@@ -3,7 +3,9 @@ Pipeline Investigation: Session Time vs Player Time
 Show actual samples to understand the difference.
 """
 import sys
-sys.path.insert(0, 'G:\\VisualStudio\\Python\\stats')
+from pathlib import Path
+# Add project root to sys.path (relative, portable)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from bot.community_stats_parser import C0RNP0RN3StatsParser
 import os

@@ -272,13 +272,11 @@ class C0RNP0RN3StatsParser:
                     w = weapon_stats[weapon]
                     if w['shots'] > 0 or w['kills'] > 0:
                         weapon_name = weapon.replace('WS_', '')
-                        stats_text += f"      {weapon_name}: {
-                            w['accuracy']:.1f}% acc ({
-                            w['hits']}/{
-                            w['shots']}) | {
-                            w['kills']}K/{
-                            w['deaths']}D | {
-                            w['headshots']} HS\n"
+                        # Build a safe formatted line (avoid multi-line f-string that was broken)
+                        stats_text += (
+                            f"      {weapon_name}: {w['accuracy']:.1f}% acc "
+                            f"({w['hits']}/{w['shots']}) | {w['kills']}K/{w['deaths']}D | {w['headshots']} HS\n"
+                        )
 
         stats_text += "-" * 60
         return stats_text
@@ -364,10 +362,7 @@ class C0RNP0RN3StatsParser:
         # Find corresponding Round 1 file
         round_1_file_path = self.find_corresponding_round_1_file(round_2_file_path)
         if not round_1_file_path:
-            print(
-                f"⚠️ Warning: Could not find Round 1 file for {
-                    os.path.basename(round_2_file_path)}"
-            )
+            print(f"⚠️ Warning: Could not find Round 1 file for {os.path.basename(round_2_file_path)}")
             print("   Parsing as regular file (cumulative stats will be included)")
             return self.parse_regular_stats_file(round_2_file_path)
 
@@ -718,93 +713,80 @@ class C0RNP0RN3StatsParser:
                 # Extended stats are already TAB-separated
                 tab_fields = extended_section.split('\t')
 
-                # Actual format has 36 TAB-separated fields (per c0rnp0rn3.lua line 273)
-                if len(tab_fields) >= 33:  # Full extended format
+                # Helper: safe cast functions to avoid IndexError/ValueError
+                def safe_int(lst, idx, default=0):
                     try:
-                        # Basic stats - CORRECT field order from c0rnp0rn3.lua:
-                        # 0: damageGiven, 1: damageReceived, 2: teamDamageGiven,
-                        # 3: teamDamageReceived, 4: gibs, 5: selfkills,
-                        # 6: teamkills, 7: teamgibs, 8: timePlayed
-                        additional_stats = {
-                            'damage_given': int(tab_fields[0]),
-                            'damage_received': int(tab_fields[1]),
-                            'team_damage_given': int(tab_fields[2]),
-                            'team_damage_received': int(tab_fields[3]),
-                            'gibs': int(tab_fields[4]),
-                            'self_kills': int(tab_fields[5]),
-                            'team_kills': int(tab_fields[6]),
-                            'team_gibs': int(tab_fields[7]),
-                            'time_played_percent': float(tab_fields[8]),
-                        }
+                        return int(lst[idx])
+                    except Exception:
+                        return default
 
-                        # Objective & Support stats (for player_stats.awards JSON)
-                        # Actual format: 36 TAB-separated fields (per c0rnp0rn3.lua line 273)
-                        objective_stats = {
-                            # Fields 0-8: damage/gibs/team stats (CORRECTED ORDER)
-                            'damage_given': int(tab_fields[0]),
-                            'damage_received': int(tab_fields[1]),
-                            'team_damage_given': int(tab_fields[2]),
-                            'team_damage_received': int(tab_fields[3]),
-                            'gibs': int(tab_fields[4]),
-                            'self_kills': int(tab_fields[5]),
-                            'team_kills': int(tab_fields[6]),
-                            'team_gibs': int(tab_fields[7]),
-                            'time_played_percent': float(tab_fields[8]),
-                            # Fields 9-19: XP, assists, objectives, dynamites, revives
-                            'xp': int(tab_fields[9]),
-                            'killing_spree': int(tab_fields[10]),
-                            'death_spree': int(tab_fields[11]),
-                            'kill_assists': int(tab_fields[12]),
-                            'kill_steals': int(tab_fields[13]),
-                            'headshot_kills': int(tab_fields[14]),
-                            'objectives_stolen': int(tab_fields[15]),
-                            'objectives_returned': int(tab_fields[16]),
-                            'dynamites_planted': int(tab_fields[17]),
-                            'dynamites_defused': int(tab_fields[18]),
-                            'times_revived': int(tab_fields[19]),
-                            # Fields 20-36: bullets, DPM, time, K/D, multikills
-                            'bullets_fired': int(tab_fields[20]),
-                            'dpm': float(tab_fields[21]),  # Lua writes 0.0 here
-                            'time_played_minutes': float(tab_fields[22]),  # Actual time!
-                            'tank_meatshield': float(tab_fields[23]),
-                            'time_dead_ratio': float(tab_fields[24]),
-                            'time_dead_minutes': float(tab_fields[25]),
-                            'kd_ratio': float(tab_fields[26]),
-                            'useful_kills': int(tab_fields[27]),
-                            'denied_playtime': int(tab_fields[28]),
-                            'multikill_2x': int(tab_fields[29]),
-                            'multikill_3x': int(tab_fields[30]),
-                            'multikill_4x': int(tab_fields[31]),
-                            'multikill_5x': int(tab_fields[32]),
-                            'multikill_6x': int(tab_fields[33]),
-                            'useless_kills': int(tab_fields[34]),
-                            'full_selfkills': int(tab_fields[35]),
-                            # NEW fields (backwards compatible):
-                            'repairs_constructions': (
-                                int(tab_fields[36]) if len(tab_fields) > 36 else 0
-                            ),
-                            'revives_given': int(tab_fields[37]) if len(tab_fields) > 37 else 0,
-                            # Total: 38 fields (Tab[0-37]) with c0rnn's latest update
-                        }
-                    except (ValueError, IndexError) as e:
-                        print(f"Warning: Could not parse all 36 fields: {e}")
-                        # Fall back to basic stats only
-                        try:
-                            additional_stats = {
-                                'damage_given': int(tab_fields[0]),
-                                'damage_received': int(tab_fields[1]),
-                            }
-                        except BaseException:
-                            pass
-                else:
-                    # Legacy format: just basic stats
+                def safe_float(lst, idx, default=0.0):
                     try:
-                        additional_stats = {
-                            'damage_given': int(tab_fields[0]) if len(tab_fields) > 0 else 0,
-                            'damage_received': int(tab_fields[1]) if len(tab_fields) > 1 else 0,
-                        }
-                    except (ValueError, IndexError):
-                        pass
+                        return float(lst[idx])
+                    except Exception:
+                        return default
+
+                # Populate additional_stats and objective_stats using safe accessors
+                try:
+                    additional_stats = {
+                        'damage_given': safe_int(tab_fields, 0),
+                        'damage_received': safe_int(tab_fields, 1),
+                        'team_damage_given': safe_int(tab_fields, 2),
+                        'team_damage_received': safe_int(tab_fields, 3),
+                        'gibs': safe_int(tab_fields, 4),
+                        'self_kills': safe_int(tab_fields, 5),
+                        'team_kills': safe_int(tab_fields, 6),
+                        'team_gibs': safe_int(tab_fields, 7),
+                        'time_played_percent': safe_float(tab_fields, 8),
+                    }
+
+                    objective_stats = {
+                        'damage_given': safe_int(tab_fields, 0),
+                        'damage_received': safe_int(tab_fields, 1),
+                        'team_damage_given': safe_int(tab_fields, 2),
+                        'team_damage_received': safe_int(tab_fields, 3),
+                        'gibs': safe_int(tab_fields, 4),
+                        'self_kills': safe_int(tab_fields, 5),
+                        'team_kills': safe_int(tab_fields, 6),
+                        'team_gibs': safe_int(tab_fields, 7),
+                        'time_played_percent': safe_float(tab_fields, 8),
+                        'xp': safe_int(tab_fields, 9),
+                        'killing_spree': safe_int(tab_fields, 10),
+                        'death_spree': safe_int(tab_fields, 11),
+                        'kill_assists': safe_int(tab_fields, 12),
+                        'kill_steals': safe_int(tab_fields, 13),
+                        'headshot_kills': safe_int(tab_fields, 14),
+                        'objectives_stolen': safe_int(tab_fields, 15),
+                        'objectives_returned': safe_int(tab_fields, 16),
+                        'dynamites_planted': safe_int(tab_fields, 17),
+                        'dynamites_defused': safe_int(tab_fields, 18),
+                        'times_revived': safe_int(tab_fields, 19),
+                        'bullets_fired': safe_int(tab_fields, 20),
+                        'dpm': safe_float(tab_fields, 21),
+                        'time_played_minutes': safe_float(tab_fields, 22),
+                        'tank_meatshield': safe_float(tab_fields, 23),
+                        'time_dead_ratio': safe_float(tab_fields, 24),
+                        'time_dead_minutes': safe_float(tab_fields, 25),
+                        'kd_ratio': safe_float(tab_fields, 26),
+                        'useful_kills': safe_int(tab_fields, 27),
+                        'denied_playtime': safe_int(tab_fields, 28),
+                        'multikill_2x': safe_int(tab_fields, 29),
+                        'multikill_3x': safe_int(tab_fields, 30),
+                        'multikill_4x': safe_int(tab_fields, 31),
+                        'multikill_5x': safe_int(tab_fields, 32),
+                        'multikill_6x': safe_int(tab_fields, 33),
+                        'useless_kills': safe_int(tab_fields, 34),
+                        'full_selfkills': safe_int(tab_fields, 35),
+                        'repairs_constructions': safe_int(tab_fields, 36),
+                        'revives_given': safe_int(tab_fields, 37),
+                    }
+                except Exception as e:
+                    # Defensive fallback: ensure we always have at least basic numbers
+                    print(f"Warning: Could not fully parse extended fields, falling back: {e}")
+                    additional_stats = {
+                        'damage_given': safe_int(tab_fields, 0),
+                        'damage_received': safe_int(tab_fields, 1),
+                    }
 
             # Calculate efficiency
             efficiency = 0
@@ -931,13 +913,10 @@ def test_c0rnporn3_parser():
                 if w['shots'] > 0:
                     weapon_name = weapon.replace('WS_', '')
                     print(
-                        f"     {weapon_name}: {
-                            w['accuracy']:.1f}% acc ({
-                            w['hits']}/{
-                            w['shots']}) | {
-                            w['kills']}K/{
-                            w['deaths']}D | {
-                            w['headshots']} HS"
+                        (
+                            f"     {weapon_name}: {w['accuracy']:.1f}% acc "
+                            f"({w['hits']}/{w['shots']}) | {w['kills']}K/{w['deaths']}D | {w['headshots']} HS"
+                        )
                     )
 
 
