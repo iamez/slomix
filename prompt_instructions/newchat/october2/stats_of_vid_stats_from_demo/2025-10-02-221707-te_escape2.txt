@@ -1,0 +1,52 @@
+>>> Map: te_escape2
+
+
+Overall stats for: vid (2 Rounds)
+
+Weapon      Acrcy Hits/Shts Kills Deaths Headshots
+--------------------------------------------------
+Knife     :   0.0    0/4        0      0
+Ka-Bar    :   0.0    0/2        0      0
+Luger     :  57.1    4/7        1      0         1
+Colt      :   0.0    0/2        0      0         0
+MP 40     :  39.5   45/114      7      7        10
+Thompson  :  42.4   67/158      6      3        12
+Grenade   :  40.0    4/10       0      0
+Dynamite  :   0.0    0/1        0      0
+
+Damage Given:   2599     Team Damage Given:      0
+Damage Recvd:   2147     Team Damage Recvd:     58
+
+Kills:   14   Team Kills:   0   Accuracy:    41.3%
+Deaths:  10   Self Kills:   9   Headshots:   19.8%
+Gibs:     4   Team Gibs:    0   Playtime:    85.0%
+                  Assists:      3                          
+
+Rank: Schutze (47 XP)
+
+Skills         Level/Points
+---------------------------
+Battle Sense   4 (10)      
+Light Weapons  4 (37)      
+
+GUID      TEAM       Player          TmX TmL TmP Kll Ast Dth Gib  SK  TK  TG Eff    DG    DR  TDG  TDR  Score  Rating  Delta
+----------------------------------------------------------------------------------------------------------------------------
+D8423F90* Axis       vid               3   4  85  14   3  10   4   9   0   0  58  2599  2147    0   58     47    0.00  +0.00
+7B84BE88* Axis       endekk            3   4  72  15   3  15   5   4   0   0  50  2448  2792    0   16     41    0.00  +0.00
+5D989160* Axis       .olz              3   4  78  10   4  10   2   7   1   0  50  2178  2465   74    0     31    0.00  +0.00
+----------------------------------------------------------------------------------------------------------------------------
+          Axis       Totals           11  13  78  39  10  35  11  20   1   0  52  7225  7404   74   74    119
+
+GUID      TEAM       Player          TmX TmL TmP Kll Ast Dth Gib  SK  TK  TG Eff    DG    DR  TDG  TDR  Score  Rating  Delta
+----------------------------------------------------------------------------------------------------------------------------
+EDBB5DA9* Allies     SuperBoyy         4   3  84  16   6  10   6   8   0   0  61  3264  2481   36   68     48    0.00  +0.00
+652EB4A6* Allies     qmr               4   3  75  10   8  13   1   6   0   1  43  1941  2264   18  111     44    0.00  +0.00
+1C747DF1* Allies     SmetarskiProner   4   3  70   9   5  16   4   0   0   0  36  2199  2480  125    0     35    0.00  +0.00
+----------------------------------------------------------------------------------------------------------------------------
+          Allies     Totals           13  11  76  35  19  39  11  14   0   1  47  7404  7225  179  179    127
+
+
+
+Stats recorded: 22:17:07 (02 Oct 2025)
+
+

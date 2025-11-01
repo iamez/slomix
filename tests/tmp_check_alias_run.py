@@ -1,6 +1,8 @@
 import asyncio, sqlite3, os, tempfile, sys
 from types import SimpleNamespace
-sys.path.append(r'G:\VisualStudio\Python\stats')
+from pathlib import Path
+# Add project root to sys.path (portable)
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 from bot.ultimate_bot import ETLegacyCommands
 import aiosqlite
 
