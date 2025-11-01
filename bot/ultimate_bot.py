@@ -5392,71 +5392,49 @@ class ETLegacyCommands(commands.Cog):
                     }
 
                 else:
-                    # ❌ No hardcoded teams - fall back to old Axis/Allies detection
-                    logger.info(
-                        "⚠️  No hardcoded teams found, using Axis/Allies (may be inaccurate)"
-                    )
+                    # ❌ No hardcoded teams - auto-detect persistent teams, then re-fetch
+                    created = await self._detect_and_store_persistent_teams(db, latest_date)
+                    hardcoded_teams = await self.get_hardcoded_teams(db, latest_date)
+                    if hardcoded_teams:
+                        team_names_list = list(hardcoded_teams.keys())
+                        team_1_name = team_names_list[0] if len(team_names_list) > 0 else "Team A"
+                        team_2_name = team_names_list[1] if len(team_names_list) > 1 else "Team B"
 
-                    # Get team composition - who played for which team
-                    query = f"""
-                        SELECT player_name, team, COUNT(*) as rounds_played
-                        FROM player_comprehensive_stats
-                        WHERE session_id IN ({session_ids_str})
-                        GROUP BY player_name, team
-                        ORDER BY player_name, rounds_played DESC
-                    """
-                    async with db.execute(query, session_ids) as cursor:
-                        team_composition = await cursor.fetchall()
+                        # Build name mapping using GUIDs
+                        guid_to_team = {}
+                        for team_name, team_data in hardcoded_teams.items():
+                            for guid in team_data["guids"]:
+                                guid_to_team[guid] = team_name
 
-                    # Assign random team names
-                    import random
+                        query = f"""
+                            SELECT DISTINCT player_name, player_guid
+                            FROM player_comprehensive_stats
+                            WHERE session_id IN ({session_ids_str})
+                        """
+                        async with db.execute(query, session_ids) as cursor:
+                            player_guid_map = await cursor.fetchall()
 
-                    team_name_pool = [
-                        "puran",
-                        "insAne",
-                        "sWat",
-                        "maDdogs",
-                        "slomix",
-                        "slo",
-                    ]
+                        name_to_team = {}
+                        for player_name, player_guid in player_guid_map:
+                            if player_guid in guid_to_team:
+                                name_to_team[player_name] = guid_to_team[player_guid]
 
-                    # Get all unique players and their primary team
-                    player_primary_teams = {}
-                    for player, team, rounds in team_composition:
-                        if player not in player_primary_teams:
-                            player_primary_teams[player] = team
+                        team_1_players_list = [
+                            name for name, team in name_to_team.items() if team == team_1_name
+                        ]
+                        team_2_players_list = [
+                            name for name, team in name_to_team.items() if team == team_2_name
+                        ]
 
-                    # Separate players by team
-                    team_1_players_list = [
-                        p for p, t in player_primary_teams.items() if t == 1
-                    ]
-                    team_2_players_list = [
-                        p for p, t in player_primary_teams.items() if t == 2
-                    ]
-
-                    # Randomly assign team names
-                    random.shuffle(team_name_pool)
-                    team_1_name = (
-                        team_name_pool[0] if team_name_pool else "Team 1"
-                    )
-                    team_2_name = (
-                        team_name_pool[1]
-                        if len(team_name_pool) > 1
-                        else "Team 2"
-                    )
-
-                    # Detect team swaps - players who played for multiple teams
-                    player_teams = {}
-                    for player, team, rounds in team_composition:
-                        if player not in player_teams:
-                            player_teams[player] = []
-                        player_teams[player].append((team, rounds))
-
-                    team_swappers = {
-                        player: teams
-                        for player, teams in player_teams.items()
-                        if len(teams) > 1
-                    }
+                        team_swappers = {}
+                        player_teams = {name: [(team, 1)] for name, team in name_to_team.items()}
+                    else:
+                        # Final minimal fallback if detection failed
+                        team_1_name = "Team 1"
+                        team_2_name = "Team 2"
+                        team_1_players_list = []
+                        team_2_players_list = []
+                        team_swappers = {}
 
                 # 🎯 GET MVP PER TEAM (using hardcoded teams if available)
                 team_mvps = {}
@@ -8778,6 +8756,311 @@ class ETLegacyCommands(commands.Cog):
             return None
 
 
+    async def _detect_and_store_persistent_teams(self, db, session_date):
+        """Auto-detect persistent teams for a session date and store in session_teams.
+
+        Heuristic:
+        - Seed teams from Round 1 game teams (team 1 vs team 2).
+        - For players not in Round 1, assign to the team they most frequently shared a game-team with.
+        """
+        import json
+
+        await self._ensure_session_teams_table(db)
+
+        # Seed from Round 1
+        async with db.execute(
+            """
+            SELECT player_guid, team
+            FROM player_comprehensive_stats
+            WHERE substr(session_date,1,10)=? AND round_number=1
+            """,
+            (session_date,),
+        ) as cur:
+            r1 = await cur.fetchall()
+
+        team1_seed = {g for g, t in r1 if t == 1}
+        team2_seed = {g for g, t in r1 if t == 2}
+
+        # If no round1 data (edge case), seed from first available round
+        if not team1_seed and not team2_seed:
+            async with db.execute(
+                """
+                SELECT round_number FROM player_comprehensive_stats
+                WHERE substr(session_date,1,10)=?
+                ORDER BY round_number ASC LIMIT 1
+                """,
+                (session_date,),
+            ) as cur:
+                first_round = await cur.fetchone()
+            if first_round:
+                fr = first_round[0]
+                async with db.execute(
+                    """
+                    SELECT player_guid, team
+                    FROM player_comprehensive_stats
+                    WHERE substr(session_date,1,10)=? AND round_number=?
+                    """,
+                    (session_date, fr),
+                ) as cur:
+                    rows = await cur.fetchall()
+                team1_seed = {g for g, t in rows if t == 1}
+                team2_seed = {g for g, t in rows if t == 2}
+
+        # Collect all players this session
+        async with db.execute(
+            """
+            SELECT DISTINCT player_guid FROM player_comprehensive_stats
+            WHERE substr(session_date,1,10)=?
+            """,
+            (session_date,),
+        ) as cur:
+            all_players = {row[0] for row in (await cur.fetchall())}
+
+        assigned = {}
+        for g in team1_seed:
+            assigned[g] = 1
+        for g in team2_seed:
+            assigned[g] = 2
+
+        # For unseeded players, assign by co-membership with seeds
+        unassigned = [g for g in all_players if g not in assigned]
+        if unassigned and (team1_seed or team2_seed):
+            # Build map of round -> sets of game-team members
+            async with db.execute(
+                """
+                SELECT round_number, player_guid, team
+                FROM player_comprehensive_stats
+                WHERE substr(session_date,1,10)=?
+                ORDER BY round_number
+                """,
+                (session_date,),
+            ) as cur:
+                rows = await cur.fetchall()
+
+            from collections import defaultdict
+
+            round_team_members = defaultdict(lambda: {1: set(), 2: set()})
+            for rnd, guid, team in rows:
+                if team in (1, 2):
+                    round_team_members[rnd][team].add(guid)
+
+            for guid in unassigned:
+                votes = {1: 0, 2: 0}
+                for rnd, teams in round_team_members.items():
+                    if guid in teams[1] or guid in teams[2]:
+                        # if shares game team with many seeds, vote for that persistent team
+                        if guid in teams[1]:
+                            votes[1] += len(teams[1] & team1_seed)
+                            votes[2] += len(teams[1] & team2_seed)
+                        elif guid in teams[2]:
+                            votes[1] += len(teams[2] & team1_seed)
+                            votes[2] += len(teams[2] & team2_seed)
+                if votes[1] > votes[2]:
+                    assigned[guid] = 1
+                    team1_seed.add(guid)
+                elif votes[2] > votes[1]:
+                    assigned[guid] = 2
+                    team2_seed.add(guid)
+                # if tie, leave unassigned for now (ignored)
+
+        # Resolve names for output
+        async with db.execute(
+            """
+            SELECT guid, alias
+            FROM player_aliases
+            WHERE guid IN ({qs})
+            AND last_seen = (
+                SELECT MAX(last_seen) FROM player_aliases pa2 WHERE pa2.guid = player_aliases.guid
+            )
+            """.format(qs=",".join("?" * max(1, len(all_players)))),
+            tuple(all_players) if all_players else ("",),
+        ) as cur:
+            alias_rows = await cur.fetchall()
+        latest_alias = {}
+        for g, a in alias_rows:
+            latest_alias[g] = a
+
+        # Write two rows into session_teams with map_name='ALL'
+        guids1 = sorted(list(team1_seed))
+        guids2 = sorted(list(team2_seed))
+        names1 = sorted([latest_alias.get(g, g) for g in guids1])
+        names2 = sorted([latest_alias.get(g, g) for g in guids2])
+
+        # If nothing detected, skip
+        if not guids1 and not guids2:
+            return False
+
+        cursor = await db.execute(
+            """
+            INSERT INTO session_teams (session_start_date, map_name, team_name, player_guids, player_names)
+            VALUES (?, 'ALL', 'Team A', ?, ?)
+            ON CONFLICT(session_start_date, map_name, team_name)
+            DO UPDATE SET player_guids=excluded.player_guids, player_names=excluded.player_names
+            """,
+            (session_date, json.dumps(guids1), json.dumps(names1)),
+        )
+        cursor = await db.execute(
+            """
+            INSERT INTO session_teams (session_start_date, map_name, team_name, player_guids, player_names)
+            VALUES (?, 'ALL', 'Team B', ?, ?)
+            ON CONFLICT(session_start_date, map_name, team_name)
+            DO UPDATE SET player_guids=excluded.player_guids, player_names=excluded.player_names
+            """,
+            (session_date, json.dumps(guids2), json.dumps(names2)),
+        )
+        await db.commit()
+        return True
+
+    async def _ensure_session_teams_table(self, db):
+        """Ensure session_teams table exists with expected columns."""
+        # Use executescript for DDL statements. executescript handles
+        # multiple statements and ensures they're executed/committed
+        # correctly with aiosqlite (avoids _CursorWrapper await issues).
+        await db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS session_teams (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_start_date TEXT NOT NULL,
+                map_name TEXT NOT NULL,
+                team_name TEXT NOT NULL,
+                player_guids TEXT NOT NULL,
+                player_names TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(session_start_date, map_name, team_name)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_session_teams_date ON session_teams(session_start_date);
+            CREATE INDEX IF NOT EXISTS idx_session_teams_map ON session_teams(map_name);
+            """
+        )
+    @commands.command(name="set_teams")
+    async def set_teams(self, ctx, team1_name: str, team2_name: str):
+        """Manually set persistent team names for the latest session date."""
+        try:
+            import json
+            async with aiosqlite.connect(self.bot.db_path) as db:
+                await self._ensure_session_teams_table(db)
+
+                # Determine latest session date (YYYY-MM-DD)
+                async with db.execute(
+                    "SELECT DISTINCT substr(session_date,1,10) as d FROM sessions ORDER BY d DESC LIMIT 1"
+                ) as cur:
+                    row = await cur.fetchone()
+                if not row:
+                    await ctx.send("❌ No sessions found to set teams for.")
+                    return
+                session_date = row[0]
+
+                # Upsert two team rows with map_name='ALL' and empty rosters initially
+                empty = json.dumps([])
+                for tname in (team1_name, team2_name):
+                    await db.execute(
+                        """
+                        INSERT INTO session_teams (session_start_date, map_name, team_name, player_guids, player_names)
+                        VALUES (?, 'ALL', ?, ?, ?)
+                        ON CONFLICT(session_start_date, map_name, team_name)
+                        DO UPDATE SET team_name=excluded.team_name
+                        """,
+                        (session_date, tname, empty, empty),
+                    )
+                await db.commit()
+            await ctx.send(f"✅ Teams set for {session_date}: **{team1_name}** vs **{team2_name}**")
+        except Exception as e:
+            logger.error(f"Error in set_teams: {e}", exc_info=True)
+            await ctx.send(f"❌ Error setting teams: {e}")
+
+    @commands.command(name="assign_player")
+    async def assign_player(self, ctx, player_name: str, team_name: str):
+        """Assign a player (by name) to a persistent team for the latest session date."""
+        try:
+            import json
+            async with aiosqlite.connect(self.bot.db_path) as db:
+                await self._ensure_session_teams_table(db)
+
+                # Resolve latest session date
+                async with db.execute(
+                    "SELECT DISTINCT substr(session_date,1,10) as d FROM sessions ORDER BY d DESC LIMIT 1"
+                ) as cur:
+                    row = await cur.fetchone()
+                if not row:
+                    await ctx.send("❌ No sessions found.")
+                    return
+                session_date = row[0]
+
+                # Resolve most recent GUID for the player (fuzzy match by alias)
+                async with db.execute(
+                    """
+                    SELECT guid, alias
+                    FROM player_aliases
+                    WHERE lower(alias) LIKE lower(?)
+                    ORDER BY last_seen DESC
+                    LIMIT 1
+                    """,
+                    (f"%{player_name}%",),
+                ) as cur:
+                    pa = await cur.fetchone()
+                if not pa:
+                    await ctx.send(f"❌ Player '{player_name}' not found in aliases.")
+                    return
+                player_guid, resolved_alias = pa
+
+                # Ensure team row exists for this date (map_name='ALL')
+                empty = json.dumps([])
+                await db.execute(
+                    """
+                    INSERT INTO session_teams (session_start_date, map_name, team_name, player_guids, player_names)
+                    VALUES (?, 'ALL', ?, ?, ?)
+                    ON CONFLICT(session_start_date, map_name, team_name)
+                    DO NOTHING
+                    """,
+                    (session_date, team_name, empty, empty),
+                )
+
+                # Fetch current roster
+                async with db.execute(
+                    """
+                    SELECT player_guids, player_names
+                    FROM session_teams
+                    WHERE session_start_date = ? AND map_name = 'ALL' AND team_name = ?
+                    """,
+                    (session_date, team_name),
+                ) as cur:
+                    row = await cur.fetchone()
+
+                if not row:
+                    await ctx.send(
+                        f"❌ Team '{team_name}' not found for {session_date}. Use !set_teams first."
+                    )
+                    return
+
+                guids = set(json.loads(row[0] or "[]"))
+                names = set(json.loads(row[1] or "[]"))
+                updated = False
+                if player_guid not in guids:
+                    guids.add(player_guid)
+                    updated = True
+                if resolved_alias not in names:
+                    names.add(resolved_alias)
+                    updated = True
+
+                if updated:
+                    await db.execute(
+                        """
+                        UPDATE session_teams
+                        SET player_guids = ?, player_names = ?
+                        WHERE session_start_date = ? AND map_name = 'ALL' AND team_name = ?
+                        """,
+                        (json.dumps(sorted(list(guids))), json.dumps(sorted(list(names))), session_date, team_name),
+                    )
+                    await db.commit()
+
+            await ctx.send(
+                f"✅ Assigned **{resolved_alias}** to **{team_name}** for {session_date}"
+            )
+        except Exception as e:
+            logger.error(f"Error in assign_player: {e}", exc_info=True)
+            await ctx.send(f"❌ Error assigning player: {e}")
+
 class UltimateETLegacyBot(commands.Bot):
     """🚀 Ultimate consolidated ET:Legacy Discord bot with proper Cog structure"""
 
@@ -9654,8 +9937,17 @@ class UltimateETLegacyBot(commands.Bot):
         accuracy = player.get("accuracy", 0.0)
 
         # Time dead
-        time_dead_mins = obj_stats.get("time_dead_ratio", 0) * time_minutes
-        time_dead_ratio = obj_stats.get("time_dead_ratio", 0)
+        # time_dead_ratio from parser may be provided as either a fraction (0.75)
+        # or a percentage (75). Normalize to percentage and compute minutes.
+        raw_td = obj_stats.get("time_dead_ratio", 0) or 0
+        if raw_td <= 1:
+            td_percent = raw_td * 100.0
+        else:
+            td_percent = float(raw_td)
+
+        time_dead_minutes = time_minutes * (td_percent / 100.0)
+        time_dead_mins = time_dead_minutes
+        time_dead_ratio = td_percent
 
         values = (
             session_id,

@@ -1,0 +1,52 @@
+>>> Map: sw_goldrush_te
+
+
+Overall stats for: vid (0 Rounds)
+
+Weapon      Acrcy Hits/Shts Kills Deaths Headshots
+--------------------------------------------------
+Knife     :   0.0    0/4        0      0
+Luger     :  50.0    4/8        0      0         0
+MP 40     :  45.5  146/321     11      3        16
+Thompson  :                     0      9         0
+Grenade   :  50.0    5/10       1      1
+Syringe   : 100.0    3/3    
+
+Damage Given:   3098     Team Damage Given:     11
+Damage Recvd:   2794     Team Damage Recvd:      0
+
+Kills:   12   Team Kills:   1   Accuracy:    45.6%
+Deaths:  13   Self Kills:   5   Headshots:   10.7%
+Gibs:     3   Team Gibs:    0   Playtime:    80.1%
+                  Assists:      3                          
+
+Rank: Schutze (83 XP)
+
+Skills         Level/Points
+---------------------------
+Battle Sense   4 (28)      
+Engineering    4 (1)       
+First Aid      4 (8)       
+Light Weapons  4 (46)      
+
+GUID      TEAM       Player          TmX TmL TmP Kll Ast Dth Gib  SK  TK  TG Eff    DG    DR  TDG  TDR  Score  Rating  Delta
+----------------------------------------------------------------------------------------------------------------------------
+7B84BE88* Axis       endekk            9   0  68  14   2  11   2   5   0   0  56  2584  2102    0   11    106    0.00  +0.00
+D8423F90* Axis       vid               9   0  80  12   3  13   3   5   1   0  48  3098  2794   11    0     83    0.00  +0.00
+5D989160* Axis       .olz              9   0  82  10   2  12   1   7   0   0  45  2708  3242    0    0     53    0.00  +0.00
+----------------------------------------------------------------------------------------------------------------------------
+          Axis       Totals           28   0  77  36   7  36   6  17   1   0  50  8390  8138   11   11    242
+
+GUID      TEAM       Player          TmX TmL TmP Kll Ast Dth Gib  SK  TK  TG Eff    DG    DR  TDG  TDR  Score  Rating  Delta
+----------------------------------------------------------------------------------------------------------------------------
+1C747DF1* Allies     SmetarskiProner   0   9  83  13   6  13   3   5   0   0  50  2777  2552    0    0    127    0.00  +0.00
+652EB4A6* Allies     qmr               0   9  79  10   3  11   3   3   0   0  47  2182  2766    0    0     97    0.00  +0.00
+EDBB5DA9* Allies     SuperBoyy         0   9  80  13   7  12   6   3   0   0  52  3179  3072    0    0     87    0.00  +0.00
+----------------------------------------------------------------------------------------------------------------------------
+          Allies     Totals            0  28  81  36  16  36  12  11   0   0  50  8138  8390    0    0    311
+
+
+
+Stats recorded: 22:28:29 (02 Oct 2025)
+
+

@@ -3,7 +3,9 @@ Show October 2, 2025 session stats and compare with expected values.
 This is the session we've been debugging.
 """
 import sys
-sys.path.insert(0, 'G:\\VisualStudio\\Python\\stats')
+from pathlib import Path
+# Add project root to sys.path (relative, portable)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import sqlite3
 from datetime import datetime
