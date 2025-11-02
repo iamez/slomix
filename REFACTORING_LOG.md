@@ -3,6 +3,12 @@
 ## Goal
 Transform `ultimate_bot.py` (10,828 lines) into a modular architecture (~500 lines main file)
 
+## 📊 PROGRESS SUMMARY
+- **Phase 1 Complete:** 3/3 core classes extracted (-401 lines)
+- **Phase 2 Progress:** 2/4 cogs extracted (-1788 lines)
+- **Total Reduction:** 10,828 → 9,464 lines (**-1,364 lines, 12.6%**)
+- **Current Status:** Admin Cog + Link Cog extracted ✅
+
 ---
 
 ## 📁 Directory Structure Created
@@ -280,6 +286,91 @@ from bot.cogs.session_cog import SessionCog
 from bot.services.ssh_service import SSHService
 from bot.services.monitoring_service import MonitoringService
 ```
+
+---
+
+## ✅ Extraction #4: Link Cog (Admin Cog already extracted)
+
+**Date:** November 1, 2025  
+**Status:** ✅ COMPLETE  
+**Original Location:** `ultimate_bot.py` Lines 7305-8289 (983 lines)  
+**New Location:** `bot/cogs/link_cog.py` (1,330 lines with enhancements)
+
+### What Was Extracted
+- `class LinkCog(commands.Cog)` - Player-Discord account linking system
+- **Commands:**
+  - `!list_players` (aliases: players, lp) - Paginated player browsing
+  - `!find_player` (aliases: fp, findplayer, search_player) - **NEW FEATURE!**
+  - `!link` - 4 linking scenarios (smart self-link, GUID, name, admin)
+  - `!unlink` - Remove Discord link
+  - `!select` - Text-based selection alternative
+- **Helper Methods:**
+  - `_smart_self_link()` - Top 3 unlinked players by activity
+  - `_link_by_guid()` - Direct GUID linking with confirmation
+  - `_link_by_name()` - Fuzzy name search with multiple options
+  - `_admin_link()` - Admin linking with permissions check
+  - `_ensure_player_name_alias()` - Database compatibility layer
+
+### NEW FEATURE: !find_player
+**User Request:** "add some user help when user is executing those link commands, because atm the admin has to know the guid of the player hes trying to link"
+
+**Solution:** Created enhanced player search command showing:
+- **GUID** prominently displayed (for easy !link usage)
+- **Top 3 aliases per player** (never more, even if 300 exist)
+- **Stats:** Kills, Deaths, K/D, total games
+- **Last Seen:** Smart relative dates (days/weeks/months ago)
+- **Link Status:** Shows if already linked to someone
+- **Usage:** `!find_player <name>` or `!fp <name>`
+
+### Database Schema
+Works with existing `player_links` table:
+- `discord_id` TEXT - Discord user ID
+- `discord_username` TEXT - Discord username  
+- `et_guid` TEXT - ET:Legacy player GUID
+- `et_name` TEXT - Player name
+- `linked_date` TIMESTAMP - When linked
+- `verified` BOOLEAN - Admin verification flag
+
+### Import Changes Required
+**Before:**
+```python
+# Commands in ETLegacyCommands class
+@commands.command(name="link")
+async def link(self, ctx, ...):
+    ...
+```
+
+**After:**
+```python
+# At bot setup_hook
+from bot.cogs.link_cog import LinkCog
+await self.add_cog(LinkCog(self))
+```
+
+### Features Preserved
+- ✅ Interactive reactions (1️⃣/2️⃣/3️⃣) for selection
+- ✅ Smart self-linking (top 3 suggestions by activity)
+- ✅ GUID validation (8-character hex)
+- ✅ Name search with fuzzy matching
+- ✅ Admin linking with permissions check
+- ✅ Confirmation embeds with stats preview
+- ✅ Alias resolution from `player_aliases` table
+- ✅ Link status checking (prevent duplicates)
+- ✅ Pagination for player lists (15 per page)
+- ✅ Filter options: linked/unlinked/active
+
+### Testing Notes
+- ✅ Syntax validated with `py_compile`
+- ⏳ Awaiting functional testing with Discord bot
+- ⏳ Test database schema compatibility
+- ⏳ Test !find_player with various search terms
+- ⏳ Test admin linking permissions
+
+### File Size Impact
+- **Before:** 10,447 lines (after Admin Cog)
+- **After:** 9,464 lines
+- **Reduction:** -983 lines (9.4% reduction)
+- **New Cog:** 1,330 lines (with enhancements)
 
 ---
 
