@@ -1518,13 +1518,14 @@ class LastSessionCog(commands.Cog):
                 awards["kill_thief"] = {"player": name, "value": steals}
 
             # Spray & Pray
-            if kills > 0:
+            if kills > 0 and bullets:
                 bpk = bullets / kills
                 if bpk > awards["spray_pray"]["value"]:
                     awards["spray_pray"] = {"player": name, "value": bpk}
 
             # Too Scared to Shoot
-            if kills >= 5 and bullets < awards["trigger_shy"]["value"]:
+            if (kills >= 5 and bullets and
+                    bullets < awards["trigger_shy"]["value"]):
                 awards["trigger_shy"] = {"player": name, "value": bullets}
 
             # Damage Efficiency King
