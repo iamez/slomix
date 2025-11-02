@@ -3323,6 +3323,7 @@ class UltimateETLegacyBot(commands.Bot):
         🆕 Auto-post round statistics to Discord after processing
         
         Called automatically by endstats_monitor after successful file processing.
+        Shows ALL players with detailed stats.
         """
         try:
             logger.debug(f"📤 Preparing Discord post for {filename}")
@@ -3358,52 +3359,89 @@ class UltimateETLegacyBot(commands.Bot):
             
             logger.info(f"📋 Creating embed: Round {round_num}, Map {map_name}, {len(players)} players")
             
-            # Create embed
+            # Create main embed
             embed = discord.Embed(
-                title=f"🎮 Round {round_num} Complete!",
-                description=f"**Map:** {map_name}\n**Players:** {len(players)}",
-                color=discord.Color.green(),
+                title=f"🎮 Round {round_num} Complete - {map_name}",
+                description=f"**{len(players)} Players** participated in this round",
+                color=discord.Color.blue(),
                 timestamp=datetime.now()
             )
             
-            # Get top 5 players by kills
-            top_players = sorted(players, key=lambda p: p.get('kills', 0), reverse=True)[:5]
+            # Sort players by kills (descending)
+            sorted_players = sorted(players, key=lambda p: p.get('kills', 0), reverse=True)
             
-            if top_players:
-                logger.debug(f"🏆 Top player: {top_players[0].get('name')} ({top_players[0].get('kills')} kills)")
-                top_text = []
-                for i, player in enumerate(top_players, 1):
-                    name = player.get('name', 'Unknown')
-                    kills = player.get('kills', 0)
-                    deaths = player.get('deaths', 0)
-                    dmg = player.get('damage_given', 0)
-                    acc = player.get('accuracy', 0)
-                    
-                    kd = f"{kills}/{deaths}"
-                    top_text.append(f"{i}. **{name}** - {kd} K/D | {int(dmg)} DMG | {acc:.1f}% ACC")
+            # Build detailed stats for ALL players
+            if sorted_players:
+                logger.debug(f"📊 Building stats for {len(sorted_players)} players")
                 
-                embed.add_field(
-                    name="🏆 Top Players",
-                    value="\n".join(top_text),
-                    inline=False
-                )
+                # Split into chunks for multiple fields (Discord has field limits)
+                chunk_size = 10
+                for chunk_idx, i in enumerate(range(0, len(sorted_players), chunk_size)):
+                    chunk = sorted_players[i:i + chunk_size]
+                    field_name = f"👥 Players {i+1}-{min(i+chunk_size, len(sorted_players))}" if len(sorted_players) > chunk_size else "👥 All Players"
+                    
+                    player_lines = []
+                    for player in chunk:
+                        name = player.get('name', 'Unknown')[:20]  # Truncate long names
+                        kills = player.get('kills', 0)
+                        deaths = player.get('deaths', 0)
+                        dmg = player.get('damage_given', 0)
+                        dmgr = player.get('damage_received', 0)
+                        acc = player.get('accuracy', 0)
+                        hs = player.get('headshots', 0)
+                        revives = player.get('revives', 0)
+                        times_revived = player.get('ammogiven', 0)  # Need to map correct field
+                        gibs = player.get('gibs', 0)
+                        team_dmg_given = player.get('team_damage_given', 0)
+                        team_dmg_rcvd = player.get('team_damage_received', 0)
+                        time_dead = player.get('time_dead', 0)
+                        
+                        # Format: Name with primary stats
+                        kd_ratio = f"{kills/deaths:.2f}" if deaths > 0 else f"{kills:.0f}"
+                        
+                        # Line 1: Core combat stats
+                        line1 = (
+                            f"**{name}** `K/D:{kills}/{deaths}` `KD:{kd_ratio}` "
+                            f"`DMG:{int(dmg)}` `DMGR:{int(dmgr)}` `ACC:{acc:.1f}%`"
+                        )
+                        
+                        # Line 2: Support & deaths stats  
+                        line2 = (
+                            f"    ↳ `HS:{hs}` `Revives:{revives}` `Gibs:{gibs}` "
+                            f"`TmDMG:{int(team_dmg_given)}/{int(team_dmg_rcvd)}` `Dead:{time_dead}s`"
+                        )
+                        
+                        player_lines.append(f"{line1}\n{line2}")
+                    
+                    embed.add_field(
+                        name=field_name,
+                        value="\n".join(player_lines),
+                        inline=False
+                    )
             
-            # Calculate totals
+            # Calculate round totals
             total_kills = sum(p.get('kills', 0) for p in players)
             total_deaths = sum(p.get('deaths', 0) for p in players)
+            total_dmg = sum(p.get('damage_given', 0) for p in players)
+            total_hs = sum(p.get('headshots', 0) for p in players)
+            avg_acc = sum(p.get('accuracy', 0) for p in players) / len(players) if players else 0
             
             embed.add_field(
-                name="📊 Round Summary",
-                value=f"Total Kills: {total_kills}\nTotal Deaths: {total_deaths}",
-                inline=True
+                name="📊 Round Totals",
+                value=(
+                    f"**Kills:** {total_kills} | **Deaths:** {total_deaths}\n"
+                    f"**Damage:** {int(total_dmg):,} | **Headshots:** {total_hs}\n"
+                    f"**Avg Accuracy:** {avg_acc:.1f}%"
+                ),
+                inline=False
             )
             
-            embed.set_footer(text=f"File: {filename}")
+            embed.set_footer(text=f"Session ID: {session_id} | {filename}")
             
             # Post to channel
-            logger.info(f"📤 Sending embed to #{channel.name}...")
+            logger.info(f"📤 Sending detailed stats embed to #{channel.name}...")
             await channel.send(embed=embed)
-            logger.info(f"✅ Successfully posted stats to Discord!")
+            logger.info(f"✅ Successfully posted stats for {len(players)} players to Discord!")
             logger.info("=" * 60)
             
         except Exception as e:
