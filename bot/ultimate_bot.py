@@ -35,15 +35,54 @@ try:
 except ImportError:
     pass
 
-# Setup basic logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("UltimateBot")
+# ==================== COMPREHENSIVE LOGGING SETUP ====================
 
-# Reduce noise from verbose third-party libraries (paramiko/discord/asyncio)
+# Create logs directory if it doesn't exist
+os.makedirs("logs", exist_ok=True)
+
+# Configure logging with both file and console output
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+log_file = os.getenv("LOG_FILE", "logs/bot.log")
+
+# Create formatter with timestamp, level, name, and message
+formatter = logging.Formatter(
+    '%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# File handler - logs everything to file
+file_handler = logging.FileHandler(log_file, encoding='utf-8')
+file_handler.setLevel(logging.DEBUG)  # Log everything to file
+file_handler.setFormatter(formatter)
+
+# Console handler - logs INFO and above to console
+console_handler = logging.StreamHandler()
+console_handler.setLevel(getattr(logging, log_level))
+console_handler.setFormatter(formatter)
+
+# Configure root logger
+logging.basicConfig(
+    level=logging.DEBUG,  # Capture everything
+    handlers=[file_handler, console_handler]
+)
+
+# Get bot logger
+logger = logging.getLogger("UltimateBot")
+logger.info("=" * 80)
+logger.info("🚀 ET:LEGACY DISCORD BOT - STARTING UP")
+logger.info("=" * 80)
+logger.info(f"📝 Log Level: {log_level}")
+logger.info(f"📁 Log File: {log_file}")
+
+# Reduce noise from verbose third-party libraries
 logging.getLogger("paramiko").setLevel(logging.WARNING)
 logging.getLogger("paramiko.transport").setLevel(logging.WARNING)
 logging.getLogger("asyncio").setLevel(logging.WARNING)
 logging.getLogger("discord").setLevel(logging.INFO)
+logging.getLogger("discord.http").setLevel(logging.WARNING)
+logging.getLogger("discord.gateway").setLevel(logging.WARNING)
+
+# ======================================================================
 
 
 async def ensure_player_name_alias(db: "aiosqlite.Connection") -> None:
@@ -2798,11 +2837,15 @@ class UltimateETLegacyBot(commands.Bot):
         # Sync existing local files to processed_files table
         await self.sync_local_files_to_processed_table()
 
-        # Start background tasks
-        self.endstats_monitor.start()
-        self.cache_refresher.start()
-        self.scheduled_monitoring_check.start()
-        self.voice_session_monitor.start()
+        # Start background tasks (only if not already running)
+        if not self.endstats_monitor.is_running():
+            self.endstats_monitor.start()
+        if not self.cache_refresher.is_running():
+            self.cache_refresher.start()
+        if not self.scheduled_monitoring_check.is_running():
+            self.scheduled_monitoring_check.start()
+        if not self.voice_session_monitor.is_running():
+            self.voice_session_monitor.start()
         logger.info("✅ Background tasks started")
 
         logger.info("✅ Ultimate Bot initialization complete!")
@@ -3274,6 +3317,97 @@ class UltimateETLegacyBot(commands.Bot):
                 "error": str(e),
                 "stats_data": None,
             }
+
+    async def post_round_stats_auto(self, filename: str, result: dict):
+        """
+        🆕 Auto-post round statistics to Discord after processing
+        
+        Called automatically by endstats_monitor after successful file processing.
+        """
+        try:
+            logger.debug(f"📤 Preparing Discord post for {filename}")
+            
+            # Get the stats channel
+            stats_channel_id = int(os.getenv("STATS_CHANNEL_ID", 0))
+            if not stats_channel_id:
+                logger.warning("⚠️ STATS_CHANNEL_ID not configured, skipping Discord post")
+                return
+            
+            logger.debug(f"📡 Looking for channel ID: {stats_channel_id}")
+            channel = self.get_channel(stats_channel_id)
+            if not channel:
+                logger.error(f"❌ Stats channel {stats_channel_id} not found")
+                logger.error(f"   Available channels: {[c.id for c in self.get_all_channels()][:10]}")
+                return
+            
+            logger.debug(f"✅ Found channel: {channel.name}")
+            
+            # Get round data from the result
+            stats_data = result.get('stats_data')
+            session_id = result.get('session_id')
+            
+            if not stats_data or not session_id:
+                logger.warning(f"⚠️ No stats data for {filename}, skipping post")
+                logger.debug(f"   stats_data: {bool(stats_data)}, session_id: {session_id}")
+                return
+            
+            # Extract round info from stats_data
+            round_num = stats_data.get('round', 0)
+            map_name = stats_data.get('map', 'Unknown')
+            players = stats_data.get('players', [])
+            
+            logger.info(f"📋 Creating embed: Round {round_num}, Map {map_name}, {len(players)} players")
+            
+            # Create embed
+            embed = discord.Embed(
+                title=f"🎮 Round {round_num} Complete!",
+                description=f"**Map:** {map_name}\n**Players:** {len(players)}",
+                color=discord.Color.green(),
+                timestamp=datetime.now()
+            )
+            
+            # Get top 5 players by kills
+            top_players = sorted(players, key=lambda p: p.get('kills', 0), reverse=True)[:5]
+            
+            if top_players:
+                logger.debug(f"🏆 Top player: {top_players[0].get('name')} ({top_players[0].get('kills')} kills)")
+                top_text = []
+                for i, player in enumerate(top_players, 1):
+                    name = player.get('name', 'Unknown')
+                    kills = player.get('kills', 0)
+                    deaths = player.get('deaths', 0)
+                    dmg = player.get('damage_given', 0)
+                    acc = player.get('accuracy', 0)
+                    
+                    kd = f"{kills}/{deaths}"
+                    top_text.append(f"{i}. **{name}** - {kd} K/D | {int(dmg)} DMG | {acc:.1f}% ACC")
+                
+                embed.add_field(
+                    name="🏆 Top Players",
+                    value="\n".join(top_text),
+                    inline=False
+                )
+            
+            # Calculate totals
+            total_kills = sum(p.get('kills', 0) for p in players)
+            total_deaths = sum(p.get('deaths', 0) for p in players)
+            
+            embed.add_field(
+                name="📊 Round Summary",
+                value=f"Total Kills: {total_kills}\nTotal Deaths: {total_deaths}",
+                inline=True
+            )
+            
+            embed.set_footer(text=f"File: {filename}")
+            
+            # Post to channel
+            logger.info(f"📤 Sending embed to #{channel.name}...")
+            await channel.send(embed=embed)
+            logger.info(f"✅ Successfully posted stats to Discord!")
+            logger.info("=" * 60)
+            
+        except Exception as e:
+            logger.error(f"❌ Error posting round stats to Discord: {e}", exc_info=True)
 
     async def _import_stats_to_db(self, stats_data, filename):
         """Import parsed stats to database"""
@@ -4000,12 +4134,15 @@ class UltimateETLegacyBot(commands.Bot):
         2. Compares with processed_files tracking
         3. Downloads new files
         4. Parses and imports to database
-        5. Posts Discord round summaries
+        5. Posts Discord round summaries automatically
         """
         if not self.monitoring or not self.ssh_enabled:
+            # Silent return - only log once when monitoring starts/stops
             return
 
         try:
+            logger.debug("🔍 SSH monitor check starting...")
+            
             # Build SSH config
             ssh_config = {
                 "host": os.getenv("SSH_HOST"),
@@ -4025,36 +4162,75 @@ class UltimateETLegacyBot(commands.Bot):
                 ]
             ):
                 logger.warning(
-                    "⚠️ SSH config incomplete - monitoring disabled"
+                    "⚠️ SSH config incomplete - monitoring disabled\n"
+                    f"   Host: {ssh_config['host']}\n"
+                    f"   User: {ssh_config['user']}\n"
+                    f"   Key: {ssh_config['key_path']}\n"
+                    f"   Path: {ssh_config['remote_path']}"
                 )
                 return
 
             # List remote files
+            logger.debug(f"📡 Connecting to SSH: {ssh_config['user']}@{ssh_config['host']}:{ssh_config['port']}")
             remote_files = await self.ssh_list_remote_files(ssh_config)
 
             if not remote_files:
+                logger.debug("📂 No remote files found or SSH connection failed")
                 return
 
+            logger.debug(f"📂 Found {len(remote_files)} total files on remote server")
+
             # Check each file
+            new_files_count = 0
             for filename in remote_files:
                 # Check if already processed (4-layer check)
                 if await self.should_process_file(filename):
-                    logger.info(f"📥 New file detected: {filename}")
+                    new_files_count += 1
+                    logger.info("=" * 60)
+                    logger.info(f"📥 NEW FILE DETECTED: {filename}")
+                    logger.info("=" * 60)
 
                     # Download file
+                    download_start = time.time()
                     local_path = await self.ssh_download_file(
                         ssh_config, filename, "local_stats"
                     )
+                    download_time = time.time() - download_start
 
                     if local_path:
+                        logger.info(f"✅ Downloaded in {download_time:.2f}s: {local_path}")
+                        
                         # Wait 3 seconds for file to fully write
+                        logger.debug("⏳ Waiting 3s for file to fully write...")
                         await asyncio.sleep(3)
 
-                        # Process the file
-                        await self.process_gamestats_file(local_path, filename)
+                        # Process the file (imports to DB)
+                        logger.info(f"⚙️ Processing file: {filename}")
+                        process_start = time.time()
+                        result = await self.process_gamestats_file(local_path, filename)
+                        process_time = time.time() - process_start
+                        
+                        logger.info(f"⚙️ Processing completed in {process_time:.2f}s")
+                        
+                        # 🆕 AUTO-POST to Discord after processing!
+                        if result and result.get('success'):
+                            logger.info(f"📊 Posting to Discord: {result.get('player_count', 0)} players")
+                            await self.post_round_stats_auto(filename, result)
+                            logger.info(f"✅ Successfully processed and posted: {filename}")
+                        else:
+                            error_msg = result.get('error', 'Unknown error') if result else 'No result'
+                            logger.warning(f"⚠️ Processing failed for {filename}: {error_msg}")
+                            logger.warning(f"⚠️ Skipping Discord post")
+                    else:
+                        logger.error(f"❌ Download failed for {filename}")
+            
+            if new_files_count == 0:
+                logger.debug(f"✅ All {len(remote_files)} files already processed")
+            else:
+                logger.info(f"🎉 Processed {new_files_count} new file(s) this check")
 
         except Exception as e:
-            logger.error(f"❌ endstats_monitor error: {e}")
+            logger.error(f"❌ endstats_monitor error: {e}", exc_info=True)
 
     @endstats_monitor.before_loop
     async def before_endstats_monitor(self):
