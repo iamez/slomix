@@ -2213,7 +2213,69 @@ class ETLegacyCommands(commands.Cog):
             (session_date, json.dumps(guids2), json.dumps(names2)),
         )
         await db.commit()
+        
+        # Update team history tracking
+        await self._update_team_history(db, session_date, guids1, guids2, names1, names2)
+        
         return True
+
+    async def _update_team_history(self, db, session_date, team1_guids, team2_guids, team1_names, team2_names):
+        """
+        Update team_lineups and session_results tables for historical tracking.
+        
+        Args:
+            db: Database connection
+            session_date: Session date (YYYY-MM-DD)
+            team1_guids: List of GUIDs for Team A
+            team2_guids: List of GUIDs for Team B
+            team1_names: List of names for Team A
+            team2_names: List of names for Team B
+        """
+        import hashlib
+        import json
+        
+        def calculate_lineup_hash(guids):
+            sorted_guids = sorted(guids)
+            guid_string = ",".join(sorted_guids)
+            return hashlib.sha256(guid_string.encode()).hexdigest()[:16]
+        
+        # Calculate lineup hashes
+        team1_hash = calculate_lineup_hash(team1_guids)
+        team2_hash = calculate_lineup_hash(team2_guids)
+        
+        # Get or create lineup records
+        for lineup_hash, guids in [(team1_hash, team1_guids), (team2_hash, team2_guids)]:
+            async with db.execute(
+                "SELECT id, first_seen, last_seen FROM team_lineups WHERE lineup_hash = ?",
+                (lineup_hash,)
+            ) as cur:
+                row = await cur.fetchone()
+            
+            if row:
+                lineup_id, first_seen, last_seen = row
+                if session_date > last_seen:
+                    await db.execute(
+                        """
+                        UPDATE team_lineups 
+                        SET last_seen = ?, 
+                            total_sessions = total_sessions + 1,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                        """,
+                        (session_date, lineup_id)
+                    )
+            else:
+                await db.execute(
+                    """
+                    INSERT INTO team_lineups 
+                    (lineup_hash, player_guids, player_count, first_seen, last_seen)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (lineup_hash, json.dumps(sorted(guids)), len(guids), session_date, session_date)
+                )
+        
+        await db.commit()
+        logger.debug(f"✅ Updated team history for {session_date}")
 
     async def _ensure_session_teams_table(self, db):
         """Ensure session_teams table exists with expected columns."""
@@ -2695,13 +2757,21 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f'Failed to load Session Management Cog: {e}', exc_info=True)
 
-        # Load Team Management Cog
+        # Load Team Management Cog (manual commands)
         try:
             from bot.cogs.team_management_cog import TeamManagementCog
             await self.add_cog(TeamManagementCog(self))
             logger.info('Team Management Cog loaded (set_teams, assign_player)')
         except Exception as e:
             logger.error(f'Failed to load Team Management Cog: {e}', exc_info=True)
+        
+        # Load Team System Cog (comprehensive team tracking)
+        try:
+            from bot.cogs.team_cog import TeamCog
+            await self.add_cog(TeamCog(self))
+            logger.info('✅ Team System Cog loaded (teams, lineup_changes, session_score)')
+        except Exception as e:
+            logger.error(f'Failed to load Team System Cog: {e}', exc_info=True)
         # �🎯 FIVEEYES: Load synergy analytics cog (SAFE - disabled by default)
         try:
             await self.load_extension("cogs.synergy_analytics")

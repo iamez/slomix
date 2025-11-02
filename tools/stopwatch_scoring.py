@@ -23,7 +23,7 @@ from typing import Dict, Tuple, Optional
 class StopwatchScoring:
     """Calculate Stopwatch mode map scores"""
     
-    def __init__(self, db_path: str = "etlegacy_production.db"):
+    def __init__(self, db_path: str = "bot/etlegacy_production.db"):
         self.db_path = db_path
     
     def parse_time_to_seconds(self, time_str: str) -> int:
@@ -114,49 +114,50 @@ class StopwatchScoring:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Get all maps for this session (grouped by map name)
+        # Get all maps for this session (grouped by map_id)
+        # Use map_id to properly pair R1+R2 together
         cursor.execute('''
-            SELECT map_name, round_number, defender_team, winner_team, 
-                   time_limit, actual_time
+            SELECT map_name, map_id, round_number, defender_team, 
+                   winner_team, time_limit, actual_time
             FROM sessions
             WHERE substr(session_date, 1, 10) = ?
-            ORDER BY id
+            AND map_id IS NOT NULL
+            ORDER BY map_id, round_number
         ''', (session_date,))
         
         rows = cursor.fetchall()
         
-        # Group rounds into map pairs (every 2 rounds = 1 map)
-        maps = []
-        i = 0
-        while i < len(rows):
-            if i + 1 < len(rows):
-                row1 = rows[i]
-                row2 = rows[i + 1]
-                map_name1 = row1[0]
-                map_name2 = row2[0]
-                
-                # Verify both rounds are for same map
-                if map_name1 == map_name2:
-                    maps.append({
-                        'map_name': map_name1,
-                        'round1': {
-                            'defender': row1[2],
-                            'winner': row1[3],
-                            'time_limit': row1[4],
-                            'actual_time': row1[5]
-                        },
-                        'round2': {
-                            'defender': row2[2],
-                            'winner': row2[3],
-                            'time_limit': row2[4],
-                            'actual_time': row2[5]
-                        }
-                    })
-                    i += 2
-                else:
-                    i += 1
-            else:
-                i += 1
+        # Group rounds by map_id (proper R1+R2 pairs)
+        maps_dict = {}
+        for row in rows:
+            map_name, map_id, round_num, defender, winner, \
+                time_limit, actual_time = row
+            
+            if map_id not in maps_dict:
+                maps_dict[map_id] = {
+                    'map_name': map_name,
+                    'map_id': map_id,
+                    'round1': None,
+                    'round2': None
+                }
+            
+            round_data = {
+                'defender': defender,
+                'winner': winner,
+                'time_limit': time_limit,
+                'actual_time': actual_time
+            }
+            
+            if round_num == 1:
+                maps_dict[map_id]['round1'] = round_data
+            elif round_num == 2:
+                maps_dict[map_id]['round2'] = round_data
+        
+        # Filter to complete maps only (both R1 and R2)
+        maps = [
+            m for m in maps_dict.values()
+            if m['round1'] is not None and m['round2'] is not None
+        ]
         
         # Get team assignments from session_teams (use DISTINCT to avoid duplicates)
         cursor.execute('''
