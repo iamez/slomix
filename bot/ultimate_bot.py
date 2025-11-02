@@ -3419,13 +3419,13 @@ class UltimateETLegacyBot(commands.Bot):
             deaths,
             player.get("damage_given", 0),
             player.get("damage_received", 0),
-            player.get("team_damage_given", 0),
-            player.get("team_damage_received", 0),
+            obj_stats.get("team_damage_given", 0),  # ✅ FIX: was player.get()
+            obj_stats.get("team_damage_received", 0),  # ✅ FIX: was player.get()
             obj_stats.get("gibs", 0),
             obj_stats.get("self_kills", 0),
             obj_stats.get("team_kills", 0),
             obj_stats.get("team_gibs", 0),
-            player.get("headshots", 0),
+            obj_stats.get("headshot_kills", 0),  # ✅ FIX: was player.get("headshots")
             time_seconds,
             time_minutes,
             time_dead_mins,
@@ -3445,17 +3445,17 @@ class UltimateETLegacyBot(commands.Bot):
             obj_stats.get("dynamites_defused", 0),
             obj_stats.get("times_revived", 0),
             obj_stats.get("revives_given", 0),
-            obj_stats.get("most_useful_kills", 0),
+            obj_stats.get("useful_kills", 0),  # ✅ FIX: was "most_useful_kills"
             obj_stats.get("useless_kills", 0),
             obj_stats.get("kill_steals", 0),
             obj_stats.get("denied_playtime", 0),
-            0,  # constructions
+            obj_stats.get("repairs_constructions", 0),  # ✅ FIX: was hardcoded 0
             obj_stats.get("tank_meatshield", 0),
-            obj_stats.get("double_kills", 0),
-            obj_stats.get("triple_kills", 0),
-            obj_stats.get("quad_kills", 0),
-            obj_stats.get("multi_kills", 0),
-            obj_stats.get("mega_kills", 0),
+            obj_stats.get("multikill_2x", 0),  # ✅ FIX: was "double_kills"
+            obj_stats.get("multikill_3x", 0),  # ✅ FIX: was "triple_kills"
+            obj_stats.get("multikill_4x", 0),  # ✅ FIX: was "quad_kills"
+            obj_stats.get("multikill_5x", 0),  # ✅ FIX: was "multi_kills"
+            obj_stats.get("multikill_6x", 0),  # ✅ FIX: was "mega_kills"
             obj_stats.get("killing_spree", 0),
             obj_stats.get("death_spree", 0),
         )
