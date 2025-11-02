@@ -2600,6 +2600,18 @@ class UltimateETLegacyBot(commands.Bot):
             else []
         )
 
+        # Load allowed bot command channels from .env
+        bot_channels_str = os.getenv("BOT_COMMAND_CHANNELS", "")
+        self.bot_command_channels = (
+            [
+                int(ch.strip())
+                for ch in bot_channels_str.split(",")
+                if ch.strip()
+            ]
+            if bot_channels_str
+            else []
+        )
+
         # Session thresholds
         self.session_start_threshold = int(
             os.getenv("SESSION_START_THRESHOLD", "6")
@@ -2617,6 +2629,11 @@ class UltimateETLegacyBot(commands.Bot):
             )
             logger.info(
                 f"📊 Thresholds: {self.session_start_threshold}+ to start, <{self.session_end_threshold} for {self.session_end_delay}s to end"
+            )
+        
+        if self.bot_command_channels:
+            logger.info(
+                f"🔒 Bot commands restricted to channels: {self.bot_command_channels}"
             )
         else:
             logger.warning(
@@ -4440,6 +4457,21 @@ class UltimateETLegacyBot(commands.Bot):
         await self.wait_until_ready()
 
     # ==================== BOT EVENTS ====================
+
+    async def on_message(self, message):
+        """Process messages and filter by allowed channels"""
+        # Ignore bot's own messages
+        if message.author.bot:
+            return
+        
+        # Check if channel restriction is enabled and if message is in allowed channel
+        if self.bot_command_channels:
+            if message.channel.id not in self.bot_command_channels:
+                # Silently ignore commands in non-whitelisted channels
+                return
+        
+        # Process commands normally
+        await self.process_commands(message)
 
     async def on_ready(self):
         """✅ Bot startup message"""
