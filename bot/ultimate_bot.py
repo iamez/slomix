@@ -3371,72 +3371,64 @@ class UltimateETLegacyBot(commands.Bot):
                 logger.debug(f"   stats_data: {bool(stats_data)}, session_id: {session_id}")
                 return
             
-            # Extract round info from stats_data
-            round_num = stats_data.get('round', 0)
-            map_name = stats_data.get('map', 'Unknown')
+            # Extract round info from stats_data (parser uses 'map_name' and 'round_num')
+            round_num = stats_data.get('round_num', stats_data.get('round', 1))
+            map_name = stats_data.get('map_name', stats_data.get('map', 'Unknown'))
+            winner_team = stats_data.get('winner_team', 'Unknown')
+            round_outcome = stats_data.get('round_outcome', '')
+            round_duration = stats_data.get('actual_time', stats_data.get('map_time', 'Unknown'))
             players = stats_data.get('players', [])
             
             logger.info(f"📋 Creating embed: Round {round_num}, Map {map_name}, {len(players)} players")
             
+            # Build title with round outcome info
+            title = f"🎮 Round {round_num} Complete - Map: **{map_name}**"
+            description_parts = []
+            
+            # Add round outcome (who won / defended)
+            if round_outcome:
+                description_parts.append(f"**Outcome:** {round_outcome}")
+            if winner_team and winner_team != 'Unknown':
+                description_parts.append(f"**Winner:** {winner_team}")
+            if round_duration:
+                description_parts.append(f"**Duration:** {round_duration}")
+            description_parts.append(f"**{len(players)} Players** participated")
+            
             # Create main embed
             embed = discord.Embed(
-                title=f"🎮 Round {round_num} Complete - {map_name}",
-                description=f"**{len(players)} Players** participated in this round",
-                color=discord.Color.blue(),
+                title=title,
+                description="\n".join(description_parts),
+                color=discord.Color.green() if round_outcome and 'win' in round_outcome.lower() else discord.Color.blue(),
                 timestamp=datetime.now()
             )
             
-            # Sort players by kills (descending)
-            sorted_players = sorted(players, key=lambda p: p.get('kills', 0), reverse=True)
+            # Sort all players by kills (simple display for now)
+            players_sorted = sorted(players, key=lambda p: p.get('kills', 0), reverse=True)
             
-            # Build detailed stats for ALL players
-            if sorted_players:
-                logger.debug(f"📊 Building stats for {len(sorted_players)} players")
+            # Split into chunks of 10 for Discord field limits
+            chunk_size = 10
+            for i in range(0, len(players_sorted), chunk_size):
+                chunk = players_sorted[i:i + chunk_size]
+                field_name = f' Players {i+1}-{min(i+chunk_size, len(players_sorted))}'
                 
-                # Split into chunks for multiple fields (Discord has field limits)
-                chunk_size = 10
-                for chunk_idx, i in enumerate(range(0, len(sorted_players), chunk_size)):
-                    chunk = sorted_players[i:i + chunk_size]
-                    field_name = f"👥 Players {i+1}-{min(i+chunk_size, len(sorted_players))}" if len(sorted_players) > chunk_size else "👥 All Players"
+                player_lines = []
+                for player in chunk:
+                    name = player.get('name', 'Unknown')[:20]
+                    kills = player.get('kills', 0)
+                    deaths = player.get('deaths', 0)
+                    dmg = player.get('damage_given', 0)
+                    acc = player.get('accuracy', 0)
                     
-                    player_lines = []
-                    for player in chunk:
-                        name = player.get('name', 'Unknown')[:20]  # Truncate long names
-                        kills = player.get('kills', 0)
-                        deaths = player.get('deaths', 0)
-                        dmg = player.get('damage_given', 0)
-                        dmgr = player.get('damage_received', 0)
-                        acc = player.get('accuracy', 0)
-                        hs = player.get('headshots', 0)
-                        revives = player.get('revives', 0)
-                        times_revived = player.get('ammogiven', 0)  # Need to map correct field
-                        gibs = player.get('gibs', 0)
-                        team_dmg_given = player.get('team_damage_given', 0)
-                        team_dmg_rcvd = player.get('team_damage_received', 0)
-                        time_dead = player.get('time_dead', 0)
-                        
-                        # Format: Name with primary stats
-                        kd_ratio = f"{kills/deaths:.2f}" if deaths > 0 else f"{kills:.0f}"
-                        
-                        # Line 1: Core combat stats
-                        line1 = (
-                            f"**{name}** `K/D:{kills}/{deaths}` `KD:{kd_ratio}` "
-                            f"`DMG:{int(dmg)}` `DMGR:{int(dmgr)}` `ACC:{acc:.1f}%`"
-                        )
-                        
-                        # Line 2: Support & deaths stats  
-                        line2 = (
-                            f"    ↳ `HS:{hs}` `Revives:{revives}` `Gibs:{gibs}` "
-                            f"`TmDMG:{int(team_dmg_given)}/{int(team_dmg_rcvd)}` `Dead:{time_dead}s`"
-                        )
-                        
-                        player_lines.append(f"{line1}\n{line2}")
-                    
-                    embed.add_field(
-                        name=field_name,
-                        value="\n".join(player_lines),
-                        inline=False
+                    kd_str = f'{kills}/{deaths}'
+                    player_lines.append(
+                        f'**{name}** - {kd_str} K/D | {int(dmg):,} DMG | {acc:.1f}% ACC'
                     )
+                
+                embed.add_field(
+                    name=field_name,
+                    value='\n'.join(player_lines) if player_lines else 'No stats',
+                    inline=False
+                )
             
             # Calculate round totals
             total_kills = sum(p.get('kills', 0) for p in players)
@@ -3461,10 +3453,142 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info(f"📤 Sending detailed stats embed to #{channel.name}...")
             await channel.send(embed=embed)
             logger.info(f"✅ Successfully posted stats for {len(players)} players to Discord!")
+            
+            # 🗺️ Check if this was the last round for the map → post map summary
+            await self._check_and_post_map_completion(session_id, map_name, round_num, channel)
+            
             logger.info("=" * 60)
             
         except Exception as e:
             logger.error(f"❌ Error posting round stats to Discord: {e}", exc_info=True)
+
+    async def _check_and_post_map_completion(self, session_id: int, map_name: str, current_round: int, channel):
+        """
+        Check if we just finished the last round of a map.
+        If so, post aggregate map statistics.
+        """
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                # Check if there are any more rounds for this map in this session
+                cursor = await db.execute("""
+                    SELECT MAX(round_num) as max_round, COUNT(DISTINCT round_num) as round_count
+                    FROM player_comprehensive_stats
+                    WHERE session_id = ? AND map_name = ?
+                """, (session_id, map_name))
+                
+                row = await cursor.fetchone()
+                if not row:
+                    return
+                
+                max_round, round_count = row
+                
+                logger.debug(f"🗺️ Map check: {map_name} - current round {current_round}, max in DB: {max_round}, total rounds: {round_count}")
+                
+                # If current round matches max round in DB, this is the last round for the map
+                if current_round == max_round and round_count >= 2:
+                    logger.info(f"🏁 Map complete! {map_name} finished after {round_count} rounds. Posting map summary...")
+                    await self._post_map_summary(session_id, map_name, channel)
+                else:
+                    logger.debug(f"⏳ Map {map_name} not complete yet (round {current_round}/{max_round})")
+                    
+        except Exception as e:
+            logger.error(f"❌ Error checking map completion: {e}", exc_info=True)
+
+    async def _post_map_summary(self, session_id: int, map_name: str, channel):
+        """
+        Post aggregate statistics for all rounds of a completed map.
+        """
+        try:
+            logger.info(f"📊 Generating map summary for {map_name}...")
+            
+            async with aiosqlite.connect(self.db_path) as db:
+                # Get map-level aggregate stats
+                cursor = await db.execute("""
+                    SELECT 
+                        COUNT(DISTINCT round_num) as total_rounds,
+                        COUNT(DISTINCT player_guid) as unique_players,
+                        SUM(kills) as total_kills,
+                        SUM(deaths) as total_deaths,
+                        SUM(damage_given) as total_damage,
+                        SUM(headshots) as total_headshots,
+                        AVG(accuracy) as avg_accuracy
+                    FROM player_comprehensive_stats
+                    WHERE session_id = ? AND map_name = ?
+                """, (session_id, map_name))
+                
+                map_stats = await cursor.fetchone()
+                if not map_stats:
+                    logger.warning(f"⚠️ No map stats found for {map_name}")
+                    return
+                
+                total_rounds, unique_players, total_kills, total_deaths, total_damage, total_headshots, avg_accuracy = map_stats
+                
+                # Get top 5 players across all rounds on this map
+                cursor = await db.execute("""
+                    SELECT 
+                        player_name,
+                        SUM(kills) as total_kills,
+                        SUM(deaths) as total_deaths,
+                        SUM(damage_given) as total_damage,
+                        AVG(accuracy) as avg_accuracy
+                    FROM player_comprehensive_stats
+                    WHERE session_id = ? AND map_name = ?
+                    GROUP BY player_guid
+                    ORDER BY total_kills DESC
+                    LIMIT 5
+                """, (session_id, map_name))
+                
+                top_players = await cursor.fetchall()
+                
+                # Create embed
+                embed = discord.Embed(
+                    title=f"🗺️ {map_name.upper()} - Map Complete!",
+                    description=f"Aggregate stats from **{total_rounds} rounds**",
+                    color=discord.Color.gold(),
+                    timestamp=datetime.now()
+                )
+                
+                # Map overview
+                kd_ratio = total_kills / total_deaths if total_deaths > 0 else total_kills
+                embed.add_field(
+                    name="📊 Map Overview",
+                    value=(
+                        f"**Rounds Played:** {total_rounds}\n"
+                        f"**Unique Players:** {unique_players}\n"
+                        f"**Total Kills:** {total_kills:,}\n"
+                        f"**Total Deaths:** {total_deaths:,}\n"
+                        f"**K/D Ratio:** {kd_ratio:.2f}\n"
+                        f"**Total Damage:** {int(total_damage):,}\n"
+                        f"**Total Headshots:** {total_headshots}\n"
+                        f"**Avg Accuracy:** {avg_accuracy:.1f}%"
+                    ),
+                    inline=False
+                )
+                
+                # Top performers
+                if top_players:
+                    top_lines = []
+                    for i, (name, kills, deaths, damage, acc) in enumerate(top_players, 1):
+                        kd = kills / deaths if deaths > 0 else kills
+                        top_lines.append(
+                            f"{i}. **{name}** - {kills}/{deaths} K/D ({kd:.2f}) | {int(damage):,} DMG | {acc:.1f}% ACC"
+                        )
+                    
+                    embed.add_field(
+                        name="🏆 Top Performers (All Rounds)",
+                        value="\n".join(top_lines),
+                        inline=False
+                    )
+                
+                embed.set_footer(text=f"Session ID: {session_id}")
+                
+                # Post to channel
+                logger.info(f"📤 Posting map summary to #{channel.name}...")
+                await channel.send(embed=embed)
+                logger.info(f"✅ Map summary posted for {map_name}!")
+                
+        except Exception as e:
+            logger.error(f"❌ Error posting map summary: {e}", exc_info=True)
 
     async def _import_stats_to_db(self, stats_data, filename):
         """Import parsed stats to database"""
