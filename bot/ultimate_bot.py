@@ -2558,7 +2558,6 @@ class UltimateETLegacyBot(commands.Bot):
 
         # 🎮 Bot State
         self.current_session = None
-        self.monitoring = False
         self.processed_files = set()
         self.auto_link_enabled = True
         self.gather_queue = {"3v3": [], "6v6": []}
@@ -2574,6 +2573,9 @@ class UltimateETLegacyBot(commands.Bot):
             os.getenv("AUTOMATION_ENABLED", "false").lower() == "true"
         )
         self.ssh_enabled = os.getenv("SSH_ENABLED", "false").lower() == "true"
+        
+        # Enable monitoring when SSH is enabled (for auto stats posting)
+        self.monitoring = self.ssh_enabled
 
         if self.automation_enabled:
             logger.info("✅ Automation system ENABLED")
