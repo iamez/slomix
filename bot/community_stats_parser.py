@@ -312,44 +312,72 @@ class C0RNP0RN3StatsParser:
         date = '-'.join(parts[:3])  # YYYY-MM-DD
         map_name = '-'.join(parts[4:-2])  # everything between time and "round-2.txt"
 
-        # Look for Round 1 files on the same date with the same map
-        search_pattern = f"{date}-*-{map_name}-round-1.txt"
-
         # Check both the same directory and local_stats directory
         search_dirs = [directory]
         if not directory.endswith("local_stats"):
             search_dirs.append("local_stats")
 
         potential_files = []
+        
+        # First, look for Round 1 files on the same date with the same map
+        search_pattern = f"{date}-*-{map_name}-round-1.txt"
         for search_dir in search_dirs:
             if os.path.exists(search_dir):
                 import glob
-
                 pattern_path = os.path.join(search_dir, search_pattern)
                 potential_files.extend(glob.glob(pattern_path))
+
+        # If no files found on the same date, check previous date 
+        # (for matches that span midnight)
+        if not potential_files:
+            from datetime import datetime, timedelta
+            try:
+                date_obj = datetime.strptime(date, '%Y-%m-%d')
+                prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
+                prev_search_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
+                
+                print(f"  → Checking previous date: {prev_search_pattern}")
+                
+                for search_dir in search_dirs:
+                    if os.path.exists(search_dir):
+                        pattern_path = os.path.join(search_dir, prev_search_pattern)
+                        found = glob.glob(pattern_path)
+                        if found:
+                            print(f"  → Found {len(found)} files from previous date")
+                        potential_files.extend(found)
+            except ValueError:
+                pass  # Invalid date format, skip previous date search
 
         if not potential_files:
             return None
 
-        # Extract Round 2 timestamp for comparison
-        r2_time_part = parts[3]  # HHMMSS
-        r2_timestamp = int(r2_time_part)
+        # Parse Round 2 full datetime for comparison
+        from datetime import datetime
+        try:
+            r2_date_str = f"{date} {parts[3]}"  # "YYYY-MM-DD HHMMSS"
+            r2_datetime = datetime.strptime(r2_date_str, '%Y-%m-%d %H%M%S')
+        except (ValueError, IndexError):
+            return None
 
         # Find the Round 1 file with the latest timestamp before Round 2
         best_r1_file = None
-        best_r1_timestamp = -1
+        best_r1_datetime = None
 
         for r1_file in potential_files:
             r1_filename = os.path.basename(r1_file)
             r1_parts = r1_filename.split('-')
             if len(r1_parts) >= 4:
-                r1_time_part = r1_parts[3]  # HHMMSS
                 try:
-                    r1_timestamp = int(r1_time_part)
+                    r1_date = '-'.join(r1_parts[:3])  # YYYY-MM-DD
+                    r1_time = r1_parts[3]  # HHMMSS
+                    r1_date_str = f"{r1_date} {r1_time}"
+                    r1_datetime = datetime.strptime(r1_date_str, '%Y-%m-%d %H%M%S')
+                    
                     # Find the Round 1 file closest to but before Round 2
-                    if r1_timestamp < r2_timestamp and r1_timestamp > best_r1_timestamp:
-                        best_r1_timestamp = r1_timestamp
-                        best_r1_file = r1_file
+                    if r1_datetime < r2_datetime:
+                        if best_r1_datetime is None or r1_datetime > best_r1_datetime:
+                            best_r1_datetime = r1_datetime
+                            best_r1_file = r1_file
                 except ValueError:
                     continue
 
