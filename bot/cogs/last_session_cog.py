@@ -494,7 +494,7 @@ class LastSessionCog(commands.Cog):
         await ctx.send(embed=embed)
 
     async def _show_top_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int, total_maps: int):
-        """Show top 10 players quick view"""
+        """Show all players ranked by kills"""
         query = f"""
             SELECT p.player_name,
                 SUM(p.kills) as kills,
@@ -512,35 +512,49 @@ class LastSessionCog(commands.Cog):
             WHERE p.session_id IN ({session_ids_str})
             GROUP BY p.player_name
             ORDER BY kills DESC
-            LIMIT 10
         """
         async with db.execute(query, session_ids) as cursor:
             top_players = await cursor.fetchall()
 
         embed = discord.Embed(
-            title=f"🏆 Top 10 Players - {latest_date}",
-            description=f"Best performers from {total_maps} maps • {player_count} total players",
+            title=f"🏆 All Players - {latest_date}",
+            description=f"All {player_count} players from {total_maps} maps",
             color=0xFEE75C,
             timestamp=datetime.now(),
         )
 
-        medals = ["🥇", "🥈", "🥉", "4.", "5.", "6.", "7.", "8.", "9.", "10."]
-        for i, player in enumerate(top_players):
+        medals = ["🥇", "🥈", "🥉"]
+        
+        # Build player list in batches to avoid Discord field limits
+        field_text = ""
+        for i, player in enumerate(top_players, 1):
             name, kills, deaths, dpm, damage, hsk, gibs, seconds = player
             kd = kills / deaths if deaths > 0 else kills
             hours = int((seconds or 0) // 3600)
             minutes = int(((seconds or 0) % 3600) // 60)
             time_display = f"{hours}h{minutes}m" if hours > 0 else f"{minutes}m"
 
-            player_stats = (
-                f"{medals[i]} **{name}**\n"
+            # Medal for top 3, number for rest
+            prefix = medals[i-1] if i <= 3 else f"{i}."
+            
+            player_line = (
+                f"{prefix} **{name}**\n"
                 f"`{kills}K/{deaths}D ({kd:.2f})` • `{dpm:.0f} DPM` • `{damage:,} DMG`\n"
                 f"`{hsk} HSK` • `{gibs} Gibs` • ⏱️ `{time_display}`\n"
             )
+            
+            # Check if adding this player would exceed field limit (1024)
+            if len(field_text) + len(player_line) > 1000:
+                embed.add_field(name="\u200b", value=field_text, inline=False)
+                field_text = player_line
+            else:
+                field_text += player_line
+        
+        # Add remaining players
+        if field_text:
+            embed.add_field(name="\u200b", value=field_text, inline=False)
 
-            embed.add_field(name="\u200b", value=player_stats, inline=False)
-
-        embed.set_footer(text="💡 Use !last_session for full session or !last_session help for more views")
+        embed.set_footer(text="💡 Use !last_session for full details")
         await ctx.send(embed=embed)
 
     async def _show_maps_view(self, ctx, db, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
@@ -1701,7 +1715,7 @@ class LastSessionCog(commands.Cog):
             import matplotlib.pyplot as plt
             import io
 
-            # Get top 6 players data
+            # Get all players data (limit to top 10 for readability)
             query = f"""
                 SELECT p.player_name,
                     SUM(p.kills) as kills,
@@ -1718,7 +1732,7 @@ class LastSessionCog(commands.Cog):
                 WHERE p.session_id IN ({session_ids_str})
                 GROUP BY p.player_name
                 ORDER BY kills DESC
-                LIMIT 6
+                LIMIT 10
             """
             async with db.execute(query, session_ids) as cursor:
                 top_players = await cursor.fetchall()
@@ -1847,7 +1861,7 @@ class LastSessionCog(commands.Cog):
             import matplotlib.pyplot as plt
             import io
 
-            # Get efficiency data for top 6 players
+            # Get efficiency data for all players (limit to top 10 for readability)
             query = f"""
                 SELECT p.player_name,
                     SUM(p.damage_given) as dmg_given,
@@ -1864,7 +1878,7 @@ class LastSessionCog(commands.Cog):
                 WHERE p.session_id IN ({session_ids_str})
                 GROUP BY p.player_name
                 ORDER BY dmg_given DESC
-                LIMIT 6
+                LIMIT 10
             """
             async with db.execute(query, session_ids) as cursor:
                 efficiency_players = await cursor.fetchall()
