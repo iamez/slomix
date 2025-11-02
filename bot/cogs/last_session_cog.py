@@ -100,12 +100,14 @@ class LastSessionCog(commands.Cog):
             Dict with team names as keys, containing 'guids' list
         """
         try:
+            import json
+            
             async with db.execute(
                 """
-                SELECT team_name, player_guid
+                SELECT team_name, player_guids, player_names
                 FROM session_teams
-                WHERE session_date = ?
-                ORDER BY team_name, player_guid
+                WHERE session_start_date = ? AND map_name = 'ALL'
+                ORDER BY team_name
                 """,
                 (session_date,),
             ) as cursor:
@@ -115,10 +117,12 @@ class LastSessionCog(commands.Cog):
                 return None
 
             teams = {}
-            for team_name, player_guid in rows:
+            for team_name, player_guids_json, player_names_json in rows:
                 if team_name not in teams:
-                    teams[team_name] = {"guids": []}
-                teams[team_name]["guids"].append(player_guid)
+                    teams[team_name] = {
+                        "guids": json.loads(player_guids_json) if player_guids_json else [],
+                        "names": json.loads(player_names_json) if player_names_json else []
+                    }
 
             return teams if teams else None
 
@@ -890,11 +894,11 @@ class LastSessionCog(commands.Cog):
         async with db.execute(query, session_ids + [limit]) as cursor:
             return await cursor.fetchall()
 
-    async def _calculate_team_scores(self, latest_date: str) -> Tuple[str, str, int, int]:
+    async def _calculate_team_scores(self, latest_date: str) -> Tuple[str, str, int, int, Optional[Dict]]:
         """
         Calculate Stopwatch team scores using StopwatchScoring
         
-        Returns: (team_1_name, team_2_name, team_1_score, team_2_score)
+        Returns: (team_1_name, team_2_name, team_1_score, team_2_score, scoring_result)
         """
         scorer = StopwatchScoring(self.bot.db_path)
         scoring_result = scorer.calculate_session_scores(latest_date)
@@ -910,9 +914,9 @@ class LastSessionCog(commands.Cog):
                 team_2_name = team_names[1]
                 team_1_score = scoring_result[team_1_name]
                 team_2_score = scoring_result[team_2_name]
-                return team_1_name, team_2_name, team_1_score, team_2_score
+                return team_1_name, team_2_name, team_1_score, team_2_score, scoring_result
 
-        return "Team 1", "Team 2", 0, 0
+        return "Team 1", "Team 2", 0, 0, None
 
     async def _build_team_mappings(self, db, latest_date: str, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict]):
         """
@@ -1146,7 +1150,8 @@ class LastSessionCog(commands.Cog):
         team_2_name: str,
         team_1_score: int,
         team_2_score: int,
-        hardcoded_teams: bool
+        hardcoded_teams: bool,
+        scoring_result: Optional[Dict] = None
     ) -> discord.Embed:
         """Build main session overview embed with all players and match score."""
         # Build description with match score
@@ -1156,6 +1161,24 @@ class LastSessionCog(commands.Cog):
                 desc += f"\n\n🤝 **Match Result: {team_1_score} - {team_2_score} (PERFECT TIE)**"
             else:
                 desc += f"\n\n🏆 **Match Result: {team_1_name} {team_1_score} - {team_2_score} {team_2_name}**"
+            
+            # Add map-by-map breakdown if available
+            if scoring_result and 'maps' in scoring_result:
+                desc += "\n\n**📊 Map Breakdown:**"
+                for map_result in scoring_result['maps']:
+                    map_name = map_result['map']
+                    t1_pts = map_result['team1_points']
+                    t2_pts = map_result['team2_points']
+                    
+                    # Show winner emoji
+                    if t1_pts > t2_pts:
+                        winner_emoji = "🟢"
+                    elif t2_pts > t1_pts:
+                        winner_emoji = "🔴"
+                    else:
+                        winner_emoji = "🟡"
+                    
+                    desc += f"\n{winner_emoji} `{map_name}`: {t1_pts}-{t2_pts}"
 
         embed = discord.Embed(
             title=f"📊 Session Summary: {latest_date}",
@@ -1991,7 +2014,7 @@ class LastSessionCog(commands.Cog):
 
                 # Phase 3: Get hardcoded teams and team scores
                 hardcoded_teams = await self._get_hardcoded_teams(db, latest_date)
-                team_1_name, team_2_name, team_1_score, team_2_score = await self._calculate_team_scores(latest_date)
+                team_1_name, team_2_name, team_1_score, team_2_score, scoring_result = await self._calculate_team_scores(latest_date)
 
                 # Get team mappings FIRST (needed for proper team stats aggregation)
                 team_1_name_mapped, team_2_name_mapped, team_1_players_list, team_2_players_list, name_to_team = await self._build_team_mappings(
@@ -2072,7 +2095,8 @@ class LastSessionCog(commands.Cog):
                 # Embed 1: Session Overview
                 embed1 = await self._build_session_overview_embed(
                     latest_date, all_players, maps_played, rounds_played, player_count,
-                    team_1_name, team_2_name, team_1_score, team_2_score, hardcoded_teams is not None
+                    team_1_name, team_2_name, team_1_score, team_2_score, hardcoded_teams is not None,
+                    scoring_result
                 )
                 await ctx.send(embed=embed1)
                 await asyncio.sleep(2)
@@ -2159,6 +2183,75 @@ class LastSessionCog(commands.Cog):
         except Exception as e:
             logger.error(f"Error in last_session command: {e}", exc_info=True)
             await ctx.send(f"❌ Error retrieving last session: {e}")
+
+    @commands.command(name="team_history")
+    async def team_history_command(self, ctx, days: int = 30):
+        """
+        Show team history and performance statistics.
+        
+        Usage: !team_history [days]
+        Example: !team_history 60  (shows last 60 days)
+        """
+        try:
+            from bot.core.team_history import TeamHistoryManager
+            
+            manager = TeamHistoryManager(self.bot.db_path)
+            
+            # Get recent lineups
+            recent = manager.get_recent_lineups(days=days, min_sessions=1)
+            
+            if not recent:
+                await ctx.send(f"❌ No team history found in the last {days} days.")
+                return
+            
+            # Build embed
+            embed = discord.Embed(
+                title=f"📊 Team History - Last {days} Days",
+                description=f"Found {len(recent)} unique lineup(s)",
+                color=0x5865F2,
+                timestamp=datetime.now()
+            )
+            
+            # Show top lineups
+            for i, lineup in enumerate(recent[:5], 1):
+                total_games = lineup['total_wins'] + lineup['total_losses'] + lineup['total_ties']
+                win_rate = (lineup['total_wins'] / total_games * 100) if total_games > 0 else 0
+                
+                field_text = (
+                    f"**Sessions:** {lineup['total_sessions']}\n"
+                    f"**Record:** {lineup['total_wins']}W - {lineup['total_losses']}L - {lineup['total_ties']}T\n"
+                    f"**Win Rate:** {win_rate:.1f}%\n"
+                    f"**Players:** {lineup['player_count']}\n"
+                    f"**Active:** {lineup['first_seen']} to {lineup['last_seen']}"
+                )
+                
+                embed.add_field(
+                    name=f"#{i} - Lineup {lineup['id']}",
+                    value=field_text,
+                    inline=False
+                )
+            
+            # Add best performers section
+            best = manager.get_best_lineups(min_sessions=1, limit=3)
+            if best:
+                best_text = ""
+                for lineup in best:
+                    total = lineup['total_wins'] + lineup['total_losses'] + lineup['total_ties']
+                    wr = (lineup['total_wins'] / total * 100) if total > 0 else 0
+                    best_text += f"**Lineup {lineup['id']}:** {wr:.1f}% WR ({lineup['total_wins']}W-{lineup['total_losses']}L-{lineup['total_ties']}T)\n"
+                
+                embed.add_field(
+                    name="🏆 Best Win Rates",
+                    value=best_text.rstrip(),
+                    inline=False
+                )
+            
+            embed.set_footer(text="Use !team_history <days> to adjust time range")
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error in team_history command: {e}", exc_info=True)
+            await ctx.send(f"❌ Error retrieving team history: {e}")
 
 
 async def setup(bot):

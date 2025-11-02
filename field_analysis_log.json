@@ -1,0 +1,606 @@
+{
+  "metadata": {
+    "generated_at": "2025-11-02T13:00:26.521591",
+    "player": "endekk",
+    "guid": "7B84BE88",
+    "map": "etl_adlernest",
+    "date": "2025-10-28",
+    "sessions": {
+      "r1": 3404,
+      "r2": 3405
+    }
+  },
+  "field_analysis": [
+    {
+      "field_name": "bullets_fired",
+      "r1_file": 193,
+      "r2_file_cumulative": 343,
+      "r2_calculated_differential": 150,
+      "r1_database": 193,
+      "r2_database": 150,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": 0.0,
+        "r2": 0.0
+      }
+    },
+    {
+      "field_name": "damage_given",
+      "r1_file": 1943,
+      "r2_file_cumulative": 3309,
+      "r2_calculated_differential": 1366,
+      "r1_database": 1943,
+      "r2_database": 1366,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": 0.0,
+        "r2": 0.0
+      }
+    },
+    {
+      "field_name": "damage_received",
+      "r1_file": 1426,
+      "r2_file_cumulative": 2521,
+      "r2_calculated_differential": 1095,
+      "r1_database": 1426,
+      "r2_database": 1095,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": 0.0,
+        "r2": 0.0
+      }
+    },
+    {
+      "field_name": "death_spree",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": null,
+      "r2_database": null,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "missing_in_db",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "denied_playtime",
+      "r1_file": 55,
+      "r2_file_cumulative": 51,
+      "r2_calculated_differential": 0,
+      "r1_database": 55,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": 0.0,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "dpm",
+      "r1_file": 0.0,
+      "r2_file_cumulative": 0.0,
+      "r2_calculated_differential": 0,
+      "r1_database": 373.65384615384613,
+      "r2_database": 279.7269624573379,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "mismatch",
+      "variance": {
+        "r1": 373.65384615384613,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "dynamites_defused",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": 0,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "dynamites_planted",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": 0,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "full_selfkills",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": null,
+      "r2_database": null,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "missing_in_db",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "gibs",
+      "r1_file": 1,
+      "r2_file_cumulative": 4,
+      "r2_calculated_differential": 3,
+      "r1_database": 1,
+      "r2_database": 3,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": 0.0,
+        "r2": 0.0
+      }
+    },
+    {
+      "field_name": "headshot_kills",
+      "r1_file": 2,
+      "r2_file_cumulative": 2,
+      "r2_calculated_differential": 0,
+      "r1_database": 12,
+      "r2_database": 11,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "mismatch",
+      "variance": {
+        "r1": 10.0,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "kd_ratio",
+      "r1_file": 1.2,
+      "r2_file_cumulative": 1.2,
+      "r2_calculated_differential": 0,
+      "r1_database": 1.2,
+      "r2_database": 1.25,
+      "r1_match": true,
+      "r2_match": false,
+      "status": "mismatch",
+      "variance": {
+        "r1": 0.0,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "kill_assists",
+      "r1_file": 2,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": 2,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": 0.0,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "kill_steals",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": 0,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "killing_spree",
+      "r1_file": 0,
+      "r2_file_cumulative": 4,
+      "r2_calculated_differential": 4,
+      "r1_database": null,
+      "r2_database": null,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "missing_in_db",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "multikill_2x",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": null,
+      "r2_database": null,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "missing_in_db",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "multikill_3x",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": null,
+      "r2_database": null,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "missing_in_db",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "multikill_4x",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": null,
+      "r2_database": null,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "missing_in_db",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "multikill_5x",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": null,
+      "r2_database": null,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "missing_in_db",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "multikill_6x",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": null,
+      "r2_database": null,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "missing_in_db",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "objectives_returned",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": 0,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "objectives_stolen",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": 0,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "repairs_constructions",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": null,
+      "r2_database": null,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "missing_in_db",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "revives_given",
+      "r1_file": 1,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": 1,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": 0.0,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "self_kills",
+      "r1_file": 3,
+      "r2_file_cumulative": 3,
+      "r2_calculated_differential": 0,
+      "r1_database": 3,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": 0.0,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "tank_meatshield",
+      "r1_file": 0.0,
+      "r2_file_cumulative": 0.0,
+      "r2_calculated_differential": 0,
+      "r1_database": 0.0,
+      "r2_database": 0.0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "team_damage_given",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": 0,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "team_damage_received",
+      "r1_file": 0,
+      "r2_file_cumulative": 53,
+      "r2_calculated_differential": 53,
+      "r1_database": 0,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": false,
+      "status": "mismatch",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "team_gibs",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": 0,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "team_kills",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": 0,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "time_dead_minutes",
+      "r1_file": 1.8,
+      "r2_file_cumulative": 2.5,
+      "r2_calculated_differential": 0.7,
+      "r1_database": 1.8252000000000002,
+      "r2_database": 0.0,
+      "r1_match": true,
+      "r2_match": false,
+      "status": "mismatch",
+      "variance": {
+        "r1": 0.02520000000000011,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "time_dead_ratio",
+      "r1_file": 35.1,
+      "r2_file_cumulative": 24.5,
+      "r2_calculated_differential": 0,
+      "r1_database": 35.1,
+      "r2_database": 0.0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": 0.0,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "time_played_minutes",
+      "r1_file": 5.2,
+      "r2_file_cumulative": 10.1,
+      "r2_calculated_differential": 4.8999999999999995,
+      "r1_database": 5.2,
+      "r2_database": 4.883333333333334,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": 0.0,
+        "r2": 0.01666666666666572
+      }
+    },
+    {
+      "field_name": "time_played_percent",
+      "r1_file": 83.1,
+      "r2_file_cumulative": 80.8,
+      "r2_calculated_differential": 0,
+      "r1_database": null,
+      "r2_database": null,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "missing_in_db",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "times_revived",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": 0,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "useful_kills",
+      "r1_file": 2,
+      "r2_file_cumulative": 4,
+      "r2_calculated_differential": 2,
+      "r1_database": null,
+      "r2_database": null,
+      "r1_match": false,
+      "r2_match": false,
+      "status": "missing_in_db",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "useless_kills",
+      "r1_file": 0,
+      "r2_file_cumulative": 0,
+      "r2_calculated_differential": 0,
+      "r1_database": 0,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": null,
+        "r2": null
+      }
+    },
+    {
+      "field_name": "xp",
+      "r1_file": 44,
+      "r2_file_cumulative": 34,
+      "r2_calculated_differential": 0,
+      "r1_database": 44,
+      "r2_database": 0,
+      "r1_match": true,
+      "r2_match": true,
+      "status": "perfect",
+      "variance": {
+        "r1": 0.0,
+        "r2": null
+      }
+    }
+  ],
+  "summary": {
+    "total_fields": 38,
+    "perfect_matches": 22,
+    "mismatches": 5,
+    "missing_in_db": 11,
+    "r1_accuracy": 81.48148148148148,
+    "r2_accuracy": 81.48148148148148
+  },
+  "critical_findings": [],
+  "recommendations": [
+    {
+      "priority": "high",
+      "issue": "5 field mismatches detected",
+      "action": "Review differential calculation logic in calculate_round_2_differential()"
+    },
+    {
+      "priority": "medium",
+      "issue": "11 fields not stored in database",
+      "action": "Consider adding missing fields to player_comprehensive_stats schema"
+    }
+  ]
+}
