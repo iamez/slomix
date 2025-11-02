@@ -539,6 +539,23 @@ class C0RNP0RN3StatsParser:
                 else 0
             )
 
+            # Calculate overall accuracy from weapon stats differential
+            total_hits = sum(w.get('hits', 0) for w in differential_player['weapon_stats'].values())
+            total_shots = sum(w.get('shots', 0) for w in differential_player['weapon_stats'].values())
+            differential_player['accuracy'] = (total_hits / total_shots * 100) if total_shots > 0 else 0.0
+            differential_player['shots_total'] = total_shots
+            differential_player['hits_total'] = total_hits
+
+            # FIX: Recalculate time_dead for Round 2 differential
+            # time_dead_ratio should be based on Round 2-only time, not subtracted percentages
+            diff_time_seconds = differential_player.get('time_played_seconds', 0)
+            if diff_time_seconds > 0:
+                # Get time_dead_minutes from objective_stats differential
+                time_dead_mins = differential_player['objective_stats'].get('time_dead_minutes', 0)
+                # Calculate ratio as percentage
+                time_dead_ratio = (time_dead_mins / (diff_time_seconds / 60.0) * 100) if diff_time_seconds > 0 else 0
+                differential_player['objective_stats']['time_dead_ratio'] = time_dead_ratio
+
             round_2_only_players.append(differential_player)
 
         # Calculate new MVP based on Round 2-only stats
