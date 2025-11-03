@@ -19,8 +19,10 @@ An **intelligent Discord bot** that makes gaming stats **automatic, social, and 
 **👉 READ FIRST**: [`docs/AI_AGENT_GUIDE.md`](docs/AI_AGENT_GUIDE.md) - Complete reference guide
 
 **Current Schema**: UNIFIED (7 tables, 53 columns)  
-**Import Script**: `tools/simple_bulk_import.py`  
+**Database Manager**: `database_manager.py` - THE ONLY TOOL FOR DATABASE OPERATIONS  
 **Database**: `bot/etlegacy_production.db` (1,862 sessions, 25 unique players)
+
+**🚨 Disaster Recovery**: See [`DISASTER_RECOVERY.md`](DISASTER_RECOVERY.md) for database recovery without AI assistance
 
 ---
 
@@ -56,6 +58,11 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your Discord bot token and server details
 
+# Setup database (first time only)
+python database_manager.py
+# Choose option 1 (Create fresh database)
+# Then option 2 (Import all files)
+
 # Run the bot
 python bot/ultimate_bot.py
 ```
@@ -72,18 +79,21 @@ python bot/ultimate_bot.py
 
 ```
 stats/
-├── bot/                    # Core bot files
-│   ├── ultimate_bot.py     # Main production bot (830 lines)
-│   └── community_stats_parser.py  # EndStats parser
+├── database_manager.py    # 🏗️ THE ONLY database tool (create, import, rebuild)
+├── DISASTER_RECOVERY.md   # 🚨 Database recovery guide (no AI needed)
 ├── bot/                   # Core bot files & database
-│   ├── ultimate_bot.py     # Main production bot (5000+ lines)
+│   ├── ultimate_bot.py     # Main production bot (4700+ lines)
+│   ├── community_stats_parser.py  # EndStats parser (970 lines)
 │   └── etlegacy_production.db # Production DB (1,862 sessions)
-├── tools/                 # Utilities and analysis tools
+├── dev/                   # Development scripts (bulk_import_stats.py)
+├── tools/                 # Analysis and utility tools
 ├── server/               # Server-side files (SSH keys, Lua scripts)
 ├── docs/                 # Documentation
 ├── local_stats/          # EndStats files from game server
 ├── test_files/           # Sample files for testing
 ├── logs/                 # Application logs
+├── archive/              # Old/deprecated tools
+│   └── old_tools/        # Archived import/database scripts (20+)
 └── config/               # Configuration templates
 ```
 
@@ -119,13 +129,29 @@ This ensures players who join mid-round aren't penalized with inflated DPM value
 
 ## 🛠️ Development
 
+### Database Operations
+```bash
+# ALL database operations use database_manager.py
+python database_manager.py
+
+# Options:
+# 1 - Create fresh database
+# 2 - Import all files (incremental, safe)
+# 3 - Rebuild from scratch (nuclear option)
+# 4 - Fix specific date range
+# 5 - Validate database
+# 6 - Quick test (10 files)
+```
+
+⚠️ **IMPORTANT**: Never create new import/database scripts. Use `database_manager.py` for ALL operations.
+
 ### Running Tests
 ```bash
 # Test parser functionality
 python bot/community_stats_parser.py
 
-# Test database connectivity  
-python tools/enhanced_database_inspector.py
+# Test database health
+python database_manager.py  # Choose option 5
 
 # Test Discord bot features
 python bot/ultimate_bot.py --test-mode
@@ -134,7 +160,7 @@ python bot/ultimate_bot.py --test-mode
 ### Adding New Features
 - Bot commands: Edit `bot/ultimate_bot.py`
 - Parser logic: Edit `bot/community_stats_parser.py`  
-- Database tools: Add to `tools/` directory
+- Database operations: Edit `database_manager.py` (not new scripts!)
 
 ## 🚀 Deployment
 
