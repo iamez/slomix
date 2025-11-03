@@ -230,8 +230,13 @@ prompt_instructions/
 backups/
 backup_*/
 
-# Fiveeyes project
+# Fiveeyes project (future roadmap, not current production)
 fiveeyes/
+
+# Test data and junk directories
+test_files/
+asdf/
+tmp/
 
 # Analytics (if separate from production)
 analytics/output/
