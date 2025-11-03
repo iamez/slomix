@@ -75,6 +75,49 @@ class DatabaseManager:
         
         self.start_time = None
         self.last_progress_time = None
+        
+        # Auto-create database/schema if needed
+        self._ensure_database_exists()
+    
+    # =========================================================================
+    # AUTO-DETECTION AND CREATION
+    # =========================================================================
+    
+    def _ensure_database_exists(self):
+        """
+        Auto-detect if database/tables exist, create if needed
+        
+        This runs automatically on init, so you never have to worry
+        about missing databases or tables.
+        """
+        db_path = Path(self.db_path)
+        
+        # Check if database file exists
+        if not db_path.exists():
+            logger.info("🔍 Database not found - creating fresh database...")
+            self.create_fresh_database(backup_existing=False)
+            return
+        
+        # Check if tables exist
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Check for sessions table (if this exists, assume all tables exist)
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
+            if cursor.fetchone() is None:
+                logger.info("🔍 Database exists but tables missing - creating schema...")
+                conn.close()
+                self.create_fresh_database(backup_existing=True)
+                return
+            
+            conn.close()
+            logger.debug("✅ Database and tables exist")
+            
+        except sqlite3.Error as e:
+            logger.warning(f"⚠️  Database check failed: {e}")
+            logger.info("🔧 Creating fresh database...")
+            self.create_fresh_database(backup_existing=True)
     
     # =========================================================================
     # SCHEMA CREATION (With ALL fixes applied)
@@ -101,6 +144,9 @@ class DatabaseManager:
         logger.info("=" * 70)
         
         db_path = Path(self.db_path)
+        
+        # Ensure bot directory exists
+        db_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Backup existing database if requested
         if backup_existing and db_path.exists():
