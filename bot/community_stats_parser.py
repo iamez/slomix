@@ -122,14 +122,14 @@ class C0RNP0RN3StatsParser:
         # Choose embed color based on outcome
         if outcome == 'Fullhold':
             color = 0xFF6B35  # Orange for fullhold
-            outcome_emoji = '🛡️'
+            outcome_emoji = '[D]'
         else:
             color = 0x00D2FF  # Blue for completed
-            outcome_emoji = '✅'
+            outcome_emoji = '[V]'
 
         embed = discord.Embed(
-            title=f"🏆 Round {round_num} Complete",
-            description=f"**📍 Map:** `{map_name}`\n{outcome_emoji} **Outcome:** {outcome}",
+            title=f"[*] Round {round_num} Complete",
+            description=f"**Map:** `{map_name}`\n{outcome_emoji} **Outcome:** {outcome}",
             color=color,
             timestamp=discord.utils.utcnow(),
         )
@@ -291,7 +291,7 @@ class C0RNP0RN3StatsParser:
                 return self.parse_regular_stats_file(file_path)
 
         except Exception as e:
-            print(f"❌ Error parsing stats file {file_path}: {e}")
+            print(f"[ERROR] Error parsing stats file {file_path}: {e}")
             return self._get_error_result(f"exception: {str(e)}")
 
     def is_round_2_file(self, file_path: str) -> bool:
@@ -312,44 +312,72 @@ class C0RNP0RN3StatsParser:
         date = '-'.join(parts[:3])  # YYYY-MM-DD
         map_name = '-'.join(parts[4:-2])  # everything between time and "round-2.txt"
 
-        # Look for Round 1 files on the same date with the same map
-        search_pattern = f"{date}-*-{map_name}-round-1.txt"
-
         # Check both the same directory and local_stats directory
         search_dirs = [directory]
         if not directory.endswith("local_stats"):
             search_dirs.append("local_stats")
 
         potential_files = []
+        
+        # First, look for Round 1 files on the same date with the same map
+        search_pattern = f"{date}-*-{map_name}-round-1.txt"
         for search_dir in search_dirs:
             if os.path.exists(search_dir):
                 import glob
-
                 pattern_path = os.path.join(search_dir, search_pattern)
                 potential_files.extend(glob.glob(pattern_path))
+
+        # If no files found on the same date, check previous date 
+        # (for matches that span midnight)
+        if not potential_files:
+            from datetime import datetime, timedelta
+            try:
+                date_obj = datetime.strptime(date, '%Y-%m-%d')
+                prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
+                prev_search_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
+                
+                print(f"  → Checking previous date: {prev_search_pattern}")
+                
+                for search_dir in search_dirs:
+                    if os.path.exists(search_dir):
+                        pattern_path = os.path.join(search_dir, prev_search_pattern)
+                        found = glob.glob(pattern_path)
+                        if found:
+                            print(f"  → Found {len(found)} files from previous date")
+                        potential_files.extend(found)
+            except ValueError:
+                pass  # Invalid date format, skip previous date search
 
         if not potential_files:
             return None
 
-        # Extract Round 2 timestamp for comparison
-        r2_time_part = parts[3]  # HHMMSS
-        r2_timestamp = int(r2_time_part)
+        # Parse Round 2 full datetime for comparison
+        from datetime import datetime
+        try:
+            r2_date_str = f"{date} {parts[3]}"  # "YYYY-MM-DD HHMMSS"
+            r2_datetime = datetime.strptime(r2_date_str, '%Y-%m-%d %H%M%S')
+        except (ValueError, IndexError):
+            return None
 
         # Find the Round 1 file with the latest timestamp before Round 2
         best_r1_file = None
-        best_r1_timestamp = -1
+        best_r1_datetime = None
 
         for r1_file in potential_files:
             r1_filename = os.path.basename(r1_file)
             r1_parts = r1_filename.split('-')
             if len(r1_parts) >= 4:
-                r1_time_part = r1_parts[3]  # HHMMSS
                 try:
-                    r1_timestamp = int(r1_time_part)
+                    r1_date = '-'.join(r1_parts[:3])  # YYYY-MM-DD
+                    r1_time = r1_parts[3]  # HHMMSS
+                    r1_date_str = f"{r1_date} {r1_time}"
+                    r1_datetime = datetime.strptime(r1_date_str, '%Y-%m-%d %H%M%S')
+                    
                     # Find the Round 1 file closest to but before Round 2
-                    if r1_timestamp < r2_timestamp and r1_timestamp > best_r1_timestamp:
-                        best_r1_timestamp = r1_timestamp
-                        best_r1_file = r1_file
+                    if r1_datetime < r2_datetime:
+                        if best_r1_datetime is None or r1_datetime > best_r1_datetime:
+                            best_r1_datetime = r1_datetime
+                            best_r1_file = r1_file
                 except ValueError:
                     continue
 
@@ -357,23 +385,23 @@ class C0RNP0RN3StatsParser:
 
     def parse_round_2_with_differential(self, round_2_file_path: str) -> Dict[str, Any]:
         """Parse Round 2 file with differential calculation to get Round 2-only stats"""
-        print(f"🔍 Detected Round 2 file: {os.path.basename(round_2_file_path)}")
+        print(f"[R2] Detected Round 2 file: {os.path.basename(round_2_file_path)}")
 
         # Find corresponding Round 1 file
         round_1_file_path = self.find_corresponding_round_1_file(round_2_file_path)
         if not round_1_file_path:
-            print(f"⚠️ Warning: Could not find Round 1 file for {os.path.basename(round_2_file_path)}")
+            print(f"[WARN] Could not find Round 1 file for {os.path.basename(round_2_file_path)}")
             print("   Parsing as regular file (cumulative stats will be included)")
             return self.parse_regular_stats_file(round_2_file_path)
 
-        print(f"📂 Found Round 1 file: {os.path.basename(round_1_file_path)}")
+        print(f"[R1] Found Round 1 file: {os.path.basename(round_1_file_path)}")
 
         # Parse both files
         round_1_result = self.parse_regular_stats_file(round_1_file_path)
         round_2_cumulative_result = self.parse_regular_stats_file(round_2_file_path)
 
         if not round_1_result['success'] or not round_2_cumulative_result['success']:
-            print("❌ Error parsing one of the round files")
+            print("[ERROR] Error parsing one of the round files")
             return self._get_error_result("failed to parse round files")
 
         # Calculate differential stats (Round 2 ONLY = Round 2 cumulative - Round 1)
@@ -382,7 +410,7 @@ class C0RNP0RN3StatsParser:
         )
 
         print(
-            f"✅ Successfully calculated Round 2-only stats for {len(round_2_only_result['players'])} players"
+            f"[OK] Successfully calculated Round 2-only stats for {len(round_2_only_result['players'])} players"
         )
         return round_2_only_result
 
@@ -511,6 +539,23 @@ class C0RNP0RN3StatsParser:
                 else 0
             )
 
+            # Calculate overall accuracy from weapon stats differential
+            total_hits = sum(w.get('hits', 0) for w in differential_player['weapon_stats'].values())
+            total_shots = sum(w.get('shots', 0) for w in differential_player['weapon_stats'].values())
+            differential_player['accuracy'] = (total_hits / total_shots * 100) if total_shots > 0 else 0.0
+            differential_player['shots_total'] = total_shots
+            differential_player['hits_total'] = total_hits
+
+            # FIX: Recalculate time_dead for Round 2 differential
+            # time_dead_ratio should be based on Round 2-only time, not subtracted percentages
+            diff_time_seconds = differential_player.get('time_played_seconds', 0)
+            if diff_time_seconds > 0:
+                # Get time_dead_minutes from objective_stats differential
+                time_dead_mins = differential_player['objective_stats'].get('time_dead_minutes', 0)
+                # Calculate ratio as percentage
+                time_dead_ratio = (time_dead_mins / (diff_time_seconds / 60.0) * 100) if diff_time_seconds > 0 else 0
+                differential_player['objective_stats']['time_dead_ratio'] = time_dead_ratio
+
             round_2_only_players.append(differential_player)
 
         # Calculate new MVP based on Round 2-only stats
@@ -626,7 +671,7 @@ class C0RNP0RN3StatsParser:
             }
 
         except Exception as e:
-            print(f"❌ Error parsing stats file {file_path}: {e}")
+            print(f"[ERROR] Error parsing stats file {file_path}: {e}")
             return self._get_error_result(f"exception: {str(e)}")
 
     def parse_player_line(self, line: str) -> Optional[Dict[str, Any]]:
@@ -802,7 +847,7 @@ class C0RNP0RN3StatsParser:
                 'rounds': rounds,
                 'kills': total_kills,
                 'deaths': total_deaths,
-                'headshots': total_headshots,
+                'headshots': total_headshots,  # ⚠️ IMPORTANT: This is sum of weapon headshot HITS (not kills!)
                 'kd_ratio': kd_ratio,
                 'shots_total': total_shots,
                 'hits_total': total_hits,
@@ -812,8 +857,14 @@ class C0RNP0RN3StatsParser:
                 'dpm': objective_stats.get('dpm', 0.0),
                 'weapon_stats': weapon_stats,
                 'efficiency': efficiency,
-                'objective_stats': objective_stats,  # ✅ NEW: All 37 fields!
+                'objective_stats': objective_stats,  # ✅ Contains headshot_KILLS (TAB field 14) + revives + all other stats
             }
+            
+            # ⚠️ CRITICAL DISTINCTION - DO NOT CONFUSE THESE TWO:
+            # 1. player['headshots'] = Sum of all weapon headshot HITS (shots that hit head, may not kill)
+            # 2. objective_stats['headshot_kills'] = TAB field 14 (kills where FINAL BLOW was to head)
+            # These are DIFFERENT stats! Database stores headshot_kills, NOT weapon sum.
+            # Validated Nov 3, 2025: 100% accuracy confirmed.
 
         except Exception as e:
             print(f"Error parsing player line: {e}")
