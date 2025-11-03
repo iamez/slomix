@@ -44,8 +44,7 @@ class LastSessionCog(commands.Cog):
         Get the most recent gaming session date from database.
         
         Returns the most recent date that has session data.
-        Note: For midnight-spanning sessions, we now use map_id to properly
-        group R1+R2, so we can just get the latest date directly.
+        Now properly sorts by BOTH date AND time to get the actual last session.
         """
         async with db.execute(
             """
@@ -56,7 +55,7 @@ class LastSessionCog(commands.Cog):
                 WHERE p.session_id = s.id
             )
             AND SUBSTR(s.session_date, 1, 4) = '2025'
-            ORDER BY s.session_date DESC
+            ORDER BY s.session_date DESC, s.session_time DESC
             LIMIT 1
             """
         ) as cursor:
@@ -65,25 +64,79 @@ class LastSessionCog(commands.Cog):
 
     async def _fetch_session_data(self, db, latest_date: str) -> Tuple[List, List, str, int]:
         """
-        Fetch all session data for a gaming session starting on latest_date.
+        Fetch all session data for the LAST gaming session.
         
-        Includes sessions from the next calendar day if they're part of the
-        same gaming session (no more than 30min gap from last session).
+        Works BACKWARDS from the absolute last session in the database,
+        grouping sessions that are within 30 minutes of each other.
+        This properly handles multiple gaming sessions on the same day.
         
         Returns:
             (sessions, session_ids, session_ids_str, player_count)
         """
         from datetime import datetime, timedelta
         
-        # Get all session IDs for the primary date
+        # Get the absolute last session (by date AND time)
         async with db.execute(
             """
-            SELECT id, map_name, round_number, actual_time, session_date
+            SELECT id, map_name, round_number, actual_time, session_date, session_time
             FROM sessions
-            WHERE SUBSTR(session_date, 1, 10) = ?
-            ORDER BY id ASC
+            ORDER BY session_date DESC, session_time DESC
+            LIMIT 1
             """,
-            (latest_date,),
+        ) as cursor:
+            last_session = await cursor.fetchone()
+        
+        if not last_session:
+            return None, None, None, 0
+        
+        last_session_id = last_session[0]
+        last_session_date = last_session[4]
+        last_session_time = last_session[5]
+        last_dt = datetime.strptime(f"{last_session_date}-{last_session_time}", '%Y-%m-%d-%H%M%S')
+        
+        # Now work BACKWARDS, collecting sessions within 30min gaps
+        gaming_session_ids = [last_session_id]
+        current_dt = last_dt
+        
+        # Get recent sessions before the last one (limit search to same day + previous day)
+        search_start_date = (last_dt - timedelta(days=1)).strftime('%Y-%m-%d')
+        
+        async with db.execute(
+            """
+            SELECT id, map_name, round_number, actual_time, session_date, session_time
+            FROM sessions
+            WHERE session_date >= ?
+              AND id < ?
+            ORDER BY session_date DESC, session_time DESC
+            """,
+            (search_start_date, last_session_id),
+        ) as cursor:
+            previous_sessions = await cursor.fetchall()
+        
+        # Work backwards through sessions, stop at first gap > 30 minutes
+        for sess in previous_sessions:
+            sess_date = sess[4]
+            sess_time = sess[5]
+            sess_dt = datetime.strptime(f"{sess_date}-{sess_time}", '%Y-%m-%d-%H%M%S')
+            
+            gap_minutes = (current_dt - sess_dt).total_seconds() / 60
+            
+            if gap_minutes <= 30:
+                gaming_session_ids.insert(0, sess[0])  # Insert at beginning (chronological order)
+                current_dt = sess_dt  # Update for next comparison
+            else:
+                break  # Gap too large - different gaming session
+        
+        # Now fetch full session data for the gaming session
+        session_ids_str = ','.join(str(sid) for sid in gaming_session_ids)
+        
+        async with db.execute(
+            f"""
+            SELECT id, map_name, round_number, actual_time, session_date, session_time
+            FROM sessions
+            WHERE id IN ({session_ids_str})
+            ORDER BY id ASC
+            """
         ) as cursor:
             primary_sessions = await cursor.fetchall()
 
@@ -92,16 +145,18 @@ class LastSessionCog(commands.Cog):
 
         # Check for sessions after midnight (next day)
         last_session_id = primary_sessions[-1][0]
-        last_session_date_full = primary_sessions[-1][4]
+        last_session_date = primary_sessions[-1][4]  # YYYY-MM-DD
+        last_session_time = primary_sessions[-1][5]  # HHMMSS
         
         # Calculate next day date string
+        last_session_date_full = f"{last_session_date}-{last_session_time}"
         last_dt = datetime.strptime(last_session_date_full, '%Y-%m-%d-%H%M%S')
         next_day = (last_dt + timedelta(days=1)).strftime('%Y-%m-%d')
         
         # Get sessions from next day that might be part of same gaming session
         async with db.execute(
             """
-            SELECT id, map_name, round_number, actual_time, session_date
+            SELECT id, map_name, round_number, actual_time, session_date, session_time
             FROM sessions
             WHERE SUBSTR(session_date, 1, 10) = ?
                 AND id > ?
@@ -143,9 +198,14 @@ class LastSessionCog(commands.Cog):
 
         return sessions, session_ids, session_ids_str, player_count
 
-    async def _get_hardcoded_teams(self, db, session_date: str) -> Optional[Dict]:
+    async def _get_hardcoded_teams(self, db, session_ids: List[int]) -> Optional[Dict]:
         """
         Get hardcoded team assignments from session_teams table
+        
+        NOTE: Queries by date range of the gaming session rounds.
+        
+        Args:
+            session_ids: List of session IDs (rounds) for this gaming session
         
         Returns:
             Dict with team names as keys, containing 'guids' list
@@ -153,14 +213,31 @@ class LastSessionCog(commands.Cog):
         try:
             import json
             
+            # Get the date range for these session_ids
+            placeholders = ','.join('?' * len(session_ids))
             async with db.execute(
-                """
+                f"""
+                SELECT DISTINCT SUBSTR(session_date, 1, 10) as date
+                FROM sessions
+                WHERE id IN ({placeholders})
+                """,
+                session_ids
+            ) as cursor:
+                dates = [row[0] for row in await cursor.fetchall()]
+            
+            if not dates:
+                return None
+            
+            # Query session_teams for these dates
+            date_placeholders = ','.join('?' * len(dates))
+            async with db.execute(
+                f"""
                 SELECT team_name, player_guids, player_names
                 FROM session_teams
-                WHERE session_start_date = ? AND map_name = 'ALL'
+                WHERE session_start_date IN ({date_placeholders}) AND map_name = 'ALL'
                 ORDER BY team_name
                 """,
-                (session_date,),
+                dates,
             ) as cursor:
                 rows = await cursor.fetchall()
 
@@ -853,7 +930,7 @@ class LastSessionCog(commands.Cog):
                 GROUP BY session_id, player_guid
             ) w ON p.session_id = w.session_id AND p.player_guid = w.player_guid
             WHERE p.session_id IN ({session_ids_str})
-            GROUP BY p.player_name
+            GROUP BY p.player_guid
             ORDER BY kills DESC
         """
         async with db.execute(query, session_ids) as cursor:
@@ -932,7 +1009,7 @@ class LastSessionCog(commands.Cog):
                 ON w.session_id = p.session_id
                 AND w.player_guid = p.player_guid
             WHERE w.session_id IN ({session_ids_str})
-            GROUP BY p.player_name, w.weapon_name
+            GROUP BY p.player_guid, w.weapon_name
             HAVING weapon_kills > 0
             ORDER BY p.player_name, weapon_kills DESC
         """
@@ -952,21 +1029,26 @@ class LastSessionCog(commands.Cog):
                 SUM(deaths) as total_deaths
             FROM player_comprehensive_stats
             WHERE session_id IN ({session_ids_str})
-            GROUP BY player_name
+            GROUP BY player_guid
             ORDER BY weighted_dpm DESC
             LIMIT ?
         """
         async with db.execute(query, session_ids + [limit]) as cursor:
             return await cursor.fetchall()
 
-    async def _calculate_team_scores(self, latest_date: str) -> Tuple[str, str, int, int, Optional[Dict]]:
+    async def _calculate_team_scores(self, session_ids: List[int]) -> Tuple[str, str, int, int, Optional[Dict]]:
         """
         Calculate Stopwatch team scores using StopwatchScoring
+        
+        NOTE: Calculates scores for a GAMING SESSION (multiple matches/rounds).
+        
+        Args:
+            session_ids: List of session IDs (rounds) for this gaming session
         
         Returns: (team_1_name, team_2_name, team_1_score, team_2_score, scoring_result)
         """
         scorer = StopwatchScoring(self.bot.db_path)
-        scoring_result = scorer.calculate_session_scores(latest_date)
+        scoring_result = scorer.calculate_session_scores(session_ids=session_ids)
 
         if scoring_result:
             # Get team names (exclude 'maps' and 'total_maps' keys)
@@ -983,9 +1065,17 @@ class LastSessionCog(commands.Cog):
 
         return "Team 1", "Team 2", 0, 0, None
 
-    async def _build_team_mappings(self, db, latest_date: str, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict]):
+    async def _build_team_mappings(self, db, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict]):
         """
         Build team mappings from hardcoded teams or auto-detect
+        
+        NOTE: Works with gaming session rounds (session_ids list).
+        
+        Args:
+            db: Database connection
+            session_ids: List of session IDs (rounds) for this gaming session
+            session_ids_str: Comma-separated session IDs for SQL queries
+            hardcoded_teams: Optional pre-defined team assignments
         
         Returns: (team_1_name, team_2_name, team_1_players, team_2_players, name_to_team)
         """
@@ -2079,12 +2169,12 @@ class LastSessionCog(commands.Cog):
                 # ═══════════════════════════════════════════════════════════════════════
 
                 # Phase 3: Get hardcoded teams and team scores
-                hardcoded_teams = await self._get_hardcoded_teams(db, latest_date)
-                team_1_name, team_2_name, team_1_score, team_2_score, scoring_result = await self._calculate_team_scores(latest_date)
+                hardcoded_teams = await self._get_hardcoded_teams(db, session_ids)
+                team_1_name, team_2_name, team_1_score, team_2_score, scoring_result = await self._calculate_team_scores(session_ids)
 
                 # Get team mappings FIRST (needed for proper team stats aggregation)
                 team_1_name_mapped, team_2_name_mapped, team_1_players_list, team_2_players_list, name_to_team = await self._build_team_mappings(
-                    db, latest_date, session_ids, session_ids_str, hardcoded_teams
+                    db, session_ids, session_ids_str, hardcoded_teams
                 )
                 
                 # Use mapped team names if available
@@ -2107,7 +2197,7 @@ class LastSessionCog(commands.Cog):
                     SELECT player_name, SUM(revives_given) as total_revives
                     FROM player_comprehensive_stats
                     WHERE session_id IN ({session_ids_str})
-                    GROUP BY player_name
+                    GROUP BY player_guid
                 """
                 async with db.execute(query, session_ids) as cursor:
                     player_revives_raw = await cursor.fetchall()
@@ -2136,7 +2226,7 @@ class LastSessionCog(commands.Cog):
                         GROUP BY session_id, player_guid
                     ) w ON p.session_id = w.session_id AND p.player_guid = w.player_guid
                     WHERE p.session_id IN ({session_ids_str})
-                    GROUP BY player_name
+                    GROUP BY p.player_guid
                 """
                 async with db.execute(query, session_ids) as cursor:
                     chaos_awards_data = await cursor.fetchall()

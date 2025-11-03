@@ -178,6 +178,27 @@ class TeamHistoryManager:
         
         cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
         
+        # Check if team_lineups table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='team_lineups'")
+        if not cursor.fetchone():
+            # Fallback: Use session_teams instead
+            cursor.execute("""
+                SELECT 
+                    team_name,
+                    player_names,
+                    player_guids,
+                    session_start_date as last_seen,
+                    1 as total_sessions,
+                    created_at as first_seen
+                FROM session_teams
+                WHERE session_start_date >= ?
+                ORDER BY session_start_date DESC
+                LIMIT 50
+            """, (cutoff_date,))
+            results = cursor.fetchall()
+            conn.close()
+            return results
+        
         cursor.execute("""
             SELECT * FROM team_lineups
             WHERE last_seen >= ?
