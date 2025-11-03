@@ -3362,22 +3362,62 @@ class UltimateETLegacyBot(commands.Bot):
             
             logger.debug(f"✅ Found channel: {channel.name}")
             
-            # Get round data from the result
-            stats_data = result.get('stats_data')
+            # Get session_id from result
             session_id = result.get('session_id')
+            stats_data = result.get('stats_data', {})
             
-            if not stats_data or not session_id:
-                logger.warning(f"⚠️ No stats data for {filename}, skipping post")
-                logger.debug(f"   stats_data: {bool(stats_data)}, session_id: {session_id}")
+            if not session_id:
+                logger.warning(f"⚠️ No session_id for {filename}, skipping post")
                 return
             
-            # Extract round info from stats_data (parser uses 'map_name' and 'round_num')
+            # Get basic round info from parser (for round outcome/winner)
             round_num = stats_data.get('round_num', stats_data.get('round', 1))
             map_name = stats_data.get('map_name', stats_data.get('map', 'Unknown'))
             winner_team = stats_data.get('winner_team', 'Unknown')
             round_outcome = stats_data.get('round_outcome', '')
             round_duration = stats_data.get('actual_time', stats_data.get('map_time', 'Unknown'))
-            players = stats_data.get('players', [])
+            
+            # 🔥 FETCH ALL PLAYER DATA FROM DATABASE (not from parser!)
+            # This gives us access to ALL 53 fields, not just the limited parser output
+            logger.debug(f"📊 Fetching full player data from database for session {session_id}, round {round_num}...")
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute("""
+                    SELECT 
+                        player_name, team, kills, deaths, damage_given, damage_received,
+                        team_damage_given, team_damage_received, gibs, headshot_kills,
+                        accuracy, revives_given, times_revived, time_dead_minutes,
+                        efficiency, kd_ratio, time_played_minutes
+                    FROM player_comprehensive_stats
+                    WHERE session_id = ? AND round_number = ?
+                    ORDER BY kills DESC
+                """, (session_id, round_num))
+                
+                rows = await cursor.fetchall()
+                
+                # Convert to dict format
+                players = []
+                for row in rows:
+                    players.append({
+                        'name': row[0],
+                        'team': row[1],
+                        'kills': row[2],
+                        'deaths': row[3],
+                        'damage_given': row[4],
+                        'damage_received': row[5],
+                        'team_damage_given': row[6],
+                        'team_damage_received': row[7],
+                        'gibs': row[8],
+                        'headshots': row[9],
+                        'accuracy': row[10],
+                        'revives': row[11],
+                        'times_revived': row[12],
+                        'time_dead': row[13],
+                        'efficiency': row[14],
+                        'kd_ratio': row[15],
+                        'time_played': row[16]
+                    })
+            
+            logger.info(f"📊 Fetched {len(players)} players with FULL stats from database")
             
             logger.info(f"📋 Creating embed: Round {round_num}, Map {map_name}, {len(players)} players")
             
@@ -3402,27 +3442,48 @@ class UltimateETLegacyBot(commands.Bot):
                 timestamp=datetime.now()
             )
             
-            # Sort all players by kills (simple display for now)
+            # Sort all players by kills
             players_sorted = sorted(players, key=lambda p: p.get('kills', 0), reverse=True)
             
-            # Split into chunks of 10 for Discord field limits
-            chunk_size = 10
+            # Split into chunks of 5 for Discord field limits (more stats per player = fewer per field)
+            chunk_size = 5
             for i in range(0, len(players_sorted), chunk_size):
                 chunk = players_sorted[i:i + chunk_size]
-                field_name = f' Players {i+1}-{min(i+chunk_size, len(players_sorted))}'
+                field_name = f'📊 Players {i+1}-{min(i+chunk_size, len(players_sorted))}'
                 
                 player_lines = []
                 for player in chunk:
-                    name = player.get('name', 'Unknown')[:20]
+                    name = player.get('name', 'Unknown')[:18]
                     kills = player.get('kills', 0)
                     deaths = player.get('deaths', 0)
                     dmg = player.get('damage_given', 0)
+                    dmgr = player.get('damage_received', 0)
                     acc = player.get('accuracy', 0)
+                    hs = player.get('headshots', 0)
+                    revives = player.get('revives', 0)
+                    got_revived = player.get('times_revived', 0)
+                    gibs = player.get('gibs', 0)
+                    team_dmg_given = player.get('team_damage_given', 0)
+                    team_dmg_rcvd = player.get('team_damage_received', 0)
+                    time_dead = player.get('time_dead', 0)
                     
                     kd_str = f'{kills}/{deaths}'
-                    player_lines.append(
-                        f'**{name}** - {kd_str} K/D | {int(dmg):,} DMG | {acc:.1f}% ACC'
+                    
+                    # Line 1: Core combat stats
+                    line1 = (
+                        f"**{name}** `{kd_str}` "
+                        f"`DMG:{int(dmg):,}←→{int(dmgr):,}` "
+                        f"`ACC:{acc:.1f}%` `HS:{hs}`"
                     )
+                    
+                    # Line 2: Support & damage stats
+                    line2 = (
+                        f"  ↳ `Rev:{revives}/{got_revived}` `Gibs:{gibs}` "
+                        f"`TmDmg:{int(team_dmg_given)}/{int(team_dmg_rcvd)}` "
+                        f"`Dead:{time_dead:.1f}m`"
+                    )
+                    
+                    player_lines.append(f"{line1}\n{line2}")
                 
                 embed.add_field(
                     name=field_name,
@@ -3430,19 +3491,24 @@ class UltimateETLegacyBot(commands.Bot):
                     inline=False
                 )
             
-            # Calculate round totals
+            # Calculate round totals (comprehensive)
             total_kills = sum(p.get('kills', 0) for p in players)
             total_deaths = sum(p.get('deaths', 0) for p in players)
             total_dmg = sum(p.get('damage_given', 0) for p in players)
             total_hs = sum(p.get('headshots', 0) for p in players)
+            total_revives = sum(p.get('revives', 0) for p in players)
+            total_gibs = sum(p.get('gibs', 0) for p in players)
+            total_team_dmg = sum(p.get('team_damage_given', 0) for p in players)
             avg_acc = sum(p.get('accuracy', 0) for p in players) / len(players) if players else 0
+            avg_time_dead = sum(p.get('time_dead', 0) for p in players) / len(players) if players else 0
             
             embed.add_field(
                 name="📊 Round Totals",
                 value=(
-                    f"**Kills:** {total_kills} | **Deaths:** {total_deaths}\n"
-                    f"**Damage:** {int(total_dmg):,} | **Headshots:** {total_hs}\n"
-                    f"**Avg Accuracy:** {avg_acc:.1f}%"
+                    f"**Kills:** {total_kills} | **Deaths:** {total_deaths} | **Headshots:** {total_hs}\n"
+                    f"**Damage:** {int(total_dmg):,} | **Team Damage:** {int(total_team_dmg):,}\n"
+                    f"**Revives:** {total_revives} | **Gibs:** {total_gibs}\n"
+                    f"**Avg Accuracy:** {avg_acc:.1f}% | **Avg Time Dead:** {avg_time_dead:.1f}m"
                 ),
                 inline=False
             )
@@ -3471,7 +3537,7 @@ class UltimateETLegacyBot(commands.Bot):
             async with aiosqlite.connect(self.db_path) as db:
                 # Check if there are any more rounds for this map in this session
                 cursor = await db.execute("""
-                    SELECT MAX(round_num) as max_round, COUNT(DISTINCT round_num) as round_count
+                    SELECT MAX(round_number) as max_round, COUNT(DISTINCT round_number) as round_count
                     FROM player_comprehensive_stats
                     WHERE session_id = ? AND map_name = ?
                 """, (session_id, map_name))
@@ -3505,12 +3571,12 @@ class UltimateETLegacyBot(commands.Bot):
                 # Get map-level aggregate stats
                 cursor = await db.execute("""
                     SELECT 
-                        COUNT(DISTINCT round_num) as total_rounds,
+                        COUNT(DISTINCT round_number) as total_rounds,
                         COUNT(DISTINCT player_guid) as unique_players,
                         SUM(kills) as total_kills,
                         SUM(deaths) as total_deaths,
                         SUM(damage_given) as total_damage,
-                        SUM(headshots) as total_headshots,
+                        SUM(headshot_kills) as total_headshots,
                         AVG(accuracy) as avg_accuracy
                     FROM player_comprehensive_stats
                     WHERE session_id = ? AND map_name = ?
