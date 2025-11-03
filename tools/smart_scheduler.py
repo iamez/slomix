@@ -95,9 +95,7 @@ class SmartSyncScheduler:
                 elif self.consecutive_empty_checks < 10:
                     # 2-9 empty checks - session might be ending
                     logger.info(
-                        f"⏸️ No files ({
-                            self.consecutive_empty_checks} "
-                        f"checks) - wait 10 minutes"
+                        f"⏸️ No files ({self.consecutive_empty_checks} checks) - wait 10 minutes"
                     )
                     return 600  # 10 minutes
                 else:
