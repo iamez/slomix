@@ -28,6 +28,15 @@ if (-not (Test-Path ".env")) {
 
 Write-Host "[DB] Database: etlegacy_production.db" -ForegroundColor Green
 Write-Host "[TOKEN] Loaded from .env" -ForegroundColor Green
+
+# Activate virtual environment
+if (Test-Path ".venv\Scripts\Activate.ps1") {
+    Write-Host "[VENV] Activating virtual environment..." -ForegroundColor Green
+    & .venv\Scripts\Activate.ps1
+} else {
+    Write-Host "[WARNING] Virtual environment not found - using system Python" -ForegroundColor Yellow
+}
+
 Write-Host "`n[START] Starting bot...`n" -ForegroundColor Yellow
 Write-Host "=" * 70 -ForegroundColor Gray
 

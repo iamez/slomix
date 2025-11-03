@@ -1,6 +1,10 @@
 # ET:Legacy Discord Bot - .gitignore
+# Updated: November 3, 2025
+# Purpose: Only track production files, exclude debug/test/analysis files
 
-# Python
+# ============================================================================
+# PYTHON CACHE & BUILD FILES
+# ============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -28,60 +32,270 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+pip-log.txt
+pip-delete-this-directory.txt
 
-# Environment
+# ============================================================================
+# ENVIRONMENT & SECRETS (NEVER COMMIT THESE!)
+# ============================================================================
 .env
-*.env
 .env.local
-.env.template
+.env.production
+.env.*.local
+*.env
+!.env.example
+!.env.template
 
-# Database
+# ============================================================================
+# DATABASE FILES
+# ============================================================================
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 backup*.db
 *_backup_*.db
+*.db.backup*
 
-# Stats Files
+# ============================================================================
+# STATS FILES (Raw game output)
+# ============================================================================
 local_stats/*.txt
 stats_cache/
 !local_stats/.gitkeep
 
-# IDE
+# ============================================================================
+# IDE & EDITOR FILES
+# ============================================================================
 .vscode/
 .idea/
 *.swp
 *.swo
+*.swn
 *~
+.project
+.classpath
+.settings/
 
-# OS files
+# ============================================================================
+# OS FILES
+# ============================================================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
 
-# Logs
+# ============================================================================
+# LOGS & OUTPUT FILES
+# ============================================================================
 *.log
 logs/
+*.log.*
+main.log
+warnings.log
+database_manager.log
 
-# Backups
+# ============================================================================
+# BACKUPS & OLD VERSIONS
+# ============================================================================
 backups/
 *.bak
+*.backup
+*.old
+*~
+*_OLD
+*_old
+*_backup
+*.py.backup
+*.py.backup_*
 
-# Testing
+# ============================================================================
+# TESTING & COVERAGE
+# ============================================================================
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
+.tox/
+.nox/
+.hypothesis/
+pytestdebug.log
 
-# Temporary files
+# ============================================================================
+# TEMPORARY FILES
+# ============================================================================
 *.tmp
 *.temp
 temp/
 tmp/
+*.swp
 
-# IMPORTANT: Never commit these directories
+# ============================================================================
+# DEBUG & ANALYSIS FILES (Main cleanup - these are the ones cluttering your repo!)
+# ============================================================================
+
+# Check/Debug scripts (one-off debugging)
+check_*.py
+debug_*.py
+test_*.py
+verify_*.py
+validate_*.py
+analyze_*.py
+inspect_*.py
+compare_*.py
+find_*.py
+list_*.py
+extract_*.py
+query_*.py
+preview_*.py
+simulate_*.py
+diagnose_*.py
+
+# Analysis output files
+analysis_*.txt
+analysis_*.json
+*_analysis.txt
+*_analysis.json
+*_analysis.html
+
+# Validation output files
+stats_validation_*.json
+stats_validation_*.txt
+stats_validation_*.html
+*_validation_*.json
+*_validation_*.txt
+*_validation_*.html
+*_discrepancies_*.json
+*_issues_*.json
+
+# Test output files
+test_out.txt
+test_output.txt
+*_test_output.txt
+team_check_output.txt
+
+# Error logs from imports
+dev/import_errors_*.json
+*_errors_*.json
+
+# Backup schemas
+backup_schema.sql
+backup_table_schemas.txt
+complete_backup_schema.txt
+
+# Old/archived scripts that were committed
+add_*.py
+backfill_*.py
+populate_*.py
+fix_*.py
+apply_*.py
+clean_*.py
+create_clean_*.py
+create_unified_*.py
+recreate_*.py
+migrate_*.py
+update_*.py
+normalize_*.py
+
+# ============================================================================
+# PRODUCTION EXCEPTIONS (Files to KEEP even if they match patterns above)
+# ============================================================================
+
+# Keep these specific production files
+!bot/check_db.py
+!tools/check_database_structure.py
+!tools/check_schema.py
+!tools/check_ssh_connection.py
+
+# ============================================================================
+# DIRECTORIES TO COMPLETELY IGNORE
+# ============================================================================
+
+# Test suites (you have 100+ files in here!)
+test_suite/
+tests/output/
+tests/fixtures/
+tests/
+
+# Prompt instructions (development notes)
+prompt_instructions/
+
+# Old backups (126 files!)
+backups/
+backup_*/
+
+# Fiveeyes project (future roadmap, not current production)
+fiveeyes/
+
+# Test data and junk directories
+test_files/
+asdf/
+tmp/
+
+# Analytics (if separate from production)
+analytics/output/
+analytics/cache/
+
+# Publish directories
 publish_temp/
 publish_clean/
 github/
 
-# Keep requirements
+# Archive (340+ files! Only track essential docs)
+archive/
+!archive/README.md
+!archive/IMPORTANT_NOTES.md
+
+# ============================================================================
+# LARGE FILES & GENERATED CONTENT
+# ============================================================================
+
+# HTML reports (usually huge)
+*.html
+!docs/*.html
+!templates/*.html
+field_mapping_report.html
+interactive_field_mapping.html
+complete_field_mapping_presentation.html
+stats_validation_report_*.html
+
+# JSON analysis dumps
+field_analysis_log.json
+*_analysis_log.json
+
+# ============================================================================
+# KEEP THESE (Production files that might match patterns above)
+# ============================================================================
+
+# Production utility scripts (add specific ones you need)
+!database_manager.py
+!dev/bulk_import_stats.py
+
+# Production tools
+!tools/stopwatch_scoring.py
+!tools/dynamic_team_detector.py
+!tools/populate_session_teams.py
+!tools/session_summary_generator.py
+!tools/simple_bulk_import.py
+!tools/db_health_check.py
+
+# Essential config files
 !requirements.txt
+!.env.example
+!.gitignore
+
+# Documentation
+!README.md
+!DISASTER_RECOVERY.md
+!PRODUCTION_FILES_FOR_REVIEW.md
+!CHANGELOG.md
+
+# Server files
+!server/c0rnp0rn3.lua
+!server/c0rnp0rn7.lua

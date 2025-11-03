@@ -346,7 +346,7 @@ def main():
         return
     
     session_date = sys.argv[1]
-    db_path = "etlegacy_production.db"
+    db_path = "bot/etlegacy_production.db"
     stats_dir = "local_stats"
     
     success = populate_session_teams_dynamic(db_path, stats_dir, session_date)
