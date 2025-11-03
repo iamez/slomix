@@ -43,23 +43,21 @@ class LastSessionCog(commands.Cog):
         """
         Get the most recent gaming session date from database.
         
-        Returns the date when the session STARTED, not the most recent 
-        calendar date (important for sessions that go past midnight).
+        Returns the most recent date that has session data.
+        Note: For midnight-spanning sessions, we now use map_id to properly
+        group R1+R2, so we can just get the latest date directly.
         """
         async with db.execute(
             """
-            SELECT MIN(SUBSTR(s.session_date, 1, 10)) as start_date
+            SELECT SUBSTR(s.session_date, 1, 10) as date
             FROM sessions s
-            WHERE SUBSTR(s.session_date, 1, 10) IN (
-                SELECT DISTINCT SUBSTR(session_date, 1, 10)
-                FROM sessions
-                ORDER BY session_date DESC
-                LIMIT 2
-            )
-            AND EXISTS (
+            WHERE EXISTS (
                 SELECT 1 FROM player_comprehensive_stats p
                 WHERE p.session_id = s.id
             )
+            AND SUBSTR(s.session_date, 1, 4) = '2025'
+            ORDER BY s.session_date DESC
+            LIMIT 1
             """
         ) as cursor:
             result = await cursor.fetchone()

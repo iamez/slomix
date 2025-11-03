@@ -1,0 +1,6 @@
+[
+  {
+    "file": "2024-03-20-073917-radar-round-2.txt",
+    "error": "'charmap' codec can't encode character '\\u274c' in position 0: character maps to <undefined>"
+  }
+]

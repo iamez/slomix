@@ -8,6 +8,7 @@ Administrative commands for bot operators.
 Other commands moved to specialized cogs.
 
 Commands:
+- !reload - Reload bot code without restarting (admin only)
 - !cache_clear - Clear query cache (admin only)
 - !weapon_diag - Diagnostic weapon stats viewer
 
@@ -61,6 +62,45 @@ class AdminCog(commands.Cog, name="Admin"):
         except Exception as e:
             logger.error(f"Error in cache_clear: {e}", exc_info=True)
             await ctx.send(f"❌ Error clearing cache: {e}")
+
+    @commands.command(name="reload")
+    async def reload_bot(self, ctx):
+        """🔄 Reload the bot (Admin only) - Reconnects to Discord with updated code."""
+        try:
+            if not ctx.author.guild_permissions.manage_guild:
+                await ctx.send("❌ You don't have permission to reload the bot. **Required:** Manage Server")
+                return
+            
+            await ctx.send("🔄 Reloading bot... This will take a few seconds.")
+            logger.info(f"🔄 Bot reload initiated by {ctx.author}")
+            
+            # Reload all cogs
+            reloaded_cogs = []
+            failed_cogs = []
+            
+            for cog_name in list(self.bot.extensions.keys()):
+                try:
+                    await self.bot.reload_extension(cog_name)
+                    reloaded_cogs.append(cog_name.split('.')[-1])
+                    logger.info(f"✅ Reloaded: {cog_name}")
+                except Exception as e:
+                    failed_cogs.append(f"{cog_name.split('.')[-1]}: {str(e)[:50]}")
+                    logger.error(f"❌ Failed to reload {cog_name}: {e}")
+            
+            # Report results
+            result_msg = "✅ **Bot Reloaded!**\n\n"
+            if reloaded_cogs:
+                result_msg += f"**Reloaded ({len(reloaded_cogs)}):** {', '.join(reloaded_cogs)}\n"
+            if failed_cogs:
+                result_msg += f"\n⚠️ **Failed ({len(failed_cogs)}):**\n" + "\n".join(f"• {cog}" for cog in failed_cogs)
+            
+            result_msg += f"\n\n💡 Bot is now running updated code!"
+            await ctx.send(result_msg)
+            logger.info("✅ Bot reload complete")
+            
+        except Exception as e:
+            logger.error(f"Error in reload_bot: {e}", exc_info=True)
+            await ctx.send(f"❌ Error reloading bot: {e}")
 
     @commands.command(name="weapon_diag")
     async def weapon_diag(self, ctx, session_id: Optional[int] = None):
