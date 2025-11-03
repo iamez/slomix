@@ -38,11 +38,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from bot.community_stats_parser import C0RNP0RN3StatsParser
 
 # Setup logging
+log_dir = Path(__file__).parent
+log_file = log_dir / 'bulk_import.log'
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('dev/bulk_import.log', encoding='utf-8'),
+        logging.FileHandler(str(log_file), encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
@@ -74,6 +76,224 @@ class BulkStatsImporter:
         self.start_time = None
         self.last_progress_time = None
         
+        # Ensure database schema exists
+        self.ensure_schema()
+    
+    def ensure_schema(self):
+        """Create database schema if it doesn't exist"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Check if sessions table exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
+            if cursor.fetchone():
+                logger.info("✅ Database schema already exists")
+                conn.close()
+                return
+            
+            logger.info("🏗️  Creating database schema...")
+            
+            # 1. Sessions table
+            cursor.execute('''
+                CREATE TABLE sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_date TEXT NOT NULL,
+                    map_name TEXT NOT NULL,
+                    round_number INTEGER NOT NULL,
+                    defender_team INTEGER DEFAULT 0,
+                    winner_team INTEGER DEFAULT 0,
+                    time_limit TEXT,
+                    actual_time TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    map_id INTEGER
+                )
+            ''')
+            logger.info("  ✅ Created sessions table")
+            
+            # 2. Player comprehensive stats (53 columns!)
+            cursor.execute('''
+                CREATE TABLE player_comprehensive_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    session_date TEXT NOT NULL,
+                    map_name TEXT NOT NULL,
+                    round_number INTEGER NOT NULL,
+                    player_guid TEXT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    clean_name TEXT NOT NULL,
+                    team INTEGER,
+                    
+                    -- Core combat stats
+                    kills INTEGER DEFAULT 0,
+                    deaths INTEGER DEFAULT 0,
+                    damage_given INTEGER DEFAULT 0,
+                    damage_received INTEGER DEFAULT 0,
+                    team_damage_given INTEGER DEFAULT 0,
+                    team_damage_received INTEGER DEFAULT 0,
+                    
+                    -- Special kills
+                    gibs INTEGER DEFAULT 0,
+                    self_kills INTEGER DEFAULT 0,
+                    team_kills INTEGER DEFAULT 0,
+                    team_gibs INTEGER DEFAULT 0,
+                    headshot_kills INTEGER DEFAULT 0,
+                    
+                    -- Time tracking
+                    time_played_seconds INTEGER DEFAULT 0,
+                    time_played_minutes REAL DEFAULT 0,
+                    time_dead_minutes REAL DEFAULT 0,
+                    time_dead_ratio REAL DEFAULT 0,
+                    
+                    -- Performance metrics
+                    xp INTEGER DEFAULT 0,
+                    kd_ratio REAL DEFAULT 0,
+                    dpm REAL DEFAULT 0,
+                    efficiency REAL DEFAULT 0,
+                    
+                    -- Weapon stats
+                    bullets_fired INTEGER DEFAULT 0,
+                    accuracy REAL DEFAULT 0,
+                    
+                    -- Objective stats
+                    kill_assists INTEGER DEFAULT 0,
+                    objectives_completed INTEGER DEFAULT 0,
+                    objectives_destroyed INTEGER DEFAULT 0,
+                    objectives_stolen INTEGER DEFAULT 0,
+                    objectives_returned INTEGER DEFAULT 0,
+                    dynamites_planted INTEGER DEFAULT 0,
+                    dynamites_defused INTEGER DEFAULT 0,
+                    times_revived INTEGER DEFAULT 0,
+                    revives_given INTEGER DEFAULT 0,
+                    
+                    -- Advanced objective stats
+                    most_useful_kills INTEGER DEFAULT 0,
+                    useless_kills INTEGER DEFAULT 0,
+                    kill_steals INTEGER DEFAULT 0,
+                    denied_playtime INTEGER DEFAULT 0,
+                    constructions INTEGER DEFAULT 0,
+                    tank_meatshield REAL DEFAULT 0,
+                    
+                    -- Multikills
+                    double_kills INTEGER DEFAULT 0,
+                    triple_kills INTEGER DEFAULT 0,
+                    quad_kills INTEGER DEFAULT 0,
+                    multi_kills INTEGER DEFAULT 0,
+                    mega_kills INTEGER DEFAULT 0,
+                    
+                    -- Sprees
+                    killing_spree_best INTEGER DEFAULT 0,
+                    death_spree_worst INTEGER DEFAULT 0,
+                    
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (session_id) REFERENCES sessions(id),
+                    
+                    -- ✅ DUPLICATE PREVENTION: Ensure one player per session
+                    UNIQUE(session_id, player_guid)
+                )
+            ''')
+            logger.info("  ✅ Created player_comprehensive_stats table (53 columns + duplicate prevention)")
+            
+            # 3. Weapon comprehensive stats
+            cursor.execute('''
+                CREATE TABLE weapon_comprehensive_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    session_date TEXT NOT NULL,
+                    map_name TEXT NOT NULL,
+                    round_number INTEGER NOT NULL,
+                    player_guid TEXT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    weapon_name TEXT NOT NULL,
+                    kills INTEGER DEFAULT 0,
+                    deaths INTEGER DEFAULT 0,
+                    headshots INTEGER DEFAULT 0,
+                    shots INTEGER DEFAULT 0,
+                    hits INTEGER DEFAULT 0,
+                    accuracy REAL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (session_id) REFERENCES sessions(id),
+                    
+                    -- ✅ DUPLICATE PREVENTION: Ensure one weapon per player per session
+                    UNIQUE(session_id, player_guid, weapon_name)
+                )
+            ''')
+            logger.info("  ✅ Created weapon_comprehensive_stats table (with duplicate prevention)")
+            
+            # 4. Player links (Discord ↔ GUID)
+            cursor.execute('''
+                CREATE TABLE player_links (
+                    discord_id BIGINT PRIMARY KEY,
+                    discord_username TEXT NOT NULL,
+                    et_guid TEXT UNIQUE NOT NULL,
+                    et_name TEXT,
+                    linked_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    verified BOOLEAN DEFAULT FALSE
+                )
+            ''')
+            logger.info("  ✅ Created player_links table")
+            
+            # 5. Processed files tracking
+            cursor.execute('''
+                CREATE TABLE processed_files (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    filename TEXT UNIQUE NOT NULL,
+                    file_hash TEXT,
+                    success BOOLEAN DEFAULT 1,
+                    error_message TEXT,
+                    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            logger.info("  ✅ Created processed_files table")
+            
+            # 6. Session teams (for team detection)
+            cursor.execute('''
+                CREATE TABLE session_teams (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_start_date TEXT NOT NULL,
+                    map_name TEXT NOT NULL,
+                    team_name TEXT NOT NULL,
+                    player_guids TEXT NOT NULL,
+                    player_names TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(session_start_date, map_name, team_name)
+                )
+            ''')
+            logger.info("  ✅ Created session_teams table")
+            
+            # 7. Player aliases
+            cursor.execute('''
+                CREATE TABLE player_aliases (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guid TEXT NOT NULL,
+                    alias TEXT NOT NULL,
+                    first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    times_seen INTEGER DEFAULT 1,
+                    UNIQUE(guid, alias)
+                )
+            ''')
+            logger.info("  ✅ Created player_aliases table")
+            
+            # Create indexes for performance
+            cursor.execute('CREATE INDEX idx_sessions_date_map ON sessions(session_date, map_name)')
+            cursor.execute('CREATE INDEX idx_player_stats_session ON player_comprehensive_stats(session_id)')
+            cursor.execute('CREATE INDEX idx_player_stats_guid ON player_comprehensive_stats(player_guid)')
+            cursor.execute('CREATE INDEX idx_weapon_stats_session ON weapon_comprehensive_stats(session_id)')
+            cursor.execute('CREATE INDEX idx_weapon_stats_guid ON weapon_comprehensive_stats(player_guid)')
+            logger.info("  ✅ Created performance indexes")
+            
+            conn.commit()
+            conn.close()
+            
+            logger.info("🎉 Database schema created successfully!")
+            logger.info("   • 7 tables + indexes created")
+            logger.info("   • Ready for import!")
+            
+        except sqlite3.Error as e:
+            logger.error(f"❌ Failed to create schema: {e}")
+            raise
+        
     def is_file_processed(self, filename: str) -> bool:
         """Check if file has already been processed"""
         try:
@@ -90,16 +310,16 @@ class BulkStatsImporter:
             logger.warning(f"Error checking processed files: {e}")
             return False
     
-    def mark_file_processed(self, filename: str, file_size: int, 
-                           player_count: int, success: bool = True):
+    def mark_file_processed(self, filename: str, file_size: int = 0, 
+                           player_count: int = 0, success: bool = True):
         """Mark file as processed in database"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO processed_files (filename, file_size, player_count, success)
-                VALUES (?, ?, ?, ?)
-            ''', (filename, file_size, player_count, 1 if success else 0))
+                INSERT INTO processed_files (filename, success)
+                VALUES (?, ?)
+            ''', (filename, 1 if success else 0))
             conn.commit()
             conn.close()
         except sqlite3.Error as e:
@@ -152,11 +372,12 @@ class BulkStatsImporter:
             if conn:
                 conn.close()
     
-    def insert_player_stats(self, session_id: int, player: Dict) -> bool:
+    def insert_player_stats(self, session_id: int, session_date: str, map_name: str, round_num: int, player: Dict) -> bool:
         """Insert player comprehensive stats for this session"""
         conn = None
         try:
             conn = sqlite3.connect(self.db_path, timeout=30.0)
+            conn.execute('BEGIN TRANSACTION')  # ✅ FIX: Start transaction
             cursor = conn.cursor()
             
             # Extract player data with defaults
@@ -165,145 +386,116 @@ class BulkStatsImporter:
             clean_name = self.parser.strip_color_codes(name)
             team = player.get('team', 0)
             
-            # Basic combat stats (from player dict)
+            # Extract objective/support stats from parser (36 fields from c0rnp0rn3.lua)
+            obj_stats = player.get('objective_stats', {})
+            
+            # Basic combat stats
             kills = player.get('kills', 0)
             deaths = player.get('deaths', 0)
+            damage_given = player.get('damage_given', 0)
+            damage_received = player.get('damage_received', 0)
             
-            # Calculate K/D ratio
+            # K/D ratio
             kd_ratio = kills / deaths if deaths > 0 else float(kills)
             
-            # Extended stats (from player dict)
-            headshot_kills = player.get('headshots', 0)
+            # Time fields - seconds is primary
+            time_played_seconds = player.get('time_played_seconds', 0)
+            time_played_minutes = time_played_seconds / 60.0 if time_played_seconds > 0 else 0.0
             
-            # Extract objective/support stats from parser (38 fields from c0rnp0rn3.lua)
-            objective_stats = player.get('objective_stats', {})
+            # DPM already calculated by parser
+            dpm = player.get('dpm', 0.0)
             
-            # Extract all fields from objective_stats dictionary
-            damage_given = objective_stats.get('damage_given', 0)
-            damage_received = objective_stats.get('damage_received', 0)
-            team_damage_given = objective_stats.get('team_damage_given', 0)
-            team_damage_received = objective_stats.get('team_damage_received', 0)
-            gibs = objective_stats.get('gibs', 0)
-            self_kills = objective_stats.get('self_kills', 0)
-            team_kills = objective_stats.get('team_kills', 0)
-            team_gibs = objective_stats.get('team_gibs', 0)
-            xp = objective_stats.get('xp', 0)
+            # Efficiency & Accuracy
+            bullets_fired = obj_stats.get('bullets_fired', 0)
+            efficiency = (kills / (kills + deaths) * 100) if (kills + deaths) > 0 else 0.0
+            accuracy = player.get('accuracy', 0.0)
             
-            # Time tracking - Convert minutes to seconds (INTEGER is primary storage)
-            time_played_minutes = objective_stats.get('time_played_minutes', 0.0)
-            time_played_seconds = int(time_played_minutes * 60)  # Convert to seconds
-            
-            # Calculate DPM from damage and time
-            if time_played_minutes > 0:
-                dpm = damage_given / time_played_minutes
+            # Time dead - normalize to percentage and compute minutes
+            raw_td = obj_stats.get('time_dead_ratio', 0) or 0
+            if raw_td <= 1:
+                time_dead_ratio = raw_td * 100.0
             else:
-                dpm = 0.0
+                time_dead_ratio = float(raw_td)
             
-            # Spree stats
-            killing_spree_best = objective_stats.get('killing_spree', 0)
-            death_spree_worst = objective_stats.get('death_spree', 0)
+            time_dead_minutes = time_played_minutes * (time_dead_ratio / 100.0)
             
-            # Assist stats
-            kill_assists = objective_stats.get('kill_assists', 0)
-            kill_steals = objective_stats.get('kill_steals', 0)
-            
-            # Objective actions (these may be 0 - parser doesn't capture all)
-            objectives_stolen = objective_stats.get('objectives_stolen', 0)
-            objectives_returned = objective_stats.get('objectives_returned', 0)
-            dynamites_planted = objective_stats.get('dynamites_planted', 0)
-            dynamites_defused = objective_stats.get('dynamites_defused', 0)
-            times_revived = objective_stats.get('times_revived', 0)
-            
-            # Calculate efficiency
-            if (kills + deaths) > 0:
-                efficiency = kills / (kills + deaths) * 100
-            else:
-                efficiency = 0.0
-            
-            # Awards (all default to 0 - calculated later by bot)
-            award_accuracy = 0
-            award_damage = 0
-            award_kills = 0
-            award_experience = 0
-            
-            # Note: These fields exist in DB but parser doesn't provide them
-            # They default to 0 and could be populated by other means
-            time_axis = 0  # Time spent on Axis team
-            time_allies = 0  # Time spent on Allies team
-            revives = 0  # Revives given (not captured by parser yet)
-            ammopacks = 0  # Ammo packs given (not captured)
-            healthpacks = 0  # Health packs given (not captured)
-            
-            # ✅ INSERT ALL 35 COLUMNS into player_comprehensive_stats
+            # ✅ INSERT ALL 51 VALUES (matching bot's implementation)
             cursor.execute('''
                 INSERT INTO player_comprehensive_stats (
-                    session_id, player_guid, player_name, clean_name, team,
+                    session_id, session_date, map_name, round_number,
+                    player_guid, player_name, clean_name, team,
                     kills, deaths, damage_given, damage_received,
                     team_damage_given, team_damage_received,
-                    gibs, self_kills, team_kills, team_gibs,
-                    time_axis, time_allies,
+                    gibs, self_kills, team_kills, team_gibs, headshot_kills,
                     time_played_seconds, time_played_minutes,
-                    xp, killing_spree_best, death_spree_worst,
-                    kill_assists, headshot_kills,
-                    revives, ammopacks, healthpacks,
-                    dpm, kd_ratio, efficiency,
-                    award_accuracy, award_damage, award_kills, award_experience
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                session_id, guid, name, clean_name, team,
-                kills, deaths, damage_given, damage_received,
-                team_damage_given, team_damage_received,
-                gibs, self_kills, team_kills, team_gibs,
-                time_axis, time_allies,
-                time_played_seconds, time_played_minutes,
-                xp, killing_spree_best, death_spree_worst,
-                kill_assists, headshot_kills,
-                revives, ammopacks, healthpacks,
-                dpm, kd_ratio, efficiency,
-                award_accuracy, award_damage, award_kills, award_experience
-            ))
-            
-            # ✅ INSERT into player_objective_stats table
-            # Map parser field names to database column names
-            cursor.execute('''
-                INSERT INTO player_objective_stats (
-                    session_id, player_guid,
-                    objectives_completed, objectives_destroyed, objectives_captured, objectives_defended,
+                    time_dead_minutes, time_dead_ratio,
+                    xp, kd_ratio, dpm, efficiency,
+                    bullets_fired, accuracy,
+                    kill_assists,
+                    objectives_completed, objectives_destroyed,
                     objectives_stolen, objectives_returned,
                     dynamites_planted, dynamites_defused,
-                    landmines_planted, landmines_spotted,
-                    revives, ammopacks, healthpacks,
-                    times_revived, kill_assists,
-                    constructions_built, constructions_destroyed,
-                    killing_spree_best, death_spree_worst,
-                    kill_steals, most_useful_kills, useless_kills,
-                    denied_playtime, tank_meatshield
+                    times_revived, revives_given,
+                    most_useful_kills, useless_kills, kill_steals,
+                    denied_playtime, constructions, tank_meatshield,
+                    double_kills, triple_kills, quad_kills,
+                    multi_kills, mega_kills,
+                    killing_spree_best, death_spree_worst
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                session_id, guid,
-                0, 0, 0, 0,  # objectives_completed/destroyed/captured/defended - not in parser
-                objectives_stolen, objectives_returned,
-                dynamites_planted, dynamites_defused,
-                0, 0,  # landmines_planted/spotted - not in parser
-                0, 0, 0,  # revives/ammopacks/healthpacks - not in parser
-                times_revived, kill_assists,
-                objective_stats.get('repairs_constructions', 0), 0,  # constructions_built/destroyed
-                killing_spree_best, death_spree_worst,
-                kill_steals,
-                objective_stats.get('useful_kills', 0),  # Map to most_useful_kills
-                objective_stats.get('useless_kills', 0),
-                objective_stats.get('denied_playtime', 0),
-                objective_stats.get('tank_meatshield', 0.0)
+                session_id, session_date, map_name, round_num,
+                guid, name, clean_name, team,
+                kills, deaths, damage_given, damage_received,
+                obj_stats.get('team_damage_given', 0),  # ✅ FIX: was player.get()
+                obj_stats.get('team_damage_received', 0),  # ✅ FIX: was player.get()
+                obj_stats.get('gibs', 0),
+                obj_stats.get('self_kills', 0),
+                obj_stats.get('team_kills', 0),
+                obj_stats.get('team_gibs', 0),
+                obj_stats.get('headshot_kills', 0),  # ✅ FIX: was player.get('headshots')
+                time_played_seconds,
+                time_played_minutes,
+                time_dead_minutes,
+                time_dead_ratio,
+                obj_stats.get('xp', 0),
+                kd_ratio,
+                dpm,
+                efficiency,
+                bullets_fired,
+                accuracy,
+                obj_stats.get('kill_assists', 0),
+                0,  # objectives_completed
+                0,  # objectives_destroyed
+                obj_stats.get('objectives_stolen', 0),
+                obj_stats.get('objectives_returned', 0),
+                obj_stats.get('dynamites_planted', 0),
+                obj_stats.get('dynamites_defused', 0),
+                obj_stats.get('times_revived', 0),
+                obj_stats.get('revives_given', 0),
+                obj_stats.get('useful_kills', 0),  # ✅ FIX: was 'most_useful_kills'
+                obj_stats.get('useless_kills', 0),
+                obj_stats.get('kill_steals', 0),
+                obj_stats.get('denied_playtime', 0),
+                obj_stats.get('repairs_constructions', 0),  # ✅ FIX: was hardcoded 0
+                obj_stats.get('tank_meatshield', 0),
+                obj_stats.get('multikill_2x', 0),  # ✅ FIX: was 'double_kills'
+                obj_stats.get('multikill_3x', 0),  # ✅ FIX: was 'triple_kills'
+                obj_stats.get('multikill_4x', 0),  # ✅ FIX: was 'quad_kills'
+                obj_stats.get('multikill_5x', 0),  # ✅ FIX: was 'multi_kills'
+                obj_stats.get('multikill_6x', 0),  # ✅ FIX: was 'mega_kills'
+                obj_stats.get('killing_spree', 0),
+                obj_stats.get('death_spree', 0),
             ))
             
-            conn.commit()
+            conn.commit()  # ✅ FIX: Commit transaction (only if all succeeded)
             
             self.stats['players_inserted'] += 1
             return True
             
         except sqlite3.Error as e:
+            if conn:
+                conn.rollback()  # ✅ FIX: Rollback on error to prevent partial writes
             logger.error(f"Error inserting player stats: {e}")
             logger.error(f"Player: {name}, Session: {session_id}")
             return False
@@ -311,41 +503,50 @@ class BulkStatsImporter:
             if conn:
                 conn.close()
     
-    def insert_weapon_stats(self, session_id: int, player: Dict) -> bool:
+    def insert_weapon_stats(self, session_id: int, session_date: str, map_name: str, round_num: int, player: Dict) -> bool:
         """Insert weapon stats for this player/session"""
         conn = None
         try:
             conn = sqlite3.connect(self.db_path, timeout=30.0)
+            conn.execute('BEGIN TRANSACTION')  # ✅ FIX: Start transaction
             cursor = conn.cursor()
             
             guid = player.get('guid', 'UNKNOWN')
+            name = player.get('name', 'Unknown')
             weapon_stats = player.get('weapon_stats', {})
             
             weapons_inserted = 0
             
+            logger.debug(f"[WEAPON] Player {name} has {len(weapon_stats)} weapons")
+            
             # Insert each weapon that was used
             for weapon_name, stats in weapon_stats.items():
+                logger.debug(f"[WEAPON] {weapon_name}: shots={stats.get('shots', 0)}, kills={stats.get('kills', 0)}")
                 # Only insert weapons with actual usage
-                if stats['shots'] > 0 or stats['kills'] > 0:
+                if stats.get('shots', 0) > 0 or stats.get('kills', 0) > 0:
                     cursor.execute('''
                         INSERT INTO weapon_comprehensive_stats (
-                            session_id, player_guid, weapon_name,
-                            kills, deaths, hits, shots, headshots, accuracy
+                            session_id, session_date, map_name, round_number,
+                            player_guid, player_name, weapon_name,
+                            kills, deaths, headshots, hits, shots, accuracy
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
-                        session_id, guid, weapon_name,
-                        stats['kills'], stats['deaths'], stats['hits'],
-                        stats['shots'], stats['headshots'], stats['accuracy']
+                        session_id, session_date, map_name, round_num,
+                        guid, name, weapon_name,
+                        stats.get('kills', 0), stats.get('deaths', 0), stats.get('headshots', 0),
+                        stats.get('hits', 0), stats.get('shots', 0), stats.get('accuracy', 0.0)
                     ))
                     weapons_inserted += 1
             
-            conn.commit()
+            conn.commit()  # ✅ FIX: Commit transaction (only if all succeeded)
             
             self.stats['weapons_inserted'] += weapons_inserted
             return True
             
         except sqlite3.Error as e:
+            if conn:
+                conn.rollback()  # ✅ FIX: Rollback on error to prevent partial writes
             logger.error(f"Error inserting weapon stats: {e}")
             return False
         finally:
@@ -401,11 +602,13 @@ class BulkStatsImporter:
             # Insert player stats for this round
             players = parsed.get('players', [])
             success_count = 0
+            map_name = parsed.get('map_name', 'Unknown')
+            round_num = parsed.get('round_num', 1)
             
             for player in players:
-                if self.insert_player_stats(session_id, player):
+                if self.insert_player_stats(session_id, file_date, map_name, round_num, player):
                     # Also insert weapon stats
-                    self.insert_weapon_stats(session_id, player)
+                    self.insert_weapon_stats(session_id, file_date, map_name, round_num, player)
                     success_count += 1
             
             # Mark file as successfully processed
@@ -490,6 +693,13 @@ class BulkStatsImporter:
         if year_filter:
             all_files = [f for f in all_files if f.name.startswith(f"{year_filter}-")]
             logger.info(f"[FILTER] Filtered to {year_filter}: {len(all_files)} files")
+        
+        # Apply last 2 weeks filter (default if no year filter)
+        if not year_filter and not limit:
+            two_weeks_ago = datetime.now() - timedelta(days=14)
+            cutoff_date = two_weeks_ago.strftime("%Y-%m-%d")
+            all_files = [f for f in all_files if f.name >= cutoff_date]
+            logger.info(f"[FILTER] Last 2 weeks (since {cutoff_date}): {len(all_files)} files")
         
         # Apply limit
         if limit:
