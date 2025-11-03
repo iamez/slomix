@@ -177,6 +177,8 @@ class DatabaseManager:
                 CREATE TABLE sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     session_date TEXT NOT NULL,
+                    session_time TEXT NOT NULL,
+                    match_id TEXT NOT NULL,
                     map_name TEXT NOT NULL,
                     round_number INTEGER NOT NULL,
                     time_limit TEXT,
@@ -186,7 +188,7 @@ class DatabaseManager:
                     is_tied BOOLEAN DEFAULT FALSE,
                     round_outcome TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(session_date, map_name, round_number)
+                    UNIQUE(match_id, round_number)
                 )
             ''')
             
@@ -355,6 +357,7 @@ class DatabaseManager:
             # Create indexes for performance
             logger.info("   Creating indexes...")
             cursor.execute('CREATE INDEX idx_sessions_date_map ON sessions(session_date, map_name)')
+            cursor.execute('CREATE INDEX idx_sessions_match_id ON sessions(match_id)')
             cursor.execute('CREATE INDEX idx_player_stats_session ON player_comprehensive_stats(session_id)')
             cursor.execute('CREATE INDEX idx_player_stats_guid ON player_comprehensive_stats(player_guid)')
             cursor.execute('CREATE INDEX idx_weapon_stats_session ON weapon_comprehensive_stats(session_id)')
@@ -380,6 +383,62 @@ class DatabaseManager:
     # =========================================================================
     # DATA IMPORT (With transaction safety and duplicate prevention)
     # =========================================================================
+    
+    def _find_or_create_match_id(self, file_date: str, session_time: str, 
+                                  map_name: str, round_num: int, file_path: Path) -> str:
+        """
+        Find or create match_id to pair Round 1 and Round 2 together
+        
+        Strategy:
+        - Round 1: Create new match_id = date_time_map
+        - Round 2: Find closest Round 1 file (same date, same map, before R2)
+        
+        This ensures R1 and R2 from the SAME MATCH are linked together!
+        """
+        if round_num == 1:
+            # Round 1: Create new match_id
+            match_id = f"{file_date}_{session_time}_{map_name}"
+            return match_id
+        
+        else:
+            # Round 2: Find matching Round 1 file
+            # Look for R1 files on same date, same map, BEFORE this R2 file
+            r1_pattern = f"{file_date}-*-{map_name}-round-1.txt"
+            r1_files = list(self.stats_dir.glob(r1_pattern))
+            
+            if not r1_files:
+                # No R1 file found - create orphan match_id
+                logger.warning(f"⚠️  No Round 1 file found for {file_path.name}")
+                match_id = f"{file_date}_{session_time}_{map_name}_orphan"
+                return match_id
+            
+            # Find R1 file closest in time BEFORE this R2
+            r2_time = int(session_time)
+            closest_r1 = None
+            closest_time_diff = float('inf')
+            
+            for r1_file in r1_files:
+                r1_time_str = r1_file.name.split('-')[3]
+                r1_time = int(r1_time_str)
+                
+                # R1 must be BEFORE R2 (R1 time < R2 time)
+                if r1_time < r2_time:
+                    time_diff = r2_time - r1_time
+                    if time_diff < closest_time_diff:
+                        closest_time_diff = time_diff
+                        closest_r1 = r1_file
+                        closest_r1_time = r1_time_str
+            
+            if closest_r1:
+                # Found matching R1 - use its match_id
+                match_id = f"{file_date}_{closest_r1_time}_{map_name}"
+                logger.debug(f"✅ Paired R2 {session_time} with R1 {closest_r1_time} (diff: {closest_time_diff}s)")
+                return match_id
+            else:
+                # All R1 files are AFTER R2 (weird case)
+                logger.warning(f"⚠️  All R1 files are after R2 for {file_path.name}")
+                match_id = f"{file_date}_{session_time}_{map_name}_orphan"
+                return match_id
     
     def is_file_processed(self, filename: str) -> bool:
         """Check if file has already been processed"""
@@ -410,7 +469,7 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logger.warning(f"Error marking file as processed: {e}")
     
-    def create_session(self, parsed_data: Dict, file_date: str) -> Optional[int]:
+    def create_session(self, parsed_data: Dict, file_date: str, session_time: str, match_id: str) -> Optional[int]:
         """Create new session (with transaction safety)"""
         conn = None
         try:
@@ -425,11 +484,11 @@ class DatabaseManager:
             
             cursor.execute('''
                 INSERT INTO sessions (
-                    session_date, map_name, round_number,
+                    session_date, session_time, match_id, map_name, round_number,
                     time_limit, actual_time, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (file_date, map_name, round_num, time_limit, actual_time))
+                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (file_date, session_time, match_id, map_name, round_num, time_limit, actual_time))
             
             session_id = cursor.lastrowid
             conn.commit()  # ✅ Commit transaction
@@ -614,11 +673,18 @@ class DatabaseManager:
                 self.stats['files_failed'] += 1
                 return False, f"Parse error: {error_msg}"
             
-            # Extract date from filename
-            file_date = '-'.join(filename.split('-')[:3])
+            # Extract date and time from filename: 2025-09-09-225817-map-round-1.txt
+            parts = filename.split('-')
+            file_date = '-'.join(parts[:3])  # 2025-09-09
+            session_time = parts[3]  # 225817
+            
+            # Generate match_id by finding R1 file for this match
+            map_name = parsed.get('map_name', 'Unknown')
+            round_num = parsed.get('round_num', 1)
+            match_id = self._find_or_create_match_id(file_date, session_time, map_name, round_num, file_path)
             
             # Create session
-            session_id = self.create_session(parsed, file_date)
+            session_id = self.create_session(parsed, file_date, session_time, match_id)
             if not session_id:
                 self.stats['files_failed'] += 1
                 return False, "Session creation failed"
@@ -939,15 +1005,81 @@ def main():
         manager.create_fresh_database(backup_existing=True)
         
     elif choice == "2":
-        year = input("Year to import [2025]: ").strip() or "2025"
-        manager.import_all_files(year_filter=int(year))
+        print("\nImport options:")
+        print("  1 - Full year (all 2025 files)")
+        print("  2 - Last 30 days only")
+        print("  3 - Custom date range")
+        sub = input("Select [1]: ").strip() or "1"
+        
+        if sub == "1":
+            year = input("Year to import [2025]: ").strip() or "2025"
+            manager.import_all_files(year_filter=int(year))
+        elif sub == "2":
+            from datetime import datetime, timedelta
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=30)
+            print(f"📅 Importing files from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+            # Filter files by date
+            all_files = sorted(manager.stats_dir.glob("*.txt"))
+            recent_files = [f for f in all_files if f.name[:10] >= start_date.strftime('%Y-%m-%d')]
+            print(f"   Found {len(recent_files)} files in last 30 days")
+            for file_path in recent_files:
+                manager.process_file(file_path)
+        elif sub == "3":
+            start = input("Start date (YYYY-MM-DD): ").strip()
+            end = input("End date (YYYY-MM-DD): ").strip()
+            all_files = sorted(manager.stats_dir.glob("*.txt"))
+            filtered = [f for f in all_files if start <= f.name[:10] <= end]
+            print(f"   Found {len(filtered)} files in range")
+            for file_path in filtered:
+                manager.process_file(file_path)
         
     elif choice == "3":
         print("\n⚠️  WARNING: This will DELETE ALL DATA!")
         confirm = input("Type 'YES DELETE EVERYTHING' to confirm: ")
         if confirm == "YES DELETE EVERYTHING":
-            year = input("Year to import [2025]: ").strip() or "2025"
-            manager.rebuild_from_scratch(year=int(year), confirm=True)
+            print("\nRebuild options:")
+            print("  1 - Full year (all 2025 files)")
+            print("  2 - Last 30 days only (RECOMMENDED for production)")
+            print("  3 - Custom date range")
+            sub = input("Select [2]: ").strip() or "2"
+            
+            if sub == "1":
+                year = input("Year to import [2025]: ").strip() or "2025"
+                manager.rebuild_from_scratch(year=int(year), confirm=True)
+            elif sub == "2":
+                from datetime import datetime, timedelta
+                # For rebuild, we still need to create DB first
+                if not manager.create_fresh_database(backup_existing=True):
+                    print("❌ Failed to create database")
+                else:
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=30)
+                    print(f"📅 Importing files from {start_date.strftime('%Y-%m-%d')} onwards...")
+                    all_files = sorted(manager.stats_dir.glob("*.txt"))
+                    recent_files = [f for f in all_files if f.name[:10] >= start_date.strftime('%Y-%m-%d')]
+                    print(f"   Found {len(recent_files)} files in last 30 days")
+                    manager.start_time = time.time()
+                    for i, file_path in enumerate(recent_files, 1):
+                        manager.process_file(file_path)
+                        if i % 10 == 0:
+                            pct = (i / len(recent_files)) * 100
+                            print(f"   [{i}/{len(recent_files)}] {pct:.1f}%")
+            elif sub == "3":
+                start = input("Start date (YYYY-MM-DD): ").strip()
+                end = input("End date (YYYY-MM-DD): ").strip()
+                if not manager.create_fresh_database(backup_existing=True):
+                    print("❌ Failed to create database")
+                else:
+                    all_files = sorted(manager.stats_dir.glob("*.txt"))
+                    filtered = [f for f in all_files if start <= f.name[:10] <= end]
+                    print(f"   Found {len(filtered)} files in range")
+                    manager.start_time = time.time()
+                    for i, file_path in enumerate(filtered, 1):
+                        manager.process_file(file_path)
+                        if i % 10 == 0:
+                            pct = (i / len(filtered)) * 100
+                            print(f"   [{i}/{len(filtered)}] {pct:.1f}%")
         else:
             print("❌ Aborted")
     
