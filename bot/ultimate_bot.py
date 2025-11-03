@@ -3665,8 +3665,18 @@ class UltimateETLegacyBot(commands.Bot):
             )
 
             # Extract date from filename: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
-            timestamp = "-".join(filename.split("-")[:4])  # Full timestamp
-            date_part = "-".join(filename.split("-")[:3])  # Date for stats
+            timestamp = "-".join(filename.split("-")[:4])  # Full timestamp YYYY-MM-DD-HHMMSS
+            date_part = "-".join(filename.split("-")[:3])  # Date YYYY-MM-DD
+            time_part = filename.split("-")[3] if len(filename.split("-")) > 3 else "000000"  # HHMMSS
+            
+            # Format time as HH:MM:SS
+            if len(time_part) == 6:
+                session_time = f"{time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+            else:
+                session_time = "00:00:00"
+            
+            # Create match_id (unique identifier for the gaming session)
+            match_id = f"{date_part}-{time_part}"
 
             async with aiosqlite.connect(self.db_path) as db:
                 # Ensure player_name alias for this connection (non-Cog helper)
@@ -3683,7 +3693,7 @@ class UltimateETLegacyBot(commands.Bot):
                     WHERE session_date = ? AND map_name = ? AND round_number = ?
                 """,
                     (
-                        timestamp,
+                        date_part,  # Use date_part not timestamp
                         stats_data["map_name"],
                         stats_data["round_num"],
                     ),
@@ -3700,12 +3710,14 @@ class UltimateETLegacyBot(commands.Bot):
                 cursor = await db.execute(
                     """
                     INSERT INTO sessions (
-                        session_date, map_name, round_number,
+                        session_date, session_time, match_id, map_name, round_number,
                         time_limit, actual_time
-                    ) VALUES (?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
-                        timestamp,
+                        date_part,
+                        session_time,
+                        match_id,
                         stats_data["map_name"],
                         stats_data["round_num"],
                         stats_data.get("map_time", ""),
