@@ -100,8 +100,7 @@ class SmartSyncScheduler:
                 elif self.consecutive_empty_checks < 10:
                     # 2-9 empty checks - session might be ending
                     logger.info(
-                        f"⏸️ No new files ({
-                            self.consecutive_empty_checks} checks) - next check in 10 minutes"
+                        f"⏸️ No new files ({self.consecutive_empty_checks} checks) - next check in 10 minutes"
                     )
                     return 600  # 10 minutes
                 else:
@@ -144,9 +143,7 @@ class SmartSyncScheduler:
 
                     hours = sleep_seconds / 3600
                     logger.info(
-                        f"😴 Deep sleep until {
-                            wake_time.strftime('%H:%M CET')} ({
-                            hours:.1f} hours)"
+                        f"😴 Deep sleep until {wake_time.strftime('%H:%M CET')} ({hours:.1f} hours)"
                     )
                     return sleep_seconds
 
@@ -188,8 +185,7 @@ class SmartSyncScheduler:
                     logger.info("✅ No new files found")
 
                 logger.info(
-                    f"⏰ Next sync in {next_interval} seconds ({
-                        next_interval / 60:.1f} minutes)"
+                    f"⏰ Next sync in {next_interval} seconds ({next_interval / 60:.1f} minutes)"
                 )
                 logger.info("-" * 70)
 
