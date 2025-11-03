@@ -1,0 +1,182 @@
+[
+  {
+    "file": "2025-10-27-211750-etl_adlernest-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.047204",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-212641-etl_adlernest-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.051170",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-213846-supply-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.051170",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-215043-supply-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.054325",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-215725-etl_sp_delivery-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.055324",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-220230-etl_sp_delivery-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.057323",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-220850-te_escape2-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.058323",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-221427-te_escape2-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.060570",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-221743-te_escape2-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.060570",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-222006-te_escape2-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.063047",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-223236-te_escape2-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.064050",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-224120-te_escape2-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.066148",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-224519-et_brewdog-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.067152",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-224926-et_brewdog-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.069149",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-230230-sw_goldrush_te-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.070648",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-10-27-230734-sw_goldrush_te-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.073833",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-212527-supply-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.074839",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-213712-supply-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.077330",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.077330",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-215115-etl_adlernest-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.078487",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-220418-sw_goldrush_te-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.079906",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-221036-sw_goldrush_te-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.081906",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-224514-supply-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.083090",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-225509-supply-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.085194",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-231128-etl_sp_delivery-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.086195",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-231748-etl_sp_delivery-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.088198",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-233014-sw_goldrush_te-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.089197",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-234251-sw_goldrush_te-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.091433",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-01-235515-etl_adlernest-round-1.txt",
+    "session_date": "2025-11-03T00:54:16.092498",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  },
+  {
+    "file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+    "session_date": "2025-11-03T00:54:16.097072",
+    "issue": "Session not in database",
+    "severity": "HIGH"
+  }
+]
