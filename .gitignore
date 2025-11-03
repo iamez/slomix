@@ -217,15 +217,16 @@ normalize_*.py
 # DIRECTORIES TO COMPLETELY IGNORE
 # ============================================================================
 
-# Test suites (you have 20+ of these!)
+# Test suites (you have 100+ files in here!)
 test_suite/
 tests/output/
 tests/fixtures/
+tests/
 
 # Prompt instructions (development notes)
 prompt_instructions/
 
-# Old backups
+# Old backups (126 files!)
 backups/
 backup_*/
 
@@ -241,10 +242,10 @@ publish_temp/
 publish_clean/
 github/
 
-# Archive (but keep archive/ directory structure)
-# Note: If you want to keep archive/ for docs, specify what to ignore inside it
-archive/diagnostics/
-archive/old_code/
+# Archive (340+ files! Only track essential docs)
+archive/
+!archive/README.md
+!archive/IMPORTANT_NOTES.md
 
 # ============================================================================
 # LARGE FILES & GENERATED CONTENT
