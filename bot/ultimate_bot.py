@@ -3806,7 +3806,7 @@ class UltimateETLegacyBot(commands.Bot):
             obj_stats.get("self_kills", 0),
             obj_stats.get("team_kills", 0),
             obj_stats.get("team_gibs", 0),
-            obj_stats.get("headshot_kills", 0),  # ✅ FIX: was player.get("headshots")
+            obj_stats.get("headshot_kills", 0),  # ✅ CRITICAL: Use headshot_KILLS (TAB field 14), NOT player["headshots"] (weapon hits sum)!
             time_seconds,
             time_minutes,
             time_dead_mins,
