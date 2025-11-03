@@ -40,16 +40,23 @@ class LastSessionCog(commands.Cog):
     # ═══════════════════════════════════════════════════════
 
     async def _get_latest_session_date(self, db) -> Optional[str]:
-        """Get the most recent session date from database that has players"""
+        """
+        Get the most recent gaming session date from database.
+        
+        Returns the most recent date that has session data.
+        Note: For midnight-spanning sessions, we now use map_id to properly
+        group R1+R2, so we can just get the latest date directly.
+        """
         async with db.execute(
             """
-            SELECT DISTINCT SUBSTR(s.session_date, 1, 10) as date
+            SELECT SUBSTR(s.session_date, 1, 10) as date
             FROM sessions s
             WHERE EXISTS (
                 SELECT 1 FROM player_comprehensive_stats p
-                WHERE SUBSTR(p.session_date, 1, 10) = SUBSTR(s.session_date, 1, 10)
+                WHERE p.session_id = s.id
             )
-            ORDER BY date DESC
+            AND SUBSTR(s.session_date, 1, 4) = '2025'
+            ORDER BY s.session_date DESC
             LIMIT 1
             """
         ) as cursor:
@@ -58,26 +65,70 @@ class LastSessionCog(commands.Cog):
 
     async def _fetch_session_data(self, db, latest_date: str) -> Tuple[List, List, str, int]:
         """
-        Fetch all session data for a given date
+        Fetch all session data for a gaming session starting on latest_date.
+        
+        Includes sessions from the next calendar day if they're part of the
+        same gaming session (no more than 30min gap from last session).
         
         Returns:
             (sessions, session_ids, session_ids_str, player_count)
         """
-        # Get all session IDs for this date (chronologically)
+        from datetime import datetime, timedelta
+        
+        # Get all session IDs for the primary date
         async with db.execute(
             """
-            SELECT id, map_name, round_number, actual_time
+            SELECT id, map_name, round_number, actual_time, session_date
             FROM sessions
             WHERE SUBSTR(session_date, 1, 10) = ?
             ORDER BY id ASC
             """,
             (latest_date,),
         ) as cursor:
-            sessions = await cursor.fetchall()
+            primary_sessions = await cursor.fetchall()
 
-        if not sessions:
+        if not primary_sessions:
             return None, None, None, 0
 
+        # Check for sessions after midnight (next day)
+        last_session_id = primary_sessions[-1][0]
+        last_session_date_full = primary_sessions[-1][4]
+        
+        # Calculate next day date string
+        last_dt = datetime.strptime(last_session_date_full, '%Y-%m-%d-%H%M%S')
+        next_day = (last_dt + timedelta(days=1)).strftime('%Y-%m-%d')
+        
+        # Get sessions from next day that might be part of same gaming session
+        async with db.execute(
+            """
+            SELECT id, map_name, round_number, actual_time, session_date
+            FROM sessions
+            WHERE SUBSTR(session_date, 1, 10) = ?
+                AND id > ?
+            ORDER BY id ASC
+            LIMIT 10
+            """,
+            (next_day, last_session_id),
+        ) as cursor:
+            next_day_sessions = await cursor.fetchall()
+        
+        # Include next-day sessions if they're within 30min of last session
+        continuation_sessions = []
+        if next_day_sessions:
+            for sess in next_day_sessions:
+                sess_dt = datetime.strptime(sess[4], '%Y-%m-%d-%H%M%S')
+                gap_minutes = (sess_dt - last_dt).total_seconds() / 60
+                
+                if gap_minutes <= 30:
+                    continuation_sessions.append(sess)
+                    last_dt = sess_dt  # Update for next comparison
+                else:
+                    break  # Gap too large, stop checking
+        
+        # Combine all sessions
+        all_sessions = primary_sessions + continuation_sessions
+        sessions = [(s[0], s[1], s[2], s[3]) for s in all_sessions]
+        
         session_ids = [s[0] for s in sessions]
         session_ids_str = ",".join("?" * len(session_ids))
 
@@ -100,12 +151,14 @@ class LastSessionCog(commands.Cog):
             Dict with team names as keys, containing 'guids' list
         """
         try:
+            import json
+            
             async with db.execute(
                 """
-                SELECT team_name, player_guid
+                SELECT team_name, player_guids, player_names
                 FROM session_teams
-                WHERE session_date = ?
-                ORDER BY team_name, player_guid
+                WHERE session_start_date = ? AND map_name = 'ALL'
+                ORDER BY team_name
                 """,
                 (session_date,),
             ) as cursor:
@@ -115,10 +168,12 @@ class LastSessionCog(commands.Cog):
                 return None
 
             teams = {}
-            for team_name, player_guid in rows:
+            for team_name, player_guids_json, player_names_json in rows:
                 if team_name not in teams:
-                    teams[team_name] = {"guids": []}
-                teams[team_name]["guids"].append(player_guid)
+                    teams[team_name] = {
+                        "guids": json.loads(player_guids_json) if player_guids_json else [],
+                        "names": json.loads(player_names_json) if player_names_json else []
+                    }
 
             return teams if teams else None
 
@@ -437,7 +492,7 @@ class LastSessionCog(commands.Cog):
         await ctx.send(embed=embed)
 
     async def _show_top_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int, total_maps: int):
-        """Show top 10 players quick view"""
+        """Show all players ranked by kills"""
         query = f"""
             SELECT p.player_name,
                 SUM(p.kills) as kills,
@@ -455,35 +510,49 @@ class LastSessionCog(commands.Cog):
             WHERE p.session_id IN ({session_ids_str})
             GROUP BY p.player_name
             ORDER BY kills DESC
-            LIMIT 10
         """
         async with db.execute(query, session_ids) as cursor:
             top_players = await cursor.fetchall()
 
         embed = discord.Embed(
-            title=f"🏆 Top 10 Players - {latest_date}",
-            description=f"Best performers from {total_maps} maps • {player_count} total players",
+            title=f"🏆 All Players - {latest_date}",
+            description=f"All {player_count} players from {total_maps} maps",
             color=0xFEE75C,
             timestamp=datetime.now(),
         )
 
-        medals = ["🥇", "🥈", "🥉", "4.", "5.", "6.", "7.", "8.", "9.", "10."]
-        for i, player in enumerate(top_players):
+        medals = ["🥇", "🥈", "🥉"]
+        
+        # Build player list in batches to avoid Discord field limits
+        field_text = ""
+        for i, player in enumerate(top_players, 1):
             name, kills, deaths, dpm, damage, hsk, gibs, seconds = player
             kd = kills / deaths if deaths > 0 else kills
             hours = int((seconds or 0) // 3600)
             minutes = int(((seconds or 0) % 3600) // 60)
             time_display = f"{hours}h{minutes}m" if hours > 0 else f"{minutes}m"
 
-            player_stats = (
-                f"{medals[i]} **{name}**\n"
+            # Medal for top 3, number for rest
+            prefix = medals[i-1] if i <= 3 else f"{i}."
+            
+            player_line = (
+                f"{prefix} **{name}**\n"
                 f"`{kills}K/{deaths}D ({kd:.2f})` • `{dpm:.0f} DPM` • `{damage:,} DMG`\n"
                 f"`{hsk} HSK` • `{gibs} Gibs` • ⏱️ `{time_display}`\n"
             )
+            
+            # Check if adding this player would exceed field limit (1024)
+            if len(field_text) + len(player_line) > 1000:
+                embed.add_field(name="\u200b", value=field_text, inline=False)
+                field_text = player_line
+            else:
+                field_text += player_line
+        
+        # Add remaining players
+        if field_text:
+            embed.add_field(name="\u200b", value=field_text, inline=False)
 
-            embed.add_field(name="\u200b", value=player_stats, inline=False)
-
-        embed.set_footer(text="💡 Use !last_session for full session or !last_session help for more views")
+        embed.set_footer(text="💡 Use !last_session for full details")
         await ctx.send(embed=embed)
 
     async def _show_maps_view(self, ctx, db, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
@@ -890,11 +959,11 @@ class LastSessionCog(commands.Cog):
         async with db.execute(query, session_ids + [limit]) as cursor:
             return await cursor.fetchall()
 
-    async def _calculate_team_scores(self, latest_date: str) -> Tuple[str, str, int, int]:
+    async def _calculate_team_scores(self, latest_date: str) -> Tuple[str, str, int, int, Optional[Dict]]:
         """
         Calculate Stopwatch team scores using StopwatchScoring
         
-        Returns: (team_1_name, team_2_name, team_1_score, team_2_score)
+        Returns: (team_1_name, team_2_name, team_1_score, team_2_score, scoring_result)
         """
         scorer = StopwatchScoring(self.bot.db_path)
         scoring_result = scorer.calculate_session_scores(latest_date)
@@ -910,9 +979,9 @@ class LastSessionCog(commands.Cog):
                 team_2_name = team_names[1]
                 team_1_score = scoring_result[team_1_name]
                 team_2_score = scoring_result[team_2_name]
-                return team_1_name, team_2_name, team_1_score, team_2_score
+                return team_1_name, team_2_name, team_1_score, team_2_score, scoring_result
 
-        return "Team 1", "Team 2", 0, 0
+        return "Team 1", "Team 2", 0, 0, None
 
     async def _build_team_mappings(self, db, latest_date: str, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict]):
         """
@@ -1146,7 +1215,8 @@ class LastSessionCog(commands.Cog):
         team_2_name: str,
         team_1_score: int,
         team_2_score: int,
-        hardcoded_teams: bool
+        hardcoded_teams: bool,
+        scoring_result: Optional[Dict] = None
     ) -> discord.Embed:
         """Build main session overview embed with all players and match score."""
         # Build description with match score
@@ -1156,6 +1226,24 @@ class LastSessionCog(commands.Cog):
                 desc += f"\n\n🤝 **Match Result: {team_1_score} - {team_2_score} (PERFECT TIE)**"
             else:
                 desc += f"\n\n🏆 **Match Result: {team_1_name} {team_1_score} - {team_2_score} {team_2_name}**"
+            
+            # Add map-by-map breakdown if available
+            if scoring_result and 'maps' in scoring_result:
+                desc += "\n\n**📊 Map Breakdown:**"
+                for map_result in scoring_result['maps']:
+                    map_name = map_result['map']
+                    t1_pts = map_result['team1_points']
+                    t2_pts = map_result['team2_points']
+                    
+                    # Show winner emoji
+                    if t1_pts > t2_pts:
+                        winner_emoji = "🟢"
+                    elif t2_pts > t1_pts:
+                        winner_emoji = "🔴"
+                    else:
+                        winner_emoji = "🟡"
+                    
+                    desc += f"\n{winner_emoji} `{map_name}`: {t1_pts}-{t2_pts}"
 
         embed = discord.Embed(
             title=f"📊 Session Summary: {latest_date}",
@@ -1495,13 +1583,14 @@ class LastSessionCog(commands.Cog):
                 awards["kill_thief"] = {"player": name, "value": steals}
 
             # Spray & Pray
-            if kills > 0:
+            if kills > 0 and bullets:
                 bpk = bullets / kills
                 if bpk > awards["spray_pray"]["value"]:
                     awards["spray_pray"] = {"player": name, "value": bpk}
 
             # Too Scared to Shoot
-            if kills >= 5 and bullets < awards["trigger_shy"]["value"]:
+            if (kills >= 5 and bullets and
+                    bullets < awards["trigger_shy"]["value"]):
                 awards["trigger_shy"] = {"player": name, "value": bullets}
 
             # Damage Efficiency King
@@ -1624,7 +1713,7 @@ class LastSessionCog(commands.Cog):
             import matplotlib.pyplot as plt
             import io
 
-            # Get top 6 players data
+            # Get all players data (limit to top 10 for readability)
             query = f"""
                 SELECT p.player_name,
                     SUM(p.kills) as kills,
@@ -1641,7 +1730,7 @@ class LastSessionCog(commands.Cog):
                 WHERE p.session_id IN ({session_ids_str})
                 GROUP BY p.player_name
                 ORDER BY kills DESC
-                LIMIT 6
+                LIMIT 10
             """
             async with db.execute(query, session_ids) as cursor:
                 top_players = await cursor.fetchall()
@@ -1770,7 +1859,7 @@ class LastSessionCog(commands.Cog):
             import matplotlib.pyplot as plt
             import io
 
-            # Get efficiency data for top 6 players
+            # Get efficiency data for all players (limit to top 10 for readability)
             query = f"""
                 SELECT p.player_name,
                     SUM(p.damage_given) as dmg_given,
@@ -1787,7 +1876,7 @@ class LastSessionCog(commands.Cog):
                 WHERE p.session_id IN ({session_ids_str})
                 GROUP BY p.player_name
                 ORDER BY dmg_given DESC
-                LIMIT 6
+                LIMIT 10
             """
             async with db.execute(query, session_ids) as cursor:
                 efficiency_players = await cursor.fetchall()
@@ -1991,7 +2080,7 @@ class LastSessionCog(commands.Cog):
 
                 # Phase 3: Get hardcoded teams and team scores
                 hardcoded_teams = await self._get_hardcoded_teams(db, latest_date)
-                team_1_name, team_2_name, team_1_score, team_2_score = await self._calculate_team_scores(latest_date)
+                team_1_name, team_2_name, team_1_score, team_2_score, scoring_result = await self._calculate_team_scores(latest_date)
 
                 # Get team mappings FIRST (needed for proper team stats aggregation)
                 team_1_name_mapped, team_2_name_mapped, team_1_players_list, team_2_players_list, name_to_team = await self._build_team_mappings(
@@ -2072,7 +2161,8 @@ class LastSessionCog(commands.Cog):
                 # Embed 1: Session Overview
                 embed1 = await self._build_session_overview_embed(
                     latest_date, all_players, maps_played, rounds_played, player_count,
-                    team_1_name, team_2_name, team_1_score, team_2_score, hardcoded_teams is not None
+                    team_1_name, team_2_name, team_1_score, team_2_score, hardcoded_teams is not None,
+                    scoring_result
                 )
                 await ctx.send(embed=embed1)
                 await asyncio.sleep(2)
@@ -2159,6 +2249,75 @@ class LastSessionCog(commands.Cog):
         except Exception as e:
             logger.error(f"Error in last_session command: {e}", exc_info=True)
             await ctx.send(f"❌ Error retrieving last session: {e}")
+
+    @commands.command(name="team_history")
+    async def team_history_command(self, ctx, days: int = 30):
+        """
+        Show team history and performance statistics.
+        
+        Usage: !team_history [days]
+        Example: !team_history 60  (shows last 60 days)
+        """
+        try:
+            from bot.core.team_history import TeamHistoryManager
+            
+            manager = TeamHistoryManager(self.bot.db_path)
+            
+            # Get recent lineups
+            recent = manager.get_recent_lineups(days=days, min_sessions=1)
+            
+            if not recent:
+                await ctx.send(f"❌ No team history found in the last {days} days.")
+                return
+            
+            # Build embed
+            embed = discord.Embed(
+                title=f"📊 Team History - Last {days} Days",
+                description=f"Found {len(recent)} unique lineup(s)",
+                color=0x5865F2,
+                timestamp=datetime.now()
+            )
+            
+            # Show top lineups
+            for i, lineup in enumerate(recent[:5], 1):
+                total_games = lineup['total_wins'] + lineup['total_losses'] + lineup['total_ties']
+                win_rate = (lineup['total_wins'] / total_games * 100) if total_games > 0 else 0
+                
+                field_text = (
+                    f"**Sessions:** {lineup['total_sessions']}\n"
+                    f"**Record:** {lineup['total_wins']}W - {lineup['total_losses']}L - {lineup['total_ties']}T\n"
+                    f"**Win Rate:** {win_rate:.1f}%\n"
+                    f"**Players:** {lineup['player_count']}\n"
+                    f"**Active:** {lineup['first_seen']} to {lineup['last_seen']}"
+                )
+                
+                embed.add_field(
+                    name=f"#{i} - Lineup {lineup['id']}",
+                    value=field_text,
+                    inline=False
+                )
+            
+            # Add best performers section
+            best = manager.get_best_lineups(min_sessions=1, limit=3)
+            if best:
+                best_text = ""
+                for lineup in best:
+                    total = lineup['total_wins'] + lineup['total_losses'] + lineup['total_ties']
+                    wr = (lineup['total_wins'] / total * 100) if total > 0 else 0
+                    best_text += f"**Lineup {lineup['id']}:** {wr:.1f}% WR ({lineup['total_wins']}W-{lineup['total_losses']}L-{lineup['total_ties']}T)\n"
+                
+                embed.add_field(
+                    name="🏆 Best Win Rates",
+                    value=best_text.rstrip(),
+                    inline=False
+                )
+            
+            embed.set_footer(text="Use !team_history <days> to adjust time range")
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error in team_history command: {e}", exc_info=True)
+            await ctx.send(f"❌ Error retrieving team history: {e}")
 
 
 async def setup(bot):
