@@ -136,12 +136,7 @@ class EnhancedDatabaseInspector:
 
             for session in sessions:
                 print(
-                    f"  Date: {
-                        session[0]} | Rounds: {
-                        session[1]} | Maps: {
-                        session[2]} | Players: {
-                        session[3]} | MVP: {
-                        session[4]}"
+                    f"  Date: {session[0]} | Rounds: {session[1]} | Maps: {session[2]} | Players: {session[3]} | MVP: {session[4]}"
                 )
 
             # Show individual stat columns in action
@@ -174,22 +169,8 @@ class EnhancedDatabaseInspector:
                 spree, assists, m3 = stat[12:15]
 
                 print(
-                    f"  {name} {
-                        k:2d} {
-                        d:2d} {
-                        hs:2d} {
-                        kd:4.1f} {
-                        acc:4.1f} {
-                            dmg:4d} {
-                                dpm:5.1f} "
-                    f"{
-                        mp40:3d}  {
-                        thomp:3d}   {
-                        fg42:3d}  {
-                        sniper:3d}   {
-                        spree:2d}   {
-                        assists:2d}  {
-                        m3:1d}"
+                    f"  {name} {k:2d} {d:2d} {hs:2d} {kd:4.1f} {acc:4.1f} {dmg:4d} {dpm:5.1f} "
+                    f"{mp40:3d}  {thomp:3d}   {fg42:3d}  {sniper:3d}   {spree:2d}   {assists:2d}  {m3:1d}"
                 )
 
             # Show weapon-specific stats
@@ -243,18 +224,8 @@ class EnhancedDatabaseInspector:
             for ss in session_stats:
                 name = ss[0][:12].ljust(12)
                 print(
-                    f"  {name}  {
-                        ss[1]:2d}   {
-                        ss[2]:3d}   {
-                        ss[3]:3d}   {
-                        ss[4]:3d}   "
-                    f"{
-                        ss[5]:4.1f}   {
-                            ss[6]:5.1f}%  {
-                                ss[7]:5.1f}   {
-                                    ss[8]:2d}   {
-                                        ss[9]:2d}   {
-                                            ss[10]:5.1f}"
+                    f"  {name}  {ss[1]:2d}   {ss[2]:3d}   {ss[3]:3d}   {ss[4]:3d}   "
+                    f"{ss[5]:4.1f}   {ss[6]:5.1f}%  {ss[7]:5.1f}   {ss[8]:2d}   {ss[9]:2d}   {ss[10]:5.1f}"
                 )
 
     async def demonstrate_flexible_queries(self):
