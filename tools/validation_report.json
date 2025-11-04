@@ -1,0 +1,1975 @@
+{
+  "validation_date": "2025-11-04",
+  "rounds_processed": 15,
+  "perfect_matches": 66,
+  "mismatches_count": 40,
+  "mismatches": [
+    {
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "player_name": "ripaZha sNozji.",
+      "player_guid": "58B93231",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "player_name": "ripazha dAFF",
+      "player_guid": "2237B50F",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "player_name": "slomix.olz",
+      "player_guid": "5D989160",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 600,
+          "db_value": 258,
+          "diff": 342
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "31.62%",
+          "db_value": "40.13%",
+          "diff": 8.513931888544896
+        },
+        {
+          "field": "kills",
+          "raw_value": 8,
+          "db_value": 7,
+          "diff": 1
+        },
+        {
+          "field": "deaths",
+          "raw_value": 16,
+          "db_value": 9,
+          "diff": 7
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 1691,
+          "db_value": 1344,
+          "diff": 347
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 3665,
+          "db_value": 1614,
+          "diff": 2051
+        },
+        {
+          "field": "headshots",
+          "raw_value": 8,
+          "db_value": 9,
+          "diff": 1
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 127,
+          "db_value": 12,
+          "diff": 115
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 87,
+          "db_value": 18,
+          "diff": 69
+        },
+        {
+          "field": "gibs",
+          "raw_value": 3,
+          "db_value": 1,
+          "diff": 2
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 3,
+          "db_value": 2,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 272,
+          "db_value": 152,
+          "diff": 120
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 0,
+          "db_value": 2,
+          "diff": 2
+        }
+      ]
+    },
+    {
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "player_name": "ripaZha eLx",
+      "player_guid": "94F16E69",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "player_name": "slomix.Imbecil",
+      "player_guid": "C74FB315",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "player_name": "ripazha antii'",
+      "player_guid": "430E79FE",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "player_name": "slomix.endekk",
+      "player_guid": "7B84BE88",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 600,
+          "db_value": 258,
+          "diff": 342
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "36.53%",
+          "db_value": "39.30%",
+          "diff": 2.7738022217678804
+        },
+        {
+          "field": "deaths",
+          "raw_value": 18,
+          "db_value": 5,
+          "diff": 13
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 1751,
+          "db_value": 1809,
+          "diff": 58
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 2549,
+          "db_value": 1573,
+          "diff": 976
+        },
+        {
+          "field": "headshots",
+          "raw_value": 14,
+          "db_value": 16,
+          "diff": 2
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 89,
+          "db_value": 54,
+          "diff": 35
+        },
+        {
+          "field": "gibs",
+          "raw_value": 6,
+          "db_value": 2,
+          "diff": 4
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 4,
+          "db_value": 3,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 219,
+          "db_value": 201,
+          "diff": 18
+        },
+        {
+          "field": "xp",
+          "raw_value": 0,
+          "db_value": 12,
+          "diff": 12
+        }
+      ]
+    },
+    {
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "player_name": "ripaZha zubl1k",
+      "player_guid": "7869361E",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "player_name": "slomix.SuperBoyy",
+      "player_guid": "EDBB5DA9",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 600,
+          "db_value": 257,
+          "diff": 343
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "37.40%",
+          "db_value": "36.02%",
+          "diff": 1.3735292632429434
+        },
+        {
+          "field": "deaths",
+          "raw_value": 20,
+          "db_value": 19,
+          "diff": 1
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 2059,
+          "db_value": 2287,
+          "diff": 228
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 3231,
+          "db_value": 2764,
+          "diff": 467
+        },
+        {
+          "field": "headshots",
+          "raw_value": 7,
+          "db_value": 15,
+          "diff": 8
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 50,
+          "db_value": 18,
+          "diff": 32
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 0,
+          "db_value": 82,
+          "diff": 82
+        },
+        {
+          "field": "gibs",
+          "raw_value": 2,
+          "db_value": 4,
+          "diff": 2
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 0,
+          "db_value": 4,
+          "diff": 4
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 246,
+          "db_value": 322,
+          "diff": 76
+        },
+        {
+          "field": "xp",
+          "raw_value": 0,
+          "db_value": 50,
+          "diff": 50
+        }
+      ]
+    },
+    {
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "player_name": "slomix.carniee",
+      "player_guid": "0A26D447",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 600,
+          "db_value": 258,
+          "diff": 342
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "34.61%",
+          "db_value": "36.69%",
+          "diff": 2.079171848892578
+        },
+        {
+          "field": "kills",
+          "raw_value": 20,
+          "db_value": 9,
+          "diff": 11
+        },
+        {
+          "field": "deaths",
+          "raw_value": 16,
+          "db_value": 5,
+          "diff": 11
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 3350,
+          "db_value": 1288,
+          "diff": 2062
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 3019,
+          "db_value": 983,
+          "diff": 2036
+        },
+        {
+          "field": "headshots",
+          "raw_value": 32,
+          "db_value": 12,
+          "diff": 20
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 0,
+          "db_value": 54,
+          "diff": 54
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 38,
+          "db_value": 0,
+          "diff": 38
+        },
+        {
+          "field": "gibs",
+          "raw_value": 4,
+          "db_value": 3,
+          "diff": 1
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 5,
+          "db_value": 1,
+          "diff": 4
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 471,
+          "db_value": 169,
+          "diff": 302
+        },
+        {
+          "field": "xp",
+          "raw_value": 21,
+          "db_value": 34,
+          "diff": 13
+        }
+      ]
+    },
+    {
+      "round_info": "R2 sw_goldrush_te on 2025-11-01",
+      "player_name": "slomix.endekk",
+      "player_guid": "7B84BE88",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 300,
+          "db_value": 672,
+          "diff": 372
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "32.94%",
+          "db_value": "37.30%",
+          "diff": 4.362898764521489
+        },
+        {
+          "field": "kills",
+          "raw_value": 11,
+          "db_value": 12,
+          "diff": 1
+        },
+        {
+          "field": "deaths",
+          "raw_value": 0,
+          "db_value": 23,
+          "diff": 23
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 1128,
+          "db_value": 2231,
+          "diff": 1103
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 644,
+          "db_value": 3369,
+          "diff": 2725
+        },
+        {
+          "field": "headshots",
+          "raw_value": 10,
+          "db_value": 12,
+          "diff": 2
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 18,
+          "db_value": 36,
+          "diff": 18
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 107,
+          "db_value": 247,
+          "diff": 140
+        },
+        {
+          "field": "gibs",
+          "raw_value": 6,
+          "db_value": 11,
+          "diff": 5
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 0,
+          "db_value": 1,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 170,
+          "db_value": 319,
+          "diff": 149
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 1,
+          "db_value": 3,
+          "diff": 2
+        },
+        {
+          "field": "xp",
+          "raw_value": 0,
+          "db_value": 27,
+          "diff": 27
+        }
+      ]
+    },
+    {
+      "round_info": "R2 sw_goldrush_te on 2025-11-01",
+      "player_name": "slomix.carniee",
+      "player_guid": "0A26D447",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 300,
+          "db_value": 672,
+          "diff": 372
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "35.29%",
+          "db_value": "36.34%",
+          "diff": 1.0484749455337692
+        },
+        {
+          "field": "kills",
+          "raw_value": 10,
+          "db_value": 11,
+          "diff": 1
+        },
+        {
+          "field": "deaths",
+          "raw_value": 3,
+          "db_value": 21,
+          "diff": 18
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 1773,
+          "db_value": 3195,
+          "diff": 1422
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 1405,
+          "db_value": 3470,
+          "diff": 2065
+        },
+        {
+          "field": "headshots",
+          "raw_value": 8,
+          "db_value": 20,
+          "diff": 12
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 18,
+          "db_value": 10,
+          "diff": 8
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 8,
+          "db_value": 133,
+          "diff": 125
+        },
+        {
+          "field": "gibs",
+          "raw_value": 0,
+          "db_value": 5,
+          "diff": 5
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 3,
+          "db_value": 4,
+          "diff": 1
+        },
+        {
+          "field": "team_kills",
+          "raw_value": 0,
+          "db_value": 1,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 272,
+          "db_value": 432,
+          "diff": 160
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 0,
+          "db_value": 2,
+          "diff": 2
+        }
+      ]
+    },
+    {
+      "round_info": "R2 sw_goldrush_te on 2025-11-01",
+      "player_name": "slomix.SuperBoyy",
+      "player_guid": "EDBB5DA9",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 300,
+          "db_value": 672,
+          "diff": 372
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "42.63%",
+          "db_value": "36.90%",
+          "diff": 5.735904647113962
+        },
+        {
+          "field": "kills",
+          "raw_value": 13,
+          "db_value": 17,
+          "diff": 4
+        },
+        {
+          "field": "deaths",
+          "raw_value": 3,
+          "db_value": 20,
+          "diff": 17
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 1579,
+          "db_value": 2626,
+          "diff": 1047
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 942,
+          "db_value": 3652,
+          "diff": 2710
+        },
+        {
+          "field": "headshots",
+          "raw_value": 7,
+          "db_value": 16,
+          "diff": 9
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 115,
+          "db_value": 169,
+          "diff": 54
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 36,
+          "db_value": 54,
+          "diff": 18
+        },
+        {
+          "field": "gibs",
+          "raw_value": 4,
+          "db_value": 8,
+          "diff": 4
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 1,
+          "db_value": 2,
+          "diff": 1
+        },
+        {
+          "field": "team_kills",
+          "raw_value": 2,
+          "db_value": 1,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 190,
+          "db_value": 393,
+          "diff": 203
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 0,
+          "db_value": 4,
+          "diff": 4
+        }
+      ]
+    },
+    {
+      "round_info": "R2 sw_goldrush_te on 2025-11-01",
+      "player_name": "//^?/M.rAzzdog",
+      "player_guid": "4D5B6107",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R2 sw_goldrush_te on 2025-11-01",
+      "player_name": "//^?/M.Demonslayer",
+      "player_guid": "1C8F69CA",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R2 sw_goldrush_te on 2025-11-01",
+      "player_name": "//^?/M.Gekku",
+      "player_guid": "11EDBD24",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R1 sw_goldrush_te on 2025-11-01",
+      "player_name": "slomix.SuperBoyy",
+      "player_guid": "EDBB5DA9",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 588,
+          "db_value": 668,
+          "diff": 80
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "41.72%",
+          "db_value": "40.81%",
+          "diff": 0.9077794109641246
+        },
+        {
+          "field": "kills",
+          "raw_value": 15,
+          "db_value": 24,
+          "diff": 9
+        },
+        {
+          "field": "deaths",
+          "raw_value": 14,
+          "db_value": 16,
+          "diff": 2
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 2491,
+          "db_value": 4001,
+          "diff": 1510
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 2447,
+          "db_value": 3213,
+          "diff": 766
+        },
+        {
+          "field": "headshots",
+          "raw_value": 10,
+          "db_value": 15,
+          "diff": 5
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 54,
+          "db_value": 90,
+          "diff": 36
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 38,
+          "db_value": 0,
+          "diff": 38
+        },
+        {
+          "field": "gibs",
+          "raw_value": 4,
+          "db_value": 8,
+          "diff": 4
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 1,
+          "db_value": 5,
+          "diff": 4
+        },
+        {
+          "field": "team_gibs",
+          "raw_value": 0,
+          "db_value": 1,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 314,
+          "db_value": 468,
+          "diff": 154
+        },
+        {
+          "field": "xp",
+          "raw_value": 83,
+          "db_value": 156,
+          "diff": 73
+        }
+      ]
+    },
+    {
+      "round_info": "R1 sw_goldrush_te on 2025-11-01",
+      "player_name": "//^?/M.Gekku",
+      "player_guid": "11EDBD24",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R1 sw_goldrush_te on 2025-11-01",
+      "player_name": "slomix.endekk",
+      "player_guid": "7B84BE88",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 588,
+          "db_value": 668,
+          "diff": 80
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "30.07%",
+          "db_value": "44.75%",
+          "diff": 14.685518852185524
+        },
+        {
+          "field": "kills",
+          "raw_value": 8,
+          "db_value": 17,
+          "diff": 9
+        },
+        {
+          "field": "deaths",
+          "raw_value": 17,
+          "db_value": 20,
+          "diff": 3
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 1745,
+          "db_value": 2977,
+          "diff": 1232
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 2022,
+          "db_value": 3220,
+          "diff": 1198
+        },
+        {
+          "field": "headshots",
+          "raw_value": 9,
+          "db_value": 16,
+          "diff": 7
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 20,
+          "db_value": 59,
+          "diff": 39
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 36,
+          "db_value": 0,
+          "diff": 36
+        },
+        {
+          "field": "gibs",
+          "raw_value": 3,
+          "db_value": 1,
+          "diff": 2
+        },
+        {
+          "field": "team_kills",
+          "raw_value": 0,
+          "db_value": 1,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 296,
+          "db_value": 324,
+          "diff": 28
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 0,
+          "db_value": 1,
+          "diff": 1
+        },
+        {
+          "field": "xp",
+          "raw_value": 123,
+          "db_value": 90,
+          "diff": 33
+        }
+      ]
+    },
+    {
+      "round_info": "R1 sw_goldrush_te on 2025-11-01",
+      "player_name": "//^?/M.Demonslayer",
+      "player_guid": "1C8F69CA",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R1 sw_goldrush_te on 2025-11-01",
+      "player_name": "//^?/M.rAzzdog",
+      "player_guid": "4D5B6107",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R1 sw_goldrush_te on 2025-11-01",
+      "player_name": "slomix.carniee",
+      "player_guid": "0A26D447",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 588,
+          "db_value": 668,
+          "diff": 80
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "36.13%",
+          "db_value": "31.22%",
+          "diff": 4.907758169330748
+        },
+        {
+          "field": "kills",
+          "raw_value": 24,
+          "db_value": 18,
+          "diff": 6
+        },
+        {
+          "field": "deaths",
+          "raw_value": 15,
+          "db_value": 18,
+          "diff": 3
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 3954,
+          "db_value": 3010,
+          "diff": 944
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 2657,
+          "db_value": 2824,
+          "diff": 167
+        },
+        {
+          "field": "headshots",
+          "raw_value": 30,
+          "db_value": 21,
+          "diff": 9
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 18,
+          "db_value": 180,
+          "diff": 162
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 18,
+          "db_value": 36,
+          "diff": 18
+        },
+        {
+          "field": "gibs",
+          "raw_value": 4,
+          "db_value": 5,
+          "diff": 1
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 3,
+          "db_value": 4,
+          "diff": 1
+        },
+        {
+          "field": "team_kills",
+          "raw_value": 0,
+          "db_value": 2,
+          "diff": 2
+        },
+        {
+          "field": "team_gibs",
+          "raw_value": 1,
+          "db_value": 0,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 548,
+          "db_value": 474,
+          "diff": 74
+        },
+        {
+          "field": "xp",
+          "raw_value": 126,
+          "db_value": 94,
+          "diff": 32
+        }
+      ]
+    },
+    {
+      "round_info": "R2 supply on 2025-11-01",
+      "player_name": "//^?/M.rAzzdog",
+      "player_guid": "4D5B6107",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R2 supply on 2025-11-01",
+      "player_name": "//^?/M.Gekku",
+      "player_guid": "11EDBD24",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R2 supply on 2025-11-01",
+      "player_name": "//^?/M.Demonslayer",
+      "player_guid": "1C8F69CA",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R2 supply on 2025-11-01",
+      "player_name": "slomix.endekk",
+      "player_guid": "7B84BE88",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 636,
+          "db_value": 528,
+          "diff": 108
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "30.54%",
+          "db_value": "42.06%",
+          "diff": 11.521163681221246
+        },
+        {
+          "field": "deaths",
+          "raw_value": 16,
+          "db_value": 14,
+          "diff": 2
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 2087,
+          "db_value": 1734,
+          "diff": 353
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 2751,
+          "db_value": 3028,
+          "diff": 277
+        },
+        {
+          "field": "headshots",
+          "raw_value": 13,
+          "db_value": 6,
+          "diff": 7
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 6,
+          "db_value": 0,
+          "diff": 6
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 36,
+          "db_value": 68,
+          "diff": 32
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 3,
+          "db_value": 6,
+          "diff": 3
+        },
+        {
+          "field": "team_kills",
+          "raw_value": 1,
+          "db_value": 0,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 333,
+          "db_value": 233,
+          "diff": 100
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 0,
+          "db_value": 6,
+          "diff": 6
+        },
+        {
+          "field": "xp",
+          "raw_value": 0,
+          "db_value": 5,
+          "diff": 5
+        }
+      ]
+    },
+    {
+      "round_info": "R2 supply on 2025-11-01",
+      "player_name": "slomix.carniee",
+      "player_guid": "0A26D447",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 636,
+          "db_value": 528,
+          "diff": 108
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "35.40%",
+          "db_value": "31.57%",
+          "diff": 3.8343434343434346
+        },
+        {
+          "field": "kills",
+          "raw_value": 21,
+          "db_value": 10,
+          "diff": 11
+        },
+        {
+          "field": "deaths",
+          "raw_value": 17,
+          "db_value": 20,
+          "diff": 3
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 3570,
+          "db_value": 2468,
+          "diff": 1102
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 3053,
+          "db_value": 2969,
+          "diff": 84
+        },
+        {
+          "field": "headshots",
+          "raw_value": 24,
+          "db_value": 17,
+          "diff": 7
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 94,
+          "db_value": 54,
+          "diff": 40
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 6,
+          "db_value": 0,
+          "diff": 6
+        },
+        {
+          "field": "gibs",
+          "raw_value": 9,
+          "db_value": 3,
+          "diff": 6
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 7,
+          "db_value": 8,
+          "diff": 1
+        },
+        {
+          "field": "team_gibs",
+          "raw_value": 1,
+          "db_value": 0,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 499,
+          "db_value": 396,
+          "diff": 103
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 0,
+          "db_value": 2,
+          "diff": 2
+        }
+      ]
+    },
+    {
+      "round_info": "R2 supply on 2025-11-01",
+      "player_name": "slomix.Imbecil",
+      "player_guid": "C74FB315",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 636,
+          "db_value": 528,
+          "diff": 108
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "28.22%",
+          "db_value": "21.29%",
+          "diff": 6.935718333456521
+        },
+        {
+          "field": "kills",
+          "raw_value": 2,
+          "db_value": 7,
+          "diff": 5
+        },
+        {
+          "field": "deaths",
+          "raw_value": 18,
+          "db_value": 24,
+          "diff": 6
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 1884,
+          "db_value": 1356,
+          "diff": 528
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 2872,
+          "db_value": 2516,
+          "diff": 356
+        },
+        {
+          "field": "headshots",
+          "raw_value": 12,
+          "db_value": 8,
+          "diff": 4
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 18,
+          "db_value": 32,
+          "diff": 14
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 76,
+          "db_value": 36,
+          "diff": 40
+        },
+        {
+          "field": "gibs",
+          "raw_value": 0,
+          "db_value": 5,
+          "diff": 5
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 3,
+          "db_value": 1,
+          "diff": 2
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 326,
+          "db_value": 249,
+          "diff": 77
+        }
+      ]
+    },
+    {
+      "round_info": "R1 supply on 2025-11-01",
+      "player_name": "slomix.endekk",
+      "player_guid": "7B84BE88",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 712,
+          "db_value": 553,
+          "diff": 159
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "41.81%",
+          "db_value": "36.33%",
+          "diff": 5.478164896790361
+        },
+        {
+          "field": "kills",
+          "raw_value": 31,
+          "db_value": 8,
+          "diff": 23
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 4097,
+          "db_value": 1930,
+          "diff": 2167
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 3003,
+          "db_value": 2478,
+          "diff": 525
+        },
+        {
+          "field": "headshots",
+          "raw_value": 32,
+          "db_value": 12,
+          "diff": 20
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 106,
+          "db_value": 89,
+          "diff": 17
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 12,
+          "db_value": 187,
+          "diff": 175
+        },
+        {
+          "field": "gibs",
+          "raw_value": 10,
+          "db_value": 1,
+          "diff": 9
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 4,
+          "db_value": 3,
+          "diff": 1
+        },
+        {
+          "field": "team_gibs",
+          "raw_value": 0,
+          "db_value": 1,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 464,
+          "db_value": 289,
+          "diff": 175
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 4,
+          "db_value": 2,
+          "diff": 2
+        },
+        {
+          "field": "xp",
+          "raw_value": 183,
+          "db_value": 64,
+          "diff": 119
+        }
+      ]
+    },
+    {
+      "round_info": "R1 supply on 2025-11-01",
+      "player_name": "//^?/M.Demonslayer",
+      "player_guid": "1C8F69CA",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R1 supply on 2025-11-01",
+      "player_name": "slomix.carniee",
+      "player_guid": "0A26D447",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 712,
+          "db_value": 553,
+          "diff": 159
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "35.30%",
+          "db_value": "36.08%",
+          "diff": 0.7799149025215328
+        },
+        {
+          "field": "kills",
+          "raw_value": 25,
+          "db_value": 20,
+          "diff": 5
+        },
+        {
+          "field": "deaths",
+          "raw_value": 13,
+          "db_value": 18,
+          "diff": 5
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 3991,
+          "db_value": 3283,
+          "diff": 708
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 2493,
+          "db_value": 2353,
+          "diff": 140
+        },
+        {
+          "field": "headshots",
+          "raw_value": 28,
+          "db_value": 23,
+          "diff": 5
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 58,
+          "db_value": 115,
+          "diff": 57
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 36,
+          "db_value": 111,
+          "diff": 75
+        },
+        {
+          "field": "gibs",
+          "raw_value": 11,
+          "db_value": 3,
+          "diff": 8
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 8,
+          "db_value": 2,
+          "diff": 6
+        },
+        {
+          "field": "team_kills",
+          "raw_value": 0,
+          "db_value": 1,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 541,
+          "db_value": 424,
+          "diff": 117
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 4,
+          "db_value": 1,
+          "diff": 3
+        },
+        {
+          "field": "xp",
+          "raw_value": 158,
+          "db_value": 89,
+          "diff": 69
+        }
+      ]
+    },
+    {
+      "round_info": "R1 supply on 2025-11-01",
+      "player_name": "//^?/M.rAzzdog",
+      "player_guid": "4D5B6107",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R1 supply on 2025-11-01",
+      "player_name": "//^?/M.Gekku",
+      "player_guid": "11EDBD24",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R1 supply on 2025-11-01",
+      "player_name": "slomix.Imbecil",
+      "player_guid": "C74FB315",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 712,
+          "db_value": 553,
+          "diff": 159
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "23.75%",
+          "db_value": "35.68%",
+          "diff": 11.936117536294212
+        },
+        {
+          "field": "kills",
+          "raw_value": 10,
+          "db_value": 9,
+          "diff": 1
+        },
+        {
+          "field": "deaths",
+          "raw_value": 13,
+          "db_value": 16,
+          "diff": 3
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 1748,
+          "db_value": 1549,
+          "diff": 199
+        },
+        {
+          "field": "headshots",
+          "raw_value": 8,
+          "db_value": 9,
+          "diff": 1
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 48,
+          "db_value": 22,
+          "diff": 26
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 164,
+          "db_value": 120,
+          "diff": 44
+        },
+        {
+          "field": "gibs",
+          "raw_value": 6,
+          "db_value": 3,
+          "diff": 3
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 5,
+          "db_value": 0,
+          "diff": 5
+        },
+        {
+          "field": "team_kills",
+          "raw_value": 0,
+          "db_value": 1,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 379,
+          "db_value": 227,
+          "diff": 152
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 2,
+          "db_value": 1,
+          "diff": 1
+        },
+        {
+          "field": "xp",
+          "raw_value": 94,
+          "db_value": 45,
+          "diff": 49
+        }
+      ]
+    },
+    {
+      "round_info": "R1 etl_adlernest on 2025-11-01",
+      "player_name": "//^?/M.Gekku",
+      "player_guid": "11EDBD24",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R1 etl_adlernest on 2025-11-01",
+      "player_name": "slomix.Imbecil",
+      "player_guid": "C74FB315",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 352,
+          "db_value": 600,
+          "diff": 248
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "24.18%",
+          "db_value": "26.92%",
+          "diff": 2.747252747252748
+        },
+        {
+          "field": "deaths",
+          "raw_value": 9,
+          "db_value": 15,
+          "diff": 6
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 950,
+          "db_value": 1174,
+          "diff": 224
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 1631,
+          "db_value": 2409,
+          "diff": 778
+        },
+        {
+          "field": "headshots",
+          "raw_value": 6,
+          "db_value": 4,
+          "diff": 2
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 0,
+          "db_value": 18,
+          "diff": 18
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 27,
+          "db_value": 36,
+          "diff": 9
+        },
+        {
+          "field": "gibs",
+          "raw_value": 5,
+          "db_value": 3,
+          "diff": 2
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 1,
+          "db_value": 0,
+          "diff": 1
+        },
+        {
+          "field": "team_gibs",
+          "raw_value": 0,
+          "db_value": 1,
+          "diff": 1
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 0,
+          "db_value": 1,
+          "diff": 1
+        },
+        {
+          "field": "xp",
+          "raw_value": 71,
+          "db_value": 56,
+          "diff": 15
+        }
+      ]
+    },
+    {
+      "round_info": "R1 etl_adlernest on 2025-11-01",
+      "player_name": "//^?/M.rAzzdog",
+      "player_guid": "4D5B6107",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R1 etl_adlernest on 2025-11-01",
+      "player_name": "//^?/M.Demonslayer",
+      "player_guid": "1C8F69CA",
+      "issues": [
+        {
+          "field": "MISSING",
+          "raw_value": "EXISTS",
+          "db_value": "NOT FOUND",
+          "diff": 0
+        }
+      ]
+    },
+    {
+      "round_info": "R1 etl_adlernest on 2025-11-01",
+      "player_name": "slomix.carniee",
+      "player_guid": "0A26D447",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 352,
+          "db_value": 600,
+          "diff": 248
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "37.20%",
+          "db_value": "35.28%",
+          "diff": 1.9147481194438072
+        },
+        {
+          "field": "deaths",
+          "raw_value": 9,
+          "db_value": 10,
+          "diff": 1
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 2358,
+          "db_value": 3184,
+          "diff": 826
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 1738,
+          "db_value": 2037,
+          "diff": 299
+        },
+        {
+          "field": "headshots",
+          "raw_value": 15,
+          "db_value": 14,
+          "diff": 1
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 0,
+          "db_value": 18,
+          "diff": 18
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 0,
+          "db_value": 18,
+          "diff": 18
+        },
+        {
+          "field": "gibs",
+          "raw_value": 3,
+          "db_value": 4,
+          "diff": 1
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 3,
+          "db_value": 10,
+          "diff": 7
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 328,
+          "db_value": 428,
+          "diff": 100
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 0,
+          "db_value": 4,
+          "diff": 4
+        },
+        {
+          "field": "xp",
+          "raw_value": 62,
+          "db_value": 72,
+          "diff": 10
+        }
+      ]
+    },
+    {
+      "round_info": "R1 etl_adlernest on 2025-11-01",
+      "player_name": "slomix.endekk",
+      "player_guid": "7B84BE88",
+      "issues": [
+        {
+          "field": "time_played_seconds",
+          "raw_value": 352,
+          "db_value": 600,
+          "diff": 248
+        },
+        {
+          "field": "accuracy",
+          "raw_value": "43.96%",
+          "db_value": "45.50%",
+          "diff": 1.5439560439560438
+        },
+        {
+          "field": "kills",
+          "raw_value": 8,
+          "db_value": 19,
+          "diff": 11
+        },
+        {
+          "field": "deaths",
+          "raw_value": 7,
+          "db_value": 6,
+          "diff": 1
+        },
+        {
+          "field": "damage_given",
+          "raw_value": 1482,
+          "db_value": 2147,
+          "diff": 665
+        },
+        {
+          "field": "damage_received",
+          "raw_value": 1200,
+          "db_value": 1322,
+          "diff": 122
+        },
+        {
+          "field": "headshots",
+          "raw_value": 3,
+          "db_value": 21,
+          "diff": 18
+        },
+        {
+          "field": "team_damage_given",
+          "raw_value": 27,
+          "db_value": 44,
+          "diff": 17
+        },
+        {
+          "field": "team_damage_received",
+          "raw_value": 0,
+          "db_value": 36,
+          "diff": 36
+        },
+        {
+          "field": "gibs",
+          "raw_value": 3,
+          "db_value": 2,
+          "diff": 1
+        },
+        {
+          "field": "self_kills",
+          "raw_value": 1,
+          "db_value": 3,
+          "diff": 2
+        },
+        {
+          "field": "team_kills",
+          "raw_value": 1,
+          "db_value": 0,
+          "diff": 1
+        },
+        {
+          "field": "bullets_fired",
+          "raw_value": 182,
+          "db_value": 200,
+          "diff": 18
+        },
+        {
+          "field": "revives_given",
+          "raw_value": 1,
+          "db_value": 5,
+          "diff": 4
+        },
+        {
+          "field": "xp",
+          "raw_value": 39,
+          "db_value": 158,
+          "diff": 119
+        }
+      ]
+    }
+  ],
+  "field_summary": {
+    "MISSING": 21,
+    "time_played_seconds": 19,
+    "accuracy": 19,
+    "kills": 14,
+    "deaths": 18,
+    "damage_given": 19,
+    "damage_received": 18,
+    "headshots": 19,
+    "team_damage_given": 18,
+    "team_damage_received": 19,
+    "gibs": 18,
+    "self_kills": 18,
+    "bullets_fired": 18,
+    "revives_given": 13,
+    "xp": 14,
+    "team_kills": 8,
+    "team_gibs": 5
+  }
+}

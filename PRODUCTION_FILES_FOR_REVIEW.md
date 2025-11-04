@@ -16,7 +16,7 @@ bot/ultimate_bot.py
 - Database operations (insert_player_stats, insert_weapon_stats)
 - All cogs and event handlers
 - Stats commands (!stats, !top_dpm, !leaderboard)
-- Session management
+- Round management
 - Alias tracking
 - **CRITICAL** - This is the production bot
 
@@ -80,11 +80,11 @@ bot/cogs/leaderboard_cog.py
 - 11 different leaderboards
 - Minimum playtime filtering
 
-### 8. **Last Session**
+### 8. **Last Round**
 ```
 bot/cogs/last_session_cog.py
 ```
-- !last_session command
+- !last_round command
 - Shows recent player performance
 - Team-specific stats
 

@@ -1,5 +1,5 @@
 """
-Last Session Cog - Comprehensive session analytics with multiple view modes
+Last Round Cog - Comprehensive session analytics with multiple view modes
 
 This cog handles the massive !last_session command with proper refactoring:
 - Multiple view modes: default, graphs, full, top, combat, obj, weapons, support, sprees
@@ -48,150 +48,71 @@ class LastSessionCog(commands.Cog):
         """
         async with db.execute(
             """
-            SELECT SUBSTR(s.session_date, 1, 10) as date
-            FROM sessions s
+            SELECT SUBSTR(s.round_date, 1, 10) as date
+            FROM rounds s
             WHERE EXISTS (
                 SELECT 1 FROM player_comprehensive_stats p
-                WHERE p.session_id = s.id
+                WHERE p.round_id = s.id
             )
-            AND SUBSTR(s.session_date, 1, 4) = '2025'
-            ORDER BY s.session_date DESC, s.session_time DESC
+            AND SUBSTR(s.round_date, 1, 4) = '2025'
+            ORDER BY s.round_date DESC, s.round_time DESC
             LIMIT 1
             """
         ) as cursor:
             result = await cursor.fetchone()
             return result[0] if result else None
 
-    async def _fetch_session_data(self, db, latest_date: str) -> Tuple[List, List, str, int]:
+    async def _fetch_session_data(self, db, latest_date: str) -> Tuple[Optional[List], Optional[List], Optional[str], int]:
         """
         Fetch all session data for the LAST gaming session.
         
-        Works BACKWARDS from the absolute last session in the database,
-        grouping sessions that are within 30 minutes of each other.
-        This properly handles multiple gaming sessions on the same day.
+        Now uses gaming_session_id column (60-minute gap threshold).
+        Much simpler than the old 30-minute manual gap logic!
         
         Returns:
-            (sessions, session_ids, session_ids_str, player_count)
+            (sessions, session_ids, session_ids_str, player_count) or (None, None, None, 0)
         """
-        from datetime import datetime, timedelta
-        
-        # Get the absolute last session (by date AND time)
+        # Get the most recent gaming_session_id
         async with db.execute(
             """
-            SELECT id, map_name, round_number, actual_time, session_date, session_time
-            FROM sessions
-            ORDER BY session_date DESC, session_time DESC
+            SELECT gaming_session_id
+            FROM rounds
+            WHERE gaming_session_id IS NOT NULL
+            ORDER BY round_date DESC, round_time DESC
             LIMIT 1
             """,
         ) as cursor:
-            last_session = await cursor.fetchone()
+            result = await cursor.fetchone()
         
-        if not last_session:
+        if not result:
             return None, None, None, 0
         
-        last_session_id = last_session[0]
-        last_session_date = last_session[4]
-        last_session_time = last_session[5]
-        last_dt = datetime.strptime(f"{last_session_date}-{last_session_time}", '%Y-%m-%d-%H%M%S')
+        latest_gaming_session_id = result[0]
         
-        # Now work BACKWARDS, collecting sessions within 30min gaps
-        gaming_session_ids = [last_session_id]
-        current_dt = last_dt
-        
-        # Get recent sessions before the last one (limit search to same day + previous day)
-        search_start_date = (last_dt - timedelta(days=1)).strftime('%Y-%m-%d')
-        
+        # Get all rounds (sessions) for this gaming session
         async with db.execute(
             """
-            SELECT id, map_name, round_number, actual_time, session_date, session_time
-            FROM sessions
-            WHERE session_date >= ?
-              AND id < ?
-            ORDER BY session_date DESC, session_time DESC
+            SELECT id, map_name, round_number, actual_time
+            FROM rounds
+            WHERE gaming_session_id = ?
+            ORDER BY round_date, round_time
             """,
-            (search_start_date, last_session_id),
+            (latest_gaming_session_id,),
         ) as cursor:
-            previous_sessions = await cursor.fetchall()
+            sessions = await cursor.fetchall()
         
-        # Work backwards through sessions, stop at first gap > 30 minutes
-        for sess in previous_sessions:
-            sess_date = sess[4]
-            sess_time = sess[5]
-            sess_dt = datetime.strptime(f"{sess_date}-{sess_time}", '%Y-%m-%d-%H%M%S')
-            
-            gap_minutes = (current_dt - sess_dt).total_seconds() / 60
-            
-            if gap_minutes <= 30:
-                gaming_session_ids.insert(0, sess[0])  # Insert at beginning (chronological order)
-                current_dt = sess_dt  # Update for next comparison
-            else:
-                break  # Gap too large - different gaming session
-        
-        # Now fetch full session data for the gaming session
-        session_ids_str = ','.join(str(sid) for sid in gaming_session_ids)
-        
-        async with db.execute(
-            f"""
-            SELECT id, map_name, round_number, actual_time, session_date, session_time
-            FROM sessions
-            WHERE id IN ({session_ids_str})
-            ORDER BY id ASC
-            """
-        ) as cursor:
-            primary_sessions = await cursor.fetchall()
-
-        if not primary_sessions:
+        if not sessions:
             return None, None, None, 0
-
-        # Check for sessions after midnight (next day)
-        last_session_id = primary_sessions[-1][0]
-        last_session_date = primary_sessions[-1][4]  # YYYY-MM-DD
-        last_session_time = primary_sessions[-1][5]  # HHMMSS
         
-        # Calculate next day date string
-        last_session_date_full = f"{last_session_date}-{last_session_time}"
-        last_dt = datetime.strptime(last_session_date_full, '%Y-%m-%d-%H%M%S')
-        next_day = (last_dt + timedelta(days=1)).strftime('%Y-%m-%d')
-        
-        # Get sessions from next day that might be part of same gaming session
-        async with db.execute(
-            """
-            SELECT id, map_name, round_number, actual_time, session_date, session_time
-            FROM sessions
-            WHERE SUBSTR(session_date, 1, 10) = ?
-                AND id > ?
-            ORDER BY id ASC
-            LIMIT 10
-            """,
-            (next_day, last_session_id),
-        ) as cursor:
-            next_day_sessions = await cursor.fetchall()
-        
-        # Include next-day sessions if they're within 30min of last session
-        continuation_sessions = []
-        if next_day_sessions:
-            for sess in next_day_sessions:
-                sess_dt = datetime.strptime(sess[4], '%Y-%m-%d-%H%M%S')
-                gap_minutes = (sess_dt - last_dt).total_seconds() / 60
-                
-                if gap_minutes <= 30:
-                    continuation_sessions.append(sess)
-                    last_dt = sess_dt  # Update for next comparison
-                else:
-                    break  # Gap too large, stop checking
-        
-        # Combine all sessions
-        all_sessions = primary_sessions + continuation_sessions
-        sessions = [(s[0], s[1], s[2], s[3]) for s in all_sessions]
-        
+        # Extract session IDs
         session_ids = [s[0] for s in sessions]
         session_ids_str = ",".join("?" * len(session_ids))
 
-        # Get unique player count
+        # Get unique player count for this gaming session
         query = f"""
             SELECT COUNT(DISTINCT player_guid)
             FROM player_comprehensive_stats
-            WHERE session_id IN ({session_ids_str})
+            WHERE round_id IN ({session_ids_str})
         """
         async with db.execute(query, session_ids) as cursor:
             player_count = (await cursor.fetchone())[0]
@@ -217,8 +138,8 @@ class LastSessionCog(commands.Cog):
             placeholders = ','.join('?' * len(session_ids))
             async with db.execute(
                 f"""
-                SELECT DISTINCT SUBSTR(session_date, 1, 10) as date
-                FROM sessions
+                SELECT DISTINCT SUBSTR(round_date, 1, 10) as date
+                FROM rounds
                 WHERE id IN ({placeholders})
                 """,
                 session_ids
@@ -299,7 +220,7 @@ class LastSessionCog(commands.Cog):
                 denied_playtime, most_useful_kills, useless_kills, gibs,
                 killing_spree_best, death_spree_worst
             FROM player_comprehensive_stats
-            WHERE session_id IN ({session_ids_str})
+            WHERE round_id IN ({session_ids_str})
         """
         async with db.execute(query, session_ids) as cursor:
             awards_rows = await cursor.fetchall()
@@ -312,7 +233,7 @@ class LastSessionCog(commands.Cog):
         rev_query = f"""
             SELECT clean_name, SUM(revives_given) as revives_given
             FROM player_comprehensive_stats
-            WHERE session_id IN ({session_ids_str})
+            WHERE round_id IN ({session_ids_str})
             GROUP BY clean_name
         """
         async with db.execute(rev_query, session_ids) as cursor:
@@ -386,7 +307,7 @@ class LastSessionCog(commands.Cog):
 
             embed.add_field(name=f"{i}. {player}", value="\n".join(txt_lines), inline=False)
 
-        embed.set_footer(text=f"Session: {latest_date} • Use !last_session for full report")
+        embed.set_footer(text=f"Round: {latest_date} • Use !last_round for full report")
         await ctx.send(embed=embed)
 
     async def _show_combat_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
@@ -405,7 +326,7 @@ class LastSessionCog(commands.Cog):
                     ELSE 0
                 END as weighted_dpm
             FROM player_comprehensive_stats p
-            WHERE p.session_id IN ({session_ids_str})
+            WHERE p.round_id IN ({session_ids_str})
             GROUP BY p.player_name
             ORDER BY kills DESC
         """
@@ -440,7 +361,7 @@ class LastSessionCog(commands.Cog):
 
             embed.add_field(name="\u200b", value=player_text, inline=False)
 
-        embed.set_footer(text=f"Session: {latest_date} • Use !last_session for full report")
+        embed.set_footer(text=f"Round: {latest_date} • Use !last_round for full report")
         await ctx.send(embed=embed)
 
     async def _show_weapons_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
@@ -453,9 +374,9 @@ class LastSessionCog(commands.Cog):
                 SUM(w.headshots) as headshots
             FROM weapon_comprehensive_stats w
             JOIN player_comprehensive_stats p
-                ON w.session_id = p.session_id
+                ON w.round_id = p.round_id
                 AND w.player_guid = p.player_guid
-            WHERE w.session_id IN ({session_ids_str})
+            WHERE w.round_id IN ({session_ids_str})
             GROUP BY p.player_name, w.weapon_name
             HAVING weapon_kills > 0
             ORDER BY p.player_name, weapon_kills DESC
@@ -490,7 +411,7 @@ class LastSessionCog(commands.Cog):
                 text += f"**{weapon}**: `{kills}K` • `{acc:.1f}% ACC` • `{hs} HS ({hs_pct:.1f}%)`\n"
             embed.add_field(name=f"⚔️ {player}", value=text.rstrip(), inline=False)
 
-        embed.set_footer(text=f"Session: {latest_date} • Use !last_session for full report")
+        embed.set_footer(text=f"Round: {latest_date} • Use !last_round for full report")
         await ctx.send(embed=embed)
 
     async def _show_support_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
@@ -502,7 +423,7 @@ class LastSessionCog(commands.Cog):
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths
             FROM player_comprehensive_stats p
-            WHERE p.session_id IN ({session_ids_str})
+            WHERE p.round_id IN ({session_ids_str})
             GROUP BY p.player_name
             ORDER BY revives_given DESC
         """
@@ -525,7 +446,7 @@ class LastSessionCog(commands.Cog):
             txt += f"Kills: `{kills or 0}` • Deaths: `{deaths or 0}`"
             embed.add_field(name=f"{name}", value=txt, inline=False)
 
-        embed.set_footer(text=f"Session: {latest_date}")
+        embed.set_footer(text=f"Round: {latest_date}")
         await ctx.send(embed=embed)
 
     async def _show_sprees_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
@@ -540,7 +461,7 @@ class LastSessionCog(commands.Cog):
                 SUM(p.mega_kills) as megas,
                 SUM(p.kills) as total_kills
             FROM player_comprehensive_stats p
-            WHERE p.session_id IN ({session_ids_str})
+            WHERE p.round_id IN ({session_ids_str})
             GROUP BY p.player_name
             ORDER BY best_spree DESC, megas DESC
         """
@@ -565,7 +486,7 @@ class LastSessionCog(commands.Cog):
             txt += f"Doubles/Triples/Quads: `{doubles}/{triples}/{quads}` • Kills: `{total_kills}`"
             embed.add_field(name=f"{i}. {name}", value=txt, inline=False)
 
-        embed.set_footer(text=f"Session: {latest_date}")
+        embed.set_footer(text=f"Round: {latest_date}")
         await ctx.send(embed=embed)
 
     async def _show_top_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int, total_maps: int):
@@ -584,7 +505,7 @@ class LastSessionCog(commands.Cog):
                 SUM(p.gibs) as gibs,
                 SUM(p.time_played_seconds) as total_seconds
             FROM player_comprehensive_stats p
-            WHERE p.session_id IN ({session_ids_str})
+            WHERE p.round_id IN ({session_ids_str})
             GROUP BY p.player_name
             ORDER BY kills DESC
         """
@@ -629,7 +550,7 @@ class LastSessionCog(commands.Cog):
         if field_text:
             embed.add_field(name="\u200b", value=field_text, inline=False)
 
-        embed.set_footer(text="💡 Use !last_session for full details")
+        embed.set_footer(text="💡 Use !last_round for full details")
         await ctx.send(embed=embed)
 
     async def _show_maps_view(self, ctx, db, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
@@ -637,10 +558,10 @@ class LastSessionCog(commands.Cog):
         
         # Group sessions by map
         map_sessions = {}
-        for session_id, map_name, round_num, actual_time in sessions:
+        for round_id, map_name, round_num, actual_time in sessions:
             if map_name not in map_sessions:
                 map_sessions[map_name] = []
-            map_sessions[map_name].append(session_id)
+            map_sessions[map_name].append(round_id)
         
         # For each map, get aggregated stats (both rounds combined)
         for map_name, map_session_ids in map_sessions.items():
@@ -667,12 +588,12 @@ class LastSessionCog(commands.Cog):
                     COALESCE(SUM(w.shots), 0) as total_shots
                 FROM player_comprehensive_stats p
                 LEFT JOIN (
-                    SELECT session_id, player_guid, SUM(hits) as hits, SUM(shots) as shots
+                    SELECT round_id, player_guid, SUM(hits) as hits, SUM(shots) as shots
                     FROM weapon_comprehensive_stats
                     WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
-                    GROUP BY session_id, player_guid
-                ) w ON p.session_id = w.session_id AND p.player_guid = w.player_guid
-                WHERE p.session_id IN ({map_ids_str})
+                    GROUP BY round_id, player_guid
+                ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
+                WHERE p.round_id IN ({map_ids_str})
                 GROUP BY p.player_name
                 ORDER BY kills DESC
             """
@@ -743,7 +664,7 @@ class LastSessionCog(commands.Cog):
                 
                 embed.add_field(name=field_name, value=field_text.rstrip(), inline=False)
             
-            embed.set_footer(text=f"Session: {latest_date} • Use !last_session maps full for round-by-round")
+            embed.set_footer(text=f"Round: {latest_date} • Use !last_session maps full for round-by-round")
             await ctx.send(embed=embed)
             await asyncio.sleep(3)  # 3 second delay between maps
 
@@ -752,15 +673,15 @@ class LastSessionCog(commands.Cog):
         
         # Group sessions by map and round
         map_rounds = {}
-        for session_id, map_name, round_num, actual_time in sessions:
+        for round_id, map_name, round_num, actual_time in sessions:
             if map_name not in map_rounds:
                 map_rounds[map_name] = {'round1': [], 'round2': [], 'all': []}
             
-            map_rounds[map_name]['all'].append(session_id)
+            map_rounds[map_name]['all'].append(round_id)
             if round_num == 1:
-                map_rounds[map_name]['round1'].append(session_id)
+                map_rounds[map_name]['round1'].append(round_id)
             elif round_num == 2:
-                map_rounds[map_name]['round2'].append(session_id)
+                map_rounds[map_name]['round2'].append(round_id)
         
         # For each map, show Round 1, Round 2, and Map Summary
         for map_name, rounds in map_rounds.items():
@@ -806,12 +727,12 @@ class LastSessionCog(commands.Cog):
                 COALESCE(SUM(w.shots), 0) as total_shots
             FROM player_comprehensive_stats p
             LEFT JOIN (
-                SELECT session_id, player_guid, SUM(hits) as hits, SUM(shots) as shots
+                SELECT round_id, player_guid, SUM(hits) as hits, SUM(shots) as shots
                 FROM weapon_comprehensive_stats
                 WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
-                GROUP BY session_id, player_guid
-            ) w ON p.session_id = w.session_id AND p.player_guid = w.player_guid
-            WHERE p.session_id IN ({round_ids_str})
+                GROUP BY round_id, player_guid
+            ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
+            WHERE p.round_id IN ({round_ids_str})
             GROUP BY p.player_name
             ORDER BY kills DESC
         """
@@ -890,7 +811,7 @@ class LastSessionCog(commands.Cog):
             
             embed.add_field(name=field_name, value=field_text.rstrip(), inline=False)
         
-        embed.set_footer(text=f"Session: {latest_date}")
+        embed.set_footer(text=f"Round: {latest_date}")
         await ctx.send(embed=embed)
 
     # ═══════════════════════════════════════════════════════
@@ -921,15 +842,15 @@ class LastSessionCog(commands.Cog):
                 SUM(p.denied_playtime) as total_denied
             FROM player_comprehensive_stats p
             LEFT JOIN (
-                SELECT session_id, player_guid,
+                SELECT round_id, player_guid,
                     SUM(hits) as hits,
                     SUM(shots) as shots,
                     SUM(headshots) as headshots
                 FROM weapon_comprehensive_stats
                 WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
-                GROUP BY session_id, player_guid
-            ) w ON p.session_id = w.session_id AND p.player_guid = w.player_guid
-            WHERE p.session_id IN ({session_ids_str})
+                GROUP BY round_id, player_guid
+            ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
+            WHERE p.round_id IN ({session_ids_str})
             GROUP BY p.player_guid
             ORDER BY kills DESC
         """
@@ -955,7 +876,7 @@ class LastSessionCog(commands.Cog):
                     SUM(deaths) as total_deaths,
                     SUM(damage_given) as total_damage
                 FROM player_comprehensive_stats
-                WHERE session_id IN ({session_ids_str})
+                WHERE round_id IN ({session_ids_str})
                 GROUP BY team
             """
             async with db.execute(query, session_ids) as cursor:
@@ -968,7 +889,7 @@ class LastSessionCog(commands.Cog):
                 SUM(deaths) as total_deaths,
                 SUM(damage_given) as total_damage
             FROM player_comprehensive_stats
-            WHERE session_id IN ({session_ids_str})
+            WHERE round_id IN ({session_ids_str})
             GROUP BY player_guid
         """
         async with db.execute(query, session_ids) as cursor:
@@ -1006,9 +927,9 @@ class LastSessionCog(commands.Cog):
                 SUM(w.headshots) as weapon_headshots
             FROM weapon_comprehensive_stats w
             JOIN player_comprehensive_stats p
-                ON w.session_id = p.session_id
+                ON w.round_id = p.round_id
                 AND w.player_guid = p.player_guid
-            WHERE w.session_id IN ({session_ids_str})
+            WHERE w.round_id IN ({session_ids_str})
             GROUP BY p.player_guid, w.weapon_name
             HAVING weapon_kills > 0
             ORDER BY p.player_name, weapon_kills DESC
@@ -1028,7 +949,7 @@ class LastSessionCog(commands.Cog):
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths
             FROM player_comprehensive_stats
-            WHERE session_id IN ({session_ids_str})
+            WHERE round_id IN ({session_ids_str})
             GROUP BY player_guid
             ORDER BY weighted_dpm DESC
             LIMIT ?
@@ -1097,7 +1018,7 @@ class LastSessionCog(commands.Cog):
             query = f"""
                 SELECT DISTINCT player_name, player_guid
                 FROM player_comprehensive_stats
-                WHERE session_id IN ({session_ids_str})
+                WHERE round_id IN ({session_ids_str})
             """
             async with db.execute(query, session_ids) as cursor:
                 player_guid_map = await cursor.fetchall()
@@ -1118,12 +1039,12 @@ class LastSessionCog(commands.Cog):
             logger.info("⚠️ No hardcoded teams - attempting smart auto-detection")
             
             # Get all player-side pairings
-            # IMPORTANT: Include session_id in the key to handle multiple plays of same map
+            # IMPORTANT: Include round_id in the key to handle multiple plays of same map
             query = f"""
-                SELECT player_guid, player_name, team, session_id, map_name, round_number
+                SELECT player_guid, player_name, team, round_id, map_name, round_number
                 FROM player_comprehensive_stats
-                WHERE session_id IN ({session_ids_str})
-                ORDER BY session_id, map_name, round_number
+                WHERE round_id IN ({session_ids_str})
+                ORDER BY round_id, map_name, round_number
             """
             async with db.execute(query, session_ids) as cursor:
                 all_records = await cursor.fetchall()
@@ -1131,8 +1052,8 @@ class LastSessionCog(commands.Cog):
             if not all_records:
                 return "Team 1", "Team 2", [], [], {}
             
-            # Build round-by-round side assignments: (session_id, map, round) -> {guid: side}
-            # Using session_id ensures each play of a map is tracked separately
+            # Build round-by-round side assignments: (round_id, map, round) -> {guid: side}
+            # Using round_id ensures each play of a map is tracked separately
             from collections import defaultdict
             round_sides = defaultdict(dict)
             guid_to_name = {}
@@ -1248,7 +1169,7 @@ class LastSessionCog(commands.Cog):
                 query = f"""
                     SELECT player_name, SUM(kills) as total_kills, player_guid
                     FROM player_comprehensive_stats
-                    WHERE session_id IN ({session_ids_str})
+                    WHERE round_id IN ({session_ids_str})
                         AND player_guid IN ({team_guids_placeholders})
                     GROUP BY player_name, player_guid
                     ORDER BY total_kills DESC
@@ -1273,7 +1194,7 @@ class LastSessionCog(commands.Cog):
                             SUM(revives_given),
                             SUM(gibs)
                         FROM player_comprehensive_stats
-                        WHERE session_id IN ({session_ids_str})
+                        WHERE round_id IN ({session_ids_str})
                             AND player_name = ?
                             AND player_guid IN ({team_guids_placeholders})
                     """
@@ -1397,7 +1318,7 @@ class LastSessionCog(commands.Cog):
                 field_name = "\u200b"  # Invisible character for continuation fields
             
             embed.add_field(name=field_name, value=field_text.rstrip(), inline=False)
-        embed.set_footer(text=f"Session: {latest_date}")
+        embed.set_footer(text=f"Round: {latest_date}")
         return embed
 
     async def _build_team_analytics_embed(
@@ -1471,7 +1392,7 @@ class LastSessionCog(commands.Cog):
             )
             embed.add_field(name=f"🔵 {team_2_name} MVP", value=team_2_mvp_text, inline=True)
 
-        embed.set_footer(text=f"Session: {latest_date}")
+        embed.set_footer(text=f"Round: {latest_date}")
         return embed
 
     async def _build_team_composition_embed(
@@ -1530,8 +1451,8 @@ class LastSessionCog(commands.Cog):
             else:
                 session_info += f"\n🏆 **Maps Won**: {team_1_name} {team_1_score} - {team_2_score} {team_2_name}"
 
-        embed.add_field(name="📊 Session Info", value=session_info, inline=False)
-        embed.set_footer(text=f"Session: {latest_date}")
+        embed.add_field(name="📊 Round Info", value=session_info, inline=False)
+        embed.set_footer(text=f"Round: {latest_date}")
         return embed
 
     async def _build_dpm_analytics_embed(
@@ -1621,7 +1542,7 @@ class LastSessionCog(commands.Cog):
 
             embed.add_field(name=f"{player} ({total_kills} total kills)", value=weapon_text, inline=False)
 
-        embed.set_footer(text=f"Session: {latest_date}")
+        embed.set_footer(text=f"Round: {latest_date}")
         return embed
 
     async def _build_special_awards_embed(
@@ -1817,7 +1738,7 @@ class LastSessionCog(commands.Cog):
                     CAST(SUM(p.time_played_seconds * p.time_dead_ratio / 100.0) AS INTEGER) as time_dead,
                     SUM(p.denied_playtime) as denied
                 FROM player_comprehensive_stats p
-                WHERE p.session_id IN ({session_ids_str})
+                WHERE p.round_id IN ({session_ids_str})
                 GROUP BY p.player_name
                 ORDER BY kills DESC
                 LIMIT 10
@@ -1958,12 +1879,12 @@ class LastSessionCog(commands.Cog):
                     SUM(p.kills) as kills
                 FROM player_comprehensive_stats p
                 LEFT JOIN (
-                    SELECT session_id, player_guid, SUM(shots) as shots
+                    SELECT round_id, player_guid, SUM(shots) as shots
                     FROM weapon_comprehensive_stats
                     WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
-                    GROUP BY session_id, player_guid
-                ) w ON p.session_id = w.session_id AND p.player_guid = w.player_guid
-                WHERE p.session_id IN ({session_ids_str})
+                    GROUP BY round_id, player_guid
+                ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
+                WHERE p.round_id IN ({session_ids_str})
                 GROUP BY p.player_name
                 ORDER BY dmg_given DESC
                 LIMIT 10
@@ -2079,7 +2000,7 @@ class LastSessionCog(commands.Cog):
     # MAIN COMMAND - Orchestrates everything
     # ═══════════════════════════════════════════════════════
 
-    @commands.command(name="last_session", aliases=["last", "latest", "recent"])
+    @commands.command(name="last_session", aliases=["last", "latest", "recent", "last_round"])
     async def last_session(self, ctx, subcommand: str = None):
         """🎮 Show the most recent session/match
 
@@ -2116,14 +2037,14 @@ class LastSessionCog(commands.Cog):
                 # Phase 1: Get session data
                 latest_date = await self._get_latest_session_date(db)
                 if not latest_date:
-                    await ctx.send("❌ No sessions found in database")
+                    await ctx.send("❌ No rounds found in database")
                     return
 
                 sessions, session_ids, session_ids_str, player_count = await self._fetch_session_data(
                     db, latest_date
                 )
                 if not sessions:
-                    await ctx.send("❌ No sessions found for latest date")
+                    await ctx.send("❌ No rounds found for latest date")
                     return
 
                 # Calculate total maps for top view
@@ -2196,7 +2117,7 @@ class LastSessionCog(commands.Cog):
                 query = f"""
                     SELECT player_name, SUM(revives_given) as total_revives
                     FROM player_comprehensive_stats
-                    WHERE session_id IN ({session_ids_str})
+                    WHERE round_id IN ({session_ids_str})
                     GROUP BY player_guid
                 """
                 async with db.execute(query, session_ids) as cursor:
@@ -2220,12 +2141,12 @@ class LastSessionCog(commands.Cog):
                         SUM(p.time_played_seconds) as play_time
                     FROM player_comprehensive_stats p
                     LEFT JOIN (
-                        SELECT session_id, player_guid, SUM(shots) as shots
+                        SELECT round_id, player_guid, SUM(shots) as shots
                         FROM weapon_comprehensive_stats
                         WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
-                        GROUP BY session_id, player_guid
-                    ) w ON p.session_id = w.session_id AND p.player_guid = w.player_guid
-                    WHERE p.session_id IN ({session_ids_str})
+                        GROUP BY round_id, player_guid
+                    ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
+                    WHERE p.round_id IN ({session_ids_str})
                     GROUP BY p.player_guid
                 """
                 async with db.execute(query, session_ids) as cursor:
@@ -2238,7 +2159,7 @@ class LastSessionCog(commands.Cog):
                 
                 # Build maps played string
                 map_play_counts = {}
-                for session_id, map_name, round_num, actual_time in sessions:
+                for round_id, map_name, round_num, actual_time in sessions:
                     if round_num == 2:
                         map_play_counts[map_name] = map_play_counts.get(map_name, 0) + 1
                 
@@ -2374,7 +2295,7 @@ class LastSessionCog(commands.Cog):
                 win_rate = (lineup['total_wins'] / total_games * 100) if total_games > 0 else 0
                 
                 field_text = (
-                    f"**Sessions:** {lineup['total_sessions']}\n"
+                    f"**Sessions:** {lineup['total_rounds']}\n"
                     f"**Record:** {lineup['total_wins']}W - {lineup['total_losses']}L - {lineup['total_ties']}T\n"
                     f"**Win Rate:** {win_rate:.1f}%\n"
                     f"**Players:** {lineup['player_count']}\n"
@@ -2411,6 +2332,6 @@ class LastSessionCog(commands.Cog):
 
 
 async def setup(bot):
-    """Load the Last Session Cog"""
+    """Load the Last Round Cog"""
     await bot.add_cog(LastSessionCog(bot))
     logger.info("🎮 LastSessionCog loaded - !last_session with comprehensive analytics (26 helper methods)")

@@ -80,7 +80,7 @@ Channel where bot automatically posts match stats and session summaries.
 
 **Usage:**
 - Auto-posted round summaries
-- Session end summaries
+- Round end summaries
 - Real-time stats updates
 
 ---

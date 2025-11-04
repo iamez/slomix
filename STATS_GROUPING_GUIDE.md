@@ -226,7 +226,7 @@ Player3  ██ 9    ██ 32%    ██ 68%     1.4
 
 ---
 
-## 🎨 Visual Layout for `!last_session maps`
+## 🎨 Visual Layout for `!last_round maps`
 
 ### Map Performance Card Example:
 

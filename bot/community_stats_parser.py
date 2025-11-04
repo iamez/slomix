@@ -327,26 +327,25 @@ class C0RNP0RN3StatsParser:
                 pattern_path = os.path.join(search_dir, search_pattern)
                 potential_files.extend(glob.glob(pattern_path))
 
-        # If no files found on the same date, check previous date 
-        # (for matches that span midnight)
-        if not potential_files:
-            from datetime import datetime, timedelta
-            try:
-                date_obj = datetime.strptime(date, '%Y-%m-%d')
-                prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
-                prev_search_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
-                
-                print(f"  → Checking previous date: {prev_search_pattern}")
-                
-                for search_dir in search_dirs:
-                    if os.path.exists(search_dir):
-                        pattern_path = os.path.join(search_dir, prev_search_pattern)
-                        found = glob.glob(pattern_path)
-                        if found:
-                            print(f"  → Found {len(found)} files from previous date")
-                        potential_files.extend(found)
-            except ValueError:
-                pass  # Invalid date format, skip previous date search
+        # ✅ FIX: ALWAYS check previous date for midnight-crossing matches
+        # (Don't just check if no same-day files found - we need to check both!)
+        from datetime import datetime, timedelta
+        try:
+            date_obj = datetime.strptime(date, '%Y-%m-%d')
+            prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
+            prev_search_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
+            
+            print(f"  → Checking previous date: {prev_search_pattern}")
+            
+            for search_dir in search_dirs:
+                if os.path.exists(search_dir):
+                    pattern_path = os.path.join(search_dir, prev_search_pattern)
+                    found = glob.glob(pattern_path)
+                    if found:
+                        print(f"  → Found {len(found)} files from previous date")
+                    potential_files.extend(found)
+        except ValueError:
+            pass  # Invalid date format, skip previous date search
 
         if not potential_files:
             return None
@@ -466,6 +465,10 @@ class C0RNP0RN3StatsParser:
                     r1_time = r1_obj.get('time_played_minutes', 0)
                     diff_minutes = max(0, r2_time - r1_time)
                     differential_player['objective_stats']['time_played_minutes'] = diff_minutes
+                elif key in ['time_dead_minutes', 'time_dead_ratio']:
+                    # SKIP time_dead fields - we'll calculate them properly later
+                    # based on actual Round 2 spawn events
+                    pass
                 elif isinstance(r2_obj[key], (int, float)):
                     # For numeric fields, calculate differential
                     differential_player['objective_stats'][key] = max(
@@ -546,15 +549,23 @@ class C0RNP0RN3StatsParser:
             differential_player['shots_total'] = total_shots
             differential_player['hits_total'] = total_hits
 
-            # FIX: Recalculate time_dead for Round 2 differential
-            # time_dead_ratio should be based on Round 2-only time, not subtracted percentages
+            # FIX: Properly calculate time_dead for Round 2 differential
+            # Use Round 2 cumulative ratio applied to Round 2 differential time
             diff_time_seconds = differential_player.get('time_played_seconds', 0)
-            if diff_time_seconds > 0:
-                # Get time_dead_minutes from objective_stats differential
-                time_dead_mins = differential_player['objective_stats'].get('time_dead_minutes', 0)
-                # Calculate ratio as percentage
-                time_dead_ratio = (time_dead_mins / (diff_time_seconds / 60.0) * 100) if diff_time_seconds > 0 else 0
-                differential_player['objective_stats']['time_dead_ratio'] = time_dead_ratio
+            diff_time_minutes = diff_time_seconds / 60.0 if diff_time_seconds > 0 else 0
+            
+            # Get the R2 cumulative time_dead_ratio (this is the correct ratio for R2)
+            r2_time_dead_ratio = r2_obj.get('time_dead_ratio', 0)
+            
+            # Calculate time_dead_minutes for R2 differential using R2 ratio
+            # time_dead_minutes = R2_differential_time * (R2_ratio / 100)
+            if diff_time_minutes > 0 and r2_time_dead_ratio > 0:
+                time_dead_mins = diff_time_minutes * (r2_time_dead_ratio / 100.0)
+                differential_player['objective_stats']['time_dead_minutes'] = time_dead_mins
+                differential_player['objective_stats']['time_dead_ratio'] = r2_time_dead_ratio
+            else:
+                differential_player['objective_stats']['time_dead_minutes'] = 0.0
+                differential_player['objective_stats']['time_dead_ratio'] = 0.0
 
             round_2_only_players.append(differential_player)
 

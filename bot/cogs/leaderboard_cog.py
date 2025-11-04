@@ -221,7 +221,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     async with db.execute(
                         """
                         SELECT
-                            COUNT(DISTINCT session_id) as total_games,
+                            COUNT(DISTINCT round_id) as total_games,
                             SUM(kills) as total_kills,
                             SUM(deaths) as total_deaths,
                             SUM(damage_given) as total_damage,
@@ -271,11 +271,11 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     # Get recent activity
                     async with db.execute(
                         """
-                        SELECT s.session_date, s.map_name, p.kills, p.deaths
+                        SELECT s.round_date, s.map_name, p.kills, p.deaths
                         FROM player_comprehensive_stats p
-                        JOIN sessions s ON p.session_id = s.id
+                        JOIN rounds s ON p.round_id = s.id
                         WHERE p.player_guid = ?
-                        ORDER BY s.session_date DESC
+                        ORDER BY s.round_date DESC
                         LIMIT 3
                     """,
                         (player_guid,),
@@ -493,7 +493,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                              ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                             SUM(p.kills) as total_kills,
                             SUM(p.deaths) as total_deaths,
-                            COUNT(DISTINCT p.session_id) as games,
+                            COUNT(DISTINCT p.round_id) as games,
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
@@ -514,7 +514,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                              ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                             SUM(p.kills) as total_kills,
                             SUM(p.deaths) as total_deaths,
-                            COUNT(DISTINCT p.session_id) as games,
+                            COUNT(DISTINCT p.round_id) as games,
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
@@ -537,7 +537,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 ELSE 0
                             END as weighted_dpm,
                             SUM(p.kills) as total_kills,
-                            COUNT(DISTINCT p.session_id) as games,
+                            COUNT(DISTINCT p.round_id) as games,
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
@@ -557,11 +557,11 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             SUM(w.hits) as total_hits,
                             SUM(w.shots) as total_shots,
                             SUM(p.kills) as total_kills,
-                            COUNT(DISTINCT p.session_id) as games,
+                            COUNT(DISTINCT p.round_id) as games,
                             p.player_guid
                         FROM player_comprehensive_stats p
                         JOIN weapon_comprehensive_stats w
-                            ON p.session_id = w.session_id
+                            ON p.round_id = w.round_id
                             AND p.player_guid = w.player_guid
                         GROUP BY p.player_guid
                         HAVING games > 50 AND total_shots > 1000
@@ -580,11 +580,11 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             SUM(p.headshot_kills) as total_hs,
                             SUM(w.hits) as total_hits,
                             SUM(p.kills) as total_kills,
-                            COUNT(DISTINCT p.session_id) as games,
+                            COUNT(DISTINCT p.round_id) as games,
                             p.player_guid
                         FROM player_comprehensive_stats p
                         JOIN weapon_comprehensive_stats w
-                            ON p.session_id = w.session_id
+                            ON p.round_id = w.round_id
                             AND p.player_guid = w.player_guid
                         GROUP BY p.player_guid
                         HAVING games > 50 AND total_hits > 1000
@@ -600,7 +600,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                              WHERE player_guid = p.player_guid 
                              GROUP BY player_name 
                              ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
-                            COUNT(DISTINCT p.session_id) as games,
+                            COUNT(DISTINCT p.round_id) as games,
                             SUM(p.kills) as total_kills,
                             SUM(p.deaths) as total_deaths,
                             p.player_guid
@@ -622,7 +622,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                              ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                             SUM(p.revives_given) as total_revives,
                             SUM(p.kills) as total_kills,
-                            COUNT(DISTINCT p.session_id) as games,
+                            COUNT(DISTINCT p.round_id) as games,
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
@@ -641,7 +641,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                              ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                             SUM(p.gibs) as total_gibs,
                             SUM(p.kills) as total_kills,
-                            COUNT(DISTINCT p.session_id) as games,
+                            COUNT(DISTINCT p.round_id) as games,
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
@@ -660,7 +660,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                              ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                             SUM(p.objectives_completed + p.objectives_destroyed + p.objectives_stolen + p.objectives_returned) as total_obj,
                             SUM(p.objectives_completed) as completed,
-                            COUNT(DISTINCT p.session_id) as games,
+                            COUNT(DISTINCT p.round_id) as games,
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
@@ -681,7 +681,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                              ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                             AVG(p.efficiency) as avg_eff,
                             SUM(p.kills) as total_kills,
-                            COUNT(DISTINCT p.session_id) as games,
+                            COUNT(DISTINCT p.round_id) as games,
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
@@ -700,7 +700,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                              ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                             SUM(p.team_damage_given) as total_team_dmg,
                             SUM(p.damage_given) as total_dmg,
-                            COUNT(DISTINCT p.session_id) as games,
+                            COUNT(DISTINCT p.round_id) as games,
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
@@ -719,7 +719,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                              ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                             SUM(p.double_kills + p.triple_kills + p.quad_kills + p.multi_kills + p.mega_kills) as total_multi,
                             SUM(p.mega_kills) as megas,
-                            COUNT(DISTINCT p.session_id) as games,
+                            COUNT(DISTINCT p.round_id) as games,
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
@@ -744,7 +744,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 THEN ROUND(CAST(SUM(w.hits) AS FLOAT) / SUM(w.kills), 2)
                                 ELSE 0 
                             END as aoe_ratio,
-                            COUNT(DISTINCT w.session_id) as games,
+                            COUNT(DISTINCT w.round_id) as games,
                             w.player_guid
                         FROM weapon_comprehensive_stats w
                         WHERE w.weapon_name = 'WS_GRENADE'

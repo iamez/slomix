@@ -422,7 +422,7 @@ class ETLegacyCommands(commands.Cog):
                     if latest_date:
                         cont.set_footer(
                             text=(
-                                f"Session: {latest_date} • Page {i+2}/{total_pages}"
+                                f"Round: {latest_date} • Page {i+2}/{total_pages}"
                             )
                         )
                     else:
@@ -755,7 +755,7 @@ class ETLegacyCommands(commands.Cog):
     # async with aiosqlite.connect(self.bot.db_path) as db:
     # async with db.execute(
     # """
-    # SELECT DISTINCT DATE(session_date) as date
+    # SELECT DISTINCT DATE(round_date) as date
     # FROM player_comprehensive_stats
     # ORDER BY date DESC LIMIT 1
     # """
@@ -775,13 +775,13 @@ class ETLegacyCommands(commands.Cog):
     # # Get session metadata
     # query = """
     # SELECT 
-    # COUNT(DISTINCT session_id) / 2 as total_maps,
-    # COUNT(DISTINCT session_id) as total_rounds,
+    # COUNT(DISTINCT round_id) / 2 as total_maps,
+    # COUNT(DISTINCT round_id) as total_rounds,
     # COUNT(DISTINCT player_guid) as player_count,
-    # MIN(session_date) as first_round,
-    # MAX(session_date) as last_round
+    # MIN(round_date) as first_round,
+    # MAX(round_date) as last_round
     # FROM player_comprehensive_stats
-    # WHERE DATE(session_date) = ?
+    # WHERE DATE(round_date) = ?
     # """
     # 
     # async with db.execute(query, (date_filter,)) as cursor:
@@ -805,8 +805,8 @@ class ETLegacyCommands(commands.Cog):
     # """
     # SELECT DISTINCT map_name
     # FROM player_comprehensive_stats
-    # WHERE DATE(session_date) = ?
-    # ORDER BY session_date
+    # WHERE DATE(round_date) = ?
+    # ORDER BY round_date
     # """,
     # (date_filter,),
     # ) as cursor:
@@ -844,7 +844,7 @@ class ETLegacyCommands(commands.Cog):
     # ELSE 0
     # END as dpm
     # FROM player_comprehensive_stats p
-    # WHERE DATE(p.session_date) = ?
+    # WHERE DATE(p.round_date) = ?
     # GROUP BY p.player_name
     # ORDER BY kills DESC
     # LIMIT 5
@@ -867,7 +867,7 @@ class ETLegacyCommands(commands.Cog):
     # )
     # 
     # embed.set_footer(
-    # text="💡 Use !last_session for the most recent session with full details"
+    # text="💡 Use !last_round for the most recent session with full details"
     # )
     # await ctx.send(embed=embed)
     # 
@@ -877,7 +877,7 @@ class ETLegacyCommands(commands.Cog):
     
     # ═══════════════════════════════════════════════════════════════════════
     # NOTE: The massive !last_session command has been refactored into a
-    # dedicated Last Session Cog (bot/cogs/last_session_cog.py) with 27
+    # dedicated Last Round Cog (bot/cogs/last_session_cog.py) with 27
     # helper methods for better maintainability.
     # 
     # Original: 3,316 lines (lines 839-4155) 
@@ -890,7 +890,7 @@ class ETLegacyCommands(commands.Cog):
     # @commands.command(
     # )
     # # 
-    # @commands.command(name="sessions", aliases=["list_sessions", "ls"])
+    # @commands.command(name="rounds", aliases=["list_sessions", "ls"])
     # async def list_sessions(self, ctx, *, month: str = None):
     # """📅 List all gaming sessions, optionally filtered by month
     # 
@@ -959,15 +959,15 @@ class ETLegacyCommands(commands.Cog):
     # 
     # query = """
     # SELECT 
-    # DATE(session_date) as date,
-    # COUNT(DISTINCT session_id) / 2 as maps,
-    # COUNT(DISTINCT session_id) as rounds,
+    # DATE(round_date) as date,
+    # COUNT(DISTINCT round_id) / 2 as maps,
+    # COUNT(DISTINCT round_id) as rounds,
     # COUNT(DISTINCT player_guid) as players,
-    # MIN(session_date) as first_round,
-    # MAX(session_date) as last_round
+    # MIN(round_date) as first_round,
+    # MAX(round_date) as last_round
     # FROM player_comprehensive_stats
-    # WHERE session_date LIKE ?
-    # GROUP BY DATE(session_date)
+    # WHERE round_date LIKE ?
+    # GROUP BY DATE(round_date)
     # ORDER BY date DESC
     # """
     # cursor.execute(query, (f"{month_filter}%",))
@@ -975,14 +975,14 @@ class ETLegacyCommands(commands.Cog):
     # else:
     # query = """
     # SELECT 
-    # DATE(session_date) as date,
-    # COUNT(DISTINCT session_id) / 2 as maps,
-    # COUNT(DISTINCT session_id) as rounds,
+    # DATE(round_date) as date,
+    # COUNT(DISTINCT round_id) / 2 as maps,
+    # COUNT(DISTINCT round_id) as rounds,
     # COUNT(DISTINCT player_guid) as players,
-    # MIN(session_date) as first_round,
-    # MAX(session_date) as last_round
+    # MIN(round_date) as first_round,
+    # MAX(round_date) as last_round
     # FROM player_comprehensive_stats
-    # GROUP BY DATE(session_date)
+    # GROUP BY DATE(round_date)
     # ORDER BY date DESC
     # LIMIT 20
     # """
@@ -1069,8 +1069,8 @@ class ETLegacyCommands(commands.Cog):
                     p.player_guid,
                     p.player_name,
                     pl.discord_id,
-                    COUNT(DISTINCT p.session_date) as sessions_played,
-                    MAX(p.session_date) as last_played,
+                    COUNT(DISTINCT p.round_date) as sessions_played,
+                    MAX(p.round_date) as last_played,
                     SUM(p.kills) as total_kills,
                     SUM(p.deaths) as total_deaths
                 FROM player_comprehensive_stats p
@@ -1091,7 +1091,7 @@ class ETLegacyCommands(commands.Cog):
                 elif filter_lower in ["unlinked", "nolink"]:
                     base_query += " HAVING pl.discord_id IS NULL"
                 elif filter_lower in ["active", "recent"]:
-                    base_query += " HAVING MAX(p.session_date) >= date('now', '-30 days')"
+                    base_query += " HAVING MAX(p.round_date) >= date('now', '-30 days')"
 
             base_query += " ORDER BY sessions_played DESC, total_kills DESC"
 
@@ -1280,10 +1280,10 @@ class ETLegacyCommands(commands.Cog):
     # """
     # SELECT 
     # player_guid,
-    # MAX(session_date) as last_played,
+    # MAX(round_date) as last_played,
     # SUM(kills) as total_kills,
     # SUM(deaths) as total_deaths,
-    # COUNT(DISTINCT session_id) as games
+    # COUNT(DISTINCT round_id) as games
     # FROM player_comprehensive_stats
     # WHERE player_guid NOT IN (SELECT et_guid FROM player_links WHERE et_guid IS NOT NULL)
     # GROUP BY player_guid
@@ -1340,7 +1340,7 @@ class ETLegacyCommands(commands.Cog):
     # SELECT player_name 
     # FROM player_comprehensive_stats 
     # WHERE player_guid = ? 
-    # ORDER BY session_date DESC 
+    # ORDER BY round_date DESC 
     # LIMIT 1
     # """,
     # (guid,),
@@ -1455,8 +1455,8 @@ class ETLegacyCommands(commands.Cog):
     # SELECT 
     # SUM(kills) as total_kills,
     # SUM(deaths) as total_deaths,
-    # COUNT(DISTINCT session_id) as games,
-    # MAX(session_date) as last_seen
+    # COUNT(DISTINCT round_id) as games,
+    # MAX(round_date) as last_seen
     # FROM player_comprehensive_stats
     # WHERE player_guid = ?
     # """,
@@ -1491,7 +1491,7 @@ class ETLegacyCommands(commands.Cog):
     # SELECT player_name 
     # FROM player_comprehensive_stats 
     # WHERE player_guid = ? 
-    # ORDER BY session_date DESC 
+    # ORDER BY round_date DESC 
     # LIMIT 1
     # """,
     # (guid,),
@@ -1596,8 +1596,8 @@ class ETLegacyCommands(commands.Cog):
     # """
     # SELECT player_guid, player_name,
     # SUM(kills) as total_kills,
-    # COUNT(DISTINCT session_id) as games,
-    # MAX(session_date) as last_seen
+    # COUNT(DISTINCT round_id) as games,
+    # MAX(round_date) as last_seen
     # FROM player_comprehensive_stats
     # WHERE LOWER(player_name) LIKE LOWER(?)
     # GROUP BY player_guid
@@ -1639,7 +1639,7 @@ class ETLegacyCommands(commands.Cog):
     # # Get stats and aliases
     # async with db.execute(
     # """
-    # SELECT SUM(kills), SUM(deaths), COUNT(DISTINCT session_id), MAX(session_date)
+    # SELECT SUM(kills), SUM(deaths), COUNT(DISTINCT round_id), MAX(round_date)
     # FROM player_comprehensive_stats
     # WHERE player_guid = ?
     # """,
@@ -1785,8 +1785,8 @@ class ETLegacyCommands(commands.Cog):
     # SELECT 
     # SUM(kills) as total_kills,
     # SUM(deaths) as total_deaths,
-    # COUNT(DISTINCT session_id) as games,
-    # MAX(session_date) as last_seen
+    # COUNT(DISTINCT round_id) as games,
+    # MAX(round_date) as last_seen
     # FROM player_comprehensive_stats
     # WHERE player_guid = ?
     # """,
@@ -1824,7 +1824,7 @@ class ETLegacyCommands(commands.Cog):
     # SELECT player_name 
     # FROM player_comprehensive_stats 
     # WHERE player_guid = ? 
-    # ORDER BY session_date DESC 
+    # ORDER BY round_date DESC 
     # LIMIT 1
     # """,
     # (guid,),
@@ -2031,7 +2031,7 @@ class ETLegacyCommands(commands.Cog):
     # # This would require storing pending link requests per user
     # # and checking if they have an active selection window
     # 
-    # async def get_hardcoded_teams(self, db, session_date):
+    # async def get_hardcoded_teams(self, db, round_date):
     # """🎯 Get hardcoded teams from session_teams table if available
     # 
     # Returns dict with team info or None if not available:
@@ -2062,7 +2062,7 @@ class ETLegacyCommands(commands.Cog):
     # WHERE session_start_date LIKE ?
     # ORDER BY team_name
     # """,
-    # (f"{session_date}%",),
+    # (f"{round_date}%",),
     # ) as cursor:
     # rows = await cursor.fetchall()
 
@@ -2090,7 +2090,7 @@ class ETLegacyCommands(commands.Cog):
                 )
 
             logger.info(
-                f"✅ Found hardcoded teams for {session_date}: {list(teams.keys())}"
+                f"✅ Found hardcoded teams for {round_date}: {list(teams.keys())}"
             )
             return teams
 
@@ -2099,7 +2099,7 @@ class ETLegacyCommands(commands.Cog):
             return None
 
 
-    async def _detect_and_store_persistent_teams(self, db, session_date):
+    async def _detect_and_store_persistent_teams(self, db, round_date):
         """Auto-detect persistent teams for a session date and store in session_teams.
 
         Heuristic:
@@ -2115,9 +2115,9 @@ class ETLegacyCommands(commands.Cog):
             """
             SELECT player_guid, team
             FROM player_comprehensive_stats
-            WHERE substr(session_date,1,10)=? AND round_number=1
+            WHERE substr(round_date,1,10)=? AND round_number=1
             """,
-            (session_date,),
+            (round_date,),
         ) as cur:
             r1 = await cur.fetchall()
 
@@ -2129,10 +2129,10 @@ class ETLegacyCommands(commands.Cog):
             async with db.execute(
                 """
                 SELECT round_number FROM player_comprehensive_stats
-                WHERE substr(session_date,1,10)=?
+                WHERE substr(round_date,1,10)=?
                 ORDER BY round_number ASC LIMIT 1
                 """,
-                (session_date,),
+                (round_date,),
             ) as cur:
                 first_round = await cur.fetchone()
             if first_round:
@@ -2141,9 +2141,9 @@ class ETLegacyCommands(commands.Cog):
                     """
                     SELECT player_guid, team
                     FROM player_comprehensive_stats
-                    WHERE substr(session_date,1,10)=? AND round_number=?
+                    WHERE substr(round_date,1,10)=? AND round_number=?
                     """,
-                    (session_date, fr),
+                    (round_date, fr),
                 ) as cur:
                     rows = await cur.fetchall()
                 team1_seed = {g for g, t in rows if t == 1}
@@ -2153,9 +2153,9 @@ class ETLegacyCommands(commands.Cog):
         async with db.execute(
             """
             SELECT DISTINCT player_guid FROM player_comprehensive_stats
-            WHERE substr(session_date,1,10)=?
+            WHERE substr(round_date,1,10)=?
             """,
-            (session_date,),
+            (round_date,),
         ) as cur:
             all_players = {row[0] for row in (await cur.fetchall())}
 
@@ -2173,10 +2173,10 @@ class ETLegacyCommands(commands.Cog):
                 """
                 SELECT round_number, player_guid, team
                 FROM player_comprehensive_stats
-                WHERE substr(session_date,1,10)=?
+                WHERE substr(round_date,1,10)=?
                 ORDER BY round_number
                 """,
-                (session_date,),
+                (round_date,),
             ) as cur:
                 rows = await cur.fetchall()
 
@@ -2240,7 +2240,7 @@ class ETLegacyCommands(commands.Cog):
             ON CONFLICT(session_start_date, map_name, team_name)
             DO UPDATE SET player_guids=excluded.player_guids, player_names=excluded.player_names
             """,
-            (session_date, json.dumps(guids1), json.dumps(names1)),
+            (round_date, json.dumps(guids1), json.dumps(names1)),
         )
         cursor = await db.execute(
             """
@@ -2249,22 +2249,22 @@ class ETLegacyCommands(commands.Cog):
             ON CONFLICT(session_start_date, map_name, team_name)
             DO UPDATE SET player_guids=excluded.player_guids, player_names=excluded.player_names
             """,
-            (session_date, json.dumps(guids2), json.dumps(names2)),
+            (round_date, json.dumps(guids2), json.dumps(names2)),
         )
         await db.commit()
         
         # Update team history tracking
-        await self._update_team_history(db, session_date, guids1, guids2, names1, names2)
+        await self._update_team_history(db, round_date, guids1, guids2, names1, names2)
         
         return True
 
-    async def _update_team_history(self, db, session_date, team1_guids, team2_guids, team1_names, team2_names):
+    async def _update_team_history(self, db, round_date, team1_guids, team2_guids, team1_names, team2_names):
         """
         Update team_lineups and session_results tables for historical tracking.
         
         Args:
             db: Database connection
-            session_date: Session date (YYYY-MM-DD)
+            round_date: Session date (YYYY-MM-DD)
             team1_guids: List of GUIDs for Team A
             team2_guids: List of GUIDs for Team B
             team1_names: List of names for Team A
@@ -2292,7 +2292,7 @@ class ETLegacyCommands(commands.Cog):
             
             if row:
                 lineup_id, first_seen, last_seen = row
-                if session_date > last_seen:
+                if round_date > last_seen:
                     await db.execute(
                         """
                         UPDATE team_lineups 
@@ -2301,7 +2301,7 @@ class ETLegacyCommands(commands.Cog):
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
                         """,
-                        (session_date, lineup_id)
+                        (round_date, lineup_id)
                     )
             else:
                 await db.execute(
@@ -2310,11 +2310,11 @@ class ETLegacyCommands(commands.Cog):
                     (lineup_hash, player_guids, player_count, first_seen, last_seen)
                     VALUES (?, ?, ?, ?, ?)
                     """,
-                    (lineup_hash, json.dumps(sorted(guids)), len(guids), session_date, session_date)
+                    (lineup_hash, json.dumps(sorted(guids)), len(guids), round_date, round_date)
                 )
         
         await db.commit()
-        logger.debug(f"✅ Updated team history for {session_date}")
+        logger.debug(f"✅ Updated team history for {round_date}")
 
     async def _ensure_session_teams_table(self, db):
         """Ensure session_teams table exists with expected columns."""
@@ -2348,13 +2348,13 @@ class ETLegacyCommands(commands.Cog):
     # 
     # # Determine latest session date (YYYY-MM-DD)
     # async with db.execute(
-    # "SELECT DISTINCT substr(session_date,1,10) as d FROM sessions ORDER BY d DESC LIMIT 1"
+    # "SELECT DISTINCT substr(round_date,1,10) as d FROM rounds ORDER BY d DESC LIMIT 1"
     # ) as cur:
     # row = await cur.fetchone()
     # if not row:
     # await ctx.send("❌ No sessions found to set teams for.")
     # return
-    # session_date = row[0]
+    # round_date = row[0]
     # 
     # # Upsert two team rows with map_name='ALL' and empty rosters initially
     # empty = json.dumps([])
@@ -2366,10 +2366,10 @@ class ETLegacyCommands(commands.Cog):
     # ON CONFLICT(session_start_date, map_name, team_name)
     # DO UPDATE SET team_name=excluded.team_name
     # """,
-    # (session_date, tname, empty, empty),
+    # (round_date, tname, empty, empty),
     # )
     # await db.commit()
-    # await ctx.send(f"✅ Teams set for {session_date}: **{team1_name}** vs **{team2_name}**")
+    # await ctx.send(f"✅ Teams set for {round_date}: **{team1_name}** vs **{team2_name}**")
     # except Exception as e:
     # logger.error(f"Error in set_teams: {e}", exc_info=True)
     # await ctx.send(f"❌ Error setting teams: {e}")
@@ -2384,13 +2384,13 @@ class ETLegacyCommands(commands.Cog):
     # 
     # # Resolve latest session date
     # async with db.execute(
-    # "SELECT DISTINCT substr(session_date,1,10) as d FROM sessions ORDER BY d DESC LIMIT 1"
+    # "SELECT DISTINCT substr(round_date,1,10) as d FROM rounds ORDER BY d DESC LIMIT 1"
     # ) as cur:
     # row = await cur.fetchone()
     # if not row:
     # await ctx.send("❌ No sessions found.")
     # return
-    # session_date = row[0]
+    # round_date = row[0]
     # 
     # # Resolve most recent GUID for the player (fuzzy match by alias)
     # async with db.execute(
@@ -2418,7 +2418,7 @@ class ETLegacyCommands(commands.Cog):
     # ON CONFLICT(session_start_date, map_name, team_name)
     # DO NOTHING
     # """,
-    # (session_date, team_name, empty, empty),
+    # (round_date, team_name, empty, empty),
     # )
     # 
     # # Fetch current roster
@@ -2428,13 +2428,13 @@ class ETLegacyCommands(commands.Cog):
     # FROM session_teams
     # WHERE session_start_date = ? AND map_name = 'ALL' AND team_name = ?
     # """,
-    # (session_date, team_name),
+    # (round_date, team_name),
     # ) as cur:
     # row = await cur.fetchone()
     # 
     # if not row:
     # await ctx.send(
-    # f"❌ Team '{team_name}' not found for {session_date}. Use !set_teams first."
+    # f"❌ Team '{team_name}' not found for {round_date}. Use !set_teams first."
     # )
     # return
     # 
@@ -2455,12 +2455,12 @@ class ETLegacyCommands(commands.Cog):
     # SET player_guids = ?, player_names = ?
     # WHERE session_start_date = ? AND map_name = 'ALL' AND team_name = ?
     # """,
-    # (json.dumps(sorted(list(guids))), json.dumps(sorted(list(names))), session_date, team_name),
+    # (json.dumps(sorted(list(guids))), json.dumps(sorted(list(names))), round_date, team_name),
     # )
     # await db.commit()
     # 
     # await ctx.send(
-    # f"✅ Assigned **{resolved_alias}** to **{team_name}** for {session_date}"
+    # f"✅ Assigned **{resolved_alias}** to **{team_name}** for {round_date}"
     # )
     # except Exception as e:
     # logger.error(f"Error in assign_player: {e}", exc_info=True)
@@ -2557,6 +2557,7 @@ class UltimateETLegacyBot(commands.Bot):
             raise FileNotFoundError(error_msg)
 
         # 🎮 Bot State
+        self.bot_startup_time = datetime.now()  # Track when bot started (for auto-import filtering)
         self.current_session = None
         self.processed_files = set()
         self.auto_link_enabled = True
@@ -2790,13 +2791,13 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"❌ Failed to load Session Cog: {e}", exc_info=True)
 
-        # 🎮 Load Last Session Cog (comprehensive last session analytics)
+        # 🎮 Load Last Round Cog (comprehensive last session analytics)
         try:
             from bot.cogs.last_session_cog import LastSessionCog
             await self.add_cog(LastSessionCog(self))
-            logger.info("✅ Last Session Cog loaded (last_session with multiple view modes)")
+            logger.info("✅ Last Round Cog loaded (last_session with multiple view modes)")
         except Exception as e:
-            logger.error(f"❌ Failed to load Last Session Cog: {e}", exc_info=True)
+            logger.error(f"❌ Failed to load Last Round Cog: {e}", exc_info=True)
 
         # Load Sync Cog
         try:
@@ -2882,7 +2883,7 @@ class UltimateETLegacyBot(commands.Bot):
                 pass
             # Verify critical tables exist
             required_tables = [
-                "sessions",
+                "rounds",
                 "player_comprehensive_stats",
                 "weapon_comprehensive_stats",
                 "player_links",
@@ -3022,7 +3023,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info(
                 f"🎮 GAMING SESSION STARTED! {len(participants)} players detected"
             )
-            logger.info(f"📊 Session ID: {self.gaming_sessions_db_id}")
+            logger.info(f"📊 Round ID: {self.gaming_sessions_db_id}")
             logger.info("🔄 Monitoring enabled")
 
             # Post to Discord if stats channel configured
@@ -3096,7 +3097,7 @@ class UltimateETLegacyBot(commands.Bot):
                     """
                     UPDATE gaming_sessions
                     SET end_time = ?, duration_seconds = ?, status = 'ended'
-                    WHERE session_id = ?
+                    WHERE round_id = ?
                 """,
                     (
                         end_time.isoformat(),
@@ -3293,7 +3294,7 @@ class UltimateETLegacyBot(commands.Bot):
         Process a gamestats file: parse and import to database
 
         Returns:
-            dict with keys: success, session_id, player_count, error
+            dict with keys: success, round_id, player_count, error
         """
         try:
             from community_stats_parser import C0RNP0RN3StatsParser
@@ -3311,7 +3312,7 @@ class UltimateETLegacyBot(commands.Bot):
                 raise Exception(f"Parser error: {error_msg}")
 
             # Import to database using existing import logic
-            session_id = await self._import_stats_to_db(stats_data, filename)
+            round_id = await self._import_stats_to_db(stats_data, filename)
             # Mark file as processed only after successful import
             try:
                 await self._mark_file_processed(filename, success=True)
@@ -3321,7 +3322,7 @@ class UltimateETLegacyBot(commands.Bot):
 
             return {
                 "success": True,
-                "session_id": session_id,
+                "round_id": round_id,
                 "player_count": len(stats_data.get("players", [])),
                 "error": None,
                 "stats_data": stats_data,
@@ -3331,7 +3332,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.error(f"❌ Processing failed: {e}")
             return {
                 "success": False,
-                "session_id": None,
+                "round_id": None,
                 "player_count": 0,
                 "error": str(e),
                 "stats_data": None,
@@ -3362,12 +3363,12 @@ class UltimateETLegacyBot(commands.Bot):
             
             logger.debug(f"✅ Found channel: {channel.name}")
             
-            # Get session_id from result
-            session_id = result.get('session_id')
+            # Get round_id from result
+            round_id = result.get('round_id')
             stats_data = result.get('stats_data', {})
             
-            if not session_id:
-                logger.warning(f"⚠️ No session_id for {filename}, skipping post")
+            if not round_id:
+                logger.warning(f"⚠️ No round_id for {filename}, skipping post")
                 return
             
             # Get basic round info from parser (for round outcome/winner)
@@ -3379,18 +3380,31 @@ class UltimateETLegacyBot(commands.Bot):
             
             # 🔥 FETCH ALL PLAYER DATA FROM DATABASE (not from parser!)
             # This gives us access to ALL 53 fields, not just the limited parser output
-            logger.debug(f"📊 Fetching full player data from database for session {session_id}, round {round_num}...")
+            logger.debug(f"📊 Fetching full player data from database for session {round_id}, round {round_num}...")
             async with aiosqlite.connect(self.db_path) as db:
+                # Get round info (time limit, actual time)
+                round_cursor = await db.execute("""
+                    SELECT time_limit, actual_time, winner_team, round_outcome
+                    FROM rounds
+                    WHERE id = ?
+                """, (round_id,))
+                round_info = await round_cursor.fetchone()
+                
+                time_limit = round_info[0] if round_info else 'Unknown'
+                actual_time = round_info[1] if round_info else 'Unknown'
+                db_winner_team = round_info[2] if round_info else winner_team
+                db_round_outcome = round_info[3] if round_info else round_outcome
+                
                 cursor = await db.execute("""
                     SELECT 
                         player_name, team, kills, deaths, damage_given, damage_received,
                         team_damage_given, team_damage_received, gibs, headshot_kills,
                         accuracy, revives_given, times_revived, time_dead_minutes,
-                        efficiency, kd_ratio, time_played_minutes
+                        efficiency, kd_ratio, time_played_minutes, dpm
                     FROM player_comprehensive_stats
-                    WHERE session_id = ? AND round_number = ?
+                    WHERE round_id = ? AND round_number = ?
                     ORDER BY kills DESC
-                """, (session_id, round_num))
+                """, (round_id, round_num))
                 
                 rows = await cursor.fetchall()
                 
@@ -3414,36 +3428,76 @@ class UltimateETLegacyBot(commands.Bot):
                         'time_dead': row[13],
                         'efficiency': row[14],
                         'kd_ratio': row[15],
-                        'time_played': row[16]
+                        'time_played': row[16],
+                        'dpm': row[17]
                     })
             
             logger.info(f"📊 Fetched {len(players)} players with FULL stats from database")
             
             logger.info(f"📋 Creating embed: Round {round_num}, Map {map_name}, {len(players)} players")
             
-            # Build title with round outcome info
-            title = f"🎮 Round {round_num} Complete - Map: **{map_name}**"
+            # Determine round type
+            round_type = "Round 1" if round_num == 1 else "Round 2"
+            
+            # Build title - simple and clean
+            title = f"🎮 {round_type} Complete - {map_name}"
+            
             description_parts = []
             
-            # Add round outcome (who won / defended)
-            if round_outcome:
-                description_parts.append(f"**Outcome:** {round_outcome}")
-            if winner_team and winner_team != 'Unknown':
-                description_parts.append(f"**Winner:** {winner_team}")
-            if round_duration:
-                description_parts.append(f"**Duration:** {round_duration}")
-            description_parts.append(f"**{len(players)} Players** participated")
+            # Add time information (limit vs actual)
+            if time_limit and actual_time and time_limit != 'Unknown' and actual_time != 'Unknown':
+                description_parts.append(f"⏱️ **Time:** {actual_time} / {time_limit}")
+            elif actual_time and actual_time != 'Unknown':
+                description_parts.append(f"⏱️ **Duration:** {actual_time}")
+            
+            # Add round outcome - use DB values if available
+            outcome_to_show = db_round_outcome if db_round_outcome else round_outcome
+            winner_to_show = db_winner_team if db_winner_team and str(db_winner_team) != 'Unknown' else winner_team
+            
+            # Build outcome line
+            outcome_line = ""
+            if winner_to_show and str(winner_to_show) != 'Unknown':
+                outcome_line = f"🏆 **Winner:** {winner_to_show}"
+            if outcome_to_show:
+                if outcome_line:
+                    outcome_line += f" ({outcome_to_show})"
+                else:
+                    outcome_line = f"🏆 **Outcome:** {outcome_to_show}"
+            
+            if outcome_line:
+                description_parts.append(outcome_line)
+            
+            # Determine embed color based on round type
+            embed_color = discord.Color.blue() if round_num == 1 else discord.Color.red()
             
             # Create main embed
             embed = discord.Embed(
                 title=title,
                 description="\n".join(description_parts),
-                color=discord.Color.green() if round_outcome and 'win' in round_outcome.lower() else discord.Color.blue(),
+                color=embed_color,
                 timestamp=datetime.now()
             )
             
             # Sort all players by kills
             players_sorted = sorted(players, key=lambda p: p.get('kills', 0), reverse=True)
+            
+            # Rank emoji/number helper
+            def get_rank_display(rank):
+                """Get rank emoji for top 3, numbers with emojis for 4+"""
+                if rank == 1:
+                    return "🥇"
+                elif rank == 2:
+                    return "🥈"
+                elif rank == 3:
+                    return "🥉"
+                else:
+                    # Convert number to digit emojis (4-9 use number emojis, 10+ use digits)
+                    num_str = str(rank)
+                    emoji_map = {
+                        '0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+                        '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'
+                    }
+                    return ''.join(emoji_map.get(digit, digit) for digit in num_str)
             
             # Split into chunks of 5 for Discord field limits (more stats per player = fewer per field)
             chunk_size = 5
@@ -3452,14 +3506,18 @@ class UltimateETLegacyBot(commands.Bot):
                 field_name = f'📊 Players {i+1}-{min(i+chunk_size, len(players_sorted))}'
                 
                 player_lines = []
-                for player in chunk:
-                    name = player.get('name', 'Unknown')[:18]
+                for idx, player in enumerate(chunk):
+                    rank = i + idx + 1  # Global rank across all chunks
+                    rank_display = get_rank_display(rank)
+                    
+                    name = player.get('name', 'Unknown')[:16]
                     kills = player.get('kills', 0)
                     deaths = player.get('deaths', 0)
                     dmg = player.get('damage_given', 0)
                     dmgr = player.get('damage_received', 0)
                     acc = player.get('accuracy', 0)
                     hs = player.get('headshots', 0)
+                    dpm = player.get('dpm', 0)
                     revives = player.get('revives', 0)
                     got_revived = player.get('times_revived', 0)
                     gibs = player.get('gibs', 0)
@@ -3469,18 +3527,17 @@ class UltimateETLegacyBot(commands.Bot):
                     
                     kd_str = f'{kills}/{deaths}'
                     
-                    # Line 1: Core combat stats
+                    # Line 1: Rank + Name + Core stats (simplified)
                     line1 = (
-                        f"**{name}** `{kd_str}` "
-                        f"`DMG:{int(dmg):,}←→{int(dmgr):,}` "
-                        f"`ACC:{acc:.1f}%` `HS:{hs}`"
+                        f"{rank_display} **{name}** • K/D:`{kd_str}` "
+                        f"DMG:`{int(dmg):,}` DPM:`{int(dpm)}` "
+                        f"ACC:`{acc:.1f}%` HS:`{hs}`"
                     )
                     
-                    # Line 2: Support & damage stats
+                    # Line 2: Support stats (simplified)
                     line2 = (
-                        f"  ↳ `Rev:{revives}/{got_revived}` `Gibs:{gibs}` "
-                        f"`TmDmg:{int(team_dmg_given)}/{int(team_dmg_rcvd)}` "
-                        f"`Dead:{time_dead:.1f}m`"
+                        f"     ↳ Rev:`{revives}/{got_revived}` Gibs:`{gibs}` "
+                        f"TmDmg:`{int(team_dmg_given)}` Dead:`{time_dead:.1f}m`"
                     )
                     
                     player_lines.append(f"{line1}\n{line2}")
@@ -3500,20 +3557,20 @@ class UltimateETLegacyBot(commands.Bot):
             total_gibs = sum(p.get('gibs', 0) for p in players)
             total_team_dmg = sum(p.get('team_damage_given', 0) for p in players)
             avg_acc = sum(p.get('accuracy', 0) for p in players) / len(players) if players else 0
+            avg_dpm = sum(p.get('dpm', 0) for p in players) / len(players) if players else 0
             avg_time_dead = sum(p.get('time_dead', 0) for p in players) / len(players) if players else 0
             
             embed.add_field(
-                name="📊 Round Totals",
+                name="📊 Round Summary",
                 value=(
-                    f"**Kills:** {total_kills} | **Deaths:** {total_deaths} | **Headshots:** {total_hs}\n"
-                    f"**Damage:** {int(total_dmg):,} | **Team Damage:** {int(total_team_dmg):,}\n"
-                    f"**Revives:** {total_revives} | **Gibs:** {total_gibs}\n"
-                    f"**Avg Accuracy:** {avg_acc:.1f}% | **Avg Time Dead:** {avg_time_dead:.1f}m"
+                    f"**Totals:** Kills:`{total_kills}` Deaths:`{total_deaths}` HS:`{total_hs}` "
+                    f"Damage:`{int(total_dmg):,}` TeamDmg:`{int(total_team_dmg):,}`\n"
+                    f"**Averages:** Accuracy:`{avg_acc:.1f}%` DPM:`{int(avg_dpm)}` DeadTime:`{avg_time_dead:.1f}m`"
                 ),
                 inline=False
             )
             
-            embed.set_footer(text=f"Session ID: {session_id} | {filename}")
+            embed.set_footer(text=f"Round ID: {round_id} | {filename}")
             
             # Post to channel
             logger.info(f"📤 Sending detailed stats embed to #{channel.name}...")
@@ -3521,14 +3578,14 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info(f"✅ Successfully posted stats for {len(players)} players to Discord!")
             
             # 🗺️ Check if this was the last round for the map → post map summary
-            await self._check_and_post_map_completion(session_id, map_name, round_num, channel)
+            await self._check_and_post_map_completion(round_id, map_name, round_num, channel)
             
             logger.info("=" * 60)
             
         except Exception as e:
             logger.error(f"❌ Error posting round stats to Discord: {e}", exc_info=True)
 
-    async def _check_and_post_map_completion(self, session_id: int, map_name: str, current_round: int, channel):
+    async def _check_and_post_map_completion(self, round_id: int, map_name: str, current_round: int, channel):
         """
         Check if we just finished the last round of a map.
         If so, post aggregate map statistics.
@@ -3539,8 +3596,8 @@ class UltimateETLegacyBot(commands.Bot):
                 cursor = await db.execute("""
                     SELECT MAX(round_number) as max_round, COUNT(DISTINCT round_number) as round_count
                     FROM player_comprehensive_stats
-                    WHERE session_id = ? AND map_name = ?
-                """, (session_id, map_name))
+                    WHERE round_id = ? AND map_name = ?
+                """, (round_id, map_name))
                 
                 row = await cursor.fetchone()
                 if not row:
@@ -3553,14 +3610,14 @@ class UltimateETLegacyBot(commands.Bot):
                 # If current round matches max round in DB, this is the last round for the map
                 if current_round == max_round and round_count >= 2:
                     logger.info(f"🏁 Map complete! {map_name} finished after {round_count} rounds. Posting map summary...")
-                    await self._post_map_summary(session_id, map_name, channel)
+                    await self._post_map_summary(round_id, map_name, channel)
                 else:
                     logger.debug(f"⏳ Map {map_name} not complete yet (round {current_round}/{max_round})")
                     
         except Exception as e:
             logger.error(f"❌ Error checking map completion: {e}", exc_info=True)
 
-    async def _post_map_summary(self, session_id: int, map_name: str, channel):
+    async def _post_map_summary(self, round_id: int, map_name: str, channel):
         """
         Post aggregate statistics for all rounds of a completed map.
         """
@@ -3579,8 +3636,8 @@ class UltimateETLegacyBot(commands.Bot):
                         SUM(headshot_kills) as total_headshots,
                         AVG(accuracy) as avg_accuracy
                     FROM player_comprehensive_stats
-                    WHERE session_id = ? AND map_name = ?
-                """, (session_id, map_name))
+                    WHERE round_id = ? AND map_name = ?
+                """, (round_id, map_name))
                 
                 map_stats = await cursor.fetchone()
                 if not map_stats:
@@ -3598,11 +3655,11 @@ class UltimateETLegacyBot(commands.Bot):
                         SUM(damage_given) as total_damage,
                         AVG(accuracy) as avg_accuracy
                     FROM player_comprehensive_stats
-                    WHERE session_id = ? AND map_name = ?
+                    WHERE round_id = ? AND map_name = ?
                     GROUP BY player_guid
                     ORDER BY total_kills DESC
                     LIMIT 5
-                """, (session_id, map_name))
+                """, (round_id, map_name))
                 
                 top_players = await cursor.fetchall()
                 
@@ -3646,7 +3703,7 @@ class UltimateETLegacyBot(commands.Bot):
                         inline=False
                     )
                 
-                embed.set_footer(text=f"Session ID: {session_id}")
+                embed.set_footer(text=f"Round ID: {round_id}")
                 
                 # Post to channel
                 logger.info(f"📤 Posting map summary to #{channel.name}...")
@@ -3671,9 +3728,9 @@ class UltimateETLegacyBot(commands.Bot):
             
             # Format time as HH:MM:SS
             if len(time_part) == 6:
-                session_time = f"{time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+                round_time = f"{time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
             else:
-                session_time = "00:00:00"
+                round_time = "00:00:00"
             
             # Create match_id (unique identifier for the gaming session)
             match_id = f"{date_part}-{time_part}"
@@ -3689,8 +3746,8 @@ class UltimateETLegacyBot(commands.Bot):
                 # Insert session
                 cursor = await db.execute(
                     """
-                    SELECT id FROM sessions
-                    WHERE session_date = ? AND map_name = ? AND round_number = ?
+                    SELECT id FROM rounds
+                    WHERE round_date = ? AND map_name = ? AND round_number = ?
                 """,
                     (
                         date_part,  # Use date_part not timestamp
@@ -3702,21 +3759,21 @@ class UltimateETLegacyBot(commands.Bot):
                 existing = await cursor.fetchone()
                 if existing:
                     logger.info(
-                        f"⚠️ Session already exists (ID: {existing[0]})"
+                        f"⚠️ Round already exists (ID: {existing[0]})"
                     )
                     return existing[0]
 
                 # Insert new session
                 cursor = await db.execute(
                     """
-                    INSERT INTO sessions (
-                        session_date, session_time, match_id, map_name, round_number,
+                    INSERT INTO rounds (
+                        round_date, round_time, match_id, map_name, round_number,
                         time_limit, actual_time
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         date_part,
-                        session_time,
+                        round_time,
                         match_id,
                         stats_data["map_name"],
                         stats_data["round_num"],
@@ -3725,22 +3782,22 @@ class UltimateETLegacyBot(commands.Bot):
                     ),
                 )
 
-                session_id = cursor.lastrowid
+                round_id = cursor.lastrowid
 
                 # Insert player stats
                 for player in stats_data.get("players", []):
                     await self._insert_player_stats(
-                        db, session_id, date_part, stats_data, player
+                        db, round_id, date_part, stats_data, player
                     )
 
                 await db.commit()
 
                 logger.info(
-                    f"✅ Imported session {session_id} with "
+                    f"✅ Imported session {round_id} with "
                     f"{len(stats_data.get('players', []))} players"
                 )
 
-                return session_id
+                return round_id
 
         except Exception as e:
             # Attempt a rollback to ensure partial writes are not committed
@@ -3759,7 +3816,7 @@ class UltimateETLegacyBot(commands.Bot):
             raise
 
     async def _insert_player_stats(
-        self, db, session_id, session_date, result, player
+        self, db, round_id, round_date, result, player
     ):
         """Insert player comprehensive stats"""
         obj_stats = player.get("objective_stats", {})
@@ -3800,8 +3857,8 @@ class UltimateETLegacyBot(commands.Bot):
         time_dead_ratio = td_percent
 
         values = (
-            session_id,
-            session_date,
+            round_id,
+            round_date,
             result["map_name"],
             result["round_num"],
             player.get("guid", "UNKNOWN"),
@@ -3856,7 +3913,7 @@ class UltimateETLegacyBot(commands.Bot):
         cursor = await db.execute(
             """
             INSERT INTO player_comprehensive_stats (
-                session_id, session_date, map_name, round_number,
+                round_id, round_date, map_name, round_number,
                 player_guid, player_name, clean_name, team,
                 kills, deaths, damage_given, damage_received,
                 team_damage_given, team_damage_received,
@@ -3898,9 +3955,9 @@ class UltimateETLegacyBot(commands.Bot):
                 cols = [r[1] for r in pragma_rows]
 
                 # Include session metadata columns if present (they're NOT NULL in some schemas)
-                insert_cols = ["session_id"]
-                if "session_date" in cols:
-                    insert_cols.append("session_date")
+                insert_cols = ["round_id"]
+                if "round_date" in cols:
+                    insert_cols.append("round_date")
                 if "map_name" in cols:
                     insert_cols.append("map_name")
                 if "round_number" in cols:
@@ -3920,7 +3977,7 @@ class UltimateETLegacyBot(commands.Bot):
                 insert_sql = f"INSERT INTO weapon_comprehensive_stats ({', '.join(insert_cols)}) VALUES ({placeholders})"
 
                 logger.debug(
-                    f"Preparing to insert {len(weapon_stats)} weapon rows for {player.get('name')} (session {session_id})"
+                    f"Preparing to insert {len(weapon_stats)} weapon rows for {player.get('name')} (session {round_id})"
                 )
                 for weapon_name, w in weapon_stats.items():
                     w_hits = int(w.get("hits", 0) or 0)
@@ -3931,9 +3988,9 @@ class UltimateETLegacyBot(commands.Bot):
                     w_acc = (w_hits / w_shots * 100) if w_shots > 0 else 0.0
 
                     # Build row values in the same order as insert_cols
-                    row_vals = [session_id]
-                    if "session_date" in cols:
-                        row_vals.append(session_date)
+                    row_vals = [round_id]
+                    if "round_date" in cols:
+                        row_vals.append(round_date)
                     if "map_name" in cols:
                         row_vals.append(result.get("map_name"))
                     if "round_number" in cols:
@@ -3955,8 +4012,8 @@ class UltimateETLegacyBot(commands.Bot):
                         logged = getattr(self, "_weapon_diag_logged", 0)
                         if logged < 5:
                             logger.debug(
-                                "DIAG WEAPON INSERT: session_id=%s player=%s",
-                                session_id,
+                                "DIAG WEAPON INSERT: round_id=%s player=%s",
+                                round_id,
                                 player.get("name"),
                             )
                             logger.debug("  insert_cols: %s", insert_cols)
@@ -3975,7 +4032,7 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             # Weapon insert failures should be visible — escalate to error and include traceback
             logger.error(
-                f"Failed to insert weapon stats for {player.get('name')} (session {session_id}): {e}",
+                f"Failed to insert weapon stats for {player.get('name')} (session {round_id}): {e}",
                 exc_info=True,
             )
         
@@ -3984,7 +4041,7 @@ class UltimateETLegacyBot(commands.Bot):
             db,
             player.get("guid", "UNKNOWN"),
             player.get("name", "Unknown"),
-            session_date,
+            round_date,
         )
 
     async def _update_player_alias(self, db, guid, alias, last_seen_date):
@@ -4110,16 +4167,38 @@ class UltimateETLegacyBot(commands.Bot):
         Smart file processing decision (Hybrid Approach)
 
         Checks multiple sources to avoid re-processing:
-        1. In-memory cache (fastest)
-        2. Local file exists (fast)
-        3. Processed files table (fast, persistent)
-        4. Sessions table (slower, definitive)
+        1. File age (prevent importing old files)
+        2. In-memory cache (fastest)
+        3. Local file exists (fast)
+        4. Processed files table (fast, persistent)
+        5. Sessions table (slower, definitive)
 
         Returns:
             bool: True if file should be processed, False if already done
         """
         try:
-            # 1. Check in-memory cache
+            # 1. Check file age - only import files created AFTER bot startup
+            # This prevents importing old files on bot restart while allowing live updates
+            try:
+                # Parse datetime from filename: YYYY-MM-DD-HHMMSS-...
+                datetime_str = filename[:17]  # Get YYYY-MM-DD-HHMMSS
+                file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d-%H%M%S")
+                
+                # Skip files created before bot started
+                if file_datetime < self.bot_startup_time:
+                    time_diff = (self.bot_startup_time - file_datetime).total_seconds() / 3600
+                    logger.debug(f"⏭️ {filename} created {time_diff:.1f}h before bot startup (skip old files)")
+                    self.processed_files.add(filename)
+                    await self._mark_file_processed(filename, success=True)
+                    return False
+                else:
+                    time_diff = (file_datetime - self.bot_startup_time).total_seconds() / 60
+                    logger.debug(f"✅ {filename} created {time_diff:.1f}m after bot startup (process as new file)")
+            except ValueError:
+                # If datetime parsing fails, continue with other checks
+                logger.warning(f"⚠️ Could not parse datetime from filename: {filename}")
+            
+            # 2. Check in-memory cache
             if filename in self.processed_files:
                 return False
 
@@ -4195,8 +4274,8 @@ class UltimateETLegacyBot(commands.Bot):
                     pass
                 cursor = await db.execute(
                     """
-                    SELECT 1 FROM sessions
-                    WHERE session_date = ? 
+                    SELECT 1 FROM rounds
+                    WHERE round_date = ? 
                       AND map_name = ? 
                       AND round_number = ?
                     LIMIT 1
@@ -4323,7 +4402,7 @@ class UltimateETLegacyBot(commands.Bot):
                 logger.error("❌ Stats channel not found")
                 return
 
-            # Create session end notification
+            # Create round end notification
             embed = discord.Embed(
                 title="🏁 Gaming Session Ended",
                 description=(
@@ -4348,7 +4427,7 @@ class UltimateETLegacyBot(commands.Bot):
                     # Get most recent session data
                     cursor = await db.execute(
                         """
-                        SELECT DISTINCT DATE(session_date) as date
+                        SELECT DISTINCT DATE(round_date) as date
                         FROM player_comprehensive_stats
                         ORDER BY date DESC
                         LIMIT 1
@@ -4357,15 +4436,15 @@ class UltimateETLegacyBot(commands.Bot):
                     row = await cursor.fetchone()
 
                     if row:
-                        session_date = row[0]
+                        round_date = row[0]
                         logger.info(
-                            f"📊 Posting auto-summary for {session_date}"
+                            f"📊 Posting auto-summary for {round_date}"
                         )
 
                         # Use last_session logic to generate embeds
                         # (This would call the existing last_session code)
                         await channel.send(
-                            f"📊 **Session Summary for {session_date}**\n"
+                            f"📊 **Session Summary for {round_date}**\n"
                             f"Use `!last_session` for full details!"
                         )
 
