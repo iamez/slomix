@@ -8,7 +8,7 @@ An **intelligent Discord bot** that makes gaming stats **automatic, social, and 
 - 🤖 **Automation Ready** - Voice detection & auto-posting built, requires configuration
 - 👥 **Social First** - @mention anyone for instant stats
 - 🏆 **Smart Aliases** - Handles name changes, consolidates stats
-- ⚡ **Production Ready** - 25 unique players, 1,862 sessions tracked
+- ⚡ **Production Ready** - 25 unique players, 1,862 rounds tracked
 
 **[👉 See Full Showcase](docs/README.md)** | **[👉 Show Your Friend](docs/FOR_YOUR_FRIEND.md)**
 
@@ -32,10 +32,10 @@ An **intelligent Discord bot** that makes gaming stats **automatic, social, and 
 - 📊 **Smart Stats** - `!stats vid` or `!stats @vid` (instant lookup)
 - 🔗 **Interactive Linking** - React with 1️⃣2️⃣3️⃣ to link your account
 - 🎯 **Alias Tracking** - All name changes consolidated automatically
-- 🎮 **Session History** - `!last_session` shows your recent matches
+- 🎮 **Session History** - `!last_round` shows your recent matches
 - 🏆 **Leaderboards** - Rankings by K/D, DPM, and 11 other stats
 - 🔧 **SSH Sync** - `!sync_stats` manually syncs server files
-- 📈 **Session Management** - `!session_start` / `!session_end` commands
+- 📈 **Round Management** - `!session_start` / `!session_end` commands
 
 ### **Available - Requires Configuration** ⚙️
 **All automation features are fully implemented and ready to use!**
@@ -71,7 +71,7 @@ python bot/ultimate_bot.py
 
 - `!stats <player>` - Player statistics
 - `!top_dpm` - DPM leaderboard  
-- `!session_stats` - Session analytics
+- `!session_stats` - Round analytics
 - `!link_me` - Link Discord to game stats
 - `!mvp` - Show MVP awards
 
@@ -120,7 +120,7 @@ This ensures players who join mid-round aren't penalized with inflated DPM value
 
 ## 📊 Database
 
-- **Sessions**: 1,862 gaming sessions tracked (all 2025 data imported)
+- **Sessions**: 1,862 gaming rounds tracked (all 2025 data imported)
 - **Players**: 25 unique player GUIDs with comprehensive stats
 - **Tables**: 7 tables (sessions, player_comprehensive_stats, weapon_comprehensive_stats, player_links, processed_files, session_teams, player_aliases)
 - **Schema**: UNIFIED 53-column schema with stopwatch scoring support

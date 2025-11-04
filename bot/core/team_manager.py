@@ -61,7 +61,7 @@ class TeamManager:
         query = """
             SELECT round_number, team, player_guid, player_name
             FROM player_comprehensive_stats
-            WHERE session_date LIKE ?
+            WHERE round_date LIKE ?
             ORDER BY round_number, team
         """
         cursor.execute(query, (f"{session_date}%",))
@@ -276,9 +276,9 @@ class TeamManager:
             cursor = db.cursor()
             cursor.execute(
                 """
-                SELECT DISTINCT SUBSTR(session_date, 1, 10) as date
-                FROM sessions
-                WHERE SUBSTR(session_date, 1, 10) < ?
+                SELECT DISTINCT SUBSTR(round_date, 1, 10) as date
+                FROM rounds
+                WHERE SUBSTR(round_date, 1, 10) < ?
                 ORDER BY date DESC
                 LIMIT 1
                 """,

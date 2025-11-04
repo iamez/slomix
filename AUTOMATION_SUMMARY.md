@@ -104,7 +104,7 @@
 
 ### 2. Daily Reports 📊
 - **Runs:** 23:00 CET every day
-- **Posts:** Sessions, rounds, kills, top players
+- **Posts:** Rounds, rounds, kills, top players
 - **Benefits:** Daily activity summary without manual work
 
 ### 3. Database Maintenance 🔧

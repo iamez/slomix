@@ -167,7 +167,7 @@ class SubstitutionDetector:
                 round_number,
                 team
             FROM player_comprehensive_stats
-            WHERE session_date LIKE ?
+            WHERE round_date LIKE ?
             ORDER BY round_number, player_guid
         """
         
@@ -209,7 +209,7 @@ class SubstitutionDetector:
                 player_guid,
                 player_name
             FROM player_comprehensive_stats
-            WHERE session_date LIKE ?
+            WHERE round_date LIKE ?
             ORDER BY round_number, team, player_guid
         """
         
