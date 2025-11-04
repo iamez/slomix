@@ -128,7 +128,7 @@ class StopwatchScoring:
             cursor.execute(f'''
                 SELECT map_name, match_id, round_number, defender_team, 
                        winner_team, time_limit, actual_time
-                FROM sessions
+                FROM rounds
                 WHERE id IN ({placeholders})
                 AND match_id IS NOT NULL
                 ORDER BY match_id, round_number
@@ -138,8 +138,8 @@ class StopwatchScoring:
             cursor.execute('''
                 SELECT map_name, match_id, round_number, defender_team, 
                        winner_team, time_limit, actual_time
-                FROM sessions
-                WHERE substr(session_date, 1, 10) = ?
+                FROM rounds
+                WHERE substr(round_date, 1, 10) = ?
                 AND match_id IS NOT NULL
                 ORDER BY match_id, round_number
             ''', (session_date,))

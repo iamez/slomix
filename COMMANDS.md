@@ -8,7 +8,7 @@ This document lists the Discord bot commands found in the repository, their alia
 
 | Command | Aliases | Description |
 |---|---|---|
-| `session_start` | (none) | Start a new gaming session (creates a session record) |
+| `session_start` | (none) | Start a new gaming session (creates a round record) |
 | `sync_stats` | `syncstats`, `sync_logs` | Manually sync and process unprocessed stats files from remote server via SSH |
 | `session_end` | (none) | Stop monitoring / end the current session |
 | `ping` | (none) | Check bot status, latency, DB latency and cache stats |
@@ -20,8 +20,8 @@ This document lists the Discord bot commands found in the repository, their alia
 | `stats` | (none) | Show detailed statistics for a player (self, name or mention) |
 | `leaderboard` | `lb`, `top` | Show leaderboards (kills, kd, dpm, accuracy, etc.) with pagination |
 | `session` | `match`, `game` | Show session/match details |
-| `last_session` | `last`, `latest`, `recent` | Show the most recent session |
-| `sessions` | `list_sessions`, `ls` | List sessions |
+| `last_round` | `last`, `latest`, `recent` | Show the most recent session |
+| `rounds` | `list_sessions`, `ls` | List sessions |
 | `list_players` | `players`, `lp` | List players (search/listing helpers) |
 | `link` | (none) | Link a Discord user to an ET:Legacy account (by name or GUID) |
 | `unlink` | (none) | Unlink a Discord account from an ET:Legacy GUID |

@@ -1,0 +1,349 @@
+﻿COMPREHENSIVE NOV 2 SESSION VALIDATION
+Comparing ALL fields from raw files vs database
+================================================================================
+
+Found 18 Nov 2 files (excluding orphan)
+Session IDs: 2134-2151 (18 sessions)
+
+================================================================================
+Round: 2025-11-02-211530-etl_adlernest-round-1.txt
+Session ID: 2134
+================================================================================
+Players: 6 in file, 6 in DB
+  Raw GUIDs: ['0A26D447', '2B5938F5', '5D989160', '7B84BE88', 'D8423F90', 'EDBB5DA9']
+  DB GUIDs:  ['0A26D447', '2B5938F5', '5D989160', '7B84BE88', 'D8423F90', 'EDBB5DA9']
+
+  DEBUG carniee (0A26D447):
+    Raw weapons: ['WS_COLT', 'WS_DYNAMITE', 'WS_GRENADE', 'WS_MP40', 'WS_SYRINGE', 'WS_THOMPSON']
+    DB weapons:  ['WS_COLT', 'WS_DYNAMITE', 'WS_GRENADE', 'WS_SYRINGE', 'WS_THOMPSON']
+  [FAIL] carniee (0A26D447)
+      headshots: R8 != D1
+      WS_MP40.deaths: R9 != D0
+
+  DEBUG bronze. (2B5938F5):
+    Raw weapons: ['WS_COLT', 'WS_DYNAMITE', 'WS_GRENADE', 'WS_KNIFE', 'WS_KNIFE_KBAR', 'WS_MP40', 'WS_THOMPSON']
+    DB weapons:  ['WS_COLT', 'WS_DYNAMITE', 'WS_GRENADE', 'WS_KNIFE', 'WS_KNIFE_KBAR', 'WS_THOMPSON']
+  [FAIL] bronze. (2B5938F5)
+      headshots: R5 != D2
+      WS_MP40.deaths: R5 != D0
+
+  DEBUG .olz (5D989160):
+    Raw weapons: ['WS_GRENADE', 'WS_LUGER', 'WS_MP40', 'WS_SYRINGE', 'WS_THOMPSON']
+    DB weapons:  ['WS_GRENADE', 'WS_LUGER', 'WS_MP40', 'WS_SYRINGE']
+  [FAIL] .olz (5D989160)
+      headshots: R7 != D2
+      WS_THOMPSON.deaths: R5 != D0
+
+  DEBUG endekk (7B84BE88):
+    Raw weapons: ['WS_COLT', 'WS_GRENADE', 'WS_KNIFE_KBAR', 'WS_LUGER', 'WS_MP40', 'WS_SYRINGE', 'WS_THOMPSON']
+    DB weapons:  ['WS_COLT', 'WS_GRENADE', 'WS_KNIFE_KBAR', 'WS_MP40', 'WS_SYRINGE', 'WS_THOMPSON']
+  [FAIL] endekk (7B84BE88)
+      headshots: R12 != D5
+      WS_LUGER.deaths: R1 != D0
+
+  DEBUG vid (D8423F90):
+    Raw weapons: ['WS_GRENADE', 'WS_KNIFE', 'WS_LUGER', 'WS_MP40', 'WS_SYRINGE', 'WS_THOMPSON']
+    DB weapons:  ['WS_GRENADE', 'WS_KNIFE', 'WS_LUGER', 'WS_MP40', 'WS_SYRINGE']
+  [FAIL] vid (D8423F90)
+      headshots: R9 != D3
+      WS_THOMPSON.deaths: R6 != D0
+
+  DEBUG slomix.SuperBoyy (EDBB5DA9):
+    Raw weapons: ['WS_COLT', 'WS_GRENADE', 'WS_LUGER', 'WS_MP40', 'WS_SYRINGE', 'WS_THOMPSON']
+    DB weapons:  ['WS_GRENADE', 'WS_LUGER', 'WS_MP40', 'WS_SYRINGE']
+  [FAIL] slomix.SuperBoyy (EDBB5DA9)
+      headshots: R4 != D2
+      WS_THOMPSON.deaths: R5 != D0
+      WS_COLT.deaths: R2 != D0
+
+================================================================================
+Round: 2025-11-02-212034-etl_adlernest-round-2.txt
+Session ID: 2135
+================================================================================
+[R2] Detected Round 2 file: 2025-11-02-212034-etl_adlernest-round-2.txt
+[R1] Found Round 1 file: 2025-11-02-211530-etl_adlernest-round-1.txt
+[ERROR] Error parsing stats file local_stats\2025-11-02-212034-etl_adlernest-round-2.txt: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
+  [FAIL] Failed to parse 2025-11-02-212034-etl_adlernest-round-2.txt
+  [FAIL] Could not parse raw file
+
+================================================================================
+Round: 2025-11-02-213554-supply-round-1.txt
+Session ID: 2136
+================================================================================
+Players: 6 in file, 6 in DB
+  [FAIL] carniee (0A26D447)
+      headshots: R23 != D3
+      WS_COLT.deaths: R1 != D0
+  [FAIL] bronze. (2B5938F5)
+      headshots: R20 != D6
+  [FAIL] .olz (5D989160)
+      headshots: R5 != D0
+      WS_MP40.deaths: R16 != D0
+      WS_LUGER.deaths: R2 != D0
+  [FAIL] endekk (7B84BE88)
+      headshots: R25 != D5
+      WS_STEN.deaths: R1 != D0
+  [FAIL] vid (D8423F90)
+      headshots: R18 != D3
+      WS_MP40.deaths: R11 != D0
+      WS_LUGER.deaths: R1 != D0
+  [FAIL] SuperBoyy (EDBB5DA9)
+      headshots: R13 != D1
+      WS_MP40.deaths: R22 != D0
+      WS_LUGER.deaths: R3 != D0
+
+================================================================================
+Round: 2025-11-02-214808-supply-round-2.txt
+Session ID: 2137
+================================================================================
+[R2] Detected Round 2 file: 2025-11-02-214808-supply-round-2.txt
+[R1] Found Round 1 file: 2025-11-02-213554-supply-round-1.txt
+[ERROR] Error parsing stats file local_stats\2025-11-02-214808-supply-round-2.txt: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
+  [FAIL] Failed to parse 2025-11-02-214808-supply-round-2.txt
+  [FAIL] Could not parse raw file
+
+================================================================================
+Round: 2025-11-02-215803-etl_sp_delivery-round-1.txt
+Session ID: 2138
+================================================================================
+Players: 6 in file, 6 in DB
+  [FAIL] carniee (0A26D447)
+      headshots: R25 != D4
+      WS_LUGER.deaths: R4 != D0
+  [FAIL] bronze. (2B5938F5)
+      headshots: R15 != D6
+      WS_LUGER.deaths: R1 != D0
+  [FAIL] .olz (5D989160)
+      headshots: R9 != D2
+      WS_COLT.deaths: R1 != D0
+  [FAIL] endekk (7B84BE88)
+      headshots: R15 != D4
+  [FAIL] vid (D8423F90)
+      headshots: R14 != D5
+  [FAIL] SuperBoyy (EDBB5DA9)
+      headshots: R19 != D7
+      WS_COLT.deaths: R3 != D0
+
+================================================================================
+Round: 2025-11-02-220711-etl_sp_delivery-round-2.txt
+Session ID: 2139
+================================================================================
+[R2] Detected Round 2 file: 2025-11-02-220711-etl_sp_delivery-round-2.txt
+[R1] Found Round 1 file: 2025-11-02-215803-etl_sp_delivery-round-1.txt
+[ERROR] Error parsing stats file local_stats\2025-11-02-220711-etl_sp_delivery-round-2.txt: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
+  [FAIL] Failed to parse 2025-11-02-220711-etl_sp_delivery-round-2.txt
+  [FAIL] Could not parse raw file
+
+================================================================================
+Round: 2025-11-02-221354-te_escape2-round-1.txt
+Session ID: 2140
+================================================================================
+Players: 6 in file, 6 in DB
+  [FAIL] carniee (0A26D447)
+      headshots: R10 != D4
+      WS_THOMPSON.deaths: R7 != D0
+  [FAIL] bronze. (2B5938F5)
+      headshots: R6 != D2
+      WS_THOMPSON.deaths: R6 != D0
+  [FAIL] .olz (5D989160)
+      headshots: R4 != D0
+      WS_MP40.deaths: R8 != D0
+  [FAIL] endekk (7B84BE88)
+      headshots: R6 != D0
+  [FAIL] vid (D8423F90)
+      headshots: R7 != D2
+      WS_LUGER.deaths: R1 != D0
+  [FAIL] SuperBoyy (EDBB5DA9)
+      headshots: R9 != D3
+      WS_MP40.deaths: R6 != D0
+      WS_LUGER.deaths: R1 != D0
+
+================================================================================
+Round: 2025-11-02-222016-te_escape2-round-2.txt
+Session ID: 2141
+================================================================================
+[R2] Detected Round 2 file: 2025-11-02-222016-te_escape2-round-2.txt
+[R1] Found Round 1 file: 2025-11-02-221354-te_escape2-round-1.txt
+[ERROR] Error parsing stats file local_stats\2025-11-02-222016-te_escape2-round-2.txt: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
+  [FAIL] Failed to parse 2025-11-02-222016-te_escape2-round-2.txt
+  [FAIL] Could not parse raw file
+
+================================================================================
+Round: 2025-11-02-223043-te_escape2-round-1.txt
+Session ID: 2142
+================================================================================
+Players: 6 in file, 6 in DB
+  [FAIL] carniee (0A26D447)
+      headshots: R10 != D4
+  [FAIL] bronze. (2B5938F5)
+      headshots: R13 != D2
+      WS_MP40.deaths: R8 != D0
+      WS_LUGER.deaths: R1 != D0
+  [FAIL] .olz (5D989160)
+      headshots: R9 != D3
+      WS_THOMPSON.deaths: R6 != D0
+  [FAIL] endekk (7B84BE88)
+      headshots: R10 != D2
+      WS_MP40.deaths: R9 != D0
+  [FAIL] vid (D8423F90)
+      headshots: R20 != D5
+      WS_COLT.deaths: R1 != D0
+  [FAIL] SuperBoyy (EDBB5DA9)
+      headshots: R7 != D0
+
+================================================================================
+Round: 2025-11-02-223828-te_escape2-round-2.txt
+Session ID: 2143
+================================================================================
+[R2] Detected Round 2 file: 2025-11-02-223828-te_escape2-round-2.txt
+[R1] Found Round 1 file: 2025-11-02-223043-te_escape2-round-1.txt
+[ERROR] Error parsing stats file local_stats\2025-11-02-223828-te_escape2-round-2.txt: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
+  [FAIL] Failed to parse 2025-11-02-223828-te_escape2-round-2.txt
+  [FAIL] Could not parse raw file
+
+================================================================================
+Round: 2025-11-02-224603-et_brewdog-round-1.txt
+Session ID: 2144
+================================================================================
+Players: 6 in file, 6 in DB
+  [FAIL] carniee (0A26D447)
+      headshots: R14 != D4
+  [FAIL] bronze. (2B5938F5)
+      headshots: R12 != D2
+  [FAIL] .olz (5D989160)
+      headshots: R3 != D2
+      WS_MP40.deaths: R8 != D0
+  [FAIL] endekk (7B84BE88)
+      headshots: R3 != D0
+      WS_THOMPSON.deaths: R2 != D0
+  [FAIL] vid (D8423F90)
+      headshots: R14 != D3
+      WS_MP40.deaths: R6 != D0
+  [FAIL] SuperBoyy (EDBB5DA9)
+      headshots: R6 != D1
+      WS_MP40.deaths: R6 != D0
+
+================================================================================
+Round: 2025-11-02-224848-et_brewdog-round-2.txt
+Session ID: 2145
+================================================================================
+[R2] Detected Round 2 file: 2025-11-02-224848-et_brewdog-round-2.txt
+[R1] Found Round 1 file: 2025-11-02-224603-et_brewdog-round-1.txt
+[ERROR] Error parsing stats file local_stats\2025-11-02-224848-et_brewdog-round-2.txt: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
+  [FAIL] Failed to parse 2025-11-02-224848-et_brewdog-round-2.txt
+  [FAIL] Could not parse raw file
+
+================================================================================
+Round: 2025-11-02-225529-etl_frostbite-round-1.txt
+Session ID: 2146
+================================================================================
+Players: 6 in file, 6 in DB
+  [FAIL] carniee (0A26D447)
+      headshots: R6 != D1
+      WS_MP40.deaths: R5 != D0
+  [FAIL] bronze. (2B5938F5)
+      headshots: R11 != D2
+      WS_MP40.deaths: R6 != D0
+  [FAIL] .olz (5D989160)
+      headshots: R8 != D2
+      WS_THOMPSON.deaths: R6 != D0
+  [FAIL] endekk (7B84BE88)
+      headshots: R7 != D1
+      WS_AIRSTRIKE.deaths: R1 != D0
+      WS_ARTILLERY.deaths: R1 != D0
+      WS_MP40.deaths: R7 != D0
+      WS_LUGER.deaths: R1 != D0
+  [FAIL] vid (D8423F90)
+      headshots: R8 != D1
+  [FAIL] SuperBoyy (EDBB5DA9)
+      headshots: R3 != D0
+      WS_THOMPSON.deaths: R3 != D0
+
+================================================================================
+Round: 2025-11-02-225911-etl_frostbite-round-2.txt
+Session ID: 2147
+================================================================================
+[R2] Detected Round 2 file: 2025-11-02-225911-etl_frostbite-round-2.txt
+[R1] Found Round 1 file: 2025-11-02-225529-etl_frostbite-round-1.txt
+[ERROR] Error parsing stats file local_stats\2025-11-02-225911-etl_frostbite-round-2.txt: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
+  [FAIL] Failed to parse 2025-11-02-225911-etl_frostbite-round-2.txt
+  [FAIL] Could not parse raw file
+
+================================================================================
+Round: 2025-11-02-231101-sw_goldrush_te-round-1.txt
+Session ID: 2148
+================================================================================
+Players: 6 in file, 6 in DB
+  [FAIL] carniee (0A26D447)
+      headshots: R21 != D9
+  [FAIL] bronze. (2B5938F5)
+      headshots: R26 != D6
+      WS_COLT.deaths: R1 != D0
+  [FAIL] .olz (5D989160)
+      headshots: R11 != D3
+      WS_MP40.deaths: R25 != D0
+      WS_LUGER.deaths: R1 != D0
+  [FAIL] endekk (7B84BE88)
+      headshots: R23 != D7
+      WS_COLT.deaths: R2 != D0
+  [FAIL] vid (D8423F90)
+      headshots: R10 != D1
+      WS_MP40.deaths: R10 != D0
+      WS_LUGER.deaths: R3 != D0
+  [FAIL] SuperBoyy (EDBB5DA9)
+      headshots: R14 != D2
+      WS_MP34.deaths: R1 != D0
+      WS_LUGER.deaths: R3 != D0
+
+================================================================================
+Round: 2025-11-02-231645-sw_goldrush_te-round-2.txt
+Session ID: 2149
+================================================================================
+[R2] Detected Round 2 file: 2025-11-02-231645-sw_goldrush_te-round-2.txt
+[R1] Found Round 1 file: 2025-11-02-231101-sw_goldrush_te-round-1.txt
+[ERROR] Error parsing stats file local_stats\2025-11-02-231645-sw_goldrush_te-round-2.txt: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
+  [FAIL] Failed to parse 2025-11-02-231645-sw_goldrush_te-round-2.txt
+  [FAIL] Could not parse raw file
+
+================================================================================
+Round: 2025-11-02-232538-erdenberg_t2-round-1.txt
+Session ID: 2150
+================================================================================
+Players: 6 in file, 6 in DB
+  [FAIL] carniee (0A26D447)
+      headshots: R10 != D3
+      WS_MP40.deaths: R12 != D0
+      WS_LUGER.deaths: R1 != D0
+  [FAIL] bronze. (2B5938F5)
+      headshots: R19 != D1
+      WS_MP40.deaths: R16 != D0
+  [FAIL] .olz (5D989160)
+      headshots: R12 != D4
+  [FAIL] endekk (7B84BE88)
+      headshots: R6 != D2
+      WS_MP40.deaths: R13 != D0
+  [FAIL] vid (D8423F90)
+      headshots: R19 != D6
+      WS_COLT.deaths: R1 != D0
+  [FAIL] SuperBoyy (EDBB5DA9)
+      headshots: R17 != D4
+      WS_COLT.deaths: R1 != D0
+      WS_THOMPSON.deaths: R8 != D0
+
+================================================================================
+Round: 2025-11-02-233358-erdenberg_t2-round-2.txt
+Session ID: 2151
+================================================================================
+[R2] Detected Round 2 file: 2025-11-02-233358-erdenberg_t2-round-2.txt
+[R1] Found Round 1 file: 2025-11-02-232538-erdenberg_t2-round-1.txt
+[ERROR] Error parsing stats file local_stats\2025-11-02-233358-erdenberg_t2-round-2.txt: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
+  [FAIL] Failed to parse 2025-11-02-233358-erdenberg_t2-round-2.txt
+  [FAIL] Could not parse raw file
+
+================================================================================
+VALIDATION SUMMARY
+================================================================================
+Total rounds validated: 18
+Players PASSED: 0
+Players FAILED: 63
+Success rate: 0/63 (0.0%)

@@ -101,8 +101,8 @@ class LinkCog(commands.Cog, name="Link"):
                         p.player_guid,
                         p.player_name,
                         pl.discord_id,
-                        COUNT(DISTINCT p.session_date) as sessions_played,
-                        MAX(p.session_date) as last_played,
+                        COUNT(DISTINCT p.round_date) as sessions_played,
+                        MAX(p.round_date) as last_played,
                         SUM(p.kills) as total_kills,
                         SUM(p.deaths) as total_deaths
                     FROM player_comprehensive_stats p
@@ -124,7 +124,7 @@ class LinkCog(commands.Cog, name="Link"):
                     elif filter_lower in ["unlinked", "nolink"]:
                         filter_clause = " HAVING pl.discord_id IS NULL"
                     elif filter_lower in ["active", "recent"]:
-                        filter_clause = " HAVING MAX(p.session_date) >= date('now', '-30 days')"
+                        filter_clause = " HAVING MAX(p.round_date) >= date('now', '-30 days')"
 
                 final_query = base_query + filter_clause + " ORDER BY sessions_played DESC, total_kills DESC"
 
@@ -284,7 +284,7 @@ class LinkCog(commands.Cog, name="Link"):
                     SELECT DISTINCT player_guid
                     FROM player_comprehensive_stats
                     WHERE LOWER(player_name) LIKE LOWER(?)
-                    ORDER BY session_date DESC
+                    ORDER BY round_date DESC
                     LIMIT 10
                 """,
                     (f"%{search_term}%",),
@@ -321,8 +321,8 @@ class LinkCog(commands.Cog, name="Link"):
                         SELECT 
                             SUM(kills) as total_kills,
                             SUM(deaths) as total_deaths,
-                            COUNT(DISTINCT session_id) as games,
-                            MAX(session_date) as last_seen
+                            COUNT(DISTINCT round_id) as games,
+                            MAX(round_date) as last_seen
                         FROM player_comprehensive_stats
                         WHERE player_guid = ?
                     """,
@@ -533,10 +533,10 @@ class LinkCog(commands.Cog, name="Link"):
                 """
                 SELECT 
                     player_guid,
-                    MAX(session_date) as last_played,
+                    MAX(round_date) as last_played,
                     SUM(kills) as total_kills,
                     SUM(deaths) as total_deaths,
-                    COUNT(DISTINCT session_id) as games
+                    COUNT(DISTINCT round_id) as games
                 FROM player_comprehensive_stats
                 WHERE player_guid NOT IN (
                     SELECT et_guid FROM player_links WHERE et_guid IS NOT NULL
@@ -600,7 +600,7 @@ class LinkCog(commands.Cog, name="Link"):
                         SELECT player_name 
                         FROM player_comprehensive_stats 
                         WHERE player_guid = ? 
-                        ORDER BY session_date DESC 
+                        ORDER BY round_date DESC 
                         LIMIT 1
                     """,
                         (guid,),
@@ -713,8 +713,8 @@ class LinkCog(commands.Cog, name="Link"):
                 SELECT 
                     SUM(kills) as total_kills,
                     SUM(deaths) as total_deaths,
-                    COUNT(DISTINCT session_id) as games,
-                    MAX(session_date) as last_seen
+                    COUNT(DISTINCT round_id) as games,
+                    MAX(round_date) as last_seen
                 FROM player_comprehensive_stats
                 WHERE player_guid = ?
             """,
@@ -756,7 +756,7 @@ class LinkCog(commands.Cog, name="Link"):
                     SELECT player_name 
                     FROM player_comprehensive_stats 
                     WHERE player_guid = ? 
-                    ORDER BY session_date DESC 
+                    ORDER BY round_date DESC 
                     LIMIT 1
                 """,
                     (guid,),
@@ -864,8 +864,8 @@ class LinkCog(commands.Cog, name="Link"):
                 """
                 SELECT player_guid, player_name,
                        SUM(kills) as total_kills,
-                       COUNT(DISTINCT session_id) as games,
-                       MAX(session_date) as last_seen
+                       COUNT(DISTINCT round_id) as games,
+                       MAX(round_date) as last_seen
                 FROM player_comprehensive_stats
                 WHERE LOWER(player_name) LIKE LOWER(?)
                 GROUP BY player_guid
@@ -910,7 +910,7 @@ class LinkCog(commands.Cog, name="Link"):
                     # Get stats and aliases
                     async with db.execute(
                         """
-                        SELECT SUM(kills), SUM(deaths), COUNT(DISTINCT session_id), MAX(session_date)
+                        SELECT SUM(kills), SUM(deaths), COUNT(DISTINCT round_id), MAX(round_date)
                         FROM player_comprehensive_stats
                         WHERE player_guid = ?
                     """,
@@ -1053,8 +1053,8 @@ class LinkCog(commands.Cog, name="Link"):
                     SELECT 
                         SUM(kills) as total_kills,
                         SUM(deaths) as total_deaths,
-                        COUNT(DISTINCT session_id) as games,
-                        MAX(session_date) as last_seen
+                        COUNT(DISTINCT round_id) as games,
+                        MAX(round_date) as last_seen
                     FROM player_comprehensive_stats
                     WHERE player_guid = ?
                 """,
@@ -1093,7 +1093,7 @@ class LinkCog(commands.Cog, name="Link"):
                         SELECT player_name 
                         FROM player_comprehensive_stats 
                         WHERE player_guid = ? 
-                        ORDER BY session_date DESC 
+                        ORDER BY round_date DESC 
                         LIMIT 1
                     """,
                         (guid,),

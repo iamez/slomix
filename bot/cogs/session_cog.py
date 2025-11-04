@@ -88,37 +88,37 @@ class SessionCog(commands.Cog, name="Session Commands"):
                 async with aiosqlite.connect(self.bot.db_path) as db:
                     async with db.execute(
                         """
-                        SELECT DISTINCT DATE(session_date) as date
+                        SELECT DISTINCT DATE(round_date) as date
                         FROM player_comprehensive_stats
                         ORDER BY date DESC LIMIT 1
                     """
                     ) as cursor:
                         result = await cursor.fetchone()
                         if not result:
-                            await ctx.send("❌ No sessions found in database")
+                            await ctx.send("❌ No rounds found in database")
                             return
                         date_filter = result[0]
 
             await ctx.send(f"📅 Loading session data for **{date_filter}**...")
 
             async with aiosqlite.connect(self.bot.db_path) as db:
-                # Get session metadata
+                # Get round metadata
                 query = """
                     SELECT 
-                        COUNT(DISTINCT session_id) / 2 as total_maps,
-                        COUNT(DISTINCT session_id) as total_rounds,
+                        COUNT(DISTINCT round_id) / 2 as total_maps,
+                        COUNT(DISTINCT round_id) as total_rounds,
                         COUNT(DISTINCT player_guid) as player_count,
-                        MIN(session_date) as first_round,
-                        MAX(session_date) as last_round
+                        MIN(round_date) as first_round,
+                        MAX(round_date) as last_round
                     FROM player_comprehensive_stats
-                    WHERE DATE(session_date) = ?
+                    WHERE DATE(round_date) = ?
                 """
 
                 async with db.execute(query, (date_filter,)) as cursor:
                     result = await cursor.fetchone()
                     if not result or result[0] == 0:
                         await ctx.send(
-                            f"❌ No session found for date: {date_filter}"
+                            f"❌ No round found for date: {date_filter}"
                         )
                         return
 
@@ -135,8 +135,8 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     """
                     SELECT DISTINCT map_name
                     FROM player_comprehensive_stats
-                    WHERE DATE(session_date) = ?
-                    ORDER BY session_date
+                    WHERE DATE(round_date) = ?
+                    ORDER BY round_date
                 """,
                     (date_filter,),
                 ) as cursor:
@@ -174,7 +174,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                             ELSE 0
                         END as dpm
                     FROM player_comprehensive_stats p
-                    WHERE DATE(p.session_date) = ?
+                    WHERE DATE(p.round_date) = ?
                     GROUP BY p.player_name
                     ORDER BY kills DESC
                     LIMIT 5
@@ -197,7 +197,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     )
 
                 embed.set_footer(
-                    text="💡 Use !last_session for the most recent session with full details"
+                    text="💡 Use !last_round for the most recent session with full details"
                 )
                 await ctx.send(embed=embed)
 
@@ -205,11 +205,11 @@ class SessionCog(commands.Cog, name="Session Commands"):
             logger.error(f"Error in session command: {e}", exc_info=True)
             await ctx.send(f"❌ Error retrieving session: {e}")
 
-    # NOTE: !last_session command has been moved to Last Session Cog
+    # NOTE: !last_session command has been moved to Last Round Cog
     # See bot/cogs/last_session_cog.py for the full implementation
     # This stub has been removed to avoid command conflicts
 
-    @commands.command(name="sessions", aliases=["list_sessions", "ls"])
+    @commands.command(name="rounds", aliases=["sessions", "list_sessions", "ls"])
     async def list_sessions(self, ctx, *, month: str = None):
         """📅 List all gaming sessions, optionally filtered by month
 
@@ -278,15 +278,15 @@ class SessionCog(commands.Cog, name="Session Commands"):
 
                 query = """
                     SELECT 
-                        DATE(session_date) as date,
-                        COUNT(DISTINCT session_id) / 2 as maps,
-                        COUNT(DISTINCT session_id) as rounds,
+                        DATE(round_date) as date,
+                        COUNT(DISTINCT round_id) / 2 as maps,
+                        COUNT(DISTINCT round_id) as rounds,
                         COUNT(DISTINCT player_guid) as players,
-                        MIN(session_date) as first_round,
-                        MAX(session_date) as last_round
+                        MIN(round_date) as first_round,
+                        MAX(round_date) as last_round
                     FROM player_comprehensive_stats
-                    WHERE session_date LIKE ?
-                    GROUP BY DATE(session_date)
+                    WHERE round_date LIKE ?
+                    GROUP BY DATE(round_date)
                     ORDER BY date DESC
                 """
                 cursor.execute(query, (f"{month_filter}%",))
@@ -294,14 +294,14 @@ class SessionCog(commands.Cog, name="Session Commands"):
             else:
                 query = """
                     SELECT 
-                        DATE(session_date) as date,
-                        COUNT(DISTINCT session_id) / 2 as maps,
-                        COUNT(DISTINCT session_id) as rounds,
+                        DATE(round_date) as date,
+                        COUNT(DISTINCT round_id) / 2 as maps,
+                        COUNT(DISTINCT round_id) as rounds,
                         COUNT(DISTINCT player_guid) as players,
-                        MIN(session_date) as first_round,
-                        MAX(session_date) as last_round
+                        MIN(round_date) as first_round,
+                        MAX(round_date) as last_round
                     FROM player_comprehensive_stats
-                    GROUP BY DATE(session_date)
+                    GROUP BY DATE(round_date)
                     ORDER BY date DESC
                     LIMIT 20
                 """
@@ -312,7 +312,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
             conn.close()
 
             if not sessions:
-                await ctx.send(f"❌ No sessions found for {filter_text}")
+                await ctx.send(f"❌ No rounds found for {filter_text}")
                 return
 
             # Create embed
