@@ -1,12 +1,12 @@
-# Session Terminology Audit - Executive Summary
+# Round Terminology Audit - Executive Summary
 
 ## The Problem
 
-**Day 0 Mistake:** Database table named `sessions` actually stores **ROUNDS**
+**Day 0 Mistake:** Database table named `rounds` actually stores **ROUNDS**
 
 ### Current Database State
-- **231 "sessions"** in database = actually **231 rounds**
-- **Oct 19:** 23 "sessions" = should be **1 gaming session**
+- **231 "rounds"** in database = actually **231 rounds**
+- **Oct 19:** 23 "rounds" = should be **1 gaming session**
 - No `gaming_session_id` column exists
 - Bot uses 30-minute gap workaround (should be 60 minutes)
 
@@ -24,7 +24,7 @@
 
 ### 🔥 Priority 1: Core System
 1. **database_manager.py** (1,139 lines)
-   - Table named `sessions` → Should be `rounds`
+   - Table named `rounds` → Should be `rounds`
    - Function `create_session()` → Should be `create_round()`
    - 50+ instances of wrong terminology
 
@@ -46,7 +46,7 @@
 ### Phase 1: Add gaming_session_id (Non-Breaking) ⏱️ 2-4 hours
 **RECOMMENDED TO DO FIRST**
 
-1. Add `gaming_session_id INTEGER` column to `sessions` table
+1. Add `gaming_session_id INTEGER` column to `rounds` table
 2. Create backfill script with 60-minute gap algorithm
 3. Update bot to query by `gaming_session_id`
 4. Change bot's 30min threshold to 60min
@@ -61,8 +61,8 @@
 ### Phase 2: Rename for Clarity (Breaking) ⏱️ 8-12 hours
 **RECOMMENDED TO DO LATER**
 
-1. Rename `sessions` table → `rounds`
-2. Rename `session_id` → `round_id` in foreign keys
+1. Rename `rounds` table → `rounds`
+2. Rename `round_id` → `round_id` in foreign keys
 3. Update all 100+ files
 4. Comprehensive testing
 
@@ -95,7 +95,7 @@ ALTER TABLE sessions ADD COLUMN gaming_session_id INTEGER;
 UPDATE sessions SET gaming_session_id = ?;
 
 -- 3. Update bot queries
-SELECT * FROM sessions WHERE gaming_session_id = ?;
+SELECT * FROM rounds WHERE gaming_session_id = ?;
 ```
 
 ### Future (Phase 2)
@@ -111,7 +111,7 @@ ALTER TABLE sessions RENAME TO rounds;
 After Phase 1:
 - [ ] All 231 rounds have gaming_session_id assigned
 - [ ] Oct 19: All 23 rounds have SAME gaming_session_id
-- [ ] Bot !last_session shows correct gaming session
+- [ ] Bot !last_round shows correct gaming session
 - [ ] Midnight-crossing rounds keep same gaming_session_id
 - [ ] New imports get gaming_session_id assigned
 - [ ] 60-minute gaps create new gaming_session_id

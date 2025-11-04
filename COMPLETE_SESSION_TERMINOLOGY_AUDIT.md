@@ -6,12 +6,12 @@
 ## EXECUTIVE SUMMARY
 
 **The Problem:** Day 0 terminology mistake affects entire codebase
-- Database table named `sessions` actually stores **ROUNDS**
-- Column named `session_id` actually means **round_id**
+- Database table named `rounds` actually stores **ROUNDS**
+- Column named `round_id` actually means **round_id**
 - No `gaming_session_id` exists
 - Bot uses 30-minute gap workaround (should be 60 minutes)
-- 231 database "sessions" = actually 231 **rounds**
-- Example: Oct 19 has 23 "sessions" = should be 1 gaming session
+- 231 database "rounds" = actually 231 **rounds**
+- Example: Oct 19 has 23 "rounds" = should be 1 gaming session
 
 **Impact:** HIGH - Affects database schema, bot logic, all queries, documentation
 
@@ -24,7 +24,7 @@
 ### 1. ROUND
 - **Definition:** Single R1 or R2 file from one map
 - **Example:** `2025-10-14_212256_R1_et_bremen_a2.txt`
-- **Database:** Should be one row in `rounds` table (currently called `sessions`)
+- **Database:** Should be one row in `rounds` table (currently called `rounds`)
 - **Duration:** ~12 minutes
 
 ### 2. MATCH  
@@ -53,10 +53,10 @@
 **Schema Issues:**
 ```python
 # Line 177-191: Wrong table name
-CREATE TABLE sessions (  # ❌ Should be "rounds"
-    id INTEGER PRIMARY KEY,  # ❌ This is round_id, not session_id
-    session_date TEXT,
-    session_time TEXT,
+CREATE TABLE rounds (  # ❌ Should be "rounds"
+    id INTEGER PRIMARY KEY,  # ❌ This is round_id, not round_id
+    round_date TEXT,
+    round_time TEXT,
     match_id TEXT,  # ✅ CORRECT - pairs R1+R2
     map_name TEXT,
     round_number INTEGER,  # ✅ Proves it's rounds!
@@ -75,47 +75,47 @@ CREATE TABLE sessions (  # ❌ Should be "rounds"
 **Foreign Key Issues:**
 ```python
 # Line 200, 269: player_comprehensive_stats
-session_id INTEGER NOT NULL,  # ❌ Actually round_id
-FOREIGN KEY (session_id) REFERENCES sessions(id)  # ❌ round_id → rounds(id)
+round_id INTEGER NOT NULL,  # ❌ Actually round_id
+FOREIGN KEY (round_id) REFERENCES sessions(id)  # ❌ round_id → rounds(id)
 
 # Line 281, 295: weapon_comprehensive_stats
-session_id INTEGER NOT NULL,  # ❌ Actually round_id
-FOREIGN KEY (session_id) REFERENCES sessions(id)  # ❌ round_id → rounds(id)
+round_id INTEGER NOT NULL,  # ❌ Actually round_id
+FOREIGN KEY (round_id) REFERENCES sessions(id)  # ❌ round_id → rounds(id)
 ```
 
 **Constraint Issues:**
 ```python
 # Line 272: player_comprehensive_stats
-UNIQUE(session_id, player_guid)  # ❌ Actually unique by (round_id, player_guid)
+UNIQUE(round_id, player_guid)  # ❌ Actually unique by (round_id, player_guid)
 
 # Line 298: weapon_comprehensive_stats
-UNIQUE(session_id, player_guid, weapon_name)  # ❌ round_id constraint
+UNIQUE(round_id, player_guid, weapon_name)  # ❌ round_id constraint
 ```
 
 **Index Issues:**
 ```python
 # Line 359-363: Wrong names
-CREATE INDEX idx_sessions_date_map ON sessions(session_date, map_name)  # ❌ rounds table
+CREATE INDEX idx_sessions_date_map ON sessions(round_date, map_name)  # ❌ rounds table
 CREATE INDEX idx_sessions_match_id ON sessions(match_id)  # ❌ rounds table
-CREATE INDEX idx_player_stats_session ON player_comprehensive_stats(session_id)  # ❌ round_id
-CREATE INDEX idx_weapon_stats_session ON weapon_comprehensive_stats(session_id)  # ❌ round_id
+CREATE INDEX idx_player_stats_session ON player_comprehensive_stats(round_id)  # ❌ round_id
+CREATE INDEX idx_weapon_stats_session ON weapon_comprehensive_stats(round_id)  # ❌ round_id
 ```
 
 **Function Names (All Wrong):**
 - Line 486: `def create_session()` → Should be `create_round()`
-- Line 535: `def insert_player_stats(session_id...)` → Parameter is round_id
-- Line 642: `def insert_weapon_stats(session_id...)` → Parameter is round_id
-- Line 387: `def _find_or_create_match_id(session_time...)` → ✅ CORRECT usage
+- Line 535: `def insert_player_stats(round_id...)` → Parameter is round_id
+- Line 642: `def insert_weapon_stats(round_id...)` → Parameter is round_id
+- Line 387: `def _find_or_create_match_id(round_time...)` → ✅ CORRECT usage
 
 **SQL Queries (50+ instances):**
-- Line 107: `SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'`
-- Line 500: `SELECT id FROM sessions WHERE match_id = ? AND round_number = ?`
-- Line 513: `INSERT INTO sessions (...) VALUES (...)`
-- Line 895: `DELETE FROM sessions WHERE session_date BETWEEN ? AND ?`
-- Line 951: `SELECT COUNT(*) FROM sessions`
-- Line 967: `SELECT MIN(session_date), MAX(session_date) FROM sessions`
-- Line 972: `SELECT COUNT(*) FROM sessions s LEFT JOIN player_comprehensive_stats p ON p.session_id = s.id WHERE p.session_id IS NULL`
-- Line 980: `SELECT COUNT(*) FROM sessions s LEFT JOIN weapon_comprehensive_stats w ON w.session_id = s.id WHERE w.session_id IS NULL`
+- Line 107: `SELECT name FROM sqlite_master WHERE type='table' AND name='rounds'`
+- Line 500: `SELECT id FROM rounds WHERE match_id = ? AND round_number = ?`
+- Line 513: `INSERT INTO rounds (...) VALUES (...)`
+- Line 895: `DELETE FROM rounds WHERE round_date BETWEEN ? AND ?`
+- Line 951: `SELECT COUNT(*) FROM rounds`
+- Line 967: `SELECT MIN(round_date), MAX(round_date) FROM rounds`
+- Line 972: `SELECT COUNT(*) FROM rounds s LEFT JOIN player_comprehensive_stats p ON p.round_id = s.id WHERE p.round_id IS NULL`
+- Line 980: `SELECT COUNT(*) FROM rounds s LEFT JOIN weapon_comprehensive_stats w ON w.round_id = s.id WHERE w.round_id IS NULL`
 
 **Statistics Variables (All Wrong):**
 - Line 71: `'sessions_created': 0` → Actually `rounds_created`
@@ -125,16 +125,16 @@ CREATE INDEX idx_weapon_stats_session ON weapon_comprehensive_stats(session_id) 
 - Line 909: `f"Deleted {sessions_deleted:,} sessions"` → Deleted rounds
 - Line 976: `orphan_sessions = cursor.fetchone()[0]` → orphan_rounds
 - Line 984: `no_weapon_sessions = cursor.fetchone()[0]` → no_weapon_rounds
-- Line 989: `'sessions': session_count` → 'rounds': round_count
+- Line 989: `'rounds': round_count` → 'rounds': round_count
 - Line 994: `'orphan_sessions': orphan_sessions` → orphan_rounds
 - Line 995: `'no_weapon_sessions': no_weapon_sessions` → no_weapon_rounds
-- Line 1000: `f"Sessions: {session_count:,}"` → Rounds count
+- Line 1000: `f"Sessions: {round_count:,}"` → Rounds count
 - Line 1005: `f"Orphan sessions: {orphan_sessions:,}"` → Orphan rounds
 - Line 1006: `f"No weapon sessions: {no_weapon_sessions:,}"` → No weapon rounds
 
 **Comments/Documentation (Misleading):**
-- Line 174: "# 1. Sessions table" → Should say "Rounds table"
-- Line 175: `logger.info("   Creating sessions table...")` → Creating rounds table
+- Line 174: "# 1. Rounds table" → Should say "Rounds table"
+- Line 175: `logger.info("   Creating rounds table...")` → Creating rounds table
 - Line 970: "# Check for sessions without players" → Rounds without players
 - Line 978: "# Check for sessions without weapons" → Rounds without weapons
 
@@ -164,35 +164,35 @@ if gap_minutes <= 30:  # ❌ Should be 60 minutes!
 **SQL Queries (All reference wrong table/column names):**
 ```python
 # Line 52-56: Queries rounds table
-SELECT s.session_date FROM sessions s
-WHERE EXISTS (SELECT 1 FROM player_comprehensive_stats p WHERE p.session_id = s.id)
+SELECT s.round_date FROM rounds s
+WHERE EXISTS (SELECT 1 FROM player_comprehensive_stats p WHERE p.round_id = s.id)
 
 # Line 82-85: Gets last round (calls it "session")
-FROM sessions WHERE session_date = ? ORDER BY session_time DESC LIMIT 1
+FROM rounds WHERE round_date = ? ORDER BY round_time DESC LIMIT 1
 
 # Line 107-111: Gets previous rounds
-FROM sessions WHERE session_date >= ? AND id < ? ORDER BY session_time DESC
+FROM rounds WHERE round_date >= ? AND id < ? ORDER BY round_time DESC
 
 # Line 136-140: Fetches rounds for gaming session
-FROM sessions WHERE id IN ({session_ids_str}) ORDER BY session_time
+FROM rounds WHERE id IN ({session_ids_str}) ORDER BY round_time
 
 # Line 160-165: Next day rounds
-FROM sessions WHERE session_date = ? AND id > ? ORDER BY session_time
+FROM rounds WHERE round_date = ? AND id > ? ORDER BY round_time
 
 # Line 194-196: Player count query
-WHERE session_id IN ({session_ids_str})
+WHERE round_id IN ({session_ids_str})
 
 # Line 221-223: Date range query
-FROM sessions WHERE id IN (?)
+FROM rounds WHERE id IN (?)
 
-# All view functions query by session_id (actually round_id):
+# All view functions query by round_id (actually round_id):
 # Line 302, 315, 408, 456, 458, 505, 543, 587
 ```
 
 **Variable Names (Confusing Mix):**
 ```python
 # Line 92: Actually last_round_id
-last_session_id = last_session[0]
+last_session_id = last_round[0]
 
 # Line 98: CORRECT name (but built from round IDs)
 gaming_session_ids = [last_session_id]
@@ -246,8 +246,8 @@ async def _show_objectives_view(self, ctx, db, latest_date: str, session_ids: Li
 "Get the most recent gaming session date from database."
 
 # Line 67-71: Correct intent, wrong implementation
-"Fetch all session data for the LAST gaming session.
-We can't rely on session_date alone because there might be multiple
+"Fetch all round data for the LAST gaming session.
+We can't rely on round_date alone because there might be multiple
 gaming sessions on the same day, so we use time-based logic,
 grouping sessions that are within 30 minutes of each other.
 This properly handles multiple gaming sessions on the same day."
@@ -255,17 +255,17 @@ This properly handles multiple gaming sessions on the same day."
 # Line 78: Wrong - gets last ROUND
 "Get the absolute last session (most recent by date and time)"
 
-# Line 97: Wrong - "sessions" are rounds
+# Line 97: Wrong - "rounds" are rounds
 "Now work BACKWARDS, collecting sessions within 30min gaps"
 
-# Line 101: Wrong - "sessions" are rounds
+# Line 101: Wrong - "rounds" are rounds
 "Get recent sessions before the last one (limit search to same day + previous day)"
 
 # Line 116: Wrong - checking rounds
 "Work backwards through sessions, stop at first gap > 30 minutes"
 
 # Line 130: Mixing terms
-"Now fetch full session data for the gaming session"
+"Now fetch full round data for the gaming session"
 
 # Line 146: Wrong - rounds after midnight
 "Check for sessions after midnight (next day)"
@@ -277,7 +277,7 @@ This properly handles multiple gaming sessions on the same day."
 "Include next-day sessions if they're within 30min of last session"
 
 # Line 183: Wrong - combining rounds
-"Combine all sessions"
+"Combine all rounds"
 
 # Line 205-208: Correct concept, wrong implementation
 "NOTE: Queries by date range of the gaming session rounds.
@@ -292,12 +292,12 @@ Args:
 ### Analysis/Utility Scripts (Need Updates After Schema Change)
 
 #### list_all_sessions.py
-**Queries sessions table:** Lines 27, 66, 90  
-**Uses session_id:** Lines 67, 73, 91, 97  
+**Queries rounds table:** Lines 27, 66, 90  
+**Uses round_id:** Lines 67, 73, 91, 97  
 **Impact:** Will break when table renamed
 
 #### check_database_health.py
-**Queries sessions table:** Lines 37, 82  
+**Queries rounds table:** Lines 37, 82  
 **Checks schema:** Line 37 `PRAGMA table_info(sessions)`  
 **Counts sessions:** Lines 134, 137, 139  
 **Expected tables:** Line 49 mentions 'gaming_sessions' - CORRECT!  
@@ -315,8 +315,8 @@ ISSUE IDENTIFIED:
 - Can have multiple gaming sessions in one day
 
 But database has:
-- 'sessions' table but it stores ROUNDS, not gaming sessions
-- 'session_date' field (format: YYYY-MM-DD) but multiple rounds per date
+- 'rounds' table but it stores ROUNDS, not gaming sessions
+- 'round_date' field (format: YYYY-MM-DD) but multiple rounds per date
 - No way to distinguish:
   - Morning gaming session vs Evening gaming session
   - Multiple separate play sessions on same date
@@ -338,19 +338,19 @@ Need a 'gaming_session_id' with timestamp to group continuous play periods!
 
 #### add_team_history_tables.py
 **Comments:** Lines 5, 13, 20, 48, 109-110  
-**Schema:** Line 48 `total_sessions INTEGER` - actually total_rounds  
+**Schema:** Line 48 `total_rounds INTEGER` - actually total_rounds  
 **Impact:** Medium - team tracking across rounds
 
 #### analyze_gaming_sessions.py
 **PURPOSE:** ✅ CORRECT - Analyzes full gaming sessions by date  
 **Function:** Line 13 `def analyze_gaming_session(date)` - ✅ CORRECT  
 **Comment:** Line 6 defines gaming session correctly  
-**Queries:** Line 25 `FROM sessions` but correctly treats them as rounds  
+**Queries:** Line 25 `FROM rounds` but correctly treats them as rounds  
 **Impact:** Low - already uses correct terminology
 
 #### analytics/synergy_detector.py
-**Queries sessions table:** Lines 211-213  
-**Uses session_id:** Lines 206, 212-213, 225, 253, 255-256, 288, 290, 293, 307-308  
+**Queries rounds table:** Lines 211-213  
+**Uses round_id:** Lines 206, 212-213, 225, 253, 255-256, 288, 290, 293, 307-308  
 **Impact:** Medium - player synergy analysis
 
 #### Map/Time Scripts
@@ -396,7 +396,7 @@ Need a 'gaming_session_id' with timestamp to group continuous play periods!
 
 ## MIGRATION PLAN
 
-### PHASE 1: Add Gaming Session Tracking (Non-Breaking) ⏱️ 2-4 hours
+### PHASE 1: Add Gaming Round Tracking (Non-Breaking) ⏱️ 2-4 hours
 
 **Goal:** Add gaming_session_id without breaking existing code
 
@@ -415,9 +415,9 @@ def calculate_gaming_session_ids():
     """
     # Get all rounds sorted by date + time
     rounds = cursor.execute("""
-        SELECT id, session_date, session_time
-        FROM sessions
-        ORDER BY session_date, session_time
+        SELECT id, round_date, round_time
+        FROM rounds
+        ORDER BY round_date, round_time
     """).fetchall()
     
     gaming_session_id = 1
@@ -457,8 +457,8 @@ async def _fetch_session_data(self, db, latest_date: str):
     # Get the most recent gaming_session_id
     async with db.execute("""
         SELECT DISTINCT gaming_session_id
-        FROM sessions
-        WHERE session_date = ?
+        FROM rounds
+        WHERE round_date = ?
         ORDER BY gaming_session_id DESC
         LIMIT 1
     """, (latest_date,)) as cursor:
@@ -472,9 +472,9 @@ async def _fetch_session_data(self, db, latest_date: str):
     # Get all rounds for this gaming session
     async with db.execute("""
         SELECT id, map_name, round_number, match_id
-        FROM sessions
+        FROM rounds
         WHERE gaming_session_id = ?
-        ORDER BY session_time
+        ORDER BY round_time
     """, (latest_gaming_session_id,)) as cursor:
         sessions = await cursor.fetchall()
     
@@ -493,7 +493,7 @@ if gap_minutes <= 60:  # NEW
 #### Step 5: Test Phase 1
 - [ ] Verify gaming_session_id assigned correctly to all 231 rounds
 - [ ] Test Oct 19: All 23 rounds should have same gaming_session_id
-- [ ] Test !last_session command shows correct gaming session
+- [ ] Test !last_round command shows correct gaming session
 - [ ] Test midnight-crossing (rounds after midnight get same gaming_session_id)
 - [ ] Import new files and verify gaming_session_id assigned
 
@@ -505,15 +505,15 @@ if gap_minutes <= 60:  # NEW
 
 #### Step 1: Rename Database Tables/Columns
 ```sql
--- Rename sessions table to rounds
+-- Rename rounds table to rounds
 ALTER TABLE sessions RENAME TO rounds;
 
--- Rename session_id to round_id in foreign keys
+-- Rename round_id to round_id in foreign keys
 -- (SQLite doesn't support ALTER COLUMN, need to recreate tables)
 -- Use database migration script
 
 -- Update indexes
-CREATE INDEX idx_rounds_date_map ON rounds(session_date, map_name);
+CREATE INDEX idx_rounds_date_map ON rounds(round_date, map_name);
 CREATE INDEX idx_rounds_match_id ON rounds(match_id);
 CREATE INDEX idx_player_stats_round ON player_comprehensive_stats(round_id);
 CREATE INDEX idx_weapon_stats_round ON weapon_comprehensive_stats(round_id);
@@ -521,9 +521,9 @@ CREATE INDEX idx_weapon_stats_round ON weapon_comprehensive_stats(round_id);
 
 #### Step 2: Update database_manager.py
 - Rename all functions: `create_session()` → `create_round()`
-- Rename all variables: `session_id` → `round_id`
+- Rename all variables: `round_id` → `round_id`
 - Rename all statistics: `sessions_created` → `rounds_created`
-- Update all SQL queries: `sessions` → `rounds`
+- Update all SQL queries: `rounds` → `rounds`
 - Update all comments
 
 #### Step 3: Update Bot Cogs
@@ -533,7 +533,7 @@ CREATE INDEX idx_weapon_stats_round ON weapon_comprehensive_stats(round_id);
 
 #### Step 4: Update All Utility Scripts
 - 60+ files need updates
-- Mostly find/replace: `sessions` → `rounds`, `session_id` → `round_id`
+- Mostly find/replace: `rounds` → `rounds`, `round_id` → `round_id`
 
 #### Step 5: Comprehensive Testing
 - [ ] Import new files
@@ -641,7 +641,7 @@ Phase 3 → Test → Enhanced architecture
 3. ⏳ **Create backfill script** - Calculate gaming_session_id for 231 rounds
 4. ⏳ **Test backfill** - Verify Oct 19 has 23 rounds with same gaming_session_id
 5. ⏳ **Update bot** - Change last_session_cog.py to use gaming_session_id
-6. ⏳ **Test bot** - Verify !last_session works correctly
+6. ⏳ **Test bot** - Verify !last_round works correctly
 7. ⏳ **Deploy Phase 1** - Push to production
 8. ⏳ **Plan Phase 2** - Create detailed migration plan for rename
 9. ⏳ **Review with user** - Get approval before Phase 2
@@ -658,8 +658,8 @@ Phase 3 → Test → Enhanced architecture
 - `gaming_session_id` (groups continuous play)
 
 **DEPRECATED TERMS (After Phase 2):**
-- ~~`sessions` table~~ → Use `rounds` table
-- ~~`session_id`~~ → Use `round_id`
+- ~~`rounds` table~~ → Use `rounds` table
+- ~~`round_id`~~ → Use `round_id`
 - ~~`create_session()`~~ → Use `create_round()`
 
 **ALWAYS CORRECT TERMS:**

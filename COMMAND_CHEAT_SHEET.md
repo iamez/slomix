@@ -110,7 +110,7 @@ python bot/ultimate_bot.py
 !session_end
 
 # Check recent imports
-!last_session
+!last_round
 !stats <playername>
 ```
 
@@ -128,14 +128,14 @@ sqlite3 bot/etlegacy_production.db
 
 ```sql
 -- Copy-paste all 9 indexes:
-CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(session_date);
+CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(round_date);
 CREATE INDEX IF NOT EXISTS idx_players_guid ON player_comprehensive_stats(guid);
-CREATE INDEX IF NOT EXISTS idx_players_session ON player_comprehensive_stats(session_id);
+CREATE INDEX IF NOT EXISTS idx_players_session ON player_comprehensive_stats(round_id);
 CREATE INDEX IF NOT EXISTS idx_players_kd ON player_comprehensive_stats(kd_ratio DESC);
 CREATE INDEX IF NOT EXISTS idx_players_dpm ON player_comprehensive_stats(dpm DESC);
 CREATE INDEX IF NOT EXISTS idx_aliases_guid ON player_aliases(guid);
 CREATE INDEX IF NOT EXISTS idx_aliases_alias ON player_aliases(alias);
-CREATE INDEX IF NOT EXISTS idx_weapons_session ON weapon_comprehensive_stats(session_id);
+CREATE INDEX IF NOT EXISTS idx_weapons_session ON weapon_comprehensive_stats(round_id);
 CREATE INDEX IF NOT EXISTS idx_weapons_player ON weapon_comprehensive_stats(player_name);
 
 -- Verify indexes created
@@ -168,15 +168,15 @@ sqlite3 bot/etlegacy_production.db
 
 ```sql
 -- Check session count
-SELECT COUNT(*) FROM sessions;
+SELECT COUNT(*) FROM rounds;
 
 -- Check player count
 SELECT COUNT(DISTINCT guid) FROM player_comprehensive_stats;
 
 -- Check recent sessions
-SELECT session_id, map_name, session_date 
-FROM sessions 
-ORDER BY session_date DESC 
+SELECT round_id, map_name, round_date 
+FROM rounds 
+ORDER BY round_date DESC 
 LIMIT 5;
 
 -- Exit
@@ -216,7 +216,7 @@ cat .env | Select-String "CHANNEL"
 !link <player>           # Link Discord account to player
 !leaderboard [category]  # Show top players
 !compare <p1> <p2>       # Compare two players
-!last_session            # Show most recent session details
+!last_round            # Show most recent session details
 !player_sessions <p>     # Show player's recent sessions
 ```
 

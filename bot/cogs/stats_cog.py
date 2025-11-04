@@ -181,7 +181,7 @@ class StatsCog(commands.Cog, name="Stats"):
                     SELECT 
                         SUM(kills) as total_kills,
                         SUM(deaths) as total_deaths,
-                        COUNT(DISTINCT session_id) as total_games,
+                        COUNT(DISTINCT round_id) as total_games,
                         CASE 
                             WHEN SUM(deaths) > 0 
                             THEN CAST(SUM(kills) AS REAL) / SUM(deaths)
@@ -343,7 +343,7 @@ class StatsCog(commands.Cog, name="Stats"):
                         SELECT 
                             SUM(kills) as total_kills,
                             SUM(deaths) as total_deaths,
-                            COUNT(DISTINCT session_id) as total_games,
+                            COUNT(DISTINCT round_id) as total_games,
                             SUM(damage_given) as total_damage,
                             SUM(time_played_seconds) as total_time,
                             SUM(headshot_kills) as total_headshots
@@ -757,9 +757,9 @@ class StatsCog(commands.Cog, name="Stats"):
                          ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                         SUM(p.kills) as total_kills,
                         SUM(p.deaths) as total_deaths,
-                        COUNT(DISTINCT p.session_id) as games
+                        COUNT(DISTINCT p.round_id) as games
                     FROM player_comprehensive_stats p
-                    JOIN sessions s ON p.session_id = s.id
+                    JOIN rounds s ON p.round_id = s.id
                     WHERE 1=1 {season_filter}
                     GROUP BY p.player_guid
                     HAVING games > 5
@@ -791,7 +791,7 @@ class StatsCog(commands.Cog, name="Stats"):
                          ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                         SUM(p.kills) as total_kills,
                         SUM(p.deaths) as total_deaths,
-                        COUNT(DISTINCT p.session_id) as games
+                        COUNT(DISTINCT p.round_id) as games
                     FROM player_comprehensive_stats p
                     GROUP BY p.player_guid
                     HAVING games > 10
@@ -826,34 +826,137 @@ class StatsCog(commands.Cog, name="Stats"):
             logger.error(f"Error in season_info command: {e}", exc_info=True)
             await ctx.send(f"❌ Error retrieving season information: {e}")
 
-    @commands.command(name="help_command")
+    @commands.command(name="help_command", aliases=["commands"])
     async def help_command(self, ctx):
-        """📚 Show all available commands"""
-        embed = discord.Embed(
-            title="🚀 Ultimate ET:Legacy Bot Commands",
-            description="**Use `!` prefix for all commands** (e.g., `!ping`, not `/ping`)",
+        """📚 Show all available commands with examples"""
+        
+        # Main Commands Embed
+        embed1 = discord.Embed(
+            title="🚀 Ultimate ET:Legacy Bot - Command Reference",
+            description="**Use `!` prefix for all commands** | 📖 Full examples below",
             color=0x0099FF,
         )
 
-        embed.add_field(
-            name="🎬 Session Management",
-            value="• `!session_start [map]` - Start new session\n• `!session_end` - End current session",
+        embed1.add_field(
+            name="📊 **Session Commands**",
+            value=(
+                "• `!last_session` - View latest gaming session with full stats\n"
+                "• `!session <date>` - View specific date session\n"
+                "  └ Example: `!session 2025-11-02`\n"
+                "• `!sessions` - List all recent gaming sessions\n"
+                "  └ Aliases: `!rounds`, `!list_sessions`, `!ls`\n"
+                "  └ Example: `!sessions 10` (filter by October)"
+            ),
             inline=False,
         )
 
-        embed.add_field(
-            name="📊 Stats Commands",
-            value="• `!stats [player]` - Player statistics\n• `!leaderboard [type]` - Top players\n• `!session [date]` - Session details",
+        embed1.add_field(
+            name="🎯 **Player Stats**",
+            value=(
+                "• `!stats <player>` - Individual player statistics\n"
+                "  └ Example: `!stats carniee`\n"
+                "• `!leaderboard [type]` - Top players by kills/accuracy/etc\n"
+                "• `!list_players` - Show all registered players\n"
+                "• `!compare <player1> <player2>` - Compare two players"
+            ),
             inline=False,
         )
 
-        embed.add_field(
-            name="🔧 System",
-            value="• `!ping` - Bot status\n• `!help_command` - This help",
+        embed1.add_field(
+            name="👥 **Team Commands**",
+            value=(
+                "• `!teams [date]` - Show team rosters\n"
+                "• `!session_score [date]` - Team scores & map breakdown\n"
+                "• `!lineup_changes [current] [previous]` - Who switched teams\n"
+                "• `!set_team_names <date> <team_a> <team_b>` - Custom names"
+            ),
             inline=False,
         )
 
-        await ctx.send(embed=embed)
+        embed1.add_field(
+            name="🏆 **Achievements & Season**",
+            value=(
+                "• `!check_achievements [player]` - View achievements\n"
+                "• `!season_info` - Current season statistics"
+            ),
+            inline=False,
+        )
+
+        embed1.add_field(
+            name="🔧 **System Commands**",
+            value=(
+                "• `!ping` - Check bot status & latency\n"
+                "• `!help` - Show this help menu"
+            ),
+            inline=False,
+        )
+
+        # Examples & Tips Embed
+        embed2 = discord.Embed(
+            title="💡 Command Examples & Pro Tips",
+            color=0x00FF00,
+        )
+
+        embed2.add_field(
+            name="📅 **Session Viewing**",
+            value=(
+                "```\n"
+                "!last_session              → Latest session (6 graphs!)\n"
+                "!session 2025-11-02        → Specific date\n"
+                "!sessions                  → List all sessions\n"
+                "!sessions 10               → October sessions only\n"
+                "!sessions october          → Same as above\n"
+                "```"
+            ),
+            inline=False,
+        )
+
+        embed2.add_field(
+            name="🎯 **Player Stats**",
+            value=(
+                "```\n"
+                "!stats carniee             → Full player stats\n"
+                "!leaderboard               → Top 10 by kills\n"
+                "!compare carniee superboyy → Head-to-head\n"
+                "!list_players              → All 45+ players\n"
+                "```"
+            ),
+            inline=False,
+        )
+
+        embed2.add_field(
+            name="👥 **Team Analysis**",
+            value=(
+                "```\n"
+                "!teams                     → Latest session teams\n"
+                "!session_score             → Team scores + maps\n"
+                "!lineup_changes            → Who switched sides\n"
+                "!lineup_changes 2025-11-02 → Compare with date\n"
+                "```"
+            ),
+            inline=False,
+        )
+
+        embed2.add_field(
+            name="🔥 **Pro Tips**",
+            value=(
+                "• **`!last_session`** shows 6 graphs:\n"
+                "  └ Player scores, K/D, Accuracy, Team KPD, Weapon usage, Headshots\n"
+                "• **Date format**: Always use `YYYY-MM-DD` (e.g., `2025-11-02`)\n"
+                "• **Player names**: Case-insensitive (`carniee` = `CARNIEE`)\n"
+                "• **Month filters**: Use numbers (`10`) or names (`october`, `oct`)\n"
+                "• **Aliases**: Many commands have shortcuts (e.g., `!ls` = `!sessions`)"
+            ),
+            inline=False,
+        )
+
+        embed2.set_footer(
+            text="💬 Questions? Ask in #bot-commands | 🐛 Report issues to admins"
+        )
+
+        # Send both embeds
+        await ctx.send(embed=embed1)
+        await ctx.send(embed=embed2)
 
 
 async def setup(bot):

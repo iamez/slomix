@@ -78,15 +78,15 @@ async def calculate_player_trend(player_guid, days=30):
     """Show if player is improving or declining"""
     query = """
     SELECT 
-        DATE(session_date) as date,
+        DATE(round_date) as date,
         AVG(kd_ratio) as avg_kd,
         AVG(dpm) as avg_dpm,
         AVG(CAST(hits AS REAL) / NULLIF(shots, 0) * 100) as avg_accuracy
     FROM player_comprehensive_stats p
-    JOIN sessions s ON p.session_id = s.id
+    JOIN rounds s ON p.round_id = s.id
     WHERE p.guid = ? 
-    AND s.session_date >= date('now', '-' || ? || ' days')
-    GROUP BY DATE(session_date)
+    AND s.round_date >= date('now', '-' || ? || ' days')
+    GROUP BY DATE(round_date)
     ORDER BY date
     """
     
@@ -125,10 +125,10 @@ class SessionPatternDetector:
         """Analyze historical data for patterns"""
         query = """
         SELECT 
-            strftime('%H', session_date) as hour,
-            strftime('%w', session_date) as day_of_week,
+            strftime('%H', round_date) as hour,
+            strftime('%w', round_date) as day_of_week,
             COUNT(*) as frequency
-        FROM sessions
+        FROM rounds
         GROUP BY hour, day_of_week
         ORDER BY frequency DESC
         """
@@ -173,9 +173,9 @@ async def update_bot_status(self):
         )
     else:
         # Show total stats
-        total_sessions = await db.execute("SELECT COUNT(*) FROM sessions")
+        total_rounds = await db.execute("SELECT COUNT(*) FROM rounds")
         await self.bot.change_presence(
-            activity=discord.Game(f"📊 {total_sessions[0][0]} sessions tracked | !help")
+            activity=discord.Game(f"📊 {total_rounds[0][0]} rounds tracked | !help")
         )
 ```
 
@@ -231,11 +231,11 @@ async def generate_activity_heatmap(self):
     """Create heatmap of gaming activity by day/hour"""
     query = """
     SELECT 
-        strftime('%w', session_date) as day,
-        strftime('%H', session_date) as hour,
+        strftime('%w', round_date) as day,
+        strftime('%H', round_date) as hour,
         COUNT(*) as sessions
-    FROM sessions
-    WHERE session_date >= date('now', '-30 days')
+    FROM rounds
+    WHERE round_date >= date('now', '-30 days')
     GROUP BY day, hour
     """
     
@@ -244,7 +244,7 @@ async def generate_activity_heatmap(self):
     # Create 7x24 matrix (days x hours)
     heatmap = np.zeros((7, 24))
     for row in data:
-        heatmap[int(row['day']), int(row['hour'])] = row['sessions']
+        heatmap[int(row['day']), int(row['hour'])] = row['rounds']
     
     # Generate heatmap
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -328,7 +328,7 @@ class AsyncDatabase:
 
 # Usage:
 async with AsyncDatabase('bot/etlegacy_production.db') as db:
-    async with db.execute("SELECT * FROM sessions") as cursor:
+    async with db.execute("SELECT * FROM rounds") as cursor:
         results = await cursor.fetchall()
 ```
 
@@ -416,9 +416,9 @@ class BettingPool:
         self.active_bets = {}
         self.points = {}  # Track virtual points
     
-    async def create_bet(self, session_id, teams):
+    async def create_bet(self, round_id, teams):
         """Create betting pool for upcoming match"""
-        self.active_bets[session_id] = {
+        self.active_bets[round_id] = {
             'team1_bets': [],
             'team2_bets': [],
             'pot': 0,
@@ -433,7 +433,7 @@ class BettingPool:
         embed.add_field(name="Odds", value=f"{teams[0]}: {odds[0]} | {teams[1]}: {odds[1]}")
         return embed
     
-    async def place_bet(self, user_id, session_id, team, amount=10):
+    async def place_bet(self, user_id, round_id, team, amount=10):
         """Place a bet on a team"""
         if user_id not in self.points:
             self.points[user_id] = 100  # Starting points
@@ -443,20 +443,20 @@ class BettingPool:
             bet = {'user': user_id, 'amount': amount, 'team': team}
             
             if team == 1:
-                self.active_bets[session_id]['team1_bets'].append(bet)
+                self.active_bets[round_id]['team1_bets'].append(bet)
             else:
-                self.active_bets[session_id]['team2_bets'].append(bet)
+                self.active_bets[round_id]['team2_bets'].append(bet)
             
-            self.active_bets[session_id]['pot'] += amount
+            self.active_bets[round_id]['pot'] += amount
             return True
         return False
     
-    async def resolve_bets(self, session_id, winner_team):
+    async def resolve_bets(self, round_id, winner_team):
         """Pay out winners based on odds"""
-        if session_id not in self.active_bets:
+        if round_id not in self.active_bets:
             return
         
-        bet_data = self.active_bets[session_id]
+        bet_data = self.active_bets[round_id]
         winning_bets = bet_data[f'team{winner_team}_bets']
         
         if winning_bets:
@@ -466,7 +466,7 @@ class BettingPool:
                 payout = int(bet['amount'] * bet_data['odds'][winner_team - 1])
                 self.points[bet['user']] += payout
         
-        del self.active_bets[session_id]
+        del self.active_bets[round_id]
 ```
 
 ---
@@ -479,14 +479,14 @@ Speed up common queries by adding these indexes:
 
 ```sql
 -- Add to create_unified_database.py or run manually
-CREATE INDEX idx_sessions_date ON sessions(session_date);
+CREATE INDEX idx_sessions_date ON sessions(round_date);
 CREATE INDEX idx_players_guid ON player_comprehensive_stats(guid);
-CREATE INDEX idx_players_session ON player_comprehensive_stats(session_id);
+CREATE INDEX idx_players_session ON player_comprehensive_stats(round_id);
 CREATE INDEX idx_players_kd ON player_comprehensive_stats(kd_ratio DESC);
 CREATE INDEX idx_players_dpm ON player_comprehensive_stats(dpm DESC);
 CREATE INDEX idx_aliases_guid ON player_aliases(guid);
 CREATE INDEX idx_aliases_alias ON player_aliases(alias);
-CREATE INDEX idx_weapons_session ON weapon_comprehensive_stats(session_id);
+CREATE INDEX idx_weapons_session ON weapon_comprehensive_stats(round_id);
 CREATE INDEX idx_weapons_player ON weapon_comprehensive_stats(player_name);
 ```
 

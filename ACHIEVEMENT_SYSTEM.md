@@ -117,7 +117,7 @@ Shows achievement progress for any player:
 SELECT 
     SUM(kills) as total_kills,
     SUM(deaths) as total_deaths,
-    COUNT(DISTINCT session_id) as total_games,
+    COUNT(DISTINCT round_id) as total_games,
     CASE 
         WHEN SUM(deaths) > 0 
         THEN CAST(SUM(kills) AS REAL) / SUM(deaths)
@@ -130,7 +130,7 @@ WHERE player_guid = ?
 **Performance:**
 - Uses indexed `player_guid` column (from Oct 12 optimization)
 - Typically completes in <10ms with 3,174 sessions
-- Aggregates across all sessions in real-time
+- Aggregates across all rounds in real-time
 
 ---
 

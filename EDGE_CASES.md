@@ -59,7 +59,7 @@ Multiple possible causes:
 ✅ **Current behavior** (lines 427-429 in database_manager.py):
 ```python
 logger.warning(f"⚠️  No Round 1 file found for {file_path.name}")
-match_id = f"{file_date}_{session_time}_{map_name}_orphan"
+match_id = f"{file_date}_{round_time}_{map_name}_orphan"
 ```
 
 System creates an "orphan" match_id and imports R2 as standalone session.
@@ -217,11 +217,11 @@ System automatically groups consecutive rounds into "gaming sessions" representi
 - Handles midnight-crossing automatically
 
 ### Example: October 19, 2025
-**Before Gaming Session Tracking:**
+**Before Gaming Round Tracking:**
 - Database showed "23 sessions" (actually 23 rounds)
 - Hard to tell it was one continuous play session
 
-**After Gaming Session Tracking:**
+**After Gaming Round Tracking:**
 - All 23 rounds correctly grouped into gaming session #3
 - Start: Oct 19, 21:26:43
 - End: Oct 20, 00:00:43 (crosses midnight)
@@ -259,8 +259,8 @@ System automatically groups consecutive rounds into "gaming sessions" representi
 
 ### Bot Integration
 ✅ **Implemented** in `bot/cogs/last_session_cog.py`:
-- `!last_session` command now shows full gaming session
-- Query: `SELECT * FROM sessions WHERE gaming_session_id = ?`
+- `!last_round` command now shows full gaming session
+- Query: `SELECT * FROM rounds WHERE gaming_session_id = ?`
 - Much simpler than old 30-minute manual gap logic
 
 ### Migration Details
