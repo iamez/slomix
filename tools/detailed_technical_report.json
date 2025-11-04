@@ -1,0 +1,1926 @@
+{
+  "summary": {
+    "total_mismatches": 50,
+    "validation_date": "2025-11-04"
+  },
+  "detailed_mismatches": [
+    {
+      "player_name": "ripaZha sNozji.",
+      "player_guid": "58B93231",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": false
+      },
+      "field_analysis": [],
+      "error": "MISSING FROM DATABASE"
+    },
+    {
+      "player_name": "ripazha dAFF",
+      "player_guid": "2237B50F",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": false
+      },
+      "field_analysis": [],
+      "error": "MISSING FROM DATABASE"
+    },
+    {
+      "player_name": "slomix.olz",
+      "player_guid": "5D989160",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": true
+      },
+      "field_analysis": [
+        {
+          "field_name": "time_played_seconds",
+          "raw_value": 600,
+          "db_value": 258,
+          "difference": 342,
+          "db_column_name": "time_played_seconds",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 600,
+            "r2_differential_expected": 600,
+            "formula": "600 (R2 cumulative) - 0 (R1) = 600 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "accuracy",
+          "raw_value": "31.62%",
+          "db_value": "40.13%",
+          "difference": 8.513931888544896,
+          "db_column_name": "accuracy",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 35.14328808446455,
+            "r2_differential_expected": 35.14328808446455,
+            "formula": "35.14328808446455 (R2 cumulative) - 0 (R1) = 35.14328808446455 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "kills",
+          "raw_value": 8,
+          "db_value": 7,
+          "difference": 1,
+          "db_column_name": "kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 25,
+            "r2_differential_expected": 25,
+            "formula": "25 (R2 cumulative) - 0 (R1) = 25 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "deaths",
+          "raw_value": 16,
+          "db_value": 9,
+          "difference": 7,
+          "db_column_name": "deaths",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 30,
+            "r2_differential_expected": 30,
+            "formula": "30 (R2 cumulative) - 0 (R1) = 30 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "damage_given",
+          "raw_value": 1691,
+          "db_value": 1344,
+          "difference": 347,
+          "db_column_name": "damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 4522,
+            "r2_differential_expected": 4522,
+            "formula": "4522 (R2 cumulative) - 0 (R1) = 4522 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "damage_received",
+          "raw_value": 3665,
+          "db_value": 1614,
+          "difference": 2051,
+          "db_column_name": "damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 7044,
+            "r2_differential_expected": 7044,
+            "formula": "7044 (R2 cumulative) - 0 (R1) = 7044 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "headshots",
+          "raw_value": 8,
+          "db_value": 1,
+          "difference": 7,
+          "db_column_name": "headshot_kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 19,
+            "r2_differential_expected": 19,
+            "formula": "19 (R2 cumulative) - 0 (R1) = 19 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "team_damage_given",
+          "raw_value": 127,
+          "db_value": 12,
+          "difference": 115,
+          "db_column_name": "team_damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "team_damage_received",
+          "raw_value": 87,
+          "db_value": 18,
+          "difference": 69,
+          "db_column_name": "team_damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "gibs",
+          "raw_value": 3,
+          "db_value": 1,
+          "difference": 2,
+          "db_column_name": "gibs",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "self_kills",
+          "raw_value": 3,
+          "db_value": 2,
+          "difference": 1,
+          "db_column_name": "self_kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "bullets_fired",
+          "raw_value": 272,
+          "db_value": 152,
+          "difference": 120,
+          "db_column_name": "bullets_fired",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 663,
+            "r2_differential_expected": 663,
+            "formula": "663 (R2 cumulative) - 0 (R1) = 663 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "revives_given",
+          "raw_value": 0,
+          "db_value": 2,
+          "difference": 2,
+          "db_column_name": "revives_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        }
+      ]
+    },
+    {
+      "player_name": "ripaZha eLx",
+      "player_guid": "94F16E69",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": false
+      },
+      "field_analysis": [],
+      "error": "MISSING FROM DATABASE"
+    },
+    {
+      "player_name": "slomix.Imbecil",
+      "player_guid": "C74FB315",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": false
+      },
+      "field_analysis": [],
+      "error": "MISSING FROM DATABASE"
+    },
+    {
+      "player_name": "ripazha antii'",
+      "player_guid": "430E79FE",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": false
+      },
+      "field_analysis": [],
+      "error": "MISSING FROM DATABASE"
+    },
+    {
+      "player_name": "slomix.endekk",
+      "player_guid": "7B84BE88",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": true
+      },
+      "field_analysis": [
+        {
+          "field_name": "time_played_seconds",
+          "raw_value": 600,
+          "db_value": 258,
+          "difference": 342,
+          "db_column_name": "time_played_seconds",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 352,
+            "r2_cumulative_value": 600,
+            "r2_differential_expected": 248,
+            "formula": "600 (R2 cumulative) - 352 (R1) = 248 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "accuracy",
+          "raw_value": "36.53%",
+          "db_value": "39.30%",
+          "difference": 2.7738022217678804,
+          "db_column_name": "accuracy",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 43.956043956043956,
+            "r2_cumulative_value": 40.81145584725537,
+            "r2_differential_expected": 0,
+            "formula": "40.81145584725537 (R2 cumulative) - 43.956043956043956 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "deaths",
+          "raw_value": 18,
+          "db_value": 5,
+          "difference": 13,
+          "db_column_name": "deaths",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 7,
+            "r2_cumulative_value": 24,
+            "r2_differential_expected": 17,
+            "formula": "24 (R2 cumulative) - 7 (R1) = 17 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "damage_given",
+          "raw_value": 1751,
+          "db_value": 1809,
+          "difference": 58,
+          "db_column_name": "damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 1482,
+            "r2_cumulative_value": 3898,
+            "r2_differential_expected": 2416,
+            "formula": "3898 (R2 cumulative) - 1482 (R1) = 2416 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "damage_received",
+          "raw_value": 2549,
+          "db_value": 1573,
+          "difference": 976,
+          "db_column_name": "damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 1200,
+            "r2_cumulative_value": 3871,
+            "r2_differential_expected": 2671,
+            "formula": "3871 (R2 cumulative) - 1200 (R1) = 2671 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "headshots",
+          "raw_value": 14,
+          "db_value": 0,
+          "difference": 14,
+          "db_column_name": "headshot_kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 3,
+            "r2_cumulative_value": 35,
+            "r2_differential_expected": 32,
+            "formula": "35 (R2 cumulative) - 3 (R1) = 32 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "team_damage_received",
+          "raw_value": 89,
+          "db_value": 54,
+          "difference": 35,
+          "db_column_name": "team_damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "gibs",
+          "raw_value": 6,
+          "db_value": 2,
+          "difference": 4,
+          "db_column_name": "gibs",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "self_kills",
+          "raw_value": 4,
+          "db_value": 3,
+          "difference": 1,
+          "db_column_name": "self_kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "bullets_fired",
+          "raw_value": 219,
+          "db_value": 201,
+          "difference": 18,
+          "db_column_name": "bullets_fired",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 182,
+            "r2_cumulative_value": 419,
+            "r2_differential_expected": 237,
+            "formula": "419 (R2 cumulative) - 182 (R1) = 237 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "xp",
+          "raw_value": 0,
+          "db_value": 12,
+          "difference": 12,
+          "db_column_name": "xp",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        }
+      ]
+    },
+    {
+      "player_name": "ripaZha zubl1k",
+      "player_guid": "7869361E",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": false
+      },
+      "field_analysis": [],
+      "error": "MISSING FROM DATABASE"
+    },
+    {
+      "player_name": "slomix.SuperBoyy",
+      "player_guid": "EDBB5DA9",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": true
+      },
+      "field_analysis": [
+        {
+          "field_name": "time_played_seconds",
+          "raw_value": 600,
+          "db_value": 257,
+          "difference": 343,
+          "db_column_name": "time_played_seconds",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 600,
+            "r2_differential_expected": 600,
+            "formula": "600 (R2 cumulative) - 0 (R1) = 600 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "accuracy",
+          "raw_value": "37.40%",
+          "db_value": "36.02%",
+          "difference": 1.3735292632429434,
+          "db_column_name": "accuracy",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 44.8382126348228,
+            "r2_differential_expected": 44.8382126348228,
+            "formula": "44.8382126348228 (R2 cumulative) - 0 (R1) = 44.8382126348228 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "deaths",
+          "raw_value": 20,
+          "db_value": 19,
+          "difference": 1,
+          "db_column_name": "deaths",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 31,
+            "r2_differential_expected": 31,
+            "formula": "31 (R2 cumulative) - 0 (R1) = 31 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "damage_given",
+          "raw_value": 2059,
+          "db_value": 2287,
+          "difference": 228,
+          "db_column_name": "damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 6270,
+            "r2_differential_expected": 6270,
+            "formula": "6270 (R2 cumulative) - 0 (R1) = 6270 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "damage_received",
+          "raw_value": 3231,
+          "db_value": 2764,
+          "difference": 467,
+          "db_column_name": "damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 5899,
+            "r2_differential_expected": 5899,
+            "formula": "5899 (R2 cumulative) - 0 (R1) = 5899 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "headshots",
+          "raw_value": 7,
+          "db_value": 2,
+          "difference": 5,
+          "db_column_name": "headshot_kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 25,
+            "r2_differential_expected": 25,
+            "formula": "25 (R2 cumulative) - 0 (R1) = 25 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "team_damage_given",
+          "raw_value": 50,
+          "db_value": 18,
+          "difference": 32,
+          "db_column_name": "team_damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "team_damage_received",
+          "raw_value": 0,
+          "db_value": 82,
+          "difference": 82,
+          "db_column_name": "team_damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "gibs",
+          "raw_value": 2,
+          "db_value": 4,
+          "difference": 2,
+          "db_column_name": "gibs",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "self_kills",
+          "raw_value": 0,
+          "db_value": 4,
+          "difference": 4,
+          "db_column_name": "self_kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "bullets_fired",
+          "raw_value": 246,
+          "db_value": 322,
+          "difference": 76,
+          "db_column_name": "bullets_fired",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 649,
+            "r2_differential_expected": 649,
+            "formula": "649 (R2 cumulative) - 0 (R1) = 649 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "xp",
+          "raw_value": 0,
+          "db_value": 50,
+          "difference": 50,
+          "db_column_name": "xp",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        }
+      ]
+    },
+    {
+      "player_name": "slomix.carniee",
+      "player_guid": "0A26D447",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": true
+      },
+      "field_analysis": [
+        {
+          "field_name": "time_played_seconds",
+          "raw_value": 600,
+          "db_value": 258,
+          "difference": 342,
+          "db_column_name": "time_played_seconds",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 352,
+            "r2_cumulative_value": 600,
+            "r2_differential_expected": 248,
+            "formula": "600 (R2 cumulative) - 352 (R1) = 248 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "accuracy",
+          "raw_value": "34.61%",
+          "db_value": "36.69%",
+          "difference": 2.079171848892578,
+          "db_column_name": "accuracy",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 37.19512195121951,
+            "r2_cumulative_value": 34.92769744160178,
+            "r2_differential_expected": 0,
+            "formula": "34.92769744160178 (R2 cumulative) - 37.19512195121951 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "kills",
+          "raw_value": 20,
+          "db_value": 9,
+          "difference": 11,
+          "db_column_name": "kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 12,
+            "r2_cumulative_value": 32,
+            "r2_differential_expected": 20,
+            "formula": "32 (R2 cumulative) - 12 (R1) = 20 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "deaths",
+          "raw_value": 16,
+          "db_value": 5,
+          "difference": 11,
+          "db_column_name": "deaths",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 9,
+            "r2_cumulative_value": 26,
+            "r2_differential_expected": 17,
+            "formula": "26 (R2 cumulative) - 9 (R1) = 17 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "damage_given",
+          "raw_value": 3350,
+          "db_value": 1288,
+          "difference": 2062,
+          "db_column_name": "damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 2358,
+            "r2_cumulative_value": 6534,
+            "r2_differential_expected": 4176,
+            "formula": "6534 (R2 cumulative) - 2358 (R1) = 4176 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "damage_received",
+          "raw_value": 3019,
+          "db_value": 983,
+          "difference": 2036,
+          "db_column_name": "damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 1738,
+            "r2_cumulative_value": 5056,
+            "r2_differential_expected": 3318,
+            "formula": "5056 (R2 cumulative) - 1738 (R1) = 3318 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "headshots",
+          "raw_value": 32,
+          "db_value": 2,
+          "difference": 30,
+          "db_column_name": "headshot_kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 15,
+            "r2_cumulative_value": 46,
+            "r2_differential_expected": 31,
+            "formula": "46 (R2 cumulative) - 15 (R1) = 31 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "team_damage_given",
+          "raw_value": 0,
+          "db_value": 54,
+          "difference": 54,
+          "db_column_name": "team_damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "team_damage_received",
+          "raw_value": 38,
+          "db_value": 0,
+          "difference": 38,
+          "db_column_name": "team_damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "gibs",
+          "raw_value": 4,
+          "db_value": 3,
+          "difference": 1,
+          "db_column_name": "gibs",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "self_kills",
+          "raw_value": 5,
+          "db_value": 1,
+          "difference": 4,
+          "db_column_name": "self_kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "bullets_fired",
+          "raw_value": 471,
+          "db_value": 169,
+          "difference": 302,
+          "db_column_name": "bullets_fired",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 328,
+            "r2_cumulative_value": 899,
+            "r2_differential_expected": 571,
+            "formula": "899 (R2 cumulative) - 328 (R1) = 571 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "xp",
+          "raw_value": 21,
+          "db_value": 34,
+          "difference": 13,
+          "db_column_name": "xp",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        }
+      ]
+    },
+    {
+      "player_name": "ripaZha sNozji.",
+      "player_guid": "58B93231",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": false
+      },
+      "field_analysis": [],
+      "error": "MISSING FROM DATABASE"
+    },
+    {
+      "player_name": "ripazha dAFF",
+      "player_guid": "2237B50F",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": false
+      },
+      "field_analysis": [],
+      "error": "MISSING FROM DATABASE"
+    },
+    {
+      "player_name": "slomix.olz",
+      "player_guid": "5D989160",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": true
+      },
+      "field_analysis": [
+        {
+          "field_name": "accuracy",
+          "raw_value": "31.62%",
+          "db_value": "35.14%",
+          "difference": 3.525641025641022,
+          "db_column_name": "accuracy",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 35.14328808446455,
+            "r2_differential_expected": 35.14328808446455,
+            "formula": "35.14328808446455 (R2 cumulative) - 0 (R1) = 35.14328808446455 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "kills",
+          "raw_value": 8,
+          "db_value": 25,
+          "difference": 17,
+          "db_column_name": "kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 25,
+            "r2_differential_expected": 25,
+            "formula": "25 (R2 cumulative) - 0 (R1) = 25 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "deaths",
+          "raw_value": 16,
+          "db_value": 30,
+          "difference": 14,
+          "db_column_name": "deaths",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 30,
+            "r2_differential_expected": 30,
+            "formula": "30 (R2 cumulative) - 0 (R1) = 30 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "damage_given",
+          "raw_value": 1691,
+          "db_value": 4522,
+          "difference": 2831,
+          "db_column_name": "damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 4522,
+            "r2_differential_expected": 4522,
+            "formula": "4522 (R2 cumulative) - 0 (R1) = 4522 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "damage_received",
+          "raw_value": 3665,
+          "db_value": 7044,
+          "difference": 3379,
+          "db_column_name": "damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 7044,
+            "r2_differential_expected": 7044,
+            "formula": "7044 (R2 cumulative) - 0 (R1) = 7044 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "team_damage_given",
+          "raw_value": 127,
+          "db_value": 199,
+          "difference": 72,
+          "db_column_name": "team_damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "gibs",
+          "raw_value": 3,
+          "db_value": 6,
+          "difference": 3,
+          "db_column_name": "gibs",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "self_kills",
+          "raw_value": 3,
+          "db_value": 13,
+          "difference": 10,
+          "db_column_name": "self_kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "bullets_fired",
+          "raw_value": 272,
+          "db_value": 663,
+          "difference": 391,
+          "db_column_name": "bullets_fired",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 663,
+            "r2_differential_expected": 663,
+            "formula": "663 (R2 cumulative) - 0 (R1) = 663 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "revives_given",
+          "raw_value": 0,
+          "db_value": 3,
+          "difference": 3,
+          "db_column_name": "revives_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "xp",
+          "raw_value": 0,
+          "db_value": 50,
+          "difference": 50,
+          "db_column_name": "xp",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        }
+      ]
+    },
+    {
+      "player_name": "ripaZha eLx",
+      "player_guid": "94F16E69",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": false
+      },
+      "field_analysis": [],
+      "error": "MISSING FROM DATABASE"
+    },
+    {
+      "player_name": "slomix.Imbecil",
+      "player_guid": "C74FB315",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": false
+      },
+      "field_analysis": [],
+      "error": "MISSING FROM DATABASE"
+    },
+    {
+      "player_name": "ripazha antii'",
+      "player_guid": "430E79FE",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": false
+      },
+      "field_analysis": [],
+      "error": "MISSING FROM DATABASE"
+    },
+    {
+      "player_name": "slomix.endekk",
+      "player_guid": "7B84BE88",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": true
+      },
+      "field_analysis": [
+        {
+          "field_name": "accuracy",
+          "raw_value": "36.53%",
+          "db_value": "40.81%",
+          "difference": 4.281775481958569,
+          "db_column_name": "accuracy",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 43.956043956043956,
+            "r2_cumulative_value": 40.81145584725537,
+            "r2_differential_expected": 0,
+            "formula": "40.81145584725537 (R2 cumulative) - 43.956043956043956 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "kills",
+          "raw_value": 11,
+          "db_value": 30,
+          "difference": 19,
+          "db_column_name": "kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 8,
+            "r2_cumulative_value": 30,
+            "r2_differential_expected": 22,
+            "formula": "30 (R2 cumulative) - 8 (R1) = 22 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "deaths",
+          "raw_value": 18,
+          "db_value": 24,
+          "difference": 6,
+          "db_column_name": "deaths",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 7,
+            "r2_cumulative_value": 24,
+            "r2_differential_expected": 17,
+            "formula": "24 (R2 cumulative) - 7 (R1) = 17 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "damage_given",
+          "raw_value": 1751,
+          "db_value": 3898,
+          "difference": 2147,
+          "db_column_name": "damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 1482,
+            "r2_cumulative_value": 3898,
+            "r2_differential_expected": 2416,
+            "formula": "3898 (R2 cumulative) - 1482 (R1) = 2416 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "damage_received",
+          "raw_value": 2549,
+          "db_value": 3871,
+          "difference": 1322,
+          "db_column_name": "damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 1200,
+            "r2_cumulative_value": 3871,
+            "r2_differential_expected": 2671,
+            "formula": "3871 (R2 cumulative) - 1200 (R1) = 2671 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "team_damage_given",
+          "raw_value": 18,
+          "db_value": 62,
+          "difference": 44,
+          "db_column_name": "team_damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "team_damage_received",
+          "raw_value": 89,
+          "db_value": 125,
+          "difference": 36,
+          "db_column_name": "team_damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "gibs",
+          "raw_value": 6,
+          "db_value": 8,
+          "difference": 2,
+          "db_column_name": "gibs",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "self_kills",
+          "raw_value": 4,
+          "db_value": 7,
+          "difference": 3,
+          "db_column_name": "self_kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "bullets_fired",
+          "raw_value": 219,
+          "db_value": 419,
+          "difference": 200,
+          "db_column_name": "bullets_fired",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 182,
+            "r2_cumulative_value": 419,
+            "r2_differential_expected": 237,
+            "formula": "419 (R2 cumulative) - 182 (R1) = 237 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "revives_given",
+          "raw_value": 0,
+          "db_value": 1,
+          "difference": 1,
+          "db_column_name": "revives_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "xp",
+          "raw_value": 0,
+          "db_value": 80,
+          "difference": 80,
+          "db_column_name": "xp",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        }
+      ]
+    },
+    {
+      "player_name": "ripaZha zubl1k",
+      "player_guid": "7869361E",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": false
+      },
+      "field_analysis": [],
+      "error": "MISSING FROM DATABASE"
+    },
+    {
+      "player_name": "slomix.SuperBoyy",
+      "player_guid": "EDBB5DA9",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": true
+      },
+      "field_analysis": [
+        {
+          "field_name": "accuracy",
+          "raw_value": "37.40%",
+          "db_value": "44.84%",
+          "difference": 7.439838651082965,
+          "db_column_name": "accuracy",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 44.8382126348228,
+            "r2_differential_expected": 44.8382126348228,
+            "formula": "44.8382126348228 (R2 cumulative) - 0 (R1) = 44.8382126348228 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "kills",
+          "raw_value": 10,
+          "db_value": 34,
+          "difference": 24,
+          "db_column_name": "kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 34,
+            "r2_differential_expected": 34,
+            "formula": "34 (R2 cumulative) - 0 (R1) = 34 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "deaths",
+          "raw_value": 20,
+          "db_value": 31,
+          "difference": 11,
+          "db_column_name": "deaths",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 31,
+            "r2_differential_expected": 31,
+            "formula": "31 (R2 cumulative) - 0 (R1) = 31 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "damage_given",
+          "raw_value": 2059,
+          "db_value": 6270,
+          "difference": 4211,
+          "db_column_name": "damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 6270,
+            "r2_differential_expected": 6270,
+            "formula": "6270 (R2 cumulative) - 0 (R1) = 6270 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "damage_received",
+          "raw_value": 3231,
+          "db_value": 5899,
+          "difference": 2668,
+          "db_column_name": "damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 5899,
+            "r2_differential_expected": 5899,
+            "formula": "5899 (R2 cumulative) - 0 (R1) = 5899 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "team_damage_given",
+          "raw_value": 50,
+          "db_value": 68,
+          "difference": 18,
+          "db_column_name": "team_damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "team_damage_received",
+          "raw_value": 0,
+          "db_value": 80,
+          "difference": 80,
+          "db_column_name": "team_damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "gibs",
+          "raw_value": 2,
+          "db_value": 10,
+          "difference": 8,
+          "db_column_name": "gibs",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "self_kills",
+          "raw_value": 0,
+          "db_value": 3,
+          "difference": 3,
+          "db_column_name": "self_kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "bullets_fired",
+          "raw_value": 246,
+          "db_value": 649,
+          "difference": 403,
+          "db_column_name": "bullets_fired",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 649,
+            "r2_differential_expected": 649,
+            "formula": "649 (R2 cumulative) - 0 (R1) = 649 (R2 differential)",
+            "player_in_r1": false
+          }
+        },
+        {
+          "field_name": "xp",
+          "raw_value": 0,
+          "db_value": 64,
+          "difference": 64,
+          "db_column_name": "xp",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": false
+          }
+        }
+      ]
+    },
+    {
+      "player_name": "slomix.carniee",
+      "player_guid": "0A26D447",
+      "round_info": "R2 etl_adlernest on 2025-11-02",
+      "database_location": {
+        "table": "player_comprehensive_stats",
+        "round_id": 195,
+        "gaming_session_id": 16,
+        "round_date": "2025-11-02",
+        "map_name": "etl_adlernest",
+        "round_number": 2,
+        "player_found": true
+      },
+      "field_analysis": [
+        {
+          "field_name": "kills",
+          "raw_value": 20,
+          "db_value": 32,
+          "difference": 12,
+          "db_column_name": "kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 12,
+            "r2_cumulative_value": 32,
+            "r2_differential_expected": 20,
+            "formula": "32 (R2 cumulative) - 12 (R1) = 20 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "deaths",
+          "raw_value": 16,
+          "db_value": 26,
+          "difference": 10,
+          "db_column_name": "deaths",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 9,
+            "r2_cumulative_value": 26,
+            "r2_differential_expected": 17,
+            "formula": "26 (R2 cumulative) - 9 (R1) = 17 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "damage_given",
+          "raw_value": 3350,
+          "db_value": 6534,
+          "difference": 3184,
+          "db_column_name": "damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 2358,
+            "r2_cumulative_value": 6534,
+            "r2_differential_expected": 4176,
+            "formula": "6534 (R2 cumulative) - 2358 (R1) = 4176 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "damage_received",
+          "raw_value": 3019,
+          "db_value": 5056,
+          "difference": 2037,
+          "db_column_name": "damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 1738,
+            "r2_cumulative_value": 5056,
+            "r2_differential_expected": 3318,
+            "formula": "5056 (R2 cumulative) - 1738 (R1) = 3318 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "team_damage_given",
+          "raw_value": 0,
+          "db_value": 18,
+          "difference": 18,
+          "db_column_name": "team_damage_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "team_damage_received",
+          "raw_value": 38,
+          "db_value": 56,
+          "difference": 18,
+          "db_column_name": "team_damage_received",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "gibs",
+          "raw_value": 4,
+          "db_value": 8,
+          "difference": 4,
+          "db_column_name": "gibs",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "self_kills",
+          "raw_value": 5,
+          "db_value": 15,
+          "difference": 10,
+          "db_column_name": "self_kills",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "bullets_fired",
+          "raw_value": 471,
+          "db_value": 899,
+          "difference": 428,
+          "db_column_name": "bullets_fired",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 328,
+            "r2_cumulative_value": 899,
+            "r2_differential_expected": 571,
+            "formula": "899 (R2 cumulative) - 328 (R1) = 571 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "revives_given",
+          "raw_value": 0,
+          "db_value": 1,
+          "difference": 1,
+          "db_column_name": "revives_given",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        },
+        {
+          "field_name": "xp",
+          "raw_value": 21,
+          "db_value": 93,
+          "difference": 72,
+          "db_column_name": "xp",
+          "is_round_2": true,
+          "differential_math": {
+            "r1_file": "2025-11-01-214552-etl_adlernest-round-1.txt",
+            "r2_file": "2025-11-02-000624-etl_adlernest-round-2.txt",
+            "r1_value": 0,
+            "r2_cumulative_value": 0,
+            "r2_differential_expected": 0,
+            "formula": "0 (R2 cumulative) - 0 (R1) = 0 (R2 differential)",
+            "player_in_r1": true
+          }
+        }
+      ]
+    }
+  ]
+}

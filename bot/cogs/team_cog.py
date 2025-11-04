@@ -46,27 +46,28 @@ class TeamCog(commands.Cog):
         
         return roster_text
     
-    @app_commands.command(name="teams", description="Show teams for current or specified session")
-    @app_commands.describe(
-        date="Session date (YYYY-MM-DD). Leave empty for latest session."
-    )
-    async def teams_command(self, interaction: discord.Interaction, date: Optional[str] = None):
-        """Show team rosters for a session"""
-        await interaction.response.defer()
+    @commands.command(name="teams")
+    async def teams_command(self, ctx, date: Optional[str] = None):
+        """Show team rosters for a session
+        
+        Usage:
+        !teams              → Show teams for latest session
+        !teams 2025-11-02   → Show teams for specific date
+        """
         
         try:
             db = self.get_db()
             
-            # Get session date
+            # Get round date
             if not date:
                 cursor = db.cursor()
                 cursor.execute(
-                    "SELECT DISTINCT SUBSTR(session_date, 1, 10) as date "
-                    "FROM sessions ORDER BY date DESC LIMIT 1"
+                    "SELECT DISTINCT SUBSTR(round_date, 1, 10) as date "
+                    "FROM rounds ORDER BY date DESC LIMIT 1"
                 )
                 row = cursor.fetchone()
                 if not row:
-                    await interaction.followup.send("❌ No sessions found in database.")
+                    await ctx.send("❌ No rounds found in database.")
                     return
                 date = row[0]
             
@@ -74,7 +75,7 @@ class TeamCog(commands.Cog):
             try:
                 datetime.strptime(date, "%Y-%m-%d")
             except ValueError:
-                await interaction.followup.send(
+                await ctx.send(
                     "❌ Invalid date format. Use YYYY-MM-DD (e.g., 2025-10-28)"
                 )
                 return
@@ -83,7 +84,7 @@ class TeamCog(commands.Cog):
             teams = self.team_manager.get_session_teams(db, date, auto_detect=True)
             
             if not teams:
-                await interaction.followup.send(
+                await ctx.send(
                     f"❌ No team data found for {date}. "
                     "Make sure there's session data for this date."
                 )
@@ -104,37 +105,29 @@ class TeamCog(commands.Cog):
             # Add footer with detection info
             embed.set_footer(text="Teams auto-detected from session data")
             
-            await interaction.followup.send(embed=embed)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error in teams command: {e}", exc_info=True)
-            await interaction.followup.send(f"❌ Error: {str(e)}")
+            await ctx.send(f"❌ Error: {str(e)}")
         finally:
             if 'db' in locals():
                 db.close()
     
-    @app_commands.command(name="set_team_names", description="Set custom names for teams")
-    @app_commands.describe(
-        date="Session date (YYYY-MM-DD)",
-        team_a="Custom name for Team A",
-        team_b="Custom name for Team B"
-    )
-    async def set_team_names_command(
-        self,
-        interaction: discord.Interaction,
-        date: str,
-        team_a: str,
-        team_b: str
-    ):
-        """Set custom team names for a session"""
-        await interaction.response.defer()
+    @commands.command(name="set_team_names")
+    async def set_team_names_command(self, ctx, date: str, team_a: str, team_b: str):
+        """Set custom team names for a session
+        
+        Usage:
+        !set_team_names 2025-11-02 "Red Devils" "Blue Lightning"
+        """
         
         try:
             # Validate date format
             try:
                 datetime.strptime(date, "%Y-%m-%d")
             except ValueError:
-                await interaction.followup.send(
+                await ctx.send(
                     "❌ Invalid date format. Use YYYY-MM-DD (e.g., 2025-10-28)"
                 )
                 return
@@ -144,7 +137,7 @@ class TeamCog(commands.Cog):
             # Check if teams exist for this date
             teams = self.team_manager.get_session_teams(db, date, auto_detect=True)
             if not teams:
-                await interaction.followup.send(
+                await ctx.send(
                     f"❌ No team data found for {date}. "
                     "Teams must be detected before setting custom names."
                 )
@@ -161,30 +154,26 @@ class TeamCog(commands.Cog):
                     color=discord.Color.green(),
                     description=f"**{team_a}** vs **{team_b}**"
                 )
-                await interaction.followup.send(embed=embed)
+                await ctx.send(embed=embed)
             else:
-                await interaction.followup.send("❌ Failed to update team names.")
+                await ctx.send("❌ Failed to update team names.")
             
         except Exception as e:
             logger.error(f"Error in set_team_names command: {e}", exc_info=True)
-            await interaction.followup.send(f"❌ Error: {str(e)}")
+            await ctx.send(f"❌ Error: {str(e)}")
         finally:
             if 'db' in locals():
                 db.close()
     
-    @app_commands.command(name="lineup_changes", description="Show lineup changes between sessions")
-    @app_commands.describe(
-        current_date="Current session date (YYYY-MM-DD). Leave empty for latest.",
-        previous_date="Previous session date (YYYY-MM-DD). Leave empty for automatic."
-    )
-    async def lineup_changes_command(
-        self,
-        interaction: discord.Interaction,
-        current_date: Optional[str] = None,
-        previous_date: Optional[str] = None
-    ):
-        """Show lineup changes between two sessions"""
-        await interaction.response.defer()
+    @commands.command(name="lineup_changes")
+    async def lineup_changes_command(self, ctx, current_date: Optional[str] = None, previous_date: Optional[str] = None):
+        """Show lineup changes between two sessions
+        
+        Usage:
+        !lineup_changes                      → Compare latest session with previous
+        !lineup_changes 2025-11-02           → Compare specified date with previous
+        !lineup_changes 2025-11-02 2025-11-01 → Compare two specific dates
+        """
         
         try:
             db = self.get_db()
@@ -193,12 +182,12 @@ class TeamCog(commands.Cog):
             if not current_date:
                 cursor = db.cursor()
                 cursor.execute(
-                    "SELECT DISTINCT SUBSTR(session_date, 1, 10) as date "
-                    "FROM sessions ORDER BY date DESC LIMIT 1"
+                    "SELECT DISTINCT SUBSTR(round_date, 1, 10) as date "
+                    "FROM rounds ORDER BY date DESC LIMIT 1"
                 )
                 row = cursor.fetchone()
                 if not row:
-                    await interaction.followup.send("❌ No sessions found in database.")
+                    await ctx.send("❌ No rounds found in database.")
                     return
                 current_date = row[0]
             
@@ -208,7 +197,7 @@ class TeamCog(commands.Cog):
                 if previous_date:
                     datetime.strptime(previous_date, "%Y-%m-%d")
             except ValueError:
-                await interaction.followup.send(
+                await ctx.send(
                     "❌ Invalid date format. Use YYYY-MM-DD (e.g., 2025-10-28)"
                 )
                 return
@@ -219,7 +208,7 @@ class TeamCog(commands.Cog):
             )
             
             if not changes.get('previous'):
-                await interaction.followup.send(
+                await ctx.send(
                     f"ℹ️ No previous session data found for comparison.\n"
                     f"Current session: {current_date}"
                 )
@@ -265,40 +254,37 @@ class TeamCog(commands.Cog):
                 
                 embed.add_field(name=team_name, value=change_text, inline=False)
             
-            await interaction.followup.send(embed=embed)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error in lineup_changes command: {e}", exc_info=True)
-            await interaction.followup.send(f"❌ Error: {str(e)}")
+            await ctx.send(f"❌ Error: {str(e)}")
         finally:
             if 'db' in locals():
                 db.close()
     
-    @app_commands.command(name="session_score", description="Show session score and team matchup")
-    @app_commands.describe(
-        date="Session date (YYYY-MM-DD). Leave empty for latest session."
-    )
-    async def session_score_command(
-        self,
-        interaction: discord.Interaction,
-        date: Optional[str] = None
-    ):
-        """Show final score for a session"""
-        await interaction.response.defer()
+    @commands.command(name="session_score")
+    async def session_score_command(self, ctx, date: Optional[str] = None):
+        """Show final score for a session
+        
+        Usage:
+        !session_score              → Show score for latest session
+        !session_score 2025-11-02   → Show score for specific date
+        """
         
         try:
             db = self.get_db()
             
-            # Get session date
+            # Get round date
             if not date:
                 cursor = db.cursor()
                 cursor.execute(
-                    "SELECT DISTINCT SUBSTR(session_date, 1, 10) as date "
-                    "FROM sessions ORDER BY date DESC LIMIT 1"
+                    "SELECT DISTINCT SUBSTR(round_date, 1, 10) as date "
+                    "FROM rounds ORDER BY date DESC LIMIT 1"
                 )
                 row = cursor.fetchone()
                 if not row:
-                    await interaction.followup.send("❌ No sessions found in database.")
+                    await ctx.send("❌ No rounds found in database.")
                     return
                 date = row[0]
             
@@ -306,7 +292,7 @@ class TeamCog(commands.Cog):
             try:
                 datetime.strptime(date, "%Y-%m-%d")
             except ValueError:
-                await interaction.followup.send(
+                await ctx.send(
                     "❌ Invalid date format. Use YYYY-MM-DD (e.g., 2025-10-28)"
                 )
                 return
@@ -314,13 +300,13 @@ class TeamCog(commands.Cog):
             # Get teams
             teams = self.team_manager.get_session_teams(db, date, auto_detect=True)
             if not teams:
-                await interaction.followup.send(f"❌ No team data found for {date}.")
+                await ctx.send(f"❌ No team data found for {date}.")
                 return
             
             # Calculate scores
             scores = self.scorer.calculate_session_scores(date)
             if not scores:
-                await interaction.followup.send(
+                await ctx.send(
                     f"❌ No scoring data found for {date}. "
                     "Ensure session has complete round data."
                 )
@@ -377,11 +363,11 @@ class TeamCog(commands.Cog):
                 map_text += "```"
                 embed.add_field(name="Map Breakdown", value=map_text, inline=False)
             
-            await interaction.followup.send(embed=embed)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error in session_score command: {e}", exc_info=True)
-            await interaction.followup.send(f"❌ Error: {str(e)}")
+            await ctx.send(f"❌ Error: {str(e)}")
         finally:
             if 'db' in locals():
                 db.close()

@@ -54,10 +54,10 @@ The new advanced team detection system replaces the simple Round 1 seeding appro
 ```python
 from bot.core.team_detector_integration import detect_session_teams_smart
 
-# Detect teams for a session
+# Detect teams for a round
 teams = detect_session_teams_smart(
     db_path="bot/etlegacy_production.db",
-    session_date="2025-11-01",
+    round_date="2025-11-01",
     auto_store=True  # Automatically save to database
 )
 
@@ -78,7 +78,7 @@ detector = TeamDetectorIntegration()
 # Detect with validation
 result, is_reliable = detector.detect_and_validate(
     db,
-    session_date="2025-11-01",
+    round_date="2025-11-01",
     require_high_confidence=True  # Only accept high-quality detections
 )
 
@@ -102,16 +102,16 @@ Replace old detection calls in `bot/core/team_manager.py`:
 
 ```python
 # OLD CODE:
-def detect_session_teams(self, db, session_date):
+def detect_session_teams(self, db, round_date):
     # ... old simple detection ...
     pass
 
 # NEW CODE:
 from bot.core.team_detector_integration import TeamDetectorIntegration
 
-def detect_session_teams(self, db, session_date):
+def detect_session_teams(self, db, round_date):
     detector = TeamDetectorIntegration(self.db_path)
-    result = detector.get_or_detect_teams(db, session_date, auto_detect=True)
+    result = detector.get_or_detect_teams(db, round_date, auto_detect=True)
     return result
 ```
 
@@ -127,7 +127,7 @@ def detect_session_teams(self, db, session_date):
 
 **Best for:**
 - Regular players with consistent teams
-- Sessions with same rosters as before
+- Rounds with same rosters as before
 
 **Example:**
 ```
@@ -143,13 +143,13 @@ New Session 2025-11-01:
 ### 2. Multi-Round Consensus (35% weight)
 
 **How it works:**
-- Analyzes ALL rounds in the session, not just Round 1
+- Analyzes ALL rounds in the round, not just Round 1
 - Builds consensus based on game-team consistency
 - Players who are always on same game-team → same persistent team
 - Uses graph clustering to find team boundaries
 
 **Best for:**
-- Sessions with multiple rounds
+- Rounds with multiple rounds
 - Detecting mid-session joiners
 - Handling team swaps
 
@@ -233,7 +233,7 @@ Update these files:
 ### Step 4: Re-detect All Historical Sessions
 
 ```python
-# Re-detect all sessions with new algorithm
+# Re-detect all rounds with new algorithm
 from bot.core.team_detector_integration import TeamDetectorIntegration
 import sqlite3
 
@@ -242,8 +242,8 @@ cursor = db.cursor()
 
 # Get all session dates
 cursor.execute("""
-    SELECT DISTINCT SUBSTR(session_date, 1, 10) as date
-    FROM sessions
+    SELECT DISTINCT SUBSTR(round_date, 1, 10) as date
+    FROM rounds
     ORDER BY date DESC
     LIMIT 30
 """)
@@ -284,17 +284,17 @@ If one team is much larger:
 
 If detection fails completely:
 
-1. Check that player data exists for the session
-2. Verify session_date format (YYYY-MM-DD)
+1. Check that player data exists for the round
+2. Verify round_date format (YYYY-MM-DD)
 3. Ensure multiple players participated
 4. Check database connectivity
 
 ## Performance
 
-- **Detection time**: 1-3 seconds per session
+- **Detection time**: 1-3 seconds per round
 - **Memory usage**: ~50MB for large sessions
 - **Database queries**: 5-10 queries per detection
-- **Scales to**: 100+ players per session
+- **Scales to**: 100+ players per round
 
 ## Future Enhancements
 

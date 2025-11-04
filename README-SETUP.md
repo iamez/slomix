@@ -18,7 +18,7 @@ Remove-Item -Recurse -Force .venv
 3. Run the helper script I added to create a fresh venv and install dependencies:
 
 ```powershell
-# allow script execution for this session
+# allow script execution for this round
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force
 # run the helper
 .\setup_env.ps1

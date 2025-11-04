@@ -46,7 +46,7 @@ bot/
 ├── commands/
 │   ├── __init__.py
 │   ├── stats_commands.py     # Stats, leaderboard, comparison
-│   ├── session_commands.py   # Session management
+│   ├── session_commands.py   # Round management
 │   ├── admin_commands.py     # Server management
 │   └── link_commands.py      # Player linking
 ├── core/
