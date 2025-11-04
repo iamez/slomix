@@ -193,7 +193,7 @@ class DatabaseManager:
                 )
             ''')
             
-            # 2. Player comprehensive stats (53 columns + ALL FIXES)
+            # 2. Player comprehensive stats (54 columns + ALL FIXES)
             logger.info("   Creating player_comprehensive_stats table...")
             cursor.execute('''
                 CREATE TABLE player_comprehensive_stats (
