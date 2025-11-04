@@ -2653,7 +2653,7 @@ class UltimateETLegacyBot(commands.Bot):
 
     async def validate_database_schema(self):
         """
-        ✅ CRITICAL: Validate database has correct unified schema (53 columns)
+        ✅ CRITICAL: Validate database has correct unified schema (54 columns)
         Prevents silent failures if wrong schema is used
         """
         try:
@@ -2663,13 +2663,13 @@ class UltimateETLegacyBot(commands.Bot):
                     await ensure_player_name_alias(db)
                 except Exception:
                     pass
-                # Check player_comprehensive_stats has 53 columns
+                # Check player_comprehensive_stats has 54 columns (53 + headshots)
                 cursor = await db.execute(
                     "PRAGMA table_info(player_comprehensive_stats)"
                 )
                 columns = await cursor.fetchall()
 
-                expected_columns = 53
+                expected_columns = 54
                 actual_columns = len(columns)
 
                 if actual_columns != expected_columns:
@@ -3379,7 +3379,7 @@ class UltimateETLegacyBot(commands.Bot):
             round_duration = stats_data.get('actual_time', stats_data.get('map_time', 'Unknown'))
             
             # 🔥 FETCH ALL PLAYER DATA FROM DATABASE (not from parser!)
-            # This gives us access to ALL 53 fields, not just the limited parser output
+            # This gives us access to ALL 54 fields, not just the limited parser output
             logger.debug(f"📊 Fetching full player data from database for session {round_id}, round {round_num}...")
             async with aiosqlite.connect(self.db_path) as db:
                 # Get round info (time limit, actual time)
