@@ -36,11 +36,11 @@ TEXT_COLOR = '#DCDDDE'
 
 ---
 
-## 📈 Graph Types for `!last_session`
+## 📈 Graph Types for `!last_round`
 
 ### 1. **DPM Line Graph** (Keep Current Style!) ✅
-**When:** `!last_session` (main overview)  
-**Shows:** DPM trends across all players in the session  
+**When:** `!last_round` (main overview)  
+**Shows:** DPM trends across all players in the round  
 **Style:** Multi-line chart with player names
 
 ```python
@@ -81,7 +81,7 @@ def create_dpm_line_graph(session_data):
 ---
 
 ### 2. **Radar Chart** (Skill Breakdown) 🎯
-**When:** `!last_session maps` - Per-player performance on a map  
+**When:** `!last_round maps` - Per-player performance on a map  
 **Shows:** Multiple skill dimensions (like your DALL-E examples)  
 **Inspired by:** Image #3 (RANARI radar chart)
 
@@ -130,7 +130,7 @@ def create_player_radar_chart(player_data):
 ---
 
 ### 3. **Grouped Bar Chart** (Map Comparison) 📊
-**When:** `!last_session maps`  
+**When:** `!last_round maps`  
 **Shows:** Performance comparison across different maps  
 **Inspired by:** Image #4 (Visual Performance Analytics)
 
@@ -197,8 +197,8 @@ def create_map_comparison_bars(session_data):
 ---
 
 ### 4. **Stacked Area Chart** (Team Performance Over Time) 🌊
-**When:** `!last_session graphs`  
-**Shows:** How team performance evolved throughout the session
+**When:** `!last_round graphs`  
+**Shows:** How team performance evolved throughout the round
 
 ```python
 def create_team_performance_timeline(session_data):
@@ -236,7 +236,7 @@ def create_team_performance_timeline(session_data):
 ---
 
 ### 5. **Heatmap** (Player Activity Map) 🔥
-**When:** `!last_session graphs`  
+**When:** `!last_round graphs`  
 **Shows:** Which players performed best on which maps
 
 ```python
@@ -343,21 +343,21 @@ def create_target_accuracy_chart(player_data):
 
 ---
 
-## 🎨 Complete Graph Suite for `!last_session`
+## 🎨 Complete Graph Suite for `!last_round`
 
-### `!last_session` (overview)
+### `!last_round` (overview)
 - ✅ **DPM Line Graph** (keep current - you like it!)
 
-### `!last_session maps`
+### `!last_round maps`
 - **Per-Map Bar Chart** - Kills/Deaths/Objectives for each map
 - **Radar Chart** - Top 3 players' skill breakdown per map
 - **Win Rate Pie Chart** - Defender vs Attacker wins per map
 
-### `!last_session rounds`
+### `!last_round rounds`
 - **Timeline Graph** - Visual timeline of all rounds with outcomes
 - **Round Duration Chart** - Bar chart of round lengths
 
-### `!last_session graphs`
+### `!last_round graphs`
 - **DPM Trend Lines** - All players' DPM over session
 - **K/D Comparison Bars** - Side-by-side player comparison
 - **Kill Distribution Pie** - Who got what % of kills
@@ -435,7 +435,7 @@ scipy>=1.10.0    # For advanced statistics
 
 ## 🎨 Example Output Order
 
-When user types `!last_session graphs`:
+When user types `!last_round graphs`:
 
 ```
 📈 Statistical Analysis - October 31, 2025
@@ -443,7 +443,7 @@ When user types `!last_session graphs`:
 Generating graphs... This may take a moment.
 
 [Graph 1: DPM Trend Lines]
-Shows how each player's DPM changed throughout the session
+Shows how each player's DPM changed throughout the round
 
 [Graph 2: K/D Comparison]  
 Side-by-side bar comparison of all players

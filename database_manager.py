@@ -68,7 +68,7 @@ class DatabaseManager:
             'files_processed': 0,
             'files_skipped': 0,
             'files_failed': 0,
-            'sessions_created': 0,
+            'rounds_created': 0,
             'players_inserted': 0,
             'weapons_inserted': 0
         }
@@ -104,7 +104,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             
             # Check for sessions table (if this exists, assume all tables exist)
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='rounds'")
             if cursor.fetchone() is None:
                 logger.info("🔍 Database exists but tables missing - creating schema...")
                 conn.close()
@@ -171,13 +171,13 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # 1. Sessions table
-            logger.info("   Creating sessions table...")
+            # 1. rounds table (with gaming_session_id for Phase 1 grouping)
+            logger.info("   Creating rounds table...")
             cursor.execute('''
-                CREATE TABLE sessions (
+                CREATE TABLE rounds (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_date TEXT NOT NULL,
-                    session_time TEXT NOT NULL,
+                    round_date TEXT NOT NULL,
+                    round_time TEXT NOT NULL,
                     match_id TEXT NOT NULL,
                     map_name TEXT NOT NULL,
                     round_number INTEGER NOT NULL,
@@ -187,6 +187,7 @@ class DatabaseManager:
                     defender_team INTEGER DEFAULT 0,
                     is_tied BOOLEAN DEFAULT FALSE,
                     round_outcome TEXT,
+                    gaming_session_id INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(match_id, round_number)
                 )
@@ -197,8 +198,8 @@ class DatabaseManager:
             cursor.execute('''
                 CREATE TABLE player_comprehensive_stats (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id INTEGER NOT NULL,
-                    session_date TEXT NOT NULL,
+                    round_id INTEGER NOT NULL,
+                    round_date TEXT NOT NULL,
                     map_name TEXT NOT NULL,
                     round_number INTEGER NOT NULL,
                     player_guid TEXT NOT NULL,
@@ -266,10 +267,10 @@ class DatabaseManager:
                     death_spree_worst INTEGER DEFAULT 0,
                     
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (session_id) REFERENCES sessions(id),
+                    FOREIGN KEY (round_id) REFERENCES rounds(id),
                     
                     -- ✅ DUPLICATE PREVENTION
-                    UNIQUE(session_id, player_guid)
+                    UNIQUE(round_id, player_guid)
                 )
             ''')
             
@@ -278,8 +279,8 @@ class DatabaseManager:
             cursor.execute('''
                 CREATE TABLE weapon_comprehensive_stats (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id INTEGER NOT NULL,
-                    session_date TEXT NOT NULL,
+                    round_id INTEGER NOT NULL,
+                    round_date TEXT NOT NULL,
                     map_name TEXT NOT NULL,
                     round_number INTEGER NOT NULL,
                     player_guid TEXT NOT NULL,
@@ -292,10 +293,10 @@ class DatabaseManager:
                     hits INTEGER DEFAULT 0,
                     accuracy REAL DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (session_id) REFERENCES sessions(id),
+                    FOREIGN KEY (round_id) REFERENCES rounds(id),
                     
                     -- ✅ DUPLICATE PREVENTION
-                    UNIQUE(session_id, player_guid, weapon_name)
+                    UNIQUE(round_id, player_guid, weapon_name)
                 )
             ''')
             
@@ -326,7 +327,7 @@ class DatabaseManager:
             ''')
             
             # 6. Session teams
-            logger.info("   Creating session_teams table...")
+            logger.info("   Creating round_teams table...")
             cursor.execute('''
                 CREATE TABLE session_teams (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -356,11 +357,11 @@ class DatabaseManager:
             
             # Create indexes for performance
             logger.info("   Creating indexes...")
-            cursor.execute('CREATE INDEX idx_sessions_date_map ON sessions(session_date, map_name)')
-            cursor.execute('CREATE INDEX idx_sessions_match_id ON sessions(match_id)')
-            cursor.execute('CREATE INDEX idx_player_stats_session ON player_comprehensive_stats(session_id)')
+            cursor.execute('CREATE INDEX idx_rounds_date_map ON rounds(round_date, map_name)')
+            cursor.execute('CREATE INDEX idx_rounds_match_id ON rounds(match_id)')
+            cursor.execute('CREATE INDEX idx_player_stats_round ON player_comprehensive_stats(round_id)')
             cursor.execute('CREATE INDEX idx_player_stats_guid ON player_comprehensive_stats(player_guid)')
-            cursor.execute('CREATE INDEX idx_weapon_stats_session ON weapon_comprehensive_stats(session_id)')
+            cursor.execute('CREATE INDEX idx_weapon_stats_round ON weapon_comprehensive_stats(round_id)')
             cursor.execute('CREATE INDEX idx_weapon_stats_guid ON weapon_comprehensive_stats(player_guid)')
             cursor.execute('CREATE INDEX idx_aliases_guid ON player_aliases(guid)')
             
@@ -384,7 +385,7 @@ class DatabaseManager:
     # DATA IMPORT (With transaction safety and duplicate prevention)
     # =========================================================================
     
-    def _find_or_create_match_id(self, file_date: str, session_time: str, 
+    def _find_or_create_match_id(self, file_date: str, round_time: str, 
                                   map_name: str, round_num: int, file_path: Path) -> str:
         """
         Find or create match_id to pair Round 1 and Round 2 together
@@ -397,7 +398,7 @@ class DatabaseManager:
         """
         if round_num == 1:
             # Round 1: Create new match_id
-            match_id = f"{file_date}_{session_time}_{map_name}"
+            match_id = f"{file_date}_{round_time}_{map_name}"
             return match_id
         
         else:
@@ -405,39 +406,82 @@ class DatabaseManager:
             # Look for R1 files on same date, same map, BEFORE this R2 file
             r1_pattern = f"{file_date}-*-{map_name}-round-1.txt"
             r1_files = list(self.stats_dir.glob(r1_pattern))
+            same_day_count = len(r1_files)
+            
+            # ✅ FIX: ALWAYS check PREVIOUS day for midnight-crossing matches
+            # (Don't just check if no same-day files - we need to check both!)
+            from datetime import datetime, timedelta
+            prev_day_r1_files = []
+            try:
+                current_date = datetime.strptime(file_date, "%Y-%m-%d")
+                prev_date = current_date - timedelta(days=1)
+                prev_date_str = prev_date.strftime("%Y-%m-%d")
+                r1_pattern_prev = f"{prev_date_str}-*-{map_name}-round-1.txt"
+                prev_day_r1_files = list(self.stats_dir.glob(r1_pattern_prev))
+                if prev_day_r1_files:
+                    r1_files.extend(prev_day_r1_files)
+                    logger.debug(f"🌙 Checking previous day for R1: {prev_date_str} ({len(prev_day_r1_files)} files)")
+            except ValueError:
+                pass  # Invalid date format, skip previous date search
             
             if not r1_files:
-                # No R1 file found - create orphan match_id
-                logger.warning(f"⚠️  No Round 1 file found for {file_path.name}")
-                match_id = f"{file_date}_{session_time}_{map_name}_orphan"
+                # No R1 file found on same day or previous day - create orphan match_id
+                logger.warning(f"⚠️  No Round 1 file found for {file_path.name} (checked today and yesterday)")
+                match_id = f"{file_date}_{round_time}_{map_name}_orphan"
                 return match_id
             
             # Find R1 file closest in time BEFORE this R2
-            r2_time = int(session_time)
+            # Use full datetime comparison to handle midnight crossings
+            from datetime import datetime
+            try:
+                r2_datetime = datetime.strptime(f"{file_date} {round_time}", "%Y-%m-%d %H%M%S")
+            except ValueError:
+                # Fallback to orphan if date parsing fails
+                logger.warning(f"⚠️  Invalid datetime for R2: {file_path.name}")
+                match_id = f"{file_date}_{round_time}_{map_name}_orphan"
+                return match_id
+            
             closest_r1 = None
             closest_time_diff = float('inf')
+            closest_r1_time = None
             
             for r1_file in r1_files:
-                r1_time_str = r1_file.name.split('-')[3]
-                r1_time = int(r1_time_str)
+                r1_parts = r1_file.name.split('-')
+                if len(r1_parts) < 4:
+                    continue
+                r1_date = '-'.join(r1_parts[:3])
+                r1_time_str = r1_parts[3]
                 
-                # R1 must be BEFORE R2 (R1 time < R2 time)
-                if r1_time < r2_time:
-                    time_diff = r2_time - r1_time
-                    if time_diff < closest_time_diff:
-                        closest_time_diff = time_diff
-                        closest_r1 = r1_file
-                        closest_r1_time = r1_time_str
+                try:
+                    r1_datetime = datetime.strptime(f"{r1_date} {r1_time_str}", "%Y-%m-%d %H%M%S")
+                    # R1 must be BEFORE R2
+                    if r1_datetime < r2_datetime:
+                        time_diff = (r2_datetime - r1_datetime).total_seconds()
+                        if time_diff < closest_time_diff:
+                            closest_time_diff = time_diff
+                            closest_r1 = r1_file
+                            closest_r1_time = r1_time_str
+                except ValueError:
+                    continue
             
             if closest_r1:
                 # Found matching R1 - use its match_id
-                match_id = f"{file_date}_{closest_r1_time}_{map_name}"
-                logger.debug(f"✅ Paired R2 {session_time} with R1 {closest_r1_time} (diff: {closest_time_diff}s)")
+                # Extract the date from the R1 file (not the R2 date!)
+                r1_parts = closest_r1.name.split('-')
+                r1_date_str = '-'.join(r1_parts[0:3])
+                match_id = f"{r1_date_str}_{closest_r1_time}_{map_name}"
+                
+                # Check if this is a midnight-crossing match
+                is_midnight_crossing = (r1_date_str != file_date)
+                if is_midnight_crossing:
+                    logger.info(f"🌙 Midnight-crossing match: R1 {closest_r1.name} -> R2 {file_path.name} ({closest_time_diff:.0f}s)")
+                else:
+                    logger.debug(f"✅ Paired R2 {round_time} with R1 {closest_r1_time} (diff: {closest_time_diff:.0f}s)")
                 return match_id
             else:
                 # All R1 files are AFTER R2 (weird case)
                 logger.warning(f"⚠️  All R1 files are after R2 for {file_path.name}")
-                match_id = f"{file_date}_{session_time}_{map_name}_orphan"
+                match_id = f"{file_date}_{round_time}_{map_name}_orphan"
                 return match_id
     
     def is_file_processed(self, filename: str) -> bool:
@@ -469,32 +513,122 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logger.warning(f"Error marking file as processed: {e}")
     
-    def create_session(self, parsed_data: Dict, file_date: str, session_time: str, match_id: str) -> Optional[int]:
-        """Create new session (with transaction safety)"""
+    def _get_or_create_gaming_session_id(self, cursor, file_date: str, round_time: str) -> Optional[int]:
+        """
+        Calculate gaming_session_id for a new round using 60-minute gap logic.
+        
+        Gaming session rules:
+        - Group consecutive rounds into gaming sessions
+        - If gap between rounds > 60 minutes → new gaming session
+        - Handles midnight-crossing (same gaming session continues after midnight)
+        
+        Returns:
+            gaming_session_id to assign to this round (or None on error)
+        """
+        GAP_THRESHOLD_MINUTES = 60
+        
+        try:
+            # Get the most recent round with a gaming_session_id
+            cursor.execute('''
+                SELECT gaming_session_id, round_date, round_time
+                FROM rounds
+                WHERE gaming_session_id IS NOT NULL
+                ORDER BY round_date DESC, round_time DESC
+                LIMIT 1
+            ''')
+            
+            last_round = cursor.fetchone()
+            
+            if not last_round:
+                # First round ever - start with gaming_session_id = 1
+                return 1
+            
+            last_gaming_session_id, last_date, last_time = last_round
+            
+            # Parse datetimes
+            current_datetime = datetime.strptime(f"{file_date} {round_time}", "%Y-%m-%d %H%M%S")
+            last_datetime = datetime.strptime(f"{last_date} {last_time}", "%Y-%m-%d %H%M%S")
+            
+            # Calculate gap
+            gap_minutes = (current_datetime - last_datetime).total_seconds() / 60
+            
+            if gap_minutes > GAP_THRESHOLD_MINUTES:
+                # Start new gaming session
+                new_gaming_session_id = last_gaming_session_id + 1
+                logger.info(f"New gaming session #{new_gaming_session_id} (gap: {gap_minutes:.1f} min from previous round)")
+                return new_gaming_session_id
+            else:
+                # Continue existing gaming session
+                logger.debug(f"Continuing gaming session #{last_gaming_session_id} (gap: {gap_minutes:.1f} min)")
+                return last_gaming_session_id
+                
+        except Exception as e:
+            logger.warning(f"Error calculating gaming_session_id: {e}. Using NULL.")
+            return None
+    
+    def create_round(self, parsed_data: Dict, file_date: str, round_time: str, match_id: str) -> Optional[int]:
+        """Create new round (with transaction safety and duplicate handling)"""
         conn = None
         try:
             conn = sqlite3.connect(self.db_path, timeout=30.0)
-            conn.execute('BEGIN TRANSACTION')  # ✅ Transaction safety
             cursor = conn.cursor()
             
             map_name = parsed_data.get('map_name', 'Unknown')
             round_num = parsed_data.get('round_num', 1)
             time_limit = parsed_data.get('map_time', '0:00')
             actual_time = parsed_data.get('actual_time', '0:00')
+            winner_team = parsed_data.get('winner_team', 0)
             
+            # Determine round outcome based on winner_team
+            # 0 = Tie, 1 = Axis won, 2 = Allies won
+            if winner_team == 0:
+                round_outcome = "Tie"
+                is_tied = True
+            elif winner_team == 1:
+                round_outcome = "Axis Victory"
+                is_tied = False
+            elif winner_team == 2:
+                round_outcome = "Allies Victory"
+                is_tied = False
+            else:
+                round_outcome = None
+                is_tied = False
+            
+            # Defender team is opposite of round number (R1 = Axis defend, R2 = Allies defend)
+            defender_team = 1 if round_num == 1 else 2
+            
+            # ✅ Check if session already exists
             cursor.execute('''
-                INSERT INTO sessions (
-                    session_date, session_time, match_id, map_name, round_number,
-                    time_limit, actual_time, created_at
+                SELECT id FROM rounds 
+                WHERE match_id = ? AND round_number = ?
+            ''', (match_id, round_num))
+            
+            existing = cursor.fetchone()
+            if existing:
+                # Round already exists - return existing ID
+                logger.debug(f"Round already exists: {match_id} R{round_num} (ID: {existing[0]})")
+                return existing[0]
+            
+            # Calculate gaming_session_id for this round
+            gaming_session_id = self._get_or_create_gaming_session_id(cursor, file_date, round_time)
+            
+            # Create new round
+            conn.execute('BEGIN TRANSACTION')  # ✅ Transaction safety
+            cursor.execute('''
+                INSERT INTO rounds (
+                    round_date, round_time, match_id, map_name, round_number,
+                    time_limit, actual_time, winner_team, defender_team, is_tied,
+                    round_outcome, gaming_session_id, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (file_date, session_time, match_id, map_name, round_num, time_limit, actual_time))
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (file_date, round_time, match_id, map_name, round_num, time_limit, actual_time, 
+                  winner_team, defender_team, is_tied, round_outcome, gaming_session_id))
             
-            session_id = cursor.lastrowid
+            round_id = cursor.lastrowid
             conn.commit()  # ✅ Commit transaction
-            self.stats['sessions_created'] += 1
+            self.stats['rounds_created'] += 1
             
-            return session_id
+            return round_id
             
         except sqlite3.Error as e:
             if conn:
@@ -505,7 +639,7 @@ class DatabaseManager:
             if conn:
                 conn.close()
     
-    def insert_player_stats(self, session_id: int, session_date: str, 
+    def insert_player_stats(self, round_id: int, round_date: str, 
                            map_name: str, round_num: int, player: Dict) -> bool:
         """Insert player stats (with transaction safety)"""
         conn = None
@@ -538,7 +672,7 @@ class DatabaseManager:
             # ✅ INSERT ALL 51 VALUES with correct field mappings
             cursor.execute('''
                 INSERT INTO player_comprehensive_stats (
-                    session_id, session_date, map_name, round_number,
+                    round_id, round_date, map_name, round_number,
                     player_guid, player_name, clean_name, team,
                     kills, deaths, damage_given, damage_received,
                     team_damage_given, team_damage_received,
@@ -562,7 +696,7 @@ class DatabaseManager:
                         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                session_id, session_date, map_name, round_num,
+                round_id, round_date, map_name, round_num,
                 guid, name, clean_name, team,
                 kills, deaths, player.get('damage_given', 0), player.get('damage_received', 0),
                 obj_stats.get('team_damage_given', 0),
@@ -571,7 +705,7 @@ class DatabaseManager:
                 obj_stats.get('self_kills', 0),
                 obj_stats.get('team_kills', 0),
                 obj_stats.get('team_gibs', 0),
-                obj_stats.get('headshot_kills', 0),
+                player.get('headshots', 0),  # ✅ FIX: headshots at player level, not obj_stats
                 time_seconds, time_minutes,
                 time_dead_minutes, time_dead_ratio,
                 obj_stats.get('xp', 0), kd_ratio, dpm, efficiency,
@@ -612,7 +746,7 @@ class DatabaseManager:
             if conn:
                 conn.close()
     
-    def insert_weapon_stats(self, session_id: int, session_date: str,
+    def insert_weapon_stats(self, round_id: int, round_date: str,
                            map_name: str, round_num: int, player: Dict) -> bool:
         """Insert weapon stats (with transaction safety)"""
         conn = None
@@ -629,13 +763,13 @@ class DatabaseManager:
                 if stats.get('shots', 0) > 0 or stats.get('kills', 0) > 0:
                     cursor.execute('''
                         INSERT INTO weapon_comprehensive_stats (
-                            session_id, session_date, map_name, round_number,
+                            round_id, round_date, map_name, round_number,
                             player_guid, player_name, weapon_name,
                             kills, deaths, headshots, hits, shots, accuracy
                         )
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
-                        session_id, session_date, map_name, round_num,
+                        round_id, round_date, map_name, round_num,
                         guid, name, weapon_name,
                         stats.get('kills', 0), stats.get('deaths', 0), stats.get('headshots', 0),
                         stats.get('hits', 0), stats.get('shots', 0), stats.get('accuracy', 0.0)
@@ -664,6 +798,15 @@ class DatabaseManager:
                 self.stats['files_skipped'] += 1
                 return True, "Already processed"
             
+            # ✅ Validate filename format first
+            parts = filename.split('-')
+            if len(parts) < 4:
+                error_msg = f"Invalid filename format: {filename} (expected: YYYY-MM-DD-HHMMSS-...)"
+                logger.warning(f"⚠️  {error_msg}")
+                self.mark_file_processed(filename, success=False)
+                self.stats['files_failed'] += 1
+                return False, error_msg
+            
             # Parse file
             parsed = self.parser.parse_stats_file(str(file_path))
             
@@ -674,20 +817,19 @@ class DatabaseManager:
                 return False, f"Parse error: {error_msg}"
             
             # Extract date and time from filename: 2025-09-09-225817-map-round-1.txt
-            parts = filename.split('-')
             file_date = '-'.join(parts[:3])  # 2025-09-09
-            session_time = parts[3]  # 225817
+            round_time = parts[3]  # 225817
             
             # Generate match_id by finding R1 file for this match
             map_name = parsed.get('map_name', 'Unknown')
             round_num = parsed.get('round_num', 1)
-            match_id = self._find_or_create_match_id(file_date, session_time, map_name, round_num, file_path)
+            match_id = self._find_or_create_match_id(file_date, round_time, map_name, round_num, file_path)
             
-            # Create session
-            session_id = self.create_session(parsed, file_date, session_time, match_id)
-            if not session_id:
+            # Create round
+            round_id = self.create_round(parsed, file_date, round_time, match_id)
+            if not round_id:
                 self.stats['files_failed'] += 1
-                return False, "Session creation failed"
+                return False, "Round creation failed"
             
             # Insert players and weapons
             players = parsed.get('players', [])
@@ -695,8 +837,8 @@ class DatabaseManager:
             round_num = parsed.get('round_num', 1)
             
             for player in players:
-                if self.insert_player_stats(session_id, file_date, map_name, round_num, player):
-                    self.insert_weapon_stats(session_id, file_date, map_name, round_num, player)
+                if self.insert_player_stats(round_id, file_date, map_name, round_num, player):
+                    self.insert_weapon_stats(round_id, file_date, map_name, round_num, player)
             
             # Mark as processed
             self.mark_file_processed(filename, success=True)
@@ -777,7 +919,7 @@ class DatabaseManager:
         logger.info(f"   Files processed:  {self.stats['files_processed']:,}")
         logger.info(f"   Files skipped:    {self.stats['files_skipped']:,}")
         logger.info(f"   Files failed:     {self.stats['files_failed']:,}")
-        logger.info(f"   Sessions created: {self.stats['sessions_created']:,}")
+        logger.info(f"   Rounds created: {self.stats['rounds_created']:,}")
         logger.info(f"   Players inserted: {self.stats['players_inserted']:,}")
         logger.info(f"   Weapons inserted: {self.stats['weapons_inserted']:,}")
         logger.info(f"   Time elapsed:     {timedelta(seconds=int(elapsed))}")
@@ -846,19 +988,19 @@ class DatabaseManager:
             
             cursor.execute("""
                 DELETE FROM weapon_comprehensive_stats 
-                WHERE session_date BETWEEN ? AND ?
+                WHERE round_date BETWEEN ? AND ?
             """, (start_date, end_date))
             weapons_deleted = cursor.rowcount
             
             cursor.execute("""
                 DELETE FROM player_comprehensive_stats 
-                WHERE session_date BETWEEN ? AND ?
+                WHERE round_date BETWEEN ? AND ?
             """, (start_date, end_date))
             players_deleted = cursor.rowcount
             
             cursor.execute("""
-                DELETE FROM sessions 
-                WHERE session_date BETWEEN ? AND ?
+                DELETE FROM rounds 
+                WHERE round_date BETWEEN ? AND ?
             """, (start_date, end_date))
             sessions_deleted = cursor.rowcount
             
@@ -912,9 +1054,9 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Check sessions
-            cursor.execute("SELECT COUNT(*) FROM sessions")
-            session_count = cursor.fetchone()[0]
+            # Check rounds
+            cursor.execute("SELECT COUNT(*) FROM rounds")
+            round_count = cursor.fetchone()[0]
             
             # Check players
             cursor.execute("SELECT COUNT(*) FROM player_comprehensive_stats")
@@ -929,21 +1071,21 @@ class DatabaseManager:
             processed_count = cursor.fetchone()[0]
             
             # Date range
-            cursor.execute("SELECT MIN(session_date), MAX(session_date) FROM sessions")
+            cursor.execute("SELECT MIN(round_date), MAX(round_date) FROM rounds")
             date_range = cursor.fetchone()
             
             # Check for sessions without players (data integrity issue)
             cursor.execute("""
-                SELECT COUNT(*) FROM sessions s
-                LEFT JOIN player_comprehensive_stats p ON p.session_id = s.id
+                SELECT COUNT(*) FROM rounds s
+                LEFT JOIN player_comprehensive_stats p ON p.round_id = s.id
                 WHERE p.id IS NULL
             """)
             orphan_sessions = cursor.fetchone()[0]
             
             # Check for sessions without weapons (potential issue)
             cursor.execute("""
-                SELECT COUNT(*) FROM sessions s
-                LEFT JOIN weapon_comprehensive_stats w ON w.session_id = s.id
+                SELECT COUNT(*) FROM rounds s
+                LEFT JOIN weapon_comprehensive_stats w ON w.round_id = s.id
                 WHERE w.id IS NULL
             """)
             no_weapon_sessions = cursor.fetchone()[0]
@@ -951,7 +1093,7 @@ class DatabaseManager:
             conn.close()
             
             results = {
-                'sessions': session_count,
+                'rounds': round_count,
                 'players': player_count,
                 'weapons': weapon_count,
                 'processed_files': processed_count,
@@ -962,7 +1104,7 @@ class DatabaseManager:
             }
             
             logger.info("\n📊 Database Statistics:")
-            logger.info(f"   Sessions:          {session_count:,}")
+            logger.info(f"   Sessions:          {round_count:,}")
             logger.info(f"   Player stats:      {player_count:,}")
             logger.info(f"   Weapon stats:      {weapon_count:,}")
             logger.info(f"   Processed files:   {processed_count:,}")
