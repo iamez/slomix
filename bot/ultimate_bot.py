@@ -3398,7 +3398,7 @@ class UltimateETLegacyBot(commands.Bot):
                 cursor = await db.execute("""
                     SELECT 
                         player_name, team, kills, deaths, damage_given, damage_received,
-                        team_damage_given, team_damage_received, gibs, headshot_kills,
+                        team_damage_given, team_damage_received, gibs, headshots,
                         accuracy, revives_given, times_revived, time_dead_minutes,
                         efficiency, kd_ratio, time_played_minutes, dpm
                     FROM player_comprehensive_stats
@@ -3875,7 +3875,8 @@ class UltimateETLegacyBot(commands.Bot):
             obj_stats.get("self_kills", 0),
             obj_stats.get("team_kills", 0),
             obj_stats.get("team_gibs", 0),
-            obj_stats.get("headshot_kills", 0),  # ✅ CRITICAL: Use headshot_KILLS (TAB field 14), NOT player["headshots"] (weapon hits sum)!
+            obj_stats.get("headshot_kills", 0),  # ✅ TAB field 14 - actual headshot kills
+            player.get("headshots", 0),  # ✅ Sum of weapon headshot hits (what we display!)
             time_seconds,
             time_minutes,
             time_dead_mins,
@@ -3917,7 +3918,7 @@ class UltimateETLegacyBot(commands.Bot):
                 player_guid, player_name, clean_name, team,
                 kills, deaths, damage_given, damage_received,
                 team_damage_given, team_damage_received,
-                gibs, self_kills, team_kills, team_gibs, headshot_kills,
+                gibs, self_kills, team_kills, team_gibs, headshot_kills, headshots,
                 time_played_seconds, time_played_minutes,
                 time_dead_minutes, time_dead_ratio,
                 xp, kd_ratio, dpm, efficiency,
@@ -3933,7 +3934,7 @@ class UltimateETLegacyBot(commands.Bot):
                 multi_kills, mega_kills,
                 killing_spree_best, death_spree_worst
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
