@@ -219,6 +219,7 @@ class DatabaseManager:
                     team_kills INTEGER DEFAULT 0,
                     team_gibs INTEGER DEFAULT 0,
                     headshot_kills INTEGER DEFAULT 0,
+                    headshots INTEGER DEFAULT 0,
                     
                     -- Time tracking
                     time_played_seconds INTEGER DEFAULT 0,
@@ -676,7 +677,7 @@ class DatabaseManager:
                     player_guid, player_name, clean_name, team,
                     kills, deaths, damage_given, damage_received,
                     team_damage_given, team_damage_received,
-                    gibs, self_kills, team_kills, team_gibs, headshot_kills,
+                    gibs, self_kills, team_kills, team_gibs, headshot_kills, headshots,
                     time_played_seconds, time_played_minutes,
                     time_dead_minutes, time_dead_ratio,
                     xp, kd_ratio, dpm, efficiency,
@@ -692,7 +693,7 @@ class DatabaseManager:
                     multi_kills, mega_kills,
                     killing_spree_best, death_spree_worst
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
@@ -705,7 +706,8 @@ class DatabaseManager:
                 obj_stats.get('self_kills', 0),
                 obj_stats.get('team_kills', 0),
                 obj_stats.get('team_gibs', 0),
-                player.get('headshots', 0),  # ✅ FIX: headshots at player level, not obj_stats
+                obj_stats.get('headshot_kills', 0),  # ✅ TAB field 14 - actual headshot kills
+                player.get('headshots', 0),  # ✅ Sum of weapon headshot hits
                 time_seconds, time_minutes,
                 time_dead_minutes, time_dead_ratio,
                 obj_stats.get('xp', 0), kd_ratio, dpm, efficiency,

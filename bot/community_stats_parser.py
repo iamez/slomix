@@ -548,6 +548,11 @@ class C0RNP0RN3StatsParser:
             differential_player['accuracy'] = (total_hits / total_shots * 100) if total_shots > 0 else 0.0
             differential_player['shots_total'] = total_shots
             differential_player['hits_total'] = total_hits
+            
+            # FIX: Recalculate headshots from differential weapon stats
+            # Don't use the subtracted value from line 443, use the sum of differential weapons
+            total_headshots = sum(w.get('headshots', 0) for w in differential_player['weapon_stats'].values())
+            differential_player['headshots'] = total_headshots
 
             # FIX: Properly calculate time_dead for Round 2 differential
             # Use Round 2 cumulative ratio applied to Round 2 differential time
