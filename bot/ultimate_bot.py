@@ -2557,6 +2557,7 @@ class UltimateETLegacyBot(commands.Bot):
             raise FileNotFoundError(error_msg)
 
         # 🎮 Bot State
+        self.bot_startup_time = datetime.now()  # Track when bot started (for auto-import filtering)
         self.current_session = None
         self.processed_files = set()
         self.auto_link_enabled = True
@@ -4110,16 +4111,38 @@ class UltimateETLegacyBot(commands.Bot):
         Smart file processing decision (Hybrid Approach)
 
         Checks multiple sources to avoid re-processing:
-        1. In-memory cache (fastest)
-        2. Local file exists (fast)
-        3. Processed files table (fast, persistent)
-        4. Sessions table (slower, definitive)
+        1. File age (prevent importing old files)
+        2. In-memory cache (fastest)
+        3. Local file exists (fast)
+        4. Processed files table (fast, persistent)
+        5. Sessions table (slower, definitive)
 
         Returns:
             bool: True if file should be processed, False if already done
         """
         try:
-            # 1. Check in-memory cache
+            # 1. Check file age - only import files created AFTER bot startup
+            # This prevents importing old files on bot restart while allowing live updates
+            try:
+                # Parse datetime from filename: YYYY-MM-DD-HHMMSS-...
+                datetime_str = filename[:17]  # Get YYYY-MM-DD-HHMMSS
+                file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d-%H%M%S")
+                
+                # Skip files created before bot started
+                if file_datetime < self.bot_startup_time:
+                    time_diff = (self.bot_startup_time - file_datetime).total_seconds() / 3600
+                    logger.debug(f"⏭️ {filename} created {time_diff:.1f}h before bot startup (skip old files)")
+                    self.processed_files.add(filename)
+                    await self._mark_file_processed(filename, success=True)
+                    return False
+                else:
+                    time_diff = (file_datetime - self.bot_startup_time).total_seconds() / 60
+                    logger.debug(f"✅ {filename} created {time_diff:.1f}m after bot startup (process as new file)")
+            except ValueError:
+                # If datetime parsing fails, continue with other checks
+                logger.warning(f"⚠️ Could not parse datetime from filename: {filename}")
+            
+            # 2. Check in-memory cache
             if filename in self.processed_files:
                 return False
 
