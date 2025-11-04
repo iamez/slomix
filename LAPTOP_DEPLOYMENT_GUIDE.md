@@ -77,7 +77,7 @@ python demo_advanced_detector.py
 - [ ] Test with different team sizes (3v3, 4v4, 5v5, etc.)
 
 ### 3. Bot Commands
-- [ ] Update `!last_session` to show per-map teams
+- [ ] Update `!last_round` to show per-map teams
 - [ ] Add `!detect_teams <date>` command
 - [ ] Add `!verify_teams <date>` command
 
@@ -91,10 +91,10 @@ python demo_advanced_detector.py
 All ready and working:
 
 ```sql
--- Sessions table
-CREATE TABLE sessions (
+-- Rounds table
+CREATE TABLE rounds (
     id INTEGER PRIMARY KEY,
-    session_date TEXT,
+    round_date TEXT,
     map_name TEXT,
     round_number INTEGER,
     map_id INTEGER,          -- Groups R1+R2 of same map
@@ -103,7 +103,7 @@ CREATE TABLE sessions (
     completion_time TEXT
 );
 
--- Session teams (where detected teams are stored)
+-- Round teams (where detected teams are stored)
 CREATE TABLE session_teams (
     session_start_date TEXT,
     map_name TEXT,
@@ -114,8 +114,8 @@ CREATE TABLE session_teams (
 
 -- Player stats (has multiple snapshots per player/round)
 CREATE TABLE player_comprehensive_stats (
-    session_id INTEGER,
-    session_date TEXT,
+    round_id INTEGER,
+    round_date TEXT,
     map_name TEXT,
     round_number INTEGER,
     player_guid TEXT,
@@ -131,11 +131,11 @@ CREATE TABLE player_comprehensive_stats (
 ```python
 # ❌ WRONG - Queries all maps together
 SELECT * FROM player_comprehensive_stats
-WHERE session_date = '2025-11-01'
+WHERE round_date = '2025-11-01'
 
 # ✅ CORRECT - Query each map separately
 SELECT * FROM player_comprehensive_stats
-WHERE session_date = '2025-11-01' AND map_name = 'supply'
+WHERE round_date = '2025-11-01' AND map_name = 'supply'
 ```
 
 ### Stopwatch Mode
@@ -154,7 +154,7 @@ ROW_NUMBER() OVER (
 
 ## Sample Usage
 
-### Analyze Last Session
+### Analyze Last Round
 ```python
 from analyze_last_session import analyze_session
 result = analyze_session()

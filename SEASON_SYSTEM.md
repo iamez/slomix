@@ -117,7 +117,7 @@ start, end = season_manager.get_season_dates()
 
 # Get SQL filter for queries
 sql_filter = season_manager.get_season_sql_filter()  
-# Returns: "AND s.session_date >= '2025-10-01' AND s.session_date <= '2025-12-31'"
+# Returns: "AND s.round_date >= '2025-10-01' AND s.round_date <= '2025-12-31'"
 
 # Check for season transitions
 is_new = season_manager.is_new_season("2025-Q3")  
@@ -142,7 +142,7 @@ query = f'''
         SUM(kills) as total_kills,
         COUNT(*) as games
     FROM player_comprehensive_stats p
-    JOIN sessions s ON p.session_id = s.id
+    JOIN rounds s ON p.round_id = s.id
     WHERE 1=1 {season_filter}
     GROUP BY player_guid
     ORDER BY total_kills DESC
@@ -159,7 +159,7 @@ query = f'''
         player_name,
         SUM(kills) as total_kills
     FROM player_comprehensive_stats p
-    JOIN sessions s ON p.session_id = s.id
+    JOIN rounds s ON p.round_id = s.id
     WHERE 1=1 {season_filter}  -- Empty string, no filtering
     GROUP BY player_guid
     ORDER BY total_kills DESC

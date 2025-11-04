@@ -31,15 +31,15 @@ def parse_raw_file(filepath):
     
     return players_by_guid, result
 
-def get_db_stats(session_id):
+def get_db_stats(round_id):
     db_path = Path('bot/etlegacy_production.db')
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT * FROM player_comprehensive_stats WHERE session_id = ?
-    """, (session_id,))
+        SELECT * FROM player_comprehensive_stats WHERE round_id = ?
+    """, (round_id,))
     
     players = {}
     for row in cursor.fetchall():
@@ -484,13 +484,13 @@ def generate_html_report():
         if i >= len(SESSION_IDS):
             break
         
-        session_id = SESSION_IDS[i]
+        round_id = SESSION_IDS[i]
         raw_players, raw_result = parse_raw_file(filepath)
         
         if not raw_players:
             continue
         
-        db_players = get_db_stats(session_id)
+        db_players = get_db_stats(round_id)
         
         is_round_2 = 'round-2' in filepath.name
         round_type = "Round 2" if is_round_2 else "Round 1"
@@ -502,7 +502,7 @@ def generate_html_report():
             <span style="font-size: 14px; font-weight: normal;">
                 Map: {raw_result.get('map_name', 'Unknown')} | 
                 Type: {round_type} | 
-                Session ID: {session_id} |
+                Round ID: {round_id} |
                 Players: {len(raw_players)}
             </span>
         </div>

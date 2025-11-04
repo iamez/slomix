@@ -12,7 +12,7 @@ Successfully implemented gaming session tracking using 60-minute gap threshold!
 ## What Was Done
 
 ### 1. Migration Script (`migrate_add_gaming_session_id.py`)
-✅ Added `gaming_session_id` column to sessions table  
+✅ Added `gaming_session_id` column to rounds table  
 ✅ Calculated 17 gaming sessions from 231 rounds  
 ✅ Used 60-minute gap threshold  
 ✅ Backfilled all existing data  
@@ -101,7 +101,7 @@ Successfully implemented gaming session tracking using 60-minute gap threshold!
 ## Validation Results
 
 ### ✅ Oct 19 Test (The Big One!)
-- **Database before:** 23 "sessions" (actually 23 rounds)
+- **Database before:** 23 "rounds" (actually 23 rounds)
 - **Database after:** 23 rounds in gaming session #3 ✅
 - **Start:** Oct 19, 21:26:43
 - **End:** Oct 20, 00:00:43 (crosses midnight)
@@ -123,7 +123,7 @@ Successfully implemented gaming session tracking using 60-minute gap threshold!
 ## What's Next
 
 ### Immediate (Bot Testing)
-1. **Test !last_session bot command** with real Discord bot
+1. **Test !last_round bot command** with real Discord bot
 2. **Import new stat files** and verify gaming_session_id assignment
 3. **Monitor logs** for any issues
 
@@ -134,8 +134,8 @@ Successfully implemented gaming session tracking using 60-minute gap threshold!
 
 ### Future Work (Phase 2 - Optional)
 Phase 2 is the **big rename** (breaking change):
-- Rename `sessions` table → `rounds` table
-- Rename `session_id` → `round_id` throughout codebase
+- Rename `rounds` table → `rounds` table
+- Rename `round_id` → `round_id` throughout codebase
 - Update 100+ files with correct terminology
 - Comprehensive testing
 
@@ -166,7 +166,7 @@ Phase 2 is the **big rename** (breaking change):
 ## Performance Impact
 
 ### Before:
-- Bot manually calculates gaming sessions on EVERY !last_session call
+- Bot manually calculates gaming sessions on EVERY !last_round call
 - Complex logic with 130+ lines
 - Multiple queries and datetime comparisons
 - Prone to errors with midnight-crossing
@@ -174,7 +174,7 @@ Phase 2 is the **big rename** (breaking change):
 ### After:
 - Bot queries gaming_session_id directly
 - Simple 20-line logic
-- One query: `SELECT * FROM sessions WHERE gaming_session_id = ?`
+- One query: `SELECT * FROM rounds WHERE gaming_session_id = ?`
 - Indexed column for fast lookups
 - Midnight-crossing handled automatically
 
@@ -188,7 +188,7 @@ Going forward, use these terms correctly:
 
 | Term | Definition | Example | Database |
 |------|------------|---------|----------|
-| **ROUND** | One R1 or R2 file | `2025-10-14_212256_R1_et_bremen_a2.txt` | One row in `sessions` table |
+| **ROUND** | One R1 or R2 file | `2025-10-14_212256_R1_et_bremen_a2.txt` | One row in `rounds` table |
 | **MATCH** | R1 + R2 pair | et_bremen R1 (21:22) + R2 (21:44) | Linked by `match_id` |
 | **GAMING SESSION** | Entire night of play | Oct 14, 21:22-23:56 (12 matches, 24 rounds) | Linked by `gaming_session_id` |
 

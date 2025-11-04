@@ -114,10 +114,10 @@ class DatabaseValidator:
         print_test("Database Data Integrity")
         
         # Check for NULL values
-        self.cursor.execute("SELECT COUNT(*) FROM sessions WHERE gaming_session_id IS NULL")
+        self.cursor.execute("SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL")
         null_count = self.cursor.fetchone()[0]
         
-        self.cursor.execute("SELECT COUNT(*) FROM sessions")
+        self.cursor.execute("SELECT COUNT(*) FROM rounds")
         total_count = self.cursor.fetchone()[0]
         
         print_detail(f"Total rounds: {total_count}")
@@ -138,7 +138,7 @@ class DatabaseValidator:
         
         self.cursor.execute("""
             SELECT gaming_session_id, COUNT(*) as round_count
-            FROM sessions
+            FROM rounds
             WHERE gaming_session_id IS NOT NULL
             GROUP BY gaming_session_id
             ORDER BY gaming_session_id
@@ -153,10 +153,10 @@ class DatabaseValidator:
         for gs_id, round_count in gaming_sessions:
             # Get all rounds for this gaming session
             self.cursor.execute("""
-                SELECT session_date, session_time
-                FROM sessions
+                SELECT round_date, round_time
+                FROM rounds
                 WHERE gaming_session_id = ?
-                ORDER BY session_date, session_time
+                ORDER BY round_date, round_time
             """, (gs_id,))
             
             rounds = self.cursor.fetchall()
@@ -187,7 +187,7 @@ class DatabaseValidator:
             self.issues.append(f"Found {len(violations)} gaming sessions with gaps > 60 minutes")
             print_fail(f"Found {len(violations)} violations of 60-minute rule:")
             for v in violations[:5]:  # Show first 5
-                print_detail(f"Gaming Session #{v['gaming_session_id']}: {v['gap_minutes']:.1f} min gap")
+                print_detail(f"Gaming Round #{v['gaming_session_id']}: {v['gap_minutes']:.1f} min gap")
             return False
         
         print_pass("All gaming sessions respect 60-minute threshold")
@@ -199,8 +199,8 @@ class DatabaseValidator:
         
         self.cursor.execute("""
             SELECT COUNT(*), COUNT(DISTINCT gaming_session_id), MIN(gaming_session_id)
-            FROM sessions
-            WHERE session_date = '2025-10-19'
+            FROM rounds
+            WHERE round_date = '2025-10-19'
         """)
         
         round_count, gs_count, gs_id = self.cursor.fetchone()
@@ -228,24 +228,24 @@ class DatabaseValidator:
         print_test("Midnight-Crossing Gaming Sessions")
         
         self.cursor.execute("""
-            SELECT gaming_session_id, GROUP_CONCAT(DISTINCT session_date) as dates, COUNT(*) as rounds
-            FROM sessions
+            SELECT gaming_session_id, GROUP_CONCAT(DISTINCT round_date) as dates, COUNT(*) as rounds
+            FROM rounds
             WHERE gaming_session_id IS NOT NULL
             GROUP BY gaming_session_id
-            HAVING COUNT(DISTINCT session_date) > 1
+            HAVING COUNT(DISTINCT round_date) > 1
         """)
         
         midnight_sessions = self.cursor.fetchall()
         
         if not midnight_sessions:
-            print_info("No midnight-crossing gaming sessions found (this is OK)")
+            print_info("No midnight-crossing gaming rounds found (this is OK)")
             return True
         
         print_detail(f"Found {len(midnight_sessions)} gaming sessions crossing midnight:")
         
         for gs_id, dates, rounds in midnight_sessions:
             date_list = dates.split(',')
-            print_detail(f"  Gaming Session #{gs_id}: {len(date_list)} dates, {rounds} rounds")
+            print_detail(f"  Gaming Round #{gs_id}: {len(date_list)} dates, {rounds} rounds")
             
             # Verify dates are consecutive
             sorted_dates = sorted(date_list)
@@ -256,7 +256,7 @@ class DatabaseValidator:
                 
                 if days_diff != 1:
                     self.issues.append(f"Gaming session #{gs_id} has non-consecutive dates")
-                    print_fail(f"Gaming Session #{gs_id} has {days_diff}-day gap between dates")
+                    print_fail(f"Gaming Round #{gs_id} has {days_diff}-day gap between dates")
                     return False
         
         print_pass("All midnight-crossing sessions have consecutive dates")
@@ -297,10 +297,10 @@ class CodeValidator:
         # Check function is called in create_session
         if 'gaming_session_id = self._get_or_create_gaming_session_id' not in content:
             self.issues.append("create_session doesn't call _get_or_create_gaming_session_id")
-            print_fail("create_session() doesn't call _get_or_create_gaming_session_id()")
+            print_fail("create_round() doesn't call _get_or_create_gaming_session_id()")
             return False
         
-        print_pass("create_session() calls _get_or_create_gaming_session_id()")
+        print_pass("create_round() calls _get_or_create_gaming_session_id()")
         
         # Check 60-minute threshold
         if 'GAP_THRESHOLD_MINUTES = 60' not in content:
@@ -311,9 +311,9 @@ class CodeValidator:
         print_pass("60-minute threshold configured")
         
         # Check gaming_session_id in INSERT statement
-        if 'gaming_session_id' not in content[content.find('INSERT INTO sessions'):content.find('INSERT INTO sessions') + 500]:
+        if 'gaming_session_id' not in content[content.find('INSERT INTO rounds'):content.find('INSERT INTO rounds') + 500]:
             self.issues.append("gaming_session_id not in INSERT statement")
-            print_fail("gaming_session_id not included in INSERT INTO sessions")
+            print_fail("gaming_session_id not included in INSERT INTO rounds")
             return False
         
         print_pass("INSERT statement includes gaming_session_id")
@@ -422,22 +422,22 @@ class IntegrationValidator:
         
         # Get the latest gaming session
         self.cursor.execute("""
-            SELECT gaming_session_id, session_date, session_time
-            FROM sessions
-            ORDER BY session_date DESC, session_time DESC
+            SELECT gaming_session_id, round_date, round_time
+            FROM rounds
+            ORDER BY round_date DESC, round_time DESC
             LIMIT 1
         """)
         
         result = self.cursor.fetchone()
         if not result:
-            print_fail("No sessions in database")
+            print_fail("No rounds in database")
             return False
         
         last_gs_id, last_date, last_time = result
         last_dt = datetime.strptime(f"{last_date} {last_time}", "%Y-%m-%d %H%M%S")
         
         print_detail(f"Latest round:")
-        print_detail(f"  Gaming Session ID: {last_gs_id}")
+        print_detail(f"  Gaming Round ID: {last_gs_id}")
         print_detail(f"  Date/Time: {last_date} {last_time}")
         
         # Simulate import scenarios
@@ -446,13 +446,13 @@ class IntegrationValidator:
         # Scenario 1: Import within 60 minutes (should continue same gaming session)
         new_dt_same_session = last_dt.replace(minute=(last_dt.minute + 15) % 60)
         expected_gs_same = last_gs_id
-        print_detail(f"  Scenario 1: +15 min → Gaming Session #{expected_gs_same} (continue)")
+        print_detail(f"  Scenario 1: +15 min → Gaming Round #{expected_gs_same} (continue)")
         
         # Scenario 2: Import after 60 minutes (should create new gaming session)
         from datetime import timedelta
         new_dt_new_session = last_dt + timedelta(minutes=70)
         expected_gs_new = last_gs_id + 1
-        print_detail(f"  Scenario 2: +70 min → Gaming Session #{expected_gs_new} (new)")
+        print_detail(f"  Scenario 2: +70 min → Gaming Round #{expected_gs_new} (new)")
         
         print_pass("Import logic simulation successful")
         return True
@@ -465,7 +465,7 @@ class IntegrationValidator:
         self.cursor.execute("""
             SELECT COUNT(*)
             FROM player_comprehensive_stats p
-            LEFT JOIN sessions s ON p.session_id = s.id
+            LEFT JOIN rounds s ON p.round_id = s.id
             WHERE s.id IS NULL
         """)
         
@@ -473,16 +473,16 @@ class IntegrationValidator:
         
         if orphan_player_stats > 0:
             self.issues.append(f"{orphan_player_stats} orphaned player stats")
-            print_fail(f"{orphan_player_stats} player stats have invalid session_id")
+            print_fail(f"{orphan_player_stats} player stats have invalid round_id")
             return False
         
-        print_pass("All player stats have valid session_id references")
+        print_pass("All player stats have valid round_id references")
         
         # Check weapon_comprehensive_stats references
         self.cursor.execute("""
             SELECT COUNT(*)
             FROM weapon_comprehensive_stats w
-            LEFT JOIN sessions s ON w.session_id = s.id
+            LEFT JOIN rounds s ON w.round_id = s.id
             WHERE s.id IS NULL
         """)
         
@@ -490,10 +490,10 @@ class IntegrationValidator:
         
         if orphan_weapon_stats > 0:
             self.issues.append(f"{orphan_weapon_stats} orphaned weapon stats")
-            print_fail(f"{orphan_weapon_stats} weapon stats have invalid session_id")
+            print_fail(f"{orphan_weapon_stats} weapon stats have invalid round_id")
             return False
         
-        print_pass("All weapon stats have valid session_id references")
+        print_pass("All weapon stats have valid round_id references")
         return True
     
     def close(self):
@@ -577,9 +577,9 @@ class PerformanceValidator:
         start = time.time()
         self.cursor.execute("""
             SELECT gaming_session_id
-            FROM sessions
+            FROM rounds
             WHERE gaming_session_id IS NOT NULL
-            ORDER BY session_date DESC, session_time DESC
+            ORDER BY round_date DESC, round_time DESC
             LIMIT 1
         """)
         result = self.cursor.fetchone()
@@ -595,7 +595,7 @@ class PerformanceValidator:
             start = time.time()
             self.cursor.execute("""
                 SELECT id, map_name, round_number
-                FROM sessions
+                FROM rounds
                 WHERE gaming_session_id = ?
             """, (latest_gs_id,))
             rounds = self.cursor.fetchall()
@@ -607,7 +607,7 @@ class PerformanceValidator:
         # Test 3: Check index usage
         self.cursor.execute("""
             EXPLAIN QUERY PLAN
-            SELECT * FROM sessions WHERE gaming_session_id = 17
+            SELECT * FROM rounds WHERE gaming_session_id = 17
         """)
         explain = self.cursor.fetchall()
         
