@@ -406,9 +406,23 @@ class DatabaseManager:
             r1_pattern = f"{file_date}-*-{map_name}-round-1.txt"
             r1_files = list(self.stats_dir.glob(r1_pattern))
             
+            # ✅ If no R1 found on same date, check PREVIOUS day (midnight-crossing matches)
             if not r1_files:
-                # No R1 file found - create orphan match_id
-                logger.warning(f"⚠️  No Round 1 file found for {file_path.name}")
+                from datetime import datetime, timedelta
+                try:
+                    current_date = datetime.strptime(file_date, "%Y-%m-%d")
+                    prev_date = current_date - timedelta(days=1)
+                    prev_date_str = prev_date.strftime("%Y-%m-%d")
+                    r1_pattern_prev = f"{prev_date_str}-*-{map_name}-round-1.txt"
+                    r1_files = list(self.stats_dir.glob(r1_pattern_prev))
+                    if r1_files:
+                        logger.debug(f"🌙 Checking previous day for R1: {prev_date_str}")
+                except ValueError:
+                    pass  # Invalid date format, continue
+            
+            if not r1_files:
+                # No R1 file found on same day or previous day - create orphan match_id
+                logger.warning(f"⚠️  No Round 1 file found for {file_path.name} (checked today and yesterday)")
                 match_id = f"{file_date}_{session_time}_{map_name}_orphan"
                 return match_id
             
@@ -469,12 +483,64 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logger.warning(f"Error marking file as processed: {e}")
     
+    def _get_or_create_gaming_session_id(self, cursor, file_date: str, session_time: str) -> Optional[int]:
+        """
+        Calculate gaming_session_id for a new round using 60-minute gap logic.
+        
+        Gaming session rules:
+        - Group consecutive rounds into gaming sessions
+        - If gap between rounds > 60 minutes → new gaming session
+        - Handles midnight-crossing (same gaming session continues after midnight)
+        
+        Returns:
+            gaming_session_id to assign to this round (or None on error)
+        """
+        GAP_THRESHOLD_MINUTES = 60
+        
+        try:
+            # Get the most recent round with a gaming_session_id
+            cursor.execute('''
+                SELECT gaming_session_id, session_date, session_time
+                FROM sessions
+                WHERE gaming_session_id IS NOT NULL
+                ORDER BY session_date DESC, session_time DESC
+                LIMIT 1
+            ''')
+            
+            last_round = cursor.fetchone()
+            
+            if not last_round:
+                # First round ever - start with gaming_session_id = 1
+                return 1
+            
+            last_gaming_session_id, last_date, last_time = last_round
+            
+            # Parse datetimes
+            current_datetime = datetime.strptime(f"{file_date} {session_time}", "%Y-%m-%d %H%M%S")
+            last_datetime = datetime.strptime(f"{last_date} {last_time}", "%Y-%m-%d %H%M%S")
+            
+            # Calculate gap
+            gap_minutes = (current_datetime - last_datetime).total_seconds() / 60
+            
+            if gap_minutes > GAP_THRESHOLD_MINUTES:
+                # Start new gaming session
+                new_gaming_session_id = last_gaming_session_id + 1
+                logger.info(f"New gaming session #{new_gaming_session_id} (gap: {gap_minutes:.1f} min from previous round)")
+                return new_gaming_session_id
+            else:
+                # Continue existing gaming session
+                logger.debug(f"Continuing gaming session #{last_gaming_session_id} (gap: {gap_minutes:.1f} min)")
+                return last_gaming_session_id
+                
+        except Exception as e:
+            logger.warning(f"Error calculating gaming_session_id: {e}. Using NULL.")
+            return None
+    
     def create_session(self, parsed_data: Dict, file_date: str, session_time: str, match_id: str) -> Optional[int]:
-        """Create new session (with transaction safety)"""
+        """Create new session (with transaction safety and duplicate handling)"""
         conn = None
         try:
             conn = sqlite3.connect(self.db_path, timeout=30.0)
-            conn.execute('BEGIN TRANSACTION')  # ✅ Transaction safety
             cursor = conn.cursor()
             
             map_name = parsed_data.get('map_name', 'Unknown')
@@ -482,13 +548,30 @@ class DatabaseManager:
             time_limit = parsed_data.get('map_time', '0:00')
             actual_time = parsed_data.get('actual_time', '0:00')
             
+            # ✅ Check if session already exists
+            cursor.execute('''
+                SELECT id FROM sessions 
+                WHERE match_id = ? AND round_number = ?
+            ''', (match_id, round_num))
+            
+            existing = cursor.fetchone()
+            if existing:
+                # Session already exists - return existing ID
+                logger.debug(f"Session already exists: {match_id} R{round_num} (ID: {existing[0]})")
+                return existing[0]
+            
+            # Calculate gaming_session_id for this round
+            gaming_session_id = self._get_or_create_gaming_session_id(cursor, file_date, session_time)
+            
+            # Create new session
+            conn.execute('BEGIN TRANSACTION')  # ✅ Transaction safety
             cursor.execute('''
                 INSERT INTO sessions (
                     session_date, session_time, match_id, map_name, round_number,
-                    time_limit, actual_time, created_at
+                    time_limit, actual_time, gaming_session_id, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (file_date, session_time, match_id, map_name, round_num, time_limit, actual_time))
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (file_date, session_time, match_id, map_name, round_num, time_limit, actual_time, gaming_session_id))
             
             session_id = cursor.lastrowid
             conn.commit()  # ✅ Commit transaction
@@ -664,6 +747,15 @@ class DatabaseManager:
                 self.stats['files_skipped'] += 1
                 return True, "Already processed"
             
+            # ✅ Validate filename format first
+            parts = filename.split('-')
+            if len(parts) < 4:
+                error_msg = f"Invalid filename format: {filename} (expected: YYYY-MM-DD-HHMMSS-...)"
+                logger.warning(f"⚠️  {error_msg}")
+                self.mark_file_processed(filename, success=False)
+                self.stats['files_failed'] += 1
+                return False, error_msg
+            
             # Parse file
             parsed = self.parser.parse_stats_file(str(file_path))
             
@@ -674,7 +766,6 @@ class DatabaseManager:
                 return False, f"Parse error: {error_msg}"
             
             # Extract date and time from filename: 2025-09-09-225817-map-round-1.txt
-            parts = filename.split('-')
             file_date = '-'.join(parts[:3])  # 2025-09-09
             session_time = parts[3]  # 225817
             

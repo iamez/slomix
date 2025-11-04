@@ -62,132 +62,53 @@ class LastSessionCog(commands.Cog):
             result = await cursor.fetchone()
             return result[0] if result else None
 
-    async def _fetch_session_data(self, db, latest_date: str) -> Tuple[List, List, str, int]:
+    async def _fetch_session_data(self, db, latest_date: str) -> Tuple[Optional[List], Optional[List], Optional[str], int]:
         """
         Fetch all session data for the LAST gaming session.
         
-        Works BACKWARDS from the absolute last session in the database,
-        grouping sessions that are within 30 minutes of each other.
-        This properly handles multiple gaming sessions on the same day.
+        Now uses gaming_session_id column (60-minute gap threshold).
+        Much simpler than the old 30-minute manual gap logic!
         
         Returns:
-            (sessions, session_ids, session_ids_str, player_count)
+            (sessions, session_ids, session_ids_str, player_count) or (None, None, None, 0)
         """
-        from datetime import datetime, timedelta
-        
-        # Get the absolute last session (by date AND time)
+        # Get the most recent gaming_session_id
         async with db.execute(
             """
-            SELECT id, map_name, round_number, actual_time, session_date, session_time
+            SELECT gaming_session_id
             FROM sessions
+            WHERE gaming_session_id IS NOT NULL
             ORDER BY session_date DESC, session_time DESC
             LIMIT 1
             """,
         ) as cursor:
-            last_session = await cursor.fetchone()
+            result = await cursor.fetchone()
         
-        if not last_session:
+        if not result:
             return None, None, None, 0
         
-        last_session_id = last_session[0]
-        last_session_date = last_session[4]
-        last_session_time = last_session[5]
-        last_dt = datetime.strptime(f"{last_session_date}-{last_session_time}", '%Y-%m-%d-%H%M%S')
+        latest_gaming_session_id = result[0]
         
-        # Now work BACKWARDS, collecting sessions within 30min gaps
-        gaming_session_ids = [last_session_id]
-        current_dt = last_dt
-        
-        # Get recent sessions before the last one (limit search to same day + previous day)
-        search_start_date = (last_dt - timedelta(days=1)).strftime('%Y-%m-%d')
-        
+        # Get all rounds (sessions) for this gaming session
         async with db.execute(
             """
-            SELECT id, map_name, round_number, actual_time, session_date, session_time
+            SELECT id, map_name, round_number, actual_time
             FROM sessions
-            WHERE session_date >= ?
-              AND id < ?
-            ORDER BY session_date DESC, session_time DESC
+            WHERE gaming_session_id = ?
+            ORDER BY session_date, session_time
             """,
-            (search_start_date, last_session_id),
+            (latest_gaming_session_id,),
         ) as cursor:
-            previous_sessions = await cursor.fetchall()
+            sessions = await cursor.fetchall()
         
-        # Work backwards through sessions, stop at first gap > 30 minutes
-        for sess in previous_sessions:
-            sess_date = sess[4]
-            sess_time = sess[5]
-            sess_dt = datetime.strptime(f"{sess_date}-{sess_time}", '%Y-%m-%d-%H%M%S')
-            
-            gap_minutes = (current_dt - sess_dt).total_seconds() / 60
-            
-            if gap_minutes <= 30:
-                gaming_session_ids.insert(0, sess[0])  # Insert at beginning (chronological order)
-                current_dt = sess_dt  # Update for next comparison
-            else:
-                break  # Gap too large - different gaming session
-        
-        # Now fetch full session data for the gaming session
-        session_ids_str = ','.join(str(sid) for sid in gaming_session_ids)
-        
-        async with db.execute(
-            f"""
-            SELECT id, map_name, round_number, actual_time, session_date, session_time
-            FROM sessions
-            WHERE id IN ({session_ids_str})
-            ORDER BY id ASC
-            """
-        ) as cursor:
-            primary_sessions = await cursor.fetchall()
-
-        if not primary_sessions:
+        if not sessions:
             return None, None, None, 0
-
-        # Check for sessions after midnight (next day)
-        last_session_id = primary_sessions[-1][0]
-        last_session_date = primary_sessions[-1][4]  # YYYY-MM-DD
-        last_session_time = primary_sessions[-1][5]  # HHMMSS
         
-        # Calculate next day date string
-        last_session_date_full = f"{last_session_date}-{last_session_time}"
-        last_dt = datetime.strptime(last_session_date_full, '%Y-%m-%d-%H%M%S')
-        next_day = (last_dt + timedelta(days=1)).strftime('%Y-%m-%d')
-        
-        # Get sessions from next day that might be part of same gaming session
-        async with db.execute(
-            """
-            SELECT id, map_name, round_number, actual_time, session_date, session_time
-            FROM sessions
-            WHERE SUBSTR(session_date, 1, 10) = ?
-                AND id > ?
-            ORDER BY id ASC
-            LIMIT 10
-            """,
-            (next_day, last_session_id),
-        ) as cursor:
-            next_day_sessions = await cursor.fetchall()
-        
-        # Include next-day sessions if they're within 30min of last session
-        continuation_sessions = []
-        if next_day_sessions:
-            for sess in next_day_sessions:
-                sess_dt = datetime.strptime(sess[4], '%Y-%m-%d-%H%M%S')
-                gap_minutes = (sess_dt - last_dt).total_seconds() / 60
-                
-                if gap_minutes <= 30:
-                    continuation_sessions.append(sess)
-                    last_dt = sess_dt  # Update for next comparison
-                else:
-                    break  # Gap too large, stop checking
-        
-        # Combine all sessions
-        all_sessions = primary_sessions + continuation_sessions
-        sessions = [(s[0], s[1], s[2], s[3]) for s in all_sessions]
-        
+        # Extract session IDs
         session_ids = [s[0] for s in sessions]
         session_ids_str = ",".join("?" * len(session_ids))
 
-        # Get unique player count
+        # Get unique player count for this gaming session
         query = f"""
             SELECT COUNT(DISTINCT player_guid)
             FROM player_comprehensive_stats
