@@ -200,7 +200,7 @@ obj_stats.get('repairs_constructions', 0)  # not hardcoded 0
 **Implementation:**
 ```python
 INSERT INTO weapon_comprehensive_stats (
-    session_id, session_date, map_name, round_number,
+    round_id, round_date, map_name, round_number,
     player_guid, player_name, weapon_name,
     kills, deaths, headshots, hits, shots, accuracy
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -311,15 +311,15 @@ vid            | 221
 
 ## 7. Session-Level Data (QUICK CHECK ✅)
 
-### Session Creation
+### Round Creation
 **File:** `dev/bulk_import_stats.py` lines 200-300  
 **Status:** ✅ CORRECT - No issues found
 
 **Implementation:**
 ```python
-CREATE TABLE sessions (
+CREATE TABLE rounds (
     id INTEGER PRIMARY KEY,
-    session_date TEXT,
+    round_date TEXT,
     map_name TEXT,
     round_number INTEGER,
     ...
@@ -327,7 +327,7 @@ CREATE TABLE sessions (
 ```
 
 **Verification:**
-- ✅ Unique constraint on (session_date, map_name, round_number)
+- ✅ Unique constraint on (round_date, map_name, round_number)
 - ✅ Round 1 and Round 2 create separate sessions
 - ✅ Map completion tracking works correctly
 
@@ -354,7 +354,7 @@ else:
 **Result:** ✅ 100% SUCCESS
 
 **Metrics:**
-- Sessions created: 1
+- Rounds created: 1
 - Players inserted: 6
 - Weapons inserted: 31
 - Success rate: 100.0%

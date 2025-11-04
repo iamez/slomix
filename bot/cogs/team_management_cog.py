@@ -58,13 +58,13 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
 
                 # Determine latest session date (YYYY-MM-DD)
                 async with db.execute(
-                    "SELECT DISTINCT substr(session_date,1,10) as d FROM sessions ORDER BY d DESC LIMIT 1"
+                    "SELECT DISTINCT substr(round_date,1,10) as d FROM rounds ORDER BY d DESC LIMIT 1"
                 ) as cur:
                     row = await cur.fetchone()
                 if not row:
-                    await ctx.send("❌ No sessions found to set teams for.")
+                    await ctx.send("❌ No rounds found to set teams for.")
                     return
-                session_date = row[0]
+                round_date = row[0]
 
                 # Upsert two team rows with map_name='ALL' and empty rosters initially
                 empty = json.dumps([])
@@ -76,13 +76,13 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
                         ON CONFLICT(session_start_date, map_name, team_name)
                         DO UPDATE SET team_name=excluded.team_name
                         """,
-                        (session_date, tname, empty, empty),
+                        (round_date, tname, empty, empty),
                     )
                 await db.commit()
 
             embed = discord.Embed(
                 title="✅ Teams Set Successfully!",
-                description=f"Teams configured for session: **{session_date}**",
+                description=f"Teams configured for session: **{round_date}**",
                 color=0x00FF00,
             )
             embed.add_field(name="Team 1", value=f"**{team1_name}**", inline=True)
@@ -94,7 +94,7 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
             )
 
             await ctx.send(embed=embed)
-            logger.info(f"✅ Teams set for {session_date}: {team1_name} vs {team2_name}")
+            logger.info(f"✅ Teams set for {round_date}: {team1_name} vs {team2_name}")
 
         except Exception as e:
             logger.error(f"Error in set_teams: {e}", exc_info=True)
@@ -115,13 +115,13 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
 
                 # Resolve latest session date
                 async with db.execute(
-                    "SELECT DISTINCT substr(session_date,1,10) as d FROM sessions ORDER BY d DESC LIMIT 1"
+                    "SELECT DISTINCT substr(round_date,1,10) as d FROM rounds ORDER BY d DESC LIMIT 1"
                 ) as cur:
                     row = await cur.fetchone()
                 if not row:
-                    await ctx.send("❌ No sessions found.")
+                    await ctx.send("❌ No rounds found.")
                     return
-                session_date = row[0]
+                round_date = row[0]
 
                 # Resolve most recent GUID for the player (fuzzy match by alias)
                 async with db.execute(
@@ -149,7 +149,7 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
                     ON CONFLICT(session_start_date, map_name, team_name)
                     DO NOTHING
                     """,
-                    (session_date, team_name, empty, empty),
+                    (round_date, team_name, empty, empty),
                 )
 
                 # Fetch current roster
@@ -159,13 +159,13 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
                     FROM session_teams
                     WHERE session_start_date = ? AND map_name = 'ALL' AND team_name = ?
                     """,
-                    (session_date, team_name),
+                    (round_date, team_name),
                 ) as cur:
                     row = await cur.fetchone()
 
                 if not row:
                     await ctx.send(
-                        f"❌ Team '{team_name}' not found for {session_date}. Use `!set_teams` first."
+                        f"❌ Team '{team_name}' not found for {round_date}. Use `!set_teams` first."
                     )
                     return
 
@@ -191,7 +191,7 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
                         (
                             json.dumps(sorted(list(guids))),
                             json.dumps(sorted(list(names))),
-                            session_date,
+                            round_date,
                             team_name,
                         ),
                     )
@@ -202,11 +202,11 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
                         description=f"**{resolved_alias}** assigned to **{team_name}**",
                         color=0x00FF00,
                     )
-                    embed.add_field(name="Session Date", value=session_date, inline=True)
+                    embed.add_field(name="Session Date", value=round_date, inline=True)
                     embed.add_field(name="Player GUID", value=f"`{player_guid[:8]}...`", inline=True)
 
                     await ctx.send(embed=embed)
-                    logger.info(f"✅ Assigned {resolved_alias} to {team_name} for {session_date}")
+                    logger.info(f"✅ Assigned {resolved_alias} to {team_name} for {round_date}")
                 else:
                     await ctx.send(f"ℹ️ **{resolved_alias}** is already on **{team_name}**")
 

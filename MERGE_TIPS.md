@@ -27,7 +27,7 @@ python bot/ultimate_bot.py
 # or
 cd bot && python ultimate_bot.py
 
-# Test !last_session command in Discord
+# Test !last_round command in Discord
 # Test !stats command
 # Test parser on recent files
 ```

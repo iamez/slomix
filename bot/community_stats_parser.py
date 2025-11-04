@@ -327,26 +327,25 @@ class C0RNP0RN3StatsParser:
                 pattern_path = os.path.join(search_dir, search_pattern)
                 potential_files.extend(glob.glob(pattern_path))
 
-        # If no files found on the same date, check previous date 
-        # (for matches that span midnight)
-        if not potential_files:
-            from datetime import datetime, timedelta
-            try:
-                date_obj = datetime.strptime(date, '%Y-%m-%d')
-                prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
-                prev_search_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
-                
-                print(f"  → Checking previous date: {prev_search_pattern}")
-                
-                for search_dir in search_dirs:
-                    if os.path.exists(search_dir):
-                        pattern_path = os.path.join(search_dir, prev_search_pattern)
-                        found = glob.glob(pattern_path)
-                        if found:
-                            print(f"  → Found {len(found)} files from previous date")
-                        potential_files.extend(found)
-            except ValueError:
-                pass  # Invalid date format, skip previous date search
+        # ✅ FIX: ALWAYS check previous date for midnight-crossing matches
+        # (Don't just check if no same-day files found - we need to check both!)
+        from datetime import datetime, timedelta
+        try:
+            date_obj = datetime.strptime(date, '%Y-%m-%d')
+            prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
+            prev_search_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
+            
+            print(f"  → Checking previous date: {prev_search_pattern}")
+            
+            for search_dir in search_dirs:
+                if os.path.exists(search_dir):
+                    pattern_path = os.path.join(search_dir, prev_search_pattern)
+                    found = glob.glob(pattern_path)
+                    if found:
+                        print(f"  → Found {len(found)} files from previous date")
+                    potential_files.extend(found)
+        except ValueError:
+            pass  # Invalid date format, skip previous date search
 
         if not potential_files:
             return None

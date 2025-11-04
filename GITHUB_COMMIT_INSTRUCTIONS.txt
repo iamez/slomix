@@ -1,0 +1,79 @@
+═══════════════════════════════════════════════════════════════════════════
+STOPWATCH SCORING - GITHUB COMMIT STATUS
+═══════════════════════════════════════════════════════════════════════════
+
+✅ FILES SYNCED TO GITHUB FOLDER (local github/ directory)
+✅ FILES READY FOR COMMIT
+❌ NOT YET COMMITTED TO GIT
+❌ NOT YET PUSHED TO GITHUB
+
+───────────────────────────────────────────────────────────────────────────
+CURRENT STATUS:
+───────────────────────────────────────────────────────────────────────────
+
+Branch: clean-restructure
+Repository: iamez/slomix
+
+Files ready to commit:
+  M  bot/community_stats_parser.py       (Modified - extracts winner/defender)
+  M  bot/ultimate_bot.py                 (Modified - displays team scores)
+  M  tools/simple_bulk_import.py         (Modified - stores winner/defender)
+  ?? tools/migrations/002_add_winner_defender_teams.py  (New - DB migration)
+  ?? tools/stopwatch_scoring.py          (New - scoring calculator)
+
+───────────────────────────────────────────────────────────────────────────
+TO COMMIT AND PUSH TO GITHUB:
+───────────────────────────────────────────────────────────────────────────
+
+1. Stage all files:
+   cd github
+   git add bot/community_stats_parser.py
+   git add bot/ultimate_bot.py
+   git add tools/simple_bulk_import.py
+   git add tools/migrations/002_add_winner_defender_teams.py
+   git add tools/stopwatch_scoring.py
+
+   OR use:
+   git add -A
+
+2. Commit with message:
+   git commit -m "Implement Stopwatch team scoring system
+
+   Features:
+   - Add winner_team/defender_team columns to database
+   - Parse winner/defender from stats file headers
+   - Calculate team scores using Stopwatch rules (2-0 wins, 1-1 ties)
+   - Display team scores in !last_session Discord command
+   
+   Scoring Rules:
+   - R2 beat R1 time: 2-0 win for R2 attackers
+   - R1 = R2 time: 1-1 tie (both teams get 1pt)
+   - R2 didn't beat R1: 2-0 win for R1 attackers
+   
+   Tested with October 2nd data: 15-5 result ✅"
+
+3. Push to GitHub:
+   git push origin clean-restructure
+
+───────────────────────────────────────────────────────────────────────────
+QUICK COMMAND (Copy & Paste):
+───────────────────────────────────────────────────────────────────────────
+
+cd github
+git add -A
+git commit -m "Implement Stopwatch team scoring system - Add winner/defender tracking, scoring calculator, and bot integration"
+git push origin clean-restructure
+
+───────────────────────────────────────────────────────────────────────────
+AFTER PUSHING:
+───────────────────────────────────────────────────────────────────────────
+
+Your Stopwatch scoring system will be live on GitHub at:
+https://github.com/iamez/slomix/tree/clean-restructure
+
+You can then:
+- Create a Pull Request to merge to main branch
+- Deploy to production server
+- Test with !last_session command
+
+═══════════════════════════════════════════════════════════════════════════

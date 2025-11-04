@@ -77,7 +77,7 @@ DATABASE_PATH=Z:\\etlegacy_bot\\etlegacy_production.db
 
 #### 7. Connection Testing
 - Test database connectivity using Python
-- Run query: `SELECT COUNT(*) FROM sessions`
+- Run query: `SELECT COUNT(*) FROM rounds`
 - Verify write access with: `PRAGMA journal_mode=WAL`
 - Report results to user
 
@@ -112,7 +112,7 @@ Test Results:
   ✅ Database readable
   ✅ Database writable
   ✅ WAL mode enabled
-  ✅ 2,152 sessions found
+  ✅ 2,152 rounds found
 
 Next Steps:
   1. Start your bot: python bot/ultimate_bot.py
@@ -363,7 +363,7 @@ SSH_ENABLED=true
 import sqlite3
 conn = sqlite3.connect('Z:\\etlegacy_bot\\etlegacy_production.db')
 cursor = conn.cursor()
-cursor.execute("SELECT COUNT(*) FROM sessions")
+cursor.execute("SELECT COUNT(*) FROM rounds")
 print(cursor.fetchone()[0])
 conn.close()
 ```

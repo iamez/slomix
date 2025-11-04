@@ -22,7 +22,7 @@ try:
     cursor = conn.cursor()
     
     # Test query
-    cursor.execute("SELECT COUNT(*) FROM sessions")
+    cursor.execute("SELECT COUNT(*) FROM rounds")
     count = cursor.fetchone()[0]
     
     print(f"✅ SUCCESS! Database accessible.")

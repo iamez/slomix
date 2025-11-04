@@ -110,12 +110,12 @@ Migrate ET:Legacy Discord Bot from single-machine SQLite setup to multi-VPS Post
    ```python
    # OLD (SQLite)
    async with aiosqlite.connect(self.db_path) as db:
-       cursor = await db.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
+       cursor = await db.execute("SELECT * FROM rounds WHERE id = ?", (round_id,))
        row = await cursor.fetchone()
    
    # NEW (PostgreSQL)
    async with self.db_pool.acquire() as conn:
-       row = await conn.fetchrow("SELECT * FROM sessions WHERE id = $1", session_id)
+       row = await conn.fetchrow("SELECT * FROM rounds WHERE id = $1", round_id)
    ```
 
 3. **SQL Syntax Changes**:
