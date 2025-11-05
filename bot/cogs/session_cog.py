@@ -22,7 +22,7 @@ import os
 import sqlite3
 from datetime import datetime
 
-import aiosqlite
+# import aiosqlite  # Removed - using database adapter
 import discord
 from discord.ext import commands
 
@@ -85,121 +85,115 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     date_filter = date_str
             else:
                 # Get most recent date
-                async with aiosqlite.connect(self.bot.db_path) as db:
-                    async with db.execute(
-                        """
-                        SELECT DISTINCT DATE(round_date) as date
-                        FROM player_comprehensive_stats
-                        ORDER BY date DESC LIMIT 1
+                result = await self.bot.db_adapter.fetch_one(
                     """
-                    ) as cursor:
-                        result = await cursor.fetchone()
-                        if not result:
-                            await ctx.send("❌ No rounds found in database")
-                            return
-                        date_filter = result[0]
+                    SELECT DISTINCT DATE(round_date) as date
+                    FROM player_comprehensive_stats
+                    ORDER BY date DESC LIMIT 1
+                    """
+                )
+                if not result:
+                    await ctx.send("❌ No rounds found in database")
+                    return
+                date_filter = result[0]
 
             await ctx.send(f"📅 Loading session data for **{date_filter}**...")
 
-            async with aiosqlite.connect(self.bot.db_path) as db:
-                # Get round metadata
-                query = """
-                    SELECT 
-                        COUNT(DISTINCT round_id) / 2 as total_maps,
-                        COUNT(DISTINCT round_id) as total_rounds,
-                        COUNT(DISTINCT player_guid) as player_count,
-                        MIN(round_date) as first_round,
-                        MAX(round_date) as last_round
-                    FROM player_comprehensive_stats
-                    WHERE DATE(round_date) = ?
+            # Get round metadata
+            query = """
+                SELECT 
+                    COUNT(DISTINCT round_id) / 2 as total_maps,
+                    COUNT(DISTINCT round_id) as total_rounds,
+                    COUNT(DISTINCT player_guid) as player_count,
+                    MIN(round_date) as first_round,
+                    MAX(round_date) as last_round
+                FROM player_comprehensive_stats
+                WHERE DATE(round_date) = ?
+            """
+
+            result = await self.bot.db_adapter.fetch_one(query, (date_filter,))
+            if not result or result[0] == 0:
+                await ctx.send(
+                    f"❌ No round found for date: {date_filter}"
+                )
+                return
+
+            (
+                total_maps,
+                total_rounds,
+                player_count,
+                first_round,
+                last_round,
+            ) = result
+
+            # Get unique maps played
+            maps = await self.bot.db_adapter.fetch_all(
                 """
+                SELECT DISTINCT map_name
+                FROM player_comprehensive_stats
+                WHERE DATE(round_date) = ?
+                ORDER BY round_date
+            """,
+                (date_filter,)
+            )
+            maps_list = [m[0] for m in maps]
 
-                async with db.execute(query, (date_filter,)) as cursor:
-                    result = await cursor.fetchone()
-                    if not result or result[0] == 0:
-                        await ctx.send(
-                            f"❌ No round found for date: {date_filter}"
-                        )
-                        return
+            # Build header embed
+            embed = discord.Embed(
+                title=f"📊 Session Summary: {date_filter}",
+                description=f"**{int(total_maps)} maps** • **{total_rounds} rounds** • **{player_count} players**",
+                color=0x00FF88,
+            )
 
-                    (
-                        total_maps,
-                        total_rounds,
-                        player_count,
-                        first_round,
-                        last_round,
-                    ) = result
-
-                # Get unique maps played
-                async with db.execute(
-                    """
-                    SELECT DISTINCT map_name
-                    FROM player_comprehensive_stats
-                    WHERE DATE(round_date) = ?
-                    ORDER BY round_date
-                """,
-                    (date_filter,),
-                ) as cursor:
-                    maps = await cursor.fetchall()
-                    maps_list = [m[0] for m in maps]
-
-                # Build header embed
-                embed = discord.Embed(
-                    title=f"📊 Session Summary: {date_filter}",
-                    description=f"**{int(total_maps)} maps** • **{total_rounds} rounds** • **{player_count} players**",
-                    color=0x00FF88,
+            # Add maps played
+            maps_text = ", ".join(maps_list)
+            if len(maps_text) > 900:
+                maps_text = (
+                    ", ".join(maps_list[:8])
+                    + f" (+{len(maps_list) - 8} more)"
                 )
+            embed.add_field(
+                name="🗺️ Maps Played", value=maps_text, inline=False
+            )
 
-                # Add maps played
-                maps_text = ", ".join(maps_list)
-                if len(maps_text) > 900:
-                    maps_text = (
-                        ", ".join(maps_list[:8])
-                        + f" (+{len(maps_list) - 8} more)"
-                    )
+            # Get top players aggregated
+            top_players = await self.bot.db_adapter.fetch_all(
+                """
+                SELECT 
+                    p.player_name,
+                    SUM(p.kills) as kills,
+                    SUM(p.deaths) as deaths,
+                    CASE
+                        WHEN SUM(p.time_played_seconds) > 0
+                        THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                        ELSE 0
+                    END as dpm
+                FROM player_comprehensive_stats p
+                WHERE DATE(p.round_date) = ?
+                GROUP BY p.player_name
+                ORDER BY kills DESC
+                LIMIT 5
+            """,
+                (date_filter,)
+            )
+
+            # Add top 5 players
+            if top_players:
+                player_text = ""
+                medals = ["🥇", "🥈", "🥉", "4.", "5."]
+                for i, (name, kills, deaths, dpm) in enumerate(
+                    top_players
+                ):
+                    kd = kills / deaths if deaths > 0 else kills
+                    player_text += f"{medals[i]} **{name}** - {kills}K/{deaths}D ({kd:.2f} KD, {dpm:.0f} DPM)\n"
                 embed.add_field(
-                    name="🗺️ Maps Played", value=maps_text, inline=False
+                    name="🏆 Top Players", value=player_text, inline=False
                 )
 
-                # Get top players aggregated
-                async with db.execute(
-                    """
-                    SELECT 
-                        p.player_name,
-                        SUM(p.kills) as kills,
-                        SUM(p.deaths) as deaths,
-                        CASE
-                            WHEN SUM(p.time_played_seconds) > 0
-                            THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
-                            ELSE 0
-                        END as dpm
-                    FROM player_comprehensive_stats p
-                    WHERE DATE(p.round_date) = ?
-                    GROUP BY p.player_name
-                    ORDER BY kills DESC
-                    LIMIT 5
-                """,
-                    (date_filter,),
-                ) as cursor:
-                    top_players = await cursor.fetchall()
-
-                # Add top 5 players
-                if top_players:
-                    player_text = ""
-                    medals = ["🥇", "🥈", "🥉", "4.", "5."]
-                    for i, (name, kills, deaths, dpm) in enumerate(
-                        top_players
-                    ):
-                        kd = kills / deaths if deaths > 0 else kills
-                        player_text += f"{medals[i]} **{name}** - {kills}K/{deaths}D ({kd:.2f} KD, {dpm:.0f} DPM)\n"
-                    embed.add_field(
-                        name="🏆 Top Players", value=player_text, inline=False
-                    )
-
-                embed.set_footer(
-                    text="💡 Use !last_round for the most recent session with full details"
-                )
-                await ctx.send(embed=embed)
+            embed.set_footer(
+                text="💡 Use !last_round for the most recent session with full details"
+            )
+            await ctx.send(embed=embed)
 
         except Exception as e:
             logger.error(f"Error in session command: {e}", exc_info=True)
