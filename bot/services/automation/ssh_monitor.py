@@ -112,13 +112,12 @@ class SSHMonitor:
     async def _load_processed_files(self):
         """Load list of previously processed files from database"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                cursor = await db.execute(
-                    "SELECT filename FROM processed_files WHERE success = 1"
-                )
-                rows = await cursor.fetchall()
-                self.processed_files = {row[0] for row in rows}
-                logger.info(f"📋 Loaded {len(self.processed_files)} previously processed files")
+            rows = await self.bot.db_adapter.fetch_all(
+                "SELECT filename FROM processed_files WHERE success = 1",
+                ()
+            )
+            self.processed_files = {row[0] for row in rows}
+            logger.info(f"📋 Loaded {len(self.processed_files)} previously processed files")
         except Exception as e:
             logger.error(f"❌ Failed to load processed files: {e}")
     
@@ -358,57 +357,52 @@ class SSHMonitor:
     async def _get_latest_round_data(self) -> Optional[Dict[str, Any]]:
         """Get data for the most recently imported round"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Get latest session and round
-                cursor = await db.execute("""
-                    SELECT 
-                        session_id,
-                        round_num,
-                        map_name,
-                        COUNT(*) as player_count,
-                        SUM(kills) as total_kills,
-                        SUM(deaths) as total_deaths,
-                        MAX(timestamp) as round_time
-                    FROM player_comprehensive_stats
-                    GROUP BY session_id, round_num
-                    ORDER BY timestamp DESC
-                    LIMIT 1
-                """)
-                
-                row = await cursor.fetchone()
-                
-                if not row:
-                    return None
-                
-                session_id, round_num, map_name, player_count, kills, deaths, timestamp = row
-                
-                # Get top 5 players
-                cursor = await db.execute("""
-                    SELECT 
-                        player_name,
-                        kills,
-                        deaths,
-                        damage_given,
-                        accuracy
-                    FROM player_comprehensive_stats
-                    WHERE session_id = ? AND round_num = ?
-                    ORDER BY kills DESC
-                    LIMIT 5
-                """, (session_id, round_num))
-                
-                top_players = await cursor.fetchall()
-                
-                return {
-                    'session_id': session_id,
-                    'round_num': round_num,
-                    'map_name': map_name,
-                    'player_count': player_count,
-                    'total_kills': kills,
-                    'total_deaths': deaths,
-                    'timestamp': timestamp,
-                    'top_players': top_players
-                }
-                
+            # Get latest session and round
+            row = await self.bot.db_adapter.fetch_one("""
+                SELECT 
+                    session_id,
+                    round_num,
+                    map_name,
+                    COUNT(*) as player_count,
+                    SUM(kills) as total_kills,
+                    SUM(deaths) as total_deaths,
+                    MAX(timestamp) as round_time
+                FROM player_comprehensive_stats
+                GROUP BY session_id, round_num
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, ())
+            
+            if not row:
+                return None
+            
+            session_id, round_num, map_name, player_count, kills, deaths, timestamp = row
+            
+            # Get top 5 players
+            top_players = await self.bot.db_adapter.fetch_all("""
+                SELECT 
+                    player_name,
+                    kills,
+                    deaths,
+                    damage_given,
+                    accuracy
+                FROM player_comprehensive_stats
+                WHERE session_id = ? AND round_num = ?
+                ORDER BY kills DESC
+                LIMIT 5
+            """, (session_id, round_num))
+            
+            return {
+                'session_id': session_id,
+                'round_num': round_num,
+                'map_name': map_name,
+                'player_count': player_count,
+                'total_kills': kills,
+                'total_deaths': deaths,
+                'timestamp': timestamp,
+                'top_players': top_players
+            }
+            
         except Exception as e:
             logger.error(f"❌ Error getting round data: {e}")
             return None
