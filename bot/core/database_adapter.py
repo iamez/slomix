@@ -6,8 +6,15 @@ import logging
 from typing import Any, Optional, List, Tuple
 from abc import ABC, abstractmethod
 import aiosqlite
-import asyncpg
 from contextlib import asynccontextmanager
+
+# Optional: asyncpg for PostgreSQL support (only needed if using PostgreSQL)
+try:
+    import asyncpg
+    ASYNCPG_AVAILABLE = True
+except ImportError:
+    asyncpg = None
+    ASYNCPG_AVAILABLE = False
 
 logger = logging.getLogger('DatabaseAdapter')
 
@@ -122,10 +129,20 @@ class PostgreSQLAdapter(DatabaseAdapter):
         self.min_pool_size = min_pool_size
         self.max_pool_size = max_pool_size
         self._pool = None
+        
+        # Check if asyncpg is available
+        if not ASYNCPG_AVAILABLE:
+            raise ImportError(
+                "asyncpg is not installed. Install it with: pip install asyncpg>=0.29.0"
+            )
+        
         logger.info(f"🐘 PostgreSQL Adapter initialized: {user}@{host}:{port}/{database}")
     
     async def connect(self):
         """Initialize PostgreSQL connection pool."""
+        if not ASYNCPG_AVAILABLE:
+            raise ImportError("asyncpg is required for PostgreSQL support")
+        
         self._pool = await asyncpg.create_pool(
             host=self.host,
             port=self.port,
