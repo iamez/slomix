@@ -1095,7 +1095,12 @@ class ETLegacyCommands(commands.Cog):
                 elif filter_lower in ["unlinked", "nolink"]:
                     base_query += " HAVING pl.discord_id IS NULL"
                 elif filter_lower in ["active", "recent"]:
-                    base_query += " HAVING MAX(p.round_date) >= date('now', '-30 days')"
+                    # Database-agnostic date arithmetic
+                    if self.bot.config.database_type == 'sqlite':
+                        base_query += " HAVING MAX(p.round_date) >= date('now', '-30 days')"
+                    else:
+                        # PostgreSQL: CURRENT_DATE - INTERVAL '30 days'
+                        base_query += " HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'"
 
             base_query += " ORDER BY sessions_played DESC, total_kills DESC"
 
