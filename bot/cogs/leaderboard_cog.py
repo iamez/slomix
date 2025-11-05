@@ -128,14 +128,15 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
             # === SCENARIO 2: NO ARGS - Use author's linked account ===
             elif not player_name:
-                discord_id = str(ctx.author.id)
-                link = await self.bot.db_adapter.fetch_one(
-                    """
+                discord_id = int(ctx.author.id)  # Convert to integer for PostgreSQL BIGINT
+                query = """
+                    SELECT et_guid, et_name FROM player_links
+                    WHERE discord_id = $1
+                """ if self.bot.config.database_type == 'postgresql' else """
                     SELECT et_guid, et_name FROM player_links
                     WHERE discord_id = ?
-                """,
-                    (discord_id,),
-                )
+                """
+                link = await self.bot.db_adapter.fetch_one(query, (discord_id,))
 
                 if not link:
                     await ctx.send(
@@ -180,12 +181,13 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                         primary_name = alias_result[1]
                     else:
                         # Fallback to player_comprehensive_stats
+                        placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
                         result = await self.bot.db_adapter.fetch_one(
-                            """
+                            f"""
                             SELECT player_guid, player_name
                             FROM player_comprehensive_stats
-                            WHERE LOWER(player_name) LIKE LOWER(?)
-                            GROUP BY player_guid
+                            WHERE LOWER(player_name) LIKE LOWER({placeholder})
+                            GROUP BY player_guid, player_name
                             LIMIT 1
                         """,
                             (f"%{player_name}%",),

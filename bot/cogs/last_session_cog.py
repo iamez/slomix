@@ -179,8 +179,16 @@ class LastSessionCog(commands.Cog):
         """Create TEMP VIEW alias for player_name if needed"""
         try:
             # Check if clean_name exists but player_name doesn't
-            columns = await self.bot.db_adapter.fetch_all("PRAGMA table_info(player_comprehensive_stats)")
-            col_names = [col[1] for col in columns]
+            if self.bot.config.database_type == 'sqlite':
+                columns = await self.bot.db_adapter.fetch_all("PRAGMA table_info(player_comprehensive_stats)")
+                col_names = [col[1] for col in columns]
+            else:  # PostgreSQL
+                columns = await self.bot.db_adapter.fetch_all("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'player_comprehensive_stats'
+                """)
+                col_names = [col[0] for col in columns]
             
             if "clean_name" in col_names and "player_name" not in col_names:
                 await self.bot.db_adapter.execute("""
@@ -370,8 +378,8 @@ class LastSessionCog(commands.Cog):
                 AND w.player_guid = p.player_guid
             WHERE w.round_id IN ({session_ids_str})
             GROUP BY p.player_name, w.weapon_name
-            HAVING weapon_kills > 0
-            ORDER BY p.player_name, weapon_kills DESC
+            HAVING SUM(w.kills) > 0
+            ORDER BY p.player_name, SUM(w.kills) DESC
         """
         pw_rows = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
@@ -771,7 +779,7 @@ class LastSessionCog(commands.Cog):
                 hits = hits or 0
                 shots = shots or 0
                 
-                # Calculate
+                # Calculate metrics
                 kd = kills / deaths if deaths > 0 else kills
                 acc = (hits / shots * 100) if shots > 0 else 0
                 
@@ -837,7 +845,7 @@ class LastSessionCog(commands.Cog):
                 GROUP BY round_id, player_guid
             ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
             WHERE p.round_id IN ({session_ids_str})
-            GROUP BY p.player_guid
+            GROUP BY p.player_guid, p.player_name
             ORDER BY kills DESC
         """
         return await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
@@ -874,7 +882,7 @@ class LastSessionCog(commands.Cog):
                 SUM(damage_given) as total_damage
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
-            GROUP BY player_guid
+            GROUP BY player_guid, player_name
         """
         player_stats = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
         
@@ -899,24 +907,27 @@ class LastSessionCog(commands.Cog):
         
         return result
 
-    async def _aggregate_weapon_stats(self, session_ids: List, session_ids_str: str):
-        """Get per-player weapon mastery data"""
+    async def _aggregate_weapon_stats(self, session_ids, session_ids_str):
+        """Aggregate weapon statistics PER PLAYER across sessions."""
+        if not session_ids:
+            return []
+        
+        # weapon_comprehensive_stats schema: kills, deaths, shots, hits, headshots, accuracy
+        # Returns: player_name, weapon_name, kills, hits, shots, headshots
         query = f"""
-            SELECT p.player_name,
-                w.weapon_name,
-                SUM(w.kills) as weapon_kills,
-                SUM(w.hits) as weapon_hits,
-                SUM(w.shots) as weapon_shots,
-                SUM(w.headshots) as weapon_headshots
-            FROM weapon_comprehensive_stats w
-            JOIN player_comprehensive_stats p
-                ON w.round_id = p.round_id
-                AND w.player_guid = p.player_guid
-            WHERE w.round_id IN ({session_ids_str})
-            GROUP BY p.player_guid, w.weapon_name
-            HAVING weapon_kills > 0
-            ORDER BY p.player_name, weapon_kills DESC
+            SELECT 
+                player_name,
+                weapon_name,
+                SUM(kills) AS total_kills,
+                SUM(hits) AS total_hits,
+                SUM(shots) AS total_shots,
+                SUM(headshots) AS total_headshots
+            FROM weapon_comprehensive_stats
+            WHERE round_id IN ({session_ids_str})
+            GROUP BY player_guid, player_name, weapon_name
+            ORDER BY player_name, total_kills DESC
         """
+        
         return await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
     async def _get_dpm_leaderboard(self, session_ids: List, session_ids_str: str, limit: int = 10):
@@ -932,11 +943,11 @@ class LastSessionCog(commands.Cog):
                 SUM(deaths) as total_deaths
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
-            GROUP BY player_guid
+            GROUP BY player_guid, player_name
             ORDER BY weighted_dpm DESC
-            LIMIT ?
+            LIMIT {limit}
         """
-        return await self.bot.db_adapter.fetch_all(query, tuple(session_ids + [limit]))
+        return await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
     async def _calculate_team_scores(self, session_ids: List[int]) -> Tuple[str, str, int, int, Optional[Dict]]:
         """
@@ -949,6 +960,10 @@ class LastSessionCog(commands.Cog):
         
         Returns: (team_1_name, team_2_name, team_1_score, team_2_score, scoring_result)
         """
+        # Skip stopwatch scoring in PostgreSQL mode (requires refactor)
+        if not self.bot.db_path:
+            return "Team 1", "Team 2", 0, 0, None
+        
         scorer = StopwatchScoring(self.bot.db_path)
         scoring_result = scorer.calculate_session_scores(session_ids=session_ids)
 
@@ -1584,6 +1599,7 @@ class LastSessionCog(commands.Cog):
             # Damage Efficiency King
             if dmg_received > 0:
                 eff = dmg_given / dmg_received
+
                 if eff > awards["damage_king"]["value"]:
                     awards["damage_king"] = {"player": name, "value": eff}
 
@@ -1691,8 +1707,7 @@ class LastSessionCog(commands.Cog):
         self,
         latest_date: str,
         session_ids: List,
-        session_ids_str: str,
-        db
+        session_ids_str: str
     ) -> Optional[io.BytesIO]:
         """Generate 6-panel performance graph (kills, deaths, DPM, time played, time dead, time denied)."""
         try:
@@ -1836,8 +1851,7 @@ class LastSessionCog(commands.Cog):
         self,
         latest_date: str,
         session_ids: List,
-        session_ids_str: str,
-        db
+        session_ids_str: str
     ) -> Optional[io.BytesIO]:
         """Generate 4-panel combat efficiency graph (damage given/received, ratio, bullets, bullets per kill)."""
         try:
@@ -2092,7 +2106,7 @@ class LastSessionCog(commands.Cog):
                 SELECT player_name, SUM(revives_given) as total_revives
                 FROM player_comprehensive_stats
                 WHERE round_id IN ({session_ids_str})
-                GROUP BY player_guid
+                GROUP BY player_guid, player_name
             """
             player_revives_raw = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
@@ -2120,7 +2134,7 @@ class LastSessionCog(commands.Cog):
                     GROUP BY round_id, player_guid
                 ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
                 WHERE p.round_id IN ({session_ids_str})
-                GROUP BY p.player_guid
+                GROUP BY p.player_guid, player_name
             """
             chaos_awards_data = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
@@ -2301,11 +2315,5 @@ class LastSessionCog(commands.Cog):
         except Exception as e:
             logger.error(f"Error in team_history command: {e}", exc_info=True)
             await ctx.send(f"❌ Error retrieving team history: {e}")
-
-
-async def setup(bot):
-    """Load the Last Round Cog"""
-    await bot.add_cog(LastSessionCog(bot))
-    logger.info("🎮 LastSessionCog loaded - !last_session with comprehensive analytics (26 helper methods)")
 
 

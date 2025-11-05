@@ -143,9 +143,10 @@ class StatsCog(commands.Cog, name="Stats"):
 
             # Handle no arguments - use author's linked account
             elif not player_name:
-                discord_id = str(ctx.author.id)
+                discord_id = int(ctx.author.id)  # BIGINT in PostgreSQL
+                placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
                 link = await self.bot.db_adapter.fetch_one(
-                    "SELECT et_guid, et_name FROM player_links WHERE discord_id = ?",
+                    f"SELECT et_guid, et_name FROM player_links WHERE discord_id = {placeholder}",
                     (discord_id,),
                 )
 
