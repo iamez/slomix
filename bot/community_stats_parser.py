@@ -300,67 +300,89 @@ class C0RNP0RN3StatsParser:
         return "-round-2.txt" in filename
 
     def find_corresponding_round_1_file(self, round_2_file_path: str) -> Optional[str]:
-        """Find the corresponding Round 1 file for a Round 2 file"""
+        """
+        Find the corresponding Round 1 file for a Round 2 file
+        
+        Strategy:
+        1. Try EXACT match (same timestamp) - for same-session rounds
+        2. Try same-day match (within 30 min before) - for most cases
+        3. Try previous-day match (midnight-crossing) - for sessions crossing midnight
+        """
+        import glob
+        from datetime import datetime, timedelta
+        
         filename = os.path.basename(round_2_file_path)
         directory = os.path.dirname(round_2_file_path)
 
-        # Extract date, map from Round 2 filename: YYYY-MM-DD-HHMMSS-mapname-round-2.txt
+        # Extract date, time, map from Round 2 filename: YYYY-MM-DD-HHMMSS-mapname-round-2.txt
         parts = filename.split('-')
         if len(parts) < 6:
             return None
 
         date = '-'.join(parts[:3])  # YYYY-MM-DD
+        time_part = parts[3]  # HHMMSS
         map_name = '-'.join(parts[4:-2])  # everything between time and "round-2.txt"
-
+        
         # Check both the same directory and local_stats directory
         search_dirs = [directory]
         if not directory.endswith("local_stats"):
             search_dirs.append("local_stats")
 
-        potential_files = []
+        # STEP 1: Try EXACT match (same timestamp prefix) - rounds from same session
+        exact_pattern = f"{date}-{time_part}-{map_name}-round-1.txt"
+        print(f"  → Looking for exact match: {exact_pattern}")
         
-        # First, look for Round 1 files on the same date with the same map
-        search_pattern = f"{date}-*-{map_name}-round-1.txt"
         for search_dir in search_dirs:
             if os.path.exists(search_dir):
-                import glob
-                pattern_path = os.path.join(search_dir, search_pattern)
-                potential_files.extend(glob.glob(pattern_path))
+                exact_path = os.path.join(search_dir, exact_pattern)
+                if os.path.exists(exact_path):
+                    print(f"  → ✅ Found exact match (same session)")
+                    return exact_path
 
-        # ✅ FIX: ALWAYS check previous date for midnight-crossing matches
-        # (Don't just check if no same-day files found - we need to check both!)
-        from datetime import datetime, timedelta
-        try:
-            date_obj = datetime.strptime(date, '%Y-%m-%d')
-            prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
-            prev_search_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
-            
-            print(f"  → Checking previous date: {prev_search_pattern}")
-            
-            for search_dir in search_dirs:
-                if os.path.exists(search_dir):
-                    pattern_path = os.path.join(search_dir, prev_search_pattern)
-                    found = glob.glob(pattern_path)
-                    if found:
-                        print(f"  → Found {len(found)} files from previous date")
-                    potential_files.extend(found)
-        except ValueError:
-            pass  # Invalid date format, skip previous date search
+        # STEP 2: Try same-day match (different timestamp, same date)
+        potential_files = []
+        same_day_pattern = f"{date}-*-{map_name}-round-1.txt"
+        print(f"  → Looking for same-day match: {same_day_pattern}")
+        
+        for search_dir in search_dirs:
+            if os.path.exists(search_dir):
+                pattern_path = os.path.join(search_dir, same_day_pattern)
+                found = glob.glob(pattern_path)
+                if found:
+                    print(f"  → Found {len(found)} same-day Round 1 file(s)")
+                potential_files.extend(found)
+
+        # STEP 3: If no same-day files, check previous date (midnight-crossing)
+        if not potential_files:
+            try:
+                date_obj = datetime.strptime(date, '%Y-%m-%d')
+                prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
+                prev_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
+                
+                print(f"  → No same-day found, checking previous date: {prev_pattern}")
+                
+                for search_dir in search_dirs:
+                    if os.path.exists(search_dir):
+                        pattern_path = os.path.join(search_dir, prev_pattern)
+                        found = glob.glob(pattern_path)
+                        if found:
+                            print(f"  → Found {len(found)} previous-day file(s) (midnight-crossing)")
+                        potential_files.extend(found)
+            except ValueError:
+                pass  # Invalid date format
 
         if not potential_files:
             return None
 
-        # Parse Round 2 full datetime for comparison
-        from datetime import datetime
+        # Find the best Round 1: closest before Round 2, within 30 minutes
         try:
-            r2_date_str = f"{date} {parts[3]}"  # "YYYY-MM-DD HHMMSS"
-            r2_datetime = datetime.strptime(r2_date_str, '%Y-%m-%d %H%M%S')
+            r2_datetime = datetime.strptime(f"{date} {time_part}", '%Y-%m-%d %H%M%S')
         except (ValueError, IndexError):
             return None
 
-        # Find the Round 1 file with the latest timestamp before Round 2
         best_r1_file = None
         best_r1_datetime = None
+        MAX_TIME_DIFF_MINUTES = 30  # Rounds typically 10-20 minutes apart
 
         for r1_file in potential_files:
             r1_filename = os.path.basename(r1_file)
@@ -369,14 +391,20 @@ class C0RNP0RN3StatsParser:
                 try:
                     r1_date = '-'.join(r1_parts[:3])  # YYYY-MM-DD
                     r1_time = r1_parts[3]  # HHMMSS
-                    r1_date_str = f"{r1_date} {r1_time}"
-                    r1_datetime = datetime.strptime(r1_date_str, '%Y-%m-%d %H%M%S')
+                    r1_datetime = datetime.strptime(f"{r1_date} {r1_time}", '%Y-%m-%d %H%M%S')
                     
-                    # Find the Round 1 file closest to but before Round 2
+                    # Round 1 must be BEFORE Round 2
                     if r1_datetime < r2_datetime:
-                        if best_r1_datetime is None or r1_datetime > best_r1_datetime:
-                            best_r1_datetime = r1_datetime
-                            best_r1_file = r1_file
+                        time_diff = (r2_datetime - r1_datetime).total_seconds() / 60
+                        
+                        # Accept if within time window
+                        if time_diff <= MAX_TIME_DIFF_MINUTES:
+                            if best_r1_datetime is None or r1_datetime > best_r1_datetime:
+                                best_r1_datetime = r1_datetime
+                                best_r1_file = r1_file
+                                print(f"  → ✅ Match found: {r1_filename} ({time_diff:.1f} min before)")
+                        else:
+                            print(f"  → ❌ Rejected: {r1_filename} ({time_diff:.1f} min gap - too old)")
                 except ValueError:
                     continue
 
