@@ -85,33 +85,58 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     date_filter = date_str
             else:
                 # Get most recent date
-                result = await self.bot.db_adapter.fetch_one(
-                    """
-                    SELECT DISTINCT DATE(round_date) as date
-                    FROM player_comprehensive_stats
-                    ORDER BY date DESC LIMIT 1
-                    """
-                )
+                if self.bot.config.database_type == 'sqlite':
+                    result = await self.bot.db_adapter.fetch_one(
+                        """
+                        SELECT DISTINCT DATE(round_date) as date
+                        FROM player_comprehensive_stats
+                        ORDER BY date DESC LIMIT 1
+                        """
+                    )
+                else:  # PostgreSQL
+                    result = await self.bot.db_adapter.fetch_one(
+                        """
+                        SELECT DISTINCT round_date
+                        FROM player_comprehensive_stats
+                        ORDER BY round_date DESC LIMIT 1
+                        """
+                    )
                 if not result:
                     await ctx.send("❌ No rounds found in database")
                     return
-                date_filter = result[0]
+                # Convert to string if it's a date object (PostgreSQL)
+                date_filter = str(result[0]) if result[0] else None
+                if not date_filter:
+                    await ctx.send("❌ No rounds found in database")
+                    return
 
             await ctx.send(f"📅 Loading session data for **{date_filter}**...")
 
-            # Get round metadata
-            query = """
-                SELECT 
-                    COUNT(DISTINCT round_id) / 2 as total_maps,
-                    COUNT(DISTINCT round_id) as total_rounds,
-                    COUNT(DISTINCT player_guid) as player_count,
-                    MIN(round_date) as first_round,
-                    MAX(round_date) as last_round
-                FROM player_comprehensive_stats
-                WHERE DATE(round_date) = ?
-            """
-
-            result = await self.bot.db_adapter.fetch_one(query, (date_filter,))
+            # Get round metadata (database-specific)
+            if self.bot.config.database_type == 'sqlite':
+                query = """
+                    SELECT 
+                        COUNT(DISTINCT round_id) / 2 as total_maps,
+                        COUNT(DISTINCT round_id) as total_rounds,
+                        COUNT(DISTINCT player_guid) as player_count,
+                        MIN(round_date) as first_round,
+                        MAX(round_date) as last_round
+                    FROM player_comprehensive_stats
+                    WHERE DATE(round_date) = ?
+                """
+                result = await self.bot.db_adapter.fetch_one(query, (date_filter,))
+            else:  # PostgreSQL
+                query = """
+                    SELECT 
+                        COUNT(DISTINCT round_id) / 2 as total_maps,
+                        COUNT(DISTINCT round_id) as total_rounds,
+                        COUNT(DISTINCT player_guid) as player_count,
+                        MIN(round_date) as first_round,
+                        MAX(round_date) as last_round
+                    FROM player_comprehensive_stats
+                    WHERE round_date = $1
+                """
+                result = await self.bot.db_adapter.fetch_one(query, (date_filter,))
             if not result or result[0] == 0:
                 await ctx.send(
                     f"❌ No round found for date: {date_filter}"
@@ -126,16 +151,28 @@ class SessionCog(commands.Cog, name="Session Commands"):
                 last_round,
             ) = result
 
-            # Get unique maps played
-            maps = await self.bot.db_adapter.fetch_all(
-                """
-                SELECT DISTINCT map_name
-                FROM player_comprehensive_stats
-                WHERE DATE(round_date) = ?
-                ORDER BY round_date
-            """,
-                (date_filter,)
-            )
+            # Get unique maps played (database-specific)
+            if self.bot.config.database_type == 'sqlite':
+                maps = await self.bot.db_adapter.fetch_all(
+                    """
+                    SELECT DISTINCT map_name
+                    FROM player_comprehensive_stats
+                    WHERE DATE(round_date) = ?
+                    ORDER BY round_date
+                """,
+                    (date_filter,)
+                )
+            else:  # PostgreSQL
+                maps = await self.bot.db_adapter.fetch_all(
+                    """
+                    SELECT DISTINCT map_name, MIN(round_date) as first_seen
+                    FROM player_comprehensive_stats
+                    WHERE round_date = $1
+                    GROUP BY map_name
+                    ORDER BY first_seen
+                """,
+                    (date_filter,)
+                )
             maps_list = [m[0] for m in maps]
 
             # Build header embed
@@ -156,26 +193,47 @@ class SessionCog(commands.Cog, name="Session Commands"):
                 name="🗺️ Maps Played", value=maps_text, inline=False
             )
 
-            # Get top players aggregated
-            top_players = await self.bot.db_adapter.fetch_all(
-                """
-                SELECT 
-                    p.player_name,
-                    SUM(p.kills) as kills,
-                    SUM(p.deaths) as deaths,
-                    CASE
-                        WHEN SUM(p.time_played_seconds) > 0
-                        THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
-                        ELSE 0
-                    END as dpm
-                FROM player_comprehensive_stats p
-                WHERE DATE(p.round_date) = ?
-                GROUP BY p.player_name
-                ORDER BY kills DESC
-                LIMIT 5
-            """,
-                (date_filter,)
-            )
+            # Get top players aggregated (database-specific)
+            if self.bot.config.database_type == 'sqlite':
+                top_players = await self.bot.db_adapter.fetch_all(
+                    """
+                    SELECT 
+                        p.player_name,
+                        SUM(p.kills) as kills,
+                        SUM(p.deaths) as deaths,
+                        CASE
+                            WHEN SUM(p.time_played_seconds) > 0
+                            THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                            ELSE 0
+                        END as dpm
+                    FROM player_comprehensive_stats p
+                    WHERE DATE(p.round_date) = ?
+                    GROUP BY p.player_name
+                    ORDER BY kills DESC
+                    LIMIT 5
+                """,
+                    (date_filter,)
+                )
+            else:  # PostgreSQL
+                top_players = await self.bot.db_adapter.fetch_all(
+                    """
+                    SELECT 
+                        p.player_name,
+                        SUM(p.kills) as kills,
+                        SUM(p.deaths) as deaths,
+                        CASE
+                            WHEN SUM(p.time_played_seconds) > 0
+                            THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                            ELSE 0
+                        END as dpm
+                    FROM player_comprehensive_stats p
+                    WHERE p.round_date = $1
+                    GROUP BY p.player_name
+                    ORDER BY kills DESC
+                    LIMIT 5
+                """,
+                    (date_filter,)
+                )
 
             # Add top 5 players
             if top_players:
@@ -215,9 +273,6 @@ class SessionCog(commands.Cog, name="Session Commands"):
         - !sessions oct          → Same as above
         """
         try:
-            conn = sqlite3.connect(self.bot.db_path)
-            cursor = conn.cursor()
-
             # Build query based on month filter
             if month:
                 # Handle different month formats
@@ -267,43 +322,73 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     await ctx.send(
                         f"❌ Invalid month format: `{month}`\nUse: `!sessions 10` or `!sessions october`"
                     )
-                    conn.close()
                     return
 
-                query = """
-                    SELECT 
-                        DATE(round_date) as date,
-                        COUNT(DISTINCT round_id) / 2 as maps,
-                        COUNT(DISTINCT round_id) as rounds,
-                        COUNT(DISTINCT player_guid) as players,
-                        MIN(round_date) as first_round,
-                        MAX(round_date) as last_round
-                    FROM player_comprehensive_stats
-                    WHERE round_date LIKE ?
-                    GROUP BY DATE(round_date)
-                    ORDER BY date DESC
-                """
-                cursor.execute(query, (f"{month_filter}%",))
+                # Use database adapter (works for both SQLite and PostgreSQL)
+                if self.bot.config.database_type == 'sqlite':
+                    query = """
+                        SELECT 
+                            DATE(round_date) as date,
+                            COUNT(DISTINCT round_id) / 2 as maps,
+                            COUNT(DISTINCT round_id) as rounds,
+                            COUNT(DISTINCT player_guid) as players,
+                            MIN(round_date) as first_round,
+                            MAX(round_date) as last_round
+                        FROM player_comprehensive_stats
+                        WHERE round_date LIKE ?
+                        GROUP BY DATE(round_date)
+                        ORDER BY date DESC
+                    """
+                    sessions = await self.bot.db_adapter.fetch_all(query, (f"{month_filter}%",))
+                else:  # PostgreSQL
+                    query = """
+                        SELECT 
+                            DATE(round_date::date) as date,
+                            COUNT(DISTINCT round_id) / 2 as maps,
+                            COUNT(DISTINCT round_id) as rounds,
+                            COUNT(DISTINCT player_guid) as players,
+                            MIN(round_date) as first_round,
+                            MAX(round_date) as last_round
+                        FROM player_comprehensive_stats
+                        WHERE round_date LIKE $1
+                        GROUP BY DATE(round_date::date)
+                        ORDER BY date DESC
+                    """
+                    sessions = await self.bot.db_adapter.fetch_all(query, (f"{month_filter}%",))
                 filter_text = month_filter
             else:
-                query = """
-                    SELECT 
-                        DATE(round_date) as date,
-                        COUNT(DISTINCT round_id) / 2 as maps,
-                        COUNT(DISTINCT round_id) as rounds,
-                        COUNT(DISTINCT player_guid) as players,
-                        MIN(round_date) as first_round,
-                        MAX(round_date) as last_round
-                    FROM player_comprehensive_stats
-                    GROUP BY DATE(round_date)
-                    ORDER BY date DESC
-                    LIMIT 20
-                """
-                cursor.execute(query)
+                # Use database adapter (works for both SQLite and PostgreSQL)
+                if self.bot.config.database_type == 'sqlite':
+                    query = """
+                        SELECT 
+                            DATE(round_date) as date,
+                            COUNT(DISTINCT round_id) / 2 as maps,
+                            COUNT(DISTINCT round_id) as rounds,
+                            COUNT(DISTINCT player_guid) as players,
+                            MIN(round_date) as first_round,
+                            MAX(round_date) as last_round
+                        FROM player_comprehensive_stats
+                        GROUP BY DATE(round_date)
+                        ORDER BY date DESC
+                        LIMIT 20
+                    """
+                    sessions = await self.bot.db_adapter.fetch_all(query)
+                else:  # PostgreSQL
+                    query = """
+                        SELECT 
+                            DATE(round_date::date) as date,
+                            COUNT(DISTINCT round_id) / 2 as maps,
+                            COUNT(DISTINCT round_id) as rounds,
+                            COUNT(DISTINCT player_guid) as players,
+                            MIN(round_date) as first_round,
+                            MAX(round_date) as last_round
+                        FROM player_comprehensive_stats
+                        GROUP BY DATE(round_date::date)
+                        ORDER BY date DESC
+                        LIMIT 20
+                    """
+                    sessions = await self.bot.db_adapter.fetch_all(query)
                 filter_text = "all time (last 20)"
-
-            sessions = cursor.fetchall()
-            conn.close()
 
             if not sessions:
                 await ctx.send(f"❌ No rounds found for {filter_text}")
@@ -317,7 +402,17 @@ class SessionCog(commands.Cog, name="Session Commands"):
             )
 
             session_list = []
-            for date, maps, rounds, players, first, last in sessions:
+            for row in sessions:
+                # Handle both dict (PostgreSQL) and tuple (SQLite) results
+                if isinstance(row, dict):
+                    date = row['date']
+                    maps = row['maps']
+                    rounds = row['rounds']
+                    players = row['players']
+                    first = row['first_round']
+                    last = row['last_round']
+                else:
+                    date, maps, rounds, players, first, last = row
                 # Calculate duration
                 from datetime import datetime
 

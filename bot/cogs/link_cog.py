@@ -271,13 +271,17 @@ class LinkCog(commands.Cog, name="Link"):
             - Link status (linked/unlinked)
         """
         try:
+            # Database-specific placeholder
+            placeholder = "?" if self.bot.config.database_type == 'sqlite' else "$1"
+            
             # Search in player_aliases (uses 'guid' and 'alias' columns)
             alias_guids = await self.bot.db_adapter.fetch_all(
-                """
-                SELECT DISTINCT pa.guid
+                f"""
+                SELECT DISTINCT pa.guid, MAX(pa.last_seen) as last_seen
                 FROM player_aliases pa
-                WHERE LOWER(pa.alias) LIKE LOWER(?)
-                ORDER BY pa.last_seen DESC
+                WHERE LOWER(pa.alias) LIKE LOWER({placeholder})
+                GROUP BY pa.guid
+                ORDER BY last_seen DESC
                 LIMIT 10
             """,
                 (f"%{search_term}%",),
@@ -286,11 +290,12 @@ class LinkCog(commands.Cog, name="Link"):
 
             # Also search main stats table
             stats_guids = await self.bot.db_adapter.fetch_all(
-                """
-                SELECT DISTINCT player_guid
+                f"""
+                SELECT DISTINCT player_guid, MAX(round_date) as max_date
                 FROM player_comprehensive_stats
-                WHERE LOWER(player_name) LIKE LOWER(?)
-                ORDER BY round_date DESC
+                WHERE LOWER(player_name) LIKE LOWER({placeholder})
+                GROUP BY player_guid
+                ORDER BY max_date DESC
                 LIMIT 10
             """,
                 (f"%{search_term}%",),
@@ -486,13 +491,14 @@ class LinkCog(commands.Cog, name="Link"):
                 return
 
             # For self-linking
-            discord_id = str(ctx.author.id)
+            discord_id = int(ctx.author.id)  # BIGINT in PostgreSQL
 
             # Check if already linked
+            placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
             existing = await self.bot.db_adapter.fetch_one(
-                """
+                f"""
                 SELECT et_name, et_guid FROM player_links
-                WHERE discord_id = ?
+                WHERE discord_id = {placeholder}
             """,
                 (discord_id,),
             )
@@ -656,20 +662,31 @@ class LinkCog(commands.Cog, name="Link"):
                 selected_idx = emojis.index(str(reaction.emoji))
                 selected = options_data[selected_idx]
 
-                # Link the account (use database-compatible datetime function)
+                # Link the account (database-specific syntax)
                 if self.bot.config.database_type == 'sqlite':
-                    datetime_expr = "datetime('now')"
-                else:
-                    datetime_expr = "CURRENT_TIMESTAMP"
-                
-                await self.bot.db_adapter.execute(
-                    f"""
-                    INSERT OR REPLACE INTO player_links
-                    (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                    VALUES (?, ?, ?, ?, {datetime_expr}, 1)
-                """,
-                    (discord_id, str(ctx.author), selected["guid"], selected["name"]),
-                )
+                    await self.bot.db_adapter.execute(
+                        """
+                        INSERT OR REPLACE INTO player_links
+                        (discord_id, discord_username, et_guid, et_name, linked_date, verified)
+                        VALUES (?, ?, ?, ?, datetime('now'), 1)
+                        """,
+                        (discord_id, str(ctx.author), selected["guid"], selected["name"]),
+                    )
+                else:  # PostgreSQL
+                    await self.bot.db_adapter.execute(
+                        """
+                        INSERT INTO player_links
+                        (discord_id, discord_username, et_guid, et_name, linked_date, verified)
+                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, true)
+                        ON CONFLICT (discord_id) DO UPDATE SET
+                            discord_username = EXCLUDED.discord_username,
+                            et_guid = EXCLUDED.et_guid,
+                            et_name = EXCLUDED.et_name,
+                            linked_date = EXCLUDED.linked_date,
+                            verified = EXCLUDED.verified
+                        """,
+                        (discord_id, str(ctx.author), selected["guid"], selected["name"]),
+                    )
 
                 # Success!
                 await message.clear_reactions()
@@ -812,20 +829,31 @@ class LinkCog(commands.Cog, name="Link"):
                 )
 
                 if str(reaction.emoji) == "✅":
-                    # Confirmed - link it (use database-compatible datetime function)
+                    # Confirmed - link it (database-specific syntax)
                     if self.bot.config.database_type == 'sqlite':
-                        datetime_expr = "datetime('now')"
-                    else:
-                        datetime_expr = "CURRENT_TIMESTAMP"
-                    
-                    await self.bot.db_adapter.execute(
-                        f"""
-                        INSERT OR REPLACE INTO player_links
-                        (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                        VALUES (?, ?, ?, ?, {datetime_expr}, 1)
-                    """,
-                        (discord_id, str(ctx.author), guid, primary_name),
-                    )
+                        await self.bot.db_adapter.execute(
+                            """
+                            INSERT OR REPLACE INTO player_links
+                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
+                            VALUES (?, ?, ?, ?, datetime('now'), 1)
+                            """,
+                            (discord_id, str(ctx.author), guid, primary_name),
+                        )
+                    else:  # PostgreSQL
+                        await self.bot.db_adapter.execute(
+                            """
+                            INSERT INTO player_links
+                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
+                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, true)
+                            ON CONFLICT (discord_id) DO UPDATE SET
+                                discord_username = EXCLUDED.discord_username,
+                                et_guid = EXCLUDED.et_guid,
+                                et_name = EXCLUDED.et_name,
+                                linked_date = EXCLUDED.linked_date,
+                                verified = EXCLUDED.verified
+                            """,
+                            (discord_id, str(ctx.author), guid, primary_name),
+                        )
 
                     await message.clear_reactions()
                     await ctx.send(
@@ -974,20 +1002,31 @@ class LinkCog(commands.Cog, name="Link"):
                     selected_idx = emojis.index(str(reaction.emoji))
                     selected = options_data[selected_idx]
 
-                    # Use database-compatible datetime function
+                    # Link it (database-specific syntax)
                     if self.bot.config.database_type == 'sqlite':
-                        datetime_expr = "datetime('now')"
-                    else:
-                        datetime_expr = "CURRENT_TIMESTAMP"
-                    
-                    await self.bot.db_adapter.execute(
-                        f"""
-                        INSERT OR REPLACE INTO player_links
-                        (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                        VALUES (?, ?, ?, ?, {datetime_expr}, 1)
-                    """,
-                        (discord_id, str(ctx.author), selected["guid"], selected["name"]),
-                    )
+                        await self.bot.db_adapter.execute(
+                            """
+                            INSERT OR REPLACE INTO player_links
+                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
+                            VALUES (?, ?, ?, ?, datetime('now'), 1)
+                            """,
+                            (discord_id, str(ctx.author), selected["guid"], selected["name"]),
+                        )
+                    else:  # PostgreSQL
+                        await self.bot.db_adapter.execute(
+                            """
+                            INSERT INTO player_links
+                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
+                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, true)
+                            ON CONFLICT (discord_id) DO UPDATE SET
+                                discord_username = EXCLUDED.discord_username,
+                                et_guid = EXCLUDED.et_guid,
+                                et_name = EXCLUDED.et_name,
+                                linked_date = EXCLUDED.linked_date,
+                                verified = EXCLUDED.verified
+                            """,
+                            (discord_id, str(ctx.author), selected["guid"], selected["name"]),
+                        )
 
                     await message.clear_reactions()
                     await ctx.send(
@@ -1031,11 +1070,12 @@ class LinkCog(commands.Cog, name="Link"):
                 )
                 return
 
-            target_discord_id = str(target_user.id)
+            target_discord_id = int(target_user.id)  # BIGINT in PostgreSQL
 
             # Check if target already linked
+            placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
             existing = await self.bot.db_adapter.fetch_one(
-                """
+                f"""
                 SELECT et_name, et_guid FROM player_links
                 WHERE discord_id = ?
             """,
@@ -1161,20 +1201,31 @@ class LinkCog(commands.Cog, name="Link"):
                 )
 
                 if str(reaction.emoji) == "✅":
-                    # Confirmed - link it (use database-compatible datetime function)
+                    # Confirmed - link it (database-specific syntax)
                     if self.bot.config.database_type == 'sqlite':
-                        datetime_expr = "datetime('now')"
-                    else:
-                        datetime_expr = "CURRENT_TIMESTAMP"
-                    
-                    await self.bot.db_adapter.execute(
-                        f"""
-                        INSERT OR REPLACE INTO player_links
-                        (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                        VALUES (?, ?, ?, ?, {datetime_expr}, 1)
-                    """,
-                        (target_discord_id, str(target_user), guid, primary_name),
-                    )
+                        await self.bot.db_adapter.execute(
+                            """
+                            INSERT OR REPLACE INTO player_links
+                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
+                            VALUES (?, ?, ?, ?, datetime('now'), 1)
+                            """,
+                            (target_discord_id, str(target_user), guid, primary_name),
+                        )
+                    else:  # PostgreSQL
+                        await self.bot.db_adapter.execute(
+                            """
+                            INSERT INTO player_links
+                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
+                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, true)
+                            ON CONFLICT (discord_id) DO UPDATE SET
+                                discord_username = EXCLUDED.discord_username,
+                                et_guid = EXCLUDED.et_guid,
+                                et_name = EXCLUDED.et_name,
+                                linked_date = EXCLUDED.linked_date,
+                                verified = EXCLUDED.verified
+                            """,
+                            (target_discord_id, str(target_user), guid, primary_name),
+                        )
 
                     await message.clear_reactions()
 
@@ -1236,11 +1287,12 @@ class LinkCog(commands.Cog, name="Link"):
             Your game stats are not deleted, only the Discord link is removed.
         """
         try:
-            discord_id = str(ctx.author.id)
+            discord_id = int(ctx.author.id)  # BIGINT in PostgreSQL
 
             # Check if linked
+            placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
             existing = await self.bot.db_adapter.fetch_one(
-                """
+                f"""
                 SELECT et_name, et_guid FROM player_links
                 WHERE discord_id = ?
             """,
