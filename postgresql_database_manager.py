@@ -37,16 +37,33 @@ sys.path.insert(0, str(Path(__file__).parent))
 from bot.community_stats_parser import C0RNP0RN3StatsParser
 from bot.config import load_config
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('postgresql_manager.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger('PostgreSQLManager')
+# Import comprehensive logging system
+try:
+    from bot.logging_config import (
+        setup_logging,
+        log_database_operation,
+        log_stats_import,
+        log_performance_warning,
+        get_logger
+    )
+    # Setup comprehensive logging
+    setup_logging(logging.INFO)
+    logger = get_logger('bot.database.manager')
+except ImportError:
+    # Fallback to basic logging if logging_config not available
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('postgresql_manager.log', encoding='utf-8'),
+            logging.StreamHandler()
+        ]
+    )
+    logger = logging.getLogger('PostgreSQLManager')
+    log_database_operation = lambda *args, **kwargs: None
+    log_stats_import = lambda *args, **kwargs: None
+    log_performance_warning = lambda *args, **kwargs: None
+
 
 
 class PostgreSQLDatabaseManager:
@@ -254,6 +271,7 @@ class PostgreSQLDatabaseManager:
             (success: bool, message: str)
         """
         filename = file_path.name
+        start_time = time.time()
         
         try:
             # Check if already processed
@@ -263,12 +281,15 @@ class PostgreSQLDatabaseManager:
                 return True, "Already processed"
             
             # STEP 1: Parse file
+            logger.debug(f"📖 Parsing file: {filename}")
             parsed_data = self.parser.parse_stats_file(str(file_path))
             
             if not parsed_data or parsed_data.get('error'):
                 error = parsed_data.get('error', 'Unknown error') if parsed_data else 'No data'
                 self.stats['files_failed'] += 1
                 await self.mark_file_processed(filename, success=False, error_msg=error)
+                logger.error(f"❌ Parse failed: {filename} - {error}")
+                log_stats_import(filename, error=error)
                 return False, f"Parse error: {error}"
             
             # STEP 2: Extract expected counts from parsed data
@@ -278,17 +299,21 @@ class PostgreSQLDatabaseManager:
             expected_total_kills = sum(p.get('kills', 0) for p in parsed_data.get('players', []))
             expected_total_deaths = sum(p.get('deaths', 0) for p in parsed_data.get('players', []))
             
+            logger.debug(f"📊 Parsed: {expected_players} players, {expected_weapons} weapons")
+            
             # Extract date/time from filename
             file_date, round_time = self._extract_date_time_from_filename(filename)
             if not file_date:
                 self.stats['files_failed'] += 1
                 await self.mark_file_processed(filename, success=False, error_msg="Invalid filename format")
+                logger.error(f"❌ Invalid filename format: {filename}")
                 return False, "Invalid filename format"
             
             # STEP 3: Create round and insert stats
             async with self.pool.acquire() as conn:
                 async with conn.transaction():
                     # Create round
+                    logger.debug(f"💾 Creating round for {filename}")
                     round_id = await self._create_round(conn, parsed_data, file_date, round_time, filename)
                     
                     if not round_id:
@@ -296,9 +321,11 @@ class PostgreSQLDatabaseManager:
                     
                     # Insert player stats
                     player_count = await self._insert_player_stats(conn, round_id, file_date, parsed_data)
+                    logger.debug(f"👥 Inserted {player_count} player stats")
                     
                     # Insert weapon stats
                     weapon_count = await self._insert_weapon_stats(conn, round_id, file_date, parsed_data)
+                    logger.debug(f"🔫 Inserted {weapon_count} weapon stats")
                     
                     # STEP 4: VERIFY DATA INTEGRITY
                     validation_passed, validation_msg = await self._validate_round_data(
@@ -322,12 +349,32 @@ class PostgreSQLDatabaseManager:
                     self.stats['players_inserted'] += player_count
                     self.stats['weapons_inserted'] += weapon_count
                     
+                    # Log successful import
+                    duration = time.time() - start_time
+                    logger.info(
+                        f"✓ Imported {filename}: {player_count} players, {weapon_count} weapons "
+                        f"[{duration:.2f}s]{' (WITH WARNINGS)' if not validation_passed else ''}"
+                    )
+                    log_stats_import(
+                        filename,
+                        round_count=1,
+                        player_count=player_count,
+                        weapon_count=weapon_count,
+                        duration=duration
+                    )
+                    
+                    # Warn if import was slow
+                    if duration > 3.0:
+                        log_performance_warning(f"Import {filename}", duration, threshold=3.0)
+                    
                     return True, f"Processed: {player_count} players, {weapon_count} weapons{' (WITH WARNINGS)' if not validation_passed else ''}"
         
         except Exception as e:
             self.stats['files_failed'] += 1
             error_msg = str(e)
-            logger.error(f"❌ Error processing {filename}: {error_msg}")
+            duration = time.time() - start_time
+            logger.error(f"❌ Error processing {filename} [{duration:.2f}s]: {error_msg}", exc_info=True)
+            log_stats_import(filename, error=error_msg, duration=duration)
             await self.mark_file_processed(filename, success=False, error_msg=error_msg)
             return False, error_msg
     

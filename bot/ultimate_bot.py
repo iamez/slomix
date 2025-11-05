@@ -41,50 +41,26 @@ except ImportError:
 
 # ==================== COMPREHENSIVE LOGGING SETUP ====================
 
-# Create logs directory if it doesn't exist
-os.makedirs("logs", exist_ok=True)
+# Import our custom logging configuration
+from bot.logging_config import (
+    setup_logging,
+    log_command_execution,
+    log_database_operation,
+    log_stats_import,
+    log_performance_warning,
+    get_logger
+)
 
-# Configure logging with both file and console output
+# Setup comprehensive logging system
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-log_file = os.getenv("LOG_FILE", "logs/bot.log")
-
-# Create formatter with timestamp, level, name, and message
-formatter = logging.Formatter(
-    '%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-
-# File handler - logs everything to file
-file_handler = logging.FileHandler(log_file, encoding='utf-8')
-file_handler.setLevel(logging.DEBUG)  # Log everything to file
-file_handler.setFormatter(formatter)
-
-# Console handler - logs INFO and above to console
-console_handler = logging.StreamHandler()
-console_handler.setLevel(getattr(logging, log_level))
-console_handler.setFormatter(formatter)
-
-# Configure root logger
-logging.basicConfig(
-    level=logging.DEBUG,  # Capture everything
-    handlers=[file_handler, console_handler]
-)
+setup_logging(getattr(logging, log_level))
 
 # Get bot logger
-logger = logging.getLogger("UltimateBot")
-logger.info("=" * 80)
+logger = get_logger("bot.core")
 logger.info("🚀 ET:LEGACY DISCORD BOT - STARTING UP")
-logger.info("=" * 80)
 logger.info(f"📝 Log Level: {log_level}")
-logger.info(f"📁 Log File: {log_file}")
-
-# Reduce noise from verbose third-party libraries
-logging.getLogger("paramiko").setLevel(logging.WARNING)
-logging.getLogger("paramiko.transport").setLevel(logging.WARNING)
-logging.getLogger("asyncio").setLevel(logging.WARNING)
-logging.getLogger("discord").setLevel(logging.INFO)
-logging.getLogger("discord.http").setLevel(logging.WARNING)
-logging.getLogger("discord.gateway").setLevel(logging.WARNING)
+logger.info(f"� Python: {sys.version}")
+logger.info(f"📦 Discord.py: {discord.__version__}")
 
 # ======================================================================
 
@@ -4695,9 +4671,15 @@ class UltimateETLegacyBot(commands.Bot):
 
     async def on_ready(self):
         """✅ Bot startup message"""
+        logger.info("=" * 80)
         logger.info(f"🚀 Ultimate ET:Legacy Bot logged in as {self.user}")
-        logger.info(f"📊 Connected to database: {self.db_path}")
-        logger.info(f"🎮 Bot ready with {len(list(self.commands))} commands!")
+        logger.info(f"🆔 Bot ID: {self.user.id}")
+        logger.info(f"📊 Database Type: {self.config.database_type.upper()}")
+        logger.info(f"📍 Database: {self.db_path}")
+        logger.info(f"🎮 Commands Loaded: {len(list(self.commands))}")
+        logger.info(f"🔧 Cogs Loaded: {len(self.cogs)}")
+        logger.info(f"🌐 Servers: {len(self.guilds)}")
+        logger.info("=" * 80)
 
         # Clear any old slash commands to avoid confusion
         try:
@@ -4707,9 +4689,52 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.warning(f"Could not clear slash commands: {e}")
 
+    async def on_command(self, ctx):
+        """Track command execution start"""
+        import time
+        ctx.command_start_time = time.time()
+        
+        command_logger = get_logger('bot.commands')
+        user = f"{ctx.author.name}#{ctx.author.discriminator} ({ctx.author.id})"
+        guild = f"{ctx.guild.name} ({ctx.guild.id})" if ctx.guild else "DM"
+        channel = f"#{ctx.channel.name}" if hasattr(ctx.channel, 'name') else "DM"
+        
+        command_logger.info(
+            f"▶ COMMAND: !{ctx.command.name} | "
+            f"User: {user} | Guild: {guild} | Channel: {channel}"
+        )
+
+    async def on_command_completion(self, ctx):
+        """Track successful command completion"""
+        import time
+        duration = time.time() - getattr(ctx, 'command_start_time', time.time())
+        
+        log_command_execution(
+            ctx,
+            f"!{ctx.command.name}",
+            start_time=getattr(ctx, 'command_start_time', None),
+            end_time=time.time()
+        )
+        
+        # Warn about slow commands
+        if duration > 5.0:
+            log_performance_warning(f"!{ctx.command.name}", duration, threshold=5.0)
+
     async def on_command_error(self, ctx, error):
         """🚨 Handle command errors"""
+        import time
         self.error_count += 1
+        
+        # Log the error with full context
+        duration = time.time() - getattr(ctx, 'command_start_time', time.time())
+        
+        log_command_execution(
+            ctx,
+            f"!{ctx.command.name}" if ctx.command else "unknown",
+            start_time=getattr(ctx, 'command_start_time', None),
+            end_time=time.time(),
+            error=str(error)
+        )
 
         if isinstance(error, commands.CommandNotFound):
             await ctx.send(
@@ -4720,8 +4745,13 @@ class UltimateETLegacyBot(commands.Bot):
                 f"❌ Missing argument: {error.param}. Use `!help_command` for usage."
             )
         else:
-            logger.error(f"Command error: {error}")
+            error_logger = get_logger('bot.errors')
+            error_logger.error(
+                f"Command error in !{ctx.command.name if ctx.command else 'unknown'}: {error}",
+                exc_info=True
+            )
             await ctx.send(f"❌ An error occurred: {error}")
+
 
 
 # 🚀 BOT STARTUP
