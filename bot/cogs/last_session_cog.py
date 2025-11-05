@@ -19,7 +19,7 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
-import aiosqlite
+# import aiosqlite  # Removed - using database adapter
 import discord
 from discord.ext import commands
 
@@ -39,14 +39,14 @@ class LastSessionCog(commands.Cog):
     # PHASE 1: CORE INFRASTRUCTURE - Database & Session Fetching
     # ═══════════════════════════════════════════════════════
 
-    async def _get_latest_session_date(self, db) -> Optional[str]:
+    async def _get_latest_session_date(self) -> Optional[str]:
         """
         Get the most recent gaming session date from database.
         
         Returns the most recent date that has session data.
         Now properly sorts by BOTH date AND time to get the actual last session.
         """
-        async with db.execute(
+        result = await self.bot.db_adapter.fetch_one(
             """
             SELECT SUBSTR(s.round_date, 1, 10) as date
             FROM rounds s
@@ -58,11 +58,10 @@ class LastSessionCog(commands.Cog):
             ORDER BY s.round_date DESC, s.round_time DESC
             LIMIT 1
             """
-        ) as cursor:
-            result = await cursor.fetchone()
-            return result[0] if result else None
+        )
+        return result[0] if result else None
 
-    async def _fetch_session_data(self, db, latest_date: str) -> Tuple[Optional[List], Optional[List], Optional[str], int]:
+    async def _fetch_session_data(self, latest_date: str) -> Tuple[Optional[List], Optional[List], Optional[str], int]:
         """
         Fetch all session data for the LAST gaming session.
         
@@ -73,16 +72,15 @@ class LastSessionCog(commands.Cog):
             (sessions, session_ids, session_ids_str, player_count) or (None, None, None, 0)
         """
         # Get the most recent gaming_session_id
-        async with db.execute(
+        result = await self.bot.db_adapter.fetch_one(
             """
             SELECT gaming_session_id
             FROM rounds
             WHERE gaming_session_id IS NOT NULL
             ORDER BY round_date DESC, round_time DESC
             LIMIT 1
-            """,
-        ) as cursor:
-            result = await cursor.fetchone()
+            """
+        )
         
         if not result:
             return None, None, None, 0
@@ -90,16 +88,15 @@ class LastSessionCog(commands.Cog):
         latest_gaming_session_id = result[0]
         
         # Get all rounds (sessions) for this gaming session
-        async with db.execute(
+        sessions = await self.bot.db_adapter.fetch_all(
             """
             SELECT id, map_name, round_number, actual_time
             FROM rounds
             WHERE gaming_session_id = ?
             ORDER BY round_date, round_time
             """,
-            (latest_gaming_session_id,),
-        ) as cursor:
-            sessions = await cursor.fetchall()
+            (latest_gaming_session_id,)
+        )
         
         if not sessions:
             return None, None, None, 0
@@ -114,12 +111,12 @@ class LastSessionCog(commands.Cog):
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
         """
-        async with db.execute(query, session_ids) as cursor:
-            player_count = (await cursor.fetchone())[0]
+        player_count_result = await self.bot.db_adapter.fetch_one(query, tuple(session_ids))
+        player_count = player_count_result[0] if player_count_result else 0
 
         return sessions, session_ids, session_ids_str, player_count
 
-    async def _get_hardcoded_teams(self, db, session_ids: List[int]) -> Optional[Dict]:
+    async def _get_hardcoded_teams(self, session_ids: List[int]) -> Optional[Dict]:
         """
         Get hardcoded team assignments from session_teams table
         
@@ -136,31 +133,30 @@ class LastSessionCog(commands.Cog):
             
             # Get the date range for these session_ids
             placeholders = ','.join('?' * len(session_ids))
-            async with db.execute(
+            dates_result = await self.bot.db_adapter.fetch_all(
                 f"""
                 SELECT DISTINCT SUBSTR(round_date, 1, 10) as date
                 FROM rounds
                 WHERE id IN ({placeholders})
                 """,
-                session_ids
-            ) as cursor:
-                dates = [row[0] for row in await cursor.fetchall()]
+                tuple(session_ids)
+            )
+            dates = [row[0] for row in dates_result]
             
             if not dates:
                 return None
             
             # Query session_teams for these dates
             date_placeholders = ','.join('?' * len(dates))
-            async with db.execute(
+            rows = await self.bot.db_adapter.fetch_all(
                 f"""
                 SELECT team_name, player_guids, player_names
                 FROM session_teams
                 WHERE session_start_date IN ({date_placeholders}) AND map_name = 'ALL'
                 ORDER BY team_name
                 """,
-                dates,
-            ) as cursor:
-                rows = await cursor.fetchall()
+                tuple(dates)
+            )
 
             if not rows:
                 return None
@@ -179,25 +175,24 @@ class LastSessionCog(commands.Cog):
             logger.debug(f"No hardcoded teams found: {e}")
             return None
 
-    async def _ensure_player_name_alias(self, db):
+    async def _ensure_player_name_alias(self):
         """Create TEMP VIEW alias for player_name if needed"""
         try:
             # Check if clean_name exists but player_name doesn't
-            async with db.execute("PRAGMA table_info(player_comprehensive_stats)") as cursor:
-                columns = await cursor.fetchall()
-                col_names = [col[1] for col in columns]
-                
-                if "clean_name" in col_names and "player_name" not in col_names:
-                    await db.execute("""
-                        CREATE TEMP VIEW IF NOT EXISTS player_name_alias AS
-                        SELECT *, clean_name as player_name
-                        FROM player_comprehensive_stats
-                    """)
-                    logger.debug("✅ Created player_name alias for clean_name")
+            columns = await self.bot.db_adapter.fetch_all("PRAGMA table_info(player_comprehensive_stats)")
+            col_names = [col[1] for col in columns]
+            
+            if "clean_name" in col_names and "player_name" not in col_names:
+                await self.bot.db_adapter.execute("""
+                    CREATE TEMP VIEW IF NOT EXISTS player_name_alias AS
+                    SELECT *, clean_name as player_name
+                    FROM player_comprehensive_stats
+                """)
+                logger.debug("✅ Created player_name alias for clean_name")
         except Exception as e:
             logger.debug(f"player_name alias setup: {e}")
 
-    async def _enable_sql_diag(self, db):
+    async def _enable_sql_diag(self):
         """Enable lightweight SQL diagnostics for debugging"""
         # This is a placeholder for future diagnostic features
         pass
@@ -211,7 +206,7 @@ class LastSessionCog(commands.Cog):
     # PHASE 2: VIEW MODE HANDLERS - Specialized views
     # ═══════════════════════════════════════════════════════
 
-    async def _show_objectives_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
+    async def _show_objectives_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show objectives & support stats only"""
         query = f"""
             SELECT clean_name, xp, kill_assists, objectives_stolen, objectives_returned,
@@ -222,8 +217,7 @@ class LastSessionCog(commands.Cog):
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
         """
-        async with db.execute(query, session_ids) as cursor:
-            awards_rows = await cursor.fetchall()
+        awards_rows = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
         if not awards_rows:
             await ctx.send("❌ No objective/support data available for latest session")
@@ -236,8 +230,7 @@ class LastSessionCog(commands.Cog):
             WHERE round_id IN ({session_ids_str})
             GROUP BY clean_name
         """
-        async with db.execute(rev_query, session_ids) as cursor:
-            rev_rows = await cursor.fetchall()
+        rev_rows = await self.bot.db_adapter.fetch_all(rev_query, tuple(session_ids))
         revives_map = {r[0]: (r[1] or 0) for r in rev_rows}
 
         # Aggregate per-player across rounds
@@ -310,7 +303,7 @@ class LastSessionCog(commands.Cog):
         embed.set_footer(text=f"Round: {latest_date} • Use !last_round for full report")
         await ctx.send(embed=embed)
 
-    async def _show_combat_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
+    async def _show_combat_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show combat-focused stats only"""
         query = f"""
             SELECT p.player_name,
@@ -330,8 +323,7 @@ class LastSessionCog(commands.Cog):
             GROUP BY p.player_name
             ORDER BY kills DESC
         """
-        async with db.execute(query, session_ids) as cursor:
-            combat_rows = await cursor.fetchall()
+        combat_rows = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
         if not combat_rows:
             await ctx.send("❌ No combat data available for latest session")
@@ -364,7 +356,7 @@ class LastSessionCog(commands.Cog):
         embed.set_footer(text=f"Round: {latest_date} • Use !last_round for full report")
         await ctx.send(embed=embed)
 
-    async def _show_weapons_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
+    async def _show_weapons_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show weapon mastery stats only"""
         query = f"""
             SELECT p.player_name, w.weapon_name,
@@ -381,8 +373,7 @@ class LastSessionCog(commands.Cog):
             HAVING weapon_kills > 0
             ORDER BY p.player_name, weapon_kills DESC
         """
-        async with db.execute(query, session_ids) as cursor:
-            pw_rows = await cursor.fetchall()
+        pw_rows = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
         if not pw_rows:
             await ctx.send("❌ No weapon data available for latest session")
@@ -414,7 +405,7 @@ class LastSessionCog(commands.Cog):
         embed.set_footer(text=f"Round: {latest_date} • Use !last_round for full report")
         await ctx.send(embed=embed)
 
-    async def _show_support_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
+    async def _show_support_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show support activity stats only"""
         query = f"""
             SELECT p.player_name,
@@ -427,8 +418,7 @@ class LastSessionCog(commands.Cog):
             GROUP BY p.player_name
             ORDER BY revives_given DESC
         """
-        async with db.execute(query, session_ids) as cursor:
-            sup_rows = await cursor.fetchall()
+        sup_rows = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
         if not sup_rows:
             await ctx.send("❌ No support data available for latest session")
@@ -449,7 +439,7 @@ class LastSessionCog(commands.Cog):
         embed.set_footer(text=f"Round: {latest_date}")
         await ctx.send(embed=embed)
 
-    async def _show_sprees_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
+    async def _show_sprees_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show killing sprees & multikills only"""
         query = f"""
             SELECT p.player_name,
@@ -465,8 +455,7 @@ class LastSessionCog(commands.Cog):
             GROUP BY p.player_name
             ORDER BY best_spree DESC, megas DESC
         """
-        async with db.execute(query, session_ids) as cursor:
-            spree_rows = await cursor.fetchall()
+        spree_rows = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
         if not spree_rows:
             await ctx.send("❌ No spree data available for latest session")
@@ -489,7 +478,7 @@ class LastSessionCog(commands.Cog):
         embed.set_footer(text=f"Round: {latest_date}")
         await ctx.send(embed=embed)
 
-    async def _show_top_view(self, ctx, db, latest_date: str, session_ids: List, session_ids_str: str, player_count: int, total_maps: int):
+    async def _show_top_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int, total_maps: int):
         """Show all players ranked by kills"""
         query = f"""
             SELECT p.player_name,
@@ -509,8 +498,7 @@ class LastSessionCog(commands.Cog):
             GROUP BY p.player_name
             ORDER BY kills DESC
         """
-        async with db.execute(query, session_ids) as cursor:
-            top_players = await cursor.fetchall()
+        top_players = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
         embed = discord.Embed(
             title=f"🏆 All Players - {latest_date}",
@@ -553,7 +541,7 @@ class LastSessionCog(commands.Cog):
         embed.set_footer(text="💡 Use !last_round for full details")
         await ctx.send(embed=embed)
 
-    async def _show_maps_view(self, ctx, db, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
+    async def _show_maps_view(self, ctx, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
         """Show popular stats per map (map summaries only)"""
         
         # Group sessions by map
@@ -598,8 +586,7 @@ class LastSessionCog(commands.Cog):
                 ORDER BY kills DESC
             """
             
-            async with db.execute(query, map_session_ids) as cursor:
-                players = await cursor.fetchall()
+            players = await self.bot.db_adapter.fetch_all(query, tuple(map_session_ids))
             
             if not players:
                 continue
@@ -668,7 +655,7 @@ class LastSessionCog(commands.Cog):
             await ctx.send(embed=embed)
             await asyncio.sleep(3)  # 3 second delay between maps
 
-    async def _show_maps_full_view(self, ctx, db, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
+    async def _show_maps_full_view(self, ctx, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
         """Show round-by-round breakdown for each map"""
         
         # Group sessions by map and round
@@ -688,20 +675,20 @@ class LastSessionCog(commands.Cog):
             
             # ===== ROUND 1 =====
             if rounds['round1']:
-                await self._send_round_stats(ctx, db, map_name, "Round 1", rounds['round1'], latest_date)
+                await self._send_round_stats(ctx, map_name, "Round 1", rounds['round1'], latest_date)
                 await asyncio.sleep(3)
             
             # ===== ROUND 2 =====
             if rounds['round2']:
-                await self._send_round_stats(ctx, db, map_name, "Round 2", rounds['round2'], latest_date)
+                await self._send_round_stats(ctx, map_name, "Round 2", rounds['round2'], latest_date)
                 await asyncio.sleep(3)
             
             # ===== MAP SUMMARY (both rounds combined) =====
             if rounds['all']:
-                await self._send_round_stats(ctx, db, map_name, "Map Summary", rounds['all'], latest_date)
+                await self._send_round_stats(ctx, map_name, "Map Summary", rounds['all'], latest_date)
                 await asyncio.sleep(3)
 
-    async def _send_round_stats(self, ctx, db, map_name: str, round_label: str, round_session_ids: List, latest_date: str):
+    async def _send_round_stats(self, ctx, map_name: str, round_label: str, round_session_ids: List, latest_date: str):
         """Helper to send stats for a single round or map summary"""
         
         round_ids_str = ','.join('?' * len(round_session_ids))
@@ -737,8 +724,7 @@ class LastSessionCog(commands.Cog):
             ORDER BY kills DESC
         """
         
-        async with db.execute(query, round_session_ids) as cursor:
-            players = await cursor.fetchall()
+        players = await self.bot.db_adapter.fetch_all(query, tuple(round_session_ids))
         
         if not players:
             return
@@ -818,7 +804,7 @@ class LastSessionCog(commands.Cog):
     # PHASE 3: DATA AGGREGATION - Heavy data processing
     # ═══════════════════════════════════════════════════════
 
-    async def _aggregate_all_player_stats(self, db, session_ids: List, session_ids_str: str):
+    async def _aggregate_all_player_stats(self, session_ids: List, session_ids_str: str):
         """
         Aggregate ALL player stats across all rounds with weighted DPM
         
@@ -854,10 +840,9 @@ class LastSessionCog(commands.Cog):
             GROUP BY p.player_guid
             ORDER BY kills DESC
         """
-        async with db.execute(query, session_ids) as cursor:
-            return await cursor.fetchall()
+        return await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
-    async def _aggregate_team_stats(self, db, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict] = None, name_to_team: Optional[Dict] = None):
+    async def _aggregate_team_stats(self, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict] = None, name_to_team: Optional[Dict] = None):
         """
         Get aggregated team statistics
         
@@ -879,8 +864,7 @@ class LastSessionCog(commands.Cog):
                 WHERE round_id IN ({session_ids_str})
                 GROUP BY team
             """
-            async with db.execute(query, session_ids) as cursor:
-                return await cursor.fetchall()
+            return await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
         
         # Get all player stats
         query = f"""
@@ -892,8 +876,7 @@ class LastSessionCog(commands.Cog):
             WHERE round_id IN ({session_ids_str})
             GROUP BY player_guid
         """
-        async with db.execute(query, session_ids) as cursor:
-            player_stats = await cursor.fetchall()
+        player_stats = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
         
         # Aggregate by actual team
         team_aggregates = {}
@@ -916,7 +899,7 @@ class LastSessionCog(commands.Cog):
         
         return result
 
-    async def _aggregate_weapon_stats(self, db, session_ids: List, session_ids_str: str):
+    async def _aggregate_weapon_stats(self, session_ids: List, session_ids_str: str):
         """Get per-player weapon mastery data"""
         query = f"""
             SELECT p.player_name,
@@ -934,10 +917,9 @@ class LastSessionCog(commands.Cog):
             HAVING weapon_kills > 0
             ORDER BY p.player_name, weapon_kills DESC
         """
-        async with db.execute(query, session_ids) as cursor:
-            return await cursor.fetchall()
+        return await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
-    async def _get_dpm_leaderboard(self, db, session_ids: List, session_ids_str: str, limit: int = 10):
+    async def _get_dpm_leaderboard(self, session_ids: List, session_ids_str: str, limit: int = 10):
         """Get DPM leaderboard with weighted calculation"""
         query = f"""
             SELECT player_name,
@@ -954,8 +936,7 @@ class LastSessionCog(commands.Cog):
             ORDER BY weighted_dpm DESC
             LIMIT ?
         """
-        async with db.execute(query, session_ids + [limit]) as cursor:
-            return await cursor.fetchall()
+        return await self.bot.db_adapter.fetch_all(query, tuple(session_ids + [limit]))
 
     async def _calculate_team_scores(self, session_ids: List[int]) -> Tuple[str, str, int, int, Optional[Dict]]:
         """
@@ -986,7 +967,7 @@ class LastSessionCog(commands.Cog):
 
         return "Team 1", "Team 2", 0, 0, None
 
-    async def _build_team_mappings(self, db, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict]):
+    async def _build_team_mappings(self, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict]):
         """
         Build team mappings from hardcoded teams or auto-detect
         
@@ -1020,8 +1001,7 @@ class LastSessionCog(commands.Cog):
                 FROM player_comprehensive_stats
                 WHERE round_id IN ({session_ids_str})
             """
-            async with db.execute(query, session_ids) as cursor:
-                player_guid_map = await cursor.fetchall()
+            player_guid_map = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
             
             # Build name -> team mapping
             name_to_team = {}
@@ -1046,8 +1026,7 @@ class LastSessionCog(commands.Cog):
                 WHERE round_id IN ({session_ids_str})
                 ORDER BY round_id, map_name, round_number
             """
-            async with db.execute(query, session_ids) as cursor:
-                all_records = await cursor.fetchall()
+            all_records = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
             
             if not all_records:
                 return "Team 1", "Team 2", [], [], {}
@@ -1146,7 +1125,7 @@ class LastSessionCog(commands.Cog):
             
             return "Team A", "Team B", team_a_players, team_b_players, name_to_team
 
-    async def _get_team_mvps(self, db, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict], team_1_name: str, team_2_name: str):
+    async def _get_team_mvps(self, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict], team_1_name: str, team_2_name: str):
         """
         Get MVP for each team with detailed stats
         
@@ -1176,8 +1155,7 @@ class LastSessionCog(commands.Cog):
                     LIMIT 1
                 """
                 params = session_ids + team_guids
-                async with db.execute(query, params) as cursor:
-                    result = await cursor.fetchone()
+                result = await self.bot.db_adapter.fetch_one(query, tuple(params))
                     
                 if result:
                     player_name, kills, guid = result
@@ -1199,8 +1177,7 @@ class LastSessionCog(commands.Cog):
                             AND player_guid IN ({team_guids_placeholders})
                     """
                     detail_params = session_ids + [player_name] + team_guids
-                    async with db.execute(detail_query, detail_params) as cursor:
-                        detail_result = await cursor.fetchone()
+                    detail_result = await self.bot.db_adapter.fetch_one(detail_query, tuple(detail_params))
                         
                     if detail_result:
                         mvp_stats = (player_name, kills, detail_result[0], detail_result[1], detail_result[2], detail_result[3])
@@ -1743,8 +1720,7 @@ class LastSessionCog(commands.Cog):
                 ORDER BY kills DESC
                 LIMIT 10
             """
-            async with db.execute(query, session_ids) as cursor:
-                top_players = await cursor.fetchall()
+            top_players = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
             if not top_players:
                 return None
@@ -1889,8 +1865,7 @@ class LastSessionCog(commands.Cog):
                 ORDER BY dmg_given DESC
                 LIMIT 10
             """
-            async with db.execute(query, session_ids) as cursor:
-                efficiency_players = await cursor.fetchall()
+            efficiency_players = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
 
             if not efficiency_players:
                 return None
@@ -2026,236 +2001,233 @@ class LastSessionCog(commands.Cog):
             except Exception:
                 pass
 
-            async with aiosqlite.connect(self.bot.db_path) as db:
-                # Setup database aliases and diagnostics
-                try:
-                    await self._ensure_player_name_alias(db)
-                    await self._enable_sql_diag(db)
-                except Exception:
-                    pass
+            # Setup database aliases and diagnostics
+            try:
+                await self._ensure_player_name_alias()
+                await self._enable_sql_diag()
+            except Exception:
+                pass
 
-                # Phase 1: Get session data
-                latest_date = await self._get_latest_session_date(db)
-                if not latest_date:
-                    await ctx.send("❌ No rounds found in database")
-                    return
+            # Phase 1: Get session data
+            latest_date = await self._get_latest_session_date()
+            if not latest_date:
+                await ctx.send("❌ No rounds found in database")
+                return
 
-                sessions, session_ids, session_ids_str, player_count = await self._fetch_session_data(
-                    db, latest_date
+            sessions, session_ids, session_ids_str, player_count = await self._fetch_session_data(
+                latest_date
+            )
+            if not sessions:
+                await ctx.send("❌ No rounds found for latest date")
+                return
+
+            # Calculate total maps for top view
+            total_maps = len(sessions) // 2
+
+            # Route to appropriate view based on subcommand
+            if subcommand and subcommand.lower() in ("obj", "objectives"):
+                await self._show_objectives_view(ctx, latest_date, session_ids, session_ids_str, player_count)
+                return
+
+            if subcommand and subcommand.lower() in ("combat",):
+                await self._show_combat_view(ctx, latest_date, session_ids, session_ids_str, player_count)
+                return
+
+            if subcommand and subcommand.lower() in ("weapons", "weapon", "weap"):
+                await self._show_weapons_view(ctx, latest_date, session_ids, session_ids_str, player_count)
+                return
+
+            if subcommand and subcommand.lower() in ("support",):
+                await self._show_support_view(ctx, latest_date, session_ids, session_ids_str, player_count)
+                return
+
+            if subcommand and subcommand.lower() in ("sprees", "spree"):
+                await self._show_sprees_view(ctx, latest_date, session_ids, session_ids_str, player_count)
+                return
+
+            if subcommand and subcommand.lower() in ("top", "top10"):
+                await self._show_top_view(ctx, latest_date, session_ids, session_ids_str, player_count, total_maps)
+                return
+
+            # NEW: Maps view routing
+            if subcommand and subcommand.lower() == "maps":
+                # Check for "full" subcommand
+                parts = ctx.message.content.split()
+                if len(parts) > 2 and parts[2].lower() == "full":
+                    await self._show_maps_full_view(ctx, latest_date, sessions, session_ids, session_ids_str, player_count)
+                else:
+                    await self._show_maps_view(ctx, latest_date, sessions, session_ids, session_ids_str, player_count)
+                return
+
+            # ═══════════════════════════════════════════════════════════════════════
+            # DEFAULT COMPREHENSIVE VIEW - Full session analytics
+            # ═══════════════════════════════════════════════════════════════════════
+
+            # Phase 3: Get hardcoded teams and team scores
+            hardcoded_teams = await self._get_hardcoded_teams( session_ids)
+            team_1_name, team_2_name, team_1_score, team_2_score, scoring_result = await self._calculate_team_scores(session_ids)
+
+            # Get team mappings FIRST (needed for proper team stats aggregation)
+            team_1_name_mapped, team_2_name_mapped, team_1_players_list, team_2_players_list, name_to_team = await self._build_team_mappings(
+                session_ids, session_ids_str, hardcoded_teams
+            )
+            
+            # Use mapped team names if available
+            if team_1_name_mapped and team_2_name_mapped:
+                team_1_name = team_1_name_mapped
+                team_2_name = team_2_name_mapped
+
+            # Phase 3: Aggregate all data (now with correct team mappings)
+            all_players = await self._aggregate_all_player_stats( session_ids, session_ids_str)
+            team_stats = await self._aggregate_team_stats( session_ids, session_ids_str, hardcoded_teams, name_to_team)
+            player_weapons = await self._aggregate_weapon_stats( session_ids, session_ids_str)
+            dpm_leaders = await self._get_dpm_leaderboard( session_ids, session_ids_str, limit=10)
+            
+            team_1_mvp_stats, team_2_mvp_stats = await self._get_team_mvps(
+                session_ids, session_ids_str, hardcoded_teams, team_1_name, team_2_name
+            )
+
+            # Get player revives for weapon mastery embed
+            query = f"""
+                SELECT player_name, SUM(revives_given) as total_revives
+                FROM player_comprehensive_stats
+                WHERE round_id IN ({session_ids_str})
+                GROUP BY player_guid
+            """
+            player_revives_raw = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
+
+            # Get chaos awards data
+            query = f"""
+                SELECT player_name,
+                    SUM(team_kills) as teamkills,
+                    SUM(self_kills) as selfkills,
+                    SUM(kill_assists) as steals,
+                    SUM(w.shots) as bullets,
+                    SUM(p.kills) as kills,
+                    SUM(p.deaths) as deaths,
+                    SUM(p.damage_given) as dmg_given,
+                    SUM(p.damage_received) as dmg_received,
+                    SUM(p.constructions) as constructions,
+                    SUM(p.tank_meatshield) as tank,
+                    SUM(p.useless_kills) as useless,
+                    MAX(p.death_spree_worst) as worst_spree,
+                    SUM(p.time_played_seconds) as play_time
+                FROM player_comprehensive_stats p
+                LEFT JOIN (
+                    SELECT round_id, player_guid, SUM(shots) as shots
+                    FROM weapon_comprehensive_stats
+                    WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
+                    GROUP BY round_id, player_guid
+                ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
+                WHERE p.round_id IN ({session_ids_str})
+                GROUP BY p.player_guid
+            """
+            chaos_awards_data = await self.bot.db_adapter.fetch_all(query, tuple(session_ids))
+
+            # Calculate maps info
+            rounds_played = len(sessions)
+            total_rounds = rounds_played
+            unique_maps = len(set(s[1] for s in sessions))
+            
+            # Build maps played string
+            map_play_counts = {}
+            for round_id, map_name, round_num, actual_time in sessions:
+                if round_num == 2:
+                    map_play_counts[map_name] = map_play_counts.get(map_name, 0) + 1
+            
+            maps_played = ", ".join(f"{name} (x{count})" for name, count in map_play_counts.items())
+
+            # ═══════════════════════════════════════════════════════════════════════
+            # BUILD AND SEND EMBEDS
+            # ═══════════════════════════════════════════════════════════════════════
+
+            # Embed 1: Session Overview
+            embed1 = await self._build_session_overview_embed(
+                latest_date, all_players, maps_played, rounds_played, player_count,
+                team_1_name, team_2_name, team_1_score, team_2_score, hardcoded_teams is not None,
+                scoring_result
+            )
+            await ctx.send(embed=embed1)
+            await asyncio.sleep(2)
+
+            # Embed 2: Team Analytics
+            embed2 = await self._build_team_analytics_embed(
+                latest_date, team_1_name, team_2_name, team_stats,
+                team_1_mvp_stats, team_2_mvp_stats, team_1_score, team_2_score,
+                hardcoded_teams is not None
+            )
+            await ctx.send(embed=embed2)
+            await asyncio.sleep(4)
+
+            # Embed 3: Team Composition
+            embed3 = await self._build_team_composition_embed(
+                latest_date, team_1_name, team_2_name, team_1_players_list, team_2_players_list,
+                total_rounds, total_maps, unique_maps, team_1_score, team_2_score,
+                hardcoded_teams is not None
+            )
+            await ctx.send(embed=embed3)
+            await asyncio.sleep(8)
+
+            # Embed 4: DPM Analytics
+            embed4 = await self._build_dpm_analytics_embed(latest_date, dpm_leaders)
+            await ctx.send(embed=embed4)
+            await asyncio.sleep(16)
+
+            # Embed 5: Weapon Mastery
+            if player_weapons:
+                embed5 = await self._build_weapon_mastery_embed(
+                    latest_date, player_weapons, player_revives_raw
                 )
-                if not sessions:
-                    await ctx.send("❌ No rounds found for latest date")
-                    return
-
-                # Calculate total maps for top view
-                total_maps = len(sessions) // 2
-
-                # Route to appropriate view based on subcommand
-                if subcommand and subcommand.lower() in ("obj", "objectives"):
-                    await self._show_objectives_view(ctx, db, latest_date, session_ids, session_ids_str, player_count)
-                    return
-
-                if subcommand and subcommand.lower() in ("combat",):
-                    await self._show_combat_view(ctx, db, latest_date, session_ids, session_ids_str, player_count)
-                    return
-
-                if subcommand and subcommand.lower() in ("weapons", "weapon", "weap"):
-                    await self._show_weapons_view(ctx, db, latest_date, session_ids, session_ids_str, player_count)
-                    return
-
-                if subcommand and subcommand.lower() in ("support",):
-                    await self._show_support_view(ctx, db, latest_date, session_ids, session_ids_str, player_count)
-                    return
-
-                if subcommand and subcommand.lower() in ("sprees", "spree"):
-                    await self._show_sprees_view(ctx, db, latest_date, session_ids, session_ids_str, player_count)
-                    return
-
-                if subcommand and subcommand.lower() in ("top", "top10"):
-                    await self._show_top_view(ctx, db, latest_date, session_ids, session_ids_str, player_count, total_maps)
-                    return
-
-                # NEW: Maps view routing
-                if subcommand and subcommand.lower() == "maps":
-                    # Check for "full" subcommand
-                    parts = ctx.message.content.split()
-                    if len(parts) > 2 and parts[2].lower() == "full":
-                        await self._show_maps_full_view(ctx, db, latest_date, sessions, session_ids, session_ids_str, player_count)
-                    else:
-                        await self._show_maps_view(ctx, db, latest_date, sessions, session_ids, session_ids_str, player_count)
-                    return
-
-                # ═══════════════════════════════════════════════════════════════════════
-                # DEFAULT COMPREHENSIVE VIEW - Full session analytics
-                # ═══════════════════════════════════════════════════════════════════════
-
-                # Phase 3: Get hardcoded teams and team scores
-                hardcoded_teams = await self._get_hardcoded_teams(db, session_ids)
-                team_1_name, team_2_name, team_1_score, team_2_score, scoring_result = await self._calculate_team_scores(session_ids)
-
-                # Get team mappings FIRST (needed for proper team stats aggregation)
-                team_1_name_mapped, team_2_name_mapped, team_1_players_list, team_2_players_list, name_to_team = await self._build_team_mappings(
-                    db, session_ids, session_ids_str, hardcoded_teams
-                )
-                
-                # Use mapped team names if available
-                if team_1_name_mapped and team_2_name_mapped:
-                    team_1_name = team_1_name_mapped
-                    team_2_name = team_2_name_mapped
-
-                # Phase 3: Aggregate all data (now with correct team mappings)
-                all_players = await self._aggregate_all_player_stats(db, session_ids, session_ids_str)
-                team_stats = await self._aggregate_team_stats(db, session_ids, session_ids_str, hardcoded_teams, name_to_team)
-                player_weapons = await self._aggregate_weapon_stats(db, session_ids, session_ids_str)
-                dpm_leaders = await self._get_dpm_leaderboard(db, session_ids, session_ids_str, limit=10)
-                
-                team_1_mvp_stats, team_2_mvp_stats = await self._get_team_mvps(
-                    db, session_ids, session_ids_str, hardcoded_teams, team_1_name, team_2_name
-                )
-
-                # Get player revives for weapon mastery embed
-                query = f"""
-                    SELECT player_name, SUM(revives_given) as total_revives
-                    FROM player_comprehensive_stats
-                    WHERE round_id IN ({session_ids_str})
-                    GROUP BY player_guid
-                """
-                async with db.execute(query, session_ids) as cursor:
-                    player_revives_raw = await cursor.fetchall()
-
-                # Get chaos awards data
-                query = f"""
-                    SELECT player_name,
-                        SUM(team_kills) as teamkills,
-                        SUM(self_kills) as selfkills,
-                        SUM(kill_assists) as steals,
-                        SUM(w.shots) as bullets,
-                        SUM(p.kills) as kills,
-                        SUM(p.deaths) as deaths,
-                        SUM(p.damage_given) as dmg_given,
-                        SUM(p.damage_received) as dmg_received,
-                        SUM(p.constructions) as constructions,
-                        SUM(p.tank_meatshield) as tank,
-                        SUM(p.useless_kills) as useless,
-                        MAX(p.death_spree_worst) as worst_spree,
-                        SUM(p.time_played_seconds) as play_time
-                    FROM player_comprehensive_stats p
-                    LEFT JOIN (
-                        SELECT round_id, player_guid, SUM(shots) as shots
-                        FROM weapon_comprehensive_stats
-                        WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
-                        GROUP BY round_id, player_guid
-                    ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
-                    WHERE p.round_id IN ({session_ids_str})
-                    GROUP BY p.player_guid
-                """
-                async with db.execute(query, session_ids) as cursor:
-                    chaos_awards_data = await cursor.fetchall()
-
-                # Calculate maps info
-                rounds_played = len(sessions)
-                total_rounds = rounds_played
-                unique_maps = len(set(s[1] for s in sessions))
-                
-                # Build maps played string
-                map_play_counts = {}
-                for round_id, map_name, round_num, actual_time in sessions:
-                    if round_num == 2:
-                        map_play_counts[map_name] = map_play_counts.get(map_name, 0) + 1
-                
-                maps_played = ", ".join(f"{name} (x{count})" for name, count in map_play_counts.items())
-
-                # ═══════════════════════════════════════════════════════════════════════
-                # BUILD AND SEND EMBEDS
-                # ═══════════════════════════════════════════════════════════════════════
-
-                # Embed 1: Session Overview
-                embed1 = await self._build_session_overview_embed(
-                    latest_date, all_players, maps_played, rounds_played, player_count,
-                    team_1_name, team_2_name, team_1_score, team_2_score, hardcoded_teams is not None,
-                    scoring_result
-                )
-                await ctx.send(embed=embed1)
+                await ctx.send(embed=embed5)
                 await asyncio.sleep(2)
 
-                # Embed 2: Team Analytics
-                embed2 = await self._build_team_analytics_embed(
-                    latest_date, team_1_name, team_2_name, team_stats,
-                    team_1_mvp_stats, team_2_mvp_stats, team_1_score, team_2_score,
-                    hardcoded_teams is not None
+            # Embed 6: Special Awards
+            if chaos_awards_data:
+                embed6 = await self._build_special_awards_embed(chaos_awards_data)
+                await ctx.send(embed=embed6)
+                await asyncio.sleep(2)
+
+            # ═══════════════════════════════════════════════════════════════════════
+            # GENERATE AND SEND GRAPHS (if not subcommand-specific)
+            # ═══════════════════════════════════════════════════════════════════════
+
+            if not subcommand or subcommand.lower() in ("full", "graphs"):
+                # Graph 1: Performance Analytics (6-panel)
+                buf1 = await self._generate_performance_graphs(
+                    latest_date, session_ids, session_ids_str
                 )
-                await ctx.send(embed=embed2)
-                await asyncio.sleep(4)
-
-                # Embed 3: Team Composition
-                embed3 = await self._build_team_composition_embed(
-                    latest_date, team_1_name, team_2_name, team_1_players_list, team_2_players_list,
-                    total_rounds, total_maps, unique_maps, team_1_score, team_2_score,
-                    hardcoded_teams is not None
-                )
-                await ctx.send(embed=embed3)
-                await asyncio.sleep(8)
-
-                # Embed 4: DPM Analytics
-                embed4 = await self._build_dpm_analytics_embed(latest_date, dpm_leaders)
-                await ctx.send(embed=embed4)
-                await asyncio.sleep(16)
-
-                # Embed 5: Weapon Mastery
-                if player_weapons:
-                    embed5 = await self._build_weapon_mastery_embed(
-                        latest_date, player_weapons, player_revives_raw
-                    )
-                    await ctx.send(embed=embed5)
+                if buf1:
+                    file1 = discord.File(buf1, filename="performance_analytics.png")
+                    await ctx.send("📊 **Visual Performance Analytics**", file=file1)
                     await asyncio.sleep(2)
 
-                # Embed 6: Special Awards
-                if chaos_awards_data:
-                    embed6 = await self._build_special_awards_embed(chaos_awards_data)
-                    await ctx.send(embed=embed6)
+                # Graph 2: Combat Efficiency (4-panel)
+                buf2 = await self._generate_combat_efficiency_graphs(
+                    latest_date, session_ids, session_ids_str
+                )
+                if buf2:
+                    file2 = discord.File(buf2, filename="combat_efficiency.png")
+                    await ctx.send("📊 **Combat Efficiency & Bullets Analysis**", file=file2)
                     await asyncio.sleep(2)
 
-                # ═══════════════════════════════════════════════════════════════════════
-                # GENERATE AND SEND GRAPHS (if not subcommand-specific)
-                # ═══════════════════════════════════════════════════════════════════════
-
-                if not subcommand or subcommand.lower() in ("full", "graphs"):
-                    # Graph 1: Performance Analytics (6-panel)
-                    buf1 = await self._generate_performance_graphs(
-                        latest_date, session_ids, session_ids_str, db
-                    )
-                    if buf1:
-                        file1 = discord.File(buf1, filename="performance_analytics.png")
-                        await ctx.send("📊 **Visual Performance Analytics**", file=file1)
-                        await asyncio.sleep(2)
-
-                    # Graph 2: Combat Efficiency (4-panel)
-                    buf2 = await self._generate_combat_efficiency_graphs(
-                        latest_date, session_ids, session_ids_str, db
-                    )
-                    if buf2:
-                        file2 = discord.File(buf2, filename="combat_efficiency.png")
-                        await ctx.send("📊 **Combat Efficiency & Bullets Analysis**", file=file2)
-                        await asyncio.sleep(2)
-
-                # Show helpful message about additional options
-                if not subcommand:
-                    help_embed = discord.Embed(
-                        title="💡 Want More Details?",
-                        description=(
-                            "**Available Options:**\n"
-                            "`!last_session graphs` - Visual analytics with performance graphs\n"
-                            "`!last_session full` - Everything including advanced combat stats\n"
-                            "`!last_session top` - Quick top 10 players view\n"
-                            "`!last_session combat` - Combat stats only\n"
-                            "`!last_session weapons` - Weapon mastery breakdown\n"
-                            "`!last_session obj` - Objectives & support\n"
-                            "`!last_session support` - Support activity\n"
-                            "`!last_session sprees` - Killing sprees & multikills"
-                        ),
-                        color=0x5865F2,
-                    )
-                    await ctx.send(embed=help_embed)
+            # Show helpful message about additional options
+            if not subcommand:
+                help_embed = discord.Embed(
+                    title="💡 Want More Details?",
+                    description=(
+                        "**Available Options:**\n"
+                        "`!last_session graphs` - Visual analytics with performance graphs\n"
+                        "`!last_session full` - Everything including advanced combat stats\n"
+                        "`!last_session top` - Quick top 10 players view\n"
+                        "`!last_session combat` - Combat stats only\n"
+                        "`!last_session weapons` - Weapon mastery breakdown\n"
+                        "`!last_session obj` - Objectives & support\n"
+                        "`!last_session support` - Support activity\n"
+                        "`!last_session sprees` - Killing sprees & multikills"
+                    ),
+                    color=0x5865F2,
+                )
+                await ctx.send(embed=help_embed)
 
         except Exception as e:
             logger.error(f"Error in last_session command: {e}", exc_info=True)
@@ -2335,3 +2307,5 @@ async def setup(bot):
     """Load the Last Round Cog"""
     await bot.add_cog(LastSessionCog(bot))
     logger.info("🎮 LastSessionCog loaded - !last_session with comprehensive analytics (26 helper methods)")
+
+

@@ -31,7 +31,6 @@ from datetime import datetime
 from typing import Optional
 
 import discord
-import aiosqlite
 from discord.ext import commands
 
 logger = logging.getLogger(__name__)
@@ -50,24 +49,27 @@ class LinkCog(commands.Cog, name="Link"):
         self.bot = bot
         logger.info("🔗 LinkCog loaded")
 
-    async def _ensure_player_name_alias(self, db: "aiosqlite.Connection") -> None:
+    async def _ensure_player_name_alias(self, db_adapter) -> None:
         """Create TEMP VIEW aliasing for player_name column compatibility."""
         try:
-            cursor = await db.execute("PRAGMA table_info(player_comprehensive_stats)")
-            columns = await cursor.fetchall()
-            column_names = [col[1] for col in columns]
-
-            if "player_name" not in column_names:
-                await db.execute("""
-                    CREATE TEMP VIEW IF NOT EXISTS player_comprehensive_stats_view AS
-                    SELECT *, name AS player_name FROM player_comprehensive_stats
-                """)
-                logger.debug("Created temporary player_name alias view")
+            # Check if player_name column exists using adapter
+            result = await db_adapter.fetch_all("SELECT * FROM player_comprehensive_stats LIMIT 1")
+            if result and hasattr(result[0], 'player_name'):
+                # Column exists, no alias needed
+                return
+            elif result and hasattr(result[0], 'name'):
+                # Create alias view if needed (SQLite only)
+                if self.bot.config.database_type == 'sqlite':
+                    await db_adapter.execute("""
+                        CREATE TEMP VIEW IF NOT EXISTS player_comprehensive_stats_view AS
+                        SELECT *, name AS player_name FROM player_comprehensive_stats
+                    """)
+                    logger.debug("Created temporary player_name alias view")
         except Exception as e:
             logger.warning(f"Could not create player_name alias: {e}")
 
     @commands.command(name="list_players", aliases=["players", "lp"])
-    async def list_players(self, ctx, filter_type: str = None, page: int = 1):
+    async def list_players(self, ctx, filter_type: Optional[str] = None, page: int = 1):
         """
         👥 List all players with pagination.
 
@@ -94,42 +96,47 @@ class LinkCog(commands.Cog, name="Link"):
             - Navigation footer with page numbers
         """
         try:
-            async with aiosqlite.connect(self.bot.db_path) as db:
-                # Base query to get all players with their link status
-                base_query = """
-                    SELECT 
-                        p.player_guid,
-                        p.player_name,
-                        pl.discord_id,
-                        COUNT(DISTINCT p.round_date) as sessions_played,
-                        MAX(p.round_date) as last_played,
-                        SUM(p.kills) as total_kills,
-                        SUM(p.deaths) as total_deaths
-                    FROM player_comprehensive_stats p
-                    LEFT JOIN player_links pl ON p.player_guid = pl.et_guid
-                    GROUP BY p.player_guid, p.player_name, pl.discord_id
-                """
+            # Ensure player_name alias compatibility
+            await self._ensure_player_name_alias(self.bot.db_adapter)
+            
+            # Base query to get all players with their link status
+            base_query = """
+                SELECT 
+                    p.player_guid,
+                    p.player_name,
+                    pl.discord_id,
+                    COUNT(DISTINCT p.round_date) as sessions_played,
+                    MAX(p.round_date) as last_played,
+                    SUM(p.kills) as total_kills,
+                    SUM(p.deaths) as total_deaths
+                FROM player_comprehensive_stats p
+                LEFT JOIN player_links pl ON p.player_guid = pl.et_guid
+                GROUP BY p.player_guid, p.player_name, pl.discord_id
+            """
 
-                # Handle case where user passed page as first arg (e.g., !lp 2)
-                if filter_type and filter_type.isdigit():
-                    page = int(filter_type)
-                    filter_type = None
+            # Handle case where user passed page as first arg (e.g., !lp 2)
+            if filter_type and filter_type.isdigit():
+                page = int(filter_type)
+                filter_type = None
 
-                # Apply filter
-                filter_clause = ""
-                if filter_type:
-                    filter_lower = filter_type.lower()
-                    if filter_lower in ["linked", "link"]:
-                        filter_clause = " HAVING pl.discord_id IS NOT NULL"
-                    elif filter_lower in ["unlinked", "nolink"]:
-                        filter_clause = " HAVING pl.discord_id IS NULL"
-                    elif filter_lower in ["active", "recent"]:
+            # Apply filter
+            filter_clause = ""
+            if filter_type:
+                filter_lower = filter_type.lower()
+                if filter_lower in ["linked", "link"]:
+                    filter_clause = " HAVING pl.discord_id IS NOT NULL"
+                elif filter_lower in ["unlinked", "nolink"]:
+                    filter_clause = " HAVING pl.discord_id IS NULL"
+                elif filter_lower in ["active", "recent"]:
+                    # Use database-compatible date arithmetic
+                    if self.bot.config.database_type == 'sqlite':
                         filter_clause = " HAVING MAX(p.round_date) >= date('now', '-30 days')"
+                    else:
+                        filter_clause = " HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'"
 
-                final_query = base_query + filter_clause + " ORDER BY sessions_played DESC, total_kills DESC"
-
-                async with db.execute(final_query) as cursor:
-                    players = await cursor.fetchall()
+            final_query = base_query + filter_clause + " ORDER BY sessions_played DESC, total_kills DESC"
+            
+            players = await self.bot.db_adapter.fetch_all(final_query)
 
             if not players:
                 await ctx.send(
@@ -264,156 +271,152 @@ class LinkCog(commands.Cog, name="Link"):
             - Link status (linked/unlinked)
         """
         try:
-            async with aiosqlite.connect(self.bot.db_path) as db:
-                # Search in player_aliases (uses 'guid' and 'alias' columns)
-                async with db.execute(
-                    """
-                    SELECT DISTINCT pa.guid
-                    FROM player_aliases pa
-                    WHERE LOWER(pa.alias) LIKE LOWER(?)
-                    ORDER BY pa.last_seen DESC
-                    LIMIT 10
-                """,
-                    (f"%{search_term}%",),
-                ) as cursor:
-                    alias_guids = [row[0] for row in await cursor.fetchall()]
+            # Search in player_aliases (uses 'guid' and 'alias' columns)
+            alias_guids = await self.bot.db_adapter.fetch_all(
+                """
+                SELECT DISTINCT pa.guid
+                FROM player_aliases pa
+                WHERE LOWER(pa.alias) LIKE LOWER(?)
+                ORDER BY pa.last_seen DESC
+                LIMIT 10
+            """,
+                (f"%{search_term}%",),
+            )
+            alias_guids = [row[0] for row in alias_guids]
 
-                # Also search main stats table
-                async with db.execute(
+            # Also search main stats table
+            stats_guids = await self.bot.db_adapter.fetch_all(
+                """
+                SELECT DISTINCT player_guid
+                FROM player_comprehensive_stats
+                WHERE LOWER(player_name) LIKE LOWER(?)
+                ORDER BY round_date DESC
+                LIMIT 10
+            """,
+                (f"%{search_term}%",),
+            )
+            stats_guids = [row[0] for row in stats_guids]
+
+            # Combine and deduplicate
+            guid_set = set(alias_guids + stats_guids)
+
+            if not guid_set:
+                await ctx.send(
+                    f"❌ No players found matching **'{search_term}'**\n\n"
+                    f"💡 **Tips:**\n"
+                    f"   • Try a shorter/partial name\n"
+                    f"   • Use `!list_players` to browse all players\n"
+                    f"   • Check spelling - search is case-insensitive"
+                )
+                return
+
+            # Limit to 5 results for cleaner display
+            guid_list = list(guid_set)[:5]
+
+            # Build detailed results
+            embed = discord.Embed(
+                title=f"🔍 Player Search Results: '{search_term}'",
+                description=f"Found **{len(guid_set)}** matching players (showing top {len(guid_list)})",
+                color=0x3498DB,
+            )
+
+            for guid in guid_list:
+                # Get stats
+                stats = await self.bot.db_adapter.fetch_one(
                     """
-                    SELECT DISTINCT player_guid
+                    SELECT 
+                        SUM(kills) as total_kills,
+                        SUM(deaths) as total_deaths,
+                        COUNT(DISTINCT round_id) as games,
+                        MAX(round_date) as last_seen
                     FROM player_comprehensive_stats
-                    WHERE LOWER(player_name) LIKE LOWER(?)
-                    ORDER BY round_date DESC
-                    LIMIT 10
+                    WHERE player_guid = ?
                 """,
-                    (f"%{search_term}%",),
-                ) as cursor:
-                    stats_guids = [row[0] for row in await cursor.fetchall()]
-
-                # Combine and deduplicate
-                guid_set = set(alias_guids + stats_guids)
-
-                if not guid_set:
-                    await ctx.send(
-                        f"❌ No players found matching **'{search_term}'**\n\n"
-                        f"💡 **Tips:**\n"
-                        f"   • Try a shorter/partial name\n"
-                        f"   • Use `!list_players` to browse all players\n"
-                        f"   • Check spelling - search is case-insensitive"
-                    )
-                    return
-
-                # Limit to 5 results for cleaner display
-                guid_list = list(guid_set)[:5]
-
-                # Build detailed results
-                embed = discord.Embed(
-                    title=f"🔍 Player Search Results: '{search_term}'",
-                    description=f"Found **{len(guid_set)}** matching players (showing top {len(guid_list)})",
-                    color=0x3498DB,
+                    (guid,),
                 )
 
-                for guid in guid_list:
-                    # Get stats
-                    async with db.execute(
-                        """
-                        SELECT 
-                            SUM(kills) as total_kills,
-                            SUM(deaths) as total_deaths,
-                            COUNT(DISTINCT round_id) as games,
-                            MAX(round_date) as last_seen
-                        FROM player_comprehensive_stats
-                        WHERE player_guid = ?
-                    """,
-                        (guid,),
-                    ) as cursor:
-                        stats = await cursor.fetchone()
+                # Get top 3 aliases
+                aliases = await self.bot.db_adapter.fetch_all(
+                    """
+                    SELECT alias, last_seen, times_seen
+                    FROM player_aliases
+                    WHERE guid = ?
+                    ORDER BY last_seen DESC, times_seen DESC
+                    LIMIT 3
+                """,
+                    (guid,),
+                )
 
-                    # Get top 3 aliases
-                    async with db.execute(
-                        """
-                        SELECT alias, last_seen, times_seen
-                        FROM player_aliases
-                        WHERE guid = ?
-                        ORDER BY last_seen DESC, times_seen DESC
-                        LIMIT 3
-                    """,
-                        (guid,),
-                    ) as cursor:
-                        aliases = await cursor.fetchall()
+                # Get link status
+                link_row = await self.bot.db_adapter.fetch_one(
+                    """
+                    SELECT discord_username
+                    FROM player_links
+                    WHERE et_guid = ?
+                """,
+                    (guid,),
+                )
 
-                    # Get link status
-                    async with db.execute(
-                        """
-                        SELECT discord_username
-                        FROM player_links
-                        WHERE et_guid = ?
-                    """,
-                        (guid,),
-                    ) as cursor:
-                        link_row = await cursor.fetchone()
+                # Format data
+                if aliases:
+                    primary_name = aliases[0][0]
+                    alias_list = [f"**{a[0]}**" for a in aliases]
+                    alias_str = ", ".join(alias_list)
+                    if len(aliases) < 3:
+                        alias_str += " _(only known name)_" if len(aliases) == 1 else ""
+                else:
+                    primary_name = "Unknown"
+                    alias_str = "_(No aliases found)_"
 
-                    # Format data
-                    if aliases:
-                        primary_name = aliases[0][0]
-                        alias_list = [f"**{a[0]}**" for a in aliases]
-                        alias_str = ", ".join(alias_list)
-                        if len(aliases) < 3:
-                            alias_str += " _(only known name)_" if len(aliases) == 1 else ""
-                    else:
-                        primary_name = "Unknown"
-                        alias_str = "_(No aliases found)_"
+                if stats:
+                    kills, deaths, games, last_seen = stats
+                    kd = kills / deaths if deaths and deaths > 0 else (kills if kills else 0)
+                    stats_str = f"**{kills:,}** K / **{deaths:,}** D / **{kd:.2f}** K/D\n**Games:** {games:,}"
+                else:
+                    stats_str = "_(No stats found)_"
+                    last_seen = "Never"
 
-                    if stats:
-                        kills, deaths, games, last_seen = stats
-                        kd = kills / deaths if deaths and deaths > 0 else (kills if kills else 0)
-                        stats_str = f"**{kills:,}** K / **{deaths:,}** D / **{kd:.2f}** K/D\n**Games:** {games:,}"
-                    else:
-                        stats_str = "_(No stats found)_"
-                        last_seen = "Never"
+                link_status = f"🔗 **Linked** to {link_row[0]}" if link_row else "❌ **Unlinked**"
 
-                    link_status = f"🔗 **Linked** to {link_row[0]}" if link_row else "❌ **Unlinked**"
-
-                    # Calculate days ago for last_seen
-                    try:
-                        from datetime import datetime
-                        last_date = datetime.fromisoformat(
-                            last_seen.replace("Z", "+00:00") if "Z" in last_seen else last_seen
-                        )
-                        days_ago = (datetime.now() - last_date).days
-                        if days_ago == 0:
-                            last_str = "Today"
-                        elif days_ago == 1:
-                            last_str = "Yesterday"
-                        elif days_ago < 7:
-                            last_str = f"{days_ago} days ago"
-                        elif days_ago < 30:
-                            weeks = days_ago // 7
-                            last_str = f"{weeks} week{'s' if weeks > 1 else ''} ago"
-                        elif days_ago < 365:
-                            months = days_ago // 30
-                            last_str = f"{months} month{'s' if months > 1 else ''} ago"
-                        else:
-                            years = days_ago // 365
-                            last_str = f"{years} year{'s' if years > 1 else ''} ago"
-                    except Exception:
-                        last_str = last_seen
-
-                    # Add field to embed
-                    embed.add_field(
-                        name=f"🎮 {primary_name}",
-                        value=(
-                            f"**GUID:** `{guid}` _(use this for !link)_\n"
-                            f"**Known as:** {alias_str}\n"
-                            f"{stats_str}\n"
-                            f"**Last Seen:** {last_str}\n"
-                            f"**Status:** {link_status}"
-                        ),
-                        inline=False,
+                # Calculate days ago for last_seen
+                try:
+                    from datetime import datetime
+                    last_date = datetime.fromisoformat(
+                        last_seen.replace("Z", "+00:00") if "Z" in last_seen else last_seen
                     )
+                    days_ago = (datetime.now() - last_date).days
+                    if days_ago == 0:
+                        last_str = "Today"
+                    elif days_ago == 1:
+                        last_str = "Yesterday"
+                    elif days_ago < 7:
+                        last_str = f"{days_ago} days ago"
+                    elif days_ago < 30:
+                        weeks = days_ago // 7
+                        last_str = f"{weeks} week{'s' if weeks > 1 else ''} ago"
+                    elif days_ago < 365:
+                        months = days_ago // 30
+                        last_str = f"{months} month{'s' if months > 1 else ''} ago"
+                    else:
+                        years = days_ago // 365
+                        last_str = f"{years} year{'s' if years > 1 else ''} ago"
+                except Exception:
+                    last_str = last_seen
 
-                # Add footer with usage hints
+                # Add field to embed
+                embed.add_field(
+                    name=f"🎮 {primary_name}",
+                    value=(
+                        f"**GUID:** `{guid}` _(use this for !link)_\n"
+                        f"**Known as:** {alias_str}\n"
+                        f"{stats_str}\n"
+                        f"**Last Seen:** {last_str}\n"
+                        f"**Status:** {link_status}"
+                    ),
+                    inline=False,
+                )
+
+            # Add footer with usage hints
                 embed.set_footer(
                     text=(
                         f"💡 To link: !link {guid_list[0]} | "
@@ -486,37 +489,35 @@ class LinkCog(commands.Cog, name="Link"):
             discord_id = str(ctx.author.id)
 
             # Check if already linked
-            async with aiosqlite.connect(self.bot.db_path) as db:
-                async with db.execute(
-                    """
-                    SELECT et_name, et_guid FROM player_links
-                    WHERE discord_id = ?
-                """,
-                    (discord_id,),
-                ) as cursor:
-                    existing = await cursor.fetchone()
+            existing = await self.bot.db_adapter.fetch_one(
+                """
+                SELECT et_name, et_guid FROM player_links
+                WHERE discord_id = ?
+            """,
+                (discord_id,),
+            )
 
-                if existing:
-                    await ctx.send(
-                        f"⚠️ You're already linked to **{existing[0]}** (GUID: `{existing[1]}`)\n\n"
-                        f"Use `!unlink` first to change your linked account.\n"
-                        f"Use `!stats` to see your stats!"
-                    )
-                    return
+            if existing:
+                await ctx.send(
+                    f"⚠️ You're already linked to **{existing[0]}** (GUID: `{existing[1]}`)\n\n"
+                    f"Use `!unlink` first to change your linked account.\n"
+                    f"Use `!stats` to see your stats!"
+                )
+                return
 
-                # === SCENARIO 1: NO ARGUMENTS - Smart Self-Linking ===
-                if not target:
-                    await self._smart_self_link(ctx, discord_id, db)
-                    return
+            # === SCENARIO 1: NO ARGUMENTS - Smart Self-Linking ===
+            if not target:
+                await self._smart_self_link(ctx, discord_id)
+                return
 
-                # === SCENARIO 2: GUID Direct Link ===
-                # Check if it's a GUID (8 hex characters)
-                if len(target) == 8 and all(c in "0123456789ABCDEFabcdef" for c in target):
-                    await self._link_by_guid(ctx, discord_id, target.upper(), db)
-                    return
+            # === SCENARIO 2: GUID Direct Link ===
+            # Check if it's a GUID (8 hex characters)
+            if len(target) == 8 and all(c in "0123456789ABCDEFabcdef" for c in target):
+                await self._link_by_guid(ctx, discord_id, target.upper())
+                return
 
-                # === SCENARIO 3: Name Search ===
-                await self._link_by_name(ctx, discord_id, target, db)
+            # === SCENARIO 3: Name Search ===
+            await self._link_by_name(ctx, discord_id, target)
 
         except Exception as e:
             logger.error(f"Error in link command: {e}", exc_info=True)
@@ -525,11 +526,11 @@ class LinkCog(commands.Cog, name="Link"):
                 f"💡 Try: `!find_player <name>` to search for players with GUIDs"
             )
 
-    async def _smart_self_link(self, ctx, discord_id: str, db):
+    async def _smart_self_link(self, ctx, discord_id: str):
         """Smart self-linking: show top 3 unlinked GUIDs with aliases."""
         try:
             # Get top 3 unlinked players by recent activity and total stats
-            async with db.execute(
+            top_players = await self.bot.db_adapter.fetch_all(
                 """
                 SELECT 
                     player_guid,
@@ -545,8 +546,7 @@ class LinkCog(commands.Cog, name="Link"):
                 ORDER BY last_played DESC, total_kills DESC
                 LIMIT 3
             """,
-            ) as cursor:
-                top_players = await cursor.fetchall()
+            )
 
             if not top_players:
                 await ctx.send(
@@ -574,7 +574,7 @@ class LinkCog(commands.Cog, name="Link"):
             options_data = []
             for idx, (guid, last_date, kills, deaths, games) in enumerate(top_players, 1):
                 # Get top 3 aliases for this GUID
-                async with db.execute(
+                aliases = await self.bot.db_adapter.fetch_all(
                     """
                     SELECT alias, last_seen, times_seen
                     FROM player_aliases
@@ -583,8 +583,7 @@ class LinkCog(commands.Cog, name="Link"):
                     LIMIT 3
                 """,
                     (guid,),
-                ) as cursor:
-                    aliases = await cursor.fetchall()
+                )
 
                 # Format aliases
                 if aliases:
@@ -595,7 +594,7 @@ class LinkCog(commands.Cog, name="Link"):
                         alias_str += " _(only name)_"
                 else:
                     # Fallback to most recent name
-                    async with db.execute(
+                    name_row = await self.bot.db_adapter.fetch_one(
                         """
                         SELECT player_name 
                         FROM player_comprehensive_stats 
@@ -604,10 +603,9 @@ class LinkCog(commands.Cog, name="Link"):
                         LIMIT 1
                     """,
                         (guid,),
-                    ) as cursor:
-                        name_row = await cursor.fetchone()
-                        primary_name = name_row[0] if name_row else "Unknown"
-                        alias_str = primary_name
+                    )
+                    primary_name = name_row[0] if name_row else "Unknown"
+                    alias_str = primary_name
 
                 kd_ratio = kills / deaths if deaths > 0 else kills
 
@@ -658,16 +656,20 @@ class LinkCog(commands.Cog, name="Link"):
                 selected_idx = emojis.index(str(reaction.emoji))
                 selected = options_data[selected_idx]
 
-                # Link the account
-                await db.execute(
-                    """
+                # Link the account (use database-compatible datetime function)
+                if self.bot.config.database_type == 'sqlite':
+                    datetime_expr = "datetime('now')"
+                else:
+                    datetime_expr = "CURRENT_TIMESTAMP"
+                
+                await self.bot.db_adapter.execute(
+                    f"""
                     INSERT OR REPLACE INTO player_links
                     (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                    VALUES (?, ?, ?, ?, datetime('now'), 1)
+                    VALUES (?, ?, ?, ?, {datetime_expr}, 1)
                 """,
                     (discord_id, str(ctx.author), selected["guid"], selected["name"]),
                 )
-                await db.commit()
 
                 # Success!
                 await message.clear_reactions()
@@ -704,11 +706,11 @@ class LinkCog(commands.Cog, name="Link"):
             logger.error(f"Error in smart self-link: {e}", exc_info=True)
             await ctx.send(f"❌ Error during self-linking: {e}")
 
-    async def _link_by_guid(self, ctx, discord_id: str, guid: str, db):
+    async def _link_by_guid(self, ctx, discord_id: str, guid: str):
         """Direct GUID linking with confirmation."""
         try:
             # Check if GUID exists
-            async with db.execute(
+            stats = await self.bot.db_adapter.fetch_one(
                 """
                 SELECT 
                     SUM(kills) as total_kills,
@@ -719,8 +721,7 @@ class LinkCog(commands.Cog, name="Link"):
                 WHERE player_guid = ?
             """,
                 (guid,),
-            ) as cursor:
-                stats = await cursor.fetchone()
+            )
 
             if not stats or stats[0] is None:
                 await ctx.send(
@@ -733,7 +734,7 @@ class LinkCog(commands.Cog, name="Link"):
                 return
 
             # Get top 3 aliases
-            async with db.execute(
+            aliases = await self.bot.db_adapter.fetch_all(
                 """
                 SELECT alias, last_seen, times_seen
                 FROM player_aliases
@@ -742,8 +743,7 @@ class LinkCog(commands.Cog, name="Link"):
                 LIMIT 3
             """,
                 (guid,),
-            ) as cursor:
-                aliases = await cursor.fetchall()
+            )
 
             if aliases:
                 primary_name = aliases[0][0]
@@ -751,7 +751,7 @@ class LinkCog(commands.Cog, name="Link"):
                 alias_str = ", ".join(alias_list)
             else:
                 # Fallback
-                async with db.execute(
+                name_row = await self.bot.db_adapter.fetch_one(
                     """
                     SELECT player_name 
                     FROM player_comprehensive_stats 
@@ -760,10 +760,9 @@ class LinkCog(commands.Cog, name="Link"):
                     LIMIT 1
                 """,
                     (guid,),
-                ) as cursor:
-                    name_row = await cursor.fetchone()
-                    primary_name = name_row[0] if name_row else "Unknown"
-                    alias_str = primary_name
+                )
+                primary_name = name_row[0] if name_row else "Unknown"
+                alias_str = primary_name
 
             kills, deaths, games, last_seen = stats
             kd_ratio = kills / deaths if deaths > 0 else kills
@@ -813,16 +812,20 @@ class LinkCog(commands.Cog, name="Link"):
                 )
 
                 if str(reaction.emoji) == "✅":
-                    # Confirmed - link it
-                    await db.execute(
-                        """
+                    # Confirmed - link it (use database-compatible datetime function)
+                    if self.bot.config.database_type == 'sqlite':
+                        datetime_expr = "datetime('now')"
+                    else:
+                        datetime_expr = "CURRENT_TIMESTAMP"
+                    
+                    await self.bot.db_adapter.execute(
+                        f"""
                         INSERT OR REPLACE INTO player_links
                         (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                        VALUES (?, ?, ?, ?, datetime('now'), 1)
+                        VALUES (?, ?, ?, ?, {datetime_expr}, 1)
                     """,
                         (discord_id, str(ctx.author), guid, primary_name),
                     )
-                    await db.commit()
 
                     await message.clear_reactions()
                     await ctx.send(
@@ -843,11 +846,11 @@ class LinkCog(commands.Cog, name="Link"):
             logger.error(f"Error in GUID link: {e}", exc_info=True)
             await ctx.send(f"❌ Error linking by GUID: {e}")
 
-    async def _link_by_name(self, ctx, discord_id: str, player_name: str, db):
+    async def _link_by_name(self, ctx, discord_id: str, player_name: str):
         """Name search linking with fuzzy matching."""
         try:
             # Search in player_aliases first
-            async with db.execute(
+            alias_rows = await self.bot.db_adapter.fetch_all(
                 """
                 SELECT DISTINCT pa.guid
                 FROM player_aliases pa
@@ -856,11 +859,11 @@ class LinkCog(commands.Cog, name="Link"):
                 LIMIT 5
             """,
                 (f"%{player_name}%",),
-            ) as cursor:
-                alias_guids = [row[0] for row in await cursor.fetchall()]
+            )
+            alias_guids = [row[0] for row in alias_rows]
 
             # Also search main stats table
-            async with db.execute(
+            matches = await self.bot.db_adapter.fetch_all(
                 """
                 SELECT player_guid, player_name,
                        SUM(kills) as total_kills,
@@ -873,8 +876,7 @@ class LinkCog(commands.Cog, name="Link"):
                 LIMIT 5
             """,
                 (f"%{player_name}%",),
-            ) as cursor:
-                matches = await cursor.fetchall()
+            )
 
             # Combine and deduplicate
             guid_set = set(alias_guids)
@@ -896,7 +898,7 @@ class LinkCog(commands.Cog, name="Link"):
 
             if len(guid_list) == 1:
                 # Single match - link directly with confirmation
-                await self._link_by_guid(ctx, discord_id, guid_list[0], db)
+                await self._link_by_guid(ctx, discord_id, guid_list[0])
             else:
                 # Multiple matches - show options
                 embed = discord.Embed(
@@ -908,27 +910,25 @@ class LinkCog(commands.Cog, name="Link"):
                 options_data = []
                 for idx, guid in enumerate(guid_list, 1):
                     # Get stats and aliases
-                    async with db.execute(
+                    stats = await self.bot.db_adapter.fetch_one(
                         """
                         SELECT SUM(kills), SUM(deaths), COUNT(DISTINCT round_id), MAX(round_date)
                         FROM player_comprehensive_stats
                         WHERE player_guid = ?
                     """,
                         (guid,),
-                    ) as cursor:
-                        stats = await cursor.fetchone()
+                    )
 
-                    async with db.execute(
+                    alias_rows = await self.bot.db_adapter.fetch_all(
                         """
                         SELECT alias FROM player_aliases
                         WHERE guid = ?
                         ORDER BY last_seen DESC LIMIT 3
                     """,
                         (guid,),
-                    ) as cursor:
-                        alias_rows = await cursor.fetchall()
-                        name = alias_rows[0][0] if alias_rows else "Unknown"
-                        aliases_str = ", ".join([a[0] for a in alias_rows[:3]])
+                    )
+                    name = alias_rows[0][0] if alias_rows else "Unknown"
+                    aliases_str = ", ".join([a[0] for a in alias_rows[:3]])
 
                     kills, deaths, games, last_seen = stats
                     kd = kills / deaths if deaths > 0 else kills
@@ -974,15 +974,20 @@ class LinkCog(commands.Cog, name="Link"):
                     selected_idx = emojis.index(str(reaction.emoji))
                     selected = options_data[selected_idx]
 
-                    await db.execute(
-                        """
+                    # Use database-compatible datetime function
+                    if self.bot.config.database_type == 'sqlite':
+                        datetime_expr = "datetime('now')"
+                    else:
+                        datetime_expr = "CURRENT_TIMESTAMP"
+                    
+                    await self.bot.db_adapter.execute(
+                        f"""
                         INSERT OR REPLACE INTO player_links
                         (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                        VALUES (?, ?, ?, ?, datetime('now'), 1)
+                        VALUES (?, ?, ?, ?, {datetime_expr}, 1)
                     """,
                         (discord_id, str(ctx.author), selected["guid"], selected["name"]),
                     )
-                    await db.commit()
 
                     await message.clear_reactions()
                     await ctx.send(
@@ -1028,85 +1033,80 @@ class LinkCog(commands.Cog, name="Link"):
 
             target_discord_id = str(target_user.id)
 
-            async with aiosqlite.connect(self.bot.db_path) as db:
-                # Check if target already linked
-                async with db.execute(
-                    """
-                    SELECT et_name, et_guid FROM player_links
-                    WHERE discord_id = ?
-                """,
-                    (target_discord_id,),
-                ) as cursor:
-                    existing = await cursor.fetchone()
+            # Check if target already linked
+            existing = await self.bot.db_adapter.fetch_one(
+                """
+                SELECT et_name, et_guid FROM player_links
+                WHERE discord_id = ?
+            """,
+                (target_discord_id,),
+            )
 
-                if existing:
-                    await ctx.send(
-                        f"⚠️ {target_user.mention} is already linked to "
-                        f"**{existing[0]}** (GUID: `{existing[1]}`)\n\n"
-                        f"They need to `!unlink` first."
-                    )
-                    return
+            if existing:
+                await ctx.send(
+                    f"⚠️ {target_user.mention} is already linked to "
+                    f"**{existing[0]}** (GUID: `{existing[1]}`)\n\n"
+                    f"They need to `!unlink` first."
+                )
+                return
 
-                # Validate GUID exists
-                async with db.execute(
+            # Validate GUID exists
+            stats = await self.bot.db_adapter.fetch_one(
+                """
+                SELECT 
+                    SUM(kills) as total_kills,
+                    SUM(deaths) as total_deaths,
+                    COUNT(DISTINCT round_id) as games,
+                    MAX(round_date) as last_seen
+                FROM player_comprehensive_stats
+                WHERE player_guid = ?
+            """,
+                (guid,),
+            )
+
+            if not stats or stats[0] is None:
+                await ctx.send(
+                    f"❌ GUID `{guid}` not found in database.\n\n"
+                    f"💡 Use `!find_player <name>` to search for the correct GUID."
+                )
+                return
+
+            # Get top 3 aliases
+            aliases = await self.bot.db_adapter.fetch_all(
+                """
+                SELECT alias, last_seen, times_seen
+                FROM player_aliases
+                WHERE guid = ?
+                ORDER BY last_seen DESC, times_seen DESC
+                LIMIT 3
+            """,
+                (guid,),
+            )
+
+            if aliases:
+                primary_name = aliases[0][0]
+                alias_list = [a[0] for a in aliases[:3]]
+                alias_str = ", ".join(alias_list)
+            else:
+                # Fallback
+                name_row = await self.bot.db_adapter.fetch_one(
                     """
-                    SELECT 
-                        SUM(kills) as total_kills,
-                        SUM(deaths) as total_deaths,
-                        COUNT(DISTINCT round_id) as games,
-                        MAX(round_date) as last_seen
-                    FROM player_comprehensive_stats
-                    WHERE player_guid = ?
+                    SELECT player_name 
+                    FROM player_comprehensive_stats 
+                    WHERE player_guid = ? 
+                    ORDER BY round_date DESC 
+                    LIMIT 1
                 """,
                     (guid,),
-                ) as cursor:
-                    stats = await cursor.fetchone()
+                )
+                primary_name = name_row[0] if name_row else "Unknown"
+                alias_str = primary_name
 
-                if not stats or stats[0] is None:
-                    await ctx.send(
-                        f"❌ GUID `{guid}` not found in database.\n\n"
-                        f"💡 Use `!find_player <name>` to search for the correct GUID."
-                    )
-                    return
+            kills, deaths, games, last_seen = stats
+            kd_ratio = kills / deaths if deaths > 0 else kills
 
-                # Get top 3 aliases
-                async with db.execute(
-                    """
-                    SELECT alias, last_seen, times_seen
-                    FROM player_aliases
-                    WHERE guid = ?
-                    ORDER BY last_seen DESC, times_seen DESC
-                    LIMIT 3
-                """,
-                    (guid,),
-                ) as cursor:
-                    aliases = await cursor.fetchall()
-
-                if aliases:
-                    primary_name = aliases[0][0]
-                    alias_list = [a[0] for a in aliases[:3]]
-                    alias_str = ", ".join(alias_list)
-                else:
-                    # Fallback
-                    async with db.execute(
-                        """
-                        SELECT player_name 
-                        FROM player_comprehensive_stats 
-                        WHERE player_guid = ? 
-                        ORDER BY round_date DESC 
-                        LIMIT 1
-                    """,
-                        (guid,),
-                    ) as cursor:
-                        name_row = await cursor.fetchone()
-                        primary_name = name_row[0] if name_row else "Unknown"
-                        alias_str = primary_name
-
-                kills, deaths, games, last_seen = stats
-                kd_ratio = kills / deaths if deaths > 0 else kills
-
-                # Admin confirmation embed
-                embed = discord.Embed(
+            # Admin confirmation embed
+            embed = discord.Embed(
                     title="🔗 Admin Link Confirmation",
                     description=(
                         f"Link {target_user.mention} to **{primary_name}**?\n\n"
@@ -1114,104 +1114,108 @@ class LinkCog(commands.Cog, name="Link"):
                     ),
                     color=0xFF6B00,  # Orange for admin action
                 )
-                embed.add_field(
-                    name="Target User",
-                    value=f"{target_user.mention} ({target_user.name})",
-                    inline=True,
+            embed.add_field(
+                name="Target User",
+                value=f"{target_user.mention} ({target_user.name})",
+                inline=True,
+            )
+            embed.add_field(
+                name="GUID",
+                value=f"`{guid}`",
+                inline=True,
+            )
+            embed.add_field(
+                name="Known Names (top 3)",
+                value=alias_str,
+                inline=False,
+            )
+            embed.add_field(
+                name="Stats",
+                value=(
+                    f"**Kills:** {kills:,} | **Deaths:** {deaths:,}\n"
+                    f"**K/D:** {kd_ratio:.2f} | **Games:** {games:,}"
+                ),
+                inline=True,
+            )
+            embed.add_field(
+                name="Last Seen",
+                value=last_seen,
+                inline=True,
+            )
+            embed.set_footer(text="React ✅ (admin) to confirm or ❌ to cancel (60s)")
+
+            message = await ctx.send(embed=embed)
+            await message.add_reaction("✅")
+            await message.add_reaction("❌")
+
+            def check(reaction, user):
+                return (
+                    user == ctx.author  # Only admin can confirm
+                    and str(reaction.emoji) in ["✅", "❌"]
+                    and reaction.message.id == message.id
                 )
-                embed.add_field(
-                    name="GUID",
-                    value=f"`{guid}`",
-                    inline=True,
+
+            try:
+                reaction, user = await self.bot.wait_for(
+                    "reaction_add", timeout=60.0, check=check
                 )
-                embed.add_field(
-                    name="Known Names (top 3)",
-                    value=alias_str,
-                    inline=False,
-                )
-                embed.add_field(
-                    name="Stats",
-                    value=(
-                        f"**Kills:** {kills:,} | **Deaths:** {deaths:,}\n"
-                        f"**K/D:** {kd_ratio:.2f} | **Games:** {games:,}"
-                    ),
-                    inline=True,
-                )
-                embed.add_field(
-                    name="Last Seen",
-                    value=last_seen,
-                    inline=True,
-                )
-                embed.set_footer(text="React ✅ (admin) to confirm or ❌ to cancel (60s)")
 
-                message = await ctx.send(embed=embed)
-                await message.add_reaction("✅")
-                await message.add_reaction("❌")
-
-                def check(reaction, user):
-                    return (
-                        user == ctx.author  # Only admin can confirm
-                        and str(reaction.emoji) in ["✅", "❌"]
-                        and reaction.message.id == message.id
-                    )
-
-                try:
-                    reaction, user = await self.bot.wait_for(
-                        "reaction_add", timeout=60.0, check=check
-                    )
-
-                    if str(reaction.emoji) == "✅":
-                        # Confirmed - link it
-                        await db.execute(
-                            """
-                            INSERT OR REPLACE INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES (?, ?, ?, ?, datetime('now'), 1)
-                        """,
-                            (target_discord_id, str(target_user), guid, primary_name),
-                        )
-                        await db.commit()
-
-                        await message.clear_reactions()
-
-                        # Success message
-                        success_embed = discord.Embed(
-                            title="✅ Admin Link Successful",
-                            description=(
-                                f"{target_user.mention} is now linked to **{primary_name}**"
-                            ),
-                            color=0x00FF00,
-                        )
-                        success_embed.add_field(
-                            name="GUID",
-                            value=f"`{guid}`",
-                            inline=True,
-                        )
-                        success_embed.add_field(
-                            name="Linked By",
-                            value=ctx.author.mention,
-                            inline=True,
-                        )
-                        success_embed.set_footer(
-                            text=f"💡 {target_user.name} can now use !stats to see their stats"
-                        )
-
-                        await ctx.send(embed=success_embed)
-
-                        # Log admin action
-                        logger.info(
-                            f"🔗 Admin link: {ctx.author} (ID: {ctx.author.id}) "
-                            f"linked {target_user} (ID: {target_user.id}) "
-                            f"to GUID {guid} ({primary_name})"
-                        )
-
+                if str(reaction.emoji) == "✅":
+                    # Confirmed - link it (use database-compatible datetime function)
+                    if self.bot.config.database_type == 'sqlite':
+                        datetime_expr = "datetime('now')"
                     else:
-                        await message.clear_reactions()
-                        await ctx.send("❌ Admin link cancelled.")
+                        datetime_expr = "CURRENT_TIMESTAMP"
+                    
+                    await self.bot.db_adapter.execute(
+                        f"""
+                        INSERT OR REPLACE INTO player_links
+                        (discord_id, discord_username, et_guid, et_name, linked_date, verified)
+                        VALUES (?, ?, ?, ?, {datetime_expr}, 1)
+                    """,
+                        (target_discord_id, str(target_user), guid, primary_name),
+                    )
 
-                except asyncio.TimeoutError:
                     await message.clear_reactions()
-                    await ctx.send("⏱️ Admin link confirmation timed out.")
+
+                    # Success message
+                    success_embed = discord.Embed(
+                        title="✅ Admin Link Successful",
+                        description=(
+                            f"{target_user.mention} is now linked to **{primary_name}**"
+                        ),
+                        color=0x00FF00,
+                    )
+                    success_embed.add_field(
+                        name="GUID",
+                        value=f"`{guid}`",
+                        inline=True,
+                    )
+                    success_embed.add_field(
+                        name="Linked By",
+                        value=ctx.author.mention,
+                        inline=True,
+                    )
+                    success_embed.set_footer(
+                        text=f"💡 {target_user.name} can now use !stats to see their stats"
+                    )
+
+                    await ctx.send(embed=success_embed)
+
+                    # Log admin action
+                    logger.info(
+                        f"🔗 Admin link: {ctx.author} (ID: {ctx.author.id}) "
+                        f"linked {target_user} (ID: {target_user.id}) "
+                        f"to GUID {guid} ({primary_name})"
+                    )
+
+                else:
+                    await message.clear_reactions()
+                    await ctx.send("❌ Admin link cancelled.")
+
+            except asyncio.TimeoutError:
+                await message.clear_reactions()
+                await ctx.send("⏱️ Admin link confirmation timed out.")
 
         except Exception as e:
             logger.error(f"Error in admin link: {e}", exc_info=True)
@@ -1234,35 +1238,32 @@ class LinkCog(commands.Cog, name="Link"):
         try:
             discord_id = str(ctx.author.id)
 
-            async with aiosqlite.connect(self.bot.db_path) as db:
-                # Check if linked
-                async with db.execute(
-                    """
-                    SELECT et_name, et_guid FROM player_links
-                    WHERE discord_id = ?
-                """,
-                    (discord_id,),
-                ) as cursor:
-                    existing = await cursor.fetchone()
+            # Check if linked
+            existing = await self.bot.db_adapter.fetch_one(
+                """
+                SELECT et_name, et_guid FROM player_links
+                WHERE discord_id = ?
+            """,
+                (discord_id,),
+            )
 
-                if not existing:
-                    await ctx.send(
-                        "❌ You don't have a linked account.\n\n"
-                        "💡 Use `!link` to link your account!"
-                    )
-                    return
-
-                player_name, guid = existing
-
-                # Remove link
-                await db.execute(
-                    """
-                    DELETE FROM player_links
-                    WHERE discord_id = ?
-                """,
-                    (discord_id,),
+            if not existing:
+                await ctx.send(
+                    "❌ You don't have a linked account.\n\n"
+                    "💡 Use `!link` to link your account!"
                 )
-                await db.commit()
+                return
+
+            player_name, guid = existing
+
+            # Remove link
+            await self.bot.db_adapter.execute(
+                """
+                DELETE FROM player_links
+                WHERE discord_id = ?
+            """,
+                (discord_id,),
+            )
 
             await ctx.send(
                 f"✅ Successfully unlinked from **{player_name}** (GUID: `{guid}`)\n\n"
