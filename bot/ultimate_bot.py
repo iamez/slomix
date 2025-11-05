@@ -1664,8 +1664,13 @@ class ETLegacyCommands(commands.Cog):
     # """,
     # (guid,),
     # ) as cursor:
-    # name_row = await cursor.fetchone()
-    # name = name_row[0] if name_row else "Unknown"
+    # name = (await cursor.fetchone())
+
+    # # Fallback to GUID if no alias found
+    # if not name:
+    # name = (guid,)
+
+    # name = name[0] if isinstance(name, tuple) and len(name) > 0 else "Unknown"
     # 
     # kills, deaths, games, last_seen = stats
     # kd = kills / deaths if deaths > 0 else kills
@@ -1674,8 +1679,8 @@ class ETLegacyCommands(commands.Cog):
     # embed.add_field(
     # name=f"{emoji} **{name}**",
     # value=(
-    # f"**GUID:** {guid}\\n{kills:,} kills | **K/D: {kd:.2f}** | "
-    # f"{games:,} games | Last: {last_seen}"
+    # f"**GUID:** {guid}\\n{kills:,} kills / {deaths:,} deaths / {kd:.2f} K/D\\n"
+    # f"**Games:** {games:,} | **Last Seen:** {last_seen}"
     # ),
     # inline=False,
     # )
@@ -1848,21 +1853,13 @@ class ETLegacyCommands(commands.Cog):
     # # Admin confirmation embed
     # embed = discord.Embed(
     # title="🔗 Admin Link Confirmation",
-    # description=(
-    # f"Link {target_user.mention} to **{primary_name}**?\\n\\n"
-    # f"**Requested by:** {ctx.author.mention}"
-    # ),
-    # color=0xFF6B00,  # Orange for admin action
-    # )
-    # embed.add_field(
-    # name="Target User",
-    # value=f"{target_user.mention} ({target_user.name})",
-    # inline=True,
+    # description=f"Link {target_user.mention} to **{primary_name}**?",
+    # color=0xFFA500,
     # )
     # embed.add_field(
     # name="GUID",
     # value=guid,
-    # inline=True,
+    # inline=False,
     # )
     # embed.add_field(
     # name="Known Names",
@@ -1871,20 +1868,15 @@ class ETLegacyCommands(commands.Cog):
     # )
     # embed.add_field(
     # name="Stats",
-    # value=(
-    # f"**Kills:** {kills:,} | **Deaths:** {deaths:,}\\n"
-    # f"**K/D:** {kd_ratio:.2f} | **Games:** {games:,}"
-    # ),
+    # value=f"{kills:,} kills / {deaths:,} deaths / {kd_ratio:.2f} K/D",
     # inline=True,
     # )
     # embed.add_field(
-    # name="Last Seen",
-    # value=last_seen,
+    # name="Activity",
+    # value=f"{games:,} games | Last: {last_seen}",
     # inline=True,
     # )
-    # embed.set_footer(
-    # text="React ✅ (admin) to confirm or ❌ to cancel (60s)"
-    # )
+    # embed.set_footer(text="React ✅ to confirm or ❌ to cancel (60s)")
     # 
     # message = await ctx.send(embed=embed)
     # await message.add_reaction("✅")
@@ -1892,7 +1884,7 @@ class ETLegacyCommands(commands.Cog):
     # 
     # def check(reaction, user):
     # return (
-    # user == ctx.author  # Only admin can confirm
+    # user == ctx.author
     # and str(reaction.emoji) in ["✅", "❌"]
     # and reaction.message.id == message.id
     # )
@@ -1907,63 +1899,24 @@ class ETLegacyCommands(commands.Cog):
     # await db.execute(
     # """
     # INSERT OR REPLACE INTO player_links
-    # (discord_id, discord_username, et_guid, et_name, 
-    # linked_date, verified)
+    # (discord_id, discord_username, et_guid, et_name, linked_date, verified)
     # VALUES (?, ?, ?, ?, datetime('now'), 1)
     # """,
-    # (
-    # target_discord_id,
-    # str(target_user),
-    # guid,
-    # primary_name,
-    # ),
+    # (discord_id, str(ctx.author), guid, primary_name),
     # )
     # await db.commit()
     # 
     # await message.clear_reactions()
-    # 
-    # # Success message
-    # success_embed = discord.Embed(
-    # title="✅ Admin Link Successful",
-    # description=(
-    # f"{target_user.mention} is now linked to "
-    # f"**{primary_name}**"
-    # ),
-    # color=0x00FF00,
+    # await ctx.send(
+    # f"✅ Successfully linked to **{primary_name}** (GUID: {guid})"
     # )
-    # success_embed.add_field(
-    # name="GUID",
-    # value=guid,
-    # inline=True,
-    # )
-    # success_embed.add_field(
-    # name="Linked By",
-    # value=ctx.author.mention,
-    # inline=True,
-    # )
-    # success_embed.set_footer(
-    # text=(
-    # f"💡 {target_user.name} can now use "
-    # f"!stats to see their stats"
-    # )
-    # )
-    # 
-    # await ctx.send(embed=success_embed)
-    # 
-    # # Log admin action
-    # logger.info(
-    # f"Admin link: {ctx.author} (ID: {ctx.author.id}) "
-    # f"linked {target_user} (ID: {target_user.id}) "
-    # f"to GUID {guid} ({primary_name})"
-    # )
-    # 
     # else:
     # await message.clear_reactions()
-    # await ctx.send("❌ Admin link cancelled.")
+    # await ctx.send("❌ Link cancelled.")
     # 
     # except asyncio.TimeoutError:
     # await message.clear_reactions()
-    # await ctx.send("⏱️ Admin link confirmation timed out.")
+    # await ctx.send("⏱️ Confirmation timed out.")
     # 
     # except Exception as e:
     # logger.error(f"Error in admin link: {e}", exc_info=True)
@@ -2633,19 +2586,6 @@ class UltimateETLegacyBot(commands.Bot):
         self.command_stats = {}
         self.error_count = 0
 
-    async def setup_hook(self):
-        """
-        🔌 Initialize database connection pool (called by discord.py on bot startup)
-        For PostgreSQL: Creates connection pool
-        For SQLite: No-op (connections created per-query)
-        """
-        try:
-            await self.db_adapter.connect()
-            logger.info("✅ Database adapter connected successfully")
-        except Exception as e:
-            logger.error(f"❌ Failed to connect database adapter: {e}")
-            raise
-
     async def close(self):
         """
         🔌 Clean up database connections and close bot gracefully
@@ -2758,6 +2698,14 @@ class UltimateETLegacyBot(commands.Bot):
     async def setup_hook(self):
         """🔧 Initialize all bot components"""
         logger.info("🚀 Initializing Ultimate ET:Legacy Bot...")
+
+        # 🔌 Connect database adapter (required for PostgreSQL pool)
+        try:
+            await self.db_adapter.connect()
+            logger.info("✅ Database adapter connected successfully")
+        except Exception as e:
+            logger.error(f"❌ Failed to connect database adapter: {e}")
+            raise
 
         # ✅ CRITICAL: Validate schema FIRST
         await self.validate_database_schema()
@@ -3124,7 +3072,7 @@ class UltimateETLegacyBot(commands.Bot):
                         title="🏁 Gaming Session Complete!",
                         description=f"Duration: {self._format_duration(duration)}",
                         color=0xFFD700,
-                        timestamp=end_time,
+                        timestamp=datetime.now(),
                     )
                     embed.add_field(
                         name="👥 Participants",
@@ -3257,6 +3205,36 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"❌ SSH download failed for {filename}: {e}")
             return None
+
+    def _ssh_download_file_sync(self, ssh_config, filename, local_dir):
+        """Synchronous SSH file download"""
+        import paramiko
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        key_path = os.path.expanduser(ssh_config["key_path"])
+
+        ssh.connect(
+            hostname=ssh_config["host"],
+            port=ssh_config["port"],
+            username=ssh_config["user"],
+            key_filename=key_path,
+            timeout=10,
+        )
+
+        sftp = ssh.open_sftp()
+
+        remote_file = f"{ssh_config['remote_path']}/{filename}"
+        local_file = os.path.join(local_dir, filename)
+
+        logger.info(f"📥 Downloading {filename}...")
+        sftp.get(remote_file, local_file)
+
+        sftp.close()
+        ssh.close()
+
+        return local_file
 
     def _ssh_download_file_sync(self, ssh_config, filename, local_dir):
         """Synchronous SSH file download"""
@@ -4261,20 +4239,41 @@ class UltimateETLegacyBot(commands.Bot):
             error_msg: Error message if processing failed
         """
         try:
-            query = """
-                INSERT OR REPLACE INTO processed_files 
-                (filename, success, error_message, processed_at)
-                VALUES (?, ?, ?, ?)
-            """
-            await self.db_adapter.execute(
-                query,
-                (
-                    filename,
-                    1 if success else 0,
-                    error_msg,
-                    datetime.now().isoformat(),
-                ),
-            )
+            # Database-specific syntax for INSERT OR REPLACE
+            if self.config.database_type == 'sqlite':
+                query = """
+                    INSERT OR REPLACE INTO processed_files 
+                    (filename, success, error_message, processed_at)
+                    VALUES (?, ?, ?, ?)
+                """
+                await self.db_adapter.execute(
+                    query,
+                    (
+                        filename,
+                        1 if success else 0,
+                        error_msg,
+                        datetime.now().isoformat(),
+                    ),
+                )
+            else:  # PostgreSQL
+                query = """
+                    INSERT INTO processed_files 
+                    (filename, success, error_message, processed_at)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (filename) DO UPDATE SET
+                        success = EXCLUDED.success,
+                        error_message = EXCLUDED.error_message,
+                        processed_at = EXCLUDED.processed_at
+                """
+                await self.db_adapter.execute(
+                    query,
+                    (
+                        filename,
+                        success,  # PostgreSQL uses boolean directly
+                        error_msg,
+                        datetime.now(),
+                    ),
+                )
 
         except Exception as e:
             logger.debug(f"Error marking file as processed: {e}")
@@ -4304,18 +4303,31 @@ class UltimateETLegacyBot(commands.Bot):
             synced = 0
             for filename in files:
                 # Check if already in table
-                check_query = "SELECT 1 FROM processed_files WHERE filename = ?"
-                existing = await self.db_adapter.fetch_one(check_query, (filename,))
+                if self.config.database_type == 'sqlite':
+                    check_query = "SELECT 1 FROM processed_files WHERE filename = ?"
+                    existing = await self.db_adapter.fetch_one(check_query, (filename,))
+                else:  # PostgreSQL
+                    check_query = "SELECT 1 FROM processed_files WHERE filename = $1"
+                    existing = await self.db_adapter.fetch_one(check_query, (filename,))
+                
                 if existing:
                     continue  # Already tracked
 
-                # Add to table
-                insert_query = """
-                    INSERT INTO processed_files 
-                    (filename, success, error_message, processed_at)
-                    VALUES (?, 1, NULL, ?)
-                """
-                await self.db_adapter.execute(insert_query, (filename, datetime.now().isoformat()))
+                # Add to table (database-specific syntax)
+                if self.config.database_type == 'sqlite':
+                    insert_query = """
+                        INSERT INTO processed_files 
+                        (filename, success, error_message, processed_at)
+                        VALUES (?, 1, NULL, ?)
+                    """
+                    await self.db_adapter.execute(insert_query, (filename, datetime.now().isoformat()))
+                else:  # PostgreSQL
+                    insert_query = """
+                        INSERT INTO processed_files 
+                        (filename, success, error_message, processed_at)
+                        VALUES ($1, $2, $3, $4)
+                    """
+                    await self.db_adapter.execute(insert_query, (filename, True, None, datetime.now()))
 
                 self.processed_files.add(filename)
                 synced += 1
