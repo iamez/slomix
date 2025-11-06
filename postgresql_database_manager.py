@@ -369,7 +369,9 @@ class PostgreSQLDatabaseManager:
                     id SERIAL PRIMARY KEY,
                     guid TEXT NOT NULL,
                     alias TEXT NOT NULL,
+                    first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    times_seen INTEGER DEFAULT 1,
                     UNIQUE(guid, alias)
                 )
             ''')
@@ -499,7 +501,7 @@ class PostgreSQLDatabaseManager:
                 async with conn.transaction():
                     # Create round
                     logger.debug(f"💾 Creating round for {filename}")
-                    round_id = await self._create_round(conn, parsed_data, file_date, round_time, filename)
+                    round_id = await self._create_round_postgresql(conn, parsed_data, file_date, round_time, filename)
                     
                     if not round_id:
                         raise Exception("Failed to create round")
@@ -705,8 +707,8 @@ class PostgreSQLDatabaseManager:
             logger.warning(f"Error calculating gaming_session_id: {e}. Using NULL.")
             return None
     
-    async def _create_round(self, conn, parsed_data: Dict, file_date: str, round_time: str, filename: str) -> Optional[int]:
-        """Create round entry with gaming_session_id calculation"""
+    async def _create_round_postgresql(self, conn, parsed_data: Dict, file_date: str, round_time: str, filename: str) -> Optional[int]:
+        """Create round entry in PostgreSQL"""
         map_name = parsed_data.get('map_name', 'unknown')
         round_number = parsed_data.get('round_number', 1)
         time_limit = parsed_data.get('time_limit', '0')
@@ -716,24 +718,20 @@ class PostgreSQLDatabaseManager:
         # Generate unique match_id from filename
         match_id = filename.replace('.txt', '')
         
-        # Calculate gaming_session_id for this round
-        gaming_session_id = await self._get_or_create_gaming_session_id(conn, file_date, round_time)
-        
         try:
             round_id = await conn.fetchval(
                 """
                 INSERT INTO rounds 
                 (round_date, round_time, match_id, map_name, round_number, 
-                 time_limit, actual_time, winner_team, gaming_session_id, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                 time_limit, actual_time, winner_team, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 ON CONFLICT (match_id, round_number) DO UPDATE SET
                     round_date = EXCLUDED.round_date,
-                    round_time = EXCLUDED.round_time,
-                    gaming_session_id = EXCLUDED.gaming_session_id
+                    round_time = EXCLUDED.round_time
                 RETURNING id
                 """,
                 file_date, round_time, match_id, map_name, round_number,
-                time_limit, actual_time, winner, gaming_session_id, datetime.now()
+                time_limit, actual_time, winner, datetime.now()
             )
             return round_id
         except Exception as e:
