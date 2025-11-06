@@ -93,7 +93,6 @@ bot/automation_architecture.py
 bot/automation_enhancements.py
 bot/BOT_CRITICAL_FIXES.py
 bot/check_db.py
-bot/community_stats_parser.py
 bot/helper_methods_to_insert.txt
 bot/hybrid_processing_helpers.py
 bot/insert_helpers.py
