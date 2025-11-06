@@ -8,6 +8,13 @@ import logging
 from typing import Optional, Dict, Any
 from pathlib import Path
 
+# Load .env file if it exists
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Load .env file into environment variables
+except ImportError:
+    pass  # python-dotenv not installed, skip
+
 logger = logging.getLogger('BotConfig')
 
 
@@ -47,8 +54,9 @@ class BotConfig:
         self.postgres_database = self._get_config('POSTGRES_DATABASE', 'etlegacy_stats')
         self.postgres_user = self._get_config('POSTGRES_USER', 'etlegacy')
         self.postgres_password = self._get_config('POSTGRES_PASSWORD', '')
-        self.postgres_min_pool = int(self._get_config('POSTGRES_MIN_POOL', '5'))
-        self.postgres_max_pool = int(self._get_config('POSTGRES_MAX_POOL', '20'))
+        # Increased pool size for 14 cogs + 4 background tasks
+        self.postgres_min_pool = int(self._get_config('POSTGRES_MIN_POOL', '10'))
+        self.postgres_max_pool = int(self._get_config('POSTGRES_MAX_POOL', '30'))
         
         # Discord settings (maintain backward compatibility)
         self.discord_token = self._get_config('DISCORD_BOT_TOKEN', '')
