@@ -1,11 +1,11 @@
-# 🎮 ET:Legacy Discord Bot - Complete System Rundown
+﻿# ðŸŽ® ET:Legacy Discord Bot - Complete System Rundown
 
 **Date:** November 2, 2025  
 **Status:** Production-Ready, Modular Architecture
 
 ---
 
-## 📋 Table of Contents
+## ðŸ“‹ Table of Contents
 
 1. [System Overview](#system-overview)
 2. [Architecture](#architecture)
@@ -18,7 +18,7 @@
 
 ---
 
-## 🎯 System Overview
+## ðŸŽ¯ System Overview
 
 ### What Is It?
 
@@ -26,61 +26,61 @@ A comprehensive Discord bot that tracks, analyzes, and displays ET:Legacy game s
 
 ### Key Capabilities
 
-- 📊 **Real-time Stats Tracking** - Automatically monitors game server for new rounds
-- 🎮 **Per-Round Analytics** - Detailed stats for every round played
-- 👥 **Team Detection** - Smart team assignment using multiple algorithms
-- 🏆 **Player Rankings** - Comprehensive leaderboards and comparisons
-- 📈 **Historical Analysis** - Track performance over time
-- 🤖 **Voice Channel Automation** - Auto-start sessions when players join voice
-- 🔄 **SSH Integration** - Automatic file downloading and processing
-- 💬 **50+ Discord Commands** - Rich command interface for all features
+- ðŸ“Š **Real-time Stats Tracking** - Automatically monitors game server for new rounds
+- ðŸŽ® **Per-Round Analytics** - Detailed stats for every round played
+- ðŸ‘¥ **Team Detection** - Smart team assignment using multiple algorithms
+- ðŸ† **Player Rankings** - Comprehensive leaderboards and comparisons
+- ðŸ“ˆ **Historical Analysis** - Track performance over time
+- ðŸ¤– **Voice Channel Automation** - Auto-start sessions when players join voice
+- ðŸ”„ **SSH Integration** - Automatic file downloading and processing
+- ðŸ’¬ **50+ Discord Commands** - Rich command interface for all features
 
 ---
 
-## 🏗️ Architecture
+## ðŸ—ï¸ Architecture
 
 ### Project Structure
 
 ```
 stats/
-├── bot/
-│   ├── ultimate_bot.py           # Main bot (4,371 lines) - Core logic
-│   ├── etlegacy_production.db    # SQLite database (unified schema)
-│   │
-│   ├── cogs/                      # Modular command groups
-│   │   ├── player_cog.py         # Player stats commands (16 commands)
-│   │   ├── session_cog.py        # Session management (6 commands)
-│   │   ├── team_cog.py           # Team analysis (8 commands)
-│   │   ├── leaderboard_cog.py    # Rankings (8 commands)
-│   │   ├── sync_cog.py           # Manual file sync (5 commands)
-│   │   ├── admin_cog.py          # Database ops (11 commands)
-│   │   └── server_control_cog.py # RCON commands (optional)
-│   │
-│   └── services/
-│       └── automation/            # Automation services (not integrated yet)
-│           ├── ssh_monitor.py
-│           ├── metrics_logger.py
-│           ├── health_monitor.py
-│           └── database_maintenance.py
-│
-├── community_stats_parser.py     # Parser for ET:Legacy stats files
-├── local_stats/                   # Downloaded stats files
-├── logs/                          # Bot logs
-└── .env                          # Configuration
+â”œâ”€â”€ bot/
+â”‚   â”œâ”€â”€ ultimate_bot.py           # Main bot (4,371 lines) - Core logic
+â”‚   â”œâ”€â”€ etlegacy_production.db    # SQLite database (unified schema)
+â”‚   â”‚
+â”‚   â”œâ”€â”€ cogs/                      # Modular command groups
+â”‚   â”‚   â”œâ”€â”€ player_cog.py         # Player stats commands (16 commands)
+â”‚   â”‚   â”œâ”€â”€ session_cog.py        # Session management (6 commands)
+â”‚   â”‚   â”œâ”€â”€ team_cog.py           # Team analysis (8 commands)
+â”‚   â”‚   â”œâ”€â”€ leaderboard_cog.py    # Rankings (8 commands)
+â”‚   â”‚   â”œâ”€â”€ sync_cog.py           # Manual file sync (5 commands)
+â”‚   â”‚   â”œâ”€â”€ admin_cog.py          # Database ops (11 commands)
+â”‚   â”‚   â””â”€â”€ server_control_cog.py # RCON commands (optional)
+â”‚   â”‚
+â”‚   â””â”€â”€ services/
+â”‚       â””â”€â”€ automation/            # Automation services (not integrated yet)
+â”‚           â”œâ”€â”€ ssh_monitor.py
+â”‚           â”œâ”€â”€ metrics_logger.py
+â”‚           â”œâ”€â”€ health_monitor.py
+â”‚           â””â”€â”€ database_maintenance.py
+â”‚
+â”œâ”€â”€ community_stats_parser.py     # Parser for ET:Legacy stats files
+â”œâ”€â”€ local_stats/                   # Downloaded stats files
+â”œâ”€â”€ logs/                          # Bot logs
+â””â”€â”€ .env                          # Configuration
 ```
 
 ### Technology Stack
 
 - **Language:** Python 3.x
 - **Discord:** discord.py (commands framework)
-- **Database:** SQLite with aiosqlite (async operations)
+- **Database:** PostgreSQL (primary) with asyncpg, SQLite (fallback) with aiosqlite
 - **SSH:** paramiko + scp (remote file access)
 - **Parser:** Custom C0RNP0RN3StatsParser
 - **Task Scheduling:** discord.ext.tasks (background loops)
 
 ---
 
-## 💾 Database Schema
+## ðŸ’¾ Database Schema
 
 ### Unified Schema (53 Columns)
 
@@ -207,7 +207,7 @@ UNIQUE(player_name, session_id, round_num)
 
 ---
 
-## 🎯 Core Features
+## ðŸŽ¯ Core Features
 
 ### 1. Stats File Processing
 
@@ -228,11 +228,11 @@ Example: 2025-11-02-201530-goldrush-round-2.txt
 - XP and skill ratings
 
 **Parser Features:**
-- ✅ Handles special characters in player names
-- ✅ Parses weapon-specific stats
-- ✅ Extracts objective stats from detailed sections
-- ✅ Calculates derived metrics (KDR, efficiency)
-- ✅ Returns structured Python dict
+- âœ… Handles special characters in player names
+- âœ… Parses weapon-specific stats
+- âœ… Extracts objective stats from detailed sections
+- âœ… Calculates derived metrics (KDR, efficiency)
+- âœ… Returns structured Python dict
 
 ### 2. Team Detection System
 
@@ -247,7 +247,7 @@ if time_axis > time_allies * 1.5:
 elif time_allies > time_axis * 1.5:
     team = "allies"
 ```
-If player spent 75%+ time on one team → assign that team
+If player spent 75%+ time on one team â†’ assign that team
 
 #### Layer 2: Historical Consistency
 ```python
@@ -338,24 +338,24 @@ async def endstats_monitor(self):
             # 4. Parse and import to database
             result = await self.process_gamestats_file(local_path, filename)
             
-            # 5. 🆕 AUTO-POST to Discord!
+            # 5. ðŸ†• AUTO-POST to Discord!
             if result.get('success'):
                 await self.post_round_stats_auto(filename, result)
 ```
 
 **What Gets Posted:**
 ```
-🎮 Round 2 Complete!
+ðŸŽ® Round 2 Complete!
 
 Map: goldrush | Players: 12
 
-🏆 Top Players
+ðŸ† Top Players
 1. PlayerName - 25/8 K/D | 3,450 DMG | 35.2% ACC
 2. PlayerTwo - 22/10 K/D | 3,100 DMG | 28.9% ACC
 3. PlayerThree - 18/7 K/D | 2,800 DMG | 41.5% ACC
 ...
 
-📊 Round Summary
+ðŸ“Š Round Summary
 Total Kills: 245
 Total Deaths: 218
 
@@ -418,11 +418,11 @@ async def cache_refresher(self):
 
 ---
 
-## 🔄 Automation Systems
+## ðŸ”„ Automation Systems
 
 ### Current (Integrated)
 
-#### 1. SSH File Monitoring ✅
+#### 1. SSH File Monitoring âœ…
 - **Status:** Active, built into `ultimate_bot.py` (line 4073)
 - **Function Name:** `endstats_monitor()` task
 - **Frequency:** Every 30 seconds
@@ -431,18 +431,18 @@ async def cache_refresher(self):
 - **Config:** `SSH_ENABLED=true` in `.env`
 - **Note:** This is the ONLY SSH monitor - we merged it with Discord posting today
 
-#### 2. Voice Channel Automation ✅
+#### 2. Voice Channel Automation âœ…
 - **Status:** Active
 - **Function:** Auto-start/stop sessions based on voice activity
 - **Thresholds:** 6+ players to start, 2- players for 3 min to end
 - **Config:** `AUTOMATION_ENABLED=true`, `GAMING_VOICE_CHANNELS` in `.env`
 
-#### 3. Scheduled Monitoring ✅
+#### 3. Scheduled Monitoring âœ…
 - **Status:** Active
 - **Function:** Auto-start monitoring at 20:00 CET daily
 - **Why:** Ensures monitoring is active for evening gaming sessions
 
-#### 4. Cache Management ✅
+#### 4. Cache Management âœ…
 - **Status:** Active
 - **Function:** Keeps processed files cache synchronized
 - **Why:** Fast duplicate detection without database queries
@@ -451,30 +451,30 @@ async def cache_refresher(self):
 
 These were created as separate modules but are **NOT USED** by the bot:
 
-#### ❌ SSH Monitor Service (Not Used)
+#### âŒ SSH Monitor Service (Not Used)
 - **File:** `bot/services/automation/ssh_monitor.py`
 - **Status:** Superseded by enhanced `endstats_monitor()` in ultimate_bot.py
 - **Action:** Can be deleted - functionality merged into main bot
 
-#### ❌ Metrics Logging (Not Used)
+#### âŒ Metrics Logging (Not Used)
 - **File:** `bot/services/automation/metrics_logger.py`
 - **Function:** Track all events, errors, performance for analysis
 - **Status:** Created but not integrated
 - **Action:** Can be integrated later for analytics
 
-#### ❌ Health Monitoring (Not Used)
+#### âŒ Health Monitoring (Not Used)
 - **File:** `bot/services/automation/health_monitor.py`
 - **Function:** Monitor bot health, send Discord alerts
 - **Status:** Created but not integrated
 - **Action:** Can be integrated later for proactive monitoring
 
-#### ❌ Database Maintenance (Not Used)
+#### âŒ Database Maintenance (Not Used)
 - **File:** `bot/services/automation/database_maintenance.py`
 - **Function:** Auto-backups, VACUUM, log cleanup
 - **Status:** Created but not integrated
 - **Action:** Can be integrated later for maintenance
 
-#### ❌ Automation Commands Cog (Not Used)
+#### âŒ Automation Commands Cog (Not Used)
 - **File:** `bot/cogs/automation_commands.py`
 - **Function:** Discord commands for automation services
 - **Status:** Created but not integrated (tied to unused services above)
@@ -482,7 +482,7 @@ These were created as separate modules but are **NOT USED** by the bot:
 
 ---
 
-## 📊 Command Reference
+## ðŸ“Š Command Reference
 
 ### Player Commands (player_cog.py)
 
@@ -570,99 +570,99 @@ These were created as separate modules but are **NOT USED** by the bot:
 
 ---
 
-## 🔄 Data Flow
+## ðŸ”„ Data Flow
 
 ### Complete Pipeline
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    ET:Legacy Game Server                            │
-│  Players play rounds → Server generates .txt stats files            │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             │ SSH (every 30s if monitoring active)
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    endstats_monitor Task                             │
-│  1. Lists remote files via SSH                                      │
-│  2. Compares with processed_files cache                             │
-│  3. Downloads NEW files to local_stats/                             │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             │ Downloaded file
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│              community_stats_parser.py (C0RNP0RN3StatsParser)       │
-│  1. Parses .txt file format                                         │
-│  2. Extracts all player stats                                       │
-│  3. Calculates derived metrics                                      │
-│  4. Returns Python dict                                             │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             │ stats_data dict
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Team Detection System                             │
-│  1. Analyze time_axis vs time_allies                                │
-│  2. Check team_history table                                        │
-│  3. Analyze objective patterns                                      │
-│  4. Analyze player interactions                                     │
-│  5. Assign teams with confidence level                              │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             │ Enhanced stats_data with teams
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Database Import (_import_stats_to_db)             │
-│  1. Insert to player_comprehensive_stats (53 columns)               │
-│  2. Update session_teams table                                      │
-│  3. Update team_history table                                       │
-│  4. Mark file as processed                                          │
-│  5. Add to processed_files cache                                    │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             │ Import result
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│              post_round_stats_auto() - 🆕 DISCORD POST              │
-│  1. Query database for latest round                                 │
-│  2. Get top 5 players by kills                                      │
-│  3. Calculate round totals                                          │
-│  4. Create Discord embed                                            │
-│  5. Post to STATS_CHANNEL_ID                                        │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             │ Posted to Discord
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Discord Users                                │
-│  • See round stats automatically (30-60s after round ends)          │
-│  • Use commands to query database (!player_stats, !leaderboard)     │
-│  • View session summaries when session ends                         │
-└─────────────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    ET:Legacy Game Server                            â”‚
+â”‚  Players play rounds â†’ Server generates .txt stats files            â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                             â”‚
+                             â”‚ SSH (every 30s if monitoring active)
+                             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    endstats_monitor Task                             â”‚
+â”‚  1. Lists remote files via SSH                                      â”‚
+â”‚  2. Compares with processed_files cache                             â”‚
+â”‚  3. Downloads NEW files to local_stats/                             â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                             â”‚
+                             â”‚ Downloaded file
+                             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚              community_stats_parser.py (C0RNP0RN3StatsParser)       â”‚
+â”‚  1. Parses .txt file format                                         â”‚
+â”‚  2. Extracts all player stats                                       â”‚
+â”‚  3. Calculates derived metrics                                      â”‚
+â”‚  4. Returns Python dict                                             â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                             â”‚
+                             â”‚ stats_data dict
+                             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    Team Detection System                             â”‚
+â”‚  1. Analyze time_axis vs time_allies                                â”‚
+â”‚  2. Check team_history table                                        â”‚
+â”‚  3. Analyze objective patterns                                      â”‚
+â”‚  4. Analyze player interactions                                     â”‚
+â”‚  5. Assign teams with confidence level                              â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                             â”‚
+                             â”‚ Enhanced stats_data with teams
+                             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    Database Import (_import_stats_to_db)             â”‚
+â”‚  1. Insert to player_comprehensive_stats (53 columns)               â”‚
+â”‚  2. Update session_teams table                                      â”‚
+â”‚  3. Update team_history table                                       â”‚
+â”‚  4. Mark file as processed                                          â”‚
+â”‚  5. Add to processed_files cache                                    â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                             â”‚
+                             â”‚ Import result
+                             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚              post_round_stats_auto() - ðŸ†• DISCORD POST              â”‚
+â”‚  1. Query database for latest round                                 â”‚
+â”‚  2. Get top 5 players by kills                                      â”‚
+â”‚  3. Calculate round totals                                          â”‚
+â”‚  4. Create Discord embed                                            â”‚
+â”‚  5. Post to STATS_CHANNEL_ID                                        â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                             â”‚
+                             â”‚ Posted to Discord
+                             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                         Discord Users                                â”‚
+â”‚  â€¢ See round stats automatically (30-60s after round ends)          â”‚
+â”‚  â€¢ Use commands to query database (!player_stats, !leaderboard)     â”‚
+â”‚  â€¢ View session summaries when session ends                         â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ### Alternative Flow: Manual Sync
 
 ```
 User types: !sync_stats 1week
-    ↓
+    â†“
 sync_cog.py: sync_stats()
-    ↓
+    â†“
 Lists remote files, filters by date
-    ↓
+    â†“
 Downloads ALL unprocessed files
-    ↓
+    â†“
 Processes each file sequentially
-    ↓
-(Same parsing → team detection → import flow)
-    ↓
+    â†“
+(Same parsing â†’ team detection â†’ import flow)
+    â†“
 Reports summary: "Processed 15 files"
 ```
 
 ---
 
-## 🎮 How Everything Works Together
+## ðŸŽ® How Everything Works Together
 
 ### Example: Typical Gaming Session
 
@@ -679,18 +679,18 @@ Bot is idle, monitoring = False
 [19:45:45] 6 players in voice channels
 
 voice_session_monitor task detects 6+ players:
-  → Calls start_session_auto()
-  → Sets self.monitoring = True
-  → Logs: "✅ Auto-starting gaming session"
-  → Posts to Discord: "🎮 Gaming session started!"
+  â†’ Calls start_session_auto()
+  â†’ Sets self.monitoring = True
+  â†’ Logs: "âœ… Auto-starting gaming session"
+  â†’ Posts to Discord: "ðŸŽ® Gaming session started!"
 ```
 
 #### 3. Scheduled Start Trigger (20:00)
 ```
 scheduled_monitoring_check task:
-  → Checks time: 20:00 CET
-  → Ensures monitoring = True (already is)
-  → Logs: "✅ Scheduled monitoring check - already active"
+  â†’ Checks time: 20:00 CET
+  â†’ Ensures monitoring = True (already is)
+  â†’ Logs: "âœ… Scheduled monitoring check - already active"
 ```
 
 #### 4. First Round Starts (20:05)
@@ -703,38 +703,38 @@ Game server generates: 2025-11-02-200530-goldrush-round-1.txt
 ```
 endstats_monitor (runs every 30s):
   [20:06:00] Check #1:
-    → Lists remote files via SSH
-    → Finds: 2025-11-02-200530-goldrush-round-1.txt
-    → Checks: Is this in processed_files cache? NO
-    → Downloads file to local_stats/
-    → Parses file (12 players detected)
-    → Runs team detection:
-      - Slomix: time_axis=300s, time_allies=50s → axis (high confidence)
-      - PlayerTwo: time_axis=40s, time_allies=310s → allies (high confidence)
+    â†’ Lists remote files via SSH
+    â†’ Finds: 2025-11-02-200530-goldrush-round-1.txt
+    â†’ Checks: Is this in processed_files cache? NO
+    â†’ Downloads file to local_stats/
+    â†’ Parses file (12 players detected)
+    â†’ Runs team detection:
+      - Slomix: time_axis=300s, time_allies=50s â†’ axis (high confidence)
+      - PlayerTwo: time_axis=40s, time_allies=310s â†’ allies (high confidence)
       - ... (all 12 players assigned)
-    → Imports to database (12 rows inserted)
-    → Marks file as processed
-    → Adds to cache
-    → 🆕 AUTO-POSTS to Discord:
+    â†’ Imports to database (12 rows inserted)
+    â†’ Marks file as processed
+    â†’ Adds to cache
+    â†’ ðŸ†• AUTO-POSTS to Discord:
     
-        🎮 Round 1 Complete!
+        ðŸŽ® Round 1 Complete!
         
         Map: goldrush | Players: 12
         
-        🏆 Top Players
+        ðŸ† Top Players
         1. Slomix - 28/5 K/D | 3,800 DMG | 42.1% ACC
         2. PlayerTwo - 24/8 K/D | 3,200 DMG | 38.5% ACC
         ...
         
-    → Logs: "✅ Posted round stats for 2025-11-02-200530-goldrush-round-1.txt"
+    â†’ Logs: "âœ… Posted round stats for 2025-11-02-200530-goldrush-round-1.txt"
 ```
 
 #### 6. Cache Refresh (20:06:30)
 ```
 cache_refresher task:
-  → Reloads processed_files from database
-  → Now includes: 2025-11-02-200530-goldrush-round-1.txt
-  → Ensures endstats_monitor won't re-process it
+  â†’ Reloads processed_files from database
+  â†’ Now includes: 2025-11-02-200530-goldrush-round-1.txt
+  â†’ Ensures endstats_monitor won't re-process it
 ```
 
 #### 7. Second Round Starts (20:25)
@@ -747,18 +747,18 @@ Game server generates: 2025-11-02-202530-goldrush-round-2.txt
 ```
 endstats_monitor:
   [20:26:00] Check #5:
-    → Lists remote files
-    → Finds TWO files:
+    â†’ Lists remote files
+    â†’ Finds TWO files:
       - 2025-11-02-200530-goldrush-round-1.txt (already in cache, skip)
       - 2025-11-02-202530-goldrush-round-2.txt (NEW!)
-    → Downloads round-2.txt
-    → Parses file
-    → Runs team detection:
+    â†’ Downloads round-2.txt
+    â†’ Parses file
+    â†’ Runs team detection:
       - Uses round 1 team_history for consistency
-      - Slomix: time_allies=305s → allies (swapped teams! ✓)
-      - PlayerTwo: time_axis=300s → axis (swapped teams! ✓)
-    → Imports to database
-    → AUTO-POSTS round 2 stats
+      - Slomix: time_allies=305s â†’ allies (swapped teams! âœ“)
+      - PlayerTwo: time_axis=300s â†’ axis (swapped teams! âœ“)
+    â†’ Imports to database
+    â†’ AUTO-POSTS round 2 stats
 ```
 
 #### 9. Multiple Maps (20:30 - 22:00)
@@ -783,18 +783,18 @@ endstats_monitor processes all files automatically:
 [22:16:30] 2 players remain
 
 voice_session_monitor:
-  → Detects 2 or fewer players
-  → Starts 3-minute timer
+  â†’ Detects 2 or fewer players
+  â†’ Starts 3-minute timer
   
 [22:19:30] Still 2 or fewer players (timer exceeded 180s)
 
 voice_session_monitor:
-  → Calls end_session_auto()
-  → Sets self.monitoring = False
-  → Queries database for session stats
-  → Posts session summary:
+  â†’ Calls end_session_auto()
+  â†’ Sets self.monitoring = False
+  â†’ Queries database for session stats
+  â†’ Posts session summary:
   
-      📊 Gaming Session Ended
+      ðŸ“Š Gaming Session Ended
       
       Duration: 2h 30m
       Maps Played: 6
@@ -848,7 +848,7 @@ Total query time: ~200-500ms
 
 ---
 
-## 🔧 Configuration
+## ðŸ”§ Configuration
 
 ### Required `.env` Variables
 
@@ -883,31 +883,31 @@ LOG_LEVEL=INFO
 
 ---
 
-## 🚀 Deployment
+## ðŸš€ Deployment
 
 ### Startup Flow
 
 ```
 1. python bot/ultimate_bot.py
-   ↓
+   â†“
 2. Loads .env configuration
-   ↓
+   â†“
 3. Validates database schema (53 columns)
-   ↓
+   â†“
 4. Loads all cogs (player, session, team, leaderboard, sync, admin)
-   ↓
+   â†“
 5. Initializes database tables
-   ↓
+   â†“
 6. Syncs local_stats/ files to processed_files table
-   ↓
+   â†“
 7. Starts background tasks:
    - endstats_monitor (every 30s)
    - cache_refresher (every 30s)
    - scheduled_monitoring_check (every 1min)
    - voice_session_monitor (every 30s)
-   ↓
+   â†“
 8. Connects to Discord
-   ↓
+   â†“
 9. Bot ready! Listening for commands and monitoring triggers
 ```
 
@@ -927,17 +927,17 @@ tail -f logs/discord_bot.log
 
 **Key log messages:**
 ```
-✅ SSH monitoring task ready
-✅ Background tasks started
-📥 New file detected: [filename]
-✅ Posted round stats for [filename] to Discord
-⚠️ SSH config incomplete - monitoring disabled
-❌ endstats_monitor error: [error]
+âœ… SSH monitoring task ready
+âœ… Background tasks started
+ðŸ“¥ New file detected: [filename]
+âœ… Posted round stats for [filename] to Discord
+âš ï¸ SSH config incomplete - monitoring disabled
+âŒ endstats_monitor error: [error]
 ```
 
 ---
 
-## 📈 Performance Characteristics
+## ðŸ“ˆ Performance Characteristics
 
 ### Response Times
 
@@ -954,8 +954,8 @@ tail -f logs/discord_bot.log
 
 - Memory: 50-150 MB (Python process)
 - CPU: < 1% idle, 5-10% during file processing
-- Database size: ~50KB per round (~5MB per 100 rounds)
-- Disk I/O: Minimal (SQLite + file downloads)
+- Database: PostgreSQL with asyncpg pool (5-20 connections, auto-reconnect)
+- Disk I/O: Minimal (PostgreSQL network + SSH downloads)
 
 ### Scalability
 
@@ -968,7 +968,7 @@ tail -f logs/discord_bot.log
 
 ---
 
-## 🎯 Key Design Decisions
+## ðŸŽ¯ Key Design Decisions
 
 ### Why Unified 53-Column Schema?
 
@@ -976,10 +976,10 @@ tail -f logs/discord_bot.log
 **After:** Single table with round_num column
 
 **Benefits:**
-- ✅ Simpler queries (no JOINs)
-- ✅ Easier team detection across rounds
-- ✅ Better historical analysis
-- ✅ Single source of truth
+- âœ… Simpler queries (no JOINs)
+- âœ… Easier team detection across rounds
+- âœ… Better historical analysis
+- âœ… Single source of truth
 
 ### Why Modular Cogs?
 
@@ -987,10 +987,10 @@ tail -f logs/discord_bot.log
 **After:** Separate cog files (bot.py now 4,371 lines)
 
 **Benefits:**
-- ✅ Easier to maintain
-- ✅ Clear organization
-- ✅ Can disable/enable features
-- ✅ Better code reuse
+- âœ… Easier to maintain
+- âœ… Clear organization
+- âœ… Can disable/enable features
+- âœ… Better code reuse
 
 ### Why Background Tasks Instead of Webhooks?
 
@@ -999,10 +999,10 @@ tail -f logs/discord_bot.log
 **Alternative:** Server pushes notifications to bot
 
 **Why polling?**
-- ✅ Simpler (no server-side modifications)
-- ✅ More reliable (handles disconnects)
-- ✅ Sufficient latency (30-60s is acceptable)
-- ✅ No firewall/NAT issues
+- âœ… Simpler (no server-side modifications)
+- âœ… More reliable (handles disconnects)
+- âœ… Sufficient latency (30-60s is acceptable)
+- âœ… No firewall/NAT issues
 
 ### Why Cache processed_files?
 
@@ -1011,13 +1011,13 @@ tail -f logs/discord_bot.log
 **With cache:** Check in-memory set (O(1) lookup)
 
 **Benefits:**
-- ✅ 1000x faster lookups
-- ✅ Reduces database load
-- ✅ Refreshed every 30s (stays synchronized)
+- âœ… 1000x faster lookups
+- âœ… Reduces database load
+- âœ… Refreshed every 30s (stays synchronized)
 
 ---
 
-## 🔮 Future Enhancements
+## ðŸ”® Future Enhancements
 
 ### Potential Additions
 
@@ -1036,11 +1036,11 @@ tail -f logs/discord_bot.log
 
 These files exist in `bot/services/automation/` but are **NOT integrated**:
 
-- ❌ `ssh_monitor.py` - Separate SSH monitor (not used, merged into ultimate_bot.py)
-- ❌ `metrics_logger.py` - Event/error/performance tracking (not used)
-- ❌ `health_monitor.py` - Bot health checks (not used)
-- ❌ `database_maintenance.py` - Auto-backups, VACUUM, cleanup (not used)
-- ❌ `automation_commands.py` - Discord commands for above services (not used)
+- âŒ `ssh_monitor.py` - Separate SSH monitor (not used, merged into ultimate_bot.py)
+- âŒ `metrics_logger.py` - Event/error/performance tracking (not used)
+- âŒ `health_monitor.py` - Bot health checks (not used)
+- âŒ `database_maintenance.py` - Auto-backups, VACUUM, cleanup (not used)
+- âŒ `automation_commands.py` - Discord commands for above services (not used)
 
 **Status:** Can be deleted OR integrated later if you want the extra features
 
@@ -1048,64 +1048,65 @@ These files exist in `bot/services/automation/` but are **NOT integrated**:
 
 ---
 
-## 📚 Summary
+## ðŸ“š Summary
 
 ### What You Have
 
 A **production-ready Discord bot** that:
 
-1. ✅ **Automatically monitors** game server for new rounds (SSH)
-2. ✅ **Downloads and parses** stats files automatically
-3. ✅ **Detects teams** using 5-layer algorithm (time, history, objectives)
-4. ✅ **Imports to database** with unified 53-column schema
-5. ✅ **Auto-posts to Discord** within 30-60 seconds of round end
-6. ✅ **Provides 50+ commands** for querying stats
-7. ✅ **Auto-starts/stops** based on voice channel activity
-8. ✅ **Schedules monitoring** at 20:00 CET daily
-9. ✅ **Maintains cache** for fast duplicate detection
-10. ✅ **Modular architecture** with separate cog files
+1. âœ… **Automatically monitors** game server for new rounds (SSH)
+2. âœ… **Downloads and parses** stats files automatically
+3. âœ… **Detects teams** using 5-layer algorithm (time, history, objectives)
+4. âœ… **Imports to database** with unified 53-column schema
+5. âœ… **Auto-posts to Discord** within 30-60 seconds of round end
+6. âœ… **Provides 50+ commands** for querying stats
+7. âœ… **Auto-starts/stops** based on voice channel activity
+8. âœ… **Schedules monitoring** at 20:00 CET daily
+9. âœ… **Maintains cache** for fast duplicate detection
+10. âœ… **Modular architecture** with separate cog files
 
 ### The Stack
 
 ```
 Discord Bot (discord.py)
-    ↓
+    â†“
 Command Cogs (6 cogs, 50+ commands)
-    ↓
+    â†“
 Background Tasks (4 tasks, 30s-1min intervals)
-    ↓
+    â†“
 SSH Integration (paramiko + scp)
-    ↓
+    â†“
 Stats Parser (C0RNP0RN3StatsParser)
-    ↓
+    â†“
 Team Detection (5-layer algorithm)
-    ↓
-SQLite Database (unified 53-column schema)
-    ↓
+    â†“
+PostgreSQL Database (production schema, connection pooling)
+    â†“
 Discord Embeds (auto-posted stats)
 ```
 
 ### Recent Changes (Today - November 2, 2025)
 
 **Merged SSH monitoring with Discord posting:**
-- ✅ Enhanced existing `endstats_monitor` task in `ultimate_bot.py` (line 4073)
-- ✅ Added `post_round_stats_auto()` method (line 3278)
-- ✅ Now auto-posts round stats to Discord after processing
-- ✅ **Single unified system** - only ONE SSH monitor exists
-- ✅ Did NOT integrate separate `bot/services/automation/ssh_monitor.py` 
-- ✅ That file can be deleted - it's not used by the bot
+- âœ… Enhanced existing `endstats_monitor` task in `ultimate_bot.py` (line 4073)
+- âœ… Added `post_round_stats_auto()` method (line 3278)
+- âœ… Now auto-posts round stats to Discord after processing
+- âœ… **Single unified system** - only ONE SSH monitor exists
+- âœ… Did NOT integrate separate `bot/services/automation/ssh_monitor.py` 
+- âœ… That file can be deleted - it's not used by the bot
 
 ### Current State
 
-**Production-ready and fully functional!** 🎉
+**Production-ready and fully functional!** ðŸŽ‰
 
 Just need to:
 1. Set `SSH_ENABLED=true` in `.env`
 2. Configure SSH credentials
 3. Set `STATS_CHANNEL_ID`
 4. Run the bot
-5. Play games and watch the magic happen! ✨
+5. Play games and watch the magic happen! âœ¨
 
 ---
 
-**That's your complete ET:Legacy Discord Bot!** 🎮
+**That's your complete ET:Legacy Discord Bot!** ðŸŽ®
+
