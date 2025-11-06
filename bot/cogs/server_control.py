@@ -16,6 +16,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import re
 import socket
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,42 @@ import paramiko
 from discord.ext import commands
 
 logger = logging.getLogger('ServerControl')
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename to prevent directory traversal attacks.
+    
+    Removes path separators and keeps only safe characters:
+    - Letters (a-z, A-Z)
+    - Numbers (0-9)
+    - Dots, dashes, underscores (. - _)
+    
+    Examples:
+        "../../../etc/passwd" -> "etcpasswd"
+        "map.pk3" -> "map.pk3"
+        "test/../hack.txt" -> "testhack.txt"
+    
+    Args:
+        filename: User-provided filename
+        
+    Returns:
+        Sanitized filename safe for file operations
+        
+    Raises:
+        ValueError: If filename becomes empty after sanitization
+    """
+    # Get just the filename (no path)
+    safe_name = os.path.basename(filename)
+    
+    # Remove any characters that aren't alphanumeric, dot, dash, or underscore
+    safe_name = re.sub(r'[^a-zA-Z0-9._-]', '', safe_name)
+    
+    # Prevent empty filenames
+    if not safe_name:
+        raise ValueError("Invalid filename provided")
+    
+    return safe_name
 
 
 class ETLegacyRCON:
