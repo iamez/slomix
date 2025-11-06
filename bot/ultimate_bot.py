@@ -3758,8 +3758,9 @@ class UltimateETLegacyBot(commands.Bot):
                     round_date, round_time, match_id, map_name, round_number,
                     time_limit, actual_time
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
             """
-            round_id = await self.db_adapter.execute(
+            round_id = await self.db_adapter.fetch_val(
                 insert_round_query,
                 (
                     date_part,
