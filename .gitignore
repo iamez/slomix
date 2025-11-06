@@ -1,0 +1,127 @@
+# Environment & Secrets
+.env
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Database Files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.bak
+*.backup
+*BACKUP*
+
+# Logs
+*.log
+logs/
+bot/logs/
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================
+# EXCLUDE ALL ROOT TEST/ANALYSIS FILES
+# ============================================
+/*.py
+/*.txt
+/*.json
+/*.html
+/*.sql
+/*.md.backup
+
+# Exclude Test/Analysis/Backup Directories
+/analytics/
+/archive/
+/asdf/
+/backups/
+/database/
+/dev/
+/fiveeyes/
+/local_stats/
+/prompt_instructions/
+/scripts/
+/temp/
+/tests/
+/test_files/
+/test_suite/
+/tmp/
+
+# ============================================
+# BOT DIRECTORY EXCLUSIONS
+# ============================================
+# Exclude bot database files
+bot/*.db
+bot/*.db.*
+bot/*.bak
+bot/*.backup
+bot/etlegacy_production*
+bot/BACKUP_*
+bot/*.cleaned.py
+bot/ultimate_bot.py.backup*
+bot/ultimate_bot.py.bak
+
+# Exclude bot test data
+bot/local_stats/
+bot/tools/
+
+# Exclude bot config (use .env instead)
+bot/config.json
+bot/fiveeyes_config.json
+
+# Exclude bot helper/test scripts
+bot/automation_architecture.py
+bot/automation_enhancements.py
+bot/BOT_CRITICAL_FIXES.py
+bot/check_db.py
+bot/community_stats_parser.py
+bot/helper_methods_to_insert.txt
+bot/hybrid_processing_helpers.py
+bot/insert_helpers.py
+bot/integrate_automation.py
+bot/last_session_helpers.py
+bot/last_session_redesigned_impl.py
+bot/remove_duplicates.py
+bot/retro_text_stats.py
+bot/retro_viz.py
+bot/setup_automation.py
+bot/test_automation.py
+bot/schema.json
+bot/schema.sql
+bot/README_AUTOMATION.md
+
+# ============================================
+# TOOLS DIRECTORY - Keep ONLY Essentials
+# ============================================
+tools/*
+!tools/__init__.py
+!tools/stopwatch_scoring.py
+!tools/postgresql_db_manager.py
+
+# ============================================
+# KEEP ESSENTIAL FILES (override exclusions)
+# ============================================
+!README.md
+!requirements.txt
+!.env.example
+!.gitignore
+!postgresql_database_manager.py
