@@ -311,8 +311,8 @@ python -c "import matplotlib; matplotlib.font_manager._rebuild()"
   - Performance optimizations
   - Security & data integrity
 
-- **[docs/DATA_PIPELINE.html](docs/DATA_PIPELINE.html)** - Visual pipeline diagram (interactive)
-- **[docs/FIELD_MAPPING.html](docs/FIELD_MAPPING.html)** - Complete field reference with examples
+- **[docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md)** - Visual pipeline diagram (interactive)
+- **[docs/FIELD_MAPPING.md](docs/FIELD_MAPPING.md)** - Complete field reference with examples
 - **[docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)** - Historical system documentation
 
 ### Integration Guides
