@@ -1,0 +1,268 @@
+================================================================================
+📊 ET:LEGACY STATS PIPELINE - "EXPLAIN LIKE I'M 5" VERSION
+================================================================================
+
+🎮 STAGE 1: NEW STATS FILE APPEARS
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Server creates: gamestats_2025-11-06_120000.txt                        │
+│ Location: /home/et/.etlegacy/legacy/gamestats/                         │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+                          ⏰ SSH Monitor Detects It
+                    (checks every 60 seconds for new files)
+                                    │
+                                    ▼
+
+
+📥 STAGE 2: FILE DOWNLOAD (SSH Monitor)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ SSH Monitor:                                                            │
+│  ✓ Sees new file on server                                             │
+│  ✓ Downloads to: ./local_stats/gamestats_2025-11-06_120000.txt         │
+│  ✓ Marks file as "downloaded" (so we don't download twice)             │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+
+
+📖 STAGE 3: PARSE THE FILE (C0RNP0RN3StatsParser)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Parser reads the text file and extracts:                               │
+│                                                                         │
+│  From filename:                                                         │
+│    📅 Date: 2025-11-06                                                  │
+│    ⏰ Time: 12:00:00                                                    │
+│    🗺️  Map: "goldrush"                                                  │
+│                                                                         │
+│  From file content:                                                     │
+│    👥 8 players with all their stats (52 fields each)                   │
+│       - kills, deaths, damage, accuracy, etc.                          │
+│    🔫 45 weapon stats (9 fields each)                                   │
+│       - per player, per weapon                                         │
+│    🏆 Round winner, scores, objectives                                  │
+│                                                                         │
+│  Output: Python dictionary with ALL this data                          │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+
+
+✅ STAGE 4: VALIDATION (7 Checks!)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Before saving, we check:                                               │
+│                                                                         │
+│  1️⃣ Player count matches? (parsed 8 = database has 8?)                 │
+│  2️⃣ Weapon count matches? (parsed 45 = database has 45?)               │
+│  3️⃣ Total kills add up? (all players' kills = database total?)         │
+│  4️⃣ Total deaths add up?                                                │
+│  5️⃣ Kills + deaths balance? (someone's kill = someone's death)         │
+│  6️⃣ Damage dealt + received balance?                                    │
+│  7️⃣ Weapon stats match player stats?                                    │
+│                                                                         │
+│  ⚠️ If any check fails by >5: LOG WARNING (but still save!)            │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+
+
+💾 STAGE 5: SAVE TO DATABASE (PostgreSQL)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Transaction starts (all-or-nothing save):                              │
+│                                                                         │
+│  Step 1: Calculate gaming_session_id                                   │
+│    ├─ Check last round's time                                          │
+│    ├─ If gap > 60 minutes: new session!                                │
+│    └─ Assign session ID (1, 2, 3, etc.)                                │
+│                                                                         │
+│  Step 2: INSERT into "rounds" table                                    │
+│    ├─ Round ID (auto-generated)                                        │
+│    ├─ Date, time, map, winner                                          │
+│    └─ Gaming session ID                                                │
+│         → rounds table has 1 new row                                   │
+│                                                                         │
+│  Step 3: INSERT into "player_comprehensive_stats" table                │
+│    ├─ For each of 8 players:                                           │
+│    │   ├─ Round ID (links to round above)                              │
+│    │   ├─ Player GUID, name, team                                      │
+│    │   └─ ALL 52 stats fields                                          │
+│    └─ player_comprehensive_stats table has 8 new rows                  │
+│                                                                         │
+│  Step 4: INSERT into "weapon_comprehensive_stats" table                │
+│    ├─ For each of 45 weapon stats:                                     │
+│    │   ├─ Round ID (links to round)                                    │
+│    │   ├─ Player GUID, weapon name                                     │
+│    │   └─ 9 weapon fields (kills, deaths, hits, etc.)                  │
+│    └─ weapon_comprehensive_stats table has 45 new rows                 │
+│                                                                         │
+│  Step 5: Mark file as "processed"                                      │
+│    └─ processed_files table: filename, success=true, timestamp         │
+│                                                                         │
+│  Transaction commits! ✅                                                │
+│  (If ANY step fails, ALL steps rollback - keeps DB clean!)             │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+
+
+📝 STAGE 6: LOGGING (for debugging later)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Write to log files:                                                    │
+│                                                                         │
+│  logs/database.log:                                                    │
+│    "✓ Imported gamestats_2025-11-06_120000.txt:                        │
+│     8 players, 45 weapons [2.15s]"                                     │
+│                                                                         │
+│  logs/bot.log:                                                         │
+│    "✓ File processed successfully"                                     │
+│                                                                         │
+│  (If error: also write to logs/errors.log with stack trace)           │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+
+
+🎮 STAGE 7: VOICE CHANNEL DETECTION (Optional - if automation enabled)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Voice Monitor watches:                                                 │
+│  👂 Are 6+ people in gaming voice channel?                             │
+│     ├─ YES → Gaming session started!                                   │
+│     └─ NO → Wait...                                                    │
+│                                                                         │
+│  ⏰ Did people leave voice channel?                                     │
+│     ├─ Less than 2 people for 3 minutes?                               │
+│     └─ YES → Session ended! Trigger !last_session                      │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+
+
+📢 STAGE 8: POST TO DISCORD (Automatic or Manual)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Two ways to post stats:                                                │
+│                                                                         │
+│  A) AUTOMATIC (Voice Monitor):                                         │
+│     When session ends → Auto-post !last_session to Discord             │
+│                                                                         │
+│  B) MANUAL (User command):                                             │
+│     User types: !last_session                                          │
+│                                                                         │
+│  Either way, bot fetches from database and creates:                    │
+│    📊 6 embed cards (overview, combat, weapons, etc.)                   │
+│    📈 2 graph images (performance, efficiency)                          │
+│    ✉️ Sends to #stats channel                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+                               
+                          ✅ DONE! Stats are live!
+
+
+================================================================================
+📍 WHERE DATA LIVES AT EACH STAGE
+================================================================================
+
+1️⃣ Game Server         → /home/et/.etlegacy/legacy/gamestats/*.txt
+2️⃣ Bot Local Storage   → ./local_stats/*.txt (copy)
+3️⃣ Parser Memory       → Python dict (temporary)
+4️⃣ PostgreSQL Database → PERMANENT storage:
+   ├─ rounds table (1 row per round)
+   ├─ player_comprehensive_stats (8 rows per round)
+   ├─ weapon_comprehensive_stats (45 rows per round)
+   └─ processed_files (1 row per file)
+5️⃣ Log Files          → ./logs/*.log (for debugging)
+6️⃣ Discord Messages   → #stats channel (pretty display)
+
+
+================================================================================
+⏱️ TIMING
+================================================================================
+
+From file creation to Discord post:
+
+  Server creates file:      0 seconds
+       ↓ (SSH monitor checks every 60s)
+  Download file:           +5 seconds
+  Parse file:              +0.5 seconds
+  Validate data:           +0.2 seconds
+  Save to database:        +2 seconds
+  Post to Discord:         +3 seconds (if automatic)
+  ────────────────────────────────────
+  TOTAL:                   ~10-70 seconds (depends on monitor timing)
+
+
+================================================================================
+🛡️ ERROR HANDLING AT EACH STAGE
+================================================================================
+
+Stage 1 (Detection):  ❌ Can't connect to server → Retry next check
+Stage 2 (Download):   ❌ Download fails → Skip file, retry next time
+Stage 3 (Parse):      ❌ Invalid file format → Mark as failed, skip
+Stage 4 (Validate):   ⚠️ Data mismatch → Log warning, still save
+Stage 5 (Database):   ❌ DB error → Rollback, mark as failed
+Stage 6 (Logging):    ❌ Can't write log → Continue anyway
+Stage 7 (Voice):      ❌ Discord error → Continue anyway
+Stage 8 (Discord):    ❌ Post fails → User can retry manually
+
+
+================================================================================
+🗄️ DATABASE SCHEMA (WHERE EACH FIELD GOES)
+================================================================================
+
+📋 rounds table:
+  - round_id (primary key)
+  - round_date, round_time
+  - map_name, winner
+  - gaming_session_id ← Links rounds into sessions!
+  - axis_score, allies_score
+  - filename (which .txt file)
+
+📋 player_comprehensive_stats table:
+  - round_id (foreign key → rounds)
+  - player_guid (unique player ID)
+  - player_name, team
+  - kills, deaths, damage_given, damage_received
+  - accuracy, headshots, revives
+  - time_played, objectives
+  - ... ALL 52 fields!
+
+📋 weapon_comprehensive_stats table:
+  - round_id (foreign key → rounds)
+  - player_guid
+  - weapon_name (mp40, thompson, etc.)
+  - kills, deaths, shots, hits
+  - headshots, accuracy
+  - ... 9 weapon fields
+
+📋 processed_files table:
+  - filename
+  - processed_at (timestamp)
+  - success (true/false)
+  - error_message (if failed)
+
+
+================================================================================
+🎯 KEY INSIGHTS
+================================================================================
+
+✅ Each file creates exactly:
+   - 1 round
+   - 8 player stats (one per player)
+   - 45 weapon stats (multiple per player)
+   - 1 processed_files entry
+
+✅ Gaming sessions group rounds together:
+   - Session 1: Rounds 1-10 (played continuously)
+   - 60+ minute gap
+   - Session 2: Rounds 11-18 (new gaming night)
+
+✅ Database is the source of truth:
+   - Original .txt files can be deleted
+   - Everything is in PostgreSQL
+   - Can rebuild Discord posts anytime from DB
+
+✅ Logging tracks everything:
+   - What went wrong
+   - How long things took
+   - Who did what
+

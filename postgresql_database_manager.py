@@ -555,8 +555,97 @@ class PostgreSQLDatabaseManager:
             logger.error(f"Failed to create round: {e}")
             return None
     
+    async def _verify_player_insert(self, conn, round_id: int, player_guid: str, expected_player: Dict) -> bool:
+        """
+        🔒 VERIFICATION: Read back inserted player and verify values match
+        
+        Uses round_id and player_guid to verify what was actually saved.
+        Returns True if all critical fields match, False otherwise.
+        """
+        try:
+            actual = await conn.fetchrow(
+                """
+                SELECT player_name, player_guid, kills, deaths, headshots, 
+                       damage_given, damage_received, kd_ratio, efficiency
+                FROM player_comprehensive_stats
+                WHERE round_id = $1 AND player_guid = $2
+                """,
+                round_id, player_guid
+            )
+            
+            if not actual:
+                logger.error(f"❌ Verification failed: Player {player_guid} not found after insert in round {round_id}!")
+                return False
+            
+            # Verify critical fields match
+            mismatches = []
+            
+            if actual['kills'] != expected_player.get('kills', 0):
+                mismatches.append(f"kills: expected {expected_player.get('kills')}, got {actual['kills']}")
+            
+            if actual['deaths'] != expected_player.get('deaths', 0):
+                mismatches.append(f"deaths: expected {expected_player.get('deaths')}, got {actual['deaths']}")
+            
+            if actual['headshots'] != expected_player.get('headshots', 0):
+                mismatches.append(f"headshots: expected {expected_player.get('headshots')}, got {actual['headshots']}")
+            
+            if actual['damage_given'] != expected_player.get('damage_given', 0):
+                mismatches.append(f"damage_given: expected {expected_player.get('damage_given')}, got {actual['damage_given']}")
+            
+            if mismatches:
+                logger.warning(f"⚠️  Player insert verification mismatch for {actual['player_name']}: {', '.join(mismatches)}")
+                return False
+            
+            logger.debug(f"✓ Verified player insert: {actual['player_name']} (K:{actual['kills']} D:{actual['deaths']} HS:{actual['headshots']})")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error verifying player insert: {e}")
+            return False
+    
+    async def _verify_weapon_insert(self, conn, round_id: int, player_guid: str, weapon_name: str, expected_weapon: Dict) -> bool:
+        """
+        🔒 VERIFICATION: Read back inserted weapon stat and verify values match
+        """
+        try:
+            actual = await conn.fetchrow(
+                """
+                SELECT weapon_name, kills, deaths, shots, hits, headshots, accuracy
+                FROM weapon_comprehensive_stats
+                WHERE round_id = $1 AND player_guid = $2 AND weapon_name = $3
+                """,
+                round_id, player_guid, weapon_name
+            )
+            
+            if not actual:
+                logger.error(f"❌ Verification failed: Weapon {weapon_name} for player {player_guid} not found after insert in round {round_id}!")
+                return False
+            
+            # Verify critical fields match
+            mismatches = []
+            
+            if actual['kills'] != expected_weapon.get('kills', 0):
+                mismatches.append(f"kills: expected {expected_weapon.get('kills')}, got {actual['kills']}")
+            
+            if actual['shots'] != expected_weapon.get('shots', 0):
+                mismatches.append(f"shots: expected {expected_weapon.get('shots')}, got {actual['shots']}")
+            
+            if actual['hits'] != expected_weapon.get('hits', 0):
+                mismatches.append(f"hits: expected {expected_weapon.get('hits')}, got {actual['hits']}")
+            
+            if mismatches:
+                logger.warning(f"⚠️  Weapon insert verification mismatch for {weapon_name}: {', '.join(mismatches)}")
+                return False
+            
+            logger.debug(f"✓ Verified weapon insert: {weapon_name} (K:{actual['kills']} Acc:{actual['accuracy']:.1f}%)")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error verifying weapon insert: {e}")
+            return False
+    
     async def _insert_player_stats(self, conn, round_id: int, round_date: str, parsed_data: Dict) -> int:
-        """Insert player stats - ALL 51 FIELDS like original database_manager.py"""
+        """Insert player stats - ALL 51 FIELDS with INSERT VERIFICATION"""
         players = parsed_data.get('players', [])
         map_name = parsed_data.get('map_name', 'unknown')
         round_number = parsed_data.get('round_number', 1)
@@ -585,8 +674,8 @@ class PostgreSQLDatabaseManager:
                 time_dead_ratio = raw_td * 100.0 if raw_td <= 1 else float(raw_td)
                 time_dead_minutes = time_minutes * (time_dead_ratio / 100.0)
                 
-                # ✅ INSERT ALL 51 VALUES with correct field mappings (matching original exactly)
-                await conn.execute(
+                # ✅ INSERT with RETURNING clause for verification
+                player_stat_id = await conn.fetchval(
                     """
                     INSERT INTO player_comprehensive_stats (
                         round_id, round_date, map_name, round_number,
@@ -621,6 +710,7 @@ class PostgreSQLDatabaseManager:
                         damage_given = EXCLUDED.damage_given,
                         kd_ratio = EXCLUDED.kd_ratio,
                         efficiency = EXCLUDED.efficiency
+                    RETURNING id
                     """,
                     round_id, round_date, map_name, round_number,
                     guid, name, clean_name, team,
@@ -659,6 +749,12 @@ class PostgreSQLDatabaseManager:
                     obj_stats.get('killing_spree', 0),
                     obj_stats.get('death_spree', 0)
                 )
+                
+                # 🔒 VERIFY INSERT: Read back and confirm values match
+                # Note: player_stat_id is actually the 'id' column from the table
+                if player_stat_id:
+                    await self._verify_player_insert(conn, round_id, guid, player)
+                
                 count += 1
             except Exception as e:
                 logger.warning(f"Failed to insert player {player.get('name')}: {e}")
@@ -666,7 +762,7 @@ class PostgreSQLDatabaseManager:
         return count
     
     async def _insert_weapon_stats(self, conn, round_id: int, round_date: str, parsed_data: Dict) -> int:
-        """Insert weapon stats - includes map_name and round_number (NOT NULL)"""
+        """Insert weapon stats with INSERT VERIFICATION"""
         players = parsed_data.get('players', [])
         map_name = parsed_data.get('map_name', 'unknown')
         round_number = parsed_data.get('round_number', 1)
@@ -682,7 +778,8 @@ class PostgreSQLDatabaseManager:
                     hits = weapon_data.get('hits', 0)
                     accuracy = (hits / shots * 100) if shots > 0 else 0.0
                     
-                    await conn.execute(
+                    # ✅ INSERT with RETURNING clause for verification
+                    weapon_stat_id = await conn.fetchval(
                         """
                         INSERT INTO weapon_comprehensive_stats (
                             round_id, round_date, map_name, round_number,
@@ -694,6 +791,7 @@ class PostgreSQLDatabaseManager:
                             shots = EXCLUDED.shots,
                             hits = EXCLUDED.hits,
                             accuracy = EXCLUDED.accuracy
+                        RETURNING id
                         """,
                         round_id, round_date, map_name, round_number,
                         player.get('guid'), player.get('name'), weapon_name,
@@ -701,6 +799,11 @@ class PostgreSQLDatabaseManager:
                         weapon_data.get('shots', 0), weapon_data.get('hits', 0),
                         weapon_data.get('headshots', 0), accuracy
                     )
+                    
+                    # 🔒 VERIFY INSERT: Read back and confirm values match
+                    if weapon_stat_id:
+                        await self._verify_weapon_insert(conn, round_id, player.get('guid'), weapon_name, weapon_data)
+                    
                     count += 1
                 except Exception as e:
                     logger.warning(f"Failed to insert weapon {weapon_name}: {e}")
