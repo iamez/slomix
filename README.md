@@ -302,8 +302,21 @@ python -c "import matplotlib; matplotlib.font_manager._rebuild()"
 
 ## 📚 Additional Documentation
 
-### Available Guides
-- **[bot/services/automation/INTEGRATION_GUIDE.md](bot/services/automation/INTEGRATION_GUIDE.md)** - Automation system setup and integration
+### Technical Documentation
+- **[docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md)** - Complete technical documentation
+  - Full data pipeline: Game Server → Database → Discord
+  - System architecture and design decisions
+  - Database schema (50+ fields per player)
+  - Field mapping: exactly what data we capture
+  - Performance optimizations
+  - Security & data integrity
+
+- **[docs/DATA_PIPELINE.html](docs/DATA_PIPELINE.html)** - Visual pipeline diagram (interactive)
+- **[docs/FIELD_MAPPING.html](docs/FIELD_MAPPING.html)** - Complete field reference with examples
+- **[docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)** - Historical system documentation
+
+### Integration Guides
+- **[bot/services/automation/INTEGRATION_GUIDE.md](bot/services/automation/INTEGRATION_GUIDE.md)** - Automation system setup
   - SSH file monitoring
   - Real-time round stats posting
   - Database maintenance
@@ -318,12 +331,13 @@ The `postgresql_database_manager.py` CLI tool provides:
 - Backup and restore
 - Transaction-safe operations
 
-### Core Systems Documentation
+### Core Systems Code
 Key files to review for understanding the bot:
-- `bot/ultimate_bot.py` - Main bot logic (4837 lines)
+- `bot/ultimate_bot.py` - Main bot logic (4,452 lines)
 - `bot/core/database_adapter.py` - Database abstraction layer
 - `bot/core/team_manager.py` - Team detection algorithms
 - `bot/cogs/last_session_cog.py` - Comprehensive analytics (111KB)
+- `community_stats_parser.py` - Stats file parser
 
 ## 🚢 VPS Deployment
 
