@@ -3250,36 +3250,83 @@ class UltimateETLegacyBot(commands.Bot):
             dict with keys: success, round_id, player_count, error
         """
         try:
-            from community_stats_parser import C0RNP0RN3StatsParser
-
             logger.info(f"⚙️ Processing {filename}...")
 
-            # Parse using existing parser (it reads the file itself)
-            parser = C0RNP0RN3StatsParser()
-            stats_data = parser.parse_stats_file(local_path)
+            # 🔥 FIX: Use PostgreSQL database manager instead of bot's own import logic
+            # This ensures proper transaction handling and constraint checks
+            if self.config.database_type == "postgres":
+                from postgresql_database_manager import PostgreSQLDatabase
+                from pathlib import Path
+                
+                # Create database manager instance (reuses existing pool)
+                db_config = {
+                    'host': self.config.postgres_host,
+                    'port': self.config.postgres_port,
+                    'database': self.config.postgres_database,
+                    'user': self.config.postgres_user,
+                    'password': self.config.postgres_password
+                }
+                
+                db_manager = PostgreSQLDatabase(db_config)
+                await db_manager.connect()
+                
+                # 🔧 FIX: Use process_file() not import_stats_file() (method doesn't exist!)
+                success, message = await db_manager.process_file(Path(local_path))
+                
+                await db_manager.disconnect()
+                
+                if not success:
+                    raise Exception(f"Import failed: {message}")
+                
+                # Parse file to get player count for return value
+                from community_stats_parser import C0RNP0RN3StatsParser
+                parser = C0RNP0RN3StatsParser()
+                stats_data = parser.parse_stats_file(local_path)
+                
+                # Mark as processed
+                try:
+                    await self._mark_file_processed(filename, success=True)
+                    self.processed_files.add(filename)
+                except Exception as e:
+                    logger.debug(f"Failed to mark {filename} as processed: {e}")
+                
+                return {
+                    "success": True,
+                    "round_id": None,  # Database manager doesn't return round_id
+                    "player_count": len(stats_data.get("players", [])) if stats_data else 0,
+                    "error": None,
+                    "stats_data": stats_data if stats_data else {},
+                }
+            else:
+                # SQLite fallback - use old import logic
+                from community_stats_parser import C0RNP0RN3StatsParser
 
-            if not stats_data or stats_data.get("error"):
-                error_msg = (
-                    stats_data.get("error") if stats_data else "No data"
-                )
-                raise Exception(f"Parser error: {error_msg}")
+                # Parse using existing parser (it reads the file itself)
+                parser = C0RNP0RN3StatsParser()
+                stats_data = parser.parse_stats_file(local_path)
 
-            # Import to database using existing import logic
-            round_id = await self._import_stats_to_db(stats_data, filename)
-            # Mark file as processed only after successful import
-            try:
-                await self._mark_file_processed(filename, success=True)
-                self.processed_files.add(filename)
-            except Exception as e:
-                logger.debug(f"Failed to mark {filename} as processed: {e}")
+                if not stats_data or stats_data.get("error"):
+                    error_msg = (
+                        stats_data.get("error") if stats_data else "No data"
+                    )
+                    raise Exception(f"Parser error: {error_msg}")
 
-            return {
-                "success": True,
-                "round_id": round_id,
-                "player_count": len(stats_data.get("players", [])),
-                "error": None,
-                "stats_data": stats_data,
-            }
+                # Import to database using existing import logic
+                round_id = await self._import_stats_to_db(stats_data, filename)
+                # Mark file as processed only after successful import
+                try:
+                    await self._mark_file_processed(filename, success=True)
+                    self.processed_files.add(filename)
+                except Exception as e:
+                    logger.debug(f"Failed to mark {filename} as processed: {e}")
+
+                return {
+                    "success": True,
+                    "round_id": round_id,
+                    "player_count": len(stats_data.get("players", [])),
+                    "error": None,
+                    "stats_data": stats_data,
+                }
 
         except Exception as e:
             logger.error(f"❌ Processing failed: {e}")
@@ -4086,16 +4133,21 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"❌ Failed to post map summary: {e}")
 
-    async def should_process_file(self, filename):
+    async def should_process_file(self, filename, ignore_startup_time=False, check_db_only=False):
         """
         Smart file processing decision (Hybrid Approach)
 
         Checks multiple sources to avoid re-processing:
-        1. File age (prevent importing old files)
+        1. File age (prevent importing old files) - SKIPPED if ignore_startup_time=True
         2. In-memory cache (fastest)
-        3. Local file exists (fast)
+        3. Local file exists (fast) - SKIPPED if check_db_only=True
         4. Processed files table (fast, persistent)
         5. Sessions table (slower, definitive)
+
+        Args:
+            filename: Name of the file to check
+            ignore_startup_time: If True, skip the bot startup time check (used by manual sync commands)
+            check_db_only: If True, only check database, not local files (used to find files needing import)
 
         Returns:
             bool: True if file should be processed, False if already done
@@ -4103,40 +4155,43 @@ class UltimateETLegacyBot(commands.Bot):
         try:
             # 1. Check file age - only import files created AFTER bot startup
             # This prevents importing old files on bot restart while allowing live updates
-            try:
-                # Parse datetime from filename: YYYY-MM-DD-HHMMSS-...
-                datetime_str = filename[:17]  # Get YYYY-MM-DD-HHMMSS
-                file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d-%H%M%S")
-                
-                # Skip files created before bot started
-                if file_datetime < self.bot_startup_time:
-                    time_diff = (self.bot_startup_time - file_datetime).total_seconds() / 3600
-                    logger.debug(f"⏭️ {filename} created {time_diff:.1f}h before bot startup (skip old files)")
+            # SKIP this check if ignore_startup_time=True (manual sync commands)
+            if not ignore_startup_time:
+                try:
+                    # Parse datetime from filename: YYYY-MM-DD-HHMMSS-...
+                    datetime_str = filename[:17]  # Get YYYY-MM-DD-HHMMSS
+                    file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d-%H%M%S")
+                    
+                    # Skip files created before bot started
+                    if file_datetime < self.bot_startup_time:
+                        time_diff = (self.bot_startup_time - file_datetime).total_seconds() / 3600
+                        logger.debug(f"⏭️ {filename} created {time_diff:.1f}h before bot startup (skip old files)")
+                        self.processed_files.add(filename)
+                        await self._mark_file_processed(filename, success=True)
+                        return False
+                    else:
+                        time_diff = (file_datetime - self.bot_startup_time).total_seconds() / 60
+                        logger.debug(f"✅ {filename} created {time_diff:.1f}m after bot startup (process as new file)")
+                except ValueError:
+                    # If datetime parsing fails, continue with other checks
+                    logger.warning(f"⚠️ Could not parse datetime from filename: {filename}")
+            
+            # 2. Check in-memory cache (only if not checking DB only)
+            if not check_db_only and filename in self.processed_files:
+                return False
+
+            # 3. Check if local file exists (SKIP if check_db_only=True)
+            if not check_db_only:
+                local_path = os.path.join("local_stats", filename)
+                if os.path.exists(local_path):
+                    logger.debug(
+                        f"⏭️ {filename} exists locally, marking processed"
+                    )
                     self.processed_files.add(filename)
                     await self._mark_file_processed(filename, success=True)
                     return False
-                else:
-                    time_diff = (file_datetime - self.bot_startup_time).total_seconds() / 60
-                    logger.debug(f"✅ {filename} created {time_diff:.1f}m after bot startup (process as new file)")
-            except ValueError:
-                # If datetime parsing fails, continue with other checks
-                logger.warning(f"⚠️ Could not parse datetime from filename: {filename}")
-            
-            # 2. Check in-memory cache
-            if filename in self.processed_files:
-                return False
 
-            # 2. Check if local file exists
-            local_path = os.path.join("local_stats", filename)
-            if os.path.exists(local_path):
-                logger.debug(
-                    f"⏭️ {filename} exists locally, marking processed"
-                )
-                self.processed_files.add(filename)
-                await self._mark_file_processed(filename, success=True)
-                return False
-
-            # 3. Check processed_files table
+            # 4. Check processed_files table
             if await self._is_in_processed_files_table(filename):
                 logger.debug(f"⏭️ {filename} in processed_files table")
                 self.processed_files.add(filename)

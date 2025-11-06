@@ -161,9 +161,12 @@ class SyncCog(commands.Cog, name="Sync Commands"):
                     )
 
             # Check which files need processing
+            # Use ignore_startup_time=True to allow historical files
+            # Use check_db_only=True to check ONLY database, not local files
+            # This allows re-importing local files that were wiped from DB
             files_to_process = []
             for filename in remote_files:
-                if await self.bot.should_process_file(filename):
+                if await self.bot.should_process_file(filename, ignore_startup_time=True, check_db_only=True):
                     files_to_process.append(filename)
 
             if not files_to_process:
