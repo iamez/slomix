@@ -1,0 +1,246 @@
+================================================================================
+🔄 ROUND 2, 3, 4... PIPELINE - WHAT'S DIFFERENT?
+================================================================================
+
+The pipeline is THE SAME, but with one CRITICAL difference:
+
+🎯 GAMING SESSION ID CALCULATION
+
+
+================================================================================
+📊 ROUND 1 vs ROUND 2+ COMPARISON
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ROUND 1 (First Round of the Night)                                     │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│ Stage 5: Calculate gaming_session_id                                   │
+│   ├─ Check database: "Is there a previous round?"                      │
+│   ├─ NO → This is the first round ever!                                │
+│   └─ gaming_session_id = 1                                             │
+│                                                                         │
+│ Saved to database:                                                     │
+│   rounds table:                                                        │
+│     round_id: 1                                                        │
+│     round_date: 2025-11-06                                             │
+│     round_time: 20:00:00                                               │
+│     gaming_session_id: 1  ← NEW SESSION!                               │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+                          ⏰ 15 minutes pass...
+                      Players finish Round 1, start Round 2
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ROUND 2 (Same Gaming Night, 15 minutes later)                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│ Stage 5: Calculate gaming_session_id                                   │
+│   ├─ Check database: "Is there a previous round?"                      │
+│   ├─ YES! Round 1 exists                                               │
+│   │   ├─ Last round time: 20:00:00                                     │
+│   │   ├─ Current round time: 20:15:00                                  │
+│   │   └─ Time gap: 15 minutes                                          │
+│   │                                                                     │
+│   ├─ Is gap > 60 minutes?                                              │
+│   ├─ NO → Same gaming session!                                         │
+│   └─ gaming_session_id = 1 (REUSE from Round 1)                        │
+│                                                                         │
+│ Saved to database:                                                     │
+│   rounds table:                                                        │
+│     round_id: 2                                                        │
+│     round_date: 2025-11-06                                             │
+│     round_time: 20:15:00                                               │
+│     gaming_session_id: 1  ← SAME SESSION AS ROUND 1!                   │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+                          ⏰ 15 more minutes...
+                               Round 3 starts
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ROUND 3 (Still Same Gaming Night)                                      │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│ Stage 5: Calculate gaming_session_id                                   │
+│   ├─ Last round time: 20:15:00                                         │
+│   ├─ Current round time: 20:30:00                                      │
+│   ├─ Time gap: 15 minutes                                              │
+│   ├─ Is gap > 60 minutes? NO                                           │
+│   └─ gaming_session_id = 1 (STILL SAME SESSION!)                       │
+│                                                                         │
+│ Database now has:                                                      │
+│   rounds table:                                                        │
+│     Round 1: gaming_session_id = 1                                     │
+│     Round 2: gaming_session_id = 1                                     │
+│     Round 3: gaming_session_id = 1  ← All linked together!             │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+                          ⏰ 2 hours pass...
+                    Players take a break, come back later
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ROUND 10 (New Gaming Session - After Long Break)                       │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│ Stage 5: Calculate gaming_session_id                                   │
+│   ├─ Last round time: 20:30:00                                         │
+│   ├─ Current round time: 22:45:00                                      │
+│   ├─ Time gap: 135 minutes (2 hours 15 minutes)                        │
+│   │                                                                     │
+│   ├─ Is gap > 60 minutes?                                              │
+│   ├─ YES! → NEW GAMING SESSION!                                        │
+│   └─ gaming_session_id = 2 (INCREMENT!)                                │
+│                                                                         │
+│ Database now has:                                                      │
+│   rounds table:                                                        │
+│     Round 1-3: gaming_session_id = 1 (first session)                   │
+│     Round 10: gaming_session_id = 2  ← NEW SESSION STARTS!             │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+🎯 THE GAMING SESSION ID LOGIC
+================================================================================
+
+Every time a new round is processed, the database manager does this:
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ def _get_or_create_gaming_session_id():                                │
+│                                                                         │
+│   1. Query database for last round:                                    │
+│      SELECT gaming_session_id, round_date, round_time                  │
+│      FROM rounds                                                       │
+│      WHERE gaming_session_id IS NOT NULL                               │
+│      ORDER BY round_date DESC, round_time DESC                         │
+│      LIMIT 1                                                           │
+│                                                                         │
+│   2. If NO previous round found:                                       │
+│      → Return gaming_session_id = 1                                    │
+│                                                                         │
+│   3. If previous round exists:                                         │
+│      a) Calculate time gap:                                            │
+│         gap = current_time - last_round_time                           │
+│                                                                         │
+│      b) Handle midnight crossing:                                      │
+│         (if dates differ, add 24 hours)                                │
+│                                                                         │
+│      c) Check gap:                                                     │
+│         - If gap <= 60 minutes:                                        │
+│           → Return SAME gaming_session_id                              │
+│                                                                         │
+│         - If gap > 60 minutes:                                         │
+│           → Return gaming_session_id + 1 (NEW SESSION!)                │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+📊 EXAMPLE: A FULL GAMING NIGHT
+================================================================================
+
+Time     | Round | Map      | Gap from Last | gaming_session_id | Why?
+---------|-------|----------|---------------|-------------------|------------------
+20:00:00 | 1     | goldrush | N/A           | 1                 | First round
+20:15:00 | 2     | supply   | 15 min        | 1                 | < 60 min gap
+20:30:00 | 3     | radar    | 15 min        | 1                 | < 60 min gap
+20:45:00 | 4     | battery  | 15 min        | 1                 | < 60 min gap
+         |       |          |               |                   |
+         |       | 🍕 PIZZA BREAK (2 hours)                     |
+         |       |          |               |                   |
+22:50:00 | 5     | goldrush | 125 min       | 2                 | > 60 min! NEW!
+23:05:00 | 6     | supply   | 15 min        | 2                 | < 60 min gap
+23:20:00 | 7     | radar    | 15 min        | 2                 | < 60 min gap
+         |       |          |               |                   |
+         |       | 😴 NEXT DAY                                  |
+         |       |          |               |                   |
+20:00:00 | 8     | battery  | ~1260 min     | 3                 | > 60 min! NEW!
+20:15:00 | 9     | goldrush | 15 min        | 3                 | < 60 min gap
+
+
+Result in database:
+  Session 1: Rounds 1, 2, 3, 4 (4 rounds)
+  Session 2: Rounds 5, 6, 7 (3 rounds)
+  Session 3: Rounds 8, 9 (2 rounds)
+
+
+================================================================================
+🔍 WHAT THIS MEANS FOR DISCORD COMMANDS
+================================================================================
+
+When you type !last_session:
+
+1. Bot finds most recent gaming_session_id:
+   SELECT MAX(gaming_session_id) FROM rounds
+   → Returns: 3
+
+2. Bot fetches all rounds with gaming_session_id = 3:
+   SELECT * FROM rounds WHERE gaming_session_id = 3
+   → Returns: Rounds 8, 9
+
+3. Bot shows stats for ONLY those rounds (not all rounds ever!)
+
+
+================================================================================
+💡 KEY DIFFERENCES: ROUND 1 vs ROUND 2+
+================================================================================
+
+┌─────────────────────────┬──────────────────┬──────────────────┐
+│ Aspect                  │ Round 1          │ Round 2+         │
+├─────────────────────────┼──────────────────┼──────────────────┤
+│ gaming_session_id       │ Always 1         │ 1 or higher      │
+│ Checks previous rounds? │ No               │ Yes              │
+│ Time gap calculation?   │ No               │ Yes              │
+│ Database query?         │ Simple INSERT    │ SELECT + INSERT  │
+│ Processing time?        │ ~2 seconds       │ ~2.2 seconds     │
+│ Everything else?        │ IDENTICAL        │ IDENTICAL        │
+└─────────────────────────┴──────────────────┴──────────────────┘
+
+
+================================================================================
+🛡️ EDGE CASES HANDLED
+================================================================================
+
+1️⃣ MIDNIGHT CROSSING:
+   Last round: 23:50:00 (Nov 5)
+   This round: 00:10:00 (Nov 6)
+   Gap = 20 minutes (NOT 23 hours 40 minutes!)
+   → Same session ✓
+
+2️⃣ EXACTLY 60 MINUTES:
+   Gap = 60 minutes
+   → Same session (only > 60 triggers new session)
+
+3️⃣ DATABASE REBUILD:
+   All files processed in order
+   Sessions calculated correctly based on file timestamps
+   → Historical sessions preserved ✓
+
+4️⃣ OUT-OF-ORDER FILES:
+   Files might be processed out of chronological order
+   Sessions still calculated based on actual round times
+   → Correct grouping ✓
+
+
+================================================================================
+📝 SUMMARY - THE 60-SECOND RULE
+================================================================================
+
+🎮 Round 1:  "This is new! gaming_session_id = 1"
+🎮 Round 2:  "Last round was 15 min ago? Same session! gaming_session_id = 1"
+🎮 Round 3:  "Last round was 15 min ago? Same session! gaming_session_id = 1"
+    ...
+    [Long break - pizza, sleep, whatever]
+    ...
+🎮 Round 10: "Last round was 2 hours ago? NEW SESSION! gaming_session_id = 2"
+🎮 Round 11: "Last round was 15 min ago? Same session! gaming_session_id = 2"
+
+The ENTIRE pipeline is the same for every round.
+The ONLY difference is the gaming_session_id calculation!
+
+Everything else (parsing, validation, database inserts, Discord posts) 
+works identically for Round 1, 2, 3, 4... 999!
+

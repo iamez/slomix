@@ -1,0 +1,8 @@
+{
+  "postgresql_host": "localhost",
+  "postgresql_port": 5432,
+  "postgresql_database": "etlegacy",
+  "postgresql_user": "etlegacy_user",
+  "postgresql_password": "REDACTED_DB_PASSWORD",
+  "sqlite_path": "bot/etlegacy_production.db"
+}
