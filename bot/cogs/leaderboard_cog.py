@@ -61,6 +61,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
         - !stats playerName   → Search by name
         - !stats @user        → Stats for mentioned Discord user
         """
+        logger.info(f"🔍 Stats command called by {ctx.author} | player_name='{player_name}' | mentions={ctx.message.mentions}")
         try:
             player_guid = None
             primary_name = None
@@ -79,7 +80,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
             # === SCENARIO 1: @MENTION - Look up linked Discord user ===
             if ctx.message.mentions:
                 mentioned_user = ctx.message.mentions[0]
-                mentioned_id = str(mentioned_user.id)
+                mentioned_id = int(mentioned_user.id)  # Convert to int for PostgreSQL BIGINT
 
                 link = await self.bot.db_adapter.fetch_one(
                     """
@@ -125,6 +126,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     f"Stats via @mention: {ctx.author} looked up "
                     f"{mentioned_user} (GUID: {player_guid})"
                 )
+                # Skip to stats retrieval (don't process player_name as search term)
 
             # === SCENARIO 2: NO ARGS - Use author's linked account ===
             elif not player_name:
@@ -149,7 +151,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 primary_name = link[1]
 
             # === SCENARIO 3: NAME SEARCH - Traditional lookup ===
-            else:
+            elif player_name and not player_guid:
                 # Try exact match in player_links first
                 link = await self.bot.db_adapter.fetch_one(
                     """
@@ -200,22 +202,26 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                         player_guid = result[0]
                         primary_name = result[1]
 
-                # === NOW WE HAVE player_guid AND primary_name - Get Stats ===
+            # === NOW WE HAVE player_guid AND primary_name - Get Stats ===
+            if not player_guid:
+                await ctx.send("❌ Could not find player stats.")
+                return
 
-                # 🚀 TRY CACHE FIRST
-                cache_key = f"stats_{player_guid}"
-                cached_data = self.stats_cache.get(cache_key)
+            # 🚀 TRY CACHE FIRST
+            cache_key = f"stats_{player_guid}"
+            cached_data = self.stats_cache.get(cache_key)
+            aliases = None  # Initialize to avoid UnboundLocalError
 
-                if cached_data:
-                    # Use cached stats
-                    overall, weapon_overall, fav_weapons, recent = cached_data
-                    logger.info(f"📦 Cache HIT: {primary_name}")
-                else:
-                    # Cache MISS - Query database
-                    logger.info(f"💾 Cache MISS: {primary_name} - querying DB")
-
-                    # Get overall stats
-                    overall = await self.bot.db_adapter.fetch_one(
+            if cached_data:
+                # Use cached stats
+                overall, weapon_overall, fav_weapons, recent = cached_data
+                logger.info(f"📦 Cache HIT: {primary_name}")
+            else:
+                # Cache MISS - Query database
+                logger.info(f"💾 Cache MISS: {primary_name} - querying DB")
+                
+                # Get overall stats
+                overall = await self.bot.db_adapter.fetch_one(
                         """
                         SELECT
                             COUNT(DISTINCT round_id) as total_games,
@@ -237,148 +243,148 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     )
 
                     # Get weapon stats with accuracy
-                    weapon_overall = await self.bot.db_adapter.fetch_one(
-                        """
-                        SELECT
-                            SUM(w.hits) as total_hits,
-                            SUM(w.shots) as total_shots,
-                            SUM(w.headshots) as total_hs
-                        FROM weapon_comprehensive_stats w
-                        WHERE w.player_guid = ?
-                    """,
-                        (player_guid,),
-                    )
+                weapon_overall = await self.bot.db_adapter.fetch_one(
+                    """
+                    SELECT
+                        SUM(w.hits) as total_hits,
+                        SUM(w.shots) as total_shots,
+                        SUM(w.headshots) as total_hs
+                    FROM weapon_comprehensive_stats w
+                    WHERE w.player_guid = ?
+                """,
+                    (player_guid,),
+                )
 
-                    # Get favorite weapons
-                    fav_weapons = await self.bot.db_adapter.fetch_all(
-                        """
-                        SELECT weapon_name, SUM(kills) as total_kills
-                        FROM weapon_comprehensive_stats
-                        WHERE player_guid = ?
-                        GROUP BY weapon_name
-                        ORDER BY total_kills DESC
-                        LIMIT 3
-                    """,
-                        (player_guid,),
-                    )
+                # Get favorite weapons
+                fav_weapons = await self.bot.db_adapter.fetch_all(
+                    """
+                    SELECT weapon_name, SUM(kills) as total_kills
+                    FROM weapon_comprehensive_stats
+                    WHERE player_guid = ?
+                    GROUP BY weapon_name
+                    ORDER BY total_kills DESC
+                    LIMIT 3
+                """,
+                    (player_guid,),
+                )
 
-                    # Get recent activity
-                    recent = await self.bot.db_adapter.fetch_all(
-                        """
-                        SELECT s.round_date, s.map_name, p.kills, p.deaths
-                        FROM player_comprehensive_stats p
-                        JOIN rounds s ON p.round_id = s.id
-                        WHERE p.player_guid = ?
-                        ORDER BY s.round_date DESC
-                        LIMIT 3
-                    """,
-                        (player_guid,),
-                    )
-                    
-                    # 💾 STORE IN CACHE
-                    self.stats_cache.set(
-                        cache_key,
-                        (overall, weapon_overall, fav_weapons, recent),
-                    )
-                    logger.info(f"💾 Cached stats for {primary_name}")
+                # Get recent activity
+                recent = await self.bot.db_adapter.fetch_all(
+                    """
+                    SELECT s.round_date, s.map_name, p.kills, p.deaths
+                    FROM player_comprehensive_stats p
+                    JOIN rounds s ON p.round_id = s.id
+                    WHERE p.player_guid = ?
+                    ORDER BY s.round_date DESC
+                    LIMIT 3
+                """,
+                    (player_guid,),
+                )
+                
+                # 💾 STORE IN CACHE
+                self.stats_cache.set(
+                    cache_key,
+                    (overall, weapon_overall, fav_weapons, recent),
+                )
+                logger.info(f"💾 Cached stats for {primary_name}")
 
-                    # Calculate stats
-                    (
-                        games,
-                        kills,
-                        deaths,
-                        dmg,
-                        dmg_recv,
-                        hs,
-                        avg_dpm,
-                        avg_kd,
-                    ) = overall
-                    hits, shots, hs_weapon = (
-                        weapon_overall if weapon_overall else (0, 0, 0)
+                # Calculate stats
+                (
+                    games,
+                    kills,
+                    deaths,
+                    dmg,
+                    dmg_recv,
+                    hs,
+                    avg_dpm,
+                    avg_kd,
+                ) = overall
+                hits, shots, hs_weapon = (
+                    weapon_overall if weapon_overall else (0, 0, 0)
+                )
+
+                # Handle None values from database
+                kills = kills or 0
+                deaths = deaths or 0
+                kd_ratio = kills / deaths if deaths > 0 else kills
+                accuracy = (hits / shots * 100) if shots > 0 else 0
+                hs_pct = (hs / hits * 100) if hits > 0 else 0
+
+                # Build embed
+                embed = discord.Embed(
+                    title=f"📊 Stats for {primary_name}",
+                    color=0x0099FF,
+                    timestamp=datetime.now(),
+                )
+
+                embed.add_field(
+                    name="🎮 Overview",
+                    value=(
+                        f"**Games Played:** {games:,}\n**K/D Ratio:** {kd_ratio:.2f}\n**Avg DPM:** {avg_dpm:.1f}"
+                        if avg_dpm
+                        else "0.0"
+                    ),
+                    inline=True,
+                )
+
+                embed.add_field(
+                    name="⚔️ Combat",
+                    value=f"**Kills:** {kills:,}\n**Deaths:** {deaths:,}\n**Headshots:** {hs:,} ({hs_pct:.1f}%)",
+                    inline=True,
+                )
+
+                embed.add_field(
+                    name="🎯 Accuracy",
+                    value=f"**Overall:** {accuracy:.1f}%\n**Damage Given:** {dmg:,}\n**Damage Taken:** {dmg_recv:,}",
+                    inline=True,
+                )
+
+                if fav_weapons:
+                    weapons_text = "\n".join(
+                        [
+                            f"**{w[0].replace('WS_', '').title()}:** {w[1]:,} kills"
+                            for w in fav_weapons
+                        ]
                     )
-
-                    # Handle None values from database
-                    kills = kills or 0
-                    deaths = deaths or 0
-                    kd_ratio = kills / deaths if deaths > 0 else kills
-                    accuracy = (hits / shots * 100) if shots > 0 else 0
-                    hs_pct = (hs / hits * 100) if hits > 0 else 0
-
-                    # Build embed
-                    embed = discord.Embed(
-                        title=f"📊 Stats for {primary_name}",
-                        color=0x0099FF,
-                        timestamp=datetime.now(),
-                    )
-
                     embed.add_field(
-                        name="🎮 Overview",
-                        value=(
-                            f"**Games Played:** {games:,}\n**K/D Ratio:** {kd_ratio:.2f}\n**Avg DPM:** {avg_dpm:.1f}"
-                            if avg_dpm
-                            else "0.0"
-                        ),
-                        inline=True,
+                        name="🔫 Favorite Weapons",
+                        value=weapons_text,
+                        inline=False,
                     )
 
+                if recent:
+                    recent_text = "\n".join(
+                        [
+                            f"`{r[0]}` **{r[1]}** - {r[2]}K/{r[3]}D"
+                            for r in recent
+                        ]
+                    )
                     embed.add_field(
-                        name="⚔️ Combat",
-                        value=f"**Kills:** {kills:,}\n**Deaths:** {deaths:,}\n**Headshots:** {hs:,} ({hs_pct:.1f}%)",
-                        inline=True,
+                        name="📅 Recent Matches",
+                        value=recent_text,
+                        inline=False,
                     )
 
-                    embed.add_field(
-                        name="🎯 Accuracy",
-                        value=f"**Overall:** {accuracy:.1f}%\n**Damage Given:** {dmg:,}\n**Damage Taken:** {dmg_recv:,}",
-                        inline=True,
-                    )
+            # Get aliases for footer (always fresh, not cached)
+            aliases = await self.bot.db_adapter.fetch_all(
+                """
+                SELECT alias
+                FROM player_aliases
+                WHERE guid = ? AND LOWER(alias) != LOWER(?)
+                ORDER BY last_seen DESC, times_seen DESC
+                LIMIT 3
+            """,
+                (player_guid, primary_name),
+            )
 
-                    if fav_weapons:
-                        weapons_text = "\n".join(
-                            [
-                                f"**{w[0].replace('WS_', '').title()}:** {w[1]:,} kills"
-                                for w in fav_weapons
-                            ]
-                        )
-                        embed.add_field(
-                            name="🔫 Favorite Weapons",
-                            value=weapons_text,
-                            inline=False,
-                        )
+            # Build footer with GUID and aliases
+            footer_text = f"GUID: {player_guid}"
+            if aliases:
+                alias_names = ", ".join([a[0] for a in aliases])
+                footer_text += f" | Also known as: {alias_names}"
 
-                    if recent:
-                        recent_text = "\n".join(
-                            [
-                                f"`{r[0]}` **{r[1]}** - {r[2]}K/{r[3]}D"
-                                for r in recent
-                            ]
-                        )
-                        embed.add_field(
-                            name="📅 Recent Matches",
-                            value=recent_text,
-                            inline=False,
-                        )
-
-                    # Get aliases for footer
-                    aliases = await self.bot.db_adapter.fetch_all(
-                        """
-                        SELECT alias
-                        FROM player_aliases
-                        WHERE guid = ? AND LOWER(alias) != LOWER(?)
-                        ORDER BY last_seen DESC, times_seen DESC
-                        LIMIT 3
-                    """,
-                        (player_guid, primary_name),
-                    )
-
-                # Build footer with GUID and aliases
-                footer_text = f"GUID: {player_guid}"
-                if aliases:
-                    alias_names = ", ".join([a[0] for a in aliases])
-                    footer_text += f" | Also known as: {alias_names}"
-
-                embed.set_footer(text=footer_text)
-                await ctx.send(embed=embed)
+            embed.set_footer(text=footer_text)
+            await ctx.send(embed=embed)
 
         except Exception as e:
             logger.error(f"Error in stats command: {e}", exc_info=True)
@@ -487,7 +493,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                         p.player_guid
                     FROM player_comprehensive_stats p
                     GROUP BY p.player_guid
-                    HAVING games > 10
+                    HAVING COUNT(DISTINCT p.round_id) > 10
                     ORDER BY total_kills DESC
                     LIMIT {players_per_page} OFFSET {offset}
                 """
@@ -508,7 +514,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
-                        HAVING games > 50 AND total_deaths > 0
+                        HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(p.deaths) > 0
                         ORDER BY (CAST(total_kills AS FLOAT) / total_deaths) DESC
                         LIMIT {players_per_page} OFFSET {offset}
                     """
@@ -531,7 +537,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
-                        HAVING games > 50
+                        HAVING COUNT(DISTINCT p.round_id) > 50
                         ORDER BY weighted_dpm DESC
                         LIMIT {players_per_page} OFFSET {offset}
                     """
@@ -554,7 +560,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             ON p.round_id = w.round_id
                             AND p.player_guid = w.player_guid
                         GROUP BY p.player_guid
-                        HAVING games > 50 AND total_shots > 1000
+                        HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(w.shots) > 1000
                         ORDER BY (CAST(total_hits AS FLOAT) / total_shots) DESC
                         LIMIT {players_per_page} OFFSET {offset}
                     """
@@ -577,7 +583,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             ON p.round_id = w.round_id
                             AND p.player_guid = w.player_guid
                         GROUP BY p.player_guid
-                        HAVING games > 50 AND total_hits > 1000
+                        HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(w.hits) > 1000
                         ORDER BY (CAST(total_hs AS FLOAT) / total_hits) DESC
                         LIMIT {players_per_page} OFFSET {offset}
                     """
@@ -616,7 +622,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
-                        HAVING games > 10
+                        HAVING COUNT(DISTINCT p.round_id) > 10
                         ORDER BY total_revives DESC
                         LIMIT {players_per_page} OFFSET {offset}
                     """
@@ -635,7 +641,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
-                        HAVING games > 10
+                        HAVING COUNT(DISTINCT p.round_id) > 10
                         ORDER BY total_gibs DESC
                         LIMIT {players_per_page} OFFSET {offset}
                     """
@@ -654,7 +660,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
-                        HAVING games > 10
+                        HAVING COUNT(DISTINCT p.round_id) > 10
                         ORDER BY total_obj DESC
                         LIMIT {players_per_page} OFFSET {offset}
                     """
@@ -675,7 +681,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
-                        HAVING games > 50
+                        HAVING COUNT(DISTINCT p.round_id) > 50
                         ORDER BY avg_eff DESC
                         LIMIT {players_per_page} OFFSET {offset}
                     """
@@ -694,7 +700,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
-                        HAVING games > 50 AND total_dmg > 0
+                        HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(p.damage_given) > 0
                         ORDER BY (CAST(total_team_dmg AS FLOAT) / total_dmg) ASC
                         LIMIT {players_per_page} OFFSET {offset}
                     """
@@ -713,7 +719,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             p.player_guid
                         FROM player_comprehensive_stats p
                         GROUP BY p.player_guid
-                        HAVING games > 10
+                        HAVING COUNT(DISTINCT p.round_id) > 10
                         ORDER BY total_multi DESC
                         LIMIT {players_per_page} OFFSET {offset}
                     """
@@ -739,7 +745,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                         FROM weapon_comprehensive_stats w
                         WHERE w.weapon_name = 'WS_GRENADE'
                         GROUP BY w.player_guid
-                        HAVING games > 10
+                        HAVING COUNT(DISTINCT w.round_id) > 10
                         ORDER BY total_kills DESC
                         LIMIT {players_per_page} OFFSET {offset}
                     """

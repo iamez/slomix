@@ -125,7 +125,7 @@ class StatsCog(commands.Cog, name="Stats"):
             # Handle @mention
             if ctx.message.mentions:
                 mentioned_user = ctx.message.mentions[0]
-                mentioned_id = str(mentioned_user.id)
+                mentioned_id = int(mentioned_user.id)  # Convert to int for PostgreSQL BIGINT
 
                 link = await self.bot.db_adapter.fetch_one(
                     "SELECT et_guid, et_name FROM player_links WHERE discord_id = ?",
@@ -396,7 +396,7 @@ class StatsCog(commands.Cog, name="Stats"):
                 # resolve it to the linked ET GUID via player_links.
                 m = re.match(r"^<@!?(\d+)>$", player_name.strip())
                 if m:
-                    discord_id = m.group(1)
+                    discord_id = int(m.group(1))  # Convert to int for PostgreSQL BIGINT
                     link = await self.bot.db_adapter.fetch_one(
                         "SELECT et_guid, et_name FROM player_links WHERE discord_id = ?",
                         (discord_id,),

@@ -2143,13 +2143,38 @@ class LastSessionCog(commands.Cog):
             total_rounds = rounds_played
             unique_maps = len(set(s[1] for s in sessions))
             
-            # Build maps played string
-            map_play_counts = {}
+            # Build maps played string - each map played ONCE even if it has R1+R2
+            # Count how many times each unique map appears (considering both rounds as 1 play)
+            map_matches = {}  # Track unique map matches
             for round_id, map_name, round_num, actual_time in sessions:
-                if round_num == 2:
-                    map_play_counts[map_name] = map_play_counts.get(map_name, 0) + 1
+                # Create a unique key for each map match (both R1 and R2 count as same match)
+                # We'll use a simple approach: if we haven't seen this map yet, it's first play
+                # If we see it again, only count if there's a big time gap (different match)
+                if map_name not in map_matches:
+                    map_matches[map_name] = []
+                map_matches[map_name].append((round_id, round_num, actual_time))
             
-            maps_played = ", ".join(f"{name} (x{count})" for name, count in map_play_counts.items())
+            # Count unique map plays (R1+R2 = 1 play)
+            map_play_counts = {}
+            for map_name, rounds_list in map_matches.items():
+                # Group by consecutive round pairs (R1 followed by R2 = 1 play)
+                plays = 0
+                seen_rounds = set()
+                for round_id, round_num, actual_time in sorted(rounds_list, key=lambda x: x[0]):
+                    if round_num == 1:
+                        plays += 1
+                    elif round_num == 2 and round_id - 1 not in seen_rounds:
+                        # R2 without matching R1 (standalone R2) counts as a play
+                        plays += 1
+                    seen_rounds.add(round_id)
+                map_play_counts[map_name] = plays
+            
+            # Sort by play count descending, then alphabetically
+            sorted_maps = sorted(map_play_counts.items(), key=lambda x: (-x[1], x[0]))
+            if sorted_maps:
+                maps_played = ", ".join(f"{name} (x{count})" if count > 1 else name for name, count in sorted_maps)
+            else:
+                maps_played = "Unknown"
 
             # ═══════════════════════════════════════════════════════════════════════
             # BUILD AND SEND EMBEDS
