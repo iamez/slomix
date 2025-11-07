@@ -3729,7 +3729,7 @@ class UltimateETLegacyBot(commands.Bot):
             else:
                 round_time = "00:00:00"
             
-            # Create match_id (unique identifier for the gaming session)
+            # Create match_id (ORIGINAL BEHAVIOR - includes timestamp)
             match_id = f"{date_part}-{time_part}"
 
             # Check if round already exists
@@ -3752,12 +3752,15 @@ class UltimateETLegacyBot(commands.Bot):
                 )
                 return existing[0]
 
+            # Calculate gaming_session_id (60-minute gap logic)
+            gaming_session_id = await self._calculate_gaming_session_id(date_part, round_time)
+
             # Insert new round
             insert_round_query = """
                 INSERT INTO rounds (
                     round_date, round_time, match_id, map_name, round_number,
-                    time_limit, actual_time
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    time_limit, actual_time, gaming_session_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
             """
             round_id = await self.db_adapter.fetch_val(
@@ -3770,6 +3773,7 @@ class UltimateETLegacyBot(commands.Bot):
                     stats_data["round_num"],
                     stats_data.get("map_time", ""),
                     stats_data.get("actual_time", ""),
+                    gaming_session_id,
                 ),
             )
 
@@ -3778,6 +3782,62 @@ class UltimateETLegacyBot(commands.Bot):
                 await self._insert_player_stats(
                     round_id, date_part, stats_data, player
                 )
+
+            # 🆕 If Round 2 file, also import match summary (cumulative stats)
+            match_summary_id = None
+            if stats_data.get('match_summary'):
+                logger.info("📋 Importing match summary (cumulative R1+R2 stats)...")
+                match_summary = stats_data['match_summary']
+                
+                # Check if match summary already exists
+                check_summary_query = """
+                    SELECT id FROM rounds
+                    WHERE round_date = ? AND map_name = ? AND round_number = 0
+                """
+                existing_summary = await self.db_adapter.fetch_one(
+                    check_summary_query,
+                    (date_part, stats_data["map_name"]),
+                )
+                
+                if not existing_summary:
+                    # Insert match summary as round_number = 0 (use same gaming_session_id as the rounds)
+                    insert_summary_query = """
+                        INSERT INTO rounds (
+                            round_date, round_time, match_id, map_name, round_number,
+                            time_limit, actual_time, winner_team, defender_team, round_outcome, gaming_session_id
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        RETURNING id
+                    """
+                    match_summary_id = await self.db_adapter.fetch_val(
+                        insert_summary_query,
+                        (
+                            date_part,
+                            round_time,
+                            match_id,
+                            match_summary["map_name"],
+                            0,  # round_number = 0 for match summary
+                            match_summary.get("map_time", ""),
+                            match_summary.get("actual_time", ""),
+                            match_summary.get("winner_team", 0),
+                            match_summary.get("defender_team", 0),
+                            match_summary.get("round_outcome", ""),
+                            gaming_session_id,  # Same session as R1/R2
+                        ),
+                    )
+                    
+                    # Insert match summary player stats
+                    for player in match_summary.get("players", []):
+                        await self._insert_player_stats(
+                            match_summary_id, date_part, match_summary, player
+                        )
+                    
+                    logger.info(
+                        f"✅ Imported match summary (ID: {match_summary_id}) with "
+                        f"{len(match_summary.get('players', []))} players"
+                    )
+                else:
+                    match_summary_id = existing_summary[0]
+                    logger.info(f"⏭️  Match summary already exists (ID: {match_summary_id})")
 
             logger.info(
                 f"✅ Imported session {round_id} with "
@@ -3789,6 +3849,59 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"❌ Database import failed: {e}")
             raise
+
+    async def _calculate_gaming_session_id(self, round_date: str, round_time: str) -> int:
+        """
+        Calculate gaming_session_id using 60-minute gap logic.
+        
+        Args:
+            round_date: Date string like '2025-11-06'
+            round_time: Time string like '23:41:53'
+        
+        Returns:
+            gaming_session_id (integer, starts at 1)
+        """
+        try:
+            from datetime import datetime, timedelta
+            
+            # Get most recent round with gaming_session_id
+            query = """
+                SELECT gaming_session_id, round_date, round_time
+                FROM rounds
+                WHERE gaming_session_id IS NOT NULL
+                ORDER BY round_date DESC, round_time DESC
+                LIMIT 1
+            """
+            last_round = await self.db_adapter.fetch_one(query)
+            
+            if not last_round:
+                # First round ever
+                return 1
+            
+            last_session_id = last_round[0]
+            last_date = last_round[1]
+            last_time = last_round[2]
+            
+            # Parse timestamps
+            current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')
+            last_dt = datetime.strptime(f"{last_date} {last_time}", '%Y-%m-%d %H:%M:%S')
+            
+            # Calculate time gap
+            gap = current_dt - last_dt
+            gap_minutes = gap.total_seconds() / 60
+            
+            # If gap > 60 minutes, start new session
+            if gap_minutes > 60:
+                new_session_id = last_session_id + 1
+                logger.info(f"🎮 New gaming session #{new_session_id} (gap: {gap_minutes:.1f} min)")
+                return new_session_id
+            else:
+                logger.debug(f"🎮 Continuing session #{last_session_id} (gap: {gap_minutes:.1f} min)")
+                return last_session_id
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Error calculating gaming_session_id: {e}. Using NULL.")
+            return None
 
     async def _insert_player_stats(
         self, round_id, round_date, result, player
@@ -4031,6 +4144,13 @@ class UltimateETLegacyBot(commands.Bot):
         Updates the player_aliases table every time we see a player.
         """
         try:
+            # Convert string date to datetime for PostgreSQL compatibility
+            from datetime import datetime
+            if isinstance(last_seen_date, str):
+                last_seen_datetime = datetime.strptime(last_seen_date, '%Y-%m-%d')
+            else:
+                last_seen_datetime = last_seen_date
+            
             # Check if this GUID+alias combination exists
             check_query = 'SELECT times_seen FROM player_aliases WHERE guid = ? AND alias = ?'
             existing = await self.db_adapter.fetch_one(check_query, (guid, alias))
@@ -4040,12 +4160,12 @@ class UltimateETLegacyBot(commands.Bot):
                 update_query = '''UPDATE player_aliases 
                        SET times_seen = times_seen + 1, last_seen = ?
                        WHERE guid = ? AND alias = ?'''
-                await self.db_adapter.execute(update_query, (last_seen_date, guid, alias))
+                await self.db_adapter.execute(update_query, (last_seen_datetime, guid, alias))
             else:
                 # Insert new alias
                 insert_query = '''INSERT INTO player_aliases (guid, alias, first_seen, last_seen, times_seen)
                        VALUES (?, ?, ?, ?, 1)'''
-                await self.db_adapter.execute(insert_query, (guid, alias, last_seen_date, last_seen_date))
+                await self.db_adapter.execute(insert_query, (guid, alias, last_seen_datetime, last_seen_datetime))
 
             logger.debug(f"✅ Updated alias: {alias} for GUID {guid}")
 
@@ -4312,10 +4432,15 @@ class UltimateETLegacyBot(commands.Bot):
 
     async def sync_local_files_to_processed_table(self):
         """
-        One-time sync: Add existing local_stats files to processed_files
-
-        Call this during bot startup to populate the table with
-        already-downloaded files
+        🔍 DIAGNOSTIC TOOL: Check for unimported files in local_stats/
+        
+        This scans local_stats/ and alerts if there are files that haven't been
+        imported to the database yet. Does NOT mark them as processed - just reports.
+        
+        Files should be imported via:
+        - SSH monitor automatic download + import
+        - Manual !import command
+        - postgresql_database_manager.py bulk import
         """
         try:
             local_dir = "local_stats"
@@ -4327,14 +4452,9 @@ class UltimateETLegacyBot(commands.Bot):
             if not files:
                 return
 
-            logger.info(
-                f"🔄 Syncing {len(files)} local files to "
-                f"processed_files table..."
-            )
-
-            synced = 0
+            # Check which files are NOT in processed_files table
+            unimported = []
             for filename in files:
-                # Check if already in table
                 if self.config.database_type == 'sqlite':
                     check_query = "SELECT 1 FROM processed_files WHERE filename = ?"
                     existing = await self.db_adapter.fetch_one(check_query, (filename,))
@@ -4342,36 +4462,34 @@ class UltimateETLegacyBot(commands.Bot):
                     check_query = "SELECT 1 FROM processed_files WHERE filename = $1"
                     existing = await self.db_adapter.fetch_one(check_query, (filename,))
                 
-                if existing:
-                    continue  # Already tracked
+                if not existing:
+                    unimported.append(filename)
 
-                # Add to table (database-specific syntax)
-                if self.config.database_type == 'sqlite':
-                    insert_query = """
-                        INSERT INTO processed_files 
-                        (filename, success, error_message, processed_at)
-                        VALUES (?, 1, NULL, ?)
-                    """
-                    await self.db_adapter.execute(insert_query, (filename, datetime.now().isoformat()))
-                else:  # PostgreSQL
-                    insert_query = """
-                        INSERT INTO processed_files 
-                        (filename, success, error_message, processed_at)
-                        VALUES ($1, $2, $3, $4)
-                    """
-                    await self.db_adapter.execute(insert_query, (filename, True, None, datetime.now()))
-
-                self.processed_files.add(filename)
-                synced += 1
-
-            if synced > 0:
+            # Report findings
+            if unimported:
+                logger.warning(
+                    f"⚠️  Found {len(unimported)} unimported files in local_stats/ "
+                    f"(total: {len(files)} files)"
+                )
+                logger.warning(
+                    f"💡 To import them, use: python postgresql_database_manager.py "
+                    f"or !import command"
+                )
+                # Show a few examples (don't spam log)
+                if len(unimported) <= 5:
+                    for f in unimported:
+                        logger.info(f"   📄 {f}")
+                else:
+                    for f in unimported[:3]:
+                        logger.info(f"   📄 {f}")
+                    logger.info(f"   ... and {len(unimported) - 3} more")
+            else:
                 logger.info(
-                    f"✅ Synced {synced} local files to "
-                    f"processed_files table"
+                    f"✅ All {len(files)} local files are tracked in database"
                 )
 
         except Exception as e:
-            logger.error(f"Error syncing local files: {e}")
+            logger.error(f"Error checking local files: {e}")
 
     async def _auto_end_session(self):
         """Auto-end session and post summary"""

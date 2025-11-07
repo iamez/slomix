@@ -411,15 +411,22 @@ class C0RNP0RN3StatsParser:
         return best_r1_file
 
     def parse_round_2_with_differential(self, round_2_file_path: str) -> Dict[str, Any]:
-        """Parse Round 2 file with differential calculation to get Round 2-only stats"""
+        """
+        Parse Round 2 file with differential calculation to get Round 2-only stats
+        
+        ALSO stores the cumulative data as 'match_summary' for easy access to total match stats.
+        """
         print(f"[R2] Detected Round 2 file: {os.path.basename(round_2_file_path)}")
 
         # Find corresponding Round 1 file
         round_1_file_path = self.find_corresponding_round_1_file(round_2_file_path)
         if not round_1_file_path:
             print(f"[WARN] Could not find Round 1 file for {os.path.basename(round_2_file_path)}")
-            print("   Parsing as regular file (cumulative stats will be included)")
-            return self.parse_regular_stats_file(round_2_file_path)
+            print("   Parsing as regular file (treating as Round 2)")
+            # Parse as regular file but force round_num to 2
+            result = self.parse_regular_stats_file(round_2_file_path)
+            result['round_num'] = 2  # Force Round 2 even if header says otherwise
+            return result
 
         print(f"[R1] Found Round 1 file: {os.path.basename(round_1_file_path)}")
 
@@ -436,9 +443,19 @@ class C0RNP0RN3StatsParser:
             round_1_result, round_2_cumulative_result
         )
 
+        # 🆕 ATTACH MATCH SUMMARY (cumulative R2 data) to the result
+        # This will be stored as round_number=0 for easy querying
+        match_summary = round_2_cumulative_result.copy()
+        match_summary['round_num'] = 0  # Special round number for match summary
+        match_summary['is_match_summary'] = True
+        
+        # Attach match summary to the Round 2 differential result
+        round_2_only_result['match_summary'] = match_summary
+
         print(
             f"[OK] Successfully calculated Round 2-only stats for {len(round_2_only_result['players'])} players"
         )
+        print(f"[MATCH] Attached match summary with cumulative stats from both rounds")
         return round_2_only_result
 
     def calculate_round_2_differential(
