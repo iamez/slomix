@@ -22,12 +22,18 @@ sudo apt-get install -y python3 python3-pip python3-venv postgresql postgresql-c
 # 2. Setup PostgreSQL
 echo ""
 echo "🗄️  Step 2: Setting up PostgreSQL database..."
+
+# Generate secure random password for database user
+DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+echo "🔐 Generated secure database password: $DB_PASSWORD"
+echo "   (This will be saved to .env file)"
+
 sudo -u postgres psql <<EOF
 -- Create database
 CREATE DATABASE etlegacy;
 
--- Create user
-CREATE USER etlegacy_user WITH PASSWORD '123';
+-- Create user with generated password
+CREATE USER etlegacy_user WITH PASSWORD '$DB_PASSWORD';
 
 -- Grant privileges
 GRANT ALL PRIVILEGES ON DATABASE etlegacy TO etlegacy_user;
@@ -37,7 +43,7 @@ GRANT ALL PRIVILEGES ON DATABASE etlegacy TO etlegacy_user;
 EOF
 
 echo "✅ PostgreSQL database 'etlegacy' created"
-echo "✅ User 'etlegacy_user' created (change password in .env file!)"
+echo "✅ User 'etlegacy_user' created with secure password"
 
 # 3. Create Python virtual environment
 echo ""
@@ -56,9 +62,14 @@ echo ""
 echo "⚙️  Step 5: Creating .env configuration file..."
 if [ ! -f .env ]; then
     cp .env.example .env
-    echo "✅ .env file created - YOU MUST EDIT THIS FILE!"
+    # Update the .env file with generated database password
+    sed -i "s/POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$DB_PASSWORD/" .env
+    echo "✅ .env file created with generated database password"
+    echo "   Database password has been automatically configured!"
 else
     echo "⚠️  .env file already exists - skipping"
+    echo "⚠️  Generated password: $DB_PASSWORD"
+    echo "   Update POSTGRES_PASSWORD in .env if needed"
 fi
 
 # 6. Initialize database schema
@@ -73,10 +84,15 @@ echo ""
 echo "=============================================="
 echo "✅ Installation Complete!"
 echo ""
-echo "⚠️  IMPORTANT: Edit .env file with your settings:"
+echo "🔐 Database Credentials:"
+echo "   Database: etlegacy"
+echo "   User: etlegacy_user"
+echo "   Password: $DB_PASSWORD (saved to .env)"
+echo ""
+echo "⚠️  IMPORTANT: Edit .env file with remaining settings:"
 echo "   1. Set DISCORD_BOT_TOKEN=your_token_here"
-echo "   2. Set POSTGRES_PASSWORD=change_this_password"
-echo "   3. Set LOCAL_STATS_PATH=/path/to/stats/files"
+echo "   2. Set LOCAL_STATS_PATH=/path/to/stats/files"
+echo "   3. Verify POSTGRES_PASSWORD is set correctly"
 echo ""
 echo "To start the bot:"
 echo "   ./start_bot.sh"

@@ -6,7 +6,6 @@ import os
 import json
 import logging
 from typing import Optional, Dict, Any
-from pathlib import Path
 
 # Load .env file if it exists
 try:
