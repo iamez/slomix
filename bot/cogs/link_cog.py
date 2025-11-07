@@ -33,6 +33,9 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
+# Import pagination view for interactive button navigation
+from bot.core.pagination_view import PaginationView
+
 logger = logging.getLogger(__name__)
 
 
@@ -110,7 +113,7 @@ class LinkCog(commands.Cog, name="Link"):
                     SUM(p.kills) as total_kills,
                     SUM(p.deaths) as total_deaths
                 FROM player_comprehensive_stats p
-                LEFT JOIN player_links pl ON p.player_guid = pl.et_guid
+                LEFT JOIN player_links pl ON p.player_guid = pl.player_guid
                 GROUP BY p.player_guid, p.player_name, pl.discord_id
             """
 
@@ -152,91 +155,93 @@ class LinkCog(commands.Cog, name="Link"):
             players_per_page = 15
             total_pages = (len(players) + players_per_page - 1) // players_per_page
 
-            # Validate page number
-            if page < 1:
-                page = 1
-            elif page > total_pages:
-                page = total_pages
+            # Generate ALL pages upfront for button navigation
+            pages = []
+            for page_num in range(1, total_pages + 1):
+                start_idx = (page_num - 1) * players_per_page
+                end_idx = min(start_idx + players_per_page, len(players))
+                page_players = players[start_idx:end_idx]
 
-            start_idx = (page - 1) * players_per_page
-            end_idx = min(start_idx + players_per_page, len(players))
-            page_players = players[start_idx:end_idx]
+                # Create embed for this page
+                filter_text = f" - {filter_type.upper()}" if filter_type else ""
+                embed = discord.Embed(
+                    title=f"👥 Players List{filter_text}",
+                    description=(
+                        f"**Total**: {len(players)} players • "
+                        f"🔗 {linked_count} linked • ❌ {unlinked_count} unlinked\n"
+                        f"**Page {page_num}/{total_pages}** (showing {start_idx+1}-{end_idx})"
+                    ),
+                    color=discord.Color.green(),
+                )
 
-            # Create embed
-            filter_text = f" - {filter_type.upper()}" if filter_type else ""
-            embed = discord.Embed(
-                title=f"👥 Players List{filter_text}",
-                description=(
-                    f"**Total**: {len(players)} players • "
-                    f"🔗 {linked_count} linked • ❌ {unlinked_count} unlinked\n"
-                    f"**Page {page}/{total_pages}** (showing {start_idx+1}-{end_idx})"
-                ),
-                color=discord.Color.green(),
-            )
+                # Format player list (compact single-line per player)
+                player_lines = []
+                for (
+                    guid,
+                    name,
+                    discord_id,
+                    sessions,
+                    last_played,
+                    kills,
+                    deaths,
+                ) in page_players:
+                    link_icon = "🔗" if discord_id else "❌"
+                    kd = kills / deaths if deaths > 0 else kills
 
-            # Format player list (compact single-line per player)
-            player_lines = []
-            for (
-                guid,
-                name,
-                discord_id,
-                sessions,
-                last_played,
-                kills,
-                deaths,
-            ) in page_players:
-                link_icon = "🔗" if discord_id else "❌"
-                kd = kills / deaths if deaths > 0 else kills
+                    # Format last played date compactly
+                    try:
+                        last_date = datetime.fromisoformat(
+                            last_played.replace("Z", "+00:00") if "Z" in last_played else last_played
+                        )
+                        days_ago = (datetime.now() - last_date).days
+                        if days_ago == 0:
+                            last_str = "today"
+                        elif days_ago == 1:
+                            last_str = "1d"
+                        elif days_ago < 7:
+                            last_str = f"{days_ago}d"
+                        elif days_ago < 30:
+                            last_str = f"{days_ago//7}w"
+                        else:
+                            last_str = f"{days_ago//30}mo"
+                    except Exception:
+                        last_str = "?"
 
-                # Format last played date compactly
-                try:
-                    last_date = datetime.fromisoformat(
-                        last_played.replace("Z", "+00:00") if "Z" in last_played else last_played
+                    player_lines.append(
+                        f"{link_icon} **{name[:20]}** • "
+                        f"{sessions}s • {kills}K/{deaths}D ({kd:.1f}) • {last_str}"
                     )
-                    days_ago = (datetime.now() - last_date).days
-                    if days_ago == 0:
-                        last_str = "today"
-                    elif days_ago == 1:
-                        last_str = "1d"
-                    elif days_ago < 7:
-                        last_str = f"{days_ago}d"
-                    elif days_ago < 30:
-                        last_str = f"{days_ago//7}w"
-                    else:
-                        last_str = f"{days_ago//30}mo"
-                except Exception:
-                    last_str = "?"
 
-                player_lines.append(
-                    f"{link_icon} **{name[:20]}** • "
-                    f"{sessions}s • {kills}K/{deaths}D ({kd:.1f}) • {last_str}"
+                embed.add_field(
+                    name=f"Players {start_idx+1}-{end_idx}",
+                    value="\n".join(player_lines),
+                    inline=False,
                 )
 
-            embed.add_field(
-                name=f"Players {start_idx+1}-{end_idx}",
-                value="\n".join(player_lines),
-                inline=False,
-            )
-
-            # Navigation footer
-            nav_text = ""
-            if total_pages > 1:
-                if page > 1:
-                    prev_cmd = f"!lp {filter_type or ''} {page-1}".strip()
-                    nav_text += f"⬅️ `{prev_cmd}` • "
-                nav_text += f"Page {page}/{total_pages}"
-                if page < total_pages:
-                    next_cmd = f"!lp {filter_type or ''} {page+1}".strip()
-                    nav_text += f" • `{next_cmd}` ➡️"
-
-            if nav_text:
-                embed.set_footer(text=nav_text)
-            else:
+                # Footer with button hint
                 embed.set_footer(
-                    text="Use !link to link • !list_players [linked|unlinked|active]"
+                    text="Use ⏮️ ◀️ ▶️ ⏭️ buttons to navigate • !link to link"
                 )
 
-            await ctx.send(embed=embed)
+                pages.append(embed)
+
+            # Handle requested page number (if user specified page as arg)
+            initial_page = 0
+            if filter_type and filter_type.isdigit():
+                requested_page = int(filter_type)
+                initial_page = max(0, min(requested_page - 1, total_pages - 1))
+            elif page > 0:
+                initial_page = max(0, min(page - 1, total_pages - 1))
+
+            # Send with interactive pagination (or single page if only 1 page)
+            if total_pages == 1:
+                await ctx.send(embed=pages[0])
+            else:
+                view = PaginationView(ctx, pages)
+                view.current_page = initial_page  # Start on requested page
+                view._update_buttons()
+                message = await ctx.send(embed=pages[initial_page], view=view)
+                view.message = message  # Store message ref for timeout handling
 
         except Exception as e:
             logger.error(f"Error in list_players command: {e}", exc_info=True)
@@ -497,7 +502,7 @@ class LinkCog(commands.Cog, name="Link"):
             placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
             existing = await self.bot.db_adapter.fetch_one(
                 f"""
-                SELECT et_name, et_guid FROM player_links
+                SELECT player_name, player_guid FROM player_links
                 WHERE discord_id = {placeholder}
             """,
                 (discord_id,),
@@ -546,7 +551,7 @@ class LinkCog(commands.Cog, name="Link"):
                     COUNT(DISTINCT round_id) as games
                 FROM player_comprehensive_stats
                 WHERE player_guid NOT IN (
-                    SELECT et_guid FROM player_links WHERE et_guid IS NOT NULL
+                    SELECT player_guid FROM player_links WHERE player_guid IS NOT NULL
                 )
                 GROUP BY player_guid
                 ORDER BY last_played DESC, total_kills DESC
@@ -1073,10 +1078,9 @@ class LinkCog(commands.Cog, name="Link"):
             target_discord_id = int(target_user.id)  # BIGINT in PostgreSQL
 
             # Check if target already linked
-            placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
             existing = await self.bot.db_adapter.fetch_one(
                 f"""
-                SELECT et_name, et_guid FROM player_links
+                SELECT player_name, player_guid FROM player_links
                 WHERE discord_id = ?
             """,
                 (target_discord_id,),
@@ -1293,7 +1297,7 @@ class LinkCog(commands.Cog, name="Link"):
             placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
             existing = await self.bot.db_adapter.fetch_one(
                 f"""
-                SELECT et_name, et_guid FROM player_links
+                SELECT player_name, player_guid FROM player_links
                 WHERE discord_id = ?
             """,
                 (discord_id,),
