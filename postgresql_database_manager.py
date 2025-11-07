@@ -29,7 +29,7 @@ import time
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, Optional, List, Tuple
+from typing import Dict, Optional, Tuple
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -190,12 +190,24 @@ class PostgreSQLDatabaseManager:
         
         # Use pg_dump for backup
         import subprocess
+        import re
         
         try:
+            # Validate hostname (defense in depth - config is already trusted)
+            host = self.config.postgres_host.split(':')[0]
+            if not re.match(r'^[a-zA-Z0-9.-]+$', host):
+                raise ValueError(f"Invalid hostname format: {host}")
+            
+            # Validate port range
+            port_str = str(self.config.postgres_host.split(':')[1]) if ':' in self.config.postgres_host else '5432'
+            port = int(port_str)  # Will raise ValueError if not numeric
+            if not (1 <= port <= 65535):
+                raise ValueError(f"Port out of valid range (1-65535): {port}")
+            
             result = subprocess.run([
                 'pg_dump',
-                '-h', self.config.postgres_host.split(':')[0],
-                '-p', str(self.config.postgres_host.split(':')[1]) if ':' in self.config.postgres_host else '5432',
+                '-h', host,
+                '-p', str(port),
                 '-U', self.config.postgres_user,
                 '-d', self.config.postgres_database,
                 '-f', backup_file
@@ -205,6 +217,8 @@ class PostgreSQLDatabaseManager:
                 logger.info(f"   ✅ Backup created: {backup_file}")
             else:
                 logger.warning(f"   ⚠️  Backup failed: {result.stderr}")
+        except ValueError as e:
+            logger.error(f"   ❌ Invalid database configuration: {e}")
         except FileNotFoundError:
             logger.warning("   ⚠️  pg_dump not found - skipping backup")
     
@@ -727,7 +741,7 @@ class PostgreSQLDatabaseManager:
                 # For round 2, we expect differential stats which might be lower
                 # This is EXPECTED and not an error
                 logger.debug(f"   Round 2 file detected: {filename}")
-                logger.debug(f"   Differential stats expected (cumulative from Round 1 removed)")
+                logger.debug("   Differential stats expected (cumulative from Round 1 removed)")
             
             if issues:
                 return False, "; ".join(issues)
