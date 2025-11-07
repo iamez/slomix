@@ -119,6 +119,10 @@ class PostgreSQLDatabaseManager:
                 max_size=20
             )
             logger.info(f"✅ Connected to PostgreSQL: {self.config.postgres_host}/{self.config.postgres_database}")
+            
+            # Run schema migrations after connecting
+            await self._migrate_schema_if_needed()
+            
         except Exception as e:
             logger.error(f"❌ Failed to connect to PostgreSQL: {e}")
             raise
@@ -158,6 +162,9 @@ class PostgreSQLDatabaseManager:
         try:
             # Create schema if it doesn't exist
             await self._create_schema_if_missing()
+            
+            # Apply any schema migrations for existing databases
+            await self._migrate_schema_if_needed()
             
             # Backup if requested
             if backup_existing:
@@ -385,6 +392,66 @@ class PostgreSQLDatabaseManager:
             
             logger.info("   ✅ Schema created successfully!")
     
+    async def _migrate_schema_if_needed(self):
+        """Apply schema migrations for existing databases"""
+        async with self.pool.acquire() as conn:
+            # Check if player_aliases table exists
+            table_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'player_aliases'
+                )
+            """)
+            
+            if not table_exists:
+                logger.info("   ⏭️  player_aliases table doesn't exist yet, skipping migrations")
+                return
+            
+            logger.info("🔍 Checking for schema migrations...")
+            
+            # Migration 1: Add first_seen column if missing
+            has_first_seen = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_name = 'player_aliases' 
+                    AND column_name = 'first_seen'
+                )
+            """)
+            
+            if not has_first_seen:
+                logger.info("   ➕ Adding 'first_seen' column to player_aliases...")
+                await conn.execute("""
+                    ALTER TABLE player_aliases 
+                    ADD COLUMN first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                """)
+                # Backfill existing rows
+                await conn.execute("""
+                    UPDATE player_aliases 
+                    SET first_seen = last_seen 
+                    WHERE first_seen IS NULL AND last_seen IS NOT NULL
+                """)
+                logger.info("   ✅ Added 'first_seen' column")
+            
+            # Migration 2: Add times_seen column if missing
+            has_times_seen = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_name = 'player_aliases' 
+                    AND column_name = 'times_seen'
+                )
+            """)
+            
+            if not has_times_seen:
+                logger.info("   ➕ Adding 'times_seen' column to player_aliases...")
+                await conn.execute("""
+                    ALTER TABLE player_aliases 
+                    ADD COLUMN times_seen INTEGER DEFAULT 1
+                """)
+                logger.info("   ✅ Added 'times_seen' column")
+            
+            logger.info("   ✅ Schema migrations complete!")
+    
     async def _wipe_all_tables(self):
         """Wipe all data from tables (keeps schema)"""
         tables = [
@@ -499,7 +566,7 @@ class PostgreSQLDatabaseManager:
             # STEP 3: Create round and insert stats
             async with self.pool.acquire() as conn:
                 async with conn.transaction():
-                    # Create round
+                    # Create round (round_number determined in _create_round_postgresql from filename)
                     logger.debug(f"💾 Creating round for {filename}")
                     round_id = await self._create_round_postgresql(conn, parsed_data, file_date, round_time, filename)
                     
@@ -513,6 +580,25 @@ class PostgreSQLDatabaseManager:
                     # Insert weapon stats
                     weapon_count = await self._insert_weapon_stats(conn, round_id, file_date, parsed_data)
                     logger.debug(f"🔫 Inserted {weapon_count} weapon stats")
+                    
+                    # 🆕 If Round 2 file, also import match summary (cumulative stats)
+                    match_summary_id = None
+                    if parsed_data.get('match_summary'):
+                        logger.info("📋 Importing match summary (cumulative R1+R2 stats)...")
+                        match_summary = parsed_data['match_summary']
+                        
+                        # Create match summary round (round_number = 0)
+                        match_summary_id = await self._create_round_postgresql(
+                            conn, match_summary, file_date, round_time, filename, is_match_summary=True
+                        )
+                        
+                        if match_summary_id:
+                            # Insert match summary player stats
+                            summary_player_count = await self._insert_player_stats(conn, match_summary_id, file_date, match_summary)
+                            summary_weapon_count = await self._insert_weapon_stats(conn, match_summary_id, file_date, match_summary)
+                            logger.info(
+                                f"✓ Match summary: {summary_player_count} players, {summary_weapon_count} weapons"
+                            )
                     
                     # STEP 4: VERIFY DATA INTEGRITY
                     validation_passed, validation_msg = await self._validate_round_data(
@@ -707,32 +793,62 @@ class PostgreSQLDatabaseManager:
             logger.warning(f"Error calculating gaming_session_id: {e}. Using NULL.")
             return None
     
-    async def _create_round_postgresql(self, conn, parsed_data: Dict, file_date: str, round_time: str, filename: str) -> Optional[int]:
-        """Create round entry in PostgreSQL"""
+    async def _create_round_postgresql(self, conn, parsed_data: Dict, file_date: str, round_time: str, filename: str, is_match_summary: bool = False) -> Optional[int]:
+        """
+        Create round entry in PostgreSQL
+        
+        Args:
+            is_match_summary: If True, store as round_number=0 (match summary)
+        """
         map_name = parsed_data.get('map_name', 'unknown')
-        round_number = parsed_data.get('round_number', 1)
+        
+        # 🔧 CRITICAL FIX: Determine round_number from FILENAME, not parsed data
+        # The file header always says round=1, but filename is authoritative
+        if is_match_summary:
+            round_number = 0
+        elif '-round-2.txt' in filename.lower():
+            round_number = 2
+            logger.debug(f"🔧 Round 2 detected from filename: {filename}")
+        elif '-round-1.txt' in filename.lower():
+            round_number = 1
+            logger.debug(f"🔧 Round 1 detected from filename: {filename}")
+        else:
+            # Fallback to parser data (try both 'round_num' and 'round_number')
+            round_number = parsed_data.get('round_num', parsed_data.get('round_number', 1))
+            logger.debug(f"🔧 Using parser round_number: {round_number}")
+        
         time_limit = parsed_data.get('time_limit', '0')
         actual_time = parsed_data.get('actual_time', '0')
         winner = parsed_data.get('winner_team', 0)
+        defender = parsed_data.get('defender_team', 0)
+        round_outcome = parsed_data.get('round_outcome', '')
         
-        # Generate unique match_id from filename
+        # Generate match_id from filename (ORIGINAL BEHAVIOR - includes timestamp)
         match_id = filename.replace('.txt', '')
+        
+        # Calculate gaming_session_id
+        gaming_session_id = await self._get_or_create_gaming_session_id(conn, file_date, round_time)
         
         try:
             round_id = await conn.fetchval(
                 """
                 INSERT INTO rounds 
                 (round_date, round_time, match_id, map_name, round_number, 
-                 time_limit, actual_time, winner_team, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                 time_limit, actual_time, winner_team, defender_team, round_outcome, gaming_session_id, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 ON CONFLICT (match_id, round_number) DO UPDATE SET
                     round_date = EXCLUDED.round_date,
-                    round_time = EXCLUDED.round_time
+                    round_time = EXCLUDED.round_time,
+                    gaming_session_id = EXCLUDED.gaming_session_id
                 RETURNING id
                 """,
                 file_date, round_time, match_id, map_name, round_number,
-                time_limit, actual_time, winner, datetime.now()
+                time_limit, actual_time, winner, defender, round_outcome, gaming_session_id, datetime.now()
             )
+            
+            if is_match_summary:
+                logger.debug(f"✓ Created match summary (round_number=0) with ID {round_id}")
+            
             return round_id
         except Exception as e:
             logger.error(f"Failed to create round: {e}")
