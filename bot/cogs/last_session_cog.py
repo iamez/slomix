@@ -87,12 +87,15 @@ class LastSessionCog(commands.Cog):
         
         latest_gaming_session_id = result[0]
         
-        # Get all rounds (sessions) for this gaming session
+        # Get R1 and R2 rounds only (exclude R0 match summaries to avoid triple-counting)
+        # R0 contains cumulative R1+R2 data, so querying all three would give us: R0+R1+R2 = (R1+R2)+R1+R2 = wrong!
+        # Using only R1+R2 lets SUM() aggregate correctly without duplication
         sessions = await self.bot.db_adapter.fetch_all(
             """
             SELECT id, map_name, round_number, actual_time
             FROM rounds
             WHERE gaming_session_id = ?
+              AND round_number IN (1, 2)
             ORDER BY round_date, round_time
             """,
             (latest_gaming_session_id,)
