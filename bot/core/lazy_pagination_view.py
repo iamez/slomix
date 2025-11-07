@@ -35,6 +35,9 @@ import discord
 from discord.ui import View, Button
 from discord import ButtonStyle, Interaction
 from typing import Callable, Optional
+import logging
+
+logger = logging.getLogger("bot.core.lazy_pagination_view")
 
 
 class LazyPaginationView(View):
@@ -46,7 +49,7 @@ class LazyPaginationView(View):
                  total_pages: int = 5,
                  timeout: int = 180):
         """
-        Initialize lazy pagination view
+        Initialize lazy pagination view with memory management
 
         Args:
             ctx: Command context (for author check)
@@ -61,7 +64,8 @@ class LazyPaginationView(View):
         self.current_page = 0
         self.message = None
         self.page_cache = {}  # Cache loaded pages
-        self.loading = False  # Prevent double-clicks during load
+        self.max_cache_size = 20  # Limit cache to prevent memory leak
+        self.fetching = False  # Prevent concurrent fetches
 
         self._update_buttons()
 
@@ -74,7 +78,7 @@ class LazyPaginationView(View):
 
     async def get_page(self, page_num: int) -> discord.Embed:
         """
-        Fetch (or retrieve from cache) page embed
+        Fetch (or retrieve from cache) page embed with memory management
 
         Args:
             page_num: Page number to fetch (0-indexed)
@@ -82,8 +86,21 @@ class LazyPaginationView(View):
         Returns:
             discord.Embed for the requested page
         """
+        # Bounds check to prevent index errors
+        page_num = max(0, min(page_num, self.total_pages - 1))
+        
         if page_num in self.page_cache:
             return self.page_cache[page_num]
+
+        # Check cache size and clean if needed to prevent memory leak
+        if len(self.page_cache) >= self.max_cache_size:
+            # Remove oldest half of cache entries
+            to_remove = list(self.page_cache.keys())[:self.max_cache_size // 2]
+            for key in to_remove:
+                del self.page_cache[key]
+            logger.debug(
+                f"Cleared {len(to_remove)} cached pages to prevent memory leak"
+            )
 
         # Load from data fetcher
         embed = await self.page_fetcher(page_num)
@@ -92,16 +109,16 @@ class LazyPaginationView(View):
 
     async def update_message(self, interaction: Interaction):
         """Update message with current page"""
-        if self.loading:
+        if self.fetching:
             return  # Prevent double-clicks
 
-        self.loading = True
+        self.fetching = True
         try:
             self._update_buttons()
             embed = await self.get_page(self.current_page)
             await interaction.response.edit_message(embed=embed, view=self)
         finally:
-            self.loading = False
+            self.fetching = False
 
     @discord.ui.button(
         emoji="⏮️",
@@ -110,6 +127,9 @@ class LazyPaginationView(View):
     )
     async def first_button(self, interaction: Interaction, button: Button):
         """Jump to first page"""
+        if self.fetching:
+            await interaction.response.defer()
+            return
         self.current_page = 0
         await self.update_message(interaction)
 
@@ -120,6 +140,9 @@ class LazyPaginationView(View):
     )
     async def prev_button(self, interaction: Interaction, button: Button):
         """Go to previous page"""
+        if self.fetching or self.current_page <= 0:
+            await interaction.response.defer()
+            return
         self.current_page = max(0, self.current_page - 1)
         await self.update_message(interaction)
 
@@ -130,6 +153,9 @@ class LazyPaginationView(View):
     )
     async def next_button(self, interaction: Interaction, button: Button):
         """Go to next page"""
+        if self.fetching or self.current_page >= self.total_pages - 1:
+            await interaction.response.defer()
+            return
         self.current_page = min(self.total_pages - 1, self.current_page + 1)
         await self.update_message(interaction)
 
@@ -140,6 +166,9 @@ class LazyPaginationView(View):
     )
     async def last_button(self, interaction: Interaction, button: Button):
         """Jump to last page"""
+        if self.fetching:
+            await interaction.response.defer()
+            return
         self.current_page = self.total_pages - 1
         await self.update_message(interaction)
 
