@@ -34,7 +34,7 @@ Date: November 7, 2025
 import discord
 from discord.ui import View, Button
 from discord import ButtonStyle, Interaction
-from typing import Callable, Optional
+from typing import Callable
 import logging
 
 logger = logging.getLogger("bot.core.lazy_pagination_view")
@@ -181,9 +181,9 @@ class LazyPaginationView(View):
             try:
                 await self.message.edit(view=self)
             except discord.errors.NotFound:
-                pass  # Message was deleted
-            except Exception:
-                pass  # Other error, ignore
+                logger.debug("Message was deleted, cannot disable buttons")
+            except Exception as e:
+                logger.warning(f"Failed to disable buttons on timeout: {e}")
 
     async def interaction_check(self, interaction: Interaction) -> bool:
         """
