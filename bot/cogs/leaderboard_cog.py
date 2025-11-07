@@ -541,7 +541,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 AND p.player_guid = w.player_guid
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(w.shots) > 1000
-                            ORDER BY (CAST(total_hits AS FLOAT) / total_shots) DESC
+                            ORDER BY (CAST(SUM(w.hits) AS FLOAT) / SUM(w.shots)) DESC
                             LIMIT {players_per_page} OFFSET {offset}
                         """
                     title = f"🏆 Top Players by Accuracy (Page {page_num}/{total_pages})"
@@ -564,7 +564,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 AND p.player_guid = w.player_guid
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(w.hits) > 1000
-                            ORDER BY (CAST(total_hs AS FLOAT) / total_hits) DESC
+                            ORDER BY (CAST(SUM(p.headshot_kills) AS FLOAT) / SUM(w.hits)) DESC
                             LIMIT {players_per_page} OFFSET {offset}
                         """
                     title = f"🏆 Top Players by Headshot % (Page {page_num}/{total_pages})"
