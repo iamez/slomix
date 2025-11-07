@@ -1,13 +1,24 @@
+# Discord Bot
 discord.py>=2.3.0
-python-dotenv>=1.0.0
-aiofiles>=23.2.0
+
+# Database
+asyncpg>=0.29.0
 aiosqlite>=0.19.0
-paramiko>=3.4.0
-trueskill>=0.4.5
-watchdog>=3.0.0
+
+# Configuration & Environment
+python-dotenv>=1.0.0
 pytz>=2023.3
 
-# Notes:
-# - This file was cleaned to remove merge conflict markers and combine
-#   required/optional dependencies from multiple branches. If any package
-#   should be pinned or removed, update this file accordingly.
+# File Operations
+aiofiles>=23.2.0
+
+# SSH/Automation
+paramiko>=3.3.0
+
+# Image Processing (for graphs/stats visualization)
+Pillow>=10.0.0
+matplotlib>=3.7.0
+
+# Additional Dependencies
+watchdog>=3.0.0
+trueskill>=0.4.5

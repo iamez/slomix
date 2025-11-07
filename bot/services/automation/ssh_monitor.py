@@ -112,13 +112,12 @@ class SSHMonitor:
     async def _load_processed_files(self):
         """Load list of previously processed files from database"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                cursor = await db.execute(
-                    "SELECT filename FROM processed_files WHERE success = 1"
-                )
-                rows = await cursor.fetchall()
-                self.processed_files = {row[0] for row in rows}
-                logger.info(f"📋 Loaded {len(self.processed_files)} previously processed files")
+            rows = await self.bot.db_adapter.fetch_all(
+                "SELECT filename FROM processed_files WHERE success = 1",
+                ()
+            )
+            self.processed_files = {row[0] for row in rows}
+            logger.info(f"📋 Loaded {len(self.processed_files)} previously processed files")
         except Exception as e:
             logger.error(f"❌ Failed to load processed files: {e}")
     
@@ -250,6 +249,11 @@ class SSHMonitor:
             # Post stats to Discord
             await self._post_round_stats(filename)
             
+            # 🆕 If this is Round 2, also post match summary
+            if '-round-2.txt' in filename:
+                logger.info(f"🏁 Round 2 detected - posting match summary...")
+                await self._post_match_summary(filename)
+            
             # Mark as processed
             self.processed_files.add(filename)
             self.files_processed_count += 1
@@ -358,57 +362,52 @@ class SSHMonitor:
     async def _get_latest_round_data(self) -> Optional[Dict[str, Any]]:
         """Get data for the most recently imported round"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Get latest session and round
-                cursor = await db.execute("""
-                    SELECT 
-                        session_id,
-                        round_num,
-                        map_name,
-                        COUNT(*) as player_count,
-                        SUM(kills) as total_kills,
-                        SUM(deaths) as total_deaths,
-                        MAX(timestamp) as round_time
-                    FROM player_comprehensive_stats
-                    GROUP BY session_id, round_num
-                    ORDER BY timestamp DESC
-                    LIMIT 1
-                """)
-                
-                row = await cursor.fetchone()
-                
-                if not row:
-                    return None
-                
-                session_id, round_num, map_name, player_count, kills, deaths, timestamp = row
-                
-                # Get top 5 players
-                cursor = await db.execute("""
-                    SELECT 
-                        player_name,
-                        kills,
-                        deaths,
-                        damage_given,
-                        accuracy
-                    FROM player_comprehensive_stats
-                    WHERE session_id = ? AND round_num = ?
-                    ORDER BY kills DESC
-                    LIMIT 5
-                """, (session_id, round_num))
-                
-                top_players = await cursor.fetchall()
-                
-                return {
-                    'session_id': session_id,
-                    'round_num': round_num,
-                    'map_name': map_name,
-                    'player_count': player_count,
-                    'total_kills': kills,
-                    'total_deaths': deaths,
-                    'timestamp': timestamp,
-                    'top_players': top_players
-                }
-                
+            # Get latest session and round
+            row = await self.bot.db_adapter.fetch_one("""
+                SELECT 
+                    session_id,
+                    round_num,
+                    map_name,
+                    COUNT(*) as player_count,
+                    SUM(kills) as total_kills,
+                    SUM(deaths) as total_deaths,
+                    MAX(timestamp) as round_time
+                FROM player_comprehensive_stats
+                GROUP BY session_id, round_num
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, ())
+            
+            if not row:
+                return None
+            
+            session_id, round_num, map_name, player_count, kills, deaths, timestamp = row
+            
+            # Get top 5 players
+            top_players = await self.bot.db_adapter.fetch_all("""
+                SELECT 
+                    player_name,
+                    kills,
+                    deaths,
+                    damage_given,
+                    accuracy
+                FROM player_comprehensive_stats
+                WHERE session_id = ? AND round_num = ?
+                ORDER BY kills DESC
+                LIMIT 5
+            """, (session_id, round_num))
+            
+            return {
+                'session_id': session_id,
+                'round_num': round_num,
+                'map_name': map_name,
+                'player_count': player_count,
+                'total_kills': kills,
+                'total_deaths': deaths,
+                'timestamp': timestamp,
+                'top_players': top_players
+            }
+            
         except Exception as e:
             logger.error(f"❌ Error getting round data: {e}")
             return None
@@ -443,6 +442,165 @@ class SSHMonitor:
         )
         
         embed.set_footer(text=f"File: {filename}")
+        
+        return embed
+    
+    async def _post_match_summary(self, filename: str):
+        """
+        Post match summary (cumulative R1+R2 stats) to Discord
+        
+        This queries round_number=0 which contains the cumulative stats
+        from the Round 2 file (R1+R2 combined).
+        """
+        try:
+            channel = self.bot.get_channel(self.stats_channel_id)
+            
+            if not channel:
+                logger.error(f"❌ Stats channel {self.stats_channel_id} not found")
+                return
+            
+            # Extract map name from filename
+            parts = filename.split('-')
+            if len(parts) < 5:
+                logger.error(f"❌ Invalid filename format: {filename}")
+                return
+            
+            map_name = '-'.join(parts[4:-2])  # Everything between timestamp and "round-N.txt"
+            
+            # Get match summary data (round_number = 0)
+            match_data = await self._get_match_summary_data(map_name)
+            
+            if not match_data:
+                logger.warning(f"⚠️ No match summary found for {map_name}")
+                return
+            
+            # Create embed
+            embed = await self._create_match_summary_embed(match_data, filename, map_name)
+            
+            # Post to channel
+            await channel.send(embed=embed)
+            logger.info(f"🏁 Posted match summary for {map_name}")
+            
+        except Exception as e:
+            logger.error(f"❌ Error posting match summary: {e}", exc_info=True)
+    
+    async def _get_match_summary_data(self, map_name: str) -> Optional[Dict[str, Any]]:
+        """Get match summary data (round_number=0) from database"""
+        try:
+            # Get the match summary round (round_number = 0)
+            row = await self.bot.db_adapter.fetch_one("""
+                SELECT 
+                    id,
+                    time_limit,
+                    actual_time,
+                    winner_team,
+                    round_outcome,
+                    COUNT(*) as player_count
+                FROM rounds
+                WHERE map_name = ? AND round_number = 0
+                ORDER BY round_date DESC, round_time DESC
+                LIMIT 1
+            """, (map_name,))
+            
+            if not row:
+                return None
+            
+            round_id, time_limit, actual_time, winner_team, round_outcome, _ = row
+            
+            # Get aggregated player stats from match summary
+            player_stats = await self.bot.db_adapter.fetch_all("""
+                SELECT 
+                    player_name,
+                    kills,
+                    deaths,
+                    damage_given,
+                    accuracy,
+                    headshots
+                FROM player_comprehensive_stats
+                WHERE round_id = ?
+                ORDER BY kills DESC
+                LIMIT 10
+            """, (round_id,))
+            
+            # Calculate totals
+            total_query = await self.bot.db_adapter.fetch_one("""
+                SELECT 
+                    SUM(kills) as total_kills,
+                    SUM(deaths) as total_deaths,
+                    SUM(damage_given) as total_damage,
+                    COUNT(DISTINCT player_guid) as player_count
+                FROM player_comprehensive_stats
+                WHERE round_id = ?
+            """, (round_id,))
+            
+            total_kills, total_deaths, total_damage, player_count = total_query
+            
+            return {
+                'time_limit': time_limit,
+                'actual_time': actual_time,
+                'winner_team': winner_team,
+                'round_outcome': round_outcome,
+                'total_kills': total_kills or 0,
+                'total_deaths': total_deaths or 0,
+                'total_damage': total_damage or 0,
+                'player_count': player_count or 0,
+                'top_players': player_stats
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting match summary: {e}")
+            return None
+    
+    async def _create_match_summary_embed(self, data: Dict[str, Any], filename: str, map_name: str) -> discord.Embed:
+        """Create Discord embed for match summary"""
+        embed = discord.Embed(
+            title=f"🏆 Match Complete - {map_name}",
+            description=f"**Stopwatch Mode** - Combined stats from both rounds",
+            color=discord.Color.gold(),
+            timestamp=datetime.now()
+        )
+        
+        # Match outcome with stopwatch times
+        outcome_text = f"**Round 1 Time:** {data['time_limit']}\n"
+        outcome_text += f"**Round 2 Time:** {data['actual_time']}\n"
+        
+        if data['round_outcome']:
+            outcome_text += f"**Result:** {data['round_outcome']}"
+        
+        embed.add_field(
+            name="⏱️ Match Result",
+            value=outcome_text,
+            inline=False
+        )
+        
+        # Top players (cumulative stats)
+        if data['top_players']:
+            top_text = []
+            for i, (name, kills, deaths, dmg, acc, hs) in enumerate(data['top_players'][:5], 1):
+                kd = f"{kills}/{deaths}"
+                top_text.append(
+                    f"{i}. **{name}** - {kd} K/D | {int(dmg):,} DMG | {acc:.1f}% ACC | {hs} HS"
+                )
+            
+            embed.add_field(
+                name="🏅 Top Performers (Both Rounds)",
+                value="\n".join(top_text),
+                inline=False
+            )
+        
+        # Match totals
+        embed.add_field(
+            name="📊 Match Totals",
+            value=(
+                f"Players: {data['player_count']}\n"
+                f"Total Kills: {data['total_kills']:,}\n"
+                f"Total Deaths: {data['total_deaths']:,}\n"
+                f"Total Damage: {int(data['total_damage']):,}"
+            ),
+            inline=True
+        )
+        
+        embed.set_footer(text=f"Match summary from {filename}")
         
         return embed
     

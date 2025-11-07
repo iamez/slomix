@@ -27,6 +27,10 @@ from tools.stopwatch_scoring import StopwatchScoring
 # Import extracted core classes
 from bot.core import StatsCache, SeasonManager, AchievementSystem
 
+# Import database adapter and config for PostgreSQL migration
+from bot.core.database_adapter import create_adapter, DatabaseAdapter
+from bot.config import load_config
+
 # Load environment variables if available
 try:
     from dotenv import load_dotenv
@@ -37,50 +41,26 @@ except ImportError:
 
 # ==================== COMPREHENSIVE LOGGING SETUP ====================
 
-# Create logs directory if it doesn't exist
-os.makedirs("logs", exist_ok=True)
+# Import our custom logging configuration
+from bot.logging_config import (
+    setup_logging,
+    log_command_execution,
+    log_database_operation,
+    log_stats_import,
+    log_performance_warning,
+    get_logger
+)
 
-# Configure logging with both file and console output
+# Setup comprehensive logging system
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-log_file = os.getenv("LOG_FILE", "logs/bot.log")
-
-# Create formatter with timestamp, level, name, and message
-formatter = logging.Formatter(
-    '%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-
-# File handler - logs everything to file
-file_handler = logging.FileHandler(log_file, encoding='utf-8')
-file_handler.setLevel(logging.DEBUG)  # Log everything to file
-file_handler.setFormatter(formatter)
-
-# Console handler - logs INFO and above to console
-console_handler = logging.StreamHandler()
-console_handler.setLevel(getattr(logging, log_level))
-console_handler.setFormatter(formatter)
-
-# Configure root logger
-logging.basicConfig(
-    level=logging.DEBUG,  # Capture everything
-    handlers=[file_handler, console_handler]
-)
+setup_logging(getattr(logging, log_level))
 
 # Get bot logger
-logger = logging.getLogger("UltimateBot")
-logger.info("=" * 80)
+logger = get_logger("bot.core")
 logger.info("🚀 ET:LEGACY DISCORD BOT - STARTING UP")
-logger.info("=" * 80)
 logger.info(f"📝 Log Level: {log_level}")
-logger.info(f"📁 Log File: {log_file}")
-
-# Reduce noise from verbose third-party libraries
-logging.getLogger("paramiko").setLevel(logging.WARNING)
-logging.getLogger("paramiko.transport").setLevel(logging.WARNING)
-logging.getLogger("asyncio").setLevel(logging.WARNING)
-logging.getLogger("discord").setLevel(logging.INFO)
-logging.getLogger("discord.http").setLevel(logging.WARNING)
-logging.getLogger("discord.gateway").setLevel(logging.WARNING)
+logger.info(f"� Python: {sys.version}")
+logger.info(f"📦 Discord.py: {discord.__version__}")
 
 # ======================================================================
 
@@ -1091,7 +1071,12 @@ class ETLegacyCommands(commands.Cog):
                 elif filter_lower in ["unlinked", "nolink"]:
                     base_query += " HAVING pl.discord_id IS NULL"
                 elif filter_lower in ["active", "recent"]:
-                    base_query += " HAVING MAX(p.round_date) >= date('now', '-30 days')"
+                    # Database-agnostic date arithmetic
+                    if self.bot.config.database_type == 'sqlite':
+                        base_query += " HAVING MAX(p.round_date) >= date('now', '-30 days')"
+                    else:
+                        # PostgreSQL: CURRENT_DATE - INTERVAL '30 days'
+                        base_query += " HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'"
 
             base_query += " ORDER BY sessions_played DESC, total_kills DESC"
 
@@ -1655,8 +1640,13 @@ class ETLegacyCommands(commands.Cog):
     # """,
     # (guid,),
     # ) as cursor:
-    # name_row = await cursor.fetchone()
-    # name = name_row[0] if name_row else "Unknown"
+    # name = (await cursor.fetchone())
+
+    # # Fallback to GUID if no alias found
+    # if not name:
+    # name = (guid,)
+
+    # name = name[0] if isinstance(name, tuple) and len(name) > 0 else "Unknown"
     # 
     # kills, deaths, games, last_seen = stats
     # kd = kills / deaths if deaths > 0 else kills
@@ -1665,8 +1655,8 @@ class ETLegacyCommands(commands.Cog):
     # embed.add_field(
     # name=f"{emoji} **{name}**",
     # value=(
-    # f"**GUID:** {guid}\\n{kills:,} kills | **K/D: {kd:.2f}** | "
-    # f"{games:,} games | Last: {last_seen}"
+    # f"**GUID:** {guid}\\n{kills:,} kills / {deaths:,} deaths / {kd:.2f} K/D\\n"
+    # f"**Games:** {games:,} | **Last Seen:** {last_seen}"
     # ),
     # inline=False,
     # )
@@ -1839,21 +1829,13 @@ class ETLegacyCommands(commands.Cog):
     # # Admin confirmation embed
     # embed = discord.Embed(
     # title="🔗 Admin Link Confirmation",
-    # description=(
-    # f"Link {target_user.mention} to **{primary_name}**?\\n\\n"
-    # f"**Requested by:** {ctx.author.mention}"
-    # ),
-    # color=0xFF6B00,  # Orange for admin action
-    # )
-    # embed.add_field(
-    # name="Target User",
-    # value=f"{target_user.mention} ({target_user.name})",
-    # inline=True,
+    # description=f"Link {target_user.mention} to **{primary_name}**?",
+    # color=0xFFA500,
     # )
     # embed.add_field(
     # name="GUID",
     # value=guid,
-    # inline=True,
+    # inline=False,
     # )
     # embed.add_field(
     # name="Known Names",
@@ -1862,20 +1844,15 @@ class ETLegacyCommands(commands.Cog):
     # )
     # embed.add_field(
     # name="Stats",
-    # value=(
-    # f"**Kills:** {kills:,} | **Deaths:** {deaths:,}\\n"
-    # f"**K/D:** {kd_ratio:.2f} | **Games:** {games:,}"
-    # ),
+    # value=f"{kills:,} kills / {deaths:,} deaths / {kd_ratio:.2f} K/D",
     # inline=True,
     # )
     # embed.add_field(
-    # name="Last Seen",
-    # value=last_seen,
+    # name="Activity",
+    # value=f"{games:,} games | Last: {last_seen}",
     # inline=True,
     # )
-    # embed.set_footer(
-    # text="React ✅ (admin) to confirm or ❌ to cancel (60s)"
-    # )
+    # embed.set_footer(text="React ✅ to confirm or ❌ to cancel (60s)")
     # 
     # message = await ctx.send(embed=embed)
     # await message.add_reaction("✅")
@@ -1883,7 +1860,7 @@ class ETLegacyCommands(commands.Cog):
     # 
     # def check(reaction, user):
     # return (
-    # user == ctx.author  # Only admin can confirm
+    # user == ctx.author
     # and str(reaction.emoji) in ["✅", "❌"]
     # and reaction.message.id == message.id
     # )
@@ -1898,63 +1875,24 @@ class ETLegacyCommands(commands.Cog):
     # await db.execute(
     # """
     # INSERT OR REPLACE INTO player_links
-    # (discord_id, discord_username, et_guid, et_name, 
-    # linked_date, verified)
+    # (discord_id, discord_username, et_guid, et_name, linked_date, verified)
     # VALUES (?, ?, ?, ?, datetime('now'), 1)
     # """,
-    # (
-    # target_discord_id,
-    # str(target_user),
-    # guid,
-    # primary_name,
-    # ),
+    # (discord_id, str(ctx.author), guid, primary_name),
     # )
     # await db.commit()
     # 
     # await message.clear_reactions()
-    # 
-    # # Success message
-    # success_embed = discord.Embed(
-    # title="✅ Admin Link Successful",
-    # description=(
-    # f"{target_user.mention} is now linked to "
-    # f"**{primary_name}**"
-    # ),
-    # color=0x00FF00,
+    # await ctx.send(
+    # f"✅ Successfully linked to **{primary_name}** (GUID: {guid})"
     # )
-    # success_embed.add_field(
-    # name="GUID",
-    # value=guid,
-    # inline=True,
-    # )
-    # success_embed.add_field(
-    # name="Linked By",
-    # value=ctx.author.mention,
-    # inline=True,
-    # )
-    # success_embed.set_footer(
-    # text=(
-    # f"💡 {target_user.name} can now use "
-    # f"!stats to see their stats"
-    # )
-    # )
-    # 
-    # await ctx.send(embed=success_embed)
-    # 
-    # # Log admin action
-    # logger.info(
-    # f"Admin link: {ctx.author} (ID: {ctx.author.id}) "
-    # f"linked {target_user} (ID: {target_user.id}) "
-    # f"to GUID {guid} ({primary_name})"
-    # )
-    # 
     # else:
     # await message.clear_reactions()
-    # await ctx.send("❌ Admin link cancelled.")
+    # await ctx.send("❌ Link cancelled.")
     # 
     # except asyncio.TimeoutError:
     # await message.clear_reactions()
-    # await ctx.send("⏱️ Admin link confirmation timed out.")
+    # await ctx.send("⏱️ Confirmation timed out.")
     # 
     # except Exception as e:
     # logger.error(f"Error in admin link: {e}", exc_info=True)
@@ -2479,82 +2417,55 @@ class UltimateETLegacyBot(commands.Bot):
         intents.message_content = True
         super().__init__(command_prefix="!", intents=intents)
 
-        # 📊 Database Configuration - Try multiple locations
+        # 📊 Database Configuration - Load config and create adapter
         import os
-
-        bot_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(bot_dir)
-
-        # ✅ Try multiple database locations
-        # Prefer the DB inside the bot directory by default (local dev copy)
-        possible_paths = [
-            os.path.join(
-                bot_dir, "etlegacy_production.db"
-            ),  # Bot directory (preferred)
-            os.path.join(parent_dir, "etlegacy_production.db"),  # Project root
-            "etlegacy_production.db",  # Current dir
-        ]
-
-        # Allow explicit override via environment variable.
-        # By default prefer the bot-local DB if it exists. To force the env
-        # override, set ETLEGACY_DB_FORCE=true in the environment.
-        env_db = os.getenv("ETLEGACY_DB_PATH") or os.getenv("DB_PATH")
-        force_override = (
-            os.getenv("ETLEGACY_DB_FORCE", "false").lower() == "true"
-        )
-        bot_db = os.path.join(bot_dir, "etlegacy_production.db")
-
-        if env_db:
-            # Expand user and make absolute for clarity
-            env_db = os.path.abspath(os.path.expanduser(env_db))
-            # If force flag set, honor env var; otherwise prefer local bot DB when present
-            if force_override:
-                logger.info(
-                    f"🔧 DB override provided via env and forced: {env_db} (will be preferred)"
-                )
-                if env_db not in possible_paths:
-                    possible_paths.insert(0, env_db)
-            else:
-                # If the bot-local DB exists, prefer it and keep env_db as fallback
-                if os.path.exists(bot_db):
-                    logger.warning(
-                        f"⚠️ ETLEGACY_DB_PATH is set to {env_db} but a local bot DB was found at {bot_db}."
-                        " Using the local bot DB by default. To force the env path set ETLEGACY_DB_FORCE=true."
+        
+        # Load configuration (from env vars or bot_config.json)
+        self.config = load_config()
+        logger.info(f"✅ Configuration loaded: {self.config}")
+        
+        # Create database adapter (supports both SQLite and PostgreSQL)
+        adapter_kwargs = self.config.get_database_adapter_kwargs()
+        self.db_adapter = create_adapter(**adapter_kwargs)
+        logger.info(f"✅ Database adapter created: {adapter_kwargs['db_type']}")
+        
+        # Keep db_path for backward compatibility (legacy code and some helpers might use it)
+        # Only set if using SQLite
+        if self.config.database_type == 'sqlite':
+            self.db_path = self.config.sqlite_db_path
+            
+            # Validate SQLite file exists
+            if not os.path.exists(self.db_path):
+                bot_dir = os.path.dirname(os.path.abspath(__file__))
+                parent_dir = os.path.dirname(bot_dir)
+                
+                # Try alternative locations for SQLite
+                possible_paths = [
+                    os.path.join(bot_dir, "etlegacy_production.db"),
+                    os.path.join(parent_dir, "etlegacy_production.db"),
+                    "etlegacy_production.db",
+                ]
+                
+                found = False
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        self.db_path = path
+                        logger.info(f"✅ SQLite database found: {path}")
+                        found = True
+                        break
+                
+                if not found:
+                    error_msg = (
+                        f"❌ SQLITE DATABASE NOT FOUND!\n"
+                        f"Tried: {possible_paths}\n"
+                        f"Run: python create_unified_database.py"
                     )
-                    # Ensure bot_db is first (possible_paths already has bot_db first by default)
-                    if possible_paths[0] != bot_db:
-                        # Remove bot_db if it appears later and put it first
-                        try:
-                            possible_paths.remove(bot_db)
-                        except ValueError:
-                            pass
-                        possible_paths.insert(0, bot_db)
-                    # Add env_db as a fallback if it's not already listed
-                    if env_db not in possible_paths:
-                        possible_paths.append(env_db)
-                else:
-                    # No local bot DB found - fall back to env_db
-                    logger.info(
-                        f"🔧 ETLEGACY_DB_PATH provided: {env_db} (no local bot DB found)"
-                    )
-                    if env_db not in possible_paths:
-                        possible_paths.insert(0, env_db)
-
-        self.db_path = None
-        for path in possible_paths:
-            if os.path.exists(path):
-                self.db_path = path
-                logger.info(f"✅ Database found: {path}")
-                break
-
-        if not self.db_path:
-            error_msg = (
-                f"❌ DATABASE NOT FOUND!\n"
-                f"Tried: {possible_paths}\n"
-                f"Run: python create_unified_database.py"
-            )
-            logger.error(error_msg)
-            raise FileNotFoundError(error_msg)
+                    logger.error(error_msg)
+                    raise FileNotFoundError(error_msg)
+        else:
+            # PostgreSQL mode - no local file needed
+            self.db_path = None
+            logger.info(f"✅ PostgreSQL mode: {self.config.postgres_host}:{self.config.postgres_port}/{self.config.postgres_database}")
 
         # 🎮 Bot State
         self.bot_startup_time = datetime.now()  # Track when bot started (for auto-import filtering)
@@ -2651,63 +2562,82 @@ class UltimateETLegacyBot(commands.Bot):
         self.command_stats = {}
         self.error_count = 0
 
-    async def validate_database_schema(self):
+    async def close(self):
         """
-        ✅ CRITICAL: Validate database has correct unified schema (53 columns)
-        Prevents silent failures if wrong schema is used
+        🔌 Clean up database connections and close bot gracefully
         """
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Ensure player_name alias for this connection (non-Cog helper)
-                try:
-                    await ensure_player_name_alias(db)
-                except Exception:
-                    pass
-                # Check player_comprehensive_stats has 53 columns
-                cursor = await db.execute(
-                    "PRAGMA table_info(player_comprehensive_stats)"
-                )
-                columns = await cursor.fetchall()
+            if hasattr(self, 'db_adapter'):
+                await self.db_adapter.close()
+                logger.info("✅ Database adapter closed successfully")
+        except Exception as e:
+            logger.error(f"⚠️ Error closing database adapter: {e}")
+        
+        # Call parent close
+        await super().close()
 
-                expected_columns = 53
-                actual_columns = len(columns)
-
-                if actual_columns != expected_columns:
-                    error_msg = (
-                        f"❌ DATABASE SCHEMA MISMATCH!\n"
-                        f"Expected: {expected_columns} columns (UNIFIED)\n"
-                        f"Found: {actual_columns} columns\n\n"
-                        f"Schema: {'SPLIT (deprecated)' if actual_columns == 35 else 'UNKNOWN'}\n\n"
-                        f"Solution:\n"
-                        f"1. Backup: cp etlegacy_production.db backup.db\n"
-                        f"2. Create: python create_unified_database.py\n"
-                        f"3. Import: python tools/simple_bulk_import.py local_stats/*.txt\n"
-                    )
-
-                    logger.error(error_msg)
-                    raise RuntimeError(error_msg)
-
-                # Verify objective stats columns exist
+    async def validate_database_schema(self):
+        """
+        ✅ CRITICAL: Validate database has correct unified schema (54 columns)
+        Prevents silent failures if wrong schema is used
+        Supports both SQLite and PostgreSQL
+        """
+        try:
+            # Query schema based on database type
+            if self.config.database_type == 'sqlite':
+                # SQLite: Use PRAGMA table_info
+                query = "PRAGMA table_info(player_comprehensive_stats)"
+                columns = await self.db_adapter.fetch_all(query)
                 column_names = [col[1] for col in columns]
-                required_stats = [
-                    "kill_assists",
-                    "dynamites_planted",
-                    "times_revived",
-                    "revives_given",
-                    "most_useful_kills",
-                    "useless_kills",
-                ]
+            else:
+                # PostgreSQL: Query information_schema
+                query = """
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'player_comprehensive_stats' 
+                    ORDER BY ordinal_position
+                """
+                columns = await self.db_adapter.fetch_all(query)
+                column_names = [col[0] for col in columns]
 
-                missing = [
-                    col for col in required_stats if col not in column_names
-                ]
-                if missing:
-                    logger.error(f"❌ MISSING COLUMNS: {missing}")
-                    raise RuntimeError(f"Missing objective stats: {missing}")
+            expected_columns = 54
+            actual_columns = len(column_names)
 
-                logger.info(
-                    f"✅ Schema validated: {actual_columns} columns (UNIFIED)"
+            if actual_columns != expected_columns:
+                error_msg = (
+                    f"❌ DATABASE SCHEMA MISMATCH!\n"
+                    f"Expected: {expected_columns} columns (UNIFIED)\n"
+                    f"Found: {actual_columns} columns\n\n"
+                    f"Schema: {'SPLIT (deprecated)' if actual_columns == 35 else 'UNKNOWN'}\n\n"
+                    f"Solution:\n"
+                    f"1. Backup database\n"
+                    f"2. Run schema conversion script\n"
+                    f"3. Re-import data\n"
                 )
+
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+
+            # Verify objective stats columns exist
+            required_stats = [
+                "kill_assists",
+                "dynamites_planted",
+                "times_revived",
+                "revives_given",
+                "most_useful_kills",
+                "useless_kills",
+            ]
+
+            missing = [
+                col for col in required_stats if col not in column_names
+            ]
+            if missing:
+                logger.error(f"❌ MISSING COLUMNS: {missing}")
+                raise RuntimeError(f"Missing objective stats: {missing}")
+
+            logger.info(
+                f"✅ Schema validated: {actual_columns} columns (UNIFIED) on {self.config.database_type.upper()}"
+            )
 
         except Exception as e:
             logger.error(f"❌ Schema validation failed: {e}")
@@ -2744,6 +2674,14 @@ class UltimateETLegacyBot(commands.Bot):
     async def setup_hook(self):
         """🔧 Initialize all bot components"""
         logger.info("🚀 Initializing Ultimate ET:Legacy Bot...")
+
+        # 🔌 Connect database adapter (required for PostgreSQL pool)
+        try:
+            await self.db_adapter.connect()
+            logger.info("✅ Database adapter connected successfully")
+        except Exception as e:
+            logger.error(f"❌ Failed to connect database adapter: {e}")
+            raise
 
         # ✅ CRITICAL: Validate schema FIRST
         await self.validate_database_schema()
@@ -2875,40 +2813,40 @@ class UltimateETLegacyBot(commands.Bot):
 
     async def initialize_database(self):
         """📊 Verify database tables exist (created by recreate_database.py)"""
-        async with aiosqlite.connect(self.db_path) as db:
-            # Ensure player_name alias for this connection (non-Cog helper)
-            try:
-                await ensure_player_name_alias(db)
-            except Exception:
-                pass
-            # Verify critical tables exist
-            required_tables = [
-                "rounds",
-                "player_comprehensive_stats",
-                "weapon_comprehensive_stats",
-                "player_links",
-                "processed_files",
-            ]
+        # Verify critical tables exist
+        required_tables = [
+            "rounds",
+            "player_comprehensive_stats",
+            "weapon_comprehensive_stats",
+            "player_links",
+            "processed_files",
+        ]
 
-            cursor = await db.execute(
-                """
+        # Query depends on database type
+        if self.config.database_type == 'sqlite':
+            query = """
                 SELECT name FROM sqlite_master
                 WHERE type='table' AND name IN (?, ?, ?, ?, ?)
-            """,
-                tuple(required_tables),
+            """
+        else:
+            # PostgreSQL: Query information_schema
+            query = """
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name IN ($1, $2, $3, $4, $5)
+            """
+
+        rows = await self.db_adapter.fetch_all(query, tuple(required_tables))
+        existing_tables = [row[0] for row in rows]
+
+        missing_tables = set(required_tables) - set(existing_tables)
+
+        if missing_tables:
+            logger.error(f"❌ Missing required tables: {missing_tables}")
+            logger.error("   Run: python recreate_database.py")
+            logger.error("   Then: python tools/simple_bulk_import.py")
+            raise Exception(
+                f"Database missing required tables: {missing_tables}"
             )
-
-            existing_tables = [row[0] for row in await cursor.fetchall()]
-
-            missing_tables = set(required_tables) - set(existing_tables)
-
-            if missing_tables:
-                logger.error(f"❌ Missing required tables: {missing_tables}")
-                logger.error("   Run: python recreate_database.py")
-                logger.error("   Then: python tools/simple_bulk_import.py")
-                raise Exception(
-                    f"Database missing required tables: {missing_tables}"
-                )
 
             logger.info(
                 f"✅ Database verified - all {len(required_tables)} required tables exist"
@@ -2999,26 +2937,18 @@ class UltimateETLegacyBot(commands.Bot):
             self.monitoring = True
 
             # Create database entry
-            async with aiosqlite.connect(self.db_path) as db:
-                # Ensure player_name alias for this connection (non-Cog helper)
-                try:
-                    await ensure_player_name_alias(db)
-                except Exception:
-                    pass
-                cursor = await db.execute(
-                    """
-                    INSERT INTO gaming_sessions (
-                        start_time, participant_count, participants, status
-                    ) VALUES (?, ?, ?, 'active')
-                """,
-                    (
-                        self.session_start_time.isoformat(),
-                        len(participants),
-                        ",".join(str(uid) for uid in participants),
-                    ),
-                )
-                self.gaming_sessions_db_id = cursor.lastrowid
-                await db.commit()
+            query = """
+                INSERT INTO gaming_sessions (
+                    start_time, participant_count, participants, status
+                ) VALUES (?, ?, ?, 'active')
+            """
+            params = (
+                self.session_start_time.isoformat(),
+                len(participants),
+                ",".join(str(uid) for uid in participants),
+            )
+            
+            self.gaming_sessions_db_id = await self.db_adapter.execute(query, params)
 
             logger.info(
                 f"🎮 GAMING SESSION STARTED! {len(participants)} players detected"
@@ -3087,25 +3017,18 @@ class UltimateETLegacyBot(commands.Bot):
             duration = end_time - self.session_start_time
 
             # Update database
-            async with aiosqlite.connect(self.db_path) as db:
-                # Ensure player_name alias for this connection (non-Cog helper)
-                try:
-                    await ensure_player_name_alias(db)
-                except Exception:
-                    pass
-                await db.execute(
-                    """
-                    UPDATE gaming_sessions
-                    SET end_time = ?, duration_seconds = ?, status = 'ended'
-                    WHERE round_id = ?
-                """,
-                    (
-                        end_time.isoformat(),
-                        int(duration.total_seconds()),
-                        self.gaming_sessions_db_id,
-                    ),
-                )
-                await db.commit()
+            query = """
+                UPDATE gaming_sessions
+                SET end_time = ?, duration_seconds = ?, status = 'ended'
+                WHERE round_id = ?
+            """
+            params = (
+                end_time.isoformat(),
+                int(duration.total_seconds()),
+                self.gaming_sessions_db_id,
+            )
+            
+            await self.db_adapter.execute(query, params)
 
             # Disable monitoring
             self.monitoring = False
@@ -3125,7 +3048,7 @@ class UltimateETLegacyBot(commands.Bot):
                         title="🏁 Gaming Session Complete!",
                         description=f"Duration: {self._format_duration(duration)}",
                         color=0xFFD700,
-                        timestamp=end_time,
+                        timestamp=datetime.now(),
                     )
                     embed.add_field(
                         name="👥 Participants",
@@ -3289,6 +3212,36 @@ class UltimateETLegacyBot(commands.Bot):
 
         return local_file
 
+    def _ssh_download_file_sync(self, ssh_config, filename, local_dir):
+        """Synchronous SSH file download"""
+        import paramiko
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        key_path = os.path.expanduser(ssh_config["key_path"])
+
+        ssh.connect(
+            hostname=ssh_config["host"],
+            port=ssh_config["port"],
+            username=ssh_config["user"],
+            key_filename=key_path,
+            timeout=10,
+        )
+
+        sftp = ssh.open_sftp()
+
+        remote_file = f"{ssh_config['remote_path']}/{filename}"
+        local_file = os.path.join(local_dir, filename)
+
+        logger.info(f"📥 Downloading {filename}...")
+        sftp.get(remote_file, local_file)
+
+        sftp.close()
+        ssh.close()
+
+        return local_file
+
     async def process_gamestats_file(self, local_path, filename):
         """
         Process a gamestats file: parse and import to database
@@ -3297,36 +3250,83 @@ class UltimateETLegacyBot(commands.Bot):
             dict with keys: success, round_id, player_count, error
         """
         try:
-            from community_stats_parser import C0RNP0RN3StatsParser
-
             logger.info(f"⚙️ Processing {filename}...")
 
-            # Parse using existing parser (it reads the file itself)
-            parser = C0RNP0RN3StatsParser()
-            stats_data = parser.parse_stats_file(local_path)
+            # 🔥 FIX: Use PostgreSQL database manager instead of bot's own import logic
+            # This ensures proper transaction handling and constraint checks
+            if self.config.database_type == "postgres":
+                from postgresql_database_manager import PostgreSQLDatabase
+                from pathlib import Path
+                
+                # Create database manager instance (reuses existing pool)
+                db_config = {
+                    'host': self.config.postgres_host,
+                    'port': self.config.postgres_port,
+                    'database': self.config.postgres_database,
+                    'user': self.config.postgres_user,
+                    'password': self.config.postgres_password
+                }
+                
+                db_manager = PostgreSQLDatabase(db_config)
+                await db_manager.connect()
+                
+                # 🔧 FIX: Use process_file() not import_stats_file() (method doesn't exist!)
+                success, message = await db_manager.process_file(Path(local_path))
+                
+                await db_manager.disconnect()
+                
+                if not success:
+                    raise Exception(f"Import failed: {message}")
+                
+                # Parse file to get player count for return value
+                from community_stats_parser import C0RNP0RN3StatsParser
+                parser = C0RNP0RN3StatsParser()
+                stats_data = parser.parse_stats_file(local_path)
+                
+                # Mark as processed
+                try:
+                    await self._mark_file_processed(filename, success=True)
+                    self.processed_files.add(filename)
+                except Exception as e:
+                    logger.debug(f"Failed to mark {filename} as processed: {e}")
+                
+                return {
+                    "success": True,
+                    "round_id": None,  # Database manager doesn't return round_id
+                    "player_count": len(stats_data.get("players", [])) if stats_data else 0,
+                    "error": None,
+                    "stats_data": stats_data if stats_data else {},
+                }
+            else:
+                # SQLite fallback - use old import logic
+                from community_stats_parser import C0RNP0RN3StatsParser
 
-            if not stats_data or stats_data.get("error"):
-                error_msg = (
-                    stats_data.get("error") if stats_data else "No data"
-                )
-                raise Exception(f"Parser error: {error_msg}")
+                # Parse using existing parser (it reads the file itself)
+                parser = C0RNP0RN3StatsParser()
+                stats_data = parser.parse_stats_file(local_path)
 
-            # Import to database using existing import logic
-            round_id = await self._import_stats_to_db(stats_data, filename)
-            # Mark file as processed only after successful import
-            try:
-                await self._mark_file_processed(filename, success=True)
-                self.processed_files.add(filename)
-            except Exception as e:
-                logger.debug(f"Failed to mark {filename} as processed: {e}")
+                if not stats_data or stats_data.get("error"):
+                    error_msg = (
+                        stats_data.get("error") if stats_data else "No data"
+                    )
+                    raise Exception(f"Parser error: {error_msg}")
 
-            return {
-                "success": True,
-                "round_id": round_id,
-                "player_count": len(stats_data.get("players", [])),
-                "error": None,
-                "stats_data": stats_data,
-            }
+                # Import to database using existing import logic
+                round_id = await self._import_stats_to_db(stats_data, filename)
+                # Mark file as processed only after successful import
+                try:
+                    await self._mark_file_processed(filename, success=True)
+                    self.processed_files.add(filename)
+                except Exception as e:
+                    logger.debug(f"Failed to mark {filename} as processed: {e}")
+
+                return {
+                    "success": True,
+                    "round_id": round_id,
+                    "player_count": len(stats_data.get("players", [])),
+                    "error": None,
+                    "stats_data": stats_data,
+                }
 
         except Exception as e:
             logger.error(f"❌ Processing failed: {e}")
@@ -3379,38 +3379,38 @@ class UltimateETLegacyBot(commands.Bot):
             round_duration = stats_data.get('actual_time', stats_data.get('map_time', 'Unknown'))
             
             # 🔥 FETCH ALL PLAYER DATA FROM DATABASE (not from parser!)
-            # This gives us access to ALL 53 fields, not just the limited parser output
+            # This gives us access to ALL 54 fields, not just the limited parser output
             logger.debug(f"📊 Fetching full player data from database for session {round_id}, round {round_num}...")
-            async with aiosqlite.connect(self.db_path) as db:
-                # Get round info (time limit, actual time)
-                round_cursor = await db.execute("""
-                    SELECT time_limit, actual_time, winner_team, round_outcome
-                    FROM rounds
-                    WHERE id = ?
-                """, (round_id,))
-                round_info = await round_cursor.fetchone()
-                
-                time_limit = round_info[0] if round_info else 'Unknown'
-                actual_time = round_info[1] if round_info else 'Unknown'
-                db_winner_team = round_info[2] if round_info else winner_team
-                db_round_outcome = round_info[3] if round_info else round_outcome
-                
-                cursor = await db.execute("""
-                    SELECT 
-                        player_name, team, kills, deaths, damage_given, damage_received,
-                        team_damage_given, team_damage_received, gibs, headshot_kills,
-                        accuracy, revives_given, times_revived, time_dead_minutes,
-                        efficiency, kd_ratio, time_played_minutes, dpm
-                    FROM player_comprehensive_stats
-                    WHERE round_id = ? AND round_number = ?
-                    ORDER BY kills DESC
-                """, (round_id, round_num))
-                
-                rows = await cursor.fetchall()
-                
-                # Convert to dict format
-                players = []
-                for row in rows:
+            
+            # Get round info (time limit, actual time)
+            round_query = """
+                SELECT time_limit, actual_time, winner_team, round_outcome
+                FROM rounds
+                WHERE id = ?
+            """
+            round_info = await self.db_adapter.fetch_one(round_query, (round_id,))
+            
+            time_limit = round_info[0] if round_info else 'Unknown'
+            actual_time = round_info[1] if round_info else 'Unknown'
+            db_winner_team = round_info[2] if round_info else winner_team
+            db_round_outcome = round_info[3] if round_info else round_outcome
+            
+            # Get player stats
+            players_query = """
+                SELECT 
+                    player_name, team, kills, deaths, damage_given, damage_received,
+                    team_damage_given, team_damage_received, gibs, headshots,
+                    accuracy, revives_given, times_revived, time_dead_minutes,
+                    efficiency, kd_ratio, time_played_minutes, dpm
+                FROM player_comprehensive_stats
+                WHERE round_id = ? AND round_number = ?
+                ORDER BY kills DESC
+            """
+            rows = await self.db_adapter.fetch_all(players_query, (round_id, round_num))
+            
+            # Convert to dict format
+            players = []
+            for row in rows:
                     players.append({
                         'name': row[0],
                         'team': row[1],
@@ -3591,28 +3591,27 @@ class UltimateETLegacyBot(commands.Bot):
         If so, post aggregate map statistics.
         """
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Check if there are any more rounds for this map in this session
-                cursor = await db.execute("""
-                    SELECT MAX(round_number) as max_round, COUNT(DISTINCT round_number) as round_count
-                    FROM player_comprehensive_stats
-                    WHERE round_id = ? AND map_name = ?
-                """, (round_id, map_name))
-                
-                row = await cursor.fetchone()
-                if not row:
-                    return
-                
-                max_round, round_count = row
-                
-                logger.debug(f"🗺️ Map check: {map_name} - current round {current_round}, max in DB: {max_round}, total rounds: {round_count}")
-                
-                # If current round matches max round in DB, this is the last round for the map
-                if current_round == max_round and round_count >= 2:
-                    logger.info(f"🏁 Map complete! {map_name} finished after {round_count} rounds. Posting map summary...")
-                    await self._post_map_summary(round_id, map_name, channel)
-                else:
-                    logger.debug(f"⏳ Map {map_name} not complete yet (round {current_round}/{max_round})")
+            # Check if there are any more rounds for this map in this session
+            query = """
+                SELECT MAX(round_number) as max_round, COUNT(DISTINCT round_number) as round_count
+                FROM player_comprehensive_stats
+                WHERE round_id = ? AND map_name = ?
+            """
+            row = await self.db_adapter.fetch_one(query, (round_id, map_name))
+            
+            if not row:
+                return
+            
+            max_round, round_count = row
+            
+            logger.debug(f"🗺️ Map check: {map_name} - current round {current_round}, max in DB: {max_round}, total rounds: {round_count}")
+            
+            # If current round matches max round in DB, this is the last round for the map
+            if current_round == max_round and round_count >= 2:
+                logger.info(f"🏁 Map complete! {map_name} finished after {round_count} rounds. Posting map summary...")
+                await self._post_map_summary(round_id, map_name, channel)
+            else:
+                logger.debug(f"⏳ Map {map_name} not complete yet (round {current_round}/{max_round})")
                     
         except Exception as e:
             logger.error(f"❌ Error checking map completion: {e}", exc_info=True)
@@ -3624,56 +3623,54 @@ class UltimateETLegacyBot(commands.Bot):
         try:
             logger.info(f"📊 Generating map summary for {map_name}...")
             
-            async with aiosqlite.connect(self.db_path) as db:
-                # Get map-level aggregate stats
-                cursor = await db.execute("""
-                    SELECT 
-                        COUNT(DISTINCT round_number) as total_rounds,
-                        COUNT(DISTINCT player_guid) as unique_players,
-                        SUM(kills) as total_kills,
-                        SUM(deaths) as total_deaths,
-                        SUM(damage_given) as total_damage,
-                        SUM(headshot_kills) as total_headshots,
-                        AVG(accuracy) as avg_accuracy
-                    FROM player_comprehensive_stats
-                    WHERE round_id = ? AND map_name = ?
-                """, (round_id, map_name))
-                
-                map_stats = await cursor.fetchone()
-                if not map_stats:
-                    logger.warning(f"⚠️ No map stats found for {map_name}")
-                    return
-                
-                total_rounds, unique_players, total_kills, total_deaths, total_damage, total_headshots, avg_accuracy = map_stats
-                
-                # Get top 5 players across all rounds on this map
-                cursor = await db.execute("""
-                    SELECT 
-                        player_name,
-                        SUM(kills) as total_kills,
-                        SUM(deaths) as total_deaths,
-                        SUM(damage_given) as total_damage,
-                        AVG(accuracy) as avg_accuracy
-                    FROM player_comprehensive_stats
-                    WHERE round_id = ? AND map_name = ?
-                    GROUP BY player_guid
-                    ORDER BY total_kills DESC
-                    LIMIT 5
-                """, (round_id, map_name))
-                
-                top_players = await cursor.fetchall()
-                
-                # Create embed
-                embed = discord.Embed(
-                    title=f"🗺️ {map_name.upper()} - Map Complete!",
-                    description=f"Aggregate stats from **{total_rounds} rounds**",
-                    color=discord.Color.gold(),
-                    timestamp=datetime.now()
-                )
-                
-                # Map overview
-                kd_ratio = total_kills / total_deaths if total_deaths > 0 else total_kills
-                embed.add_field(
+            # Get map-level aggregate stats
+            map_query = """
+                SELECT 
+                    COUNT(DISTINCT round_number) as total_rounds,
+                    COUNT(DISTINCT player_guid) as unique_players,
+                    SUM(kills) as total_kills,
+                    SUM(deaths) as total_deaths,
+                    SUM(damage_given) as total_damage,
+                    SUM(headshot_kills) as total_headshots,
+                    AVG(accuracy) as avg_accuracy
+                FROM player_comprehensive_stats
+                WHERE round_id = ? AND map_name = ?
+            """
+            map_stats = await self.db_adapter.fetch_one(map_query, (round_id, map_name))
+            
+            if not map_stats:
+                logger.warning(f"⚠️ No map stats found for {map_name}")
+                return
+            
+            total_rounds, unique_players, total_kills, total_deaths, total_damage, total_headshots, avg_accuracy = map_stats
+            
+            # Get top 5 players across all rounds on this map
+            top_players_query = """
+                SELECT 
+                    player_name,
+                    SUM(kills) as total_kills,
+                    SUM(deaths) as total_deaths,
+                    SUM(damage_given) as total_damage,
+                    AVG(accuracy) as avg_accuracy
+                FROM player_comprehensive_stats
+                WHERE round_id = ? AND map_name = ?
+                GROUP BY player_guid
+                ORDER BY total_kills DESC
+                LIMIT 5
+            """
+            top_players = await self.db_adapter.fetch_all(top_players_query, (round_id, map_name))
+            
+            # Create embed
+            embed = discord.Embed(
+                title=f"🗺️ {map_name.upper()} - Map Complete!",
+                description=f"Aggregate stats from **{total_rounds} rounds**",
+                color=discord.Color.gold(),
+                timestamp=datetime.now()
+            )
+            
+            # Map overview
+            kd_ratio = total_kills / total_deaths if total_deaths > 0 else total_kills
+            embed.add_field(
                     name="📊 Map Overview",
                     value=(
                         f"**Rounds Played:** {total_rounds}\n"
@@ -3686,29 +3683,29 @@ class UltimateETLegacyBot(commands.Bot):
                         f"**Avg Accuracy:** {avg_accuracy:.1f}%"
                     ),
                     inline=False
-                )
-                
-                # Top performers
-                if top_players:
-                    top_lines = []
-                    for i, (name, kills, deaths, damage, acc) in enumerate(top_players, 1):
-                        kd = kills / deaths if deaths > 0 else kills
-                        top_lines.append(
-                            f"{i}. **{name}** - {kills}/{deaths} K/D ({kd:.2f}) | {int(damage):,} DMG | {acc:.1f}% ACC"
-                        )
-                    
-                    embed.add_field(
-                        name="🏆 Top Performers (All Rounds)",
-                        value="\n".join(top_lines),
-                        inline=False
+            )
+            
+            # Top performers
+            if top_players:
+                top_lines = []
+                for i, (name, kills, deaths, damage, acc) in enumerate(top_players, 1):
+                    kd = kills / deaths if deaths > 0 else kills
+                    top_lines.append(
+                        f"{i}. **{name}** - {kills}/{deaths} K/D ({kd:.2f}) | {int(damage):,} DMG | {acc:.1f}% ACC"
                     )
                 
-                embed.set_footer(text=f"Round ID: {round_id}")
-                
-                # Post to channel
-                logger.info(f"📤 Posting map summary to #{channel.name}...")
-                await channel.send(embed=embed)
-                logger.info(f"✅ Map summary posted for {map_name}!")
+                embed.add_field(
+                    name="🏆 Top Performers (All Rounds)",
+                    value="\n".join(top_lines),
+                    inline=False
+                )
+            
+            embed.set_footer(text=f"Round ID: {round_id}")
+            
+            # Post to channel
+            logger.info(f"📤 Posting map summary to #{channel.name}...")
+            await channel.send(embed=embed)
+            logger.info(f"✅ Map summary posted for {map_name}!")
                 
         except Exception as e:
             logger.error(f"❌ Error posting map summary: {e}", exc_info=True)
@@ -3732,91 +3729,182 @@ class UltimateETLegacyBot(commands.Bot):
             else:
                 round_time = "00:00:00"
             
-            # Create match_id (unique identifier for the gaming session)
+            # Create match_id (ORIGINAL BEHAVIOR - includes timestamp)
             match_id = f"{date_part}-{time_part}"
 
-            async with aiosqlite.connect(self.db_path) as db:
-                # Ensure player_name alias for this connection (non-Cog helper)
-                try:
-                    await ensure_player_name_alias(db)
-                except Exception:
-                    pass
-                # Start an explicit transaction so we can rollback on error
-                await db.execute("BEGIN")
-                # Insert session
-                cursor = await db.execute(
-                    """
-                    SELECT id FROM rounds
-                    WHERE round_date = ? AND map_name = ? AND round_number = ?
-                """,
-                    (
-                        date_part,  # Use date_part not timestamp
-                        stats_data["map_name"],
-                        stats_data["round_num"],
-                    ),
-                )
+            # Check if round already exists
+            check_query = """
+                SELECT id FROM rounds
+                WHERE round_date = ? AND map_name = ? AND round_number = ?
+            """
+            existing = await self.db_adapter.fetch_one(
+                check_query,
+                (
+                    date_part,  # Use date_part not timestamp
+                    stats_data["map_name"],
+                    stats_data["round_num"],
+                ),
+            )
 
-                existing = await cursor.fetchone()
-                if existing:
-                    logger.info(
-                        f"⚠️ Round already exists (ID: {existing[0]})"
-                    )
-                    return existing[0]
-
-                # Insert new session
-                cursor = await db.execute(
-                    """
-                    INSERT INTO rounds (
-                        round_date, round_time, match_id, map_name, round_number,
-                        time_limit, actual_time
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        date_part,
-                        round_time,
-                        match_id,
-                        stats_data["map_name"],
-                        stats_data["round_num"],
-                        stats_data.get("map_time", ""),
-                        stats_data.get("actual_time", ""),
-                    ),
-                )
-
-                round_id = cursor.lastrowid
-
-                # Insert player stats
-                for player in stats_data.get("players", []):
-                    await self._insert_player_stats(
-                        db, round_id, date_part, stats_data, player
-                    )
-
-                await db.commit()
-
+            if existing:
                 logger.info(
-                    f"✅ Imported session {round_id} with "
-                    f"{len(stats_data.get('players', []))} players"
+                    f"⚠️ Round already exists (ID: {existing[0]})"
+                )
+                return existing[0]
+
+            # Calculate gaming_session_id (60-minute gap logic)
+            gaming_session_id = await self._calculate_gaming_session_id(date_part, round_time)
+
+            # Insert new round
+            insert_round_query = """
+                INSERT INTO rounds (
+                    round_date, round_time, match_id, map_name, round_number,
+                    time_limit, actual_time, gaming_session_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
+            """
+            round_id = await self.db_adapter.fetch_val(
+                insert_round_query,
+                (
+                    date_part,
+                    round_time,
+                    match_id,
+                    stats_data["map_name"],
+                    stats_data["round_num"],
+                    stats_data.get("map_time", ""),
+                    stats_data.get("actual_time", ""),
+                    gaming_session_id,
+                ),
+            )
+
+            # Insert player stats
+            for player in stats_data.get("players", []):
+                await self._insert_player_stats(
+                    round_id, date_part, stats_data, player
                 )
 
-                return round_id
+            # 🆕 If Round 2 file, also import match summary (cumulative stats)
+            match_summary_id = None
+            if stats_data.get('match_summary'):
+                logger.info("📋 Importing match summary (cumulative R1+R2 stats)...")
+                match_summary = stats_data['match_summary']
+                
+                # Check if match summary already exists
+                check_summary_query = """
+                    SELECT id FROM rounds
+                    WHERE round_date = ? AND map_name = ? AND round_number = 0
+                """
+                existing_summary = await self.db_adapter.fetch_one(
+                    check_summary_query,
+                    (date_part, stats_data["map_name"]),
+                )
+                
+                if not existing_summary:
+                    # Insert match summary as round_number = 0 (use same gaming_session_id as the rounds)
+                    insert_summary_query = """
+                        INSERT INTO rounds (
+                            round_date, round_time, match_id, map_name, round_number,
+                            time_limit, actual_time, winner_team, defender_team, round_outcome, gaming_session_id
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        RETURNING id
+                    """
+                    match_summary_id = await self.db_adapter.fetch_val(
+                        insert_summary_query,
+                        (
+                            date_part,
+                            round_time,
+                            match_id,
+                            match_summary["map_name"],
+                            0,  # round_number = 0 for match summary
+                            match_summary.get("map_time", ""),
+                            match_summary.get("actual_time", ""),
+                            match_summary.get("winner_team", 0),
+                            match_summary.get("defender_team", 0),
+                            match_summary.get("round_outcome", ""),
+                            gaming_session_id,  # Same session as R1/R2
+                        ),
+                    )
+                    
+                    # Insert match summary player stats
+                    for player in match_summary.get("players", []):
+                        await self._insert_player_stats(
+                            match_summary_id, date_part, match_summary, player
+                        )
+                    
+                    logger.info(
+                        f"✅ Imported match summary (ID: {match_summary_id}) with "
+                        f"{len(match_summary.get('players', []))} players"
+                    )
+                else:
+                    match_summary_id = existing_summary[0]
+                    logger.info(f"⏭️  Match summary already exists (ID: {match_summary_id})")
+
+            logger.info(
+                f"✅ Imported session {round_id} with "
+                f"{len(stats_data.get('players', []))} players"
+            )
+
+            return round_id
 
         except Exception as e:
-            # Attempt a rollback to ensure partial writes are not committed
-            try:
-                async with aiosqlite.connect(self.db_path) as db:
-                    # Ensure player_name alias for this connection (non-Cog helper)
-                    try:
-                        await ensure_player_name_alias(db)
-                    except Exception:
-                        pass
-                    await db.execute("ROLLBACK")
-            except Exception:
-                logger.debug("Rollback failed or not required")
-
             logger.error(f"❌ Database import failed: {e}")
             raise
 
+    async def _calculate_gaming_session_id(self, round_date: str, round_time: str) -> int:
+        """
+        Calculate gaming_session_id using 60-minute gap logic.
+        
+        Args:
+            round_date: Date string like '2025-11-06'
+            round_time: Time string like '23:41:53'
+        
+        Returns:
+            gaming_session_id (integer, starts at 1)
+        """
+        try:
+            from datetime import datetime, timedelta
+            
+            # Get most recent round with gaming_session_id
+            query = """
+                SELECT gaming_session_id, round_date, round_time
+                FROM rounds
+                WHERE gaming_session_id IS NOT NULL
+                ORDER BY round_date DESC, round_time DESC
+                LIMIT 1
+            """
+            last_round = await self.db_adapter.fetch_one(query)
+            
+            if not last_round:
+                # First round ever
+                return 1
+            
+            last_session_id = last_round[0]
+            last_date = last_round[1]
+            last_time = last_round[2]
+            
+            # Parse timestamps
+            current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')
+            last_dt = datetime.strptime(f"{last_date} {last_time}", '%Y-%m-%d %H:%M:%S')
+            
+            # Calculate time gap
+            gap = current_dt - last_dt
+            gap_minutes = gap.total_seconds() / 60
+            
+            # If gap > 60 minutes, start new session
+            if gap_minutes > 60:
+                new_session_id = last_session_id + 1
+                logger.info(f"🎮 New gaming session #{new_session_id} (gap: {gap_minutes:.1f} min)")
+                return new_session_id
+            else:
+                logger.debug(f"🎮 Continuing session #{last_session_id} (gap: {gap_minutes:.1f} min)")
+                return last_session_id
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Error calculating gaming_session_id: {e}. Using NULL.")
+            return None
+
     async def _insert_player_stats(
-        self, db, round_id, round_date, result, player
+        self, round_id, round_date, result, player
     ):
         """Insert player comprehensive stats"""
         obj_stats = player.get("objective_stats", {})
@@ -3875,7 +3963,8 @@ class UltimateETLegacyBot(commands.Bot):
             obj_stats.get("self_kills", 0),
             obj_stats.get("team_kills", 0),
             obj_stats.get("team_gibs", 0),
-            obj_stats.get("headshot_kills", 0),  # ✅ CRITICAL: Use headshot_KILLS (TAB field 14), NOT player["headshots"] (weapon hits sum)!
+            obj_stats.get("headshot_kills", 0),  # ✅ TAB field 14 - actual headshot kills
+            player.get("headshots", 0),  # ✅ Sum of weapon headshot hits (what we display!)
             time_seconds,
             time_minutes,
             time_dead_mins,
@@ -3910,14 +3999,13 @@ class UltimateETLegacyBot(commands.Bot):
             obj_stats.get("death_spree", 0),
         )
 
-        cursor = await db.execute(
-            """
+        query = """
             INSERT INTO player_comprehensive_stats (
                 round_id, round_date, map_name, round_number,
                 player_guid, player_name, clean_name, team,
                 kills, deaths, damage_given, damage_received,
                 team_damage_given, team_damage_received,
-                gibs, self_kills, team_kills, team_gibs, headshot_kills,
+                gibs, self_kills, team_kills, team_gibs, headshot_kills, headshots,
                 time_played_seconds, time_played_minutes,
                 time_dead_minutes, time_dead_ratio,
                 xp, kd_ratio, dpm, efficiency,
@@ -3933,26 +4021,31 @@ class UltimateETLegacyBot(commands.Bot):
                 multi_kills, mega_kills,
                 killing_spree_best, death_spree_worst
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
-        """,
-            values,
-        )
-        # Capture inserted player row id for optional FK reference
-        try:
-            player_stats_id = cursor.lastrowid
-        except Exception:
-            player_stats_id = None
+        """
+        player_stats_id = await self.db_adapter.execute(query, values)
 
         # Insert weapon stats into weapon_comprehensive_stats if available
         try:
             weapon_stats = player.get("weapon_stats", {}) or {}
             if weapon_stats:
-                pragma_cur = await db.execute("PRAGMA table_info(weapon_comprehensive_stats)")
-                pragma_rows = await pragma_cur.fetchall()
-                cols = [r[1] for r in pragma_rows]
+                # Get table column info (database-agnostic)
+                if self.config.database_type == 'sqlite':
+                    col_query = "PRAGMA table_info(weapon_comprehensive_stats)"
+                    pragma_rows = await self.db_adapter.fetch_all(col_query)
+                    cols = [r[1] for r in pragma_rows]
+                else:
+                    # PostgreSQL: Query information_schema
+                    col_query = """
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name = 'weapon_comprehensive_stats'
+                        ORDER BY ordinal_position
+                    """
+                    pragma_rows = await self.db_adapter.fetch_all(col_query)
+                    cols = [r[0] for r in pragma_rows]
 
                 # Include session metadata columns if present (they're NOT NULL in some schemas)
                 insert_cols = ["round_id"]
@@ -4028,7 +4121,7 @@ class UltimateETLegacyBot(commands.Bot):
                     except Exception:
                         logger.exception("Failed to log weapon insert diagnostic")
 
-                    await db.execute(insert_sql, tuple(row_vals))
+                    await self.db_adapter.execute(insert_sql, tuple(row_vals))
         except Exception as e:
             # Weapon insert failures should be visible — escalate to error and include traceback
             logger.error(
@@ -4038,13 +4131,12 @@ class UltimateETLegacyBot(commands.Bot):
         
         # 🔗 CRITICAL: Update player aliases for !stats and !link commands
         await self._update_player_alias(
-            db,
             player.get("guid", "UNKNOWN"),
             player.get("name", "Unknown"),
             round_date,
         )
 
-    async def _update_player_alias(self, db, guid, alias, last_seen_date):
+    async def _update_player_alias(self, guid, alias, last_seen_date):
         """
         Track player aliases for !stats and !link commands
         
@@ -4052,28 +4144,28 @@ class UltimateETLegacyBot(commands.Bot):
         Updates the player_aliases table every time we see a player.
         """
         try:
+            # Convert string date to datetime for PostgreSQL compatibility
+            from datetime import datetime
+            if isinstance(last_seen_date, str):
+                last_seen_datetime = datetime.strptime(last_seen_date, '%Y-%m-%d')
+            else:
+                last_seen_datetime = last_seen_date
+            
             # Check if this GUID+alias combination exists
-            async with db.execute(
-                'SELECT times_seen FROM player_aliases WHERE guid = ? AND alias = ?',
-                (guid, alias),
-            ) as cursor:
-                existing = await cursor.fetchone()
+            check_query = 'SELECT times_seen FROM player_aliases WHERE guid = ? AND alias = ?'
+            existing = await self.db_adapter.fetch_one(check_query, (guid, alias))
 
             if existing:
                 # Update existing alias: increment times_seen and update last_seen
-                await db.execute(
-                    '''UPDATE player_aliases 
+                update_query = '''UPDATE player_aliases 
                        SET times_seen = times_seen + 1, last_seen = ?
-                       WHERE guid = ? AND alias = ?''',
-                    (last_seen_date, guid, alias),
-                )
+                       WHERE guid = ? AND alias = ?'''
+                await self.db_adapter.execute(update_query, (last_seen_datetime, guid, alias))
             else:
                 # Insert new alias
-                await db.execute(
-                    '''INSERT INTO player_aliases (guid, alias, first_seen, last_seen, times_seen)
-                       VALUES (?, ?, ?, ?, 1)''',
-                    (guid, alias, last_seen_date, last_seen_date),
-                )
+                insert_query = '''INSERT INTO player_aliases (guid, alias, first_seen, last_seen, times_seen)
+                       VALUES (?, ?, ?, ?, 1)'''
+                await self.db_adapter.execute(insert_query, (guid, alias, last_seen_datetime, last_seen_datetime))
 
             logger.debug(f"✅ Updated alias: {alias} for GUID {guid}")
 
@@ -4162,16 +4254,21 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"❌ Failed to post map summary: {e}")
 
-    async def should_process_file(self, filename):
+    async def should_process_file(self, filename, ignore_startup_time=False, check_db_only=False):
         """
         Smart file processing decision (Hybrid Approach)
 
         Checks multiple sources to avoid re-processing:
-        1. File age (prevent importing old files)
+        1. File age (prevent importing old files) - SKIPPED if ignore_startup_time=True
         2. In-memory cache (fastest)
-        3. Local file exists (fast)
+        3. Local file exists (fast) - SKIPPED if check_db_only=True
         4. Processed files table (fast, persistent)
         5. Sessions table (slower, definitive)
+
+        Args:
+            filename: Name of the file to check
+            ignore_startup_time: If True, skip the bot startup time check (used by manual sync commands)
+            check_db_only: If True, only check database, not local files (used to find files needing import)
 
         Returns:
             bool: True if file should be processed, False if already done
@@ -4179,40 +4276,43 @@ class UltimateETLegacyBot(commands.Bot):
         try:
             # 1. Check file age - only import files created AFTER bot startup
             # This prevents importing old files on bot restart while allowing live updates
-            try:
-                # Parse datetime from filename: YYYY-MM-DD-HHMMSS-...
-                datetime_str = filename[:17]  # Get YYYY-MM-DD-HHMMSS
-                file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d-%H%M%S")
-                
-                # Skip files created before bot started
-                if file_datetime < self.bot_startup_time:
-                    time_diff = (self.bot_startup_time - file_datetime).total_seconds() / 3600
-                    logger.debug(f"⏭️ {filename} created {time_diff:.1f}h before bot startup (skip old files)")
+            # SKIP this check if ignore_startup_time=True (manual sync commands)
+            if not ignore_startup_time:
+                try:
+                    # Parse datetime from filename: YYYY-MM-DD-HHMMSS-...
+                    datetime_str = filename[:17]  # Get YYYY-MM-DD-HHMMSS
+                    file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d-%H%M%S")
+                    
+                    # Skip files created before bot started
+                    if file_datetime < self.bot_startup_time:
+                        time_diff = (self.bot_startup_time - file_datetime).total_seconds() / 3600
+                        logger.debug(f"⏭️ {filename} created {time_diff:.1f}h before bot startup (skip old files)")
+                        self.processed_files.add(filename)
+                        await self._mark_file_processed(filename, success=True)
+                        return False
+                    else:
+                        time_diff = (file_datetime - self.bot_startup_time).total_seconds() / 60
+                        logger.debug(f"✅ {filename} created {time_diff:.1f}m after bot startup (process as new file)")
+                except ValueError:
+                    # If datetime parsing fails, continue with other checks
+                    logger.warning(f"⚠️ Could not parse datetime from filename: {filename}")
+            
+            # 2. Check in-memory cache (only if not checking DB only)
+            if not check_db_only and filename in self.processed_files:
+                return False
+
+            # 3. Check if local file exists (SKIP if check_db_only=True)
+            if not check_db_only:
+                local_path = os.path.join("local_stats", filename)
+                if os.path.exists(local_path):
+                    logger.debug(
+                        f"⏭️ {filename} exists locally, marking processed"
+                    )
                     self.processed_files.add(filename)
                     await self._mark_file_processed(filename, success=True)
                     return False
-                else:
-                    time_diff = (file_datetime - self.bot_startup_time).total_seconds() / 60
-                    logger.debug(f"✅ {filename} created {time_diff:.1f}m after bot startup (process as new file)")
-            except ValueError:
-                # If datetime parsing fails, continue with other checks
-                logger.warning(f"⚠️ Could not parse datetime from filename: {filename}")
-            
-            # 2. Check in-memory cache
-            if filename in self.processed_files:
-                return False
 
-            # 2. Check if local file exists
-            local_path = os.path.join("local_stats", filename)
-            if os.path.exists(local_path):
-                logger.debug(
-                    f"⏭️ {filename} exists locally, marking processed"
-                )
-                self.processed_files.add(filename)
-                await self._mark_file_processed(filename, success=True)
-                return False
-
-            # 3. Check processed_files table
+            # 4. Check processed_files table
             if await self._is_in_processed_files_table(filename):
                 logger.debug(f"⏭️ {filename} in processed_files table")
                 self.processed_files.add(filename)
@@ -4235,19 +4335,10 @@ class UltimateETLegacyBot(commands.Bot):
     async def _is_in_processed_files_table(self, filename):
         """Check if filename exists in processed_files table"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Ensure player_name alias for this connection (non-Cog helper)
-                try:
-                    await ensure_player_name_alias(db)
-                except Exception:
-                    pass
-                cursor = await db.execute(
-                    """SELECT 1 FROM processed_files 
-                       WHERE filename = ? AND success = 1""",
-                    (filename,),
-                )
-                result = await cursor.fetchone()
-                return result is not None
+            query = """SELECT 1 FROM processed_files 
+                       WHERE filename = ? AND success = 1"""
+            result = await self.db_adapter.fetch_one(query, (filename,))
+            return result is not None
         except Exception as e:
             logger.debug(f"Error checking processed_files table: {e}")
             return False
@@ -4266,29 +4357,23 @@ class UltimateETLegacyBot(commands.Bot):
             # Use full timestamp for unique identification
             timestamp = "-".join(filename.split("-")[:4])
 
-            async with aiosqlite.connect(self.db_path) as db:
-                # Ensure player_name alias for this connection (non-Cog helper)
-                try:
-                    await ensure_player_name_alias(db)
-                except Exception:
-                    pass
-                cursor = await db.execute(
-                    """
-                    SELECT 1 FROM rounds
-                    WHERE round_date = ? 
-                      AND map_name = ? 
-                      AND round_number = ?
-                    LIMIT 1
-                """,
-                    (
-                        timestamp,
-                        file_info["map_name"],
-                        file_info["round_number"],
-                    ),
-                )
-
-                result = await cursor.fetchone()
-                return result is not None
+            query = """
+                SELECT 1 FROM rounds
+                WHERE round_date = ? 
+                  AND map_name = ? 
+                  AND round_number = ?
+                LIMIT 1
+            """
+            result = await self.db_adapter.fetch_one(
+                query,
+                (
+                    timestamp,
+                    file_info["map_name"],
+                    file_info["round_number"],
+                ),
+            )
+            
+            return result is not None
 
         except Exception as e:
             logger.debug(f"Error checking session in DB: {e}")
@@ -4306,18 +4391,15 @@ class UltimateETLegacyBot(commands.Bot):
             error_msg: Error message if processing failed
         """
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                # Ensure player_name alias for this connection (non-Cog helper)
-                try:
-                    await ensure_player_name_alias(db)
-                except Exception:
-                    pass
-                await db.execute(
-                    """
+            # Database-specific syntax for INSERT OR REPLACE
+            if self.config.database_type == 'sqlite':
+                query = """
                     INSERT OR REPLACE INTO processed_files 
                     (filename, success, error_message, processed_at)
                     VALUES (?, ?, ?, ?)
-                """,
+                """
+                await self.db_adapter.execute(
+                    query,
                     (
                         filename,
                         1 if success else 0,
@@ -4325,17 +4407,40 @@ class UltimateETLegacyBot(commands.Bot):
                         datetime.now().isoformat(),
                     ),
                 )
-                await db.commit()
+            else:  # PostgreSQL
+                query = """
+                    INSERT INTO processed_files 
+                    (filename, success, error_message, processed_at)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (filename) DO UPDATE SET
+                        success = EXCLUDED.success,
+                        error_message = EXCLUDED.error_message,
+                        processed_at = EXCLUDED.processed_at
+                """
+                await self.db_adapter.execute(
+                    query,
+                    (
+                        filename,
+                        success,  # PostgreSQL uses boolean directly
+                        error_msg,
+                        datetime.now(),
+                    ),
+                )
 
         except Exception as e:
             logger.debug(f"Error marking file as processed: {e}")
 
     async def sync_local_files_to_processed_table(self):
         """
-        One-time sync: Add existing local_stats files to processed_files
-
-        Call this during bot startup to populate the table with
-        already-downloaded files
+        🔍 DIAGNOSTIC TOOL: Check for unimported files in local_stats/
+        
+        This scans local_stats/ and alerts if there are files that haven't been
+        imported to the database yet. Does NOT mark them as processed - just reports.
+        
+        Files should be imported via:
+        - SSH monitor automatic download + import
+        - Manual !import command
+        - postgresql_database_manager.py bulk import
         """
         try:
             local_dir = "local_stats"
@@ -4347,45 +4452,44 @@ class UltimateETLegacyBot(commands.Bot):
             if not files:
                 return
 
-            logger.info(
-                f"🔄 Syncing {len(files)} local files to "
-                f"processed_files table..."
-            )
+            # Check which files are NOT in processed_files table
+            unimported = []
+            for filename in files:
+                if self.config.database_type == 'sqlite':
+                    check_query = "SELECT 1 FROM processed_files WHERE filename = ?"
+                    existing = await self.db_adapter.fetch_one(check_query, (filename,))
+                else:  # PostgreSQL
+                    check_query = "SELECT 1 FROM processed_files WHERE filename = $1"
+                    existing = await self.db_adapter.fetch_one(check_query, (filename,))
+                
+                if not existing:
+                    unimported.append(filename)
 
-            synced = 0
-            async with aiosqlite.connect(self.db_path) as db:
-                for filename in files:
-                    # Check if already in table
-                    cursor = await db.execute(
-                        "SELECT 1 FROM processed_files WHERE filename = ?",
-                        (filename,),
-                    )
-                    if await cursor.fetchone():
-                        continue  # Already tracked
-
-                    # Add to table
-                    await db.execute(
-                        """
-                        INSERT INTO processed_files 
-                        (filename, success, error_message, processed_at)
-                        VALUES (?, 1, NULL, ?)
-                    """,
-                        (filename, datetime.now().isoformat()),
-                    )
-
-                    self.processed_files.add(filename)
-                    synced += 1
-
-                await db.commit()
-
-            if synced > 0:
+            # Report findings
+            if unimported:
+                logger.warning(
+                    f"⚠️  Found {len(unimported)} unimported files in local_stats/ "
+                    f"(total: {len(files)} files)"
+                )
+                logger.warning(
+                    f"💡 To import them, use: python postgresql_database_manager.py "
+                    f"or !import command"
+                )
+                # Show a few examples (don't spam log)
+                if len(unimported) <= 5:
+                    for f in unimported:
+                        logger.info(f"   📄 {f}")
+                else:
+                    for f in unimported[:3]:
+                        logger.info(f"   📄 {f}")
+                    logger.info(f"   ... and {len(unimported) - 3} more")
+            else:
                 logger.info(
-                    f"✅ Synced {synced} local files to "
-                    f"processed_files table"
+                    f"✅ All {len(files)} local files are tracked in database"
                 )
 
         except Exception as e:
-            logger.error(f"Error syncing local files: {e}")
+            logger.error(f"Error checking local files: {e}")
 
     async def _auto_end_session(self):
         """Auto-end session and post summary"""
@@ -4418,35 +4522,26 @@ class UltimateETLegacyBot(commands.Bot):
             # (Reuse the last_session command logic)
             try:
                 # Query database for most recent session
-                async with aiosqlite.connect(self.db_path) as db:
-                    # Ensure player_name alias for this connection (non-Cog helper)
-                    try:
-                        await ensure_player_name_alias(db)
-                    except Exception:
-                        pass
-                    # Get most recent session data
-                    cursor = await db.execute(
-                        """
-                        SELECT DISTINCT DATE(round_date) as date
-                        FROM player_comprehensive_stats
-                        ORDER BY date DESC
-                        LIMIT 1
-                    """
+                query = """
+                    SELECT DISTINCT DATE(round_date) as date
+                    FROM player_comprehensive_stats
+                    ORDER BY date DESC
+                    LIMIT 1
+                """
+                row = await self.db_adapter.fetch_one(query)
+
+                if row:
+                    round_date = row[0]
+                    logger.info(
+                        f"📊 Posting auto-summary for {round_date}"
                     )
-                    row = await cursor.fetchone()
 
-                    if row:
-                        round_date = row[0]
-                        logger.info(
-                            f"📊 Posting auto-summary for {round_date}"
-                        )
-
-                        # Use last_session logic to generate embeds
-                        # (This would call the existing last_session code)
-                        await channel.send(
-                            f"📊 **Session Summary for {round_date}**\n"
-                            f"Use `!last_session` for full details!"
-                        )
+                    # Use last_session logic to generate embeds
+                    # (This would call the existing last_session code)
+                    await channel.send(
+                        f"📊 **Session Summary for {round_date}**\n"
+                        f"Use `!last_session` for full details!"
+                    )
 
                 logger.info("✅ Session auto-ended successfully")
 
@@ -4585,17 +4680,9 @@ class UltimateETLegacyBot(commands.Bot):
         """
         try:
             # Refresh processed files cache
-            async with aiosqlite.connect(self.db_path) as db:
-                # Ensure player_name alias for this connection (non-Cog helper)
-                try:
-                    await ensure_player_name_alias(db)
-                except Exception:
-                    pass
-                cursor = await db.execute(
-                    "SELECT filename FROM processed_files WHERE success = 1"
-                )
-                rows = await cursor.fetchall()
-                self.processed_files = {row[0] for row in rows}
+            query = "SELECT filename FROM processed_files WHERE success = 1"
+            rows = await self.db_adapter.fetch_all(query)
+            self.processed_files = {row[0] for row in rows}
 
         except Exception as e:
             logger.debug(f"Cache refresh error: {e}")
@@ -4758,9 +4845,15 @@ class UltimateETLegacyBot(commands.Bot):
 
     async def on_ready(self):
         """✅ Bot startup message"""
+        logger.info("=" * 80)
         logger.info(f"🚀 Ultimate ET:Legacy Bot logged in as {self.user}")
-        logger.info(f"📊 Connected to database: {self.db_path}")
-        logger.info(f"🎮 Bot ready with {len(list(self.commands))} commands!")
+        logger.info(f"🆔 Bot ID: {self.user.id}")
+        logger.info(f"📊 Database Type: {self.config.database_type.upper()}")
+        logger.info(f"📍 Database: {self.db_path}")
+        logger.info(f"🎮 Commands Loaded: {len(list(self.commands))}")
+        logger.info(f"🔧 Cogs Loaded: {len(self.cogs)}")
+        logger.info(f"🌐 Servers: {len(self.guilds)}")
+        logger.info("=" * 80)
 
         # Clear any old slash commands to avoid confusion
         try:
@@ -4770,9 +4863,52 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.warning(f"Could not clear slash commands: {e}")
 
+    async def on_command(self, ctx):
+        """Track command execution start"""
+        import time
+        ctx.command_start_time = time.time()
+        
+        command_logger = get_logger('bot.commands')
+        user = f"{ctx.author.name}#{ctx.author.discriminator} ({ctx.author.id})"
+        guild = f"{ctx.guild.name} ({ctx.guild.id})" if ctx.guild else "DM"
+        channel = f"#{ctx.channel.name}" if hasattr(ctx.channel, 'name') else "DM"
+        
+        command_logger.info(
+            f"▶ COMMAND: !{ctx.command.name} | "
+            f"User: {user} | Guild: {guild} | Channel: {channel}"
+        )
+
+    async def on_command_completion(self, ctx):
+        """Track successful command completion"""
+        import time
+        duration = time.time() - getattr(ctx, 'command_start_time', time.time())
+        
+        log_command_execution(
+            ctx,
+            f"!{ctx.command.name}",
+            start_time=getattr(ctx, 'command_start_time', None),
+            end_time=time.time()
+        )
+        
+        # Warn about slow commands
+        if duration > 5.0:
+            log_performance_warning(f"!{ctx.command.name}", duration, threshold=5.0)
+
     async def on_command_error(self, ctx, error):
         """🚨 Handle command errors"""
+        import time
         self.error_count += 1
+        
+        # Log the error with full context
+        duration = time.time() - getattr(ctx, 'command_start_time', time.time())
+        
+        log_command_execution(
+            ctx,
+            f"!{ctx.command.name}" if ctx.command else "unknown",
+            start_time=getattr(ctx, 'command_start_time', None),
+            end_time=time.time(),
+            error=str(error)
+        )
 
         if isinstance(error, commands.CommandNotFound):
             await ctx.send(
@@ -4783,8 +4919,13 @@ class UltimateETLegacyBot(commands.Bot):
                 f"❌ Missing argument: {error.param}. Use `!help_command` for usage."
             )
         else:
-            logger.error(f"Command error: {error}")
+            error_logger = get_logger('bot.errors')
+            error_logger.error(
+                f"Command error in !{ctx.command.name if ctx.command else 'unknown'}: {error}",
+                exc_info=True
+            )
             await ctx.send(f"❌ An error occurred: {error}")
+
 
 
 # 🚀 BOT STARTUP
