@@ -102,72 +102,34 @@ python postgresql_database_manager.py
 
 ### 6. Run Bot
 ```bash
-python bot/ultimate_bot.py
-```
-
-## 💡 Bot Entry Point
-
-The main bot file is `bot/ultimate_bot.py` (not `main.py`). Run it directly:
-```bash
-# Windows
-python bot\ultimate_bot.py
-
-# Linux/Mac
-python bot/ultimate_bot.py
+python main.py
 ```
 
 ## 📁 Project Structure
 
 ```
 slomix/
-├── bot/                                    # Main bot code
-│   ├── ultimate_bot.py                    # Main bot entry point (4837 lines)
-│   ├── config.py                          # Bot configuration
-│   ├── logging_config.py                  # Logging setup
-│   ├── image_generator.py                 # Graph generation
-│   │
-│   ├── cogs/                              # Discord command modules (14 cogs)
-│   │   ├── admin_cog.py                   # Database admin commands
-│   │   ├── stats_cog.py                   # Player statistics commands
-│   │   ├── leaderboard_cog.py             # Rankings and leaderboards
-│   │   ├── last_session_cog.py            # Comprehensive session analytics (111KB)
-│   │   ├── session_cog.py                 # Session viewing
-│   │   ├── session_management_cog.py      # Session control
-│   │   ├── link_cog.py                    # Player Discord linking
-│   │   ├── sync_cog.py                    # Data synchronization
-│   │   ├── team_cog.py                    # Team tracking
-│   │   ├── team_management_cog.py         # Team management
-│   │   ├── automation_commands.py         # Automation controls
-│   │   ├── server_control.py              # Server management
-│   │   ├── synergy_analytics.py           # Player synergy analysis
-│   │   └── synergy_analytics_fixed.py     # Fixed synergy analysis
-│   │
-│   ├── core/                              # Core systems (9 modules)
-│   │   ├── database_adapter.py            # SQLite/PostgreSQL abstraction
-│   │   ├── team_manager.py                # Team detection & tracking
-│   │   ├── advanced_team_detector.py      # Advanced team detection
-│   │   ├── team_detector_integration.py   # Team detector integration
-│   │   ├── substitution_detector.py       # Player substitution detection
-│   │   ├── team_history.py                # Team history tracking
-│   │   ├── achievement_system.py          # Achievement tracking
-│   │   ├── season_manager.py              # Season management
-│   │   └── stats_cache.py                 # Statistics caching
-│   │
-│   └── services/automation/               # Automation services (4 modules)
-│       ├── ssh_monitor.py                 # SSH file monitoring
-│       ├── database_maintenance.py        # Database maintenance
-│       ├── health_monitor.py              # System health monitoring
-│       ├── metrics_logger.py              # Metrics logging
-│       └── INTEGRATION_GUIDE.md           # Automation integration guide
-│
-├── tools/                                  # Essential tools
-│   ├── stopwatch_scoring.py              # Stopwatch mode scoring calculator
-│   └── postgresql_db_manager.py           # PostgreSQL database manager
-│
-├── postgresql_database_manager.py         # Main database management CLI
-├── requirements.txt                        # Python dependencies
-├── .env.example                           # Environment variables template
-└── README.md                              # This file
+├── bot/                          # Main bot code
+│   ├── cogs/                     # Discord command modules
+│   │   ├── leaderboard_cog.py   # Stats commands (!stats, !last_session, etc)
+│   │   ├── server_control_cog.py # Server control commands
+│   │   └── admin_cog.py         # Admin utilities
+│   ├── services/                 # Core services
+│   │   ├── automation/          # Auto-import system
+│   │   │   ├── service.py       # Main automation service
+│   │   │   └── monitor.py       # File system monitor
+│   │   ├── graph_generator.py   # Graph generation service
+│   │   └── team_detector.py     # Team detection logic
+│   ├── database/                 # Database layer
+│   │   ├── manager.py           # PostgreSQL manager
+│   │   └── schema.sql           # Database schema
+│   └── utils/                    # Utilities
+│       ├── parsers.py           # Stats file parser
+│       └── validators.py        # Data validation
+├── postgresql_database_manager.py # Database management CLI
+├── main.py                       # Bot entry point
+├── requirements.txt              # Python dependencies
+└── README.md                     # This file
 ```
 
 ## 🎯 Discord Commands
@@ -302,42 +264,10 @@ python -c "import matplotlib; matplotlib.font_manager._rebuild()"
 
 ## 📚 Additional Documentation
 
-### Technical Documentation
-- **[docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md)** - Complete technical documentation
-  - Full data pipeline: Game Server → Database → Discord
-  - System architecture and design decisions
-  - Database schema (50+ fields per player)
-  - Field mapping: exactly what data we capture
-  - Performance optimizations
-  - Security & data integrity
-
-- **[docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md)** - Visual pipeline diagram (interactive)
-- **[docs/FIELD_MAPPING.md](docs/FIELD_MAPPING.md)** - Complete field reference with examples
-- **[docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)** - Historical system documentation
-
-### Integration Guides
-- **[bot/services/automation/INTEGRATION_GUIDE.md](bot/services/automation/INTEGRATION_GUIDE.md)** - Automation system setup
-  - SSH file monitoring
-  - Real-time round stats posting
-  - Database maintenance
-  - Health monitoring
-  - Metrics logging
-
-### Database Management
-The `postgresql_database_manager.py` CLI tool provides:
-- Schema initialization
-- Data import/export
-- Database health checks
-- Backup and restore
-- Transaction-safe operations
-
-### Core Systems Code
-Key files to review for understanding the bot:
-- `bot/ultimate_bot.py` - Main bot logic (4,452 lines)
-- `bot/core/database_adapter.py` - Database abstraction layer
-- `bot/core/team_manager.py` - Team detection algorithms
-- `bot/cogs/last_session_cog.py` - Comprehensive analytics (111KB)
-- `community_stats_parser.py` - Stats file parser
+- **[DATA_PIPELINE_EXPLAINED.txt](DATA_PIPELINE_EXPLAINED.txt)** - How stats parsing works
+- **[AUTOMATION_SETUP_GUIDE.md](AUTOMATION_SETUP_GUIDE.md)** - Automation system deep dive
+- **[VPS_DEPLOYMENT_GUIDE.md](VPS_DEPLOYMENT_GUIDE.md)** - Deploy to Linux VPS
+- **[COMPLETE_SYSTEM_RUNDOWN.md](COMPLETE_SYSTEM_RUNDOWN.md)** - Full system architecture
 
 ## 🚢 VPS Deployment
 
@@ -358,44 +288,13 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# Configure environment
-cp .env.example .env
-nano .env  # Edit with your settings
+# Configure (edit .env file)
+nano .env
 
 # Initialize database
 python postgresql_database_manager.py
-# Select option 1: Initialize schema
 
-# Run bot
-python bot/ultimate_bot.py
-```
-
-### Systemd Service Setup
-Create `/etc/systemd/system/et-bot.service`:
-```ini
-[Unit]
-Description=Enemy Territory Stats Bot
-After=network.target postgresql.service
-
-[Service]
-Type=simple
-User=your-user
-WorkingDirectory=/path/to/slomix
-Environment="PATH=/path/to/slomix/.venv/bin"
-ExecStart=/path/to/slomix/.venv/bin/python bot/ultimate_bot.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable et-bot
-sudo systemctl start et-bot
-sudo systemctl status et-bot
+# Run with systemd (see VPS_DEPLOYMENT_GUIDE.md)
 ```
 
 ## 🔐 Security Notes
@@ -423,11 +322,9 @@ This is a private bot for specific ET servers. External contributions are not cu
 
 For issues or questions:
 1. Check troubleshooting section above
-2. Review `bot/services/automation/INTEGRATION_GUIDE.md` for automation setup
-3. Check bot logs (console output or logs directory)
-4. Review database logs in `postgresql_manager.log`
-5. Use `postgresql_database_manager.py` for database health checks
-6. Contact server administrators
+2. Review documentation in `docs/` folder
+3. Check logs in `logs/` directory
+4. Contact server administrators
 
 ---
 
