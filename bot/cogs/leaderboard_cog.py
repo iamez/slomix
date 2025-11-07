@@ -427,8 +427,13 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
             # Create page fetcher - reuses existing leaderboard logic
             async def get_page(page_num: int) -> Optional[discord.Embed]:
-                """Fetch a single leaderboard page"""
+                """Fetch a single leaderboard page
+                
+                Note: page_num is 0-indexed from LazyPaginationView
+                """
                 players_per_page = 10
+                # Convert 0-indexed to 1-indexed for page display
+                page_num = page_num + 1
                 offset = (page_num - 1) * players_per_page
 
                 # Map aliases
@@ -884,11 +889,10 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 ctx,
                 page_fetcher=get_page,
                 total_pages=min(total_pages, 50),  # Cap at 50
-                max_preload_pages=5,  # Lazy-load first 5
             )
 
-            # Get and send first page
-            first_page = await get_page(1)
+            # Get and send first page (0-indexed for LazyPaginationView)
+            first_page = await get_page(0)
             if first_page:
                 await ctx.send(embed=first_page, view=view)
             else:
