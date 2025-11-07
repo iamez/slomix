@@ -58,6 +58,10 @@ class SSHMonitor:
             "remote_path": os.getenv("REMOTE_STATS_PATH", "")
         }
         
+        # Discord configuration
+        stats_channel_env = os.getenv("STATS_CHANNEL_ID", "0")
+        self.stats_channel_id = int(stats_channel_env) if stats_channel_env.isdigit() else 0
+        
         # Statistics (for monitoring health)
         self.last_check_time: Optional[datetime] = None
         self.files_processed_count = 0
