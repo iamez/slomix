@@ -2939,18 +2939,20 @@ class UltimateETLegacyBot(commands.Bot):
             self.monitoring = True
 
             # Create database entry
-            query = """
-                INSERT INTO gaming_sessions (
-                    start_time, participant_count, participants, status
-                ) VALUES (?, ?, ?, 'active')
-            """
-            params = (
-                self.session_start_time.isoformat(),
-                len(participants),
-                ",".join(str(uid) for uid in participants),
-            )
-            
-            self.gaming_sessions_db_id = await self.db_adapter.execute(query, params)
+            # NOTE: Disabled - gaming_sessions table is legacy, replaced by gaming_session_id in rounds table
+            # query = """
+            #     INSERT INTO gaming_sessions (
+            #         start_time, participant_count, participants, status
+            #     ) VALUES (?, ?, ?, 'active')
+            # """
+            # params = (
+            #     self.session_start_time.isoformat(),
+            #     len(participants),
+            #     ",".join(str(uid) for uid in participants),
+            # )
+            # 
+            # self.gaming_sessions_db_id = await self.db_adapter.execute(query, params)
+            self.gaming_sessions_db_id = None  # Disabled
 
             logger.info(
                 f"🎮 GAMING SESSION STARTED! {len(participants)} players detected"
@@ -3018,19 +3020,19 @@ class UltimateETLegacyBot(commands.Bot):
             end_time = discord.utils.utcnow()
             duration = end_time - self.session_start_time
 
-            # Update database
-            query = """
-                UPDATE gaming_sessions
-                SET end_time = ?, duration_seconds = ?, status = 'ended'
-                WHERE round_id = ?
-            """
-            params = (
-                end_time.isoformat(),
-                int(duration.total_seconds()),
-                self.gaming_sessions_db_id,
-            )
-            
-            await self.db_adapter.execute(query, params)
+            # Update database - DISABLED (legacy table)
+            # query = """
+            #     UPDATE gaming_sessions
+            #     SET end_time = ?, duration_seconds = ?, status = 'ended'
+            #     WHERE round_id = ?
+            # """
+            # params = (
+            #     end_time.isoformat(),
+            #     int(duration.total_seconds()),
+            #     self.gaming_sessions_db_id,
+            # )
+            # 
+            # await self.db_adapter.execute(query, params)
 
             # Disable monitoring
             self.monitoring = False
