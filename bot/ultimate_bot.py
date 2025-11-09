@@ -4867,6 +4867,56 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info("🧹 Cleared old slash commands")
         except Exception as e:
             logger.warning(f"Could not clear slash commands: {e}")
+        
+        # 🆕 AUTO-DETECT ACTIVE GAMING SESSION ON STARTUP
+        await self._check_voice_channels_on_startup()
+
+    async def _check_voice_channels_on_startup(self):
+        """
+        Check voice channels on bot startup and auto-start session if players detected.
+        
+        This ensures the bot doesn't miss active sessions if it restarts
+        while players are already in voice.
+        """
+        try:
+            if not self.automation_enabled or not self.gaming_voice_channels:
+                return
+            
+            # Wait a moment for Discord cache to populate
+            await asyncio.sleep(2)
+            
+            # Count players in gaming voice channels
+            total_players = 0
+            current_participants = set()
+            
+            for channel_id in self.gaming_voice_channels:
+                channel = self.get_channel(channel_id)
+                if channel and hasattr(channel, "members"):
+                    for member in channel.members:
+                        if not member.bot:
+                            total_players += 1
+                            current_participants.add(member.id)
+            
+            logger.info(
+                f"🎙️ Startup voice check: {total_players} players detected "
+                f"in {len(self.gaming_voice_channels)} monitored channels"
+            )
+            
+            # Auto-start session if threshold met
+            if total_players >= self.session_start_threshold and not self.session_active:
+                logger.info(
+                    f"🎮 AUTO-STARTING SESSION: {total_players} players detected "
+                    f"(threshold: {self.session_start_threshold})"
+                )
+                await self._start_gaming_session(current_participants)
+            elif total_players > 0:
+                logger.info(
+                    f"ℹ️  {total_players} players in voice but below threshold "
+                    f"({self.session_start_threshold} needed to auto-start)"
+                )
+                
+        except Exception as e:
+            logger.error(f"❌ Error checking voice channels on startup: {e}", exc_info=True)
 
     async def on_command(self, ctx):
         """Track command execution start"""
