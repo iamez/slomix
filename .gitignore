@@ -65,6 +65,10 @@ desktop.ini
 /test_files/
 /test_suite/
 /tmp/
+/publish_temp/
+/publish_clean/
+/github/
+/performance_updates/
 
 # ============================================
 # BOT DIRECTORY EXCLUSIONS
