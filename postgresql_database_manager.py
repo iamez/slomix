@@ -397,30 +397,12 @@ class PostgreSQLDatabaseManager:
                 )
             ''')
             
-            # 8. Gaming sessions (Discord voice tracking)
-            await conn.execute('''
-                CREATE TABLE gaming_sessions (
-                    session_id SERIAL PRIMARY KEY,
-                    start_time TIMESTAMP NOT NULL,
-                    end_time TIMESTAMP,
-                    duration_seconds INTEGER,
-                    participant_count INTEGER,
-                    participants TEXT,
-                    maps_played TEXT,
-                    total_rounds INTEGER DEFAULT 0,
-                    status TEXT DEFAULT 'active',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
             # Create indexes
             await conn.execute('CREATE INDEX idx_rounds_date ON rounds(round_date)')
             await conn.execute('CREATE INDEX idx_player_stats_round ON player_comprehensive_stats(round_id)')
             await conn.execute('CREATE INDEX idx_player_stats_guid ON player_comprehensive_stats(player_guid)')
             await conn.execute('CREATE INDEX idx_weapon_stats_round ON weapon_comprehensive_stats(round_id)')
             await conn.execute('CREATE INDEX idx_processed_files_filename ON processed_files(filename)')
-            await conn.execute('CREATE INDEX idx_gaming_sessions_start ON gaming_sessions(start_time DESC)')
-            await conn.execute('CREATE INDEX idx_gaming_sessions_status ON gaming_sessions(status)')
             
             logger.info("   ✅ Schema created successfully!")
     
@@ -482,41 +464,6 @@ class PostgreSQLDatabaseManager:
                 """)
                 logger.info("   ✅ Added 'times_seen' column")
             
-            # Migration 3: Create gaming_sessions table if missing
-            gaming_sessions_exists = await conn.fetchval("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'gaming_sessions'
-                )
-            """)
-            
-            if not gaming_sessions_exists:
-                logger.info("   ➕ Creating gaming_sessions table...")
-                await conn.execute('''
-                    CREATE TABLE gaming_sessions (
-                        session_id SERIAL PRIMARY KEY,
-                        start_time TIMESTAMP NOT NULL,
-                        end_time TIMESTAMP,
-                        duration_seconds INTEGER,
-                        participant_count INTEGER,
-                        participants TEXT,
-                        maps_played TEXT,
-                        total_rounds INTEGER DEFAULT 0,
-                        status TEXT DEFAULT 'active',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                await conn.execute('''
-                    CREATE INDEX idx_gaming_sessions_start 
-                    ON gaming_sessions(start_time DESC)
-                ''')
-                await conn.execute('''
-                    CREATE INDEX idx_gaming_sessions_status 
-                    ON gaming_sessions(status)
-                ''')
-                logger.info("   ✅ Created gaming_sessions table")
-            
             logger.info("   ✅ Schema migrations complete!")
     
     async def _wipe_all_tables(self):
@@ -528,7 +475,6 @@ class PostgreSQLDatabaseManager:
             'session_teams',
             'player_links',
             'player_aliases',
-            'gaming_sessions',
             'rounds'
         ]
         
