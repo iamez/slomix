@@ -2,30 +2,62 @@
 
 A comprehensive Discord bot for tracking and analyzing Wolfenstein: Enemy Territory game statistics with PostgreSQL backend.
 
+> **📍 Branch Status:** `system-security-optimization`  
+> **🎯 Current Focus:** Performance upgrades, security hardening, and voice-based team detection  
+> **📋 Full Roadmap:** See [PERFORMANCE_UPGRADES_ROADMAP.md](PERFORMANCE_UPGRADES_ROADMAP.md) for 10-phase implementation plan
+
 ## 🎮 Features
 
-### Core Statistics
+### ✅ Production Ready
 - **Player Stats**: Track kills, deaths, K/D ratio, accuracy, damage, XP, and more
 - **Weapon Stats**: Detailed weapon usage, accuracy, headshots, kills per weapon
 - **Map Performance**: Per-map statistics and performance tracking
 - **Gaming Sessions**: Automatic session detection and consolidation
 - **Leaderboards**: Top players, weapons, maps, and performance rankings
+- **Last Session Analytics**: 6 comprehensive graphs (K/D, weapons, maps, teams, etc.)
+- **Auto-Import**: Monitors stats directory and imports new files automatically
+- **Voice Detection**: Monitors Discord voice channels, detects gaming sessions (6+ players)
+- **PostgreSQL Backend**: Fast, scalable database with transaction safety
+- **Duplicate Prevention**: SHA256 hash-based file tracking
 
-### Advanced Analytics
-- **Last Session Command**: Generates 6 comprehensive graphs:
-  - Player Performance (K/D, Accuracy, Damage)
-  - Weapon Analysis (usage distribution, accuracy comparison)
-  - Map Breakdown (rounds played per map)
-  - Kill Metrics (total kills, deaths, revives)
-  - Team Analysis (team performance comparison)
-  - Time-based Metrics (XP gain, damage over time)
+### 🚧 In Development (This Branch)
 
-### Automation Features
-- **Auto-Import**: Monitors local stats directory and imports new files automatically
-- **Round Detection**: Intelligent R1/R2 differential stats calculation
-- **Session Consolidation**: Groups rounds into gaming sessions (gap threshold: 12 hours)
-- **Duplicate Prevention**: SHA256 hash-based duplicate file detection
-- **Transaction Safety**: Atomic database operations with rollback support
+**Phase 1: Voice Activity Tracking** ⏳
+- Track Discord voice participants during gaming sessions
+- Link Discord users to ET player GUIDs
+- Monitor join/leave times, channel assignments
+- Build historical voice activity database
+
+**Phase 2: Gaming Session Management** 📋
+- Proper `gaming_sessions` table schema
+- Link rounds to voice-detected sessions
+- Track session duration, participant lists
+- Session summary command with voice data
+
+**Phase 9: Security & Permissions** 🔐 **CRITICAL**
+- Role-based command access (PUBLIC, TRUSTED, MODERATOR, ADMIN, OWNER)
+- Whitelist master admin (Discord ID: 231165917604741121)
+- Protect dangerous commands (!rebuild, !import, VPS control)
+- Audit logging for all admin actions
+- Rate limiting to prevent abuse
+- Substitution tracking via voice channel switches
+
+**Phase 3-8: Performance Optimization** ⚡
+- Redis caching layer (5-min TTL → sub-second queries)
+- Leaderboard pre-computation (refresh on import)
+- Advanced database indexing
+- Async I/O optimization
+- Pagination for large datasets
+- Advanced analytics (heatmaps, timelines, dashboards)
+
+**Bonus: Voice-Based Team Detection** 🎯
+- 100% accurate team assignment (vs 50-80% algorithmic)
+- If players in "Team A Channel" vs "Team B Channel" = instant perfect teams
+- Confidence scoring: Voice=1.0, Manual=0.9, Algorithmic=0.5-0.8
+- Real-time roster updates as players move channels
+- Substitution detection when players switch teams mid-game
+
+**See Full Plan:** [PERFORMANCE_UPGRADES_ROADMAP.md](PERFORMANCE_UPGRADES_ROADMAP.md) (1,700+ lines, 10 phases)
 
 ## 📋 Requirements
 
@@ -172,28 +204,35 @@ slomix/
 
 ## 🎯 Discord Commands
 
-### Player Statistics
+### Player Statistics (PUBLIC - Everyone)
 - `!stats [player]` - Get detailed player statistics
 - `!stats @mention` - Get stats for mentioned Discord user
 - `!top [stat]` - View leaderboards (kd, kills, accuracy, etc)
 - `!compare <player1> <player2>` - Compare two players
 
-### Session Analysis
+### Session Analysis (PUBLIC - Everyone)
 - `!last_session` - Generate comprehensive 6-graph analysis of last gaming session
 - `!sessions` - List recent gaming sessions
 - `!session <number>` - View specific session details
 
-### Map & Weapon Stats
+### Map & Weapon Stats (PUBLIC - Everyone)
 - `!maps` - List all maps with stats
 - `!map <name>` - Get detailed map statistics
 - `!weapons` - View weapon usage statistics
 - `!weapon <name>` - Get specific weapon stats
 
-### Admin Commands
+### Admin Commands (ADMIN+ - Restricted)
 - `!import` - Manually trigger stats import
-- `!rebuild` - Rebuild database from scratch
+- `!check_schema` - Verify database schema
 - `!status` - Check bot and automation status
 - `!resync` - Force resync with database
+
+### Owner Commands (OWNER ONLY - You!)
+- `!rebuild` - ⚠️ DANGER: Rebuild entire database (wipes all data)
+- `!shutdown` - Shutdown the bot
+
+> **🔐 Security Note:** Phase 9 will implement role-based permissions.  
+> Currently all commands are public - **security update is critical priority!**
 
 ## 🔧 Database Management
 
@@ -302,7 +341,17 @@ python -c "import matplotlib; matplotlib.font_manager._rebuild()"
 
 ## 📚 Additional Documentation
 
-### Technical Documentation
+### 🗺️ This Branch: Performance & Security Roadmap
+- **[PERFORMANCE_UPGRADES_ROADMAP.md](PERFORMANCE_UPGRADES_ROADMAP.md)** - **PRIMARY GUIDE FOR THIS BRANCH**
+  - 10-phase implementation plan (1,700+ lines)
+  - Voice activity tracking & team detection
+  - Redis caching, database optimization
+  - **Security & permissions system (CRITICAL)**
+  - Rate limiting, audit logging, role-based access
+  - Voice-based team detection (100% accuracy)
+  - ML predictions, automated backups, health checks
+  
+### 📖 Technical Documentation (Main Branch)
 - **[docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md)** - Complete technical documentation
   - Full data pipeline: Game Server → Database → Discord
   - System architecture and design decisions
@@ -315,7 +364,7 @@ python -c "import matplotlib; matplotlib.font_manager._rebuild()"
 - **[docs/FIELD_MAPPING.md](docs/FIELD_MAPPING.md)** - Complete field reference with examples
 - **[docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)** - Historical system documentation
 
-### Integration Guides
+### 🔧 Integration Guides
 - **[bot/services/automation/INTEGRATION_GUIDE.md](bot/services/automation/INTEGRATION_GUIDE.md)** - Automation system setup
   - SSH file monitoring
   - Real-time round stats posting
@@ -323,21 +372,65 @@ python -c "import matplotlib; matplotlib.font_manager._rebuild()"
   - Health monitoring
   - Metrics logging
 
-### Database Management
-The `postgresql_database_manager.py` CLI tool provides:
-- Schema initialization
-- Data import/export
-- Database health checks
-- Backup and restore
-- Transaction-safe operations
+---
 
-### Core Systems Code
-Key files to review for understanding the bot:
-- `bot/ultimate_bot.py` - Main bot logic (4,452 lines)
-- `bot/core/database_adapter.py` - Database abstraction layer
-- `bot/core/team_manager.py` - Team detection algorithms
-- `bot/cogs/last_session_cog.py` - Comprehensive analytics (111KB)
-- `community_stats_parser.py` - Stats file parser
+## 🚀 Quick Start (This Branch)
+
+### Current VPS Deployment
+```bash
+# Already running on VPS
+Host: samba@192.168.64.116
+Database: PostgreSQL (etlegacy @ localhost:5432)
+Status: ✅ Bot running, voice detection active
+```
+
+### Local Development Setup
+```bash
+# Clone this branch
+git clone -b system-security-optimization https://github.com/iamez/slomix.git
+cd slomix
+
+# Install dependencies
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your credentials
+
+# Initialize database
+python postgresql_database_manager.py
+# Select option 1: Initialize schema
+
+# Run bot
+python bot/ultimate_bot.py
+```
+
+### Priority Tasks (Before Merging to Main)
+
+**🔐 Phase 9: Security (MUST DO)**
+1. Implement permission system (`bot/core/permissions.py`)
+2. Add role-based decorators to all commands
+3. Whitelist master admin (Discord ID: 231165917604741121)
+4. Create `admin_audit_log` table
+5. Add rate limiting to prevent spam
+6. Test permission denials
+
+**📊 Phase 1: Voice Tracking (SHOULD DO)**
+1. Create `voice_sessions` table
+2. Build `VoiceSessionManager` class
+3. Link Discord users to ET GUIDs
+4. Track session participants
+
+**⚡ Phase 3: Redis Caching (NICE TO HAVE)**
+1. Install Redis on VPS
+2. Migrate hot queries to cache
+3. Pre-compute leaderboards
+
+**See:** [PERFORMANCE_UPGRADES_ROADMAP.md](PERFORMANCE_UPGRADES_ROADMAP.md) for complete implementation details
+
+---
 
 ## 🚢 VPS Deployment
 
@@ -400,16 +493,28 @@ sudo systemctl status et-bot
 
 ## 🔐 Security Notes
 
-**⚠️ NEVER commit:**
-- Discord bot tokens
-- Database passwords
-- `.env` files
-- `config.json` with secrets
+**⚠️ Branch Status: Security NOT yet implemented!**
+- Phase 9 (Security & Permissions) is planned but not coded
+- Currently **ALL commands are public** - anyone can run `!rebuild`, `!import`, etc.
+- **DO NOT use in production** until Phase 9 is complete
 
-**Use environment variables for:**
-- `DISCORD_TOKEN`
-- `POSTGRES_PASSWORD`
-- Any API keys
+**Planned Security (Phase 9):**
+- Role-based permissions (PUBLIC, TRUSTED, MODERATOR, ADMIN, OWNER)
+- Master admin whitelist (Discord ID: 231165917604741121)
+- Audit logging for all admin actions
+- Rate limiting to prevent spam
+- Command decorators: `@requires_permission(PermissionLevel.OWNER)`
+
+**Current Security Best Practices:**
+- ✅ Never commit Discord tokens or database passwords
+- ✅ Use `.env` files for secrets (in `.gitignore`)
+- ✅ SHA256 hash-based duplicate detection
+- ✅ Transaction-safe database operations
+- ❌ No command permissions (CRITICAL TO FIX)
+
+**See:** [PERFORMANCE_UPGRADES_ROADMAP.md - Phase 9](PERFORMANCE_UPGRADES_ROADMAP.md#phase-9-security--permissions-system-critical) for implementation plan
+
+---
 
 ## 📝 License
 
