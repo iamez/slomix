@@ -2803,8 +2803,9 @@ class UltimateETLegacyBot(commands.Bot):
         if not self.cache_refresher.is_running():
             self.cache_refresher.start()
         # scheduled_monitoring_check task removed - see performance optimization
-        if not self.voice_session_monitor.is_running():
-            self.voice_session_monitor.start()
+        # voice_session_monitor disabled - using on_voice_state_update event instead (more efficient)
+        # if not self.voice_session_monitor.is_running():
+        #     self.voice_session_monitor.start()
         logger.info("✅ Background tasks started (optimized SSH monitoring with voice detection)")
 
         logger.info("✅ Ultimate Bot initialization complete!")
