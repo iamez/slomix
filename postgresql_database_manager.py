@@ -521,6 +521,7 @@ class PostgreSQLDatabaseManager:
         if len(parts) >= 4:
             date = f"{parts[0]}-{parts[1]}-{parts[2]}"
             time = parts[3]
+            logger.debug(f"🔍 Extracted from filename '{filename}': date={date}, time={time} (type: {type(time).__name__})")
             return date, time
         return None, None
     
@@ -786,9 +787,15 @@ class PostgreSQLDatabaseManager:
             last_date = last_round['round_date']
             last_time = last_round['round_time']
             
-            # Parse datetimes
+            # Parse datetimes (handle both HHMMSS and HH:MM:SS formats from DB)
             current_datetime = datetime.strptime(f"{file_date} {round_time}", "%Y-%m-%d %H%M%S")
-            last_datetime = datetime.strptime(f"{last_date} {last_time}", "%Y-%m-%d %H%M%S")
+            
+            # Try parsing last_time - it might be stored as "HHMMSS" or "HH:MM:SS"
+            try:
+                last_datetime = datetime.strptime(f"{last_date} {last_time}", "%Y-%m-%d %H%M%S")
+            except ValueError:
+                # Fallback to format with colons
+                last_datetime = datetime.strptime(f"{last_date} {last_time}", "%Y-%m-%d %H:%M:%S")
             
             # Calculate gap
             gap_minutes = (current_datetime - last_datetime).total_seconds() / 60
@@ -842,6 +849,8 @@ class PostgreSQLDatabaseManager:
         
         # Calculate gaming_session_id
         gaming_session_id = await self._get_or_create_gaming_session_id(conn, file_date, round_time)
+        
+        logger.debug(f"🔍 About to INSERT: round_date='{file_date}', round_time='{round_time}' (type: {type(round_time).__name__})")
         
         try:
             round_id = await conn.fetchval(

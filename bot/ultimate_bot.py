@@ -3725,11 +3725,11 @@ class UltimateETLegacyBot(commands.Bot):
             date_part = "-".join(filename.split("-")[:3])  # Date YYYY-MM-DD
             time_part = filename.split("-")[3] if len(filename.split("-")) > 3 else "000000"  # HHMMSS
             
-            # Format time as HH:MM:SS
+            # Store time as HHMMSS (NO COLONS) to match postgresql_database_manager format
             if len(time_part) == 6:
-                round_time = f"{time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+                round_time = time_part  # Keep as HHMMSS: "221941"
             else:
-                round_time = "00:00:00"
+                round_time = "000000"
             
             # Create match_id (ORIGINAL BEHAVIOR - includes timestamp)
             match_id = f"{date_part}-{time_part}"
@@ -3858,7 +3858,7 @@ class UltimateETLegacyBot(commands.Bot):
         
         Args:
             round_date: Date string like '2025-11-06'
-            round_time: Time string like '23:41:53'
+            round_time: Time string like '234153' (HHMMSS) or '23:41:53' (HH:MM:SS)
         
         Returns:
             gaming_session_id (integer, starts at 1)
@@ -3884,9 +3884,15 @@ class UltimateETLegacyBot(commands.Bot):
             last_date = last_round[1]
             last_time = last_round[2]
             
-            # Parse timestamps
-            current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')
-            last_dt = datetime.strptime(f"{last_date} {last_time}", '%Y-%m-%d %H:%M:%S')
+            # Parse current timestamp (HHMMSS format)
+            current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H%M%S')
+            
+            # Parse last timestamp (handle both HHMMSS and HH:MM:SS formats from DB)
+            try:
+                last_dt = datetime.strptime(f"{last_date} {last_time}", '%Y-%m-%d %H%M%S')
+            except ValueError:
+                # Fallback to format with colons
+                last_dt = datetime.strptime(f"{last_date} {last_time}", '%Y-%m-%d %H:%M:%S')
             
             # Calculate time gap
             gap = current_dt - last_dt
