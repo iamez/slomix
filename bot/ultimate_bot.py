@@ -2500,7 +2500,6 @@ class UltimateETLegacyBot(commands.Bot):
         self.session_start_time = None
         self.session_participants = set()  # Discord user IDs
         self.session_end_timer = None  # For 5-minute buffer
-        self.gaming_sessions_db_id = None  # Link to gaming_sessions table
         
         # SSH monitoring optimization - counter-based intervals
         self.ssh_check_counter = 0  # Tracks cycles for interval-based checking
@@ -2938,27 +2937,9 @@ class UltimateETLegacyBot(commands.Bot):
             # Enable monitoring
             self.monitoring = True
 
-            # Create database entry for Discord voice session tracking
-            query = """
-                INSERT INTO gaming_sessions (
-                    start_time, participant_count, participants, status
-                ) VALUES ($1, $2, $3, 'active')
-                RETURNING session_id
-            """
-            params = (
-                self.session_start_time,
-                len(participants),
-                ",".join(str(uid) for uid in participants),
-            )
-            
-            self.gaming_sessions_db_id = await self.db_adapter.fetch_one(query, params)
-            if self.gaming_sessions_db_id:
-                self.gaming_sessions_db_id = self.gaming_sessions_db_id[0]
-
             logger.info(
                 f"🎮 GAMING SESSION STARTED! {len(participants)} players detected"
             )
-            logger.info(f"📊 Session ID: {self.gaming_sessions_db_id}")
             logger.info("🔄 Monitoring enabled")
 
             # Post to Discord if stats channel configured
@@ -3021,21 +3002,6 @@ class UltimateETLegacyBot(commands.Bot):
             end_time = discord.utils.utcnow()
             duration = end_time - self.session_start_time
 
-            # Update database with session end details
-            if self.gaming_sessions_db_id:
-                query = """
-                    UPDATE gaming_sessions
-                    SET end_time = $1, duration_seconds = $2, status = 'ended'
-                    WHERE session_id = $3
-                """
-                params = (
-                    end_time,
-                    int(duration.total_seconds()),
-                    self.gaming_sessions_db_id,
-                )
-                
-                await self.db_adapter.execute(query, params)
-
             # Disable monitoring
             self.monitoring = False
 
@@ -3069,7 +3035,6 @@ class UltimateETLegacyBot(commands.Bot):
             self.session_start_time = None
             self.session_participants = set()
             self.session_end_timer = None
-            self.gaming_sessions_db_id = None
 
         except Exception as e:
             logger.error(f"Error ending gaming session: {e}", exc_info=True)
