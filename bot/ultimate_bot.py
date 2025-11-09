@@ -2938,26 +2938,27 @@ class UltimateETLegacyBot(commands.Bot):
             # Enable monitoring
             self.monitoring = True
 
-            # Create database entry
-            # NOTE: Disabled - gaming_sessions table is legacy, replaced by gaming_session_id in rounds table
-            # query = """
-            #     INSERT INTO gaming_sessions (
-            #         start_time, participant_count, participants, status
-            #     ) VALUES (?, ?, ?, 'active')
-            # """
-            # params = (
-            #     self.session_start_time.isoformat(),
-            #     len(participants),
-            #     ",".join(str(uid) for uid in participants),
-            # )
-            # 
-            # self.gaming_sessions_db_id = await self.db_adapter.execute(query, params)
-            self.gaming_sessions_db_id = None  # Disabled
+            # Create database entry for Discord voice session tracking
+            query = """
+                INSERT INTO gaming_sessions (
+                    start_time, participant_count, participants, status
+                ) VALUES ($1, $2, $3, 'active')
+                RETURNING session_id
+            """
+            params = (
+                self.session_start_time,
+                len(participants),
+                ",".join(str(uid) for uid in participants),
+            )
+            
+            self.gaming_sessions_db_id = await self.db_adapter.fetch_one(query, params)
+            if self.gaming_sessions_db_id:
+                self.gaming_sessions_db_id = self.gaming_sessions_db_id[0]
 
             logger.info(
                 f"🎮 GAMING SESSION STARTED! {len(participants)} players detected"
             )
-            logger.info(f"📊 Round ID: {self.gaming_sessions_db_id}")
+            logger.info(f"📊 Session ID: {self.gaming_sessions_db_id}")
             logger.info("🔄 Monitoring enabled")
 
             # Post to Discord if stats channel configured
@@ -3020,19 +3021,20 @@ class UltimateETLegacyBot(commands.Bot):
             end_time = discord.utils.utcnow()
             duration = end_time - self.session_start_time
 
-            # Update database - DISABLED (legacy table)
-            # query = """
-            #     UPDATE gaming_sessions
-            #     SET end_time = ?, duration_seconds = ?, status = 'ended'
-            #     WHERE round_id = ?
-            # """
-            # params = (
-            #     end_time.isoformat(),
-            #     int(duration.total_seconds()),
-            #     self.gaming_sessions_db_id,
-            # )
-            # 
-            # await self.db_adapter.execute(query, params)
+            # Update database with session end details
+            if self.gaming_sessions_db_id:
+                query = """
+                    UPDATE gaming_sessions
+                    SET end_time = $1, duration_seconds = $2, status = 'ended'
+                    WHERE session_id = $3
+                """
+                params = (
+                    end_time,
+                    int(duration.total_seconds()),
+                    self.gaming_sessions_db_id,
+                )
+                
+                await self.db_adapter.execute(query, params)
 
             # Disable monitoring
             self.monitoring = False
