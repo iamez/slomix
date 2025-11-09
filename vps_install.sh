@@ -28,12 +28,15 @@ DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
 echo "🔐 Generated secure database password: $DB_PASSWORD"
 echo "   (This will be saved to .env file)"
 
+# Escape single quotes for PostgreSQL (prevents SQL injection)
+DB_PASSWORD_ESCAPED="${DB_PASSWORD//\'/\'\'}"
+
 sudo -u postgres psql <<EOF
 -- Create database
 CREATE DATABASE etlegacy;
 
 -- Create user with generated password
-CREATE USER etlegacy_user WITH PASSWORD '$DB_PASSWORD';
+CREATE USER etlegacy_user WITH PASSWORD '$DB_PASSWORD_ESCAPED';
 
 -- Grant privileges
 GRANT ALL PRIVILEGES ON DATABASE etlegacy TO etlegacy_user;
