@@ -43,14 +43,22 @@ async def fix_gaming_sessions():
         for round_id, round_date, round_time, old_session_id in rounds:
             # Parse datetime (handle both HHMMSS and HH:MM:SS formats)
             try:
-                if ':' in round_time:
-                    # HH:MM:SS format
-                    dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')
+                # Try HHMMSS format first (no colons)
+                if ':' not in str(round_time):
+                    dt = datetime.strptime(
+                        f"{round_date} {round_time}", 
+                        '%Y-%m-%d %H%M%S'
+                    )
                 else:
-                    # HHMMSS format
-                    dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H%M%S')
+                    # HH:MM:SS format (with colons)
+                    dt = datetime.strptime(
+                        f"{round_date} {round_time}", 
+                        '%Y-%m-%d %H:%M:%S'
+                    )
             except Exception as e:
-                logger.warning(f"Failed to parse {round_date} {round_time}: {e}")
+                logger.warning(
+                    f"Failed to parse {round_date} {round_time}: {e}"
+                )
                 continue
             
             # Calculate gap from last round
