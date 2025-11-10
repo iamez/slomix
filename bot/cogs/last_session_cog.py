@@ -655,9 +655,19 @@ class LastSessionCog(commands.Cog):
                     
                     medal = medals[global_idx] if global_idx < len(medals) else "🔹"
                     
+                    # Accuracy emoji based on percentage
+                    if acc >= 50:
+                        acc_emoji = "🎯"  # Excellent
+                    elif acc >= 40:
+                        acc_emoji = "📍"  # Good
+                    elif acc >= 30:
+                        acc_emoji = "📌"  # Medium
+                    else:
+                        acc_emoji = "💫"  # Lower
+                    
                     field_text += f"{medal} **{name}**\n"
-                    field_text += f"`{kills}K/{deaths}D ({kd:.2f})` • `{dpm:.0f} DPM` • `{acc:.1f}% ACC`\n"
-                    field_text += f"💥 `{dmg_given:,}↑ / {dmg_received:,}↓` • 🦴 `{gibs}` • 🎯 `{hs} HS`\n"
+                    field_text += f"`{kills}K/{deaths}D ({kd:.2f})` • `{dpm:.0f} DPM` • {acc_emoji} `{acc:.1f}% ACC`\n"
+                    field_text += f"💥 `{dmg_given:,}↑ / {dmg_received:,}↓` • 🦴 `{gibs}` • 💀 `{hs} HS`\n"
                     field_text += f"⏱️ `{play_min}:{play_sec:02d}` • 💀 `{dead_min}m` • ⏳ `{denied_min}:{denied_sec:02d}`\n"
                 
                 # Add field

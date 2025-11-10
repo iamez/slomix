@@ -3499,17 +3499,27 @@ class UltimateETLegacyBot(commands.Bot):
                     
                     kd_str = f'{kills}/{deaths}'
                     
+                    # Accuracy emoji based on percentage
+                    if acc >= 50:
+                        acc_emoji = "🎯"  # Excellent
+                    elif acc >= 40:
+                        acc_emoji = "📍"  # Good
+                    elif acc >= 30:
+                        acc_emoji = "📌"  # Medium
+                    else:
+                        acc_emoji = "💫"  # Lower
+                    
                     # Line 1: Rank + Name + Core stats (simplified)
                     line1 = (
                         f"{rank_display} **{name}** • K/D:`{kd_str}` "
-                        f"DMG:`{int(dmg):,}` DPM:`{int(dpm)}` "
-                        f"ACC:`{acc:.1f}%` HS:`{hs}`"
+                        f"💥 `{int(dmg):,}` • DPM:`{int(dpm)}` "
+                        f"{acc_emoji} `{acc:.1f}%` • 💀 `{hs}`"
                     )
                     
                     # Line 2: Support stats (simplified)
                     line2 = (
-                        f"     ↳ Rev:`{revives}/{got_revived}` Gibs:`{gibs}` "
-                        f"TmDmg:`{int(team_dmg_given)}` Dead:`{time_dead:.1f}m`"
+                        f"     ↳ 🔄 `{revives}/{got_revived}` • 🦴 `{gibs}` • "
+                        f"🤦 `{int(team_dmg_given)}` • ⏱️ `{time_dead:.1f}m`"
                     )
                     
                     player_lines.append(f"{line1}\n{line2}")
@@ -3535,9 +3545,9 @@ class UltimateETLegacyBot(commands.Bot):
             embed.add_field(
                 name="📊 Round Summary",
                 value=(
-                    f"**Totals:** Kills:`{total_kills}` Deaths:`{total_deaths}` HS:`{total_hs}` "
-                    f"Damage:`{int(total_dmg):,}` TeamDmg:`{int(total_team_dmg):,}`\n"
-                    f"**Averages:** Accuracy:`{avg_acc:.1f}%` DPM:`{int(avg_dpm)}` DeadTime:`{avg_time_dead:.1f}m`"
+                    f"**Totals:** Kills:`{total_kills}` Deaths:`{total_deaths}` 💀 HS:`{total_hs}` "
+                    f"💥 `{int(total_dmg):,}` 🤦 `{int(total_team_dmg):,}`\n"
+                    f"**Averages:** 📊 ACC:`{avg_acc:.1f}%` DPM:`{int(avg_dpm)}` ⏱️ `{avg_time_dead:.1f}m`"
                 ),
                 inline=False
             )
