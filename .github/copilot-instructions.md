@@ -1,7 +1,7 @@
 # ET:Legacy Stats Bot - AI Agent Instructions
 
 ## Project Identity
-**Enemy Territory: Legacy Discord Stats Bot** - Comprehensive stats tracking for Wolfenstein: ET with PostgreSQL/SQLite hybrid backend. This is a mature, production-ready system (4,800+ lines main bot) currently in VPS migration phase.
+**Enemy Territory: Legacy Discord Stats Bot** - Comprehensive stats tracking for Wolfenstein: ET with PostgreSQL/SQLite hybrid backend. This is a mature, production-ready system (4,990 lines main bot) currently in VPS migration phase.
 
 ## Critical Architecture Patterns
 
@@ -27,9 +27,9 @@ POSTGRES_DATABASE = "et_stats"  # Configured via bot_config.json or .env
 **Critical parsing detail:** Round 2 files contain CUMULATIVE stats - parser calculates differentials by subtracting Round 1 values. Never treat R2 stats as standalone.
 
 ### Discord Bot Architecture: Cog-Based Modular Design
-- **Entry point:** `bot/ultimate_bot.py` (4,837 lines but most logic in Cogs)
+- **Entry point:** `bot/ultimate_bot.py` (4,990 lines but most logic in Cogs)
 - **14 Cogs in `bot/cogs/`:** Each handles specific command domain (admin, stats, leaderboards, sessions, teams, etc.)
-- **9 Core modules in `bot/core/`:** Shared business logic (team detection, achievements, caching, season management)
+- **12 Core modules in `bot/core/`:** Shared business logic (team detection, achievements, caching, season management, pagination)
 - **4 Automation services:** SSH monitoring, health checks, metrics (in `bot/services/automation/`)
 
 **Always use Cogs for new commands** - never add commands directly to `ultimate_bot.py`

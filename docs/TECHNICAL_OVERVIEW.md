@@ -49,8 +49,8 @@
          │
          ▼
 ┌─────────────────┐
-│ Discord Bot     │ bot/ultimate_bot.py (4,452 lines)
-│ Commands        │ 50+ commands across 14 cogs
+│ Discord Bot     │ bot/ultimate_bot.py (4,990 lines)
+│ Commands        │ 60+ commands across 14 cogs
 │                 │ Real-time analytics
 └────────┬────────┘
          │
@@ -121,7 +121,7 @@
 ```
 slomix/
 ├── bot/
-│   ├── ultimate_bot.py              # Main bot (4,452 lines)
+│   ├── ultimate_bot.py              # Main bot (4,990 lines)
 │   ├── config.py                    # Configuration management
 │   ├── logging_config.py            # Logging setup
 │   ├── image_generator.py           # Graph generation (matplotlib)
@@ -560,10 +560,11 @@ async with db.transaction():
 ## 📝 Additional Resources
 
 - **[bot/services/automation/INTEGRATION_GUIDE.md](../bot/services/automation/INTEGRATION_GUIDE.md)** - Automation setup
-- **[DATA_PIPELINE.html](DATA_PIPELINE.html)** - Visual pipeline diagram
-- **[FIELD_MAPPING.html](FIELD_MAPPING.html)** - Complete field reference
-- **Main Bot Code:** `bot/ultimate_bot.py` (4,452 lines)
-- **Parser Code:** `community_stats_parser.py`
+- **[DATA_PIPELINE.md](DATA_PIPELINE.md)** - Data pipeline documentation
+- **[FIELD_MAPPING.md](FIELD_MAPPING.md)** - Complete field reference
+- **Main Bot Code:** `bot/ultimate_bot.py` (4,990 lines)
+- **Parser Code:** `bot/community_stats_parser.py` (1,036 lines)
+- **Database Manager:** `postgresql_database_manager.py` (1,573 lines)
 
 ---
 
