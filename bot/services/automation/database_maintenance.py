@@ -16,7 +16,8 @@ import logging
 import os
 import shutil
 from datetime import datetime, timedelta
-import aiosqlite
+from typing import Optional
+# import aiosqlite  # Removed - using database adapter
 
 logger = logging.getLogger("DBMaintenance")
 
@@ -87,10 +88,8 @@ class DatabaseMaintenance:
     async def vacuum_database(self) -> bool:
         """Optimize database"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute("VACUUM")
-                await db.execute("ANALYZE")
-                await db.commit()
+            await self.bot.db_adapter.execute("VACUUM", ())
+            await self.bot.db_adapter.execute("ANALYZE", ())
             
             self.last_vacuum = datetime.now()
             logger.info("✅ Database vacuumed and optimized")

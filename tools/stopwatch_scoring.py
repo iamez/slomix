@@ -17,7 +17,7 @@ Map score = sum of the two round results (0, 1, or 2 points per team).
 
 import sqlite3
 import json
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 
 
 class StopwatchScoring:
@@ -99,13 +99,19 @@ class StopwatchScoring:
     
     def calculate_session_scores(
         self, 
-        session_date: str
-    ) -> Dict[str, int]:
+        session_ids: Optional[List[int]] = None,
+        session_date: Optional[str] = None
+    ) -> Optional[Dict[str, int]]:
         """
-        Calculate total scores for a session
+        Calculate total scores for a gaming session
+        
+        NOTE: "sessions" table stores ROUNDS (one row per stats file).
+              A MATCH = 2 rounds (R1+R2) linked by match_id.
+              A GAMING SESSION = multiple matches played continuously (within 30min gaps).
         
         Args:
-            session_date: Session date (YYYY-MM-DD)
+            session_ids: List of session IDs for this gaming session (preferred)
+            session_date: Session date (YYYY-MM-DD) - legacy fallback
         
         Returns:
             Dict with team names as keys and total points as values
@@ -114,29 +120,42 @@ class StopwatchScoring:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Get all maps for this session (grouped by map_id)
-        # Use map_id to properly pair R1+R2 together
-        cursor.execute('''
-            SELECT map_name, map_id, round_number, defender_team, 
-                   winner_team, time_limit, actual_time
-            FROM sessions
-            WHERE substr(session_date, 1, 10) = ?
-            AND map_id IS NOT NULL
-            ORDER BY map_id, round_number
-        ''', (session_date,))
+        # Get all rounds for this gaming session (grouped by match_id)
+        # Use match_id to properly pair R1+R2 together
+        if session_ids:
+            # Use session_ids list (correct approach - filters to specific gaming session)
+            placeholders = ','.join('?' * len(session_ids))
+            cursor.execute(f'''
+                SELECT map_name, match_id, round_number, defender_team, 
+                       winner_team, time_limit, actual_time
+                FROM rounds
+                WHERE id IN ({placeholders})
+                AND match_id IS NOT NULL
+                ORDER BY match_id, round_number
+            ''', session_ids)
+        else:
+            # Fallback to date query (may include multiple gaming sessions on same day!)
+            cursor.execute('''
+                SELECT map_name, match_id, round_number, defender_team, 
+                       winner_team, time_limit, actual_time
+                FROM rounds
+                WHERE substr(round_date, 1, 10) = ?
+                AND match_id IS NOT NULL
+                ORDER BY match_id, round_number
+            ''', (session_date,))
         
         rows = cursor.fetchall()
         
-        # Group rounds by map_id (proper R1+R2 pairs)
+        # Group rounds by match_id (proper R1+R2 pairs)
         maps_dict = {}
         for row in rows:
-            map_name, map_id, round_num, defender, winner, \
+            map_name, match_id, round_num, defender, winner, \
                 time_limit, actual_time = row
             
-            if map_id not in maps_dict:
-                maps_dict[map_id] = {
+            if match_id not in maps_dict:
+                maps_dict[match_id] = {
                     'map_name': map_name,
-                    'map_id': map_id,
+                    'match_id': match_id,
                     'round1': None,
                     'round2': None
                 }
@@ -149,9 +168,9 @@ class StopwatchScoring:
             }
             
             if round_num == 1:
-                maps_dict[map_id]['round1'] = round_data
+                maps_dict[match_id]['round1'] = round_data
             elif round_num == 2:
-                maps_dict[map_id]['round2'] = round_data
+                maps_dict[match_id]['round2'] = round_data
         
         # Filter to complete maps only (both R1 and R2)
         maps = [
@@ -262,7 +281,7 @@ if __name__ == "__main__":
     session_date = sys.argv[1]
     
     scorer = StopwatchScoring()
-    results = scorer.calculate_session_scores(session_date)
+    results = scorer.calculate_session_scores(session_date=session_date)
     
     if not results:
         print(f"❌ No session_teams data found for {session_date}")
