@@ -2500,7 +2500,9 @@ class UltimateETLegacyBot(commands.Bot):
         self.session_start_time = None
         self.session_participants = set()  # Discord user IDs
         self.session_end_timer = None  # For 5-minute buffer
-        self.gaming_sessions_db_id = None  # Link to gaming_sessions table
+        
+        # SSH monitoring optimization - counter-based intervals
+        self.ssh_check_counter = 0  # Tracks cycles for interval-based checking
 
         # Load gaming voice channel IDs from .env
         gaming_channels_str = os.getenv("GAMING_VOICE_CHANNELS", "")
@@ -2800,11 +2802,11 @@ class UltimateETLegacyBot(commands.Bot):
             self.endstats_monitor.start()
         if not self.cache_refresher.is_running():
             self.cache_refresher.start()
-        if not self.scheduled_monitoring_check.is_running():
-            self.scheduled_monitoring_check.start()
-        if not self.voice_session_monitor.is_running():
-            self.voice_session_monitor.start()
-        logger.info("✅ Background tasks started")
+        # scheduled_monitoring_check task removed - see performance optimization
+        # voice_session_monitor disabled - using on_voice_state_update event instead (more efficient)
+        # if not self.voice_session_monitor.is_running():
+        #     self.voice_session_monitor.start()
+        logger.info("✅ Background tasks started (optimized SSH monitoring with voice detection)")
 
         logger.info("✅ Ultimate Bot initialization complete!")
         logger.info(
@@ -2936,24 +2938,9 @@ class UltimateETLegacyBot(commands.Bot):
             # Enable monitoring
             self.monitoring = True
 
-            # Create database entry
-            query = """
-                INSERT INTO gaming_sessions (
-                    start_time, participant_count, participants, status
-                ) VALUES (?, ?, ?, 'active')
-            """
-            params = (
-                self.session_start_time.isoformat(),
-                len(participants),
-                ",".join(str(uid) for uid in participants),
-            )
-            
-            self.gaming_sessions_db_id = await self.db_adapter.execute(query, params)
-
             logger.info(
                 f"🎮 GAMING SESSION STARTED! {len(participants)} players detected"
             )
-            logger.info(f"📊 Round ID: {self.gaming_sessions_db_id}")
             logger.info("🔄 Monitoring enabled")
 
             # Post to Discord if stats channel configured
@@ -3016,20 +3003,6 @@ class UltimateETLegacyBot(commands.Bot):
             end_time = discord.utils.utcnow()
             duration = end_time - self.session_start_time
 
-            # Update database
-            query = """
-                UPDATE gaming_sessions
-                SET end_time = ?, duration_seconds = ?, status = 'ended'
-                WHERE round_id = ?
-            """
-            params = (
-                end_time.isoformat(),
-                int(duration.total_seconds()),
-                self.gaming_sessions_db_id,
-            )
-            
-            await self.db_adapter.execute(query, params)
-
             # Disable monitoring
             self.monitoring = False
 
@@ -3063,7 +3036,6 @@ class UltimateETLegacyBot(commands.Bot):
             self.session_start_time = None
             self.session_participants = set()
             self.session_end_timer = None
-            self.gaming_sessions_db_id = None
 
         except Exception as e:
             logger.error(f"Error ending gaming session: {e}", exc_info=True)
@@ -3723,11 +3695,11 @@ class UltimateETLegacyBot(commands.Bot):
             date_part = "-".join(filename.split("-")[:3])  # Date YYYY-MM-DD
             time_part = filename.split("-")[3] if len(filename.split("-")) > 3 else "000000"  # HHMMSS
             
-            # Format time as HH:MM:SS
+            # Store time as HHMMSS (NO COLONS) to match postgresql_database_manager format
             if len(time_part) == 6:
-                round_time = f"{time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+                round_time = time_part  # Keep as HHMMSS: "221941"
             else:
-                round_time = "00:00:00"
+                round_time = "000000"
             
             # Create match_id (ORIGINAL BEHAVIOR - includes timestamp)
             match_id = f"{date_part}-{time_part}"
@@ -3856,7 +3828,7 @@ class UltimateETLegacyBot(commands.Bot):
         
         Args:
             round_date: Date string like '2025-11-06'
-            round_time: Time string like '23:41:53'
+            round_time: Time string like '234153' (HHMMSS) or '23:41:53' (HH:MM:SS)
         
         Returns:
             gaming_session_id (integer, starts at 1)
@@ -3882,9 +3854,19 @@ class UltimateETLegacyBot(commands.Bot):
             last_date = last_round[1]
             last_time = last_round[2]
             
-            # Parse timestamps
-            current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')
-            last_dt = datetime.strptime(f"{last_date} {last_time}", '%Y-%m-%d %H:%M:%S')
+            # Parse current timestamp (handle both HHMMSS and HH:MM:SS formats)
+            try:
+                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H%M%S')
+            except ValueError:
+                # Fallback to format with colons
+                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')
+            
+            # Parse last timestamp (handle both HHMMSS and HH:MM:SS formats from DB)
+            try:
+                last_dt = datetime.strptime(f"{last_date} {last_time}", '%Y-%m-%d %H%M%S')
+            except ValueError:
+                # Fallback to format with colons
+                last_dt = datetime.strptime(f"{last_date} {last_time}", '%Y-%m-%d %H:%M:%S')
             
             # Calculate time gap
             gap = current_dt - last_dt
@@ -4557,25 +4539,86 @@ class UltimateETLegacyBot(commands.Bot):
 
     # ==================== BACKGROUND TASKS ====================
 
-    @tasks.loop(seconds=30)
+    @tasks.loop(seconds=60)
     async def endstats_monitor(self):
         """
-        🔄 SSH Monitoring Task - Runs every 30 seconds
-
+        🔄 SSH Monitoring Task - Optimized Performance Version
+        
+        **Performance Optimization (93% reduction in SSH calls):**
+        - Dead Hours (02:00-11:00): No SSH checks
+        - Voice Detection: 6+ players → check every 60s
+        - Idle Mode: <6 players → check every 6 hours
+        - Uses counter-based intervals (Option B from design doc)
+        
         Monitors remote game server for new stats files:
         1. Lists files on remote server via SSH
         2. Compares with processed_files tracking
         3. Downloads new files
         4. Parses and imports to database
         5. Posts Discord round summaries automatically
+        
+        **Old system:** ~2,880 SSH checks/day (every 30s continuously)
+        **New system:** ~182 SSH checks/day (interval-based)
         """
         if not self.monitoring or not self.ssh_enabled:
-            # Silent return - only log once when monitoring starts/stops
             return
 
         try:
-            logger.debug("🔍 SSH monitor check starting...")
+            # ========== DEAD HOURS CHECK (02:00-11:00 CET) ==========
+            try:
+                import pytz
+                cet = pytz.timezone("Europe/Paris")
+            except:
+                try:
+                    from zoneinfo import ZoneInfo
+                    cet = ZoneInfo("Europe/Paris")
+                except:
+                    cet = None
             
+            now = datetime.now(cet) if cet else datetime.now()
+            hour = now.hour
+            
+            # Skip SSH check during dead hours (02:00-11:00)
+            if 2 <= hour < 11:
+                logger.debug(f"⏸️  Dead hours ({hour:02d}:00 CET) - skipping SSH check")
+                return
+            
+            # ========== VOICE DETECTION (Player Count Check) ==========
+            total_players = 0
+            for channel_id in self.gaming_voice_channels:
+                channel = self.get_channel(channel_id)
+                if channel and hasattr(channel, "members"):
+                    total_players += sum(1 for m in channel.members if not m.bot)
+            
+            # ========== INTERVAL-BASED CHECKING (Counter System) ==========
+            self.ssh_check_counter += 1
+            
+            if total_players >= 6:
+                # ACTIVE MODE: Check every 60 seconds (every 1 cycle)
+                interval = 1
+                mode = "ACTIVE"
+            else:
+                # IDLE MODE: Check every 6 hours (360 cycles at 60s each)
+                interval = 360
+                mode = "IDLE"
+            
+            # Only perform SSH check when counter reaches interval
+            if self.ssh_check_counter < interval:
+                logger.debug(
+                    f"⏭️  Skipping SSH check ({mode} mode: "
+                    f"{self.ssh_check_counter}/{interval}, "
+                    f"{total_players} players in voice)"
+                )
+                return
+            
+            # Reset counter and perform check
+            self.ssh_check_counter = 0
+            logger.info(
+                f"🔍 SSH check triggered ({mode} mode, "
+                f"{total_players} players in voice)"
+            )
+            
+            # ========== SSH CHECK EXECUTION ==========
             # Build SSH config
             ssh_config = {
                 "host": os.getenv("SSH_HOST"),
@@ -4586,14 +4629,12 @@ class UltimateETLegacyBot(commands.Bot):
             }
 
             # Validate SSH config
-            if not all(
-                [
-                    ssh_config["host"],
-                    ssh_config["user"],
-                    ssh_config["key_path"],
-                    ssh_config["remote_path"],
-                ]
-            ):
+            if not all([
+                ssh_config["host"],
+                ssh_config["user"],
+                ssh_config["key_path"],
+                ssh_config["remote_path"],
+            ]):
                 logger.warning(
                     "⚠️ SSH config incomplete - monitoring disabled\n"
                     f"   Host: {ssh_config['host']}\n"
@@ -4669,7 +4710,7 @@ class UltimateETLegacyBot(commands.Bot):
     async def before_endstats_monitor(self):
         """Wait for bot to be ready before starting SSH monitoring"""
         await self.wait_until_ready()
-        logger.info("✅ SSH monitoring task ready")
+        logger.info("✅ SSH monitoring task ready (optimized with voice detection)")
 
     @tasks.loop(seconds=30)
     async def cache_refresher(self):
@@ -4692,79 +4733,23 @@ class UltimateETLegacyBot(commands.Bot):
         """Wait for bot to be ready"""
         await self.wait_until_ready()
 
-    @tasks.loop(minutes=1)
-    async def scheduled_monitoring_check(self):
-        """
-        ⏰ Scheduled Monitoring - Runs every 1 minute
-
-        Auto-starts monitoring at 20:00 CET daily
-        No manual !session_start needed!
-        """
-        if not self.ssh_enabled:
-            return
-
-        try:
-            # Determine CET timezone: prefer pytz, then zoneinfo. If neither is
-            # available (or the tz database isn't present on the platform),
-            # fall back to the local system time (naive datetime) so the
-            # scheduler keeps running instead of crashing repeatedly.
-            cet = None
-            try:
-                import pytz
-
-                cet = pytz.timezone("Europe/Paris")
-            except Exception:
-                try:
-                    from zoneinfo import ZoneInfo
-
-                    try:
-                        cet = ZoneInfo("Europe/Paris")
-                    except Exception as e:
-                        logger.warning(
-                            "Could not load ZoneInfo('Europe/Paris'): %s", e
-                        )
-                        cet = None
-                except Exception:
-                    cet = None
-
-            if cet is not None:
-                now = datetime.now(cet)
-            else:
-                logger.warning(
-                    "Timezone 'Europe/Paris' not available; using local system time"
-                )
-                now = datetime.now()
-
-            # Check if it's 20:00 CET
-            if now.hour == 20 and now.minute == 0:
-                if not self.monitoring:
-                    logger.info("⏰ 20:00 CET - Auto-starting monitoring!")
-                    self.monitoring = True
-
-                    # Post notification to Discord
-                    channel = self.get_channel(self.stats_channel_id)
-                    if channel:
-                        embed = discord.Embed(
-                            title="🎮 Monitoring Started",
-                            description=(
-                                "Automatic monitoring enabled at 20:00 CET!\n\n"
-                                "Round summaries will be posted automatically "
-                                "when games are played."
-                            ),
-                            color=0x00FF00,
-                            timestamp=datetime.now(),
-                        )
-                        await channel.send(embed=embed)
-
-                    logger.info("✅ Monitoring auto-started at 20:00 CET")
-
-        except Exception as e:
-            logger.error(f"Scheduled monitoring error: {e}")
-
-    @scheduled_monitoring_check.before_loop
-    async def before_scheduled_monitoring(self):
-        """Wait for bot to be ready"""
-        await self.wait_until_ready()
+    # ========== DEPRECATED: Scheduled Monitoring (Removed in Performance Optimization) ==========
+    # This task has been removed - monitoring is now controlled by:
+    # 1. Voice detection (6+ players = active mode)
+    # 2. Dead hours detection (02:00-11:00 = no checks)
+    # 3. Manual !session_start / !session_end commands (if needed)
+    #
+    # Old auto-start at 20:00 CET is no longer needed - voice detection handles everything
+    #
+    # @tasks.loop(minutes=1)
+    # async def scheduled_monitoring_check(self):
+    #     """⏰ DEPRECATED - Monitoring now voice-triggered"""
+    #     pass
+    #
+    # @scheduled_monitoring_check.before_loop
+    # async def before_scheduled_monitoring(self):
+    #     """Wait for bot to be ready"""
+    #     await self.wait_until_ready()
 
     @tasks.loop(seconds=30)
     async def voice_session_monitor(self):
@@ -4862,6 +4847,56 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info("🧹 Cleared old slash commands")
         except Exception as e:
             logger.warning(f"Could not clear slash commands: {e}")
+        
+        # 🆕 AUTO-DETECT ACTIVE GAMING SESSION ON STARTUP
+        await self._check_voice_channels_on_startup()
+
+    async def _check_voice_channels_on_startup(self):
+        """
+        Check voice channels on bot startup and auto-start session if players detected.
+        
+        This ensures the bot doesn't miss active sessions if it restarts
+        while players are already in voice.
+        """
+        try:
+            if not self.automation_enabled or not self.gaming_voice_channels:
+                return
+            
+            # Wait a moment for Discord cache to populate
+            await asyncio.sleep(2)
+            
+            # Count players in gaming voice channels
+            total_players = 0
+            current_participants = set()
+            
+            for channel_id in self.gaming_voice_channels:
+                channel = self.get_channel(channel_id)
+                if channel and hasattr(channel, "members"):
+                    for member in channel.members:
+                        if not member.bot:
+                            total_players += 1
+                            current_participants.add(member.id)
+            
+            logger.info(
+                f"🎙️ Startup voice check: {total_players} players detected "
+                f"in {len(self.gaming_voice_channels)} monitored channels"
+            )
+            
+            # Auto-start session if threshold met
+            if total_players >= self.session_start_threshold and not self.session_active:
+                logger.info(
+                    f"🎮 AUTO-STARTING SESSION: {total_players} players detected "
+                    f"(threshold: {self.session_start_threshold})"
+                )
+                await self._start_gaming_session(current_participants)
+            elif total_players > 0:
+                logger.info(
+                    f"ℹ️  {total_players} players in voice but below threshold "
+                    f"({self.session_start_threshold} needed to auto-start)"
+                )
+                
+        except Exception as e:
+            logger.error(f"❌ Error checking voice channels on startup: {e}", exc_info=True)
 
     async def on_command(self, ctx):
         """Track command execution start"""

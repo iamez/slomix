@@ -336,7 +336,7 @@ class C0RNP0RN3StatsParser:
             if os.path.exists(search_dir):
                 exact_path = os.path.join(search_dir, exact_pattern)
                 if os.path.exists(exact_path):
-                    print(f"  → ✅ Found exact match (same session)")
+                    print("  → ✅ Found exact match (same session)")
                     return exact_path
 
         # STEP 2: Try same-day match (different timestamp, same date)
@@ -455,7 +455,7 @@ class C0RNP0RN3StatsParser:
         print(
             f"[OK] Successfully calculated Round 2-only stats for {len(round_2_only_result['players'])} players"
         )
-        print(f"[MATCH] Attached match summary with cumulative stats from both rounds")
+        print("[MATCH] Attached match summary with cumulative stats from both rounds")
         return round_2_only_result
 
     def calculate_round_2_differential(
