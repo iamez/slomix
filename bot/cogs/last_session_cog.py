@@ -55,7 +55,9 @@ class LastSessionCog(commands.Cog):
                 WHERE p.round_id = s.id
             )
             AND SUBSTR(s.round_date, 1, 4) = '2025'
-            ORDER BY s.round_date DESC, s.round_time DESC
+            ORDER BY 
+                s.round_date DESC, 
+                CAST(REPLACE(s.round_time, ':', '') AS INTEGER) DESC
             LIMIT 1
             """
         )
@@ -77,7 +79,9 @@ class LastSessionCog(commands.Cog):
             SELECT gaming_session_id
             FROM rounds
             WHERE gaming_session_id IS NOT NULL
-            ORDER BY round_date DESC, round_time DESC
+            ORDER BY
+                round_date DESC,
+                CAST(REPLACE(round_time, ':', '') AS INTEGER) DESC
             LIMIT 1
             """
         )
@@ -96,7 +100,9 @@ class LastSessionCog(commands.Cog):
             FROM rounds
             WHERE gaming_session_id = ?
               AND round_number IN (1, 2)
-            ORDER BY round_date, round_time
+            ORDER BY
+                round_date,
+                CAST(REPLACE(round_time, ':', '') AS INTEGER)
             """,
             (latest_gaming_session_id,)
         )
