@@ -22,7 +22,7 @@ import logging
 from typing import Optional
 
 import discord
-import aiosqlite
+# import aiosqlite  # Removed - using database adapter
 from discord.ext import commands
 
 logger = logging.getLogger(__name__)
@@ -103,34 +103,31 @@ class AdminCog(commands.Cog, name="Admin"):
             await ctx.send(f"❌ Error reloading bot: {e}")
 
     @commands.command(name="weapon_diag")
-    async def weapon_diag(self, ctx, session_id: Optional[int] = None):
+    async def weapon_diag(self, ctx, round_id: Optional[int] = None):
         """🧪 Diagnostic: show weapon stats aggregates for a session."""
         try:
-            async with aiosqlite.connect(self.bot.db_path) as db:
-                if session_id is None:
-                    async with db.execute("SELECT id FROM sessions ORDER BY id DESC LIMIT 1") as cur:
-                        row = await cur.fetchone()
-                        if not row:
-                            await ctx.send("❌ No sessions found in DB.")
-                            return
-                        session_id = row[0]
+            if round_id is None:
+                row = await self.bot.db_adapter.fetch_one("SELECT id FROM rounds ORDER BY id DESC LIMIT 1")
+                if not row:
+                    await ctx.send("❌ No rounds found in DB.")
+                    return
+                round_id = row[0]
 
-                async with db.execute(
-                    "SELECT COUNT(*) as rows, SUM(COALESCE(hits,0)) as total_hits, "
-                    "SUM(COALESCE(shots,0)) as total_shots, SUM(COALESCE(headshots,0)) as total_headshots "
-                    "FROM weapon_comprehensive_stats WHERE session_id = ?",
-                    (session_id,),
-                ) as cur:
-                    agg = await cur.fetchone()
+            agg = await self.bot.db_adapter.fetch_one(
+                "SELECT COUNT(*) as rows, SUM(COALESCE(hits,0)) as total_hits, "
+                "SUM(COALESCE(shots,0)) as total_shots, SUM(COALESCE(headshots,0)) as total_headshots "
+                "FROM weapon_comprehensive_stats WHERE round_id = ?",
+                (round_id,)
+            )
 
-                msg = f"🔎 **Weapon Diagnostics**\n**Session ID:** {session_id}\n"
-                if agg:
-                    rows, hits, shots, headshots = agg
-                    msg += f"**Rows:** {rows}\n**Hits:** {hits or 0}\n**Shots:** {shots or 0}\n**Headshots:** {headshots or 0}"
-                else:
-                    msg += "No weapon data available."
+            msg = f"🔎 **Weapon Diagnostics**\n**Round ID:** {round_id}\n"
+            if agg:
+                rows, hits, shots, headshots = agg
+                msg += f"**Rows:** {rows}\n**Hits:** {hits or 0}\n**Shots:** {shots or 0}\n**Headshots:** {headshots or 0}"
+            else:
+                msg += "No weapon data available."
 
-                await ctx.send(msg)
+            await ctx.send(msg)
         except Exception as e:
             logger.error(f"Error in weapon_diag: {e}", exc_info=True)
             await ctx.send(f"❌ weapon_diag failed: {e}")

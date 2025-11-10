@@ -154,7 +154,7 @@ class AdvancedTeamDetector:
                 deaths,
                 time_played_seconds
             FROM player_comprehensive_stats
-            WHERE session_date LIKE ?
+            WHERE round_date LIKE ?
             ORDER BY round_number, player_guid
         """
         
@@ -197,9 +197,9 @@ class AdvancedTeamDetector:
         
         # Get recent sessions (last 30 days, max 10 sessions)
         query = """
-            SELECT DISTINCT SUBSTR(session_date, 1, 10) as date
-            FROM sessions
-            WHERE SUBSTR(session_date, 1, 10) < ?
+            SELECT DISTINCT SUBSTR(round_date, 1, 10) as date
+            FROM rounds
+            WHERE SUBSTR(round_date, 1, 10) < ?
             ORDER BY date DESC
             LIMIT 10
         """
