@@ -58,6 +58,10 @@ class SSHMonitor:
             "remote_path": os.getenv("REMOTE_STATS_PATH", "")
         }
         
+        # Discord configuration
+        stats_channel_env = os.getenv("STATS_CHANNEL_ID", "0")
+        self.stats_channel_id = int(stats_channel_env) if stats_channel_env.isdigit() else 0
+        
         # Statistics (for monitoring health)
         self.last_check_time: Optional[datetime] = None
         self.files_processed_count = 0
@@ -251,7 +255,7 @@ class SSHMonitor:
             
             # 🆕 If this is Round 2, also post match summary
             if '-round-2.txt' in filename:
-                logger.info(f"🏁 Round 2 detected - posting match summary...")
+                logger.info("🏁 Round 2 detected - posting match summary...")
                 await self._post_match_summary(filename)
             
             # Mark as processed
@@ -555,7 +559,7 @@ class SSHMonitor:
         """Create Discord embed for match summary"""
         embed = discord.Embed(
             title=f"🏆 Match Complete - {map_name}",
-            description=f"**Stopwatch Mode** - Combined stats from both rounds",
+            description="**Stopwatch Mode** - Combined stats from both rounds",
             color=discord.Color.gold(),
             timestamp=datetime.now()
         )
