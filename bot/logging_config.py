@@ -151,8 +151,8 @@ def setup_logging(log_level=logging.INFO):
     logger.info("=" * 80)
     logger.info(f"Logging system initialized - Level: {logging.getLevelName(log_level)}")
     logger.info(f"Log directory: {LOGS_DIR.absolute()}")
-    logger.info(f"Log files: bot.log, errors.log, commands.log, database.log")
-    logger.info(f"Rotation: 10MB per file, 5 backups each")
+    logger.info("Log files: bot.log, errors.log, commands.log, database.log")
+    logger.info("Rotation: 10MB per file, 5 backups each")
     logger.info("=" * 80)
     
     return root_logger
