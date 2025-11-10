@@ -42,6 +42,8 @@ async def fix_gaming_sessions():
         
         for round_id, round_date, round_time, old_session_id in rounds:
             # Parse datetime (handle both HHMMSS and HH:MM:SS formats)
+            # Also normalize round_time to HHMMSS format for consistency
+            normalized_time = round_time
             try:
                 # Try HHMMSS format first (no colons)
                 if ':' not in str(round_time):
@@ -49,12 +51,14 @@ async def fix_gaming_sessions():
                         f"{round_date} {round_time}", 
                         '%Y-%m-%d %H%M%S'
                     )
+                    normalized_time = round_time  # Already correct format
                 else:
-                    # HH:MM:SS format (with colons)
+                    # HH:MM:SS format (with colons) - need to normalize
                     dt = datetime.strptime(
                         f"{round_date} {round_time}", 
                         '%Y-%m-%d %H:%M:%S'
                     )
+                    normalized_time = dt.strftime('%H%M%S')  # Convert to HHMMSS
             except Exception as e:
                 logger.warning(
                     f"Failed to parse {round_date} {round_time}: {e}"
@@ -73,12 +77,13 @@ async def fix_gaming_sessions():
                         f"({last_dt.strftime('%Y-%m-%d %H:%M:%S')} → {dt.strftime('%Y-%m-%d %H:%M:%S')})"
                     )
             
-            # Update if session ID changed or was NULL
-            if old_session_id != current_session_id:
+            # Update session ID AND normalize round_time format if needed
+            if old_session_id != current_session_id or normalized_time != round_time:
                 await adapter.execute(
-                    "UPDATE rounds SET gaming_session_id = ? WHERE id = ?",
-                    (current_session_id, round_id)
+                    "UPDATE rounds SET gaming_session_id = ?, round_time = ? WHERE id = ?",
+                    (current_session_id, normalized_time, round_id)
                 )
+                updates += 1
                 updates += 1
                 logger.debug(
                     f"Updated round {round_id}: session {old_session_id} → {current_session_id}"
