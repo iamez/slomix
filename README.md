@@ -752,8 +752,8 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 1. **Check Documentation:**
    - [SAFETY_VALIDATION_SYSTEMS.md](SAFETY_VALIDATION_SYSTEMS.md) - Data integrity
    - [ROUND_2_PIPELINE_EXPLAINED.txt](ROUND_2_PIPELINE_EXPLAINED.txt) - Differential logic
-   - [AUTOMATION_SETUP_GUIDE.md](AUTOMATION_SETUP_GUIDE.md) - Automation setup
-   - [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) - Emergency recovery
+   - [bot/services/automation/INTEGRATION_GUIDE.md](bot/services/automation/INTEGRATION_GUIDE.md) - Automation setup
+   - [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) - Deployment guide
 
 2. **Check Logs:**
    - `logs/bot.log` - General operations
@@ -821,7 +821,7 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This is a private project. All rights reserved.
 
 ---
 
