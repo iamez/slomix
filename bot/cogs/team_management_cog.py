@@ -13,7 +13,7 @@ team tracking in session analytics.
 import json
 import logging
 
-import aiosqlite
+# import aiosqlite  # Removed - using database adapter
 import discord
 from discord.ext import commands
 
@@ -27,9 +27,9 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
         self.bot = bot
         logger.info("👥 TeamManagementCog initializing...")
 
-    async def _ensure_session_teams_table(self, db):
+    async def _ensure_session_teams_table(self):
         """Ensure session_teams table exists"""
-        await db.execute(
+        await self.bot.db_adapter.execute(
             """
             CREATE TABLE IF NOT EXISTS session_teams (
                 session_start_date TEXT NOT NULL,
@@ -41,7 +41,6 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
             )
         """
         )
-        await db.commit()
 
     @commands.command(name="set_teams")
     async def set_teams(self, ctx, team1_name: str, team2_name: str):
@@ -53,36 +52,33 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
         After setting teams, use !assign_player to add players to each team.
         """
         try:
-            async with aiosqlite.connect(self.bot.db_path) as db:
-                await self._ensure_session_teams_table(db)
+            await self._ensure_session_teams_table()
 
-                # Determine latest session date (YYYY-MM-DD)
-                async with db.execute(
-                    "SELECT DISTINCT substr(session_date,1,10) as d FROM sessions ORDER BY d DESC LIMIT 1"
-                ) as cur:
-                    row = await cur.fetchone()
-                if not row:
-                    await ctx.send("❌ No sessions found to set teams for.")
-                    return
-                session_date = row[0]
+            # Determine latest session date (YYYY-MM-DD)
+            row = await self.bot.db_adapter.fetch_one(
+                "SELECT DISTINCT substr(round_date,1,10) as d FROM rounds ORDER BY d DESC LIMIT 1"
+            )
+            if not row:
+                await ctx.send("❌ No rounds found to set teams for.")
+                return
+            round_date = row[0]
 
-                # Upsert two team rows with map_name='ALL' and empty rosters initially
-                empty = json.dumps([])
-                for tname in (team1_name, team2_name):
-                    await db.execute(
-                        """
-                        INSERT INTO session_teams (session_start_date, map_name, team_name, player_guids, player_names)
-                        VALUES (?, 'ALL', ?, ?, ?)
-                        ON CONFLICT(session_start_date, map_name, team_name)
-                        DO UPDATE SET team_name=excluded.team_name
-                        """,
-                        (session_date, tname, empty, empty),
-                    )
-                await db.commit()
+            # Upsert two team rows with map_name='ALL' and empty rosters initially
+            empty = json.dumps([])
+            for tname in (team1_name, team2_name):
+                await self.bot.db_adapter.execute(
+                    """
+                    INSERT INTO session_teams (session_start_date, map_name, team_name, player_guids, player_names)
+                    VALUES (?, 'ALL', ?, ?, ?)
+                    ON CONFLICT(session_start_date, map_name, team_name)
+                    DO UPDATE SET team_name=excluded.team_name
+                    """,
+                    (round_date, tname, empty, empty)
+                )
 
             embed = discord.Embed(
                 title="✅ Teams Set Successfully!",
-                description=f"Teams configured for session: **{session_date}**",
+                description=f"Teams configured for session: **{round_date}**",
                 color=0x00FF00,
             )
             embed.add_field(name="Team 1", value=f"**{team1_name}**", inline=True)
@@ -94,7 +90,7 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
             )
 
             await ctx.send(embed=embed)
-            logger.info(f"✅ Teams set for {session_date}: {team1_name} vs {team2_name}")
+            logger.info(f"✅ Teams set for {round_date}: {team1_name} vs {team2_name}")
 
         except Exception as e:
             logger.error(f"Error in set_teams: {e}", exc_info=True)
@@ -110,105 +106,100 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
         against known player aliases. Use !set_teams first to create the teams.
         """
         try:
-            async with aiosqlite.connect(self.bot.db_path) as db:
-                await self._ensure_session_teams_table(db)
+            await self._ensure_session_teams_table()
 
-                # Resolve latest session date
-                async with db.execute(
-                    "SELECT DISTINCT substr(session_date,1,10) as d FROM sessions ORDER BY d DESC LIMIT 1"
-                ) as cur:
-                    row = await cur.fetchone()
-                if not row:
-                    await ctx.send("❌ No sessions found.")
-                    return
-                session_date = row[0]
+            # Resolve latest session date
+            row = await self.bot.db_adapter.fetch_one(
+                "SELECT DISTINCT substr(round_date,1,10) as d FROM rounds ORDER BY d DESC LIMIT 1"
+            )
+            if not row:
+                await ctx.send("❌ No rounds found.")
+                return
+            round_date = row[0]
 
-                # Resolve most recent GUID for the player (fuzzy match by alias)
-                async with db.execute(
-                    """
-                    SELECT guid, alias
-                    FROM player_aliases
-                    WHERE lower(alias) LIKE lower(?)
-                    ORDER BY last_seen DESC
-                    LIMIT 1
-                    """,
-                    (f"%{player_name}%",),
-                ) as cur:
-                    pa = await cur.fetchone()
-                if not pa:
-                    await ctx.send(f"❌ Player '{player_name}' not found in aliases.")
-                    return
-                player_guid, resolved_alias = pa
+            # Resolve most recent GUID for the player (fuzzy match by alias)
+            pa = await self.bot.db_adapter.fetch_one(
+                """
+                SELECT guid, alias
+                FROM player_aliases
+                WHERE lower(alias) LIKE lower(?)
+                ORDER BY last_seen DESC
+                LIMIT 1
+                """,
+                (f"%{player_name}%",)
+            )
+            if not pa:
+                await ctx.send(f"❌ Player '{player_name}' not found in aliases.")
+                return
+            player_guid, resolved_alias = pa
 
-                # Ensure team row exists for this date (map_name='ALL')
-                empty = json.dumps([])
-                await db.execute(
-                    """
-                    INSERT INTO session_teams (session_start_date, map_name, team_name, player_guids, player_names)
-                    VALUES (?, 'ALL', ?, ?, ?)
-                    ON CONFLICT(session_start_date, map_name, team_name)
-                    DO NOTHING
-                    """,
-                    (session_date, team_name, empty, empty),
+            # Ensure team row exists for this date (map_name='ALL')
+            empty = json.dumps([])
+            await self.bot.db_adapter.execute(
+                """
+                INSERT INTO session_teams (session_start_date, map_name, team_name, player_guids, player_names)
+                VALUES (?, 'ALL', ?, ?, ?)
+                ON CONFLICT(session_start_date, map_name, team_name)
+                DO NOTHING
+                """,
+                (round_date, team_name, empty, empty)
+            )
+
+            # Fetch current roster
+            row = await self.bot.db_adapter.fetch_one(
+                """
+                SELECT player_guids, player_names
+                FROM session_teams
+                WHERE session_start_date = ? AND map_name = 'ALL' AND team_name = ?
+                """,
+                (round_date, team_name)
+            )
+
+            if not row:
+                await ctx.send(
+                    f"❌ Team '{team_name}' not found for {round_date}. Use `!set_teams` first."
                 )
+                return
 
-                # Fetch current roster
-                async with db.execute(
+            # Update roster
+            guids = set(json.loads(row[0] or "[]"))
+            names = set(json.loads(row[1] or "[]"))
+            updated = False
+            
+            if player_guid not in guids:
+                guids.add(player_guid)
+                updated = True
+            if resolved_alias not in names:
+                names.add(resolved_alias)
+                updated = True
+
+            if updated:
+                await self.bot.db_adapter.execute(
                     """
-                    SELECT player_guids, player_names
-                    FROM session_teams
+                    UPDATE session_teams
+                    SET player_guids = ?, player_names = ?
                     WHERE session_start_date = ? AND map_name = 'ALL' AND team_name = ?
                     """,
-                    (session_date, team_name),
-                ) as cur:
-                    row = await cur.fetchone()
-
-                if not row:
-                    await ctx.send(
-                        f"❌ Team '{team_name}' not found for {session_date}. Use `!set_teams` first."
+                    (
+                        json.dumps(sorted(list(guids))),
+                        json.dumps(sorted(list(names))),
+                        round_date,
+                        team_name,
                     )
-                    return
+                )
 
-                # Update roster
-                guids = set(json.loads(row[0] or "[]"))
-                names = set(json.loads(row[1] or "[]"))
-                updated = False
-                
-                if player_guid not in guids:
-                    guids.add(player_guid)
-                    updated = True
-                if resolved_alias not in names:
-                    names.add(resolved_alias)
-                    updated = True
+                embed = discord.Embed(
+                    title="✅ Player Assigned!",
+                    description=f"**{resolved_alias}** assigned to **{team_name}**",
+                    color=0x00FF00,
+                )
+                embed.add_field(name="Session Date", value=round_date, inline=True)
+                embed.add_field(name="Player GUID", value=f"`{player_guid[:8]}...`", inline=True)
 
-                if updated:
-                    await db.execute(
-                        """
-                        UPDATE session_teams
-                        SET player_guids = ?, player_names = ?
-                        WHERE session_start_date = ? AND map_name = 'ALL' AND team_name = ?
-                        """,
-                        (
-                            json.dumps(sorted(list(guids))),
-                            json.dumps(sorted(list(names))),
-                            session_date,
-                            team_name,
-                        ),
-                    )
-                    await db.commit()
-
-                    embed = discord.Embed(
-                        title="✅ Player Assigned!",
-                        description=f"**{resolved_alias}** assigned to **{team_name}**",
-                        color=0x00FF00,
-                    )
-                    embed.add_field(name="Session Date", value=session_date, inline=True)
-                    embed.add_field(name="Player GUID", value=f"`{player_guid[:8]}...`", inline=True)
-
-                    await ctx.send(embed=embed)
-                    logger.info(f"✅ Assigned {resolved_alias} to {team_name} for {session_date}")
-                else:
-                    await ctx.send(f"ℹ️ **{resolved_alias}** is already on **{team_name}**")
+                await ctx.send(embed=embed)
+                logger.info(f"✅ Assigned {resolved_alias} to {team_name} for {round_date}")
+            else:
+                await ctx.send(f"ℹ️ **{resolved_alias}** is already on **{team_name}**")
 
         except Exception as e:
             logger.error(f"Error in assign_player: {e}", exc_info=True)
