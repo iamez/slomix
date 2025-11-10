@@ -4,7 +4,7 @@
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
 [![Data Integrity](https://img.shields.io/badge/data%20integrity-6%20layers-blue)](SAFETY_VALIDATION_SYSTEMS.md)
-[![Automation](https://img.shields.io/badge/automation-fully%20implemented-orange)](AUTOMATION_SETUP_GUIDE.md)
+[![Automation](https://img.shields.io/badge/automation-fully%20implemented-orange)](bot/services/automation/INTEGRATION_GUIDE.md)
 
 A **production-grade Discord bot** with **zero-downtime automation**, **6-layer data validation**, and **intelligent differential stat calculation** for ET:Legacy game servers.
 
@@ -17,7 +17,7 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 - ⚡ **Real-Time Processing** - VPS → Local → Database → Discord in <3 seconds per file
 - 🎯 **Zero Data Loss** - PostgreSQL transactions, rollback on error, 4,193 verified inserts
 
-**[� View Complete Data Pipeline](COMPLETE_DATA_PIPELINE.html)** | **[🔒 Safety & Validation Systems](SAFETY_VALIDATION_SYSTEMS.md)** | **[� Round 2 Pipeline Explained](ROUND_2_PIPELINE_EXPLAINED.txt)**
+**[📊 View Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation Systems](SAFETY_VALIDATION_SYSTEMS.md)** | **[🔄 Round 2 Pipeline Explained](ROUND_2_PIPELINE_EXPLAINED.txt)**
 
 ---
 
@@ -189,7 +189,7 @@ Automatically groups rounds into gaming sessions:
 
 **Enable:** Set `AUTOMATION_ENABLED=true` and `SSH_ENABLED=true` in `.env`
 
-**[📖 Setup Guide: AUTOMATION_SETUP_GUIDE.md](AUTOMATION_SETUP_GUIDE.md)**
+**[📖 Setup Guide: bot/services/automation/INTEGRATION_GUIDE.md](bot/services/automation/INTEGRATION_GUIDE.md)**
 
 ---
 
@@ -299,63 +299,55 @@ REMOTE_STATS_PATH=/home/et/.etlegacy/legacy/gamestats
 slomix/
 ├── 📊 Core Systems
 │   ├── bot/
-│   │   ├── ultimate_bot.py              # Main bot (4,790 lines)
-│   │   ├── community_stats_parser.py    # Round 1/2 differential parser (1,200 lines)
+│   │   ├── ultimate_bot.py              # Main bot (4,990 lines)
+│   │   ├── community_stats_parser.py    # Round 1/2 differential parser (1,036 lines)
 │   │   ├── cogs/
 │   │   │   ├── last_session_cog.py      # Session stats & summaries
 │   │   │   └── sync_cog.py              # VPS sync commands
 │   │   ├── core/
 │   │   │   ├── database_adapter.py      # PostgreSQL/SQLite abstraction
 │   │   │   └── stats_cache.py           # TTL-based caching (300s)
-│   │   └── schema_postgresql.sql        # Production schema (7 tables)
 │   │
-│   └── postgresql_database_manager.py   # Database operations (1,252 lines)
+│   └── postgresql_database_manager.py   # Database operations (1,573 lines)
 │       ├── 6-layer validation system
 │       ├── ACID transaction wrapper
 │       ├── Per-insert verification (RETURNING clause)
 │       └── Gaming session ID calculation
 │
 ├── 🔒 Safety & Validation Documentation
-│   ├── SAFETY_VALIDATION_SYSTEMS.md     # Complete safety inventory
-│   ├── VERIFICATION_ARCHITECTURE_DECISION.md
-│   ├── VERIFICATION_IMPLEMENTED.md
-│   └── DATA_INTEGRITY_VERIFICATION_POINTS.md
+│   └── SAFETY_VALIDATION_SYSTEMS.md     # Complete safety inventory
 │
 ├── 📖 Pipeline Documentation
-│   ├── COMPLETE_DATA_PIPELINE.html      # Visual pipeline diagram
+│   ├── DATA_PIPELINE.md                 # Pipeline overview
 │   ├── ROUND_2_PIPELINE_EXPLAINED.txt   # Differential calculation
-│   ├── DATA_PIPELINE_EXPLAINED.txt      # Text-based pipeline
-│   └── NUKE_AND_REIMPORT_WITH_VERIFICATION.md
+│   └── docs/DATA_PIPELINE.md            # Detailed technical pipeline
 │
 ├── 🤖 Automation Documentation
-│   ├── AUTOMATION_SETUP_GUIDE.md        # Setup instructions
-│   ├── AUTOMATION_SUMMARY.md            # Feature overview
-│   ├── AUTOMATION_REFACTOR_COMPLETE.md  # Implementation details
-│   └── AUTOMATION_CHECKLIST.md          # Deployment checklist
+│   └── bot/services/automation/INTEGRATION_GUIDE.md  # Automation setup
 │
 ├── 📂 Data & Logs
 │   ├── local_stats/                     # Stats files (288+ files)
-│   ├── logs/                            # Application logs
-│   │   ├── bot.log                      # Main bot log
-│   │   ├── errors.log                   # Error tracking
-│   │   ├── database.log                 # Database operations
-│   │   └── commands.log                 # Command usage
-│   └── backup/                          # Database backups
+│   └── logs/                            # Application logs
+│       ├── bot.log                      # Main bot log
+│       ├── errors.log                   # Error tracking
+│       ├── database.log                 # Database operations
+│       └── commands.log                 # Command usage
 │
-├── �️ Configuration
+├── ⚙️ Configuration
 │   ├── .env                             # Environment configuration
 │   ├── .env.example                     # Template
-│   ├── bot_config.json                  # Bot settings
-│   └── requirements.txt                 # Python dependencies
+│   └── requirements.txt                 # Python dependencies (11 packages)
 │
-├── 📚 Additional Docs
-│   ├── DISASTER_RECOVERY.md             # Database recovery
-│   ├── ACHIEVEMENT_SYSTEM.md            # MVP & achievements
-│   ├── ADVANCED_TEAM_DETECTION.md       # Team detection logic
-│   ├── AI_PROJECT_STATUS_OCT12.md       # Development history
-│   └── docs/
-│       ├── AI_AGENT_GUIDE.md            # For AI assistants
-│       └── FOR_YOUR_FRIEND.md           # User guide
+├── 📚 Documentation
+│   ├── docs/
+│   │   ├── COMMANDS.md                  # Bot commands reference
+│   │   ├── DATA_PIPELINE.md             # Pipeline documentation
+│   │   ├── FIELD_MAPPING.md             # Stats fields reference
+│   │   ├── SYSTEM_ARCHITECTURE.md       # Architecture docs
+│   │   └── TECHNICAL_OVERVIEW.md        # Technical guide
+│   ├── DEPLOYMENT_CHECKLIST.md          # Deployment guide
+│   ├── VPS_SETUP.md                     # VPS setup instructions
+│   └── AI_AGENT_INSTRUCTIONS.md         # For AI assistants
 │
 └── 🔧 Development Tools
     ├── check_last_session_data.py       # Diagnostic scripts
@@ -364,9 +356,10 @@ slomix/
 ```
 
 **Key Files:**
-- **`postgresql_database_manager.py`** - ALL database operations (create, import, rebuild, validate)
-- **`bot/ultimate_bot.py`** - Main production bot
-- **`bot/community_stats_parser.py`** - Round 2 differential calculation
+- **`postgresql_database_manager.py`** - ALL database operations (1,573 lines: create, import, rebuild, validate)
+- **`bot/ultimate_bot.py`** - Main production bot (4,990 lines)
+- **`bot/community_stats_parser.py`** - Round 2 differential calculation (1,036 lines)
+- **`bot/core/database_adapter.py`** - Async DB abstraction layer
 - **`SAFETY_VALIDATION_SYSTEMS.md`** - Complete safety documentation
 
 ---
@@ -784,27 +777,26 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 
 ### **Getting Started**
 - [README.md](README.md) - This file
-- [AUTOMATION_SETUP_GUIDE.md](AUTOMATION_SETUP_GUIDE.md) - Enable automation
-- [docs/AI_AGENT_GUIDE.md](docs/AI_AGENT_GUIDE.md) - For AI assistants
+- [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) - Deployment guide
+- [bot/services/automation/INTEGRATION_GUIDE.md](bot/services/automation/INTEGRATION_GUIDE.md) - Automation setup
+- [AI_AGENT_INSTRUCTIONS.md](AI_AGENT_INSTRUCTIONS.md) - For AI assistants
 
 ### **System Architecture**
-- [COMPLETE_DATA_PIPELINE.html](COMPLETE_DATA_PIPELINE.html) - Visual pipeline
+- [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md) - Complete data pipeline
+- [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md) - Technical architecture
+- [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) - System overview
 - [SAFETY_VALIDATION_SYSTEMS.md](SAFETY_VALIDATION_SYSTEMS.md) - 6-layer safety
 - [ROUND_2_PIPELINE_EXPLAINED.txt](ROUND_2_PIPELINE_EXPLAINED.txt) - Differential calculation
 
 ### **Development**
-- [DATA_PIPELINE_EXPLAINED.txt](DATA_PIPELINE_EXPLAINED.txt) - Pipeline details
-- [VERIFICATION_ARCHITECTURE_DECISION.md](VERIFICATION_ARCHITECTURE_DECISION.md) - Design decisions
-- [VERIFICATION_IMPLEMENTED.md](VERIFICATION_IMPLEMENTED.md) - Implementation
+- [docs/FIELD_MAPPING.md](docs/FIELD_MAPPING.md) - Stats field reference
+- [docs/COMMANDS.md](docs/COMMANDS.md) - Bot commands reference
+- [DATA_PIPELINE.md](DATA_PIPELINE.md) - Pipeline overview
 
-### **Operations**
-- [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) - Emergency procedures
-- [AUTOMATION_CHECKLIST.md](AUTOMATION_CHECKLIST.md) - Deployment checklist
-- [AI_PROJECT_STATUS_OCT12.md](AI_PROJECT_STATUS_OCT12.md) - Project history
-
-### **Features**
-- [ACHIEVEMENT_SYSTEM.md](ACHIEVEMENT_SYSTEM.md) - MVP & achievements
-- [ADVANCED_TEAM_DETECTION.md](ADVANCED_TEAM_DETECTION.md) - Team detection logic
+### **Operations & Deployment**
+- [VPS_SETUP.md](VPS_SETUP.md) - VPS setup instructions
+- [VPS_INSTALL.md](VPS_INSTALL.md) - VPS installation guide
+- [TEST_PLAN_VPS.md](TEST_PLAN_VPS.md) - VPS testing plan
 
 ---
 
