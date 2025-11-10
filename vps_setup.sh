@@ -57,12 +57,15 @@ if [ "$DB_PASSWORD" != "$DB_PASSWORD_CONFIRM" ]; then
 fi
 
 # Create database and user
+# Escape single quotes for PostgreSQL (prevents SQL injection)
+DB_PASSWORD_ESCAPED="${DB_PASSWORD//\'/\'\'}"
+
 sudo -u postgres psql << EOF
 -- Create database
 CREATE DATABASE etlegacy;
 
 -- Create user
-CREATE USER etlegacy_user WITH PASSWORD '$DB_PASSWORD';
+CREATE USER etlegacy_user WITH PASSWORD '$DB_PASSWORD_ESCAPED';
 
 -- Grant privileges
 GRANT ALL PRIVILEGES ON DATABASE etlegacy TO etlegacy_user;
