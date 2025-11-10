@@ -48,17 +48,17 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
             time_str = now.strftime("%H:%M:%S")
 
             async with aiosqlite.connect(self.bot.db_path) as db:
-                # Create session entry
+                # Create round entry
                 cursor = await db.execute(
                     """
-                    INSERT INTO sessions (start_time, date, map_name, status)
+                    INSERT INTO rounds (start_time, date, map_name, status)
                     VALUES (?, ?, ?, 'active')
                 """,
                     (time_str, date_str, map_name),
                 )
 
-                session_id = cursor.lastrowid
-                self.bot.current_session = session_id
+                round_id = cursor.lastrowid
+                self.bot.current_session = round_id
                 await db.commit()
 
             # Enable monitoring
@@ -67,7 +67,7 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
             embed = discord.Embed(
                 title="🎬 Session Started!",
                 description=(
-                    f"Session ID: **{session_id}**\n"
+                    f"Round ID: **{round_id}**\n"
                     f"Map: **{map_name}**\n"
                     f"Date: **{date_str}**\n\n"
                     "✅ Monitoring enabled - stats will be tracked automatically."
@@ -77,7 +77,7 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
             )
 
             await ctx.send(embed=embed)
-            logger.info(f"✅ Session started manually: ID {session_id}, map {map_name}")
+            logger.info(f"✅ Session started manually: ID {round_id}, map {map_name}")
 
         except Exception as e:
             logger.error(f"Error in session_start: {e}", exc_info=True)

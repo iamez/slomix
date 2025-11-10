@@ -13,7 +13,7 @@ import traceback
 from typing import Optional, List
 from datetime import datetime
 import asyncio
-# import aiosqlite  # Removed - using database adapter
+import aiosqlite
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -535,15 +535,17 @@ class SynergyAnalytics(commands.Cog):
     async def _get_player_guid(self, player_name: str) -> Optional[str]:
         """Get player GUID from name"""
         try:
-            row = await self.bot.db_adapter.fetch_one("""
-                SELECT player_guid 
-                FROM player_aliases 
-                WHERE LOWER(player_name) LIKE LOWER(?) 
-                ORDER BY last_seen DESC 
-                LIMIT 1
-            """, (f"%{player_name}%",))
-            
-            return row[0] if row else None
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute("""
+                    SELECT player_guid 
+                    FROM player_aliases 
+                    WHERE LOWER(player_name) LIKE LOWER(?) 
+                    ORDER BY last_seen DESC 
+                    LIMIT 1
+                """, (f"%{player_name}%",))
+                
+                row = await cursor.fetchone()
+                return row[0] if row else None
         except Exception as e:
             print(f"Error getting player GUID: {e}")
             return None
@@ -619,16 +621,18 @@ class SynergyAnalytics(commands.Cog):
                 
                 # Get synergy from database
                 try:
-                    # Try both orderings
-                    row = await self.bot.db_adapter.fetch_one("""
-                        SELECT synergy_score
-                        FROM player_synergies
-                        WHERE (player_a_guid = ? AND player_b_guid = ?)
-                           OR (player_a_guid = ? AND player_b_guid = ?)
-                    """, (guid_a, guid_b, guid_b, guid_a))
-                    
-                    if row:
-                        synergies.append(row[0])
+                    async with aiosqlite.connect(self.db_path) as db:
+                        # Try both orderings
+                        cursor = await db.execute("""
+                            SELECT synergy_score
+                            FROM player_synergies
+                            WHERE (player_a_guid = ? AND player_b_guid = ?)
+                               OR (player_a_guid = ? AND player_b_guid = ?)
+                        """, (guid_a, guid_b, guid_b, guid_a))
+                        
+                        row = await cursor.fetchone()
+                        if row:
+                            synergies.append(row[0])
                 except Exception as e:
                     print(f"Error getting synergy: {e}")
         
@@ -640,31 +644,34 @@ class SynergyAnalytics(commands.Cog):
         partners = []
         
         try:
-            # Get all synergies involving this player
-            rows = await self.bot.db_adapter.fetch_all("""
-                SELECT 
-                    CASE 
-                        WHEN player_a_guid = ? THEN player_b_guid
-                        ELSE player_a_guid
-                    END as partner_guid,
-                    CASE
-                        WHEN player_a_guid = ? THEN player_b_name
-                        ELSE player_a_name
-                    END as partner_name,
-                    synergy_score,
-                    games_same_team
-                FROM player_synergies
-                WHERE player_a_guid = ? OR player_b_guid = ?
-                ORDER BY synergy_score DESC
-            """, (player_guid, player_guid, player_guid, player_guid))
-            
-            for row in rows:
-                partners.append({
-                    'partner_guid': row[0],
-                    'partner_name': row[1],
-                    'synergy_score': row[2],
-                    'games': row[3]
-                })
+            async with aiosqlite.connect(self.db_path) as db:
+                # Get all synergies involving this player
+                cursor = await db.execute("""
+                    SELECT 
+                        CASE 
+                            WHEN player_a_guid = ? THEN player_b_guid
+                            ELSE player_a_guid
+                        END as partner_guid,
+                        CASE
+                            WHEN player_a_guid = ? THEN player_b_name
+                            ELSE player_a_name
+                        END as partner_name,
+                        synergy_score,
+                        games_same_team
+                    FROM player_synergies
+                    WHERE player_a_guid = ? OR player_b_guid = ?
+                    ORDER BY synergy_score DESC
+                """, (player_guid, player_guid, player_guid, player_guid))
+                
+                rows = await cursor.fetchall()
+                
+                for row in rows:
+                    partners.append({
+                        'partner_guid': row[0],
+                        'partner_name': row[1],
+                        'synergy_score': row[2],
+                        'games': row[3]
+                    })
         
         except Exception as e:
             print(f"Error getting partners: {e}")
