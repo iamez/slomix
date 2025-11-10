@@ -3854,8 +3854,12 @@ class UltimateETLegacyBot(commands.Bot):
             last_date = last_round[1]
             last_time = last_round[2]
             
-            # Parse current timestamp (HHMMSS format)
-            current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H%M%S')
+            # Parse current timestamp (handle both HHMMSS and HH:MM:SS formats)
+            try:
+                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H%M%S')
+            except ValueError:
+                # Fallback to format with colons
+                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')
             
             # Parse last timestamp (handle both HHMMSS and HH:MM:SS formats from DB)
             try:
