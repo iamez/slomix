@@ -382,7 +382,7 @@ class C0RNP0RN3StatsParser:
 
         best_r1_file = None
         best_r1_datetime = None
-        MAX_TIME_DIFF_MINUTES = 30  # Rounds typically 10-20 minutes apart
+        MAX_TIME_DIFF_MINUTES = 60  # Match gaming_session_id threshold (60-min gap = new session)
 
         for r1_file in potential_files:
             r1_filename = os.path.basename(r1_file)
