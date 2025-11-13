@@ -10,12 +10,10 @@ initialization is present here; heavy lifting is done inside Cog methods.
 import asyncio
 import logging
 import os
-import sqlite3
 import sys
 import time
 from datetime import datetime
 
-import aiosqlite
 import io
 import discord
 from discord.ext import commands, tasks
