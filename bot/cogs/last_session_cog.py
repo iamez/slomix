@@ -560,17 +560,44 @@ class LastSessionCog(commands.Cog):
 
     async def _show_maps_view(self, ctx, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
         """Show popular stats per map (map summaries only)"""
-        
-        # Group sessions by map
-        map_sessions = {}
-        for round_id, map_name, round_num, actual_time in sessions:
-            if map_name not in map_sessions:
-                map_sessions[map_name] = []
-            map_sessions[map_name].append(round_id)
-        
-        # For each map, get aggregated stats (both rounds combined)
-        for map_name, map_session_ids in map_sessions.items():
+
+        # Group sessions into matches (R1 + R2 pairs)
+        # Don't group by map_name - this would combine duplicate maps!
+        map_matches = []
+        i = 0
+        while i < len(sessions):
+            match_rounds = []
+            current_map = sessions[i][1]  # map_name
+
+            # Collect R1 and R2 for this match
+            while i < len(sessions) and sessions[i][1] == current_map and len(match_rounds) < 2:
+                round_id, map_name, round_num, actual_time = sessions[i]
+                match_rounds.append(round_id)
+                i += 1
+
+            # Store this match
+            if match_rounds:
+                map_matches.append((current_map, match_rounds))
+
+        # Count occurrences of each map for display
+        map_counts = {}
+        for map_name, _ in map_matches:
+            map_counts[map_name] = map_counts.get(map_name, 0) + 1
+
+        # Track which occurrence we're on for each map
+        map_occurrence = {}
+
+        # For each match, get aggregated stats (both rounds combined)
+        for map_name, map_session_ids in map_matches:
             map_ids_str = ','.join('?' * len(map_session_ids))
+
+            # Determine display name (add counter for duplicates)
+            if map_counts[map_name] > 1:
+                occurrence_num = map_occurrence.get(map_name, 0) + 1
+                map_occurrence[map_name] = occurrence_num
+                display_map_name = f"{map_name} (#{occurrence_num})"
+            else:
+                display_map_name = map_name
             
             # Get all players for this map (aggregated across both rounds)
             query = f"""
@@ -610,7 +637,7 @@ class LastSessionCog(commands.Cog):
             
             # Build embed for this map
             embed = discord.Embed(
-                title=f"🗺️ Map Stats: {map_name}",
+                title=f"🗺️ Map Stats: {display_map_name}",
                 description=f"{len(players)} players • Map Summary (both rounds)",
                 color=0x5865F2,
                 timestamp=datetime.now()
@@ -674,35 +701,61 @@ class LastSessionCog(commands.Cog):
 
     async def _show_maps_full_view(self, ctx, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
         """Show round-by-round breakdown for each map"""
-        
-        # Group sessions by map and round
-        map_rounds = {}
-        for round_id, map_name, round_num, actual_time in sessions:
-            if map_name not in map_rounds:
-                map_rounds[map_name] = {'round1': [], 'round2': [], 'all': []}
-            
-            map_rounds[map_name]['all'].append(round_id)
-            if round_num == 1:
-                map_rounds[map_name]['round1'].append(round_id)
-            elif round_num == 2:
-                map_rounds[map_name]['round2'].append(round_id)
-        
-        # For each map, show Round 1, Round 2, and Map Summary
-        for map_name, rounds in map_rounds.items():
+
+        # Group into matches (R1 + R2 pairs) to handle duplicate maps
+        map_matches = []
+        i = 0
+        while i < len(sessions):
+            match_data = {'map_name': None, 'round1': [], 'round2': [], 'all': []}
+            current_map = sessions[i][1]
+            match_data['map_name'] = current_map
+
+            # Collect R1 and R2 for this match
+            while i < len(sessions) and sessions[i][1] == current_map and len(match_data['all']) < 2:
+                round_id, map_name, round_num, actual_time = sessions[i]
+                match_data['all'].append(round_id)
+                if round_num == 1:
+                    match_data['round1'].append(round_id)
+                elif round_num == 2:
+                    match_data['round2'].append(round_id)
+                i += 1
+
+            map_matches.append(match_data)
+
+        # Count occurrences for display names
+        map_counts = {}
+        for match in map_matches:
+            map_name = match['map_name']
+            map_counts[map_name] = map_counts.get(map_name, 0) + 1
+
+        map_occurrence = {}
+
+        # For each match, show round 1, round 2, and combined stats
+        for match in map_matches:
+            map_name = match['map_name']
+            rounds = {'round1': match['round1'], 'round2': match['round2'], 'all': match['all']}
+
+            # Determine display name (add counter for duplicates)
+            if map_counts[map_name] > 1:
+                occurrence_num = map_occurrence.get(map_name, 0) + 1
+                map_occurrence[map_name] = occurrence_num
+                display_map_name = f"{map_name} (#{occurrence_num})"
+            else:
+                display_map_name = map_name
             
             # ===== ROUND 1 =====
             if rounds['round1']:
-                await self._send_round_stats(ctx, map_name, "Round 1", rounds['round1'], latest_date)
+                await self._send_round_stats(ctx, display_map_name, "Round 1", rounds['round1'], latest_date)
                 await asyncio.sleep(3)
-            
+
             # ===== ROUND 2 =====
             if rounds['round2']:
-                await self._send_round_stats(ctx, map_name, "Round 2", rounds['round2'], latest_date)
+                await self._send_round_stats(ctx, display_map_name, "Round 2", rounds['round2'], latest_date)
                 await asyncio.sleep(3)
-            
+
             # ===== MAP SUMMARY (both rounds combined) =====
             if rounds['all']:
-                await self._send_round_stats(ctx, map_name, "Map Summary", rounds['all'], latest_date)
+                await self._send_round_stats(ctx, display_map_name, "Map Summary", rounds['all'], latest_date)
                 await asyncio.sleep(3)
 
     async def _send_round_stats(self, ctx, map_name: str, round_label: str, round_session_ids: List, latest_date: str):
