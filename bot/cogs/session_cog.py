@@ -19,7 +19,6 @@ This cog contains ~3,600 lines of session viewing logic including:
 import asyncio
 import logging
 import os
-import sqlite3
 from datetime import datetime
 
 # import aiosqlite  # Removed - using database adapter
