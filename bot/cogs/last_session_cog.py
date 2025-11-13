@@ -24,6 +24,7 @@ import discord
 from discord.ext import commands
 
 from tools.stopwatch_scoring import StopwatchScoring
+from bot.stats import StatsCalculator
 
 logger = logging.getLogger("bot.cogs.last_session")
 
@@ -356,7 +357,7 @@ class LastSessionCog(commands.Cog):
         medals = ["🥇", "🥈", "🥉"]
         for i, row in enumerate(combat_rows, 1):
             name, kills, deaths, dmg_g, dmg_r, gibs, hsk, dpm = row
-            kd = kills / deaths if deaths and deaths > 0 else (kills or 0)
+            kd = StatsCalculator.calculate_kd(kills, deaths)
             
             player_text = (
                 f"{medals[i-1] if i <= 3 else f'{i}.'} **{name}**\n"
@@ -401,8 +402,8 @@ class LastSessionCog(commands.Cog):
         for player, weapon, kills, hits, shots, hs in pw_rows:
             if player not in player_weapon_map:
                 player_weapon_map[player] = []
-            acc = (hits / shots * 100) if shots and shots > 0 else 0
-            hs_pct = (hs / hits * 100) if hits and hits > 0 else 0
+            acc = StatsCalculator.calculate_accuracy(hits, shots)
+            hs_pct = StatsCalculator.calculate_headshot_percentage(hs, hits)
             weapon_clean = weapon.replace("WS_", "").replace("_", " ").title()
             player_weapon_map[player].append((weapon_clean, kills, acc, hs_pct, hs, hits, shots))
 
@@ -530,7 +531,7 @@ class LastSessionCog(commands.Cog):
         field_text = ""
         for i, player in enumerate(top_players, 1):
             name, kills, deaths, dpm, damage, hsk, gibs, seconds = player
-            kd = kills / deaths if deaths > 0 else kills
+            kd = StatsCalculator.calculate_kd(kills, deaths)
             hours = int((seconds or 0) // 3600)
             minutes = int(((seconds or 0) % 3600) // 60)
             time_display = f"{hours}h{minutes}m" if hours > 0 else f"{minutes}m"

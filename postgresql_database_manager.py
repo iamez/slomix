@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from bot.community_stats_parser import C0RNP0RN3StatsParser
 from bot.config import load_config
+from bot.stats import StatsCalculator
 
 # Import comprehensive logging system
 try:
@@ -984,12 +985,12 @@ class PostgreSQLDatabaseManager:
                 
                 kills = player.get('kills', 0)
                 deaths = player.get('deaths', 0)
-                kd_ratio = kills / deaths if deaths > 0 else float(kills)
-                
+                kd_ratio = StatsCalculator.calculate_kd(kills, deaths)
+
                 time_seconds = player.get('time_played_seconds', 0)
                 time_minutes = time_seconds / 60.0 if time_seconds > 0 else 0.0
                 dpm = player.get('dpm', 0.0)
-                efficiency = (kills / (kills + deaths) * 100) if (kills + deaths) > 0 else 0.0
+                efficiency = StatsCalculator.calculate_efficiency(kills, deaths)
                 accuracy = player.get('accuracy', 0.0)
                 
                 raw_td = obj_stats.get('time_dead_ratio', 0) or 0

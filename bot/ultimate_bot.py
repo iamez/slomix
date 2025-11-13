@@ -28,6 +28,7 @@ from bot.core import StatsCache, SeasonManager, AchievementSystem
 # Import database adapter and config for PostgreSQL migration
 from bot.core.database_adapter import create_adapter, DatabaseAdapter
 from bot.config import load_config
+from bot.stats import StatsCalculator
 
 # Load environment variables if available
 try:
@@ -2374,27 +2375,16 @@ class UltimateETLegacyBot(commands.Bot):
             raise
 
     def safe_divide(self, numerator, denominator, default=0.0):
-        """✅ NULL-safe division"""
-        try:
-            if numerator is None or denominator is None or denominator == 0:
-                return default
-            return numerator / denominator
-        except (TypeError, ZeroDivisionError):
-            return default
+        """✅ NULL-safe division (uses centralized StatsCalculator)"""
+        return StatsCalculator.safe_divide(numerator, denominator, default)
 
     def safe_percentage(self, part, total, default=0.0):
-        """✅ NULL-safe percentage (returns 0-100)"""
-        result = self.safe_divide(part, total, default)
-        return result * 100 if result != default else default
+        """✅ NULL-safe percentage (returns 0-100) (uses centralized StatsCalculator)"""
+        return StatsCalculator.safe_percentage(part, total, default)
 
     def safe_dpm(self, damage, time_seconds, default=0.0):
-        """✅ NULL-safe DPM calculation: (damage * 60) / time_seconds"""
-        try:
-            if damage is None or time_seconds is None or time_seconds == 0:
-                return default
-            return (damage * 60) / time_seconds
-        except (TypeError, ZeroDivisionError):
-            return default
+        """✅ NULL-safe DPM calculation (uses centralized StatsCalculator)"""
+        return StatsCalculator.calculate_dpm(damage, time_seconds, default)
 
     async def send_with_delay(self, ctx, *args, delay=0.5, **kwargs):
         """✅ Send message with rate limit delay"""

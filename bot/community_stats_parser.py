@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 
 import discord
 
+from bot.stats import StatsCalculator
+
 # C0RNP0RN3.LUA weapon enumeration (the actual format used)
 C0RNP0RN3_WEAPONS = {
     0: "WS_KNIFE",
@@ -94,19 +96,16 @@ class C0RNP0RN3StatsParser:
 
     def format_kd_ratio(self, kills: int, deaths: int) -> str:
         """Format K/D ratio with performance indicators"""
-        if deaths == 0:
-            kd = kills
+        kd = StatsCalculator.calculate_kd(kills, deaths)
+
+        if kd >= 2.0:
             indicator = "🔥"
+        elif kd >= 1.5:
+            indicator = "⚡"
+        elif kd >= 1.0:
+            indicator = "⚔️"
         else:
-            kd = kills / deaths
-            if kd >= 2.0:
-                indicator = "🔥"
-            elif kd >= 1.5:
-                indicator = "⚡"
-            elif kd >= 1.0:
-                indicator = "⚔️"
-            else:
-                indicator = "📈"
+            indicator = "📈"
 
         return f"{indicator} {kills}K/{deaths}D ({kd:.2f})"
 
