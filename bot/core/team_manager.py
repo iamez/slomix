@@ -14,6 +14,7 @@ across the entire session regardless of which side they play on.
 
 import json
 import logging
+import sqlite3
 from typing import Dict, List, Tuple, Optional, Set
 from datetime import datetime
 from collections import defaultdict, Counter
