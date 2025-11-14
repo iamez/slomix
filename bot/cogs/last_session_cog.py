@@ -2222,18 +2222,18 @@ class LastSessionCog(commands.Cog):
                 map_matches[map_name].append((round_id, round_num, actual_time))
             
             # Count unique map plays (R1+R2 = 1 play)
+            # BUG FIX: Don't assume R1 and R2 have consecutive IDs!
+            # Count R1s to determine how many times a map was played
             map_play_counts = {}
             for map_name, rounds_list in map_matches.items():
-                # Group by consecutive round pairs (R1 followed by R2 = 1 play)
-                plays = 0
-                seen_rounds = set()
-                for round_id, round_num, actual_time in sorted(rounds_list, key=lambda x: x[0]):
-                    if round_num == 1:
-                        plays += 1
-                    elif round_num == 2 and round_id - 1 not in seen_rounds:
-                        # R2 without matching R1 (standalone R2) counts as a play
-                        plays += 1
-                    seen_rounds.add(round_id)
+                # Count R1 rounds = number of times this map was played
+                # (R1+R2 pair = 1 play, standalone R1 or R2 = 1 play)
+                r1_count = sum(1 for _, round_num, _ in rounds_list if round_num == 1)
+                r2_count = sum(1 for _, round_num, _ in rounds_list if round_num == 2)
+
+                # Number of complete plays = max of R1 or R2 count
+                # (handles cases where R1 or R2 might be missing)
+                plays = max(r1_count, r2_count, 1)
                 map_play_counts[map_name] = plays
             
             # Sort by play count descending, then alphabetically
