@@ -882,8 +882,8 @@ class LastSessionCog(commands.Cog):
     async def _aggregate_all_player_stats(self, session_ids: List, session_ids_str: str):
         """
         Aggregate ALL player stats across all rounds with weighted DPM
-        
-        Returns: List of player stat tuples
+
+        Returns: List of player stat tuples (includes NEW stats: gibs, revives, times revived, dmg received, useful kills)
         """
         query = f"""
             SELECT p.player_name,
@@ -900,7 +900,12 @@ class LastSessionCog(commands.Cog):
                 SUM(p.headshot_kills) as headshot_kills,
                 SUM(p.time_played_seconds) as total_seconds,
                 CAST(SUM(p.time_played_seconds * p.time_dead_ratio / 100.0) AS INTEGER) as total_time_dead,
-                SUM(p.denied_playtime) as total_denied
+                SUM(p.denied_playtime) as total_denied,
+                SUM(p.gibs) as total_gibs,
+                SUM(p.revives_given) as total_revives_given,
+                SUM(p.times_revived) as total_times_revived,
+                SUM(p.damage_received) as total_damage_received,
+                SUM(p.most_useful_kills) as total_useful_kills
             FROM player_comprehensive_stats p
             LEFT JOIN (
                 SELECT round_id, player_guid,
@@ -1334,6 +1339,7 @@ class LastSessionCog(commands.Cog):
                 global_idx = field_idx + i
                 name, kills, deaths, dpm, hits, shots = player[0:6]
                 total_hs, hsk, total_seconds, total_time_dead, total_denied = player[6:11]
+                total_gibs, total_revives_given, total_times_revived, total_damage_received, total_useful_kills = player[11:16]
 
                 # Handle NULL values
                 kills = kills or 0
@@ -1345,6 +1351,11 @@ class LastSessionCog(commands.Cog):
                 total_seconds = total_seconds or 0
                 total_time_dead = total_time_dead or 0
                 total_denied = total_denied or 0
+                total_gibs = total_gibs or 0
+                total_revives_given = total_revives_given or 0
+                total_times_revived = total_times_revived or 0
+                total_damage_received = total_damage_received or 0
+                total_useful_kills = total_useful_kills or 0
 
                 # Calculate metrics
                 kd_ratio = kills / deaths if deaths > 0 else kills
@@ -1364,11 +1375,18 @@ class LastSessionCog(commands.Cog):
                 denied_seconds = int(total_denied % 60)
                 time_denied_display = f"{denied_minutes}:{denied_seconds:02d}"
 
-                # 3-line format matching original screenshot
+                # Format damage received (show in K if over 1000)
+                if total_damage_received >= 1000:
+                    dmg_recv_display = f"{total_damage_received/1000:.1f}K"
+                else:
+                    dmg_recv_display = f"{total_damage_received}"
+
+                # 4-line format with NEW stats on line 4
                 medal = medals[global_idx] if global_idx < len(medals) else "🔹"
                 field_text += f"{medal} **{name}**\n"
                 field_text += f"`{kills}K/{deaths}D ({kd_ratio:.2f})` • `{dpm:.0f} DPM` • `{acc:.1f}% ACC ({hits}/{shots})`\n"
                 field_text += f"`{total_hs} HS ({hs_rate:.1f}%)` • ⏱️ `{time_display}` • 💀 `{time_dead_display}` • ⏳ `{time_denied_display}`\n"
+                field_text += f"`{total_gibs} GIBS` • `{total_revives_given} REVS` • `{total_times_revived} REV'D` • `{dmg_recv_display} DMG⬇` • `{total_useful_kills} USEFUL`\n"
             
             # Add field with appropriate name
             if field_idx == 0:
@@ -2247,93 +2265,99 @@ class LastSessionCog(commands.Cog):
             # BUILD AND SEND EMBEDS
             # ═══════════════════════════════════════════════════════════════════════
 
-            # Embed 1: Session Overview
+            # ═══════════════════════════════════════════════════════════════════════
+            # DEFAULT VIEW: ONLY SESSION OVERVIEW
+            # Other embeds/graphs available via subcommands (obj, graphs, combat, etc.)
+            # ═══════════════════════════════════════════════════════════════════════
+
+            # Embed 1: Session Overview (ONLY EMBED SHOWN BY DEFAULT)
             embed1 = await self._build_session_overview_embed(
                 latest_date, all_players, maps_played, rounds_played, player_count,
                 team_1_name, team_2_name, team_1_score, team_2_score, hardcoded_teams is not None,
                 scoring_result
             )
             await ctx.send(embed=embed1)
-            await asyncio.sleep(2)
-
-            # Embed 2: Team Analytics
-            embed2 = await self._build_team_analytics_embed(
-                latest_date, team_1_name, team_2_name, team_stats,
-                team_1_mvp_stats, team_2_mvp_stats, team_1_score, team_2_score,
-                hardcoded_teams is not None
-            )
-            await ctx.send(embed=embed2)
-            await asyncio.sleep(4)
-
-            # Embed 3: Team Composition
-            embed3 = await self._build_team_composition_embed(
-                latest_date, team_1_name, team_2_name, team_1_players_list, team_2_players_list,
-                total_rounds, total_maps, unique_maps, team_1_score, team_2_score,
-                hardcoded_teams is not None
-            )
-            await ctx.send(embed=embed3)
-            await asyncio.sleep(8)
-
-            # Embed 4: DPM Analytics
-            embed4 = await self._build_dpm_analytics_embed(latest_date, dpm_leaders)
-            await ctx.send(embed=embed4)
-            await asyncio.sleep(16)
-
-            # Embed 5: Weapon Mastery
-            if player_weapons:
-                embed5 = await self._build_weapon_mastery_embed(
-                    latest_date, player_weapons, player_revives_raw
-                )
-                await ctx.send(embed=embed5)
-                await asyncio.sleep(2)
-
-            # Embed 6: Special Awards
-            if chaos_awards_data:
-                embed6 = await self._build_special_awards_embed(chaos_awards_data)
-                await ctx.send(embed=embed6)
-                await asyncio.sleep(2)
 
             # ═══════════════════════════════════════════════════════════════════════
-            # GENERATE AND SEND GRAPHS (if not subcommand-specific)
+            # ADDITIONAL EMBEDS - ONLY FOR SUBCOMMANDS
+            # Uncomment these if you want them back, or use subcommands for specific views
             # ═══════════════════════════════════════════════════════════════════════
 
-            if not subcommand or subcommand.lower() in ("full", "graphs"):
-                # Graph 1: Performance Analytics (6-panel)
-                buf1 = await self._generate_performance_graphs(
-                    latest_date, session_ids, session_ids_str
-                )
-                if buf1:
-                    file1 = discord.File(buf1, filename="performance_analytics.png")
-                    await ctx.send("📊 **Visual Performance Analytics**", file=file1)
-                    await asyncio.sleep(2)
+            # # Embed 2: Team Analytics
+            # embed2 = await self._build_team_analytics_embed(
+            #     latest_date, team_1_name, team_2_name, team_stats,
+            #     team_1_mvp_stats, team_2_mvp_stats, team_1_score, team_2_score,
+            #     hardcoded_teams is not None
+            # )
+            # await ctx.send(embed=embed2)
+            # await asyncio.sleep(4)
 
-                # Graph 2: Combat Efficiency (4-panel)
-                buf2 = await self._generate_combat_efficiency_graphs(
-                    latest_date, session_ids, session_ids_str
-                )
-                if buf2:
-                    file2 = discord.File(buf2, filename="combat_efficiency.png")
-                    await ctx.send("📊 **Combat Efficiency & Bullets Analysis**", file=file2)
-                    await asyncio.sleep(2)
+            # # Embed 3: Team Composition
+            # embed3 = await self._build_team_composition_embed(
+            #     latest_date, team_1_name, team_2_name, team_1_players_list, team_2_players_list,
+            #     total_rounds, total_maps, unique_maps, team_1_score, team_2_score,
+            #     hardcoded_teams is not None
+            # )
+            # await ctx.send(embed=embed3)
+            # await asyncio.sleep(8)
 
-            # Show helpful message about additional options
-            if not subcommand:
-                help_embed = discord.Embed(
-                    title="💡 Want More Details?",
-                    description=(
-                        "**Available Options:**\n"
-                        "`!last_session graphs` - Visual analytics with performance graphs\n"
-                        "`!last_session full` - Everything including advanced combat stats\n"
-                        "`!last_session top` - Quick top 10 players view\n"
-                        "`!last_session combat` - Combat stats only\n"
-                        "`!last_session weapons` - Weapon mastery breakdown\n"
-                        "`!last_session obj` - Objectives & support\n"
-                        "`!last_session support` - Support activity\n"
-                        "`!last_session sprees` - Killing sprees & multikills"
-                    ),
-                    color=0x5865F2,
-                )
-                await ctx.send(embed=help_embed)
+            # # Embed 4: DPM Analytics
+            # embed4 = await self._build_dpm_analytics_embed(latest_date, dpm_leaders)
+            # await ctx.send(embed=embed4)
+            # await asyncio.sleep(16)
+
+            # # Embed 5: Weapon Mastery
+            # if player_weapons:
+            #     embed5 = await self._build_weapon_mastery_embed(
+            #         latest_date, player_weapons, player_revives_raw
+            #     )
+            #     await ctx.send(embed=embed5)
+            #     await asyncio.sleep(2)
+
+            # # Embed 6: Special Awards
+            # if chaos_awards_data:
+            #     embed6 = await self._build_special_awards_embed(chaos_awards_data)
+            #     await ctx.send(embed=embed6)
+            #     await asyncio.sleep(2)
+
+            # # GRAPHS
+            # if not subcommand or subcommand.lower() in ("full", "graphs"):
+            #     # Graph 1: Performance Analytics (6-panel)
+            #     buf1 = await self._generate_performance_graphs(
+            #         latest_date, session_ids, session_ids_str
+            #     )
+            #     if buf1:
+            #         file1 = discord.File(buf1, filename="performance_analytics.png")
+            #         await ctx.send("📊 **Visual Performance Analytics**", file=file1)
+            #         await asyncio.sleep(2)
+
+            #     # Graph 2: Combat Efficiency (4-panel)
+            #     buf2 = await self._generate_combat_efficiency_graphs(
+            #         latest_date, session_ids, session_ids_str
+            #     )
+            #     if buf2:
+            #         file2 = discord.File(buf2, filename="combat_efficiency.png")
+            #         await ctx.send("📊 **Combat Efficiency & Bullets Analysis**", file=file2)
+            #         await asyncio.sleep(2)
+
+            # # Help message
+            # if not subcommand:
+            #     help_embed = discord.Embed(
+            #         title="💡 Want More Details?",
+            #         description=(
+            #             "**Available Options:**\n"
+            #             "`!last_session graphs` - Visual analytics with performance graphs\n"
+            #             "`!last_session full` - Everything including advanced combat stats\n"
+            #             "`!last_session top` - Quick top 10 players view\n"
+            #             "`!last_session combat` - Combat stats only\n"
+            #             "`!last_session weapons` - Weapon mastery breakdown\n"
+            #             "`!last_session obj` - Objectives & support\n"
+            #             "`!last_session support` - Support activity\n"
+            #             "`!last_session sprees` - Killing sprees & multikills"
+            #         ),
+            #         color=0x5865F2,
+            #     )
+            #     await ctx.send(embed=help_embed)
 
         except Exception as e:
             logger.error(f"Error in last_session command: {e}", exc_info=True)
