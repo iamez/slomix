@@ -918,7 +918,13 @@ class LastSessionCog(commands.Cog):
                 SUM(p.revives_given) as total_revives_given,
                 SUM(p.times_revived) as total_times_revived,
                 SUM(p.damage_received) as total_damage_received,
-                SUM(p.most_useful_kills) as total_useful_kills
+                SUM(p.damage_given) as total_damage_given,
+                SUM(p.most_useful_kills) as total_useful_kills,
+                SUM(p.double_kills) as total_double_kills,
+                SUM(p.triple_kills) as total_triple_kills,
+                SUM(p.quad_kills) as total_quad_kills,
+                SUM(p.multi_kills) as total_multi_kills,
+                SUM(p.mega_kills) as total_mega_kills
             FROM player_comprehensive_stats p
             LEFT JOIN rounds r ON p.round_id = r.id
             LEFT JOIN (
@@ -1353,7 +1359,9 @@ class LastSessionCog(commands.Cog):
                 global_idx = field_idx + i
                 name, kills, deaths, dpm, hits, shots = player[0:6]
                 total_hs, hsk, total_seconds, total_time_dead, total_denied = player[6:11]
-                total_gibs, total_revives_given, total_times_revived, total_damage_received, total_useful_kills = player[11:16]
+                total_gibs, total_revives_given, total_times_revived, total_damage_received, total_damage_given = player[11:16]
+                total_useful_kills, total_double_kills, total_triple_kills, total_quad_kills = player[16:20]
+                total_multi_kills, total_mega_kills = player[20:22]
 
                 # Handle NULL values
                 kills = kills or 0
@@ -1369,7 +1377,13 @@ class LastSessionCog(commands.Cog):
                 total_revives_given = total_revives_given or 0
                 total_times_revived = total_times_revived or 0
                 total_damage_received = total_damage_received or 0
+                total_damage_given = total_damage_given or 0
                 total_useful_kills = total_useful_kills or 0
+                total_double_kills = total_double_kills or 0
+                total_triple_kills = total_triple_kills or 0
+                total_quad_kills = total_quad_kills or 0
+                total_multi_kills = total_multi_kills or 0
+                total_mega_kills = total_mega_kills or 0
 
                 # Calculate metrics
                 kd_ratio = kills / deaths if deaths > 0 else kills
@@ -1389,18 +1403,41 @@ class LastSessionCog(commands.Cog):
                 denied_seconds = int(total_denied % 60)
                 time_denied_display = f"{denied_minutes}:{denied_seconds:02d}"
 
-                # Format damage received (show in K if over 1000)
+                # Format damage (show in K if over 1000)
+                if total_damage_given >= 1000:
+                    dmg_given_display = f"{total_damage_given/1000:.1f}K"
+                else:
+                    dmg_given_display = f"{total_damage_given}"
+
                 if total_damage_received >= 1000:
                     dmg_recv_display = f"{total_damage_received/1000:.1f}K"
                 else:
                     dmg_recv_display = f"{total_damage_received}"
 
-                # 4-line format with NEW stats on line 4
+                # Compact format with icons (3-4 lines)
                 medal = medals[global_idx] if global_idx < len(medals) else "🔹"
                 field_text += f"{medal} **{name}**\n"
-                field_text += f"`{kills}K/{deaths}D ({kd_ratio:.2f})` • `{dpm:.0f} DPM` • `{acc:.1f}% ACC ({hits}/{shots})`\n"
-                field_text += f"`{total_hs} HS ({hs_rate:.1f}%)` • ⏱️ `{time_display}` • 💀 `{time_dead_display}` • ⏳ `{time_denied_display}`\n"
-                field_text += f"`{total_gibs} GIBS` • `{total_revives_given} REVS` • `{total_times_revived} REV'D` • `{dmg_recv_display} DMG⬇` • `{total_useful_kills} USEFUL`\n"
+                field_text += f"⏱️ `{time_display}` • 💪 `{dpm:.0f} DPM` • 📊 `{dmg_given_display}⬆/{dmg_recv_display}⬇` • 🎯 `{acc:.1f}% ACC ({hits}/{shots})`\n"
+                field_text += f"⚔️ `{kills}K/{deaths}D/{total_gibs}G ({kd_ratio:.2f} KD)` • 💉 `{total_revives_given}↑/{total_times_revived}↓` • 🎯 `{total_useful_kills} UK` • 📈 `{total_hs} HS ({hs_rate:.1f}%)`\n"
+
+                # Line 4: Multikills (only if player has ANY) + death stats
+                multikills_text = ""
+                if total_double_kills > 0 or total_triple_kills > 0 or total_quad_kills > 0 or total_multi_kills > 0 or total_mega_kills > 0:
+                    multikill_parts = []
+                    if total_double_kills > 0:
+                        multikill_parts.append(f"{total_double_kills} DOUBLE")
+                    if total_triple_kills > 0:
+                        multikill_parts.append(f"{total_triple_kills} TRIPLE")
+                    if total_quad_kills > 0:
+                        multikill_parts.append(f"{total_quad_kills} QUAD")
+                    if total_multi_kills > 0:
+                        multikill_parts.append(f"{total_multi_kills} PENTA")
+                    if total_mega_kills > 0:
+                        multikill_parts.append(f"{total_mega_kills} MEGA")
+
+                    multikills_text = f"🔥 `{' • '.join(multikill_parts)}` • "
+
+                field_text += f"{multikills_text}💀 `{time_dead_display}` • ⏳ `{time_denied_display}`\n"
             
             # Add field with appropriate name
             if field_idx == 0:
