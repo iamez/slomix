@@ -894,14 +894,8 @@ class LastSessionCog(commands.Cog):
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
                 CASE
-                    WHEN SUM(
-                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                    ) > 0
-                    THEN (SUM(p.damage_given) * 60.0) / SUM(
-                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                    )
+                    WHEN SUM(p.time_played_seconds) > 0
+                    THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
                     ELSE 0
                 END as weighted_dpm,
                 COALESCE(SUM(w.hits), 0) as total_hits,
