@@ -585,29 +585,29 @@ class PostgreSQLDatabaseManager:
                     # Create round (round_number determined in _create_round_postgresql from filename)
                     logger.debug(f"💾 Creating round for {filename}")
                     round_id = await self._create_round_postgresql(conn, parsed_data, file_date, round_time, filename)
-                    
+
                     if not round_id:
                         raise Exception("Failed to create round")
-                    
+
                     # Insert player stats
                     player_count = await self._insert_player_stats(conn, round_id, file_date, parsed_data)
                     logger.debug(f"👥 Inserted {player_count} player stats")
-                    
+
                     # Insert weapon stats
                     weapon_count = await self._insert_weapon_stats(conn, round_id, file_date, parsed_data)
                     logger.debug(f"🔫 Inserted {weapon_count} weapon stats")
-                    
+
                     # 🆕 If Round 2 file, also import match summary (cumulative stats)
                     match_summary_id = None
                     if parsed_data.get('match_summary'):
                         logger.info("📋 Importing match summary (cumulative R1+R2 stats)...")
                         match_summary = parsed_data['match_summary']
-                        
+
                         # Create match summary round (round_number = 0)
                         match_summary_id = await self._create_round_postgresql(
                             conn, match_summary, file_date, round_time, filename, is_match_summary=True
                         )
-                        
+
                         if match_summary_id:
                             # Insert match summary player stats
                             summary_player_count = await self._insert_player_stats(conn, match_summary_id, file_date, match_summary)
@@ -615,29 +615,25 @@ class PostgreSQLDatabaseManager:
                             logger.info(
                                 f"✓ Match summary: {summary_player_count} players, {summary_weapon_count} weapons"
                             )
-                    
+
                     # STEP 4: VERIFY DATA INTEGRITY
                     validation_passed, validation_msg = await self._validate_round_data(
-                        conn, round_id, 
+                        conn, round_id,
                         expected_players, expected_weapons,
                         expected_total_kills, expected_total_deaths,
                         filename
                     )
-                    
+
                     if not validation_passed:
                         # Log warning but don't fail - data is still saved
                         logger.warning(f"⚠️  Data mismatch in {filename}: {validation_msg}")
-                        # Add to error message for tracking
-                        await self.mark_file_processed(filename, success=True, error_msg=f"WARN: {validation_msg}")
-                    else:
-                        # Perfect match
-                        await self.mark_file_processed(filename, success=True)
-                    
+
+                    # Transaction successful - update stats
                     self.stats['files_processed'] += 1
                     self.stats['rounds_created'] += 1
                     self.stats['players_inserted'] += player_count
                     self.stats['weapons_inserted'] += weapon_count
-                    
+
                     # Log successful import
                     duration = time.time() - start_time
                     logger.info(
@@ -651,12 +647,19 @@ class PostgreSQLDatabaseManager:
                         weapon_count=weapon_count,
                         duration=duration
                     )
-                    
+
                     # Warn if import was slow
                     if duration > 3.0:
                         log_performance_warning(f"Import {filename}", duration, threshold=3.0)
-                    
-                    return True, f"Processed: {player_count} players, {weapon_count} weapons{' (WITH WARNINGS)' if not validation_passed else ''}"
+
+            # 🔒 CRITICAL: Mark file as processed ONLY after transaction commits successfully
+            # This prevents files from being marked as processed when the transaction rolls back
+            if validation_passed:
+                await self.mark_file_processed(filename, success=True)
+            else:
+                await self.mark_file_processed(filename, success=True, error_msg=f"WARN: {validation_msg}")
+
+            return True, f"Processed: {player_count} players, {weapon_count} weapons{' (WITH WARNINGS)' if not validation_passed else ''}"
         
         except Exception as e:
             self.stats['files_failed'] += 1
