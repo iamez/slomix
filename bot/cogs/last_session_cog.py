@@ -883,6 +883,10 @@ class LastSessionCog(commands.Cog):
         """
         Aggregate ALL player stats across all rounds with weighted DPM
 
+        IMPORTANT: Playtime calculated from actual_time in rounds table (actual round duration),
+        NOT time_played_seconds which tracks "alive time". In stopwatch mode, round duration is
+        fixed - everyone who played the same rounds has the same playtime.
+
         Returns: List of player stat tuples (includes NEW stats: gibs, revives, times revived, dmg received, useful kills)
         """
         query = f"""
@@ -890,15 +894,24 @@ class LastSessionCog(commands.Cog):
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
                 CASE
-                    WHEN SUM(p.time_played_seconds) > 0
-                    THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                    WHEN SUM(
+                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                    ) > 0
+                    THEN (SUM(p.damage_given) * 60.0) / SUM(
+                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                    )
                     ELSE 0
                 END as weighted_dpm,
                 COALESCE(SUM(w.hits), 0) as total_hits,
                 COALESCE(SUM(w.shots), 0) as total_shots,
                 COALESCE(SUM(w.headshots), 0) as total_headshots,
                 SUM(p.headshot_kills) as headshot_kills,
-                SUM(p.time_played_seconds) as total_seconds,
+                SUM(
+                    CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                    CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                ) as total_seconds,
                 CAST(SUM(p.time_played_seconds * p.time_dead_ratio / 100.0) AS INTEGER) as total_time_dead,
                 SUM(p.denied_playtime) as total_denied,
                 SUM(p.gibs) as total_gibs,
@@ -907,6 +920,7 @@ class LastSessionCog(commands.Cog):
                 SUM(p.damage_received) as total_damage_received,
                 SUM(p.most_useful_kills) as total_useful_kills
             FROM player_comprehensive_stats p
+            LEFT JOIN rounds r ON p.round_id = r.id
             LEFT JOIN (
                 SELECT round_id, player_guid,
                     SUM(hits) as hits,
