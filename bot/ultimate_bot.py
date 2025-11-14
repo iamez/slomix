@@ -355,18 +355,6 @@ class UltimateETLegacyBot(commands.Bot):
             logger.error(f"❌ Schema validation failed: {e}")
             raise
 
-    def safe_divide(self, numerator, denominator, default=0.0):
-        """✅ NULL-safe division (uses centralized StatsCalculator)"""
-        return StatsCalculator.safe_divide(numerator, denominator, default)
-
-    def safe_percentage(self, part, total, default=0.0):
-        """✅ NULL-safe percentage (returns 0-100) (uses centralized StatsCalculator)"""
-        return StatsCalculator.safe_percentage(part, total, default)
-
-    def safe_dpm(self, damage, time_seconds, default=0.0):
-        """✅ NULL-safe DPM calculation (uses centralized StatsCalculator)"""
-        return StatsCalculator.calculate_dpm(damage, time_seconds, default)
-
     async def send_with_delay(self, ctx, *args, delay=0.5, **kwargs):
         """✅ Send message with rate limit delay"""
         await ctx.send(*args, **kwargs)
