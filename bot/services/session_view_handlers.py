@@ -680,9 +680,3 @@ async def send_round_stats(self, ctx, map_name: str, round_label: str, round_ses
     
     embed.set_footer(text=f"Round: {latest_date}")
     await ctx.send(embed=embed)
-
-# ═══════════════════════════════════════════════════════
-# PHASE 3: DATA AGGREGATION - Heavy data processing
-# ═══════════════════════════════════════════════════════
-
-async def _aggregate_all_player_stats(self, session_ids: List, session_ids_str: str):
