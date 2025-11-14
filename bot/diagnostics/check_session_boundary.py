@@ -60,14 +60,31 @@ async def main():
     # Count R1+R2 only
     r1_r2_only = [r for r in all_rounds_in_sessions if r[3] in (1, 2)]
     print(f"\n" + "="*80)
-    print(f"📊 R1+R2 rounds only: {len(r1_r2_only)}")
+    print(f"📊 R1+R2 rounds only (ALL sessions): {len(r1_r2_only)}")
     print("="*80)
 
-    # Show what !last_session would query
-    print("\n🤖 This is what !last_session is querying:")
+    # Show what !last_session would query WITH THE FIX
+    print("\n🤖 OLD BEHAVIOR (before fix):")
     print(f"   - Gaming session IDs from 2025-11-11: {session_id_list}")
     print(f"   - Total rounds (R1+R2 only): {len(r1_r2_only)}")
     print(f"   - This includes rounds from OTHER dates if they're in the same gaming session!")
+
+    # Show what the FIXED query returns
+    filtered_rounds = await db.fetch_all(f"""
+        SELECT id, round_date, round_time, map_name, round_number
+        FROM rounds
+        WHERE gaming_session_id IN ({session_id_placeholders})
+          AND round_number IN (1, 2)
+          AND SUBSTR(round_date, 1, 10) = '2025-11-11'
+        ORDER BY round_date, round_time
+    """, tuple(session_id_list))
+
+    print(f"\n✅ NEW BEHAVIOR (after fix):")
+    print(f"   - Gaming session IDs from 2025-11-11: {session_id_list}")
+    print(f"   - Filtered to ONLY 2025-11-11 rounds: {len(filtered_rounds)}")
+    print(f"\nFiltered rounds (what !last_session NOW uses):")
+    for round_id, date, time, map_name, rnd in filtered_rounds:
+        print(f"  ID {round_id}: {date} {time} - {map_name} R{rnd}")
 
     await db.close()
 
