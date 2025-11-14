@@ -560,9 +560,3 @@ async def build_special_awards_embed(
 
     embed.set_footer(text="🏆 Excellence, Efficiency, and Chaos!")
     return embed
-
-# ═══════════════════════════════════════════════════════
-# PHASE 5: GRAPH GENERATION
-# ═══════════════════════════════════════════════════════
-
-async def _generate_performance_graphs(
