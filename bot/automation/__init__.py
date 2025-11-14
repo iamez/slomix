@@ -8,5 +8,6 @@ This module handles automated tasks like:
 """
 
 from .ssh_handler import SSHHandler
+from .file_tracker import FileTracker
 
-__all__ = ['SSHHandler']
+__all__ = ['SSHHandler', 'FileTracker']
