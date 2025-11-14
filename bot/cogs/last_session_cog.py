@@ -66,55 +66,50 @@ class LastSessionCog(commands.Cog):
 
     async def _fetch_session_data(self, latest_date: str) -> Tuple[Optional[List], Optional[List], Optional[str], int]:
         """
-        Fetch all session data for ALL gaming sessions on the latest date.
+        Fetch session data for the MOST RECENT gaming session.
 
-        BUG FIX: Now properly fetches ALL gaming sessions from the latest date,
-        not just the most recent gaming_session_id globally.
+        BUG FIX: Now fetches ONLY the latest gaming_session_id, not all sessions
+        that touched the latest date. This prevents including tail-end rounds from
+        a previous day's session that spanned midnight.
+
+        Example: If session 21 ran 2025-11-10 22:00 → 2025-11-11 00:15, and
+        session 22 ran 2025-11-11 21:00 → 23:00, we want ONLY session 22 (the
+        latest gaming session), not the midnight overflow from session 21.
 
         Uses gaming_session_id column (60-minute gap threshold).
 
         Returns:
             (sessions, session_ids, session_ids_str, player_count) or (None, None, None, 0)
         """
-        # Get ALL gaming_session_ids from the latest date
-        # This fixes the bug where only the last session of the day was shown
-        gaming_session_ids = await self.bot.db_adapter.fetch_all(
+        # Get the SINGLE latest gaming_session_id globally (highest session ID)
+        result = await self.bot.db_adapter.fetch_one(
             """
-            SELECT DISTINCT gaming_session_id
+            SELECT MAX(gaming_session_id)
             FROM rounds
             WHERE gaming_session_id IS NOT NULL
-              AND SUBSTR(round_date, 1, 10) = ?
-            ORDER BY gaming_session_id
-            """,
-            (latest_date,)
+            """
         )
 
-        if not gaming_session_ids:
+        if not result or result[0] is None:
             return None, None, None, 0
 
-        # Extract list of gaming_session_ids
-        session_id_list = [row[0] for row in gaming_session_ids]
-        session_id_placeholders = ",".join("?" * len(session_id_list))
+        latest_gaming_session_id = result[0]
 
-        # Get R1 and R2 rounds only (exclude R0 match summaries to avoid triple-counting)
+        # Get R1 and R2 rounds only from this ONE gaming session
+        # (exclude R0 match summaries to avoid triple-counting)
         # R0 contains cumulative R1+R2 data, so querying all three would give us: R0+R1+R2 = (R1+R2)+R1+R2 = wrong!
         # Using only R1+R2 lets SUM() aggregate correctly without duplication
-        #
-        # CRITICAL: Also filter by actual date to prevent sessions spanning midnight from including
-        # rounds from previous/next days. If session 21 spans 2025-11-10 to 2025-11-11, we only
-        # want rounds from 2025-11-11 when querying latest_date = 2025-11-11.
         sessions = await self.bot.db_adapter.fetch_all(
-            f"""
+            """
             SELECT id, map_name, round_number, actual_time
             FROM rounds
-            WHERE gaming_session_id IN ({session_id_placeholders})
+            WHERE gaming_session_id = ?
               AND round_number IN (1, 2)
-              AND SUBSTR(round_date, 1, 10) = ?
             ORDER BY
                 round_date,
                 CAST(REPLACE(round_time, ':', '') AS INTEGER)
             """,
-            tuple(session_id_list) + (latest_date,)
+            (latest_gaming_session_id,)
         )
         
         if not sessions:
