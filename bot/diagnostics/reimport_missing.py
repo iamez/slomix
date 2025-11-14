@@ -29,7 +29,7 @@ async def main():
         async with db.pool.acquire() as conn:
             await conn.execute(
                 "DELETE FROM processed_files WHERE filename = $1",
-                (filename,)
+                filename
             )
         
         print(f"   ✅ Cleared from processed_files")
