@@ -3,12 +3,12 @@ import sys
 from pathlib import Path
 sys.path.insert(0, '.')
 from bot.config import load_config
-from postgresql_database_manager import PostgreSQLDatabase
+from postgresql_database_manager import PostgreSQLDatabaseManager
 
 async def main():
     # Load config
     config = load_config()
-    
+
     # Create database manager
     db_config = {
         'host': config.postgres_host,
@@ -17,8 +17,8 @@ async def main():
         'user': config.postgres_user,
         'password': config.postgres_password
     }
-    
-    db = PostgreSQLDatabase(db_config)
+
+    db = PostgreSQLDatabaseManager(db_config)
     await db.connect()
     
     # Try to import one of the missing files
