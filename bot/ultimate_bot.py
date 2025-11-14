@@ -29,6 +29,7 @@ from bot.core import StatsCache, SeasonManager, AchievementSystem
 from bot.core.database_adapter import create_adapter, DatabaseAdapter
 from bot.config import load_config
 from bot.stats import StatsCalculator
+from bot.automation import SSHHandler
 
 # Load environment variables if available
 try:
@@ -738,166 +739,10 @@ class UltimateETLegacyBot(commands.Bot):
 
     # � SSH MONITORING HELPER METHODS
 
-    def parse_gamestats_filename(self, filename):
-        """
-        Parse gamestats filename to extract metadata
-
-        Format: YYYY-MM-DD-HHMMSS-<map_name>-round-<N>.txt
-        Example: 2025-10-02-232818-erdenberg_t2-round-2.txt
-
-        Returns:
-            dict with keys: date, time, map_name, round_number, etc.
-        """
-        import re
-
-        pattern = r"^(\d{4}-\d{2}-\d{2})-(\d{6})-(.+?)-round-(\d+)\.txt$"
-        match = re.match(pattern, filename)
-
-        if not match:
-            return None
-
-        date, time, map_name, round_num = match.groups()
-        round_number = int(round_num)
-
-        return {
-            "date": date,
-            "time": time,
-            "map_name": map_name,
-            "round_number": round_number,
-            "is_round_1": round_number == 1,
-            "is_round_2": round_number == 2,
-            "is_map_complete": round_number == 2,
-            "full_timestamp": f"{date} {time[:2]}:{time[2:4]}:{time[4:6]}",
-            "filename": filename,
-        }
-
-    async def ssh_list_remote_files(self, ssh_config):
-        """List .txt files on remote SSH server"""
-        try:
-            # Run in executor to avoid blocking
-            loop = asyncio.get_event_loop()
-            files = await loop.run_in_executor(
-                None, self._ssh_list_files_sync, ssh_config
-            )
-            return files
-
-        except Exception as e:
-            logger.error(f"❌ SSH list files failed: {e}")
-            return []
-
-    def _ssh_list_files_sync(self, ssh_config):
-        """Synchronous SSH file listing"""
-        import paramiko
-
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-        key_path = os.path.expanduser(ssh_config["key_path"])
-
-        ssh.connect(
-            hostname=ssh_config["host"],
-            port=ssh_config["port"],
-            username=ssh_config["user"],
-            key_filename=key_path,
-            timeout=10,
-        )
-
-        sftp = ssh.open_sftp()
-        files = sftp.listdir(ssh_config["remote_path"])
-        # Filter: only .txt files, exclude obsolete _ws.txt files
-        txt_files = [
-            f
-            for f in files
-            if f.endswith(".txt") and not f.endswith("_ws.txt")
-        ]
-
-        sftp.close()
-        ssh.close()
-
-        return txt_files
-
-    async def ssh_download_file(
-        self, ssh_config, filename, local_dir="local_stats"
-    ):
-        """Download a single file from remote server"""
-        try:
-            # Ensure local directory exists
-            os.makedirs(local_dir, exist_ok=True)
-
-            # Run in executor
-            loop = asyncio.get_event_loop()
-            local_path = await loop.run_in_executor(
-                None,
-                self._ssh_download_file_sync,
-                ssh_config,
-                filename,
-                local_dir,
-            )
-            return local_path
-
-        except Exception as e:
-            logger.error(f"❌ SSH download failed for {filename}: {e}")
-            return None
-
-    def _ssh_download_file_sync(self, ssh_config, filename, local_dir):
-        """Synchronous SSH file download"""
-        import paramiko
-
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-        key_path = os.path.expanduser(ssh_config["key_path"])
-
-        ssh.connect(
-            hostname=ssh_config["host"],
-            port=ssh_config["port"],
-            username=ssh_config["user"],
-            key_filename=key_path,
-            timeout=10,
-        )
-
-        sftp = ssh.open_sftp()
-
-        remote_file = f"{ssh_config['remote_path']}/{filename}"
-        local_file = os.path.join(local_dir, filename)
-
-        logger.info(f"📥 Downloading {filename}...")
-        sftp.get(remote_file, local_file)
-
-        sftp.close()
-        ssh.close()
-
-        return local_file
-
-    def _ssh_download_file_sync(self, ssh_config, filename, local_dir):
-        """Synchronous SSH file download"""
-        import paramiko
-
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-        key_path = os.path.expanduser(ssh_config["key_path"])
-
-        ssh.connect(
-            hostname=ssh_config["host"],
-            port=ssh_config["port"],
-            username=ssh_config["user"],
-            key_filename=key_path,
-            timeout=10,
-        )
-
-        sftp = ssh.open_sftp()
-
-        remote_file = f"{ssh_config['remote_path']}/{filename}"
-        local_file = os.path.join(local_dir, filename)
-
-        logger.info(f"📥 Downloading {filename}...")
-        sftp.get(remote_file, local_file)
-
-        sftp.close()
-        ssh.close()
-
-        return local_file
+    # NOTE: SSH operations moved to bot/automation/ssh_handler.py
+    # - SSHHandler.parse_gamestats_filename()
+    # - SSHHandler.list_remote_files()
+    # - SSHHandler.download_file()
 
     async def process_gamestats_file(self, local_path, filename):
         """
@@ -2017,7 +1862,7 @@ class UltimateETLegacyBot(commands.Bot):
         Filename format: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
         """
         try:
-            file_info = self.parse_gamestats_filename(filename)
+            file_info = SSHHandler.parse_gamestats_filename(filename)
             if not file_info:
                 return False
 
@@ -2331,7 +2176,7 @@ class UltimateETLegacyBot(commands.Bot):
 
             # List remote files
             logger.debug(f"📡 Connecting to SSH: {ssh_config['user']}@{ssh_config['host']}:{ssh_config['port']}")
-            remote_files = await self.ssh_list_remote_files(ssh_config)
+            remote_files = await SSHHandler.list_remote_files(ssh_config)
 
             if not remote_files:
                 logger.debug("📂 No remote files found or SSH connection failed")
@@ -2351,7 +2196,7 @@ class UltimateETLegacyBot(commands.Bot):
 
                     # Download file
                     download_start = time.time()
-                    local_path = await self.ssh_download_file(
+                    local_path = await SSHHandler.download_file(
                         ssh_config, filename, "local_stats"
                     )
                     download_time = time.time() - download_start
