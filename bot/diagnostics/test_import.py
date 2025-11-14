@@ -2,23 +2,11 @@ import asyncio
 import sys
 from pathlib import Path
 sys.path.insert(0, '.')
-from bot.config import load_config
 from postgresql_database_manager import PostgreSQLDatabaseManager
 
 async def main():
-    # Load config
-    config = load_config()
-
-    # Create database manager
-    db_config = {
-        'host': config.postgres_host,
-        'port': config.postgres_port,
-        'database': config.postgres_database,
-        'user': config.postgres_user,
-        'password': config.postgres_password
-    }
-
-    db = PostgreSQLDatabaseManager(db_config)
+    # Create database manager (loads config automatically)
+    db = PostgreSQLDatabaseManager(stats_dir='local_stats')
     await db.connect()
     
     # Try to import one of the missing files
