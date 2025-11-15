@@ -22,7 +22,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 import discord
 
 logger = logging.getLogger("UltimateBot.SSHMonitor")
@@ -188,35 +188,45 @@ class SSHMonitor:
             logger.error(f"❌ Error checking for new files: {e}", exc_info=True)
             raise
     
-    async def _list_remote_files(self) -> list:
-        """List files in remote SSH directory"""
+    def _list_remote_files_sync(self) -> list:
+        """List files in remote SSH directory (synchronous - use in executor)"""
+        import paramiko
+
+        ssh = None
         try:
-            import paramiko
-            
             # Create SSH client
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            
+
             # Connect
             ssh.connect(
-                hostname=self.ssh_host,
-                port=self.ssh_port,
-                username=self.ssh_user,
-                key_filename=os.path.expanduser(self.ssh_key_path),
+                hostname=self.ssh_config['host'],
+                port=self.ssh_config['port'],
+                username=self.ssh_config['user'],
+                key_filename=os.path.expanduser(self.ssh_config['key_path']),
                 timeout=10
             )
-            
+
             # List files
-            stdin, stdout, stderr = ssh.exec_command(f"ls -1 {self.remote_stats_dir}")
+            stdin, stdout, stderr = ssh.exec_command(f"ls -1 {self.ssh_config['remote_path']}")
             files = stdout.read().decode().strip().split('\n')
-            
-            ssh.close()
-            
+
             return [f.strip() for f in files if f.strip()]
-            
+
         except Exception as e:
             logger.error(f"❌ SSH list files error: {e}")
             raise
+        finally:
+            if ssh:
+                try:
+                    ssh.close()
+                except:
+                    pass
+
+    async def _list_remote_files(self) -> list:
+        """List files in remote SSH directory (async wrapper)"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._list_remote_files_sync)
     
     async def _process_new_file(self, filename: str):
         """
@@ -275,51 +285,71 @@ class SSHMonitor:
             self.last_error = str(e)
             logger.error(f"❌ Error processing {filename}: {e}", exc_info=True)
     
-    async def _download_file(self, filename: str) -> Optional[str]:
-        """Download file from remote server"""
+    def _download_file_sync(self, filename: str) -> Tuple[Optional[str], float]:
+        """Download file from remote server (synchronous - use in executor)"""
+        import paramiko
+        from scp import SCPClient
+
+        download_start = datetime.now()
+        ssh = None
+
         try:
-            import paramiko
-            from scp import SCPClient
-            
-            download_start = datetime.now()
-            
             # Create SSH client
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            
+
             # Connect
             ssh.connect(
-                hostname=self.ssh_host,
-                port=self.ssh_port,
-                username=self.ssh_user,
-                key_filename=os.path.expanduser(self.ssh_key_path),
+                hostname=self.ssh_config['host'],
+                port=self.ssh_config['port'],
+                username=self.ssh_config['user'],
+                key_filename=os.path.expanduser(self.ssh_config['key_path']),
                 timeout=10
             )
-            
+
             # Download using SCP
             local_dir = "bot/local_stats"
             os.makedirs(local_dir, exist_ok=True)
-            
+
             local_path = os.path.join(local_dir, filename)
-            remote_path = f"{self.remote_stats_dir}/{filename}"
-            
+            remote_path = f"{self.ssh_config['remote_path']}/{filename}"
+
             with SCPClient(ssh.get_transport()) as scp:
                 scp.get(remote_path, local_path)
-            
-            ssh.close()
-            
-            # Track download time
+
+            # Calculate download time
             download_duration = (datetime.now() - download_start).total_seconds()
+
+            return local_path, download_duration
+
+        except Exception as e:
+            logger.error(f"❌ Download error for {filename}: {e}")
+            return None, 0.0
+        finally:
+            if ssh:
+                try:
+                    ssh.close()
+                except:
+                    pass
+
+    async def _download_file(self, filename: str) -> Optional[str]:
+        """Download file from remote server (async wrapper)"""
+        loop = asyncio.get_event_loop()
+        local_path, download_duration = await loop.run_in_executor(
+            None, self._download_file_sync, filename
+        )
+
+        if local_path:
+            # Track download time
+            if not hasattr(self, 'download_times'):
+                self.download_times = []
             self.download_times.append(download_duration)
             if len(self.download_times) > 100:
                 self.download_times.pop(0)
-            
+
             logger.info(f"✅ Downloaded {filename} in {download_duration:.2f}s")
-            return local_path
-            
-        except Exception as e:
-            logger.error(f"❌ Download error for {filename}: {e}")
-            return None
+
+        return local_path
     
     async def _import_file_to_db(self, local_path: str, filename: str) -> bool:
         """Import stats file to database"""
