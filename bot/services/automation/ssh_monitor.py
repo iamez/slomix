@@ -21,6 +21,7 @@ Usage:
 import asyncio
 import logging
 import os
+import shlex
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
 import discord
@@ -207,8 +208,9 @@ class SSHMonitor:
                 timeout=10
             )
 
-            # List files
-            stdin, stdout, stderr = ssh.exec_command(f"ls -1 {self.ssh_config['remote_path']}")
+            # List files (use shlex.quote for security)
+            safe_path = shlex.quote(self.ssh_config['remote_path'])
+            stdin, stdout, stderr = ssh.exec_command(f"ls -1 {safe_path}")
             files = stdout.read().decode().strip().split('\n')
 
             return [f.strip() for f in files if f.strip()]
@@ -220,7 +222,8 @@ class SSHMonitor:
             if ssh:
                 try:
                     ssh.close()
-                except:
+                except Exception:
+                    # Silently ignore SSH close errors during cleanup
                     pass
 
     async def _list_remote_files(self) -> list:
@@ -329,7 +332,8 @@ class SSHMonitor:
             if ssh:
                 try:
                     ssh.close()
-                except:
+                except Exception:
+                    # Silently ignore SSH close errors during cleanup
                     pass
 
     async def _download_file(self, filename: str) -> Optional[str]:

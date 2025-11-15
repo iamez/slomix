@@ -520,8 +520,9 @@ class ServerControl(commands.Cog):
         await ctx.send(f"📥 Downloading `{sanitized_name}`...")
 
         try:
-            # Download to temp file
-            temp_path = f"/tmp/{sanitized_name}"
+            # Download to secure temp file
+            temp_fd, temp_path = tempfile.mkstemp(suffix=f"_{sanitized_name}", prefix="etlegacy_upload_")
+            os.close(temp_fd)  # Close the file descriptor, we'll use the path
             await attachment.save(temp_path)
             
             # Calculate MD5 hash
@@ -586,7 +587,7 @@ class ServerControl(commands.Cog):
         
         try:
             rcon = ETLegacyRCON(self.rcon_host, self.rcon_port, self.rcon_password)
-            response = rcon.send_command(f'map {map_name}')
+            rcon.send_command(f'map {map_name}')
             rcon.close()
             
             embed = discord.Embed(
