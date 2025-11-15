@@ -7,8 +7,8 @@ Discord commands for managing teams, viewing lineups, and tracking team statisti
 import discord
 from discord.ext import commands
 from discord import app_commands
-import sqlite3
 import logging
+import sqlite3
 from typing import Optional
 from datetime import datetime
 

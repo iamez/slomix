@@ -12,9 +12,9 @@ The game uses Axis/Allies (roles that switch), but we track persistent teams
 across the entire session regardless of which side they play on.
 """
 
-import sqlite3
 import json
 import logging
+import sqlite3
 from typing import Dict, List, Tuple, Optional, Set
 from datetime import datetime
 from collections import defaultdict, Counter

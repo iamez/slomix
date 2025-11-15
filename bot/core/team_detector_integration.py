@@ -8,7 +8,6 @@ Provides a unified interface for team detection that:
 4. Handles edge cases gracefully
 """
 
-import sqlite3
 import json
 import logging
 from typing import Dict, Tuple

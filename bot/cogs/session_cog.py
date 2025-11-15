@@ -19,7 +19,6 @@ This cog contains ~3,600 lines of session viewing logic including:
 import asyncio
 import logging
 import os
-import sqlite3
 from datetime import datetime
 
 # import aiosqlite  # Removed - using database adapter
@@ -29,6 +28,7 @@ from discord.ext import commands
 # Import shared utilities
 from bot.core.achievement_system import AchievementSystem
 from bot.core.season_manager import SeasonManager
+from bot.stats import StatsCalculator
 from bot.core.stats_cache import StatsCache
 from tools.stopwatch_scoring import StopwatchScoring
 
@@ -242,7 +242,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                 for i, (name, kills, deaths, dpm) in enumerate(
                     top_players
                 ):
-                    kd = kills / deaths if deaths > 0 else kills
+                    kd = StatsCalculator.calculate_kd(kills, deaths)
                     player_text += f"{medals[i]} **{name}** - {kills}K/{deaths}D ({kd:.2f} KD, {dpm:.0f} DPM)\n"
                 embed.add_field(
                     name="🏆 Top Players", value=player_text, inline=False

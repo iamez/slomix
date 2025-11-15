@@ -20,6 +20,8 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
+from bot.stats import StatsCalculator
+
 logger = logging.getLogger(__name__)
 
 
@@ -368,11 +370,11 @@ class StatsCog(commands.Cog, name="Stats"):
 
                 hits, shots = weapon_stats if weapon_stats else (0, 0)
 
-                # Calculate metrics
-                kd = kills / deaths if deaths > 0 else kills
-                accuracy = (hits / shots * 100) if shots > 0 else 0
-                dpm = (damage * 60 / time_sec) if time_sec > 0 else 0
-                hs_pct = (headshots / kills * 100) if kills > 0 else 0
+                # Calculate metrics using centralized calculator
+                kd = StatsCalculator.calculate_kd(kills, deaths)
+                accuracy = StatsCalculator.calculate_accuracy(hits, shots)
+                dpm = StatsCalculator.calculate_dpm(damage, time_sec)
+                hs_pct = StatsCalculator.calculate_headshot_percentage(headshots, kills)
 
                 return {
                     "name": display_name,

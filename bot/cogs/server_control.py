@@ -17,6 +17,7 @@ import hashlib
 import logging
 import os
 import re
+import shlex
 import socket
 from datetime import datetime
 from pathlib import Path
@@ -32,37 +33,69 @@ logger = logging.getLogger('ServerControl')
 def sanitize_filename(filename: str) -> str:
     """
     Sanitize filename to prevent directory traversal attacks.
-    
+
     Removes path separators and keeps only safe characters:
     - Letters (a-z, A-Z)
     - Numbers (0-9)
     - Dots, dashes, underscores (. - _)
-    
+
     Examples:
         "../../../etc/passwd" -> "etcpasswd"
         "map.pk3" -> "map.pk3"
         "test/../hack.txt" -> "testhack.txt"
-    
+
     Args:
         filename: User-provided filename
-        
+
     Returns:
         Sanitized filename safe for file operations
-        
+
     Raises:
         ValueError: If filename becomes empty after sanitization
     """
     # Get just the filename (no path)
     safe_name = os.path.basename(filename)
-    
+
     # Remove any characters that aren't alphanumeric, dot, dash, or underscore
     safe_name = re.sub(r'[^a-zA-Z0-9._-]', '', safe_name)
-    
+
     # Prevent empty filenames
     if not safe_name:
         raise ValueError("Invalid filename provided")
-    
+
     return safe_name
+
+
+def sanitize_rcon_input(input_str: str) -> str:
+    """
+    Sanitize input for RCON commands to prevent command injection.
+
+    Removes dangerous characters that could be used for injection:
+    - Semicolons (;) - command separator
+    - Newlines (\n, \r) - command separator
+    - Null bytes (\x00) - string terminator
+    - Backticks (`) - command substitution
+    - Dollar signs ($) - variable expansion
+    - Pipes (|) - command chaining
+    - Ampersands (&) - background execution
+
+    Examples:
+        "status; quit" -> "status quit"
+        "say `rm -rf /`" -> "say rm -rf /"
+
+    Args:
+        input_str: User-provided RCON command or parameter
+
+    Returns:
+        Sanitized string safe for RCON execution
+    """
+    dangerous_chars = [';', '\n', '\r', '\x00', '`', '$', '|', '&']
+    sanitized = input_str
+
+    for char in dangerous_chars:
+        sanitized = sanitized.replace(char, '')
+
+    return sanitized.strip()
 
 
 class ETLegacyRCON:
@@ -114,7 +147,16 @@ class ServerControl(commands.Cog):
         self.ssh_port = int(os.getenv('SSH_PORT', 22))
         self.ssh_user = os.getenv('SSH_USER')
         self.ssh_key_path = os.path.expanduser(os.getenv('SSH_KEY_PATH', '~/.ssh/id_rsa'))
-        
+
+        # Validate SSH key exists
+        if self.ssh_key_path and not os.path.exists(self.ssh_key_path):
+            logger.warning(f"⚠️ SSH key not found at: {self.ssh_key_path}")
+            logger.warning("SSH features will be disabled until key is configured")
+            self.ssh_enabled = False
+        else:
+            self.ssh_enabled = True
+            logger.info(f"✅ SSH key found: {self.ssh_key_path}")
+
         # Server Configuration - Customized for Vektor
         self.server_install_path = '/home/et/etlegacy-v2.83.1-x86_64'
         self.maps_path = f"{self.server_install_path}/etmain"
@@ -470,13 +512,16 @@ class ServerControl(commands.Cog):
             await ctx.send(f"❌ File too large! Max size: {max_size / 1024 / 1024:.0f}MB")
             return
         
-        await self.log_action(ctx, "Map Upload", f"Uploading {attachment.filename} ({attachment.size / 1024 / 1024:.1f}MB)")
-        
-        await ctx.send(f"📥 Downloading `{attachment.filename}`...")
-        
+        # Sanitize filename to prevent directory traversal
+        sanitized_name = sanitize_filename(attachment.filename)
+
+        await self.log_action(ctx, "Map Upload", f"Uploading {sanitized_name} ({attachment.size / 1024 / 1024:.1f}MB)")
+
+        await ctx.send(f"📥 Downloading `{sanitized_name}`...")
+
         try:
             # Download to temp file
-            temp_path = f"/tmp/{attachment.filename}"
+            temp_path = f"/tmp/{sanitized_name}"
             await attachment.save(temp_path)
             
             # Calculate MD5 hash
@@ -488,12 +533,13 @@ class ServerControl(commands.Cog):
             # Upload via SSH
             ssh = self.get_ssh_client()
             sftp = ssh.open_sftp()
-            
-            remote_path = f"{self.maps_path}/{attachment.filename}"
+
+            remote_path = f"{self.maps_path}/{sanitized_name}"
             sftp.put(temp_path, remote_path)
-            
-            # Set proper permissions
-            ssh.exec_command(f"chmod 644 {remote_path}")
+
+            # Set proper permissions (use shlex.quote for safety)
+            safe_path = shlex.quote(remote_path)
+            ssh.exec_command(f"chmod 644 {safe_path}")
             
             sftp.close()
             ssh.close()
@@ -503,7 +549,7 @@ class ServerControl(commands.Cog):
             
             embed = discord.Embed(
                 title="✅ Map Uploaded",
-                description=f"`{attachment.filename}` has been uploaded to the server",
+                description=f"`{sanitized_name}` has been uploaded to the server",
                 color=discord.Color.green(),
                 timestamp=datetime.now()
             )
@@ -511,17 +557,17 @@ class ServerControl(commands.Cog):
             embed.add_field(name="MD5", value=f"`{file_hash[:8]}...`", inline=True)
             embed.add_field(
                 name="ℹ️ Next Steps",
-                value=f"Use `!map_change {attachment.filename.replace('.pk3', '')}` to load it",
+                value=f"Use `!map_change {sanitized_name.replace('.pk3', '')}` to load it",
                 inline=False
             )
-            
+
             await ctx.send(embed=embed)
-            await self.log_action(ctx, "Map Upload Success", f"{attachment.filename} - MD5: {file_hash}")
+            await self.log_action(ctx, "Map Upload Success", f"{sanitized_name} - MD5: {file_hash}")
         
         except Exception as e:
             logger.error(f"Error uploading map: {e}", exc_info=True)
             await ctx.send(f"❌ Error uploading map: {e}")
-            await self.log_action(ctx, "Map Upload Failed", f"❌ {attachment.filename} - {e}")
+            await self.log_action(ctx, "Map Upload Failed", f"❌ {sanitized_name} - {e}")
     
     @commands.command(name='map_change', aliases=['changemap', 'map'])
     @commands.check(is_admin_channel)
@@ -573,9 +619,15 @@ class ServerControl(commands.Cog):
             # Ensure .pk3 extension
             if not map_name.endswith('.pk3'):
                 map_name += '.pk3'
-            
+
+            # Sanitize filename to prevent directory traversal
+            map_name = sanitize_filename(map_name)
+
             remote_path = f"{self.maps_path}/{map_name}"
-            delete_command = f"rm -f {remote_path} && echo 'deleted' || echo 'failed'"
+
+            # Use shlex.quote to prevent command injection
+            safe_path = shlex.quote(remote_path)
+            delete_command = f"rm -f {safe_path} && echo 'deleted' || echo 'failed'"
             output, error, exit_code = self.execute_ssh_command(delete_command)
             
             if 'deleted' in output:
@@ -613,11 +665,17 @@ class ServerControl(commands.Cog):
             await ctx.send("❌ RCON is not configured!")
             return
         
-        await self.log_action(ctx, "RCON Command", f"Command: {command}")
-        
+        # Sanitize command to prevent injection
+        safe_command = sanitize_rcon_input(command)
+        if safe_command != command:
+            await ctx.send("⚠️ Command contained dangerous characters and was sanitized.")
+            logger.warning(f"RCON command sanitized: '{command}' -> '{safe_command}'")
+
+        await self.log_action(ctx, "RCON Command", f"Command: {safe_command}")
+
         try:
             rcon = ETLegacyRCON(self.rcon_host, self.rcon_port, self.rcon_password)
-            response = rcon.send_command(command)
+            response = rcon.send_command(safe_command)
             rcon.close()
             
             # Truncate long responses
@@ -649,14 +707,17 @@ class ServerControl(commands.Cog):
             await ctx.send("❌ RCON is not configured!")
             return
         
-        await self.log_action(ctx, "Player Kick", f"Player ID: {player_id}, Reason: {reason}")
-        
+        # Sanitize reason to prevent command injection
+        safe_reason = sanitize_rcon_input(reason)
+
+        await self.log_action(ctx, "Player Kick", f"Player ID: {player_id}, Reason: {safe_reason}")
+
         try:
             rcon = ETLegacyRCON(self.rcon_host, self.rcon_port, self.rcon_password)
-            rcon.send_command(f'clientkick {player_id} "{reason}"')
+            rcon.send_command(f'clientkick {player_id} "{safe_reason}"')
             rcon.close()
-            
-            await ctx.send(f"✅ Kicked player #{player_id} - Reason: {reason}")
+
+            await ctx.send(f"✅ Kicked player #{player_id} - Reason: {safe_reason}")
         
         except Exception as e:
             logger.error(f"Error kicking player: {e}", exc_info=True)
@@ -673,13 +734,16 @@ class ServerControl(commands.Cog):
         if not self.rcon_enabled or not self.rcon_password:
             await ctx.send("❌ RCON is not configured!")
             return
-        
+
+        # Sanitize message to prevent command injection
+        safe_message = sanitize_rcon_input(message)
+
         try:
             rcon = ETLegacyRCON(self.rcon_host, self.rcon_port, self.rcon_password)
-            rcon.send_command(f'say "{message}"')
+            rcon.send_command(f'say "{safe_message}"')
             rcon.close()
-            
-            await ctx.send(f"✅ Message sent to server: *{message}*")
+
+            await ctx.send(f"✅ Message sent to server: *{safe_message}*")
         
         except Exception as e:
             logger.error(f"Error sending message: {e}", exc_info=True)
