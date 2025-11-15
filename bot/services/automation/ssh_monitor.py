@@ -68,7 +68,14 @@ class SSHMonitor:
         self.files_processed_count = 0
         self.errors_count = 0
         self.last_error: Optional[str] = None
-        
+
+        # Monitoring state
+        self.is_monitoring = False
+        self.processed_files = set()
+        self.check_times = []
+        self.download_times = []
+        self.check_interval = int(os.getenv("SSH_CHECK_INTERVAL", "60"))  # seconds
+
         logger.info("🔄 SSH Monitor service initialized")
     
     async def start_monitoring(self):
@@ -98,20 +105,20 @@ class SSHMonitor:
     def _validate_config(self) -> bool:
         """Validate SSH configuration"""
         required = [
-            self.ssh_host,
-            self.ssh_user,
-            self.ssh_key_path,
-            self.remote_stats_dir
+            self.ssh_config['host'],
+            self.ssh_config['user'],
+            self.ssh_config['key_path'],
+            self.ssh_config['remote_path']
         ]
-        
+
         if not all(required):
             logger.error("❌ Missing SSH configuration:")
-            if not self.ssh_host: logger.error("  - SSH_HOST")
-            if not self.ssh_user: logger.error("  - SSH_USER")
-            if not self.ssh_key_path: logger.error("  - SSH_KEY_PATH")
-            if not self.remote_stats_dir: logger.error("  - REMOTE_STATS_PATH")
+            if not self.ssh_config['host']: logger.error("  - SSH_HOST")
+            if not self.ssh_config['user']: logger.error("  - SSH_USER")
+            if not self.ssh_config['key_path']: logger.error("  - SSH_KEY_PATH")
+            if not self.ssh_config['remote_path']: logger.error("  - REMOTE_STATS_PATH")
             return False
-        
+
         return True
     
     async def _load_processed_files(self):

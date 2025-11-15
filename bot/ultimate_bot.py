@@ -480,6 +480,31 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(f"⚠️  Could not load Server Control cog: {e}")
             logger.warning("Bot will continue without server control features")
 
+        # 🤖 AUTOMATION: Initialize automation services
+        try:
+            from bot.services.automation import SSHMonitor, HealthMonitor, MetricsLogger, DatabaseMaintenance
+
+            # Create automation services
+            self.ssh_monitor = SSHMonitor(self)
+            self.health_monitor = HealthMonitor(self)
+            self.metrics = MetricsLogger(self)
+            self.db_maintenance = DatabaseMaintenance(self)
+
+            logger.info("✅ Automation services initialized (SSH, Health, Metrics, DB Maintenance)")
+
+            # Load automation commands cog
+            await self.load_extension("cogs.automation_commands")
+            logger.info("✅ Automation Commands cog loaded")
+
+            # Auto-start SSH monitoring if enabled
+            if self.ssh_enabled:
+                logger.info("🔄 SSH monitoring enabled - starting automatically...")
+                await self.ssh_monitor.start_monitoring()
+
+        except Exception as e:
+            logger.warning(f"⚠️  Could not initialize automation services: {e}", exc_info=True)
+            logger.warning("Bot will continue without automation features")
+
         # Initialize database
         await self.initialize_database()
 
