@@ -11,7 +11,6 @@ This helps improve team detection accuracy by understanding
 roster changes throughout the session.
 """
 
-import sqlite3
 import logging
 from typing import Dict, List, Tuple, Set, Optional
 from dataclasses import dataclass
