@@ -11,7 +11,6 @@ A sophisticated multi-strategy team detection system that combines:
 This replaces the simple Round 1 seeding approach with a smarter algorithm.
 """
 
-import sqlite3
 import json
 import logging
 from typing import Dict, List, Tuple, Optional, Set

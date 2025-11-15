@@ -21,6 +21,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.lazy_pagination_view import LazyPaginationView
+from bot.stats import StatsCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -308,9 +309,9 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 # Handle None values from database
                 kills = kills or 0
                 deaths = deaths or 0
-                kd_ratio = kills / deaths if deaths > 0 else kills
-                accuracy = (hits / shots * 100) if shots > 0 else 0
-                hs_pct = (hs / hits * 100) if hits > 0 else 0
+                kd_ratio = StatsCalculator.calculate_kd(kills, deaths)
+                accuracy = StatsCalculator.calculate_accuracy(hits, shots)
+                hs_pct = StatsCalculator.calculate_headshot_percentage(hs, hits)
 
                 # Build embed
                 embed = discord.Embed(
@@ -766,7 +767,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                     if stat == "kills":
                         kills, deaths, games = row[1], row[2], row[3]
-                        kd = kills / deaths if deaths > 0 else kills
+                        kd = StatsCalculator.calculate_kd(kills, deaths)
                         leaderboard_text += (
                             f"{medal} **{name}** - {kills:,}K "
                             f"({kd:.2f} K/D, {games} games)\n"
@@ -774,7 +775,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                     elif stat == "kd":
                         kills, deaths, games = row[1], row[2], row[3]
-                        kd = kills / deaths if deaths > 0 else kills
+                        kd = StatsCalculator.calculate_kd(kills, deaths)
                         leaderboard_text += (
                             f"{medal} **{name}** - {kd:.2f} K/D "
                             f"({kills:,}K/{deaths:,}D, {games} games)\n"

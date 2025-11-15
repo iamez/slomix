@@ -41,8 +41,8 @@ class BotConfig:
         if os.path.exists(self.config_file):
             self._load_config_file()
         
-        # Database configuration
-        self.database_type = self._get_config('DATABASE_TYPE', 'sqlite')
+        # Database configuration (default to PostgreSQL for production)
+        self.database_type = self._get_config('DATABASE_TYPE', 'postgresql')
         
         # SQLite settings
         self.sqlite_db_path = self._get_config('SQLITE_DB_PATH', 'bot/etlegacy_production.db')

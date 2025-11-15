@@ -13,7 +13,6 @@ These commands control the active session and monitoring state.
 import logging
 from datetime import datetime
 
-import aiosqlite
 import discord
 from discord.ext import commands
 

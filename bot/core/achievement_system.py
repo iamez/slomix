@@ -18,7 +18,6 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Set
 import discord
-import aiosqlite
 
 logger = logging.getLogger(__name__)
 

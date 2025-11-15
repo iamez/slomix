@@ -19,7 +19,6 @@ import os
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
-import aiosqlite
 
 logger = logging.getLogger("MetricsLogger")
 

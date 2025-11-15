@@ -9,6 +9,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 
+from bot.stats import StatsCalculator
+
 matplotlib.use('Agg')
 
 
@@ -153,7 +155,7 @@ class StatsImageGenerator:
             if isinstance(player, dict):
                 kills = player.get('kills', 0)
                 deaths = player.get('deaths', 0)
-                kd = player.get('kd', (kills / deaths) if deaths else kills)
+                kd = player.get('kd', StatsCalculator.calculate_kd(kills, deaths))
                 dpm = player.get('dpm', 0)
                 acc = player.get('acc', 0)
                 hits = player.get('hits', 0)
@@ -167,7 +169,7 @@ class StatsImageGenerator:
                 # Tuple fallback (older callers)
                 kills = player[1] if len(player) > 1 else 0
                 deaths = player[2] if len(player) > 2 else 0
-                kd = (kills / deaths) if deaths else kills
+                kd = StatsCalculator.calculate_kd(kills, deaths)
                 dpm = player[3] if len(player) > 3 else 0
                 playtime = (
                     player[4] / 60
@@ -179,7 +181,7 @@ class StatsImageGenerator:
                 shots = player[7] if len(player) > 7 else 0
                 hs = player[8] if len(player) > 8 else 0
                 # compute accuracy percentage when using tuple fallback
-                acc = (hits / shots * 100) if shots else 0
+                acc = StatsCalculator.calculate_accuracy(hits, shots)
                 gibs = player[9] if len(player) > 9 else 0
                 revives = player[10] if len(player) > 10 else 0
 

@@ -6,7 +6,6 @@ Utility functions for querying and displaying team history data.
 These can be imported and used by bot commands or analysis scripts.
 """
 
-import sqlite3
 import json
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime, timedelta

@@ -35,6 +35,7 @@ from discord.ext import commands
 
 # Import pagination view for interactive button navigation
 from bot.core.pagination_view import PaginationView
+from bot.stats import StatsCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +187,7 @@ class LinkCog(commands.Cog, name="Link"):
                     deaths,
                 ) in page_players:
                     link_icon = "🔗" if discord_id else "❌"
-                    kd = kills / deaths if deaths > 0 else kills
+                    kd = StatsCalculator.calculate_kd(kills, deaths)
 
                     # Format last played date compactly
                     try:
