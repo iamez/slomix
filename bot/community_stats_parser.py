@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 
 import discord
 
+from bot.stats import StatsCalculator
+
 # C0RNP0RN3.LUA weapon enumeration (the actual format used)
 C0RNP0RN3_WEAPONS = {
     0: "WS_KNIFE",
@@ -94,30 +96,28 @@ class C0RNP0RN3StatsParser:
 
     def format_kd_ratio(self, kills: int, deaths: int) -> str:
         """Format K/D ratio with performance indicators"""
-        if deaths == 0:
-            kd = kills
+        kd = StatsCalculator.calculate_kd(kills, deaths)
+
+        if kd >= 2.0:
             indicator = "🔥"
+        elif kd >= 1.5:
+            indicator = "⚡"
+        elif kd >= 1.0:
+            indicator = "⚔️"
         else:
-            kd = kills / deaths
-            if kd >= 2.0:
-                indicator = "🔥"
-            elif kd >= 1.5:
-                indicator = "⚡"
-            elif kd >= 1.0:
-                indicator = "⚔️"
-            else:
-                indicator = "📈"
+            indicator = "📈"
 
         return f"{indicator} {kills}K/{deaths}D ({kd:.2f})"
 
     def create_stylish_round_embed(self, stats_data: Dict[str, Any]):
-        """Create a beautiful Discord embed for round results"""
+        """Create a compact icon-based Discord embed for round results (matches !last_session style)"""
 
         map_name = stats_data.get('map_name', 'Unknown')
         round_num = stats_data.get('round_num', 1)
         outcome = stats_data.get('round_outcome', 'Unknown')
         mvp_name = stats_data.get('mvp', 'Unknown')
         players = stats_data.get('players', [])
+        actual_time = stats_data.get('actual_time', 'Unknown')
 
         # Choose embed color based on outcome
         if outcome == 'Fullhold':
@@ -127,108 +127,90 @@ class C0RNP0RN3StatsParser:
             color = 0x00D2FF  # Blue for completed
             outcome_emoji = '[V]'
 
+        # Create header description
+        header = f"🗺️ **{map_name}** • Round {round_num} • {outcome_emoji} {outcome} • ⏱️ {actual_time}"
+
         embed = discord.Embed(
-            title=f"[*] Round {round_num} Complete",
-            description=f"**Map:** `{map_name}`\n{outcome_emoji} **Outcome:** {outcome}",
+            title="",
+            description=header,
             color=color,
             timestamp=discord.utils.utcnow(),
         )
 
-        # Add MVP section
-        if mvp_name != 'Unknown' and players:
-            mvp_player = next((p for p in players if p['name'] == mvp_name), None)
-            if mvp_player:
-                mvp_kd = self.format_kd_ratio(mvp_player['kills'], mvp_player['deaths'])
-                mvp_dmg = mvp_player.get('damage_given', 0)
-
-                embed.add_field(
-                    name="🌟 Round MVP",
-                    value=f"**{mvp_name}**\n{mvp_kd}\n💊 {mvp_dmg} DMG",
-                    inline=True,
-                )
-
-        # Add top performers with weapon highlights
+        # Add top 3 performers in compact format
         if players:
             sorted_players = sorted(players, key=lambda x: x['kd_ratio'], reverse=True)
             top_3 = sorted_players[:3]
 
-            leaderboard = ""
             medals = ["🥇", "🥈", "🥉"]
 
             for i, player in enumerate(top_3):
                 medal = medals[i] if i < 3 else "🏅"
-                kd_formatted = self.format_kd_ratio(player['kills'], player['deaths'])
                 team_indicator = "🔴" if player['team'] == 1 else "🔵"
 
-                # Get best SKILL weapon (exclude grenades, syringes, etc.)
+                # Get stats from objective_stats
+                obj_stats = player.get('objective_stats', {})
+
+                # Basic stats
+                name = player['name']
+                kills = player.get('kills', 0)
+                deaths = player.get('deaths', 0)
+                kd_ratio = player.get('kd_ratio', 0)
+
+                # Extended stats
+                gibs = obj_stats.get('gibs', 0)
+                revives_given = obj_stats.get('revives_given', 0)
+                times_revived = obj_stats.get('times_revived', 0)
+                damage_given = obj_stats.get('damage_given', 0)
+                damage_received = obj_stats.get('damage_received', 0)
+                useful_kills = obj_stats.get('useful_kills', 0)
+                dpm = obj_stats.get('dpm', 0)
+                time_dead_mins = obj_stats.get('time_dead_minutes', 0)
+                denied_mins = obj_stats.get('denied_playtime', 0) / 60.0 if obj_stats.get('denied_playtime') else 0
+                headshots = obj_stats.get('headshot_kills', 0)
+
+                # Multikills
+                double_kills = obj_stats.get('multikill_2x', 0)
+                triple_kills = obj_stats.get('multikill_3x', 0)
+                quad_kills = obj_stats.get('multikill_4x', 0)
+                penta_kills = obj_stats.get('multikill_5x', 0)
+                mega_kills = obj_stats.get('multikill_6x', 0)
+
+                # Weapon stats for accuracy
                 weapon_stats = player.get('weapon_stats', {})
-                skill_weapons = [
-                    'WS_MP40',
-                    'WS_THOMPSON',
-                    'WS_LUGER',
-                    'WS_COLT',
-                    'WS_STEN',
-                    'WS_FG42',
-                    'WS_KAR98',
-                    'WS_GARAND',
-                    'WS_CARBINE',
-                    'WS_K43',
-                ]
-                best_weapon = None
-                best_accuracy = 0
+                total_hits = sum(w['hits'] for w in weapon_stats.values())
+                total_shots = sum(w['shots'] for w in weapon_stats.values())
+                acc = (total_hits / total_shots * 100) if total_shots > 0 else 0
+                hs_rate = (headshots / total_hits * 100) if total_hits > 0 else 0
 
-                for weapon, stats in weapon_stats.items():
-                    if (
-                        weapon in skill_weapons
-                        and stats['shots'] > 5
-                        and stats['accuracy'] > best_accuracy
-                    ):
-                        best_accuracy = stats['accuracy']
-                        best_weapon = weapon
+                # Format damage (show in K if over 1000)
+                dmg_given_display = f"{damage_given/1000:.1f}K" if damage_given >= 1000 else f"{damage_given}"
+                dmg_recv_display = f"{damage_received/1000:.1f}K" if damage_received >= 1000 else f"{damage_received}"
 
-                weapon_info = ""
-                if best_weapon:
-                    emoji = self.weapon_emojis.get(best_weapon, '🔫')
-                    weapon_name = best_weapon.replace('WS_', '')
-                    weapon_info = f"\n   {emoji} Topshots: {weapon_name} ({best_accuracy:.1f}%)"
-                    # Use the accuracy bar for topshots
-                    accuracy_bar = self.format_accuracy_bar(best_accuracy)
-                    weapon_info = f"\n   {emoji} Topshots: {weapon_name}\n   {accuracy_bar}"
+                # Format times
+                time_dead_display = f"{int(time_dead_mins)}:{int((time_dead_mins % 1) * 60):02d}"
+                denied_display = f"{int(denied_mins)}:{int((denied_mins % 1) * 60):02d}"
 
-                leaderboard += f"{medal} {team_indicator} **{player['name']}**\n"
-                leaderboard += f"   {kd_formatted}\n"
-                leaderboard += f"   💊 {player.get('damage_given', 0)} DMG{weapon_info}\n\n"
+                # Build player field (4-line compact format)
+                mvp_badge = " (MVP)" if name == mvp_name else ""
+                player_text = f"{medal} {team_indicator} **{name}**{mvp_badge}\n"
+                player_text += f"⏱️ `{actual_time}` • 💪 `{dpm:.0f} DPM` • 📊 `{dmg_given_display}⬆/{dmg_recv_display}⬇` • 🎯 `{acc:.1f}% ACC ({total_hits}/{total_shots})`\n"
+                player_text += f"⚔️ `{kills}K/{deaths}D/{gibs}G ({kd_ratio:.2f} KD)` • 💉 `{revives_given}↑/{times_revived}↓` • 🎯 `{useful_kills} UK` • 📈 `{headshots} HS ({hs_rate:.1f}%)`\n"
 
-            embed.add_field(name="🎯 Top Performers", value=leaderboard, inline=False)
+                # Line 4: Multikills (conditional) + death stats
+                multikills_text = ""
+                if double_kills or triple_kills or quad_kills or penta_kills or mega_kills:
+                    multikill_parts = []
+                    if double_kills: multikill_parts.append(f"{double_kills} DOUBLE")
+                    if triple_kills: multikill_parts.append(f"{triple_kills} TRIPLE")
+                    if quad_kills: multikill_parts.append(f"{quad_kills} QUAD")
+                    if penta_kills: multikill_parts.append(f"{penta_kills} PENTA")
+                    if mega_kills: multikill_parts.append(f"{mega_kills} MEGA")
+                    multikills_text = f"🔥 `{' • '.join(multikill_parts)}` • "
 
-        # Add match stats summary
-        if players:
-            total_kills = sum(p['kills'] for p in players)
-            total_deaths = sum(p['deaths'] for p in players)
-            avg_kd = total_kills / total_deaths if total_deaths > 0 else 0
+                player_text += f"{multikills_text}💀 `{time_dead_display}` • ⏳ `{denied_display}`"
 
-            # Find weapon usage stats
-            weapon_usage = {}
-            for player in players:
-                for weapon, stats in player.get('weapon_stats', {}).items():
-                    if stats['shots'] > 0:
-                        if weapon not in weapon_usage:
-                            weapon_usage[weapon] = 0
-                        weapon_usage[weapon] += stats['shots']
-
-            # Most used weapon
-            most_used = max(weapon_usage.items(), key=lambda x: x[1]) if weapon_usage else None
-            weapon_info = ""
-            if most_used:
-                emoji = self.weapon_emojis.get(most_used[0], '🔫')
-                weapon_name = most_used[0].replace('WS_', '')
-                weapon_info = f"\n🔫 Most Used: {emoji} {weapon_name}"
-
-            embed.add_field(
-                name="📊 Match Summary",
-                value=f"👥 **{len(players)} Players**\n⚔️ **{total_kills} Total Kills**\n📈 **{avg_kd:.2f} Avg K/D**{weapon_info}",
-                inline=True,
-            )
+                embed.add_field(name="\u200b", value=player_text, inline=False)
 
         embed.set_footer(text="ET:Legacy Community Stats • c0rnp0rn3.lua")
 
@@ -382,7 +364,7 @@ class C0RNP0RN3StatsParser:
 
         best_r1_file = None
         best_r1_datetime = None
-        MAX_TIME_DIFF_MINUTES = 30  # Rounds typically 10-20 minutes apart
+        MAX_TIME_DIFF_MINUTES = 30  # Rounds typically 5-15 minutes apart (R1 and R2 back-to-back)
 
         for r1_file in potential_files:
             r1_filename = os.path.basename(r1_file)
