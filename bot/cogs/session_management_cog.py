@@ -10,6 +10,7 @@ Note: These are different from session *viewing* commands (in Session Cog).
 These commands control the active session and monitoring state.
 """
 
+import aiosqlite
 import logging
 from datetime import datetime
 

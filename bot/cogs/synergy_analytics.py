@@ -536,10 +536,10 @@ class SynergyAnalytics(commands.Cog):
         """Get player GUID from name"""
         try:
             row = await self.bot.db_adapter.fetch_one("""
-                SELECT player_guid 
-                FROM player_aliases 
-                WHERE LOWER(player_name) LIKE LOWER(?) 
-                ORDER BY last_seen DESC 
+                SELECT guid
+                FROM player_aliases
+                WHERE LOWER(alias) LIKE LOWER(?)
+                ORDER BY last_seen DESC
                 LIMIT 1
             """, (f"%{player_name}%",))
             

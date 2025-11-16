@@ -11,13 +11,13 @@ This package contains all automation-related services:
 """
 
 from .health_monitor import HealthMonitor
-from .ssh_monitor import SSHFileMonitor
+from .ssh_monitor import SSHMonitor
 from .database_maintenance import DatabaseMaintenance
 from .metrics_logger import MetricsLogger
 
 __all__ = [
     'HealthMonitor',
-    'SSHFileMonitor',
+    'SSHMonitor',
     'DatabaseMaintenance',
     'MetricsLogger',
 ]
