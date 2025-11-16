@@ -8,6 +8,21 @@
 
 A **production-grade Discord bot** with **zero-downtime automation**, **6-layer data validation**, and **intelligent differential stat calculation** for ET:Legacy game servers.
 
+## 🔥 Recent Updates (November 2025)
+
+**Critical Bug Fixes & Optimizations:**
+- ✅ **SSH Monitor Startup Optimization** - Only checks last 24h on startup (not all 3,766 files)
+- ✅ **PostgreSQL Boolean Compatibility** - Fixed boolean type errors in queries
+- ✅ **File Exclusion Filters** - Automatically excludes `_ws.txt` and unwanted files
+- ✅ **Constructor Arguments** - Fixed automation service initialization
+- ✅ **Session View Handlers** - Fixed missing imports and method name mismatches
+- ✅ **SQL Column Names** - Fixed `guid`/`alias` column references
+- ✅ **Shell Injection Warnings** - Proper Bandit suppressions with shlex.quote()
+- ✅ **Memory Leaks** - Fixed async blocking and resource cleanup
+- ✅ **Security Hardening** - Secure temp files and command sanitization
+
+**Branch:** `claude/fix-production-critical-issues-01TSoke7RTuTbKEhrQCgG2AF` (testing)
+
 ## ✨ What Makes This Special
 
 - � **6-Layer Data Integrity** - Transaction safety, ACID guarantees, per-insert verification
@@ -187,6 +202,12 @@ Automatically groups rounds into gaming sessions:
 - 📢 **Auto-Post** - Round summaries posted to Discord automatically
 - 🏁 **Session Summaries** - Auto-posted when players leave voice
 
+#### **Smart Startup Optimization** ⚡
+- 🚀 **24-Hour Lookback** - On startup, only processes files from last 24 hours (not all historical files)
+- 📅 **Configurable Window** - Set `SSH_STARTUP_LOOKBACK_HOURS` (default: 24)
+- 🎯 **File Filtering** - Automatically excludes `_ws.txt` and other unwanted files
+- ⏱️ **Fast Startup** - Processes ~5 recent files instead of 3,766+ historical files
+
 **Enable:** Set `AUTOMATION_ENABLED=true` and `SSH_ENABLED=true` in `.env`
 
 **[📖 Setup Guide: bot/services/automation/INTEGRATION_GUIDE.md](bot/services/automation/INTEGRATION_GUIDE.md)**
@@ -252,6 +273,8 @@ SSH_PORT=22
 SSH_USER=et
 SSH_KEY_PATH=~/.ssh/etlegacy_bot
 REMOTE_STATS_PATH=/home/et/.etlegacy/legacy/gamestats
+SSH_CHECK_INTERVAL=60
+SSH_STARTUP_LOOKBACK_HOURS=24
 ```
 
 ---
