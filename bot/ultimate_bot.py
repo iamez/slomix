@@ -480,6 +480,38 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(f"⚠️  Could not load Server Control cog: {e}")
             logger.warning("Bot will continue without server control features")
 
+        # 🤖 AUTOMATION: Initialize automation services
+        try:
+            from bot.services.automation import SSHMonitor, HealthMonitor, MetricsLogger, DatabaseMaintenance
+
+            # Get configuration from environment
+            admin_channel_id = int(os.getenv("ADMIN_CHANNEL_ID", "0"))
+
+            # For PostgreSQL, we don't have a db_path, but metrics_logger needs one for its own SQLite db
+            # Use a sensible default path for metrics database
+            metrics_db_path = os.getenv("METRICS_DB_PATH", "bot/data/metrics.db")
+
+            # Create automation services in correct order (MetricsLogger first, it's needed by HealthMonitor)
+            self.metrics = MetricsLogger(db_path=metrics_db_path)
+            self.ssh_monitor = SSHMonitor(self)
+            self.health_monitor = HealthMonitor(self, admin_channel_id, self.metrics)
+            self.db_maintenance = DatabaseMaintenance(self, self.db_path or "bot/data/etlegacy.db", admin_channel_id)
+
+            logger.info("✅ Automation services initialized (SSH, Health, Metrics, DB Maintenance)")
+
+            # Load automation commands cog
+            await self.load_extension("cogs.automation_commands")
+            logger.info("✅ Automation Commands cog loaded")
+
+            # Auto-start SSH monitoring if enabled
+            if self.ssh_enabled:
+                logger.info("🔄 SSH monitoring enabled - starting automatically...")
+                await self.ssh_monitor.start_monitoring()
+
+        except Exception as e:
+            logger.warning(f"⚠️  Could not initialize automation services: {e}", exc_info=True)
+            logger.warning("Bot will continue without automation features")
+
         # Initialize database
         await self.initialize_database()
 

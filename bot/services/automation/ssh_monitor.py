@@ -21,8 +21,9 @@ Usage:
 import asyncio
 import logging
 import os
-from datetime import datetime
-from typing import Optional, Dict, Any, List
+import shlex
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, Tuple
 import discord
 
 logger = logging.getLogger("UltimateBot.SSHMonitor")
@@ -67,7 +68,18 @@ class SSHMonitor:
         self.files_processed_count = 0
         self.errors_count = 0
         self.last_error: Optional[str] = None
-        
+
+        # Monitoring state
+        self.is_monitoring = False
+        self.processed_files = set()
+        self.check_times = []
+        self.download_times = []
+        self.check_interval = int(os.getenv("SSH_CHECK_INTERVAL", "60"))  # seconds
+
+        # Startup optimization: only check recent files on first check
+        self._is_first_check = True
+        self.startup_lookback_hours = int(os.getenv("SSH_STARTUP_LOOKBACK_HOURS", "24"))
+
         logger.info("🔄 SSH Monitor service initialized")
     
     async def start_monitoring(self):
@@ -97,27 +109,27 @@ class SSHMonitor:
     def _validate_config(self) -> bool:
         """Validate SSH configuration"""
         required = [
-            self.ssh_host,
-            self.ssh_user,
-            self.ssh_key_path,
-            self.remote_stats_dir
+            self.ssh_config['host'],
+            self.ssh_config['user'],
+            self.ssh_config['key_path'],
+            self.ssh_config['remote_path']
         ]
-        
+
         if not all(required):
             logger.error("❌ Missing SSH configuration:")
-            if not self.ssh_host: logger.error("  - SSH_HOST")
-            if not self.ssh_user: logger.error("  - SSH_USER")
-            if not self.ssh_key_path: logger.error("  - SSH_KEY_PATH")
-            if not self.remote_stats_dir: logger.error("  - REMOTE_STATS_PATH")
+            if not self.ssh_config['host']: logger.error("  - SSH_HOST")
+            if not self.ssh_config['user']: logger.error("  - SSH_USER")
+            if not self.ssh_config['key_path']: logger.error("  - SSH_KEY_PATH")
+            if not self.ssh_config['remote_path']: logger.error("  - REMOTE_STATS_PATH")
             return False
-        
+
         return True
     
     async def _load_processed_files(self):
         """Load list of previously processed files from database"""
         try:
             rows = await self.bot.db_adapter.fetch_all(
-                "SELECT filename FROM processed_files WHERE success = 1",
+                "SELECT filename FROM processed_files WHERE success = true",
                 ()
             )
             self.processed_files = {row[0] for row in rows}
@@ -159,64 +171,133 @@ class SSHMonitor:
         
         logger.info("🛑 Monitoring loop stopped")
     
+    def _parse_file_timestamp(self, filename: str) -> Optional[datetime]:
+        """
+        Parse timestamp from filename.
+
+        Expected format: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+        Example: 2025-11-16-142030-supply-round-1.txt
+
+        Returns:
+            datetime object if parsing succeeds, None otherwise
+        """
+        try:
+            parts = filename.split('-')
+            if len(parts) < 5:
+                return None
+
+            # Extract date and time parts
+            year = int(parts[0])
+            month = int(parts[1])
+            day = int(parts[2])
+            time_str = parts[3]  # HHMMSS format
+
+            # Parse time
+            if len(time_str) != 6:
+                return None
+
+            hour = int(time_str[0:2])
+            minute = int(time_str[2:4])
+            second = int(time_str[4:6])
+
+            return datetime(year, month, day, hour, minute, second)
+
+        except (ValueError, IndexError) as e:
+            logger.debug(f"Could not parse timestamp from filename {filename}: {e}")
+            return None
+
     async def _check_for_new_files(self):
         """Check remote directory for new stats files"""
         try:
             # List remote files
             remote_files = await self._list_remote_files()
-            
+
             if not remote_files:
                 logger.debug("No files found on remote server")
                 return
-            
-            # Filter for .stats files only
-            stats_files = [f for f in remote_files if f.endswith('.stats') or f.endswith('.txt')]
-            
+
+            # Filter for .stats files and .txt files (but exclude _ws.txt files)
+            stats_files = [
+                f for f in remote_files
+                if (f.endswith('.stats') or f.endswith('.txt')) and not f.endswith('_ws.txt')
+            ]
+
+            # On first check, filter by time to avoid processing old files
+            if self._is_first_check and self.startup_lookback_hours > 0:
+                cutoff_time = datetime.now() - timedelta(hours=self.startup_lookback_hours)
+                time_filtered_files = []
+
+                for f in stats_files:
+                    file_time = self._parse_file_timestamp(f)
+                    if file_time and file_time >= cutoff_time:
+                        time_filtered_files.append(f)
+                    elif not file_time:
+                        # If we can't parse the timestamp, skip it on first check
+                        logger.debug(f"Skipping file with unparseable timestamp: {f}")
+
+                logger.info(f"📅 First check: filtered {len(stats_files)} files to {len(time_filtered_files)} from last {self.startup_lookback_hours}h")
+                stats_files = time_filtered_files
+                self._is_first_check = False  # Only filter on first check
+
             # Find new files (not in processed set)
             new_files = [f for f in stats_files if f not in self.processed_files]
-            
+
             if new_files:
-                logger.info(f"🆕 Found {len(new_files)} new file(s): {new_files}")
-                
+                logger.info(f"🆕 Found {len(new_files)} new file(s)")
+
                 # Process each new file
                 for filename in new_files:
                     await self._process_new_file(filename)
             else:
                 logger.debug(f"✓ No new files (checked {len(stats_files)} files)")
-                
+
         except Exception as e:
             logger.error(f"❌ Error checking for new files: {e}", exc_info=True)
             raise
     
-    async def _list_remote_files(self) -> list:
-        """List files in remote SSH directory"""
+    def _list_remote_files_sync(self) -> list:
+        """List files in remote SSH directory (synchronous - use in executor)"""
+        import paramiko
+
+        ssh = None
         try:
-            import paramiko
-            
             # Create SSH client
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            
+
             # Connect
             ssh.connect(
-                hostname=self.ssh_host,
-                port=self.ssh_port,
-                username=self.ssh_user,
-                key_filename=os.path.expanduser(self.ssh_key_path),
+                hostname=self.ssh_config['host'],
+                port=self.ssh_config['port'],
+                username=self.ssh_config['user'],
+                key_filename=os.path.expanduser(self.ssh_config['key_path']),
                 timeout=10
             )
-            
-            # List files
-            stdin, stdout, stderr = ssh.exec_command(f"ls -1 {self.remote_stats_dir}")
+
+            # List files (use shlex.quote to prevent shell injection)
+            # remote_path is sanitized with shlex.quote before use in command
+            safe_path = shlex.quote(self.ssh_config['remote_path'])
+            # Safe to use in f-string: safe_path is properly quoted with shlex.quote
+            stdin, stdout, stderr = ssh.exec_command(f"ls -1 {safe_path}")  # nosec B601
             files = stdout.read().decode().strip().split('\n')
-            
-            ssh.close()
-            
+
             return [f.strip() for f in files if f.strip()]
-            
+
         except Exception as e:
             logger.error(f"❌ SSH list files error: {e}")
             raise
+        finally:
+            if ssh:
+                try:
+                    ssh.close()
+                except Exception as e:
+                    # Log SSH close errors during cleanup (debug level only)
+                    logger.debug(f"SSH close error during cleanup: {e}")
+
+    async def _list_remote_files(self) -> list:
+        """List files in remote SSH directory (async wrapper)"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._list_remote_files_sync)
     
     async def _process_new_file(self, filename: str):
         """
@@ -275,51 +356,72 @@ class SSHMonitor:
             self.last_error = str(e)
             logger.error(f"❌ Error processing {filename}: {e}", exc_info=True)
     
-    async def _download_file(self, filename: str) -> Optional[str]:
-        """Download file from remote server"""
+    def _download_file_sync(self, filename: str) -> Tuple[Optional[str], float]:
+        """Download file from remote server (synchronous - use in executor)"""
+        import paramiko
+        from scp import SCPClient
+
+        download_start = datetime.now()
+        ssh = None
+
         try:
-            import paramiko
-            from scp import SCPClient
-            
-            download_start = datetime.now()
-            
             # Create SSH client
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            
+
             # Connect
             ssh.connect(
-                hostname=self.ssh_host,
-                port=self.ssh_port,
-                username=self.ssh_user,
-                key_filename=os.path.expanduser(self.ssh_key_path),
+                hostname=self.ssh_config['host'],
+                port=self.ssh_config['port'],
+                username=self.ssh_config['user'],
+                key_filename=os.path.expanduser(self.ssh_config['key_path']),
                 timeout=10
             )
-            
+
             # Download using SCP
             local_dir = "bot/local_stats"
             os.makedirs(local_dir, exist_ok=True)
-            
+
             local_path = os.path.join(local_dir, filename)
-            remote_path = f"{self.remote_stats_dir}/{filename}"
-            
+            remote_path = f"{self.ssh_config['remote_path']}/{filename}"
+
             with SCPClient(ssh.get_transport()) as scp:
                 scp.get(remote_path, local_path)
-            
-            ssh.close()
-            
-            # Track download time
+
+            # Calculate download time
             download_duration = (datetime.now() - download_start).total_seconds()
+
+            return local_path, download_duration
+
+        except Exception as e:
+            logger.error(f"❌ Download error for {filename}: {e}")
+            return None, 0.0
+        finally:
+            if ssh:
+                try:
+                    ssh.close()
+                except Exception as e:
+                    # Log SSH close errors during cleanup (debug level only)
+                    logger.debug(f"SSH close error during cleanup: {e}")
+
+    async def _download_file(self, filename: str) -> Optional[str]:
+        """Download file from remote server (async wrapper)"""
+        loop = asyncio.get_event_loop()
+        local_path, download_duration = await loop.run_in_executor(
+            None, self._download_file_sync, filename
+        )
+
+        if local_path:
+            # Track download time
+            if not hasattr(self, 'download_times'):
+                self.download_times = []
             self.download_times.append(download_duration)
             if len(self.download_times) > 100:
                 self.download_times.pop(0)
-            
+
             logger.info(f"✅ Downloaded {filename} in {download_duration:.2f}s")
-            return local_path
-            
-        except Exception as e:
-            logger.error(f"❌ Download error for {filename}: {e}")
-            return None
+
+        return local_path
     
     async def _import_file_to_db(self, local_path: str, filename: str) -> bool:
         """Import stats file to database"""
