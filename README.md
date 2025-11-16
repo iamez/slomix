@@ -213,7 +213,8 @@ Automatically groups rounds into gaming sessions:
 - 🎮 **Smart Checks** - Only checks SSH when players are in voice channels (saves resources!)
 - 💤 **Idle Mode** - Skips SSH checks when voice channels are empty (0 players)
 - ⚡ **Active Mode** - Checks SSH every 60s when 1+ players in voice
-- 🔧 **Configurable** - Set `SSH_VOICE_CONDITIONAL=true` (default: enabled)
+- ⏳ **Grace Period** - Continues checking for 10min after players leave (catches final round files)
+- 🔧 **Configurable** - Set `SSH_VOICE_CONDITIONAL=true`, `SSH_GRACE_PERIOD_MINUTES=10`
 
 **Enable:** Set `AUTOMATION_ENABLED=true` and `SSH_ENABLED=true` in `.env`
 
@@ -283,6 +284,7 @@ REMOTE_STATS_PATH=/home/et/.etlegacy/legacy/gamestats
 SSH_CHECK_INTERVAL=60
 SSH_STARTUP_LOOKBACK_HOURS=24
 SSH_VOICE_CONDITIONAL=true
+SSH_GRACE_PERIOD_MINUTES=10
 
 # Voice Channels (comma-separated IDs for voice-conditional monitoring)
 GAMING_VOICE_CHANNELS=947583652957659166,1029097483697143938

@@ -83,9 +83,14 @@ class SSHMonitor:
         # Voice-conditional monitoring: only check SSH when players are in voice channels
         self.voice_conditional = os.getenv("SSH_VOICE_CONDITIONAL", "true").lower() == "true"
 
+        # Grace period: continue checking SSH for X minutes after players leave voice
+        # (catches files that appear shortly after game ends)
+        self.grace_period_minutes = int(os.getenv("SSH_GRACE_PERIOD_MINUTES", "10"))
+        self.last_voice_activity_time: Optional[datetime] = None
+
         logger.info("🔄 SSH Monitor service initialized")
         if self.voice_conditional:
-            logger.info("🎙️ Voice-conditional mode: SSH checks only when players in voice channels")
+            logger.info(f"🎙️ Voice-conditional mode: SSH checks only when players in voice (grace period: {self.grace_period_minutes}min)")
     
     async def start_monitoring(self):
         """Start the SSH monitoring task"""
@@ -177,13 +182,31 @@ class SSHMonitor:
                 if self.voice_conditional:
                     voice_count = self._get_voice_player_count()
 
-                    if voice_count == 0:
-                        # No players in voice - skip SSH check
-                        logger.debug("⏭️ Skipping SSH check: no players in voice channels")
-                        await asyncio.sleep(self.check_interval)
-                        continue
-                    elif voice_count > 0:
+                    if voice_count > 0:
+                        # Players in voice - update activity time and check SSH
+                        self.last_voice_activity_time = datetime.now()
                         logger.debug(f"🎙️ {voice_count} player(s) in voice - checking SSH")
+
+                    elif voice_count == 0:
+                        # No players in voice - check if we're in grace period
+                        if self.last_voice_activity_time:
+                            time_since_activity = (datetime.now() - self.last_voice_activity_time).total_seconds() / 60
+
+                            if time_since_activity < self.grace_period_minutes:
+                                # Still in grace period - continue checking
+                                remaining = self.grace_period_minutes - time_since_activity
+                                logger.debug(f"⏳ Grace period: checking SSH ({remaining:.1f}min remaining)")
+                            else:
+                                # Grace period expired - skip SSH check
+                                logger.debug("⏭️ Skipping SSH check: no players in voice (grace period expired)")
+                                await asyncio.sleep(self.check_interval)
+                                continue
+                        else:
+                            # Never had voice activity yet - skip SSH check
+                            logger.debug("⏭️ Skipping SSH check: no players in voice channels")
+                            await asyncio.sleep(self.check_interval)
+                            continue
+
                     # voice_count == -1 means voice monitoring disabled, proceed with check
 
                 # Check for new files
