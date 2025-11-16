@@ -218,8 +218,8 @@ class SSHMonitor:
             # List files (use shlex.quote to prevent shell injection)
             # remote_path is sanitized with shlex.quote before use in command
             safe_path = shlex.quote(self.ssh_config['remote_path'])
-            # Safe to use in f-string: safe_path is properly quoted
-            stdin, stdout, stderr = ssh.exec_command(f"ls -1 {safe_path}")  # noqa: S604
+            # Safe to use in f-string: safe_path is properly quoted with shlex.quote
+            stdin, stdout, stderr = ssh.exec_command(f"ls -1 {safe_path}")  # nosec B601
             files = stdout.read().decode().strip().split('\n')
 
             return [f.strip() for f in files if f.strip()]
