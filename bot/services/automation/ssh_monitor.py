@@ -22,7 +22,7 @@ import asyncio
 import logging
 import os
 import shlex
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, Tuple
 import discord
 
@@ -75,6 +75,10 @@ class SSHMonitor:
         self.check_times = []
         self.download_times = []
         self.check_interval = int(os.getenv("SSH_CHECK_INTERVAL", "60"))  # seconds
+
+        # Startup optimization: only check recent files on first check
+        self._is_first_check = True
+        self.startup_lookback_hours = int(os.getenv("SSH_STARTUP_LOOKBACK_HOURS", "24"))
 
         logger.info("🔄 SSH Monitor service initialized")
     
@@ -167,31 +171,83 @@ class SSHMonitor:
         
         logger.info("🛑 Monitoring loop stopped")
     
+    def _parse_file_timestamp(self, filename: str) -> Optional[datetime]:
+        """
+        Parse timestamp from filename.
+
+        Expected format: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+        Example: 2025-11-16-142030-supply-round-1.txt
+
+        Returns:
+            datetime object if parsing succeeds, None otherwise
+        """
+        try:
+            parts = filename.split('-')
+            if len(parts) < 5:
+                return None
+
+            # Extract date and time parts
+            year = int(parts[0])
+            month = int(parts[1])
+            day = int(parts[2])
+            time_str = parts[3]  # HHMMSS format
+
+            # Parse time
+            if len(time_str) != 6:
+                return None
+
+            hour = int(time_str[0:2])
+            minute = int(time_str[2:4])
+            second = int(time_str[4:6])
+
+            return datetime(year, month, day, hour, minute, second)
+
+        except (ValueError, IndexError) as e:
+            logger.debug(f"Could not parse timestamp from filename {filename}: {e}")
+            return None
+
     async def _check_for_new_files(self):
         """Check remote directory for new stats files"""
         try:
             # List remote files
             remote_files = await self._list_remote_files()
-            
+
             if not remote_files:
                 logger.debug("No files found on remote server")
                 return
-            
+
             # Filter for .stats files only
             stats_files = [f for f in remote_files if f.endswith('.stats') or f.endswith('.txt')]
-            
+
+            # On first check, filter by time to avoid processing old files
+            if self._is_first_check and self.startup_lookback_hours > 0:
+                cutoff_time = datetime.now() - timedelta(hours=self.startup_lookback_hours)
+                time_filtered_files = []
+
+                for f in stats_files:
+                    file_time = self._parse_file_timestamp(f)
+                    if file_time and file_time >= cutoff_time:
+                        time_filtered_files.append(f)
+                    elif not file_time:
+                        # If we can't parse the timestamp, skip it on first check
+                        logger.debug(f"Skipping file with unparseable timestamp: {f}")
+
+                logger.info(f"📅 First check: filtered {len(stats_files)} files to {len(time_filtered_files)} from last {self.startup_lookback_hours}h")
+                stats_files = time_filtered_files
+                self._is_first_check = False  # Only filter on first check
+
             # Find new files (not in processed set)
             new_files = [f for f in stats_files if f not in self.processed_files]
-            
+
             if new_files:
-                logger.info(f"🆕 Found {len(new_files)} new file(s): {new_files}")
-                
+                logger.info(f"🆕 Found {len(new_files)} new file(s)")
+
                 # Process each new file
                 for filename in new_files:
                     await self._process_new_file(filename)
             else:
                 logger.debug(f"✓ No new files (checked {len(stats_files)} files)")
-                
+
         except Exception as e:
             logger.error(f"❌ Error checking for new files: {e}", exc_info=True)
             raise
