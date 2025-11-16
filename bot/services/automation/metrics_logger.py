@@ -13,6 +13,7 @@ Features:
 - Exports metrics to JSON/CSV
 """
 
+import aiosqlite
 import json
 import logging
 import os
