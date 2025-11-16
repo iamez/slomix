@@ -216,8 +216,11 @@ class SSHMonitor:
                 logger.debug("No files found on remote server")
                 return
 
-            # Filter for .stats files only
-            stats_files = [f for f in remote_files if f.endswith('.stats') or f.endswith('.txt')]
+            # Filter for .stats files and .txt files (but exclude _ws.txt files)
+            stats_files = [
+                f for f in remote_files
+                if (f.endswith('.stats') or f.endswith('.txt')) and not f.endswith('_ws.txt')
+            ]
 
             # On first check, filter by time to avoid processing old files
             if self._is_first_check and self.startup_lookback_hours > 0:
