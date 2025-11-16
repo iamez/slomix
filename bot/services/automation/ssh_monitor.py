@@ -94,21 +94,25 @@ class SSHMonitor:
     
     async def start_monitoring(self):
         """Start the SSH monitoring task"""
+        logger.info(f"🔍 start_monitoring() called - ssh_enabled={self.ssh_enabled}")
+
         if not self.ssh_enabled:
-            logger.warning("⚠️ SSH monitoring disabled in configuration")
+            logger.warning("⚠️ SSH monitoring disabled in configuration (SSH_ENABLED=false or not set)")
             return
-        
+
+        logger.info("🔍 SSH enabled, validating configuration...")
         if not self._validate_config():
             logger.error("❌ SSH configuration invalid, cannot start monitoring")
             return
-        
+
         self.is_monitoring = True
         logger.info("✅ SSH monitoring started")
-        
+
         # Load previously processed files from database
         await self._load_processed_files()
-        
+
         # Start monitoring loop
+        logger.info("🔁 Starting monitoring loop...")
         asyncio.create_task(self._monitoring_loop())
     
     async def stop_monitoring(self):

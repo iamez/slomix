@@ -149,7 +149,7 @@ class HealthMonitor:
         health['session_active'] = getattr(self.bot, 'session_active', False)
         
         # Get database size
-        if hasattr(self.bot, 'db_path') and os.path.exists(self.bot.db_path):
+        if hasattr(self.bot, 'db_path') and self.bot.db_path and os.path.exists(self.bot.db_path):
             db_size = os.path.getsize(self.bot.db_path) / (1024 * 1024)
             health['db_size_mb'] = round(db_size, 2)
         
