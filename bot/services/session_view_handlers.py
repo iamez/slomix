@@ -19,6 +19,8 @@ import logging
 from datetime import datetime
 from typing import List
 
+from bot.stats import StatsCalculator
+
 logger = logging.getLogger("bot.services.session_view_handlers")
 
 
@@ -571,7 +573,7 @@ class SessionViewHandlers:
                 await self._send_round_stats(ctx, display_map_name, "Map Summary", rounds['all'], latest_date)
                 await asyncio.sleep(3)
 
-    async def send_round_stats(self, ctx, map_name: str, round_label: str, round_session_ids: List, latest_date: str):
+    async def _send_round_stats(self, ctx, map_name: str, round_label: str, round_session_ids: List, latest_date: str):
         """Helper to send stats for a single round or map summary"""
     
         round_ids_str = ','.join('?' * len(round_session_ids))
