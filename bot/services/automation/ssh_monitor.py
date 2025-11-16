@@ -129,7 +129,7 @@ class SSHMonitor:
         """Load list of previously processed files from database"""
         try:
             rows = await self.bot.db_adapter.fetch_all(
-                "SELECT filename FROM processed_files WHERE success = 1",
+                "SELECT filename FROM processed_files WHERE success = true",
                 ()
             )
             self.processed_files = {row[0] for row in rows}
