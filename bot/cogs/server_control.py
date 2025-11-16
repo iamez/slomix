@@ -19,6 +19,7 @@ import os
 import re
 import shlex
 import socket
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
