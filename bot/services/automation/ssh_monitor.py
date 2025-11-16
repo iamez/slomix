@@ -249,7 +249,8 @@ class SSHMonitor:
                 for filename in new_files:
                     await self._process_new_file(filename)
             else:
-                logger.debug(f"✓ No new files (checked {len(stats_files)} files)")
+                # Changed to INFO level so users can see monitoring is working
+                logger.info(f"✓ No new files (checked {len(stats_files)} files)")
 
         except Exception as e:
             logger.error(f"❌ Error checking for new files: {e}", exc_info=True)
