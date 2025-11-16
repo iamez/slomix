@@ -484,11 +484,18 @@ class UltimateETLegacyBot(commands.Bot):
         try:
             from bot.services.automation import SSHMonitor, HealthMonitor, MetricsLogger, DatabaseMaintenance
 
-            # Create automation services
+            # Get configuration from environment
+            admin_channel_id = int(os.getenv("ADMIN_CHANNEL_ID", "0"))
+
+            # For PostgreSQL, we don't have a db_path, but metrics_logger needs one for its own SQLite db
+            # Use a sensible default path for metrics database
+            metrics_db_path = os.getenv("METRICS_DB_PATH", "bot/data/metrics.db")
+
+            # Create automation services in correct order (MetricsLogger first, it's needed by HealthMonitor)
+            self.metrics = MetricsLogger(db_path=metrics_db_path)
             self.ssh_monitor = SSHMonitor(self)
-            self.health_monitor = HealthMonitor(self)
-            self.metrics = MetricsLogger(self)
-            self.db_maintenance = DatabaseMaintenance(self)
+            self.health_monitor = HealthMonitor(self, admin_channel_id, self.metrics)
+            self.db_maintenance = DatabaseMaintenance(self, self.db_path or "bot/data/etlegacy.db", admin_channel_id)
 
             logger.info("✅ Automation services initialized (SSH, Health, Metrics, DB Maintenance)")
 

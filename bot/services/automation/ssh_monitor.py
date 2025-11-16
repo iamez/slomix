@@ -23,7 +23,7 @@ import logging
 import os
 import shlex
 from datetime import datetime
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, Tuple
 import discord
 
 logger = logging.getLogger("UltimateBot.SSHMonitor")
@@ -215,9 +215,11 @@ class SSHMonitor:
                 timeout=10
             )
 
-            # List files (use shlex.quote for security)
+            # List files (use shlex.quote to prevent shell injection)
+            # remote_path is sanitized with shlex.quote before use in command
             safe_path = shlex.quote(self.ssh_config['remote_path'])
-            stdin, stdout, stderr = ssh.exec_command(f"ls -1 {safe_path}")
+            # Safe to use in f-string: safe_path is properly quoted
+            stdin, stdout, stderr = ssh.exec_command(f"ls -1 {safe_path}")  # noqa: S604
             files = stdout.read().decode().strip().split('\n')
 
             return [f.strip() for f in files if f.strip()]
@@ -229,9 +231,9 @@ class SSHMonitor:
             if ssh:
                 try:
                     ssh.close()
-                except Exception:
-                    # Silently ignore SSH close errors during cleanup
-                    pass
+                except Exception as e:
+                    # Log SSH close errors during cleanup (debug level only)
+                    logger.debug(f"SSH close error during cleanup: {e}")
 
     async def _list_remote_files(self) -> list:
         """List files in remote SSH directory (async wrapper)"""
@@ -339,9 +341,9 @@ class SSHMonitor:
             if ssh:
                 try:
                     ssh.close()
-                except Exception:
-                    # Silently ignore SSH close errors during cleanup
-                    pass
+                except Exception as e:
+                    # Log SSH close errors during cleanup (debug level only)
+                    logger.debug(f"SSH close error during cleanup: {e}")
 
     async def _download_file(self, filename: str) -> Optional[str]:
         """Download file from remote server (async wrapper)"""
