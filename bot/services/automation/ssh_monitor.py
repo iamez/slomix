@@ -80,7 +80,12 @@ class SSHMonitor:
         self._is_first_check = True
         self.startup_lookback_hours = int(os.getenv("SSH_STARTUP_LOOKBACK_HOURS", "24"))
 
+        # Voice-conditional monitoring: only check SSH when players are in voice channels
+        self.voice_conditional = os.getenv("SSH_VOICE_CONDITIONAL", "true").lower() == "true"
+
         logger.info("🔄 SSH Monitor service initialized")
+        if self.voice_conditional:
+            logger.info("🎙️ Voice-conditional mode: SSH checks only when players in voice channels")
     
     async def start_monitoring(self):
         """Start the SSH monitoring task"""
@@ -137,25 +142,61 @@ class SSHMonitor:
         except Exception as e:
             logger.error(f"❌ Failed to load processed files: {e}")
     
+    def _get_voice_player_count(self) -> int:
+        """
+        Get current number of players in gaming voice channels.
+
+        Returns:
+            int: Number of players in voice, or -1 if voice monitoring disabled
+        """
+        try:
+            # Check if bot has gaming voice channels configured
+            if not hasattr(self.bot, 'gaming_voice_channels') or not self.bot.gaming_voice_channels:
+                return -1  # Voice monitoring disabled
+
+            total_players = 0
+            for channel_id in self.bot.gaming_voice_channels:
+                channel = self.bot.get_channel(channel_id)
+                if channel and isinstance(channel, discord.VoiceChannel):
+                    total_players += len(channel.members)
+
+            return total_players
+        except Exception as e:
+            logger.debug(f"Could not get voice player count: {e}")
+            return -1  # Error means we should check anyway
+
     async def _monitoring_loop(self):
         """Main monitoring loop - runs continuously"""
         logger.info("🔁 Monitoring loop started")
-        
+
         while self.is_monitoring:
             try:
                 start_time = datetime.now()
-                
+
+                # Voice-conditional check: only check SSH if players are in voice
+                if self.voice_conditional:
+                    voice_count = self._get_voice_player_count()
+
+                    if voice_count == 0:
+                        # No players in voice - skip SSH check
+                        logger.debug("⏭️ Skipping SSH check: no players in voice channels")
+                        await asyncio.sleep(self.check_interval)
+                        continue
+                    elif voice_count > 0:
+                        logger.debug(f"🎙️ {voice_count} player(s) in voice - checking SSH")
+                    # voice_count == -1 means voice monitoring disabled, proceed with check
+
                 # Check for new files
                 await self._check_for_new_files()
-                
+
                 # Track check time
                 check_duration = (datetime.now() - start_time).total_seconds()
                 self.check_times.append(check_duration)
                 if len(self.check_times) > 100:
                     self.check_times.pop(0)  # Keep last 100
-                
+
                 self.last_check_time = datetime.now()
-                
+
                 # Wait before next check
                 await asyncio.sleep(self.check_interval)
                 

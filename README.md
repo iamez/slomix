@@ -11,6 +11,7 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 ## 🔥 Recent Updates (November 2025)
 
 **Critical Bug Fixes & Optimizations:**
+- ✅ **Voice-Conditional SSH Monitoring** - Only checks SSH when players in voice (massive resource savings!)
 - ✅ **SSH Monitor Startup Optimization** - Only checks last 24h on startup (not all 3,766 files)
 - ✅ **PostgreSQL Boolean Compatibility** - Fixed boolean type errors in queries
 - ✅ **File Exclusion Filters** - Automatically excludes `_ws.txt` and unwanted files
@@ -208,6 +209,12 @@ Automatically groups rounds into gaming sessions:
 - 🎯 **File Filtering** - Automatically excludes `_ws.txt` and other unwanted files
 - ⏱️ **Fast Startup** - Processes ~5 recent files instead of 3,766+ historical files
 
+#### **Voice-Conditional SSH Monitoring** 🎙️
+- 🎮 **Smart Checks** - Only checks SSH when players are in voice channels (saves resources!)
+- 💤 **Idle Mode** - Skips SSH checks when voice channels are empty (0 players)
+- ⚡ **Active Mode** - Checks SSH every 60s when 1+ players in voice
+- 🔧 **Configurable** - Set `SSH_VOICE_CONDITIONAL=true` (default: enabled)
+
 **Enable:** Set `AUTOMATION_ENABLED=true` and `SSH_ENABLED=true` in `.env`
 
 **[📖 Setup Guide: bot/services/automation/INTEGRATION_GUIDE.md](bot/services/automation/INTEGRATION_GUIDE.md)**
@@ -275,6 +282,10 @@ SSH_KEY_PATH=~/.ssh/etlegacy_bot
 REMOTE_STATS_PATH=/home/et/.etlegacy/legacy/gamestats
 SSH_CHECK_INTERVAL=60
 SSH_STARTUP_LOOKBACK_HOURS=24
+SSH_VOICE_CONDITIONAL=true
+
+# Voice Channels (comma-separated IDs for voice-conditional monitoring)
+GAMING_VOICE_CHANNELS=947583652957659166,1029097483697143938
 ```
 
 ---
