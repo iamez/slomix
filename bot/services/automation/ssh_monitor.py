@@ -185,7 +185,7 @@ class SSHMonitor:
                     if voice_count > 0:
                         # Players in voice - update activity time and check SSH
                         self.last_voice_activity_time = datetime.now()
-                        logger.debug(f"🎙️ {voice_count} player(s) in voice - checking SSH")
+                        logger.info(f"🎙️ {voice_count} player(s) in voice - checking SSH")
 
                     elif voice_count == 0:
                         # No players in voice - check if we're in grace period
@@ -195,15 +195,15 @@ class SSHMonitor:
                             if time_since_activity < self.grace_period_minutes:
                                 # Still in grace period - continue checking
                                 remaining = self.grace_period_minutes - time_since_activity
-                                logger.debug(f"⏳ Grace period: checking SSH ({remaining:.1f}min remaining)")
+                                logger.info(f"⏳ Grace period: checking SSH ({remaining:.1f}min remaining)")
                             else:
                                 # Grace period expired - skip SSH check
-                                logger.debug("⏭️ Skipping SSH check: no players in voice (grace period expired)")
+                                logger.info("⏭️ Skipping SSH check: no players in voice (grace period expired)")
                                 await asyncio.sleep(self.check_interval)
                                 continue
                         else:
                             # Never had voice activity yet - skip SSH check
-                            logger.debug("⏭️ Skipping SSH check: no players in voice channels")
+                            logger.info("⏭️ Skipping SSH check: no players in voice channels")
                             await asyncio.sleep(self.check_interval)
                             continue
 
