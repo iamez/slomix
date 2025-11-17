@@ -10,9 +10,10 @@
 
 ### Critical Fixes Applied:
 
-1. **✅ DPM Calculation Fix** (Commit: c2eaca1)
-   - Fixed weighted DPM using `time_played_seconds` instead of round duration
-   - Impact: Accurate DPM values (was showing inflated ~20% higher)
+1. **✅ DPM Calculation Fix** (Commit: bc1013b)
+   - Fixed weighted DPM to use round durations instead of player playtime
+   - Fixed 12 queries across 7 files
+   - Impact: Consistent DPM values across all players in same session
 
 2. **✅ File Loss Prevention** (Commit: 94a508d)
    - Added 30-minute grace period after last file download
@@ -25,11 +26,26 @@
    - Session queries now exclude cancelled rounds
    - Impact: Accurate round counting (no more false starts in stats)
 
-4. **✅ Leaderboard Stat Inflation Fix** (Commit: 50b4ae1)
-   - Fixed ALL 17 queries to exclude R0 (match summary) rounds
+4. **✅ Substitution Detection** (Commit: 4ce513c)
+   - Detects roster changes between rounds (player leaves/joins + restart)
+   - Substitution rounds count in lifetime stats, excluded from session
+   - Impact: Fair stats tracking for both players and match integrity
+
+5. **✅ Leaderboard Stat Inflation Fix** (Commit: c4a46b3)
+   - Fixed ALL 17 queries in leaderboard_cog.py to exclude R0 rounds
    - Player profile stats (4 queries)
    - All 13 leaderboard categories
    - Impact: Eliminates 33-50% stat inflation
+
+6. **✅ Stats Cog R0 Filtering** (Commit: 01d0772)
+   - Fixed 6 queries in stats_cog.py (achievements, compare, season)
+   - Fixed compare command DPM to use round durations
+   - Impact: Accurate achievement progress and player comparisons
+
+7. **✅ Team Stats Aggregation Fix** (Commit: 01d0772)
+   - Fixed team aggregation queries to exclude R0 and cancelled rounds
+   - Both fallback and main code paths now properly filtered
+   - Impact: Accurate team statistics in session summaries
 
 ---
 
@@ -112,11 +128,14 @@ git pull origin claude/fix-production-critical-issues-01TSoke7RTuTbKEhrQCgG2AF-0
 # Check recent commits
 git log --oneline -10
 
-# Should see:
-# 50b4ae1 CRITICAL: Fix leaderboard stat inflation (partial) + comprehensive audit
-# 94a508d Fix voice detection bug causing 31% file loss
+# Should see (most recent first):
+# 01d0772 CRITICAL: Fix stats_cog and team aggregation queries (R0 inflation + DPM)
+# 4ce513c Add substitution detection for roster-change restarts
+# bc1013b CRITICAL: Fix DPM calculations to use round durations instead of playtime
+# 2286b05 Add comprehensive deployment guide for critical production fixes
+# c4a46b3 CRITICAL: Fix leaderboard stat inflation (COMPLETE) - All 13 queries fixed
 # f8e017d Add comprehensive restart/cancellation detection system
-# c2eaca1 Fix DPM calculation using time_played_seconds instead of round duration
+# 94a508d Fix voice detection bug causing 31% file loss
 
 # Verify critical files changed
 git show --name-only 50b4ae1
@@ -243,10 +262,21 @@ python3 bot/ultimate_bot.py
 
 !stats <player_name>
 # Should show player stats with CORRECT DPM values
-# Example: vid should show ~315 DPM (not inflated 377)
+# Stats should NOT include R0 summary rounds
 
 !last_session
-# Should show correct round count (excluding restarts)
+# Should show correct round count (excluding restarts and R0)
+# Team stats should be accurate
+
+!check_achievements
+# Should show accurate kill/game counts (R0 excluded)
+
+!compare player1 player2
+# DPM should be consistent for players in same session
+# All stats should exclude R0
+
+!season_info
+# Season champion stats should be accurate (R0 excluded)
 # Should exclude R0 rounds from calculations
 # Should show Team A vs Team B (if hardcoded teams exist)
 
