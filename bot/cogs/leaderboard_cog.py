@@ -223,29 +223,30 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 # Cache MISS - Query database
                 logger.info(f"💾 Cache MISS: {primary_name} - querying DB")
                 
-                # Get overall stats
+                # Get overall stats (EXCLUDE R0 match summaries to prevent 33% inflation)
                 overall = await self.bot.db_adapter.fetch_one(
                         """
                         SELECT
-                            COUNT(DISTINCT round_id) as total_games,
-                            SUM(kills) as total_kills,
-                            SUM(deaths) as total_deaths,
-                            SUM(damage_given) as total_damage,
-                            SUM(damage_received) as total_damage_received,
-                            SUM(headshot_kills) as total_headshots,
+                            COUNT(DISTINCT p.round_id) as total_games,
+                            SUM(p.kills) as total_kills,
+                            SUM(p.deaths) as total_deaths,
+                            SUM(p.damage_given) as total_damage,
+                            SUM(p.damage_received) as total_damage_received,
+                            SUM(p.headshot_kills) as total_headshots,
                             CASE
-                                WHEN SUM(time_played_seconds) > 0
-                                THEN (SUM(damage_given) * 60.0) / SUM(time_played_seconds)
+                                WHEN SUM(p.time_played_seconds) > 0
+                                THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
                                 ELSE 0
                             END as weighted_dpm,
-                            AVG(kd_ratio) as avg_kd
-                        FROM player_comprehensive_stats
-                        WHERE player_guid = ?
+                            AVG(p.kd_ratio) as avg_kd
+                        FROM player_comprehensive_stats p
+                        JOIN rounds r ON p.round_id = r.id
+                        WHERE p.player_guid = ? AND r.round_number IN (1, 2)
                     """,
                         (player_guid,),
                     )
 
-                    # Get weapon stats with accuracy
+                    # Get weapon stats with accuracy (EXCLUDE R0 match summaries)
                 weapon_overall = await self.bot.db_adapter.fetch_one(
                     """
                     SELECT
@@ -253,31 +254,33 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                         SUM(w.shots) as total_shots,
                         SUM(w.headshots) as total_hs
                     FROM weapon_comprehensive_stats w
-                    WHERE w.player_guid = ?
+                    JOIN rounds r ON w.round_id = r.id
+                    WHERE w.player_guid = ? AND r.round_number IN (1, 2)
                 """,
                     (player_guid,),
                 )
 
-                # Get favorite weapons
+                # Get favorite weapons (EXCLUDE R0 match summaries)
                 fav_weapons = await self.bot.db_adapter.fetch_all(
                     """
-                    SELECT weapon_name, SUM(kills) as total_kills
-                    FROM weapon_comprehensive_stats
-                    WHERE player_guid = ?
-                    GROUP BY weapon_name
+                    SELECT w.weapon_name, SUM(w.kills) as total_kills
+                    FROM weapon_comprehensive_stats w
+                    JOIN rounds r ON w.round_id = r.id
+                    WHERE w.player_guid = ? AND r.round_number IN (1, 2)
+                    GROUP BY w.weapon_name
                     ORDER BY total_kills DESC
                     LIMIT 3
                 """,
                     (player_guid,),
                 )
 
-                # Get recent activity
+                # Get recent activity (EXCLUDE R0 match summaries)
                 recent = await self.bot.db_adapter.fetch_all(
                     """
                     SELECT s.round_date, s.map_name, p.kills, p.deaths
                     FROM player_comprehensive_stats p
                     JOIN rounds s ON p.round_id = s.id
-                    WHERE p.player_guid = ?
+                    WHERE p.player_guid = ? AND s.round_number IN (1, 2)
                     ORDER BY s.round_date DESC
                     LIMIT 3
                 """,
