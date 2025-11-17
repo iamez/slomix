@@ -47,6 +47,12 @@
    - Both fallback and main code paths now properly filtered
    - Impact: Accurate team statistics in session summaries
 
+8. **✅ CRITICAL: Broken Query Fixes** (Commit: b6555cb)
+   - Fixed ssh_monitor.py - automated Discord round summaries were BROKEN
+   - Fixed link_cog.py - 7 commands showing inflated stats
+   - Fixed achievement_system.py - achievement milestones triggered incorrectly
+   - Impact: Discord summaries now work + accurate stats in all link commands
+
 ---
 
 ## 🎯 Pre-Deployment Checklist
@@ -129,10 +135,11 @@ git pull origin claude/fix-production-critical-issues-01TSoke7RTuTbKEhrQCgG2AF-0
 git log --oneline -10
 
 # Should see (most recent first):
+# b6555cb CRITICAL: Fix broken queries and add R0 filtering to remaining files
+# 297bd59 Update deployment guide with stats_cog and team aggregation fixes
 # 01d0772 CRITICAL: Fix stats_cog and team aggregation queries (R0 inflation + DPM)
 # 4ce513c Add substitution detection for roster-change restarts
 # bc1013b CRITICAL: Fix DPM calculations to use round durations instead of playtime
-# 2286b05 Add comprehensive deployment guide for critical production fixes
 # c4a46b3 CRITICAL: Fix leaderboard stat inflation (COMPLETE) - All 13 queries fixed
 # f8e017d Add comprehensive restart/cancellation detection system
 # 94a508d Fix voice detection bug causing 31% file loss
@@ -277,8 +284,22 @@ python3 bot/ultimate_bot.py
 
 !season_info
 # Season champion stats should be accurate (R0 excluded)
-# Should exclude R0 rounds from calculations
-# Should show Team A vs Team B (if hardcoded teams exist)
+
+!lp
+# List players command should show accurate stats (lower than before)
+# All players should have correct kill/death counts
+
+!find_player <name>
+# Search results should show accurate stats
+# No more inflated numbers
+
+!link
+# Smart link should show correct top unlinked players
+# Stats should be accurate
+
+!check_achievements
+# Achievement progress should be accurate
+# Milestones trigger at correct thresholds
 
 !leaderboard kills
 # Should show correct kill counts (not inflated by R0)
