@@ -30,9 +30,9 @@ class SessionStatsAggregator:
         """
         Aggregate ALL player stats across all rounds with weighted DPM
 
-        IMPORTANT: Playtime calculated from actual_time in rounds table (actual round duration),
-        NOT time_played_seconds which tracks "alive time". In stopwatch mode, round duration is
-        fixed - everyone who played the same rounds has the same playtime.
+        DPM calculation uses time_played_seconds (actual time alive/playing),
+        NOT round duration. This ensures DPM accurately reflects damage output
+        during active playtime, excluding time spent dead.
 
         Returns: List of player stat tuples (includes NEW stats: gibs, revives, times revived, dmg received, useful kills)
         """
@@ -41,24 +41,15 @@ class SessionStatsAggregator:
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
                 CASE
-                    WHEN SUM(
-                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                    ) > 0
-                    THEN (SUM(p.damage_given) * 60.0) / SUM(
-                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                    )
+                    WHEN SUM(p.time_played_seconds) > 0
+                    THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
                     ELSE 0
                 END as weighted_dpm,
                 COALESCE(SUM(w.hits), 0) as total_hits,
                 COALESCE(SUM(w.shots), 0) as total_shots,
                 COALESCE(SUM(w.headshots), 0) as total_headshots,
                 SUM(p.headshot_kills) as headshot_kills,
-                SUM(
-                    CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                    CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                ) as total_seconds,
+                SUM(p.time_played_seconds) as total_seconds,
                 CAST(SUM(p.time_played_seconds * p.time_dead_ratio / 100.0) AS INTEGER) as total_time_dead,
                 SUM(p.denied_playtime) as total_denied,
                 SUM(p.gibs) as total_gibs,
@@ -73,7 +64,6 @@ class SessionStatsAggregator:
                 SUM(p.multi_kills) as total_multi_kills,
                 SUM(p.mega_kills) as total_mega_kills
             FROM player_comprehensive_stats p
-            LEFT JOIN rounds r ON p.round_id = r.id
             LEFT JOIN (
                 SELECT round_id, player_guid,
                     SUM(hits) as hits,
