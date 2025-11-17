@@ -141,37 +141,49 @@ class LinkCog(commands.Cog, name="Link"):
                     else:
                         filter_clause = " HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'"
 
-            final_query = base_query + filter_clause + " ORDER BY sessions_played DESC, total_kills DESC"
-            
-            players = await self.bot.db_adapter.fetch_all(final_query)
+            # PERFORMANCE OPTIMIZATION: Get counts first with lightweight query
+            count_query = f"""
+                SELECT
+                    COUNT(*) as total_players,
+                    SUM(CASE WHEN discord_id IS NOT NULL THEN 1 ELSE 0 END) as linked_count
+                FROM ({base_query + filter_clause}) as players_subq
+            """
 
-            if not players:
+            counts = await self.bot.db_adapter.fetch_one(count_query)
+            total_players = counts[0] if counts else 0
+            linked_count = counts[1] if counts and counts[1] else 0
+
+            if total_players == 0:
                 await ctx.send(
                     f"❌ No players found" + (f" with filter: {filter_type}" if filter_type else "")
                 )
                 return
 
-            # Count linked vs unlinked
-            linked_count = sum(1 for p in players if p[2])
-            unlinked_count = len(players) - linked_count
+            unlinked_count = total_players - linked_count
 
             # Pagination settings
             players_per_page = 15
-            total_pages = (len(players) + players_per_page - 1) // players_per_page
+            total_pages = (total_players + players_per_page - 1) // players_per_page
 
-            # Generate ALL pages upfront for button navigation
+            # Generate ONLY requested pages for button navigation (lazy loading)
+            # Pre-generate first 5 pages for immediate navigation
+            max_pregenerate = min(5, total_pages)
             pages = []
-            for page_num in range(1, total_pages + 1):
-                start_idx = (page_num - 1) * players_per_page
-                end_idx = min(start_idx + players_per_page, len(players))
-                page_players = players[start_idx:end_idx]
+
+            for page_num in range(1, max_pregenerate + 1):
+                offset = (page_num - 1) * players_per_page
+                page_query = base_query + filter_clause + f" ORDER BY sessions_played DESC, total_kills DESC LIMIT {players_per_page} OFFSET {offset}"
+                page_players = await self.bot.db_adapter.fetch_all(page_query)
 
                 # Create embed for this page
+                start_idx = offset
+                end_idx = min(offset + len(page_players), total_players)
+
                 filter_text = f" - {filter_type.upper()}" if filter_type else ""
                 embed = discord.Embed(
                     title=f"👥 Players List{filter_text}",
                     description=(
-                        f"**Total**: {len(players)} players • "
+                        f"**Total**: {total_players} players • "
                         f"🔗 {linked_count} linked • ❌ {unlinked_count} unlinked\n"
                         f"**Page {page_num}/{total_pages}** (showing {start_idx+1}-{end_idx})"
                     ),
