@@ -257,6 +257,7 @@ class PostgreSQLDatabaseManager:
                     is_tied BOOLEAN DEFAULT FALSE,
                     round_outcome TEXT,
                     gaming_session_id INTEGER,
+                    round_status VARCHAR(20) DEFAULT 'completed',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(match_id, round_number)
                 )
@@ -400,6 +401,8 @@ class PostgreSQLDatabaseManager:
             
             # Create indexes
             await conn.execute('CREATE INDEX idx_rounds_date ON rounds(round_date)')
+            await conn.execute('CREATE INDEX idx_rounds_status ON rounds(round_status)')
+            await conn.execute('CREATE INDEX idx_rounds_gaming_session ON rounds(gaming_session_id, map_name, round_number, round_status)')
             await conn.execute('CREATE INDEX idx_player_stats_round ON player_comprehensive_stats(round_id)')
             await conn.execute('CREATE INDEX idx_player_stats_guid ON player_comprehensive_stats(player_guid)')
             await conn.execute('CREATE INDEX idx_weapon_stats_round ON weapon_comprehensive_stats(round_id)')
@@ -813,28 +816,111 @@ class PostgreSQLDatabaseManager:
         try:
             round_id = await conn.fetchval(
                 """
-                INSERT INTO rounds 
-                (round_date, round_time, match_id, map_name, round_number, 
-                 time_limit, actual_time, winner_team, defender_team, round_outcome, gaming_session_id, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                INSERT INTO rounds
+                (round_date, round_time, match_id, map_name, round_number,
+                 time_limit, actual_time, winner_team, defender_team, round_outcome, gaming_session_id, round_status, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 ON CONFLICT (match_id, round_number) DO UPDATE SET
                     round_date = EXCLUDED.round_date,
                     round_time = EXCLUDED.round_time,
-                    gaming_session_id = EXCLUDED.gaming_session_id
+                    gaming_session_id = EXCLUDED.gaming_session_id,
+                    round_status = EXCLUDED.round_status
                 RETURNING id
                 """,
                 file_date, round_time, match_id, map_name, round_number,
-                time_limit, actual_time, winner, defender, round_outcome, gaming_session_id, datetime.now()
+                time_limit, actual_time, winner, defender, round_outcome, gaming_session_id, 'completed', datetime.now()
             )
-            
+
+            # 🆕 RESTART DETECTION: Check for earlier rounds that should be marked as cancelled
+            if not is_match_summary and gaming_session_id and round_number in (1, 2):
+                await self._detect_and_mark_restarts(conn, round_id, gaming_session_id, map_name, round_number, file_date, round_time)
+
             if is_match_summary:
                 logger.debug(f"✓ Created match summary (round_number=0) with ID {round_id}")
-            
+
             return round_id
         except Exception as e:
             logger.error(f"Failed to create round: {e}")
             return None
-    
+
+    async def _detect_and_mark_restarts(self, conn, current_round_id: int, gaming_session_id: int,
+                                        map_name: str, round_number: int, current_date: str, current_time: str) -> None:
+        """
+        Detect and mark earlier rounds as 'cancelled' if this is a restart.
+
+        A round is considered a restart if:
+        - Same gaming_session_id
+        - Same map_name
+        - Same round_number
+        - Earlier timestamp
+        - Within reasonable timeframe (< 30 minutes apart)
+
+        Example: adlernest R1 played at 21:49, then restarted at 22:13
+        → Mark 21:49 round as 'cancelled'
+        """
+        RESTART_THRESHOLD_MINUTES = 30
+
+        try:
+            # Find earlier rounds with same map/round in this gaming session
+            earlier_rounds = await conn.fetch(
+                """
+                SELECT id, round_date, round_time, match_id
+                FROM rounds
+                WHERE gaming_session_id = $1
+                  AND map_name = $2
+                  AND round_number = $3
+                  AND id != $4
+                  AND round_status = 'completed'
+                ORDER BY round_date, round_time
+                """,
+                gaming_session_id, map_name, round_number, current_round_id
+            )
+
+            if not earlier_rounds:
+                return  # No duplicates found
+
+            # Parse current round datetime
+            try:
+                current_dt = datetime.strptime(f"{current_date} {current_time}", "%Y-%m-%d %H%M%S")
+            except ValueError:
+                current_dt = datetime.strptime(f"{current_date} {current_time}", "%Y-%m-%d %H:%M:%S")
+
+            # Check each earlier round
+            for earlier in earlier_rounds:
+                earlier_date = earlier['round_date']
+                earlier_time = earlier['round_time']
+                earlier_id = earlier['id']
+                earlier_match_id = earlier['match_id']
+
+                # Parse earlier datetime
+                try:
+                    earlier_dt = datetime.strptime(f"{earlier_date} {earlier_time}", "%Y-%m-%d %H%M%S")
+                except ValueError:
+                    earlier_dt = datetime.strptime(f"{earlier_date} {earlier_time}", "%Y-%m-%d %H:%M:%S")
+
+                # Calculate time difference
+                time_diff_minutes = (current_dt - earlier_dt).total_seconds() / 60
+
+                # If within threshold, mark earlier round as cancelled
+                if 0 < time_diff_minutes <= RESTART_THRESHOLD_MINUTES:
+                    await conn.execute(
+                        """
+                        UPDATE rounds
+                        SET round_status = 'cancelled'
+                        WHERE id = $1
+                        """,
+                        earlier_id
+                    )
+
+                    logger.warning(
+                        f"🔄 RESTART DETECTED: Marked round {earlier_id} ({earlier_match_id}) as 'cancelled' "
+                        f"(restarted after {time_diff_minutes:.1f}min)"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error in restart detection: {e}")
+            # Don't fail the import if restart detection fails
+
     async def _insert_player_stats(self, conn, round_id: int, round_date: str, parsed_data: Dict) -> int:
         """Insert player stats - ALL 51 FIELDS with INSERT VERIFICATION"""
         players = parsed_data.get('players', [])
