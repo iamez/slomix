@@ -831,9 +831,19 @@ class PostgreSQLDatabaseManager:
                 time_limit, actual_time, winner, defender, round_outcome, gaming_session_id, 'completed', datetime.now()
             )
 
-            # 🆕 RESTART DETECTION: Check for earlier rounds that should be marked as cancelled
+            # 🆕 RESTART DETECTION: Check for earlier rounds that should be marked as cancelled/substitution
             if not is_match_summary and gaming_session_id and round_number in (1, 2):
-                await self._detect_and_mark_restarts(conn, round_id, gaming_session_id, map_name, round_number, file_date, round_time)
+                # Extract player GUIDs for substitution detection
+                player_guids = set()
+                if 'players' in parsed_data:
+                    for player in parsed_data['players']:
+                        if 'guid' in player:
+                            player_guids.add(player['guid'])
+
+                await self._detect_and_mark_restarts(
+                    conn, round_id, gaming_session_id, map_name, round_number,
+                    file_date, round_time, player_guids if player_guids else None
+                )
 
             if is_match_summary:
                 logger.debug(f"✓ Created match summary (round_number=0) with ID {round_id}")
@@ -844,9 +854,10 @@ class PostgreSQLDatabaseManager:
             return None
 
     async def _detect_and_mark_restarts(self, conn, current_round_id: int, gaming_session_id: int,
-                                        map_name: str, round_number: int, current_date: str, current_time: str) -> None:
+                                        map_name: str, round_number: int, current_date: str, current_time: str,
+                                        current_player_guids: set = None) -> None:
         """
-        Detect and mark earlier rounds as 'cancelled' if this is a restart.
+        Detect and mark earlier rounds as 'cancelled' or 'substitution' if this is a restart.
 
         A round is considered a restart if:
         - Same gaming_session_id
@@ -855,8 +866,12 @@ class PostgreSQLDatabaseManager:
         - Earlier timestamp
         - Within reasonable timeframe (< 30 minutes apart)
 
-        Example: adlernest R1 played at 21:49, then restarted at 22:13
-        → Mark 21:49 round as 'cancelled'
+        Restart types:
+        - 'cancelled': False start, same roster (or roster unknown)
+        - 'substitution': Round completed, roster changed (player left/joined)
+
+        Example restart: adlernest R1 played at 21:49, then restarted at 22:13
+        Example substitution: adlernest R1 with ipkiss completed, he left, vid joined, restart
         """
         RESTART_THRESHOLD_MINUTES = 30
 
@@ -901,21 +916,53 @@ class PostgreSQLDatabaseManager:
                 # Calculate time difference
                 time_diff_minutes = (current_dt - earlier_dt).total_seconds() / 60
 
-                # If within threshold, mark earlier round as cancelled
+                # If within threshold, check for roster changes
                 if 0 < time_diff_minutes <= RESTART_THRESHOLD_MINUTES:
+                    restart_status = 'cancelled'  # Default to cancelled
+
+                    # Check if roster changed (substitution detection)
+                    if current_player_guids:
+                        # Get player roster from earlier round
+                        earlier_players = await conn.fetch(
+                            """
+                            SELECT DISTINCT player_guid
+                            FROM player_comprehensive_stats
+                            WHERE round_id = $1
+                            """,
+                            earlier_id
+                        )
+
+                        if earlier_players:
+                            earlier_guids = {row['player_guid'] for row in earlier_players}
+
+                            # Check if rosters are different
+                            if earlier_guids != current_player_guids:
+                                restart_status = 'substitution'
+                                logger.info(
+                                    f"👥 SUBSTITUTION DETECTED: Roster changed for round {earlier_id} "
+                                    f"(players left/joined, restarted after {time_diff_minutes:.1f}min)"
+                                )
+
+                    # Mark earlier round
                     await conn.execute(
                         """
                         UPDATE rounds
-                        SET round_status = 'cancelled'
-                        WHERE id = $1
+                        SET round_status = $1
+                        WHERE id = $2
                         """,
-                        earlier_id
+                        restart_status, earlier_id
                     )
 
-                    logger.warning(
-                        f"🔄 RESTART DETECTED: Marked round {earlier_id} ({earlier_match_id}) as 'cancelled' "
-                        f"(restarted after {time_diff_minutes:.1f}min)"
-                    )
+                    if restart_status == 'cancelled':
+                        logger.warning(
+                            f"🔄 RESTART DETECTED: Marked round {earlier_id} ({earlier_match_id}) as 'cancelled' "
+                            f"(false start, restarted after {time_diff_minutes:.1f}min)"
+                        )
+                    else:
+                        logger.info(
+                            f"🔄 RESTART (SUBSTITUTION): Round {earlier_id} marked as 'substitution' "
+                            f"(counts in lifetime stats, excluded from session)"
+                        )
 
         except Exception as e:
             logger.error(f"Error in restart detection: {e}")

@@ -257,7 +257,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             AVG(p.kd_ratio) as avg_kd
                         FROM player_comprehensive_stats p
                         JOIN rounds r ON p.round_id = r.id
-                        WHERE p.player_guid = ? AND r.round_number IN (1, 2)
+                        WHERE p.player_guid = ? AND r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                     """,
                         (player_guid,),
                     )
@@ -271,7 +271,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                         SUM(w.headshots) as total_hs
                     FROM weapon_comprehensive_stats w
                     JOIN rounds r ON w.round_id = r.id
-                    WHERE w.player_guid = ? AND r.round_number IN (1, 2)
+                    WHERE w.player_guid = ? AND r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                 """,
                     (player_guid,),
                 )
@@ -282,7 +282,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     SELECT w.weapon_name, SUM(w.kills) as total_kills
                     FROM weapon_comprehensive_stats w
                     JOIN rounds r ON w.round_id = r.id
-                    WHERE w.player_guid = ? AND r.round_number IN (1, 2)
+                    WHERE w.player_guid = ? AND r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                     GROUP BY w.weapon_name
                     ORDER BY total_kills DESC
                     LIMIT 3
@@ -495,7 +495,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             p.player_guid
                         FROM player_comprehensive_stats p
                         JOIN rounds r ON p.round_id = r.id
-                        WHERE r.round_number IN (1, 2)
+                        WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                         GROUP BY p.player_guid
                         HAVING COUNT(DISTINCT p.round_id) > 10
                         ORDER BY total_kills DESC
@@ -516,7 +516,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 p.player_guid
                             FROM player_comprehensive_stats p
                             JOIN rounds r ON p.round_id = r.id
-                            WHERE r.round_number IN (1, 2)
+                            WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(p.deaths) > 0
                             ORDER BY (CAST(total_kills AS FLOAT) / total_deaths) DESC
@@ -557,7 +557,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 p.player_guid
                             FROM player_comprehensive_stats p
                             JOIN rounds r ON p.round_id = r.id
-                            WHERE r.round_number IN (1, 2)
+                            WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50
                             ORDER BY weighted_dpm DESC
@@ -582,7 +582,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             JOIN weapon_comprehensive_stats w
                                 ON p.round_id = w.round_id
                                 AND p.player_guid = w.player_guid
-                            WHERE r.round_number IN (1, 2)
+                            WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(w.shots) > 1000
                             ORDER BY (CAST(SUM(w.hits) AS FLOAT) / SUM(w.shots)) DESC
@@ -607,7 +607,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             JOIN weapon_comprehensive_stats w
                                 ON p.round_id = w.round_id
                                 AND p.player_guid = w.player_guid
-                            WHERE r.round_number IN (1, 2)
+                            WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(w.hits) > 1000
                             ORDER BY (CAST(SUM(p.headshot_kills) AS FLOAT) / SUM(w.hits)) DESC
@@ -628,7 +628,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 p.player_guid
                             FROM player_comprehensive_stats p
                             JOIN rounds r ON p.round_id = r.id
-                            WHERE r.round_number IN (1, 2)
+                            WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             ORDER BY games DESC
                             LIMIT {players_per_page} OFFSET {offset}
@@ -648,7 +648,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 p.player_guid
                             FROM player_comprehensive_stats p
                             JOIN rounds r ON p.round_id = r.id
-                            WHERE r.round_number IN (1, 2)
+                            WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 10
                             ORDER BY total_revives DESC
@@ -669,7 +669,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 p.player_guid
                             FROM player_comprehensive_stats p
                             JOIN rounds r ON p.round_id = r.id
-                            WHERE r.round_number IN (1, 2)
+                            WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 10
                             ORDER BY total_gibs DESC
@@ -690,7 +690,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 p.player_guid
                             FROM player_comprehensive_stats p
                             JOIN rounds r ON p.round_id = r.id
-                            WHERE r.round_number IN (1, 2)
+                            WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 10
                             ORDER BY total_obj DESC
@@ -711,7 +711,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 p.player_guid
                             FROM player_comprehensive_stats p
                             JOIN rounds r ON p.round_id = r.id
-                            WHERE r.round_number IN (1, 2)
+                            WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50
                             ORDER BY avg_eff DESC
@@ -732,7 +732,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 p.player_guid
                             FROM player_comprehensive_stats p
                             JOIN rounds r ON p.round_id = r.id
-                            WHERE r.round_number IN (1, 2)
+                            WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(p.damage_given) > 0
                             ORDER BY (CAST(total_team_dmg AS FLOAT) / total_dmg) ASC
@@ -756,7 +756,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 p.player_guid
                             FROM player_comprehensive_stats p
                             JOIN rounds r ON p.round_id = r.id
-                            WHERE r.round_number IN (1, 2)
+                            WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 10
                             ORDER BY total_multi DESC
@@ -784,7 +784,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             FROM weapon_comprehensive_stats w
                             JOIN rounds r ON w.round_id = r.id
                             WHERE w.weapon_name = 'WS_GRENADE'
-                              AND r.round_number IN (1, 2)
+                              AND r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY w.player_guid
                             HAVING COUNT(DISTINCT w.round_id) > 10
                             ORDER BY total_kills DESC
