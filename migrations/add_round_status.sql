@@ -13,9 +13,10 @@ CREATE INDEX IF NOT EXISTS idx_rounds_gaming_session ON rounds(gaming_session_id
 UPDATE rounds SET round_status = 'completed' WHERE round_status IS NULL;
 
 -- Add comment for documentation
-COMMENT ON COLUMN rounds.round_status IS 'Round status: completed (normal), cancelled (restarted), warmup (practice)';
+COMMENT ON COLUMN rounds.round_status IS 'Round status: completed (normal), cancelled (restarted), substitution (roster changed), warmup (practice)';
 
 -- Valid statuses:
--- 'completed' - Normal round that counts toward stats
--- 'cancelled' - Earlier attempt of a restarted round (excluded from session summaries)
--- 'warmup' - Practice round (excluded from stats)
+-- 'completed' - Normal round that counts toward all stats (session + lifetime)
+-- 'cancelled' - Earlier attempt of a restarted round (excluded from all stats)
+-- 'substitution' - Round completed but roster changed, restart occurred (counts in lifetime stats, excluded from session)
+-- 'warmup' - Practice round (excluded from all stats)

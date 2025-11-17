@@ -225,6 +225,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     FROM player_comprehensive_stats p
                     JOIN rounds r ON p.round_id = r.id
                     WHERE DATE(p.round_date) = ? AND r.round_number IN (1, 2)
+                      AND (r.round_status = 'completed' OR r.round_status IS NULL)
                     GROUP BY p.player_name
                     ORDER BY kills DESC
                     LIMIT 5
@@ -262,6 +263,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     FROM player_comprehensive_stats p
                     JOIN rounds r ON p.round_id = r.id
                     WHERE p.round_date = $1 AND r.round_number IN (1, 2)
+                      AND (r.round_status = 'completed' OR r.round_status IS NULL)
                     GROUP BY p.player_name
                     ORDER BY kills DESC
                     LIMIT 5
