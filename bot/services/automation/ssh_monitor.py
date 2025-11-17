@@ -468,54 +468,66 @@ class SSHMonitor:
     async def _get_latest_round_data(self) -> Optional[Dict[str, Any]]:
         """Get data for the most recently imported round"""
         try:
-            # Get latest session and round
-            row = await self.bot.db_adapter.fetch_one("""
-                SELECT 
-                    session_id,
-                    round_num,
+            # Get latest round from rounds table (exclude R0 match summaries)
+            round_row = await self.bot.db_adapter.fetch_one("""
+                SELECT
+                    id,
+                    round_number,
                     map_name,
-                    COUNT(*) as player_count,
-                    SUM(kills) as total_kills,
-                    SUM(deaths) as total_deaths,
-                    MAX(timestamp) as round_time
-                FROM player_comprehensive_stats
-                GROUP BY session_id, round_num
-                ORDER BY timestamp DESC
+                    round_date,
+                    round_time
+                FROM rounds
+                WHERE round_number IN (1, 2)
+                  AND (round_status = 'completed' OR round_status IS NULL)
+                ORDER BY round_date DESC, round_time DESC
                 LIMIT 1
             """, ())
-            
-            if not row:
+
+            if not round_row:
                 return None
-            
-            session_id, round_num, map_name, player_count, kills, deaths, timestamp = row
-            
-            # Get top 5 players
+
+            round_id, round_number, map_name, round_date, round_time = round_row
+
+            # Get aggregated stats for this round
+            totals = await self.bot.db_adapter.fetch_one("""
+                SELECT
+                    COUNT(DISTINCT player_guid) as player_count,
+                    SUM(kills) as total_kills,
+                    SUM(deaths) as total_deaths
+                FROM player_comprehensive_stats
+                WHERE round_id = ?
+            """, (round_id,))
+
+            player_count, kills, deaths = totals if totals else (0, 0, 0)
+
+            # Get top 5 players for this round
             top_players = await self.bot.db_adapter.fetch_all("""
-                SELECT 
+                SELECT
                     player_name,
                     kills,
                     deaths,
                     damage_given,
                     accuracy
                 FROM player_comprehensive_stats
-                WHERE session_id = ? AND round_num = ?
+                WHERE round_id = ?
                 ORDER BY kills DESC
                 LIMIT 5
-            """, (session_id, round_num))
-            
+            """, (round_id,))
+
             return {
-                'session_id': session_id,
-                'round_num': round_num,
+                'round_id': round_id,
+                'round_num': round_number,
                 'map_name': map_name,
                 'player_count': player_count,
-                'total_kills': kills,
-                'total_deaths': deaths,
-                'timestamp': timestamp,
+                'total_kills': kills or 0,
+                'total_deaths': deaths or 0,
+                'round_date': round_date,
+                'round_time': round_time,
                 'top_players': top_players
             }
-            
+
         except Exception as e:
-            logger.error(f"❌ Error getting round data: {e}")
+            logger.error(f"❌ Error getting round data: {e}", exc_info=True)
             return None
     
     async def _create_round_embed(self, data: Dict[str, Any], filename: str) -> discord.Embed:
