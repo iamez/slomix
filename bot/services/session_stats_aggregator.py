@@ -108,25 +108,31 @@ class SessionStatsAggregator:
             # WARNING: In stopwatch mode this groups by SIDE (attacker/defender) not actual team!
             logger.warning("⚠️ No team rosters available - stats will group by SIDE not team")
             query = f"""
-                SELECT team,
-                    SUM(kills) as total_kills,
-                    SUM(deaths) as total_deaths,
-                    SUM(damage_given) as total_damage
-                FROM player_comprehensive_stats
-                WHERE round_id IN ({session_ids_str})
-                GROUP BY team
+                SELECT p.team,
+                    SUM(p.kills) as total_kills,
+                    SUM(p.deaths) as total_deaths,
+                    SUM(p.damage_given) as total_damage
+                FROM player_comprehensive_stats p
+                JOIN rounds r ON p.round_id = r.id
+                WHERE p.round_id IN ({session_ids_str})
+                  AND r.round_number IN (1, 2)
+                  AND (r.round_status = 'completed' OR r.round_status IS NULL)
+                GROUP BY p.team
             """
             return await self.db_adapter.fetch_all(query, tuple(session_ids))
 
-        # Get all player stats
+        # Get all player stats (with R0 and round_status filtering)
         query = f"""
-            SELECT player_name, player_guid,
-                SUM(kills) as total_kills,
-                SUM(deaths) as total_deaths,
-                SUM(damage_given) as total_damage
-            FROM player_comprehensive_stats
-            WHERE round_id IN ({session_ids_str})
-            GROUP BY player_guid, player_name
+            SELECT p.player_name, p.player_guid,
+                SUM(p.kills) as total_kills,
+                SUM(p.deaths) as total_deaths,
+                SUM(p.damage_given) as total_damage
+            FROM player_comprehensive_stats p
+            JOIN rounds r ON p.round_id = r.id
+            WHERE p.round_id IN ({session_ids_str})
+              AND r.round_number IN (1, 2)
+              AND (r.round_status = 'completed' OR r.round_status IS NULL)
+            GROUP BY p.player_guid, p.player_name
         """
         player_stats = await self.db_adapter.fetch_all(query, tuple(session_ids))
 
