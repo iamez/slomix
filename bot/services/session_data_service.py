@@ -48,7 +48,8 @@ class SessionDataService:
                 SELECT 1 FROM player_comprehensive_stats p
                 WHERE p.round_id = s.id
             )
-            AND SUBSTR(s.round_date, 1, 4) = '2025'
+            AND s.round_number IN (1, 2)
+            AND (s.round_status IN ('completed', 'substitution') OR s.round_status IS NULL)
             ORDER BY
                 s.round_date DESC,
                 CAST(REPLACE(s.round_time, ':', '') AS INTEGER) DESC
