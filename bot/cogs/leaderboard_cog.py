@@ -468,16 +468,18 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 if stat == "kills":
                     query = f"""
-                        SELECT 
-                            (SELECT player_name FROM player_comprehensive_stats 
-                             WHERE player_guid = p.player_guid 
-                             GROUP BY player_name 
+                        SELECT
+                            (SELECT player_name FROM player_comprehensive_stats
+                             WHERE player_guid = p.player_guid
+                             GROUP BY player_name
                              ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                             SUM(p.kills) as total_kills,
                             SUM(p.deaths) as total_deaths,
                             COUNT(DISTINCT p.round_id) as games,
                             p.player_guid
                         FROM player_comprehensive_stats p
+                        JOIN rounds r ON p.round_id = r.id
+                        WHERE r.round_number IN (1, 2)
                         GROUP BY p.player_guid
                         HAVING COUNT(DISTINCT p.round_id) > 10
                         ORDER BY total_kills DESC
@@ -487,16 +489,18 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 elif stat == "kd":
                     query = f"""
-                            SELECT 
-                                (SELECT player_name FROM player_comprehensive_stats 
-                                 WHERE player_guid = p.player_guid 
-                                 GROUP BY player_name 
+                            SELECT
+                                (SELECT player_name FROM player_comprehensive_stats
+                                 WHERE player_guid = p.player_guid
+                                 GROUP BY player_name
                                  ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                                 SUM(p.kills) as total_kills,
                                 SUM(p.deaths) as total_deaths,
                                 COUNT(DISTINCT p.round_id) as games,
                                 p.player_guid
                             FROM player_comprehensive_stats p
+                            JOIN rounds r ON p.round_id = r.id
+                            WHERE r.round_number IN (1, 2)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(p.deaths) > 0
                             ORDER BY (CAST(total_kills AS FLOAT) / total_deaths) DESC
@@ -506,10 +510,10 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 elif stat == "dpm":
                     query = f"""
-                            SELECT 
-                                (SELECT player_name FROM player_comprehensive_stats 
-                                 WHERE player_guid = p.player_guid 
-                                 GROUP BY player_name 
+                            SELECT
+                                (SELECT player_name FROM player_comprehensive_stats
+                                 WHERE player_guid = p.player_guid
+                                 GROUP BY player_name
                                  ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                                 CASE
                                     WHEN SUM(p.time_played_seconds) > 0
@@ -520,6 +524,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 COUNT(DISTINCT p.round_id) as games,
                                 p.player_guid
                             FROM player_comprehensive_stats p
+                            JOIN rounds r ON p.round_id = r.id
+                            WHERE r.round_number IN (1, 2)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50
                             ORDER BY weighted_dpm DESC
@@ -529,10 +535,10 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 elif stat == "accuracy":
                     query = f"""
-                            SELECT 
-                                (SELECT player_name FROM player_comprehensive_stats 
-                                 WHERE player_guid = p.player_guid 
-                                 GROUP BY player_name 
+                            SELECT
+                                (SELECT player_name FROM player_comprehensive_stats
+                                 WHERE player_guid = p.player_guid
+                                 GROUP BY player_name
                                  ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                                 SUM(w.hits) as total_hits,
                                 SUM(w.shots) as total_shots,
@@ -540,9 +546,11 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 COUNT(DISTINCT p.round_id) as games,
                                 p.player_guid
                             FROM player_comprehensive_stats p
+                            JOIN rounds r ON p.round_id = r.id
                             JOIN weapon_comprehensive_stats w
                                 ON p.round_id = w.round_id
                                 AND p.player_guid = w.player_guid
+                            WHERE r.round_number IN (1, 2)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(w.shots) > 1000
                             ORDER BY (CAST(SUM(w.hits) AS FLOAT) / SUM(w.shots)) DESC
@@ -552,10 +560,10 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 elif stat == "headshots":
                     query = f"""
-                            SELECT 
-                                (SELECT player_name FROM player_comprehensive_stats 
-                                 WHERE player_guid = p.player_guid 
-                                 GROUP BY player_name 
+                            SELECT
+                                (SELECT player_name FROM player_comprehensive_stats
+                                 WHERE player_guid = p.player_guid
+                                 GROUP BY player_name
                                  ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                                 SUM(p.headshot_kills) as total_hs,
                                 SUM(w.hits) as total_hits,
@@ -563,9 +571,11 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 COUNT(DISTINCT p.round_id) as games,
                                 p.player_guid
                             FROM player_comprehensive_stats p
+                            JOIN rounds r ON p.round_id = r.id
                             JOIN weapon_comprehensive_stats w
                                 ON p.round_id = w.round_id
                                 AND p.player_guid = w.player_guid
+                            WHERE r.round_number IN (1, 2)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(w.hits) > 1000
                             ORDER BY (CAST(SUM(p.headshot_kills) AS FLOAT) / SUM(w.hits)) DESC
@@ -585,6 +595,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 SUM(p.deaths) as total_deaths,
                                 p.player_guid
                             FROM player_comprehensive_stats p
+                            JOIN rounds r ON p.round_id = r.id
+                            WHERE r.round_number IN (1, 2)
                             GROUP BY p.player_guid
                             ORDER BY games DESC
                             LIMIT {players_per_page} OFFSET {offset}
@@ -603,6 +615,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 COUNT(DISTINCT p.round_id) as games,
                                 p.player_guid
                             FROM player_comprehensive_stats p
+                            JOIN rounds r ON p.round_id = r.id
+                            WHERE r.round_number IN (1, 2)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 10
                             ORDER BY total_revives DESC
@@ -622,6 +636,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 COUNT(DISTINCT p.round_id) as games,
                                 p.player_guid
                             FROM player_comprehensive_stats p
+                            JOIN rounds r ON p.round_id = r.id
+                            WHERE r.round_number IN (1, 2)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 10
                             ORDER BY total_gibs DESC
@@ -641,6 +657,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 COUNT(DISTINCT p.round_id) as games,
                                 p.player_guid
                             FROM player_comprehensive_stats p
+                            JOIN rounds r ON p.round_id = r.id
+                            WHERE r.round_number IN (1, 2)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 10
                             ORDER BY total_obj DESC
@@ -660,6 +678,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 COUNT(DISTINCT p.round_id) as games,
                                 p.player_guid
                             FROM player_comprehensive_stats p
+                            JOIN rounds r ON p.round_id = r.id
+                            WHERE r.round_number IN (1, 2)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50
                             ORDER BY avg_eff DESC
@@ -679,6 +699,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 COUNT(DISTINCT p.round_id) as games,
                                 p.player_guid
                             FROM player_comprehensive_stats p
+                            JOIN rounds r ON p.round_id = r.id
+                            WHERE r.round_number IN (1, 2)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(p.damage_given) > 0
                             ORDER BY (CAST(total_team_dmg AS FLOAT) / total_dmg) ASC
@@ -701,6 +723,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                 COUNT(DISTINCT p.round_id) as games,
                                 p.player_guid
                             FROM player_comprehensive_stats p
+                            JOIN rounds r ON p.round_id = r.id
+                            WHERE r.round_number IN (1, 2)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 10
                             ORDER BY total_multi DESC
@@ -710,23 +734,25 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 elif stat == "grenades":
                     query = f"""
-                            SELECT 
-                                (SELECT player_name FROM player_comprehensive_stats 
-                                 WHERE player_guid = w.player_guid 
-                                 GROUP BY player_name 
+                            SELECT
+                                (SELECT player_name FROM player_comprehensive_stats
+                                 WHERE player_guid = w.player_guid
+                                 GROUP BY player_name
                                  ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                                 SUM(w.kills) as total_kills,
                                 SUM(w.shots) as total_throws,
                                 SUM(w.hits) as total_hits,
-                                CASE 
-                                    WHEN SUM(w.kills) > 0 
+                                CASE
+                                    WHEN SUM(w.kills) > 0
                                     THEN ROUND(CAST(SUM(w.hits) AS FLOAT) / SUM(w.kills), 2)
-                                    ELSE 0 
+                                    ELSE 0
                                 END as aoe_ratio,
                                 COUNT(DISTINCT w.round_id) as games,
                                 w.player_guid
                             FROM weapon_comprehensive_stats w
+                            JOIN rounds r ON w.round_id = r.id
                             WHERE w.weapon_name = 'WS_GRENADE'
+                              AND r.round_number IN (1, 2)
                             GROUP BY w.player_guid
                             HAVING COUNT(DISTINCT w.round_id) > 10
                             ORDER BY total_kills DESC
