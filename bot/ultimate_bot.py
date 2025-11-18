@@ -161,6 +161,7 @@ class UltimateETLegacyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
+        intents.members = True  # Required for voice channel member detection
         super().__init__(command_prefix="!", intents=intents)
 
         # 📊 Database Configuration - Load config and create adapter
@@ -217,6 +218,7 @@ class UltimateETLegacyBot(commands.Bot):
         
         # SSH monitoring optimization - counter-based intervals
         self.ssh_check_counter = 0  # Tracks cycles for interval-based checking
+        self.last_file_download_time = None  # Track last file download for grace period logic
 
         # Load gaming voice channel IDs from .env
         gaming_channels_str = os.getenv("GAMING_VOICE_CHANNELS", "")
@@ -577,6 +579,55 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info(
                 f"✅ Database verified - all {len(required_tables)} required tables exist"
             )
+
+    # 🔌 SSH HELPER METHODS
+
+    async def ssh_list_remote_files(self, ssh_config: dict) -> list:
+        """
+        List files in remote SSH directory using provided config.
+        Used by sync_cog for manual sync operations.
+
+        Args:
+            ssh_config: Dict with keys: host, port, user, key_path, remote_path
+
+        Returns:
+            List of filenames in remote directory
+        """
+        import paramiko
+        import shlex
+
+        def _list_files_sync():
+            ssh = None
+            try:
+                ssh = paramiko.SSHClient()
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+                ssh.connect(
+                    hostname=ssh_config['host'],
+                    port=ssh_config['port'],
+                    username=ssh_config['user'],
+                    key_filename=os.path.expanduser(ssh_config['key_path']),
+                    timeout=10
+                )
+
+                safe_path = shlex.quote(ssh_config['remote_path'])
+                stdin, stdout, stderr = ssh.exec_command(f"ls -1 {safe_path}")  # nosec B601
+                files = stdout.read().decode().strip().split('\n')
+
+                return [f.strip() for f in files if f.strip()]
+
+            except Exception as e:
+                logger.error(f"❌ SSH list files error: {e}")
+                return []
+            finally:
+                if ssh:
+                    try:
+                        ssh.close()
+                    except Exception:
+                        pass
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _list_files_sync)
 
     # 🎙️ VOICE CHANNEL SESSION DETECTION
 
@@ -1895,23 +1946,26 @@ class UltimateETLegacyBot(commands.Bot):
     @tasks.loop(seconds=60)
     async def endstats_monitor(self):
         """
-        🔄 SSH Monitoring Task - Optimized Performance Version
-        
-        **Performance Optimization (93% reduction in SSH calls):**
-        - Dead Hours (02:00-11:00): No SSH checks
-        - Voice Detection: 6+ players → check every 60s
-        - Idle Mode: <6 players → check every 6 hours
-        - Uses counter-based intervals (Option B from design doc)
-        
+        🔄 SSH Monitoring Task - Optimized Performance with Grace Period
+
+        **Performance Optimization with File Loss Prevention:**
+        - Dead Hours (02:00-11:00 CET): No SSH checks
+        - Active Mode: 6+ players in voice → check every 60s
+        - Grace Period: Within 30min of last file → check every 60s (prevents file loss during player drops)
+        - Idle Mode: No players + no recent files → check every 10min (reduced from 6hr to prevent file loss)
+        - Uses counter-based intervals with grace period logic
+
         Monitors remote game server for new stats files:
         1. Lists files on remote server via SSH
         2. Compares with processed_files tracking
         3. Downloads new files
         4. Parses and imports to database
         5. Posts Discord round summaries automatically
-        
+        6. Detects and marks round restarts/cancellations
+
         **Old system:** ~2,880 SSH checks/day (every 30s continuously)
-        **New system:** ~182 SSH checks/day (interval-based)
+        **New system:** ~200 SSH checks/day (with grace period + 10min idle)
+        **File loss prevention:** Grace period keeps checking for 30min after last file
         """
         if not self.monitoring or not self.ssh_enabled:
             return
@@ -1943,18 +1997,26 @@ class UltimateETLegacyBot(commands.Bot):
                 if channel and hasattr(channel, "members"):
                     total_players += sum(1 for m in channel.members if not m.bot)
             
-            # ========== INTERVAL-BASED CHECKING (Counter System) ==========
+            # ========== INTERVAL-BASED CHECKING (Counter System with Grace Period) ==========
             self.ssh_check_counter += 1
-            
-            if total_players >= 6:
+
+            # Calculate time since last file was downloaded
+            grace_period_active = False
+            if hasattr(self, 'last_file_download_time') and self.last_file_download_time:
+                time_since_last_file = (datetime.now() - self.last_file_download_time).total_seconds()
+                grace_period_active = time_since_last_file < 1800  # 30 minutes grace period
+
+            if total_players >= 6 or grace_period_active:
                 # ACTIVE MODE: Check every 60 seconds (every 1 cycle)
+                # Triggered by: 6+ players in voice OR within 30min of last file
                 interval = 1
-                mode = "ACTIVE"
+                mode = "ACTIVE (players)" if total_players >= 6 else "ACTIVE (grace period)"
             else:
-                # IDLE MODE: Check every 6 hours (360 cycles at 60s each)
-                interval = 360
+                # IDLE MODE: Check every 10 minutes (10 cycles at 60s each)
+                # 🔧 REDUCED from 6 hours to 10 minutes to prevent file loss
+                interval = 10
                 mode = "IDLE"
-            
+
             # Only perform SSH check when counter reaches interval
             if self.ssh_check_counter < interval:
                 logger.debug(
@@ -1963,7 +2025,7 @@ class UltimateETLegacyBot(commands.Bot):
                     f"{total_players} players in voice)"
                 )
                 return
-            
+
             # Reset counter and perform check
             self.ssh_check_counter = 0
             logger.info(
@@ -2026,7 +2088,10 @@ class UltimateETLegacyBot(commands.Bot):
 
                     if local_path:
                         logger.info(f"✅ Downloaded in {download_time:.2f}s: {local_path}")
-                        
+
+                        # Track download time for grace period logic
+                        self.last_file_download_time = datetime.now()
+
                         # Wait 3 seconds for file to fully write
                         logger.debug("⏳ Waiting 3s for file to fully write...")
                         await asyncio.sleep(3)
@@ -2301,6 +2366,11 @@ class UltimateETLegacyBot(commands.Bot):
         if isinstance(error, commands.CommandNotFound):
             await ctx.send(
                 "❌ Command not found. Use `!help_command` for available commands."
+            )
+        elif isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(
+                f"⏱️ Slow down! Try again in {error.retry_after:.1f}s",
+                delete_after=5
             )
         elif isinstance(error, commands.MissingRequiredArgument):
             await ctx.send(
