@@ -248,9 +248,10 @@ class PlayerBadgeService:
             return {}
 
         try:
-            # Build placeholders for IN clause
+            # Build placeholders for IN clause (safe: no user input in placeholder string)
             placeholders = ",".join("?" * len(player_guids))
 
+            # Safe: placeholders are "?" only, user data passed via parameterized tuple
             query = f"""
                 SELECT
                     p.player_guid,
@@ -273,7 +274,7 @@ class PlayerBadgeService:
                   AND r.round_number IN (1, 2)
                   AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                 GROUP BY p.player_guid
-            """
+            """  # nosec B608
 
             results = await self.db_adapter.fetch_all(query, tuple(player_guids))
 
