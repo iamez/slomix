@@ -12,7 +12,7 @@ Players must be linked (discord_id) to set custom names.
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from datetime import datetime
 
 logger = logging.getLogger("bot.services.player_display_name_service")
@@ -104,15 +104,17 @@ class PlayerDisplayNameService:
             return {}
 
         try:
+            # Build placeholders for IN clause (safe: no user input in placeholder string)
             placeholders = ",".join("?" * len(player_guids))
 
             # Get all custom display names
+            # Safe: placeholders are "?" only, user data passed via tuple
             link_query = f"""
                 SELECT player_guid, display_name
                 FROM player_links
                 WHERE player_guid IN ({placeholders})
                   AND display_name IS NOT NULL
-            """
+            """  # nosec B608
             link_results = await self.db_adapter.fetch_all(link_query, tuple(player_guids))
             display_names = {row[0]: row[1] for row in link_results}
 
@@ -120,13 +122,15 @@ class PlayerDisplayNameService:
             remaining_guids = [guid for guid in player_guids if guid not in display_names]
 
             if remaining_guids:
+                # Build placeholders for remaining GUIDs (safe: no user input)
                 alias_placeholders = ",".join("?" * len(remaining_guids))
+                # Safe: placeholders are "?" only, user data passed via tuple
                 alias_query = f"""
                     SELECT DISTINCT ON (guid) guid, alias
                     FROM player_aliases
                     WHERE guid IN ({alias_placeholders})
                     ORDER BY guid, last_seen DESC
-                """
+                """  # nosec B608
                 # Note: DISTINCT ON is PostgreSQL syntax
                 # For SQLite, use a different approach
                 try:
