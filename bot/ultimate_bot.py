@@ -1818,6 +1818,14 @@ class UltimateETLegacyBot(commands.Bot):
             filename, ignore_startup_time=ignore_startup_time, check_db_only=check_db_only
         )
 
+    async def ssh_list_remote_files(self, ssh_config: dict) -> list:
+        """Delegate to SSHHandler.list_remote_files()"""
+        return await SSHHandler.list_remote_files(ssh_config)
+
+    async def ssh_download_file(self, ssh_config: dict, filename: str, local_dir: str = "local_stats") -> str:
+        """Delegate to SSHHandler.download_file()"""
+        return await SSHHandler.download_file(ssh_config, filename, local_dir)
+
     async def _auto_end_session(self):
         """Auto-end session and post summary"""
         try:
