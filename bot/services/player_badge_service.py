@@ -4,15 +4,23 @@ Player Badge Service - Achievement Badge Display
 Fetches and formats player achievement badges for display in session stats.
 
 Provides emoji badges based on player lifetime achievements:
-- Kill milestones: 🎯 💥 💀 ⚔️ ☠️ 👑
-- Game milestones: 🎮 🎯 🏆 ⭐ 💎 👑
-- K/D milestones: ⚖️ 📈 🔥 💯
 
-Future expansions:
-- Revive milestones
-- Objective milestones
+**Core Achievements:**
+- Kill milestones: 🎯 (100) 💥 (500) 💀 (1K) ⚔️ (2.5K) ☠️ (5K) 👑 (10K)
+- Game milestones: 🎮 (10) 🎯 (50) 🏆 (100) ⭐ (250) 💎 (500) 👑 (1K)
+- K/D milestones: ⚖️ (1.0) 📈 (1.5) 🔥 (2.0) 💯 (3.0)
+
+**Phase 1: Support & Objectives:**
+- Revives given: 💉 (100) 🏥 (1K) ⚕️ (10K)
+- Times revived: 🔄 (50) ♻️ (500) 🔁 (5K)
+- Dynamites planted: 💣 (50) 🧨 (500) 💥 (5K)
+- Dynamites defused: 🛡️ (50) 🔰 (500) 🏛️ (5K)
+- Objectives (stolen+returned): 🎯 (25) 🏆 (250) 👑 (2.5K)
+
+**Future Phase 2:**
 - Record holders (most kills in round/map/month/year)
 - Weapon mastery (MP40/Thompson accuracy)
+- DPM records
 """
 
 import logging
@@ -50,6 +58,37 @@ class PlayerBadgeService:
         3.0: "💯",
     }
 
+    # Phase 1: Support & Objective Milestones
+    REVIVE_MILESTONES = {
+        100: "💉",
+        1000: "🏥",
+        10000: "⚕️",
+    }
+
+    TIMES_REVIVED_MILESTONES = {
+        50: "🔄",
+        500: "♻️",
+        5000: "🔁",
+    }
+
+    DYNAMITE_PLANTED_MILESTONES = {
+        50: "💣",
+        500: "🧨",
+        5000: "💥",
+    }
+
+    DYNAMITE_DEFUSED_MILESTONES = {
+        50: "🛡️",
+        500: "🔰",
+        5000: "🏛️",
+    }
+
+    OBJECTIVE_MILESTONES = {
+        25: "🎯",
+        250: "🏆",
+        2500: "👑",
+    }
+
     def __init__(self, db_adapter):
         """
         Initialize the PlayerBadgeService.
@@ -70,7 +109,7 @@ class PlayerBadgeService:
             String of emoji badges (e.g., "💀🏆📈" or "" if no achievements)
         """
         try:
-            # Get player lifetime stats
+            # Get player lifetime stats including support/objectives
             query = """
                 SELECT
                     SUM(p.kills) as total_kills,
@@ -80,7 +119,12 @@ class PlayerBadgeService:
                         WHEN SUM(p.deaths) > 0
                         THEN CAST(SUM(p.kills) AS REAL) / SUM(p.deaths)
                         ELSE SUM(p.kills)
-                    END as overall_kd
+                    END as overall_kd,
+                    SUM(p.revives_given) as total_revives,
+                    SUM(p.times_revived) as total_times_revived,
+                    SUM(p.dynamites_planted) as total_dyns_planted,
+                    SUM(p.dynamites_defused) as total_dyns_defused,
+                    (SUM(p.objectives_stolen) + SUM(p.objectives_returned)) as total_objectives
                 FROM player_comprehensive_stats p
                 JOIN rounds r ON p.round_id = r.id
                 WHERE p.player_guid = ?
@@ -94,25 +138,45 @@ class PlayerBadgeService:
             if not result or result[0] is None:
                 return ""
 
-            kills, deaths, games, kd_ratio = result
+            (kills, deaths, games, kd_ratio, revives, times_revived,
+             dyns_planted, dyns_defused, objectives) = result
 
             badges = []
 
-            # Get highest kill milestone
-            kill_badge = self._get_highest_milestone(kills, self.KILL_MILESTONES)
+            # Core achievements (kills, games, K/D)
+            kill_badge = self._get_highest_milestone(kills or 0, self.KILL_MILESTONES)
             if kill_badge:
                 badges.append(kill_badge)
 
-            # Get highest game milestone
-            game_badge = self._get_highest_milestone(games, self.GAME_MILESTONES)
+            game_badge = self._get_highest_milestone(games or 0, self.GAME_MILESTONES)
             if game_badge:
                 badges.append(game_badge)
 
-            # Get highest K/D milestone (only if 20+ games)
             if games >= 20:
-                kd_badge = self._get_highest_milestone(kd_ratio, self.KD_MILESTONES)
+                kd_badge = self._get_highest_milestone(kd_ratio or 0, self.KD_MILESTONES)
                 if kd_badge:
                     badges.append(kd_badge)
+
+            # Phase 1: Support & Objective achievements
+            revive_badge = self._get_highest_milestone(revives or 0, self.REVIVE_MILESTONES)
+            if revive_badge:
+                badges.append(revive_badge)
+
+            revived_badge = self._get_highest_milestone(times_revived or 0, self.TIMES_REVIVED_MILESTONES)
+            if revived_badge:
+                badges.append(revived_badge)
+
+            dyn_plant_badge = self._get_highest_milestone(dyns_planted or 0, self.DYNAMITE_PLANTED_MILESTONES)
+            if dyn_plant_badge:
+                badges.append(dyn_plant_badge)
+
+            dyn_defuse_badge = self._get_highest_milestone(dyns_defused or 0, self.DYNAMITE_DEFUSED_MILESTONES)
+            if dyn_defuse_badge:
+                badges.append(dyn_defuse_badge)
+
+            obj_badge = self._get_highest_milestone(objectives or 0, self.OBJECTIVE_MILESTONES)
+            if obj_badge:
+                badges.append(obj_badge)
 
             return "".join(badges)
 
@@ -165,7 +229,12 @@ class PlayerBadgeService:
                         WHEN SUM(p.deaths) > 0
                         THEN CAST(SUM(p.kills) AS REAL) / SUM(p.deaths)
                         ELSE SUM(p.kills)
-                    END as overall_kd
+                    END as overall_kd,
+                    SUM(p.revives_given) as total_revives,
+                    SUM(p.times_revived) as total_times_revived,
+                    SUM(p.dynamites_planted) as total_dyns_planted,
+                    SUM(p.dynamites_defused) as total_dyns_defused,
+                    (SUM(p.objectives_stolen) + SUM(p.objectives_returned)) as total_objectives
                 FROM player_comprehensive_stats p
                 JOIN rounds r ON p.round_id = r.id
                 WHERE p.player_guid IN ({placeholders})
@@ -178,10 +247,11 @@ class PlayerBadgeService:
 
             badge_map = {}
             for row in results:
-                guid, kills, deaths, games, kd_ratio = row
+                (guid, kills, deaths, games, kd_ratio, revives, times_revived,
+                 dyns_planted, dyns_defused, objectives) = row
                 badges = []
 
-                # Get highest achievements
+                # Core achievements
                 kill_badge = self._get_highest_milestone(kills or 0, self.KILL_MILESTONES)
                 if kill_badge:
                     badges.append(kill_badge)
@@ -194,6 +264,27 @@ class PlayerBadgeService:
                     kd_badge = self._get_highest_milestone(kd_ratio or 0, self.KD_MILESTONES)
                     if kd_badge:
                         badges.append(kd_badge)
+
+                # Phase 1: Support & Objective achievements
+                revive_badge = self._get_highest_milestone(revives or 0, self.REVIVE_MILESTONES)
+                if revive_badge:
+                    badges.append(revive_badge)
+
+                revived_badge = self._get_highest_milestone(times_revived or 0, self.TIMES_REVIVED_MILESTONES)
+                if revived_badge:
+                    badges.append(revived_badge)
+
+                dyn_plant_badge = self._get_highest_milestone(dyns_planted or 0, self.DYNAMITE_PLANTED_MILESTONES)
+                if dyn_plant_badge:
+                    badges.append(dyn_plant_badge)
+
+                dyn_defuse_badge = self._get_highest_milestone(dyns_defused or 0, self.DYNAMITE_DEFUSED_MILESTONES)
+                if dyn_defuse_badge:
+                    badges.append(dyn_defuse_badge)
+
+                obj_badge = self._get_highest_milestone(objectives or 0, self.OBJECTIVE_MILESTONES)
+                if obj_badge:
+                    badges.append(obj_badge)
 
                 badge_map[guid] = "".join(badges)
 
