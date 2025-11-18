@@ -23,8 +23,12 @@ import logging
 import os
 import shlex
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 import discord
+
+# Import services for comprehensive stats display
+from bot.services.player_badge_service import PlayerBadgeService
+from bot.services.player_display_name_service import PlayerDisplayNameService
 
 logger = logging.getLogger("UltimateBot.SSHMonitor")
 
@@ -77,6 +81,10 @@ class SSHMonitor:
         self.check_interval = int(os.getenv("SSH_CHECK_INTERVAL", "60"))  # seconds
 
         # Startup optimization: only check recent files on first check
+
+        # Initialize services for comprehensive stats display
+        self.badge_service = PlayerBadgeService(bot.db_adapter)
+        self.display_name_service = PlayerDisplayNameService(bot.db_adapter)
         self._is_first_check = True
         self.startup_lookback_hours = int(os.getenv("SSH_STARTUP_LOOKBACK_HOURS", "24"))
 
@@ -571,18 +579,39 @@ class SSHMonitor:
 
             player_count, kills, deaths = totals if totals else (0, 0, 0)
 
-            # Get top 5 players for this round
+            # Get ALL players with comprehensive stats for this round
             top_players = await self.bot.db_adapter.fetch_all("""
                 SELECT
                     player_name,
+                    player_guid,
                     kills,
                     deaths,
+                    gibs,
                     damage_given,
-                    accuracy
-                FROM player_comprehensive_stats
-                WHERE round_id = ?
-                ORDER BY kills DESC
-                LIMIT 5
+                    damage_received,
+                    accuracy,
+                    headshots,
+                    headshot_kills,
+                    time_played_seconds,
+                    time_dead_ratio,
+                    denied_playtime,
+                    most_useful_kills,
+                    revives_given,
+                    times_revived,
+                    double_kills,
+                    triple_kills,
+                    quad_kills,
+                    multi_kills,
+                    mega_kills
+                FROM player_comprehensive_stats p
+                LEFT JOIN (
+                    SELECT round_id, player_guid, SUM(hits) as hits, SUM(shots) as shots
+                    FROM weapon_comprehensive_stats
+                    WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
+                    GROUP BY round_id, player_guid
+                ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
+                WHERE p.round_id = ?
+                ORDER BY p.kills DESC
             """, (round_id,))
 
             return {
@@ -602,36 +631,122 @@ class SSHMonitor:
             return None
     
     async def _create_round_embed(self, data: Dict[str, Any], filename: str) -> discord.Embed:
-        """Create Discord embed for round stats"""
+        """Create Discord embed for round stats with comprehensive 3-line format"""
         embed = discord.Embed(
             title=f"🎮 Round {data['round_num']} Complete!",
             description=f"**Map:** {data['map_name']}\n**Players:** {data['player_count']}",
             color=discord.Color.green(),
             timestamp=datetime.now()
         )
-        
-        # Top players
+
+        # Get all players with comprehensive stats
         if data['top_players']:
-            top_text = []
-            for i, (name, kills, deaths, dmg, acc) in enumerate(data['top_players'], 1):
-                kd = f"{kills}/{deaths}"
-                top_text.append(f"{i}. **{name}** - {kd} K/D | {int(dmg)} DMG | {acc:.1f}% ACC")
-            
+            # Fetch badges and display names for all players
+            player_guids = [player[1] for player in data['top_players']]  # player_guid is at index 1
+            player_badges = await self.badge_service.get_player_badges_batch(player_guids)
+            display_names = await self.display_name_service.get_display_names_batch(player_guids)
+
+            # Build player display with 3-line format
+            medals = ["🥇", "🥈", "🥉"]
+            field_text = ""
+
+            for i, player_data in enumerate(data['top_players']):
+                # Unpack comprehensive player data
+                (name, player_guid, kills, deaths, gibs, dmg_given, dmg_recv, acc,
+                 total_hs, hsk, time_played, time_dead_ratio, denied, useful_kills,
+                 revives, times_revived, double, triple, quad, multi, mega) = player_data
+
+                # Use display name if available
+                display_name = display_names.get(player_guid, name)
+
+                # Handle NULL values
+                kills = kills or 0
+                deaths = deaths or 0
+                gibs = gibs or 0
+                dmg_given = dmg_given or 0
+                dmg_recv = dmg_recv or 0
+                total_hs = total_hs or 0
+                time_played = time_played or 0
+                time_dead_ratio = time_dead_ratio or 0
+                denied = denied or 0
+                useful_kills = useful_kills or 0
+                revives = revives or 0
+                times_revived = times_revived or 0
+
+                # Calculate metrics
+                kd_ratio = kills / deaths if deaths > 0 else kills
+                hs_rate = (total_hs / kills * 100) if kills > 0 else 0
+
+                # Calculate DPM (damage per minute)
+                dpm = (dmg_given * 60.0) / time_played if time_played > 0 else 0
+
+                # Format times
+                minutes = int(time_played // 60)
+                seconds = int(time_played % 60)
+                time_display = f"{minutes}:{seconds:02d}"
+
+                time_dead = int(time_played * time_dead_ratio / 100.0)
+                dead_minutes = int(time_dead // 60)
+                dead_seconds = int(time_dead % 60)
+                time_dead_display = f"{dead_minutes}:{dead_seconds:02d}"
+
+                denied_minutes = int(denied // 60)
+                denied_seconds = int(denied % 60)
+                time_denied_display = f"{denied_minutes}:{denied_seconds:02d}"
+
+                # Format damage (show in K if over 1000)
+                dmg_given_display = f"{dmg_given/1000:.1f}K" if dmg_given >= 1000 else f"{dmg_given}"
+                dmg_recv_display = f"{dmg_recv/1000:.1f}K" if dmg_recv >= 1000 else f"{dmg_recv}"
+
+                # Medal (top 3)
+                medal = medals[i] if i < len(medals) else "🔹"
+
+                # Get achievement badges
+                badges = ""
+                if player_guid in player_badges:
+                    badges = f" {player_badges[player_guid]}"
+
+                # Build multikills string
+                multikills_parts = []
+                if double: multikills_parts.append(f"{double}DBL")
+                if triple: multikills_parts.append(f"{triple}TPL")
+                if quad: multikills_parts.append(f"{quad}QD")
+                if multi: multikills_parts.append(f"{multi}PNT")
+                if mega: multikills_parts.append(f"{mega}MGA")
+                multikills_display = f" • {' '.join(multikills_parts)}" if multikills_parts else ""
+
+                # Three-line format
+                # Line 1: Medal + Name + Badges
+                field_text += f"{medal} **{display_name}**{badges}\n"
+
+                # Line 2: Combat essentials (K/D/G, DPM, damage, accuracy, headshots)
+                field_text += (
+                    f"   {kills}K/{deaths}D/{gibs}G ({kd_ratio:.2f}) • "
+                    f"{dpm:.0f} DPM • {dmg_given_display}⬆/{dmg_recv_display}⬇ • "
+                    f"{acc:.1f}% ACC • {total_hs} HS ({hs_rate:.1f}%)\n"
+                )
+
+                # Line 3: Support/meta stats (UK, revives, times, multikills)
+                field_text += (
+                    f"   {useful_kills} UK • {revives}↑/{times_revived}↓ • "
+                    f"⏱{time_display} 💀{time_dead_display} ⏳{time_denied_display}{multikills_display}\n\n"
+                )
+
             embed.add_field(
-                name="🏆 Top Players",
-                value="\n".join(top_text),
+                name="🏆 All Players",
+                value=field_text.rstrip(),
                 inline=False
             )
-        
+
         # Stats summary
         embed.add_field(
             name="📊 Round Summary",
             value=f"Total Kills: {data['total_kills']}\nTotal Deaths: {data['total_deaths']}",
             inline=True
         )
-        
+
         embed.set_footer(text=f"File: {filename}")
-        
+
         return embed
     
     async def _post_match_summary(self, filename: str):
@@ -695,19 +810,33 @@ class SSHMonitor:
 
             round_id, time_limit, actual_time, winner_team, round_outcome = row
             
-            # Get aggregated player stats from match summary
+            # Get ALL player stats with comprehensive data from match summary
             player_stats = await self.bot.db_adapter.fetch_all("""
-                SELECT 
+                SELECT
                     player_name,
+                    player_guid,
                     kills,
                     deaths,
+                    gibs,
                     damage_given,
+                    damage_received,
                     accuracy,
-                    headshots
+                    headshots,
+                    headshot_kills,
+                    time_played_seconds,
+                    time_dead_ratio,
+                    denied_playtime,
+                    most_useful_kills,
+                    revives_given,
+                    times_revived,
+                    double_kills,
+                    triple_kills,
+                    quad_kills,
+                    multi_kills,
+                    mega_kills
                 FROM player_comprehensive_stats
                 WHERE round_id = ?
                 ORDER BY kills DESC
-                LIMIT 10
             """, (round_id,))
             
             # Calculate totals
@@ -740,42 +869,126 @@ class SSHMonitor:
             return None
     
     async def _create_match_summary_embed(self, data: Dict[str, Any], filename: str, map_name: str) -> discord.Embed:
-        """Create Discord embed for match summary"""
+        """Create Discord embed for match summary with comprehensive 3-line format"""
         embed = discord.Embed(
             title=f"🏆 Match Complete - {map_name}",
             description="**Stopwatch Mode** - Combined stats from both rounds",
             color=discord.Color.gold(),
             timestamp=datetime.now()
         )
-        
+
         # Match outcome with stopwatch times
         outcome_text = f"**Round 1 Time:** {data['time_limit']}\n"
         outcome_text += f"**Round 2 Time:** {data['actual_time']}\n"
-        
+
         if data['round_outcome']:
             outcome_text += f"**Result:** {data['round_outcome']}"
-        
+
         embed.add_field(
             name="⏱️ Match Result",
             value=outcome_text,
             inline=False
         )
-        
-        # Top players (cumulative stats)
+
+        # ALL players (cumulative stats) with comprehensive 3-line format
         if data['top_players']:
-            top_text = []
-            for i, (name, kills, deaths, dmg, acc, hs) in enumerate(data['top_players'][:5], 1):
-                kd = f"{kills}/{deaths}"
-                top_text.append(
-                    f"{i}. **{name}** - {kd} K/D | {int(dmg):,} DMG | {acc:.1f}% ACC | {hs} HS"
+            # Fetch badges and display names for all players
+            player_guids = [player[1] for player in data['top_players']]  # player_guid at index 1
+            player_badges = await self.badge_service.get_player_badges_batch(player_guids)
+            display_names = await self.display_name_service.get_display_names_batch(player_guids)
+
+            # Build player display with 3-line format
+            medals = ["🥇", "🥈", "🥉"]
+            field_text = ""
+
+            for i, player_data in enumerate(data['top_players']):
+                # Unpack comprehensive player data
+                (name, player_guid, kills, deaths, gibs, dmg_given, dmg_recv, acc,
+                 total_hs, hsk, time_played, time_dead_ratio, denied, useful_kills,
+                 revives, times_revived, double, triple, quad, multi, mega) = player_data
+
+                # Use display name if available
+                display_name = display_names.get(player_guid, name)
+
+                # Handle NULL values
+                kills = kills or 0
+                deaths = deaths or 0
+                gibs = gibs or 0
+                dmg_given = dmg_given or 0
+                dmg_recv = dmg_recv or 0
+                total_hs = total_hs or 0
+                time_played = time_played or 0
+                time_dead_ratio = time_dead_ratio or 0
+                denied = denied or 0
+                useful_kills = useful_kills or 0
+                revives = revives or 0
+                times_revived = times_revived or 0
+
+                # Calculate metrics
+                kd_ratio = kills / deaths if deaths > 0 else kills
+                hs_rate = (total_hs / kills * 100) if kills > 0 else 0
+
+                # Calculate DPM (damage per minute)
+                dpm = (dmg_given * 60.0) / time_played if time_played > 0 else 0
+
+                # Format times
+                minutes = int(time_played // 60)
+                seconds = int(time_played % 60)
+                time_display = f"{minutes}:{seconds:02d}"
+
+                time_dead = int(time_played * time_dead_ratio / 100.0)
+                dead_minutes = int(time_dead // 60)
+                dead_seconds = int(time_dead % 60)
+                time_dead_display = f"{dead_minutes}:{dead_seconds:02d}"
+
+                denied_minutes = int(denied // 60)
+                denied_seconds = int(denied % 60)
+                time_denied_display = f"{denied_minutes}:{denied_seconds:02d}"
+
+                # Format damage (show in K if over 1000)
+                dmg_given_display = f"{dmg_given/1000:.1f}K" if dmg_given >= 1000 else f"{dmg_given}"
+                dmg_recv_display = f"{dmg_recv/1000:.1f}K" if dmg_recv >= 1000 else f"{dmg_recv}"
+
+                # Medal (top 3)
+                medal = medals[i] if i < len(medals) else "🔹"
+
+                # Get achievement badges
+                badges = ""
+                if player_guid in player_badges:
+                    badges = f" {player_badges[player_guid]}"
+
+                # Build multikills string
+                multikills_parts = []
+                if double: multikills_parts.append(f"{double}DBL")
+                if triple: multikills_parts.append(f"{triple}TPL")
+                if quad: multikills_parts.append(f"{quad}QD")
+                if multi: multikills_parts.append(f"{multi}PNT")
+                if mega: multikills_parts.append(f"{mega}MGA")
+                multikills_display = f" • {' '.join(multikills_parts)}" if multikills_parts else ""
+
+                # Three-line format
+                # Line 1: Medal + Name + Badges
+                field_text += f"{medal} **{display_name}**{badges}\n"
+
+                # Line 2: Combat essentials (K/D/G, DPM, damage, accuracy, headshots)
+                field_text += (
+                    f"   {kills}K/{deaths}D/{gibs}G ({kd_ratio:.2f}) • "
+                    f"{dpm:.0f} DPM • {dmg_given_display}⬆/{dmg_recv_display}⬇ • "
+                    f"{acc:.1f}% ACC • {total_hs} HS ({hs_rate:.1f}%)\n"
                 )
-            
+
+                # Line 3: Support/meta stats (UK, revives, times, multikills)
+                field_text += (
+                    f"   {useful_kills} UK • {revives}↑/{times_revived}↓ • "
+                    f"⏱{time_display} 💀{time_dead_display} ⏳{time_denied_display}{multikills_display}\n\n"
+                )
+
             embed.add_field(
-                name="🏅 Top Performers (Both Rounds)",
-                value="\n".join(top_text),
+                name="🏅 All Performers (Both Rounds)",
+                value=field_text.rstrip(),
                 inline=False
             )
-        
+
         # Match totals
         embed.add_field(
             name="📊 Match Totals",
@@ -787,9 +1000,9 @@ class SSHMonitor:
             ),
             inline=True
         )
-        
+
         embed.set_footer(text=f"Match summary from {filename}")
-        
+
         return embed
     
     def get_stats(self) -> Dict[str, Any]:

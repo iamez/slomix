@@ -430,6 +430,14 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"❌ Failed to load Last Round Cog: {e}", exc_info=True)
 
+        # 🏆 Load Achievements Cog (achievement badge information and help)
+        try:
+            from bot.cogs.achievements_cog import AchievementsCog
+            await self.add_cog(AchievementsCog(self))
+            logger.info("✅ Achievements Cog loaded (achievements, medals, badges)")
+        except Exception as e:
+            logger.error(f"❌ Failed to load Achievements Cog: {e}", exc_info=True)
+
         # Load Sync Cog
         try:
             from bot.cogs.sync_cog import SyncCog
