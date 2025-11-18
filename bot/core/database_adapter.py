@@ -67,7 +67,8 @@ class PostgreSQLAdapter(DatabaseAdapter):
     """PostgreSQL database adapter using asyncpg connection pooling."""
 
     def __init__(self, host: str, port: int, database: str, user: str, password: str,
-                 min_pool_size: int = 2, max_pool_size: int = 10):
+                 min_pool_size: int = 2, max_pool_size: int = 10,
+                 ssl_mode: str = 'disable', ssl_cert: str = '', ssl_key: str = '', ssl_root_cert: str = ''):
         """
         Initialize PostgreSQL adapter.
 
@@ -79,6 +80,10 @@ class PostgreSQLAdapter(DatabaseAdapter):
             password: Database password
             min_pool_size: Minimum pool connections (default 2, reduced from 5)
             max_pool_size: Maximum pool connections (default 10, reduced from 20)
+            ssl_mode: SSL mode (disable, require, verify-ca, verify-full)
+            ssl_cert: Path to client certificate file
+            ssl_key: Path to client private key file
+            ssl_root_cert: Path to root certificate file
         """
         # Handle host:port in host string
         if ':' in host:
@@ -92,8 +97,14 @@ class PostgreSQLAdapter(DatabaseAdapter):
         self.password = password
         self.min_pool_size = min_pool_size
         self.max_pool_size = max_pool_size
+        self.ssl_mode = ssl_mode
+        self.ssl_cert = ssl_cert
+        self.ssl_key = ssl_key
+        self.ssl_root_cert = ssl_root_cert
         self.pool = None
-        logger.info(f"📦 PostgreSQL Adapter initialized: {host}:{port}/{database}")
+
+        ssl_status = "SSL disabled" if ssl_mode == 'disable' else f"SSL mode: {ssl_mode}"
+        logger.info(f"📦 PostgreSQL Adapter initialized: {host}:{port}/{database} ({ssl_status})")
 
     async def connect(self):
         """Initialize PostgreSQL connection pool."""
@@ -101,12 +112,41 @@ class PostgreSQLAdapter(DatabaseAdapter):
             raise RuntimeError("asyncpg not available - cannot connect to PostgreSQL")
 
         try:
+            # Configure SSL if enabled
+            ssl_context = None
+            if self.ssl_mode and self.ssl_mode != 'disable':
+                import ssl as ssl_module
+
+                if self.ssl_mode == 'require':
+                    # Require SSL but don't verify certificate
+                    ssl_context = ssl_module.create_default_context()
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl_module.CERT_NONE
+                    logger.info("   SSL: Required (no verification)")
+
+                elif self.ssl_mode in ('verify-ca', 'verify-full'):
+                    # Verify certificate authority
+                    if self.ssl_root_cert:
+                        ssl_context = ssl_module.create_default_context(cafile=self.ssl_root_cert)
+                    else:
+                        ssl_context = ssl_module.create_default_context()
+
+                    if self.ssl_mode == 'verify-full':
+                        ssl_context.check_hostname = True
+                        logger.info("   SSL: Full verification (cert + hostname)")
+                    else:
+                        ssl_context.check_hostname = False
+                        logger.info("   SSL: CA verification")
+
+                    ssl_context.verify_mode = ssl_module.CERT_REQUIRED
+
             self.pool = await asyncpg.create_pool(
                 host=self.host,
                 port=self.port,
                 database=self.database,
                 user=self.user,
                 password=self.password,
+                ssl=ssl_context,
                 min_size=self.min_pool_size,
                 max_size=self.max_pool_size,
                 command_timeout=60

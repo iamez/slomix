@@ -55,6 +55,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
         except Exception:
             pass
 
+    @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.command(name="stats")
     async def stats(self, ctx, *, player_name: str = None):
         """📊 Show detailed player statistics
@@ -412,6 +413,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
             logger.error(f"Error in stats command: {e}", exc_info=True)
             await ctx.send(f"❌ Error retrieving stats: {e}")
 
+    @commands.cooldown(1, 10, commands.BucketType.user)
     @commands.command(name="leaderboard", aliases=["lb", "top"])
     async def leaderboard(self, ctx, stat_type: str = "kills"):
         """🏆 Show players leaderboard with pagination
