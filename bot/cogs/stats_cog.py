@@ -178,17 +178,20 @@ class StatsCog(commands.Cog, name="Stats"):
             # Get player stats
             stats = await self.bot.db_adapter.fetch_one(
                 """
-                SELECT 
-                    SUM(kills) as total_kills,
-                    SUM(deaths) as total_deaths,
-                    COUNT(DISTINCT round_id) as total_games,
-                    CASE 
-                        WHEN SUM(deaths) > 0 
-                        THEN CAST(SUM(kills) AS REAL) / SUM(deaths)
-                        ELSE SUM(kills) 
+                SELECT
+                    SUM(p.kills) as total_kills,
+                    SUM(p.deaths) as total_deaths,
+                    COUNT(DISTINCT p.round_id) as total_games,
+                    CASE
+                        WHEN SUM(p.deaths) > 0
+                        THEN CAST(SUM(p.kills) AS REAL) / SUM(p.deaths)
+                        ELSE SUM(p.kills)
                     END as overall_kd
-                FROM player_comprehensive_stats
-                WHERE player_guid = ?
+                FROM player_comprehensive_stats p
+                JOIN rounds r ON p.round_id = r.id
+                WHERE p.player_guid = ?
+                  AND r.round_number IN (1, 2)
+                  AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             """,
                 (player_guid,),
             )
@@ -335,18 +338,29 @@ class StatsCog(commands.Cog, name="Stats"):
 
             # Helper: get stats when we already have a GUID
             async def get_player_stats_by_guid(player_guid, display_name):
-                # Get comprehensive stats
+                # Get comprehensive stats with round durations for DPM
                 stats = await self.bot.db_adapter.fetch_one(
                     """
-                    SELECT 
-                        SUM(kills) as total_kills,
-                        SUM(deaths) as total_deaths,
-                        COUNT(DISTINCT round_id) as total_games,
-                        SUM(damage_given) as total_damage,
-                        SUM(time_played_seconds) as total_time,
-                        SUM(headshot_kills) as total_headshots
-                    FROM player_comprehensive_stats
-                    WHERE player_guid = ?
+                    SELECT
+                        SUM(p.kills) as total_kills,
+                        SUM(p.deaths) as total_deaths,
+                        COUNT(DISTINCT p.round_id) as total_games,
+                        SUM(p.damage_given) as total_damage,
+                        SUM(p.headshot_kills) as total_headshots,
+                        SUM(
+                            CASE
+                                WHEN r.actual_time LIKE '%:%' THEN
+                                    CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                                    CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                                ELSE
+                                    CAST(r.actual_time AS INTEGER)
+                            END
+                        ) as total_time_seconds
+                    FROM player_comprehensive_stats p
+                    JOIN rounds r ON p.round_id = r.id
+                    WHERE p.player_guid = ?
+                      AND r.round_number IN (1, 2)
+                      AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                 """,
                     (player_guid,),
                 )
@@ -354,16 +368,19 @@ class StatsCog(commands.Cog, name="Stats"):
                 if not stats or stats[0] is None:
                     return None
 
-                kills, deaths, games, damage, time_sec, headshots = stats
+                kills, deaths, games, damage, headshots, time_sec = stats
 
                 # Get weapon stats for accuracy
                 weapon_stats = await self.bot.db_adapter.fetch_one(
                     """
-                    SELECT 
-                        SUM(hits) as total_hits,
-                        SUM(shots) as total_shots
-                    FROM weapon_comprehensive_stats
-                    WHERE player_guid = ?
+                    SELECT
+                        SUM(w.hits) as total_hits,
+                        SUM(w.shots) as total_shots
+                    FROM weapon_comprehensive_stats w
+                    JOIN rounds r ON w.round_id = r.id
+                    WHERE w.player_guid = ?
+                      AND r.round_number IN (1, 2)
+                      AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                 """,
                     (player_guid,),
                 )
@@ -743,17 +760,19 @@ class StatsCog(commands.Cog, name="Stats"):
 
             # Season kills leader
             season_query = f"""
-                SELECT 
-                    (SELECT player_name FROM player_comprehensive_stats 
-                     WHERE player_guid = p.player_guid 
-                     GROUP BY player_name 
+                SELECT
+                    (SELECT player_name FROM player_comprehensive_stats
+                     WHERE player_guid = p.player_guid
+                     GROUP BY player_name
                      ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                     SUM(p.kills) as total_kills,
                     SUM(p.deaths) as total_deaths,
                     COUNT(DISTINCT p.round_id) as games
                 FROM player_comprehensive_stats p
                 JOIN rounds s ON p.round_id = s.id
-                WHERE 1=1 {season_filter}
+                WHERE s.round_number IN (1, 2)
+                  AND (s.round_status IN ('completed', 'substitution') OR s.round_status IS NULL)
+                  {season_filter}
                 GROUP BY p.player_guid
                 HAVING games > 5
                 ORDER BY total_kills DESC
@@ -776,15 +795,18 @@ class StatsCog(commands.Cog, name="Stats"):
 
             # All-time kills leader
             alltime_query = """
-                SELECT 
-                    (SELECT player_name FROM player_comprehensive_stats 
-                     WHERE player_guid = p.player_guid 
-                     GROUP BY player_name 
+                SELECT
+                    (SELECT player_name FROM player_comprehensive_stats
+                     WHERE player_guid = p.player_guid
+                     GROUP BY player_name
                      ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                     SUM(p.kills) as total_kills,
                     SUM(p.deaths) as total_deaths,
                     COUNT(DISTINCT p.round_id) as games
                 FROM player_comprehensive_stats p
+                JOIN rounds r ON p.round_id = r.id
+                WHERE r.round_number IN (1, 2)
+                  AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                 GROUP BY p.player_guid
                 HAVING games > 10
                 ORDER BY total_kills DESC

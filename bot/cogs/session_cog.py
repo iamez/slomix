@@ -205,8 +205,24 @@ class SessionCog(commands.Cog, name="Session Commands"):
                         SUM(p.kills) as kills,
                         SUM(p.deaths) as deaths,
                         CASE
-                            WHEN SUM(p.time_played_seconds) > 0
-                            THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                            WHEN SUM(
+                                CASE
+                                    WHEN r.actual_time LIKE '%:%' THEN
+                                        (CAST(SUBSTR(r.actual_time, 1, INSTR(r.actual_time, ':')-1) AS INTEGER) * 60 +
+                                         CAST(SUBSTR(r.actual_time, INSTR(r.actual_time, ':')+1) AS INTEGER))
+                                    ELSE
+                                        CAST(r.actual_time AS INTEGER)
+                                END
+                            ) > 0
+                            THEN (SUM(p.damage_given) * 60.0) / SUM(
+                                CASE
+                                    WHEN r.actual_time LIKE '%:%' THEN
+                                        (CAST(SUBSTR(r.actual_time, 1, INSTR(r.actual_time, ':')-1) AS INTEGER) * 60 +
+                                         CAST(SUBSTR(r.actual_time, INSTR(r.actual_time, ':')+1) AS INTEGER))
+                                    ELSE
+                                        CAST(r.actual_time AS INTEGER)
+                                END
+                            )
                             ELSE 0
                         END as dpm
                     FROM player_comprehensive_stats p
@@ -225,8 +241,24 @@ class SessionCog(commands.Cog, name="Session Commands"):
                         SUM(p.kills) as kills,
                         SUM(p.deaths) as deaths,
                         CASE
-                            WHEN SUM(p.time_played_seconds) > 0
-                            THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                            WHEN SUM(
+                                CASE
+                                    WHEN r.actual_time LIKE '%:%' THEN
+                                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                                    ELSE
+                                        CAST(r.actual_time AS INTEGER)
+                                END
+                            ) > 0
+                            THEN (SUM(p.damage_given) * 60.0) / SUM(
+                                CASE
+                                    WHEN r.actual_time LIKE '%:%' THEN
+                                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                                    ELSE
+                                        CAST(r.actual_time AS INTEGER)
+                                END
+                            )
                             ELSE 0
                         END as dpm
                     FROM player_comprehensive_stats p

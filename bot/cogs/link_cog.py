@@ -105,7 +105,7 @@ class LinkCog(commands.Cog, name="Link"):
             
             # Base query to get all players with their link status
             base_query = """
-                SELECT 
+                SELECT
                     p.player_guid,
                     p.player_name,
                     pl.discord_id,
@@ -114,7 +114,10 @@ class LinkCog(commands.Cog, name="Link"):
                     SUM(p.kills) as total_kills,
                     SUM(p.deaths) as total_deaths
                 FROM player_comprehensive_stats p
+                JOIN rounds r ON p.round_id = r.id
                 LEFT JOIN player_links pl ON p.player_guid = pl.player_guid
+                WHERE r.round_number IN (1, 2)
+                  AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                 GROUP BY p.player_guid, p.player_name, pl.discord_id
             """
 
@@ -147,33 +150,38 @@ class LinkCog(commands.Cog, name="Link"):
 
             players = await self.bot.db_adapter.fetch_all(final_query)
 
-            if not players:
+            if total_players == 0:
                 await ctx.send(
                     f"❌ No players found" + (f" with filter: {filter_type}" if filter_type else "")
                 )
                 return
 
-            # Count linked vs unlinked
-            linked_count = sum(1 for p in players if p[2])
-            unlinked_count = len(players) - linked_count
+            unlinked_count = total_players - linked_count
 
             # Pagination settings
             players_per_page = 15
-            total_pages = (len(players) + players_per_page - 1) // players_per_page
+            total_pages = (total_players + players_per_page - 1) // players_per_page
 
-            # Generate ALL pages upfront for button navigation
+            # Generate ONLY requested pages for button navigation (lazy loading)
+            # Pre-generate first 5 pages for immediate navigation
+            max_pregenerate = min(5, total_pages)
             pages = []
-            for page_num in range(1, total_pages + 1):
-                start_idx = (page_num - 1) * players_per_page
-                end_idx = min(start_idx + players_per_page, len(players))
-                page_players = players[start_idx:end_idx]
+
+            for page_num in range(1, max_pregenerate + 1):
+                offset = (page_num - 1) * players_per_page
+                # NOTE: Safe concatenation - filter_clause from hardcoded strings, offset computed from page_num
+                page_query = base_query + filter_clause + f" ORDER BY sessions_played DESC, total_kills DESC LIMIT {players_per_page} OFFSET {offset}"
+                page_players = await self.bot.db_adapter.fetch_all(page_query)
 
                 # Create embed for this page
+                start_idx = offset
+                end_idx = min(offset + len(page_players), total_players)
+
                 filter_text = f" - {filter_type.upper()}" if filter_type else ""
                 embed = discord.Embed(
                     title=f"👥 Players List{filter_text}",
                     description=(
-                        f"**Total**: {len(players)} players • "
+                        f"**Total**: {total_players} players • "
                         f"🔗 {linked_count} linked • ❌ {unlinked_count} unlinked\n"
                         f"**Page {page_num}/{total_pages}** (showing {start_idx+1}-{end_idx})"
                     ),
@@ -340,13 +348,16 @@ class LinkCog(commands.Cog, name="Link"):
                 # Get stats
                 stats = await self.bot.db_adapter.fetch_one(
                     """
-                    SELECT 
-                        SUM(kills) as total_kills,
-                        SUM(deaths) as total_deaths,
-                        COUNT(DISTINCT round_id) as games,
-                        MAX(round_date) as last_seen
-                    FROM player_comprehensive_stats
-                    WHERE player_guid = ?
+                    SELECT
+                        SUM(p.kills) as total_kills,
+                        SUM(p.deaths) as total_deaths,
+                        COUNT(DISTINCT p.round_id) as games,
+                        MAX(p.round_date) as last_seen
+                    FROM player_comprehensive_stats p
+                    JOIN rounds r ON p.round_id = r.id
+                    WHERE p.player_guid = ?
+                      AND r.round_number IN (1, 2)
+                      AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                 """,
                     (guid,),
                 )
@@ -455,6 +466,7 @@ class LinkCog(commands.Cog, name="Link"):
                 f"💡 Try: `!list_players` to browse all players"
             )
 
+    @commands.cooldown(1, 30, commands.BucketType.user)
     @commands.command(name="link")
     async def link(self, ctx, target: Optional[str] = None, *, guid: Optional[str] = None):
         """
@@ -549,17 +561,20 @@ class LinkCog(commands.Cog, name="Link"):
             # Get top 3 unlinked players by recent activity and total stats
             top_players = await self.bot.db_adapter.fetch_all(
                 """
-                SELECT 
-                    player_guid,
-                    MAX(round_date) as last_played,
-                    SUM(kills) as total_kills,
-                    SUM(deaths) as total_deaths,
-                    COUNT(DISTINCT round_id) as games
-                FROM player_comprehensive_stats
-                WHERE player_guid NOT IN (
+                SELECT
+                    p.player_guid,
+                    MAX(p.round_date) as last_played,
+                    SUM(p.kills) as total_kills,
+                    SUM(p.deaths) as total_deaths,
+                    COUNT(DISTINCT p.round_id) as games
+                FROM player_comprehensive_stats p
+                JOIN rounds r ON p.round_id = r.id
+                WHERE p.player_guid NOT IN (
                     SELECT player_guid FROM player_links WHERE player_guid IS NOT NULL
                 )
-                GROUP BY player_guid
+                  AND r.round_number IN (1, 2)
+                  AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+                GROUP BY p.player_guid
                 ORDER BY last_played DESC, total_kills DESC
                 LIMIT 3
             """,
@@ -740,13 +755,16 @@ class LinkCog(commands.Cog, name="Link"):
             # Check if GUID exists
             stats = await self.bot.db_adapter.fetch_one(
                 """
-                SELECT 
-                    SUM(kills) as total_kills,
-                    SUM(deaths) as total_deaths,
-                    COUNT(DISTINCT round_id) as games,
-                    MAX(round_date) as last_seen
-                FROM player_comprehensive_stats
-                WHERE player_guid = ?
+                SELECT
+                    SUM(p.kills) as total_kills,
+                    SUM(p.deaths) as total_deaths,
+                    COUNT(DISTINCT p.round_id) as games,
+                    MAX(p.round_date) as last_seen
+                FROM player_comprehensive_stats p
+                JOIN rounds r ON p.round_id = r.id
+                WHERE p.player_guid = ?
+                  AND r.round_number IN (1, 2)
+                  AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             """,
                 (guid,),
             )
@@ -904,13 +922,16 @@ class LinkCog(commands.Cog, name="Link"):
             # Also search main stats table
             matches = await self.bot.db_adapter.fetch_all(
                 """
-                SELECT player_guid, player_name,
-                       SUM(kills) as total_kills,
-                       COUNT(DISTINCT round_id) as games,
-                       MAX(round_date) as last_seen
-                FROM player_comprehensive_stats
-                WHERE LOWER(player_name) LIKE LOWER(?)
-                GROUP BY player_guid
+                SELECT p.player_guid, p.player_name,
+                       SUM(p.kills) as total_kills,
+                       COUNT(DISTINCT p.round_id) as games,
+                       MAX(p.round_date) as last_seen
+                FROM player_comprehensive_stats p
+                JOIN rounds r ON p.round_id = r.id
+                WHERE LOWER(p.player_name) LIKE LOWER(?)
+                  AND r.round_number IN (1, 2)
+                  AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+                GROUP BY p.player_guid, p.player_name
                 ORDER BY last_seen DESC, games DESC
                 LIMIT 5
             """,
@@ -951,9 +972,12 @@ class LinkCog(commands.Cog, name="Link"):
                     # Get stats and aliases
                     stats = await self.bot.db_adapter.fetch_one(
                         """
-                        SELECT SUM(kills), SUM(deaths), COUNT(DISTINCT round_id), MAX(round_date)
-                        FROM player_comprehensive_stats
-                        WHERE player_guid = ?
+                        SELECT SUM(p.kills), SUM(p.deaths), COUNT(DISTINCT p.round_id), MAX(p.round_date)
+                        FROM player_comprehensive_stats p
+                        JOIN rounds r ON p.round_id = r.id
+                        WHERE p.player_guid = ?
+                          AND r.round_number IN (1, 2)
+                          AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                     """,
                         (guid,),
                     )
@@ -1103,13 +1127,16 @@ class LinkCog(commands.Cog, name="Link"):
             # Validate GUID exists
             stats = await self.bot.db_adapter.fetch_one(
                 """
-                SELECT 
-                    SUM(kills) as total_kills,
-                    SUM(deaths) as total_deaths,
-                    COUNT(DISTINCT round_id) as games,
-                    MAX(round_date) as last_seen
-                FROM player_comprehensive_stats
-                WHERE player_guid = ?
+                SELECT
+                    SUM(p.kills) as total_kills,
+                    SUM(p.deaths) as total_deaths,
+                    COUNT(DISTINCT p.round_id) as games,
+                    MAX(p.round_date) as last_seen
+                FROM player_comprehensive_stats p
+                JOIN rounds r ON p.round_id = r.id
+                WHERE p.player_guid = ?
+                  AND r.round_number IN (1, 2)
+                  AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             """,
                 (guid,),
             )
