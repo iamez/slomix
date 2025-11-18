@@ -10,19 +10,20 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 
 ## 🔥 Recent Updates (November 2025)
 
-**Critical Bug Fixes & Optimizations:**
+**Latest Features & Enhancements:**
+- 🏆 **Achievement System** - Player badges for medics, engineers, combat specialists, and more!
+- 🎨 **Custom Display Names** - Linked players can set personalized display names
+- 📊 **Enhanced Performance Graphs** - Exact value labels on all stat visualizations
+- 📢 **Upgraded Auto-Posting** - Now shows ALL players with comprehensive stats (not just top performers)
+- 🎯 **Improved Session Output** - Redesigned !last_session format with achievement badges
+- 🐛 **Bug Fixes** - Fixed !list_players command, Codacy warnings, and various production issues
+
+**Previous Critical Optimizations:**
 - ✅ **Voice-Conditional SSH Monitoring** - Only checks SSH when players in voice (massive resource savings!)
 - ✅ **SSH Monitor Startup Optimization** - Only checks last 24h on startup (not all 3,766 files)
 - ✅ **PostgreSQL Boolean Compatibility** - Fixed boolean type errors in queries
 - ✅ **File Exclusion Filters** - Automatically excludes `_ws.txt` and unwanted files
-- ✅ **Constructor Arguments** - Fixed automation service initialization
-- ✅ **Session View Handlers** - Fixed missing imports and method name mismatches
-- ✅ **SQL Column Names** - Fixed `guid`/`alias` column references
-- ✅ **Shell Injection Warnings** - Proper Bandit suppressions with shlex.quote()
-- ✅ **Memory Leaks** - Fixed async blocking and resource cleanup
-- ✅ **Security Hardening** - Secure temp files and command sanitization
-
-**Branch:** `claude/fix-production-critical-issues-01TSoke7RTuTbKEhrQCgG2AF` (testing)
+- ✅ **Security Hardening** - Secure temp files, command sanitization, and rate limiting
 
 ## ✨ What Makes This Special
 
@@ -178,6 +179,8 @@ Automatically groups rounds into gaming sessions:
 - � **Alias Tracking** - Automatically consolidates stats across name changes
 - 📈 **Session Analytics** - `!last_session` shows 14-20 rounds per gaming session
 - 🗺️ **Map Statistics** - Per-map breakdowns with R1/R2 differential
+- 🏆 **Achievement System** - Dynamic badges for medics, engineers, sharpshooters, rambo, objective specialists
+- 🎨 **Custom Display Names** - Linked players can set personalized names with `!set_display_name`
 
 #### **Leaderboard System**
 - 🥇 **11 Leaderboard Categories** - K/D, DPM, accuracy, headshots, efficiency, etc.
@@ -315,6 +318,8 @@ GAMING_VOICE_CHANNELS=947583652957659166,1029097483697143938
 - `!link` - Link Discord account to game stats (interactive)
 - `!link_me` - Quick link (if GUID known)
 - `!unlink` - Remove Discord link
+- `!set_display_name <name>` - Set custom display name for linked account
+- `!achievements` - View achievement system help and available badges
 
 ### **Admin Commands**
 - `!sync_month` - Sync last 30 days from VPS
