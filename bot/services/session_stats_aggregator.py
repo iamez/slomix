@@ -92,7 +92,8 @@ class SessionStatsAggregator:
             GROUP BY p.player_guid, p.player_name, session_total.total_seconds
             ORDER BY kills DESC
         """
-        return await self.db_adapter.fetch_all(query, tuple(session_ids))
+        # Pass session_ids twice: once for line 78 (rounds), once for line 91 (player_stats)
+        return await self.db_adapter.fetch_all(query, tuple(session_ids) + tuple(session_ids))
 
     async def aggregate_team_stats(self, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict] = None, name_to_team: Optional[Dict] = None):
         """
@@ -212,4 +213,5 @@ class SessionStatsAggregator:
             ORDER BY weighted_dpm DESC
             LIMIT {limit}
         """
-        return await self.db_adapter.fetch_all(query, tuple(session_ids))
+        # Pass session_ids twice: once for line 207 (rounds), once for line 211 (player_stats)
+        return await self.db_adapter.fetch_all(query, tuple(session_ids) + tuple(session_ids))
