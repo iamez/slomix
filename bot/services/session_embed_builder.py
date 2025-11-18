@@ -37,7 +37,8 @@ class SessionEmbedBuilder:
         team_1_score: int,
         team_2_score: int,
         hardcoded_teams: bool,
-        scoring_result: Optional[Dict] = None
+        scoring_result: Optional[Dict] = None,
+        player_badges: Optional[Dict[str, str]] = None
     ) -> discord.Embed:
         """Build main session overview embed with all players and match score."""
         # Build description with match score
@@ -83,11 +84,11 @@ class SessionEmbedBuilder:
             
             for i, player in enumerate(field_players):
                 global_idx = field_idx + i
-                name, kills, deaths, dpm, hits, shots = player[0:6]
-                total_hs, hsk, total_seconds, total_time_dead, total_denied = player[6:11]
-                total_gibs, total_revives_given, total_times_revived, total_damage_received, total_damage_given = player[11:16]
-                total_useful_kills, total_double_kills, total_triple_kills, total_quad_kills = player[16:20]
-                total_multi_kills, total_mega_kills = player[20:22]
+                name, player_guid, kills, deaths, dpm, hits, shots = player[0:7]
+                total_hs, hsk, total_seconds, total_time_dead, total_denied = player[7:12]
+                total_gibs, total_revives_given, total_times_revived, total_damage_received, total_damage_given = player[12:17]
+                total_useful_kills, total_double_kills, total_triple_kills, total_quad_kills = player[17:21]
+                total_multi_kills, total_mega_kills = player[21:23]
 
                 # Handle NULL values
                 kills = kills or 0
@@ -159,8 +160,13 @@ class SessionEmbedBuilder:
                 multikills_str = " ".join(multikills_parts) if multikills_parts else ""
                 multikills_display = f" • {multikills_str}" if multikills_str else ""
 
-                # Line 1: Player name
-                field_text += f"{medal} **{name}**\n"
+                # Get achievement badges for this player
+                badges = ""
+                if player_badges and player_guid in player_badges:
+                    badges = f" {player_badges[player_guid]}"
+
+                # Line 1: Player name with badges
+                field_text += f"{medal} **{name}**{badges}\n"
 
                 # Line 2: Combat essentials (K/D, DPM, damage, accuracy, headshots)
                 field_text += (

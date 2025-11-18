@@ -24,6 +24,7 @@ from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.session_embed_builder import SessionEmbedBuilder
 from bot.services.session_graph_generator import SessionGraphGenerator
 from bot.services.session_view_handlers import SessionViewHandlers
+from bot.services.player_badge_service import PlayerBadgeService
 
 logger = logging.getLogger("bot.cogs.last_session")
 
@@ -41,6 +42,7 @@ class LastSessionCog(commands.Cog):
         self.embed_builder = SessionEmbedBuilder()
         self.graph_generator = SessionGraphGenerator(bot.db_adapter)
         self.view_handlers = SessionViewHandlers(bot.db_adapter, StatsCalculator)
+        self.badge_service = PlayerBadgeService(bot.db_adapter)
 
         logger.info("✅ All services initialized successfully")
 
@@ -206,11 +208,15 @@ class LastSessionCog(commands.Cog):
             # BUILD AND SEND EMBEDS
             # ═══════════════════════════════════════════════════════════════════════
 
+            # Fetch achievement badges for all players
+            player_guids = [player[1] for player in all_players]  # player_guid is at index 1
+            player_badges = await self.badge_service.get_player_badges_batch(player_guids)
+
             # DEFAULT VIEW: ONLY SESSION OVERVIEW
             embed1 = await self.embed_builder.build_session_overview_embed(
                 latest_date, all_players, maps_played, rounds_played, player_count,
                 team_1_name, team_2_name, team_1_score, team_2_score, hardcoded_teams is not None,
-                scoring_result
+                scoring_result, player_badges
             )
             await ctx.send(embed=embed1)
 
