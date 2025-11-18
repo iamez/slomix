@@ -1809,6 +1809,15 @@ class UltimateETLegacyBot(commands.Bot):
     # - FileTracker.mark_processed()
     # - FileTracker.sync_local_files_to_processed_table()
 
+    # Wrapper methods for backward compatibility
+    async def should_process_file(
+        self, filename: str, ignore_startup_time: bool = False, check_db_only: bool = False
+    ) -> bool:
+        """Delegate to FileTracker.should_process_file()"""
+        return await self.file_tracker.should_process_file(
+            filename, ignore_startup_time=ignore_startup_time, check_db_only=check_db_only
+        )
+
     async def _auto_end_session(self):
         """Auto-end session and post summary"""
         try:
