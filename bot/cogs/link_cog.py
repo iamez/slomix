@@ -123,10 +123,13 @@ class LinkCog(commands.Cog, name="Link"):
                 page = int(filter_type)
                 filter_type = None
 
-            # Apply filter
+            # Apply filter - whitelist validation for security
+            # Note: We use string concatenation here ONLY because filter_type is validated
+            # against a strict whitelist. The filter_clause contains NO user input.
             filter_clause = ""
             if filter_type:
                 filter_lower = filter_type.lower()
+                # Whitelist validation - only these exact values are allowed
                 if filter_lower in ["linked", "link"]:
                     filter_clause = " HAVING pl.discord_id IS NOT NULL"
                 elif filter_lower in ["unlinked", "nolink"]:
@@ -137,9 +140,11 @@ class LinkCog(commands.Cog, name="Link"):
                         filter_clause = " HAVING MAX(p.round_date) >= date('now', '-30 days')"
                     else:
                         filter_clause = " HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'"
+                # If filter_type doesn't match whitelist, filter_clause stays empty (no filter applied)
 
-            final_query = base_query + filter_clause + " ORDER BY sessions_played DESC, total_kills DESC"
-            
+            # Safe string concatenation: filter_clause is built from whitelisted constants only
+            final_query = base_query + filter_clause + " ORDER BY sessions_played DESC, total_kills DESC"  # nosec B608
+
             players = await self.bot.db_adapter.fetch_all(final_query)
 
             if not players:
