@@ -506,9 +506,12 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info("✅ Automation Commands cog loaded")
 
             # Auto-start SSH monitoring if enabled
+            logger.info(f"🔍 Bot ssh_enabled={self.ssh_enabled} (from SSH_ENABLED env var)")
             if self.ssh_enabled:
                 logger.info("🔄 SSH monitoring enabled - starting automatically...")
                 await self.ssh_monitor.start_monitoring()
+            else:
+                logger.info("⏭️ SSH monitoring not enabled, skipping auto-start")
 
         except Exception as e:
             logger.warning(f"⚠️  Could not initialize automation services: {e}", exc_info=True)
