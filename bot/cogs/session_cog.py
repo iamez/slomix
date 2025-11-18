@@ -278,7 +278,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     top_players
                 ):
                     kd = StatsCalculator.calculate_kd(kills, deaths)
-                    player_text += f"{medals[i]} **{name}** - {kills}K/{deaths}D ({kd:.2f} KD, {dpm:.0f} DPM)\n"
+                    player_text += f"{medals[i]} **{name}** • {kills}K/{deaths}D ({kd:.2f}) • {dpm:.0f} DPM\n"
                 embed.add_field(
                     name="🏆 Top Players", value=player_text, inline=False
                 )
