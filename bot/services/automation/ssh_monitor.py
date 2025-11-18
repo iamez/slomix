@@ -222,8 +222,9 @@ class SSHMonitor:
                 if (f.endswith('.stats') or f.endswith('.txt')) and not f.endswith('_ws.txt')
             ]
 
-            # On first check, filter by time to avoid processing old files
-            if self._is_first_check and self.startup_lookback_hours > 0:
+            # ALWAYS filter by time to avoid processing old files (not just first check)
+            # This prevents re-processing thousands of old files if processed_files table gets cleared
+            if self.startup_lookback_hours > 0:
                 cutoff_time = datetime.now() - timedelta(hours=self.startup_lookback_hours)
                 time_filtered_files = []
 
@@ -232,12 +233,13 @@ class SSHMonitor:
                     if file_time and file_time >= cutoff_time:
                         time_filtered_files.append(f)
                     elif not file_time:
-                        # If we can't parse the timestamp, skip it on first check
+                        # If we can't parse the timestamp, skip it
                         logger.debug(f"Skipping file with unparseable timestamp: {f}")
 
-                logger.info(f"📅 First check: filtered {len(stats_files)} files to {len(time_filtered_files)} from last {self.startup_lookback_hours}h")
+                if self._is_first_check:
+                    logger.info(f"📅 First check: filtered {len(stats_files)} files to {len(time_filtered_files)} from last {self.startup_lookback_hours}h")
+                    self._is_first_check = False
                 stats_files = time_filtered_files
-                self._is_first_check = False  # Only filter on first check
 
             # Find new files (not in processed set)
             new_files = [f for f in stats_files if f not in self.processed_files]
@@ -607,23 +609,22 @@ class SSHMonitor:
         try:
             # Get the match summary round (round_number = 0)
             row = await self.bot.db_adapter.fetch_one("""
-                SELECT 
+                SELECT
                     id,
                     time_limit,
                     actual_time,
                     winner_team,
-                    round_outcome,
-                    COUNT(*) as player_count
+                    round_outcome
                 FROM rounds
                 WHERE map_name = ? AND round_number = 0
                 ORDER BY round_date DESC, round_time DESC
                 LIMIT 1
             """, (map_name,))
-            
+
             if not row:
                 return None
-            
-            round_id, time_limit, actual_time, winner_team, round_outcome, _ = row
+
+            round_id, time_limit, actual_time, winner_team, round_outcome = row
             
             # Get aggregated player stats from match summary
             player_stats = await self.bot.db_adapter.fetch_all("""
