@@ -69,6 +69,7 @@ class LastSessionCog(commands.Cog):
         except Exception as e:
             logger.debug(f"player_name alias setup: {e}")
 
+    @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.command(name="last_session", aliases=["last", "latest", "recent", "last_round"])
     async def last_session(self, ctx, subcommand: str = None):
         """🎮 Show the most recent session/match

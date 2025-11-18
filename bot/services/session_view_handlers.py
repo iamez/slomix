@@ -146,13 +146,28 @@ class SessionViewHandlers:
                 SUM(p.gibs) as gibs,
                 SUM(p.headshot_kills) as headshot_kills,
                 CASE
-                    WHEN SUM(p.time_played_seconds) > 0
-                    THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                    WHEN session_total.total_seconds > 0
+                    THEN (SUM(p.damage_given) * 60.0) / session_total.total_seconds
                     ELSE 0
                 END as weighted_dpm
             FROM player_comprehensive_stats p
+            CROSS JOIN (
+                SELECT SUM(
+                    CASE
+                        WHEN r.actual_time LIKE '%:%' THEN
+                            CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                            CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                        ELSE
+                            CAST(r.actual_time AS INTEGER)
+                    END
+                ) as total_seconds
+                FROM rounds r
+                WHERE r.id IN ({session_ids_str})
+                  AND r.round_number IN (1, 2)
+                  AND (r.round_status = 'completed' OR r.round_status IS NULL)
+            ) session_total
             WHERE p.round_id IN ({session_ids_str})
-            GROUP BY p.player_name
+            GROUP BY p.player_name, session_total.total_seconds
             ORDER BY kills DESC
         """
         combat_rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
@@ -317,17 +332,32 @@ class SessionViewHandlers:
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
                 CASE
-                    WHEN SUM(p.time_played_seconds) > 0
-                    THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                    WHEN session_total.total_seconds > 0
+                    THEN (SUM(p.damage_given) * 60.0) / session_total.total_seconds
                     ELSE 0
                 END as weighted_dpm,
                 SUM(p.damage_given) as total_damage,
                 SUM(p.headshot_kills) as headshot_kills,
                 SUM(p.gibs) as gibs,
-                SUM(p.time_played_seconds) as total_seconds
+                session_total.total_seconds as total_seconds
             FROM player_comprehensive_stats p
+            CROSS JOIN (
+                SELECT SUM(
+                    CASE
+                        WHEN r.actual_time LIKE '%:%' THEN
+                            CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                            CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                        ELSE
+                            CAST(r.actual_time AS INTEGER)
+                    END
+                ) as total_seconds
+                FROM rounds r
+                WHERE r.id IN ({session_ids_str})
+                  AND r.round_number IN (1, 2)
+                  AND (r.round_status = 'completed' OR r.round_status IS NULL)
+            ) session_total
             WHERE p.round_id IN ({session_ids_str})
-            GROUP BY p.player_name
+            GROUP BY p.player_name, session_total.total_seconds
             ORDER BY kills DESC
         """
         top_players = await self.db_adapter.fetch_all(query, tuple(session_ids))
@@ -420,20 +450,35 @@ class SessionViewHandlers:
                     SUM(p.kills) as kills,
                     SUM(p.deaths) as deaths,
                     CASE
-                        WHEN SUM(p.time_played_seconds) > 0
-                        THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                        WHEN map_total.total_seconds > 0
+                        THEN (SUM(p.damage_given) * 60.0) / map_total.total_seconds
                         ELSE 0
                     END as dpm,
                     SUM(p.damage_given) as dmg_given,
                     SUM(p.damage_received) as dmg_received,
                     SUM(p.gibs) as gibs,
                     SUM(p.headshot_kills) as headshots,
-                    SUM(p.time_played_seconds) as time_played,
+                    map_total.total_seconds as time_played,
                     SUM(p.time_dead_minutes) as time_dead_minutes,
                     SUM(p.denied_playtime) as time_denied,
                     COALESCE(SUM(w.hits), 0) as total_hits,
                     COALESCE(SUM(w.shots), 0) as total_shots
                 FROM player_comprehensive_stats p
+                CROSS JOIN (
+                    SELECT SUM(
+                        CASE
+                            WHEN r.actual_time LIKE '%:%' THEN
+                                CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                                CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                            ELSE
+                                CAST(r.actual_time AS INTEGER)
+                        END
+                    ) as total_seconds
+                    FROM rounds r
+                    WHERE r.id IN ({map_ids_str})
+                      AND r.round_number IN (1, 2)
+                      AND (r.round_status = 'completed' OR r.round_status IS NULL)
+                ) map_total
                 LEFT JOIN (
                     SELECT round_id, player_guid, SUM(hits) as hits, SUM(shots) as shots
                     FROM weapon_comprehensive_stats
@@ -441,7 +486,7 @@ class SessionViewHandlers:
                     GROUP BY round_id, player_guid
                 ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
                 WHERE p.round_id IN ({map_ids_str})
-                GROUP BY p.player_name
+                GROUP BY p.player_name, map_total.total_seconds
                 ORDER BY kills DESC
             """
         
@@ -584,20 +629,35 @@ class SessionViewHandlers:
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
                 CASE
-                    WHEN SUM(p.time_played_seconds) > 0
-                    THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                    WHEN round_total.total_seconds > 0
+                    THEN (SUM(p.damage_given) * 60.0) / round_total.total_seconds
                     ELSE 0
                 END as dpm,
                 SUM(p.damage_given) as dmg_given,
                 SUM(p.damage_received) as dmg_received,
                 SUM(p.gibs) as gibs,
                 SUM(p.headshot_kills) as headshots,
-                SUM(p.time_played_seconds) as time_played,
+                round_total.total_seconds as time_played,
                 SUM(p.time_dead_minutes) as time_dead_minutes,
                 SUM(p.denied_playtime) as time_denied,
                 COALESCE(SUM(w.hits), 0) as total_hits,
                 COALESCE(SUM(w.shots), 0) as total_shots
             FROM player_comprehensive_stats p
+            CROSS JOIN (
+                SELECT SUM(
+                    CASE
+                        WHEN r.actual_time LIKE '%:%' THEN
+                            CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                            CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                        ELSE
+                            CAST(r.actual_time AS INTEGER)
+                    END
+                ) as total_seconds
+                FROM rounds r
+                WHERE r.id IN ({round_ids_str})
+                  AND r.round_number IN (1, 2)
+                  AND (r.round_status = 'completed' OR r.round_status IS NULL)
+            ) round_total
             LEFT JOIN (
                 SELECT round_id, player_guid, SUM(hits) as hits, SUM(shots) as shots
                 FROM weapon_comprehensive_stats
@@ -605,7 +665,7 @@ class SessionViewHandlers:
                 GROUP BY round_id, player_guid
             ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
             WHERE p.round_id IN ({round_ids_str})
-            GROUP BY p.player_name
+            GROUP BY p.player_name, round_total.total_seconds
             ORDER BY kills DESC
         """
     
