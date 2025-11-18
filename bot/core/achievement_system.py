@@ -138,17 +138,20 @@ class AchievementSystem:
                 # Get player totals
                 async with db.execute(
                     """
-                    SELECT 
-                        SUM(kills) as total_kills,
-                        SUM(deaths) as total_deaths,
-                        COUNT(DISTINCT session_id) as total_games,
-                        CASE 
-                            WHEN SUM(deaths) > 0 
-                            THEN CAST(SUM(kills) AS REAL) / SUM(deaths)
-                            ELSE SUM(kills) 
+                    SELECT
+                        SUM(p.kills) as total_kills,
+                        SUM(p.deaths) as total_deaths,
+                        COUNT(DISTINCT p.round_id) as total_games,
+                        CASE
+                            WHEN SUM(p.deaths) > 0
+                            THEN CAST(SUM(p.kills) AS REAL) / SUM(p.deaths)
+                            ELSE SUM(p.kills)
                         END as overall_kd
-                    FROM player_comprehensive_stats
-                    WHERE player_guid = ?
+                    FROM player_comprehensive_stats p
+                    JOIN rounds r ON p.round_id = r.id
+                    WHERE p.player_guid = ?
+                      AND r.round_number IN (1, 2)
+                      AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                 """,
                     (player_guid,),
                 ) as cursor:

@@ -14,6 +14,7 @@ aiofiles>=23.2.0
 
 # SSH/Automation
 paramiko>=3.4.0
+scp>=0.14.0
 
 # Image Processing (for graphs/stats visualization)
 Pillow>=10.3.0

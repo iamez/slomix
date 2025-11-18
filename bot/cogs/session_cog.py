@@ -197,17 +197,35 @@ class SessionCog(commands.Cog, name="Session Commands"):
             if self.bot.config.database_type == 'sqlite':
                 top_players = await self.bot.db_adapter.fetch_all(
                     """
-                    SELECT 
+                    SELECT
                         p.player_name,
                         SUM(p.kills) as kills,
                         SUM(p.deaths) as deaths,
                         CASE
-                            WHEN SUM(p.time_played_seconds) > 0
-                            THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                            WHEN SUM(
+                                CASE
+                                    WHEN r.actual_time LIKE '%:%' THEN
+                                        (CAST(SUBSTR(r.actual_time, 1, INSTR(r.actual_time, ':')-1) AS INTEGER) * 60 +
+                                         CAST(SUBSTR(r.actual_time, INSTR(r.actual_time, ':')+1) AS INTEGER))
+                                    ELSE
+                                        CAST(r.actual_time AS INTEGER)
+                                END
+                            ) > 0
+                            THEN (SUM(p.damage_given) * 60.0) / SUM(
+                                CASE
+                                    WHEN r.actual_time LIKE '%:%' THEN
+                                        (CAST(SUBSTR(r.actual_time, 1, INSTR(r.actual_time, ':')-1) AS INTEGER) * 60 +
+                                         CAST(SUBSTR(r.actual_time, INSTR(r.actual_time, ':')+1) AS INTEGER))
+                                    ELSE
+                                        CAST(r.actual_time AS INTEGER)
+                                END
+                            )
                             ELSE 0
                         END as dpm
                     FROM player_comprehensive_stats p
-                    WHERE DATE(p.round_date) = ?
+                    JOIN rounds r ON p.round_id = r.id
+                    WHERE DATE(p.round_date) = ? AND r.round_number IN (1, 2)
+                      AND (r.round_status = 'completed' OR r.round_status IS NULL)
                     GROUP BY p.player_name
                     ORDER BY kills DESC
                     LIMIT 5
@@ -217,17 +235,35 @@ class SessionCog(commands.Cog, name="Session Commands"):
             else:  # PostgreSQL
                 top_players = await self.bot.db_adapter.fetch_all(
                     """
-                    SELECT 
+                    SELECT
                         p.player_name,
                         SUM(p.kills) as kills,
                         SUM(p.deaths) as deaths,
                         CASE
-                            WHEN SUM(p.time_played_seconds) > 0
-                            THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                            WHEN SUM(
+                                CASE
+                                    WHEN r.actual_time LIKE '%:%' THEN
+                                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                                    ELSE
+                                        CAST(r.actual_time AS INTEGER)
+                                END
+                            ) > 0
+                            THEN (SUM(p.damage_given) * 60.0) / SUM(
+                                CASE
+                                    WHEN r.actual_time LIKE '%:%' THEN
+                                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                                    ELSE
+                                        CAST(r.actual_time AS INTEGER)
+                                END
+                            )
                             ELSE 0
                         END as dpm
                     FROM player_comprehensive_stats p
-                    WHERE p.round_date = $1
+                    JOIN rounds r ON p.round_id = r.id
+                    WHERE p.round_date = $1 AND r.round_number IN (1, 2)
+                      AND (r.round_status = 'completed' OR r.round_status IS NULL)
                     GROUP BY p.player_name
                     ORDER BY kills DESC
                     LIMIT 5
