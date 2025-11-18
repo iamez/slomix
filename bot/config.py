@@ -56,6 +56,12 @@ class BotConfig:
         # Increased pool size for 14 cogs + 4 background tasks
         self.postgres_min_pool = int(self._get_config('POSTGRES_MIN_POOL', '10'))
         self.postgres_max_pool = int(self._get_config('POSTGRES_MAX_POOL', '30'))
+
+        # PostgreSQL SSL Configuration (optional, for remote databases)
+        self.postgres_ssl_mode = self._get_config('POSTGRES_SSL_MODE', 'disable')  # disable, require, verify-ca, verify-full
+        self.postgres_ssl_cert = self._get_config('POSTGRES_SSL_CERT', '')
+        self.postgres_ssl_key = self._get_config('POSTGRES_SSL_KEY', '')
+        self.postgres_ssl_root_cert = self._get_config('POSTGRES_SSL_ROOT_CERT', '')
         
         # Discord settings (maintain backward compatibility)
         self.discord_token = self._get_config('DISCORD_BOT_TOKEN', '')
@@ -122,7 +128,11 @@ class BotConfig:
                 'user': self.postgres_user,
                 'password': self.postgres_password,
                 'min_pool_size': self.postgres_min_pool,
-                'max_pool_size': self.postgres_max_pool
+                'max_pool_size': self.postgres_max_pool,
+                'ssl_mode': self.postgres_ssl_mode,
+                'ssl_cert': self.postgres_ssl_cert,
+                'ssl_key': self.postgres_ssl_key,
+                'ssl_root_cert': self.postgres_ssl_root_cert
             }
         else:
             raise ValueError(f"Unsupported database type: {self.database_type}")

@@ -166,7 +166,7 @@ class SyncCog(commands.Cog, name="Sync Commands"):
             # This allows re-importing local files that were wiped from DB
             files_to_process = []
             for filename in remote_files:
-                if await self.bot.should_process_file(filename, ignore_startup_time=True, check_db_only=True):
+                if await self.bot.file_tracker.should_process_file(filename, ignore_startup_time=True, check_db_only=True):
                     files_to_process.append(filename)
 
             if not files_to_process:
