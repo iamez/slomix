@@ -142,6 +142,8 @@ class LinkCog(commands.Cog, name="Link"):
                         filter_clause = " HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'"
 
             # PERFORMANCE OPTIMIZATION: Get counts first with lightweight query
+            # NOTE: filter_clause is safe - selected from hardcoded strings above (lines 133-142)
+            # This is structural SQL modification (HAVING clause), not user data interpolation
             count_query = f"""
                 SELECT
                     COUNT(*) as total_players,
@@ -172,6 +174,7 @@ class LinkCog(commands.Cog, name="Link"):
 
             for page_num in range(1, max_pregenerate + 1):
                 offset = (page_num - 1) * players_per_page
+                # NOTE: Safe concatenation - filter_clause from hardcoded strings, offset computed from page_num
                 page_query = base_query + filter_clause + f" ORDER BY sessions_played DESC, total_kills DESC LIMIT {players_per_page} OFFSET {offset}"
                 page_players = await self.bot.db_adapter.fetch_all(page_query)
 
