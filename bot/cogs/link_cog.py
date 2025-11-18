@@ -14,8 +14,12 @@ Commands:
 - !link @user <GUID> - Admin link another user
 - !unlink - Remove your link
 - !select <1-3> - Alternative to reaction selection
-- !find_player <name> - Helper: Search for players with GUIDs and aliases (NEW!)
+- !find_player <name> - Helper: Search for players with GUIDs and aliases
 - !list_players - Browse all players with pagination
+- !setname <name> - Set custom display name (NEW!)
+- !setname alias <name> - Use one of your aliases as display name (NEW!)
+- !setname reset - Reset to automatic display name (NEW!)
+- !myaliases - View all your in-game aliases (NEW!)
 
 Enhanced Features:
 - Interactive reactions (1️⃣/2️⃣/3️⃣) for easy selection
@@ -23,6 +27,7 @@ Enhanced Features:
 - GUID validation and confirmation
 - Admin linking with permissions check
 - Fuzzy name matching
+- Custom display names for linked players
 """
 
 import asyncio
@@ -36,6 +41,7 @@ from discord.ext import commands
 # Import pagination view for interactive button navigation
 from bot.core.pagination_view import PaginationView
 from bot.stats import StatsCalculator
+from bot.services.player_display_name_service import PlayerDisplayNameService
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +57,7 @@ class LinkCog(commands.Cog, name="Link"):
             bot: The main bot instance with database access
         """
         self.bot = bot
+        self.display_name_service = PlayerDisplayNameService(bot.db_adapter)
         logger.info("🔗 LinkCog loaded")
 
     async def _ensure_player_name_alias(self, db_adapter) -> None:
@@ -149,6 +156,10 @@ class LinkCog(commands.Cog, name="Link"):
             final_query = base_query + filter_clause + " ORDER BY sessions_played DESC, total_kills DESC"  # nosec B608
 
             players = await self.bot.db_adapter.fetch_all(final_query)
+
+            # Calculate player counts from results
+            total_players = len(players)
+            linked_count = sum(1 for p in players if p[2] is not None)  # p[2] is discord_id
 
             if total_players == 0:
                 await ctx.send(
@@ -1413,6 +1424,166 @@ class LinkCog(commands.Cog, name="Link"):
         # TODO: Implement persistent selection state
         # This would require storing pending link requests per user
         # and checking if they have an active selection window
+
+    @commands.command(name="setname")
+    async def setname(self, ctx, option: str = None, *, name: str = None):
+        """
+        ✏️ Set your custom display name
+
+        Linked players can choose how their name appears in stats.
+        Your display name will show instead of random aliases in !last_session.
+
+        Usage:
+            !setname <custom_name>       → Set a custom display name
+            !setname alias <name>        → Use one of your aliases
+            !setname reset               → Reset to automatic (most recent alias)
+
+        Examples:
+            !setname MyAwesomeName
+            !setname alias PlayerOne
+            !setname reset
+
+        Requirements:
+            - Must be linked (!link to link your account)
+            - Custom names: 2-32 characters
+            - Alias names: Must be from your existing aliases (!myaliases to view)
+        """
+        if not option:
+            await ctx.send(
+                "❌ Please specify what you want to do!\n\n"
+                "**Usage:**\n"
+                "`!setname <custom_name>` - Set custom name\n"
+                "`!setname alias <name>` - Use one of your aliases\n"
+                "`!setname reset` - Reset to automatic\n\n"
+                "**Example:** `!setname MyAwesomeName`"
+            )
+            return
+
+        # Handle reset
+        if option.lower() == "reset":
+            success, message = await self.display_name_service.reset_display_name(ctx.author.id)
+            if success:
+                await ctx.send(f"✅ {message}")
+            else:
+                await ctx.send(f"❌ {message}")
+            return
+
+        # Handle alias selection
+        if option.lower() == "alias":
+            if not name:
+                await ctx.send(
+                    "❌ Please specify which alias to use!\n\n"
+                    "**Usage:** `!setname alias <name>`\n"
+                    "**Example:** `!setname alias PlayerOne`\n\n"
+                    "Use `!myaliases` to see your available aliases."
+                )
+                return
+
+            success, message = await self.display_name_service.set_alias_display_name(
+                ctx.author.id,
+                name
+            )
+            if success:
+                await ctx.send(f"✅ {message}")
+            else:
+                await ctx.send(f"❌ {message}")
+            return
+
+        # Handle custom name (option is the name if not 'reset' or 'alias')
+        custom_name = f"{option} {name}" if name else option
+
+        success, message = await self.display_name_service.set_custom_display_name(
+            ctx.author.id,
+            custom_name
+        )
+
+        if success:
+            await ctx.send(f"✅ {message}")
+        else:
+            await ctx.send(f"❌ {message}")
+
+    @commands.command(name="myaliases", aliases=["aliases", "mynames"])
+    async def myaliases(self, ctx):
+        """
+        📝 View all your player aliases
+
+        Shows all names you've used in-game, sorted by most recent.
+        You can use any of these as your display name with `!setname alias <name>`.
+
+        Usage:
+            !myaliases
+
+        Requirements:
+            - Must be linked (!link to link your account)
+
+        Tip:
+            Use `!setname alias <name>` to set your display name to one of these aliases.
+        """
+        success, aliases = await self.display_name_service.get_player_aliases(ctx.author.id)
+
+        if not success:
+            await ctx.send(
+                "❌ You must be linked to view your aliases.\n\n"
+                "Use `!link` to link your Discord account to your in-game profile."
+            )
+            return
+
+        if not aliases:
+            await ctx.send("❌ No aliases found. Play some games to build your alias history!")
+            return
+
+        # Build embed
+        embed = discord.Embed(
+            title=f"📝 {ctx.author.display_name}'s Aliases",
+            description=f"All names you've used in-game ({len(aliases)} total)",
+            color=0x5865F2,
+        )
+
+        # Group aliases for better display
+        alias_lines = []
+        for i, (alias, times_seen, last_seen) in enumerate(aliases[:20], 1):
+            # Format last_seen
+            try:
+                last_seen_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00") if "Z" in last_seen else last_seen)
+                last_seen_str = last_seen_dt.strftime("%Y-%m-%d")
+            except Exception:
+                last_seen_str = "Unknown"
+
+            alias_lines.append(
+                f"{i}. **{alias}** - Used {times_seen}x (last: {last_seen_str})"
+            )
+
+        # Split into fields if too many
+        chunk_size = 10
+        for i in range(0, len(alias_lines), chunk_size):
+            chunk = alias_lines[i:i+chunk_size]
+            field_name = f"Aliases {i+1}-{min(i+chunk_size, len(alias_lines))}" if i > 0 else "Your Aliases"
+            embed.add_field(
+                name=field_name,
+                value="\n".join(chunk),
+                inline=False
+            )
+
+        if len(aliases) > 20:
+            embed.add_field(
+                name="💡 Note",
+                value=f"Showing top 20 of {len(aliases)} aliases (sorted by most recent)",
+                inline=False
+            )
+
+        embed.add_field(
+            name="✏️ Set Display Name",
+            value=(
+                "Use any of these as your display name:\n"
+                "`!setname alias <name>` - Use an alias\n"
+                "`!setname <custom>` - Use a custom name\n"
+                "`!setname reset` - Reset to automatic"
+            ),
+            inline=False
+        )
+
+        embed.set_footer(text="🎮 Your display name appears in !last_session")
+        await ctx.send(embed=embed)
 
 
 async def setup(bot):
