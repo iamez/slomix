@@ -126,10 +126,13 @@ class LinkCog(commands.Cog, name="Link"):
                 page = int(filter_type)
                 filter_type = None
 
-            # Apply filter
+            # Apply filter - whitelist validation for security
+            # Note: We use string concatenation here ONLY because filter_type is validated
+            # against a strict whitelist. The filter_clause contains NO user input.
             filter_clause = ""
             if filter_type:
                 filter_lower = filter_type.lower()
+                # Whitelist validation - only these exact values are allowed
                 if filter_lower in ["linked", "link"]:
                     filter_clause = " HAVING pl.discord_id IS NOT NULL"
                 elif filter_lower in ["unlinked", "nolink"]:
@@ -140,20 +143,12 @@ class LinkCog(commands.Cog, name="Link"):
                         filter_clause = " HAVING MAX(p.round_date) >= date('now', '-30 days')"
                     else:
                         filter_clause = " HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'"
+                # If filter_type doesn't match whitelist, filter_clause stays empty (no filter applied)
 
-            # PERFORMANCE OPTIMIZATION: Get counts first with lightweight query
-            # NOTE: filter_clause is safe - selected from hardcoded strings above (lines 133-142)
-            # This is structural SQL modification (HAVING clause), not user data interpolation
-            count_query = f"""
-                SELECT
-                    COUNT(*) as total_players,
-                    SUM(CASE WHEN discord_id IS NOT NULL THEN 1 ELSE 0 END) as linked_count
-                FROM ({base_query + filter_clause}) as players_subq
-            """
+            # Safe string concatenation: filter_clause is built from whitelisted constants only
+            final_query = base_query + filter_clause + " ORDER BY sessions_played DESC, total_kills DESC"  # nosec B608
 
-            counts = await self.bot.db_adapter.fetch_one(count_query)
-            total_players = counts[0] if counts else 0
-            linked_count = counts[1] if counts and counts[1] else 0
+            players = await self.bot.db_adapter.fetch_all(final_query)
 
             if total_players == 0:
                 await ctx.send(
