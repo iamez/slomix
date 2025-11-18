@@ -37,7 +37,8 @@ class SessionEmbedBuilder:
         team_1_score: int,
         team_2_score: int,
         hardcoded_teams: bool,
-        scoring_result: Optional[Dict] = None
+        scoring_result: Optional[Dict] = None,
+        player_badges: Optional[Dict[str, str]] = None
     ) -> discord.Embed:
         """Build main session overview embed with all players and match score."""
         # Build description with match score
@@ -83,11 +84,11 @@ class SessionEmbedBuilder:
             
             for i, player in enumerate(field_players):
                 global_idx = field_idx + i
-                name, kills, deaths, dpm, hits, shots = player[0:6]
-                total_hs, hsk, total_seconds, total_time_dead, total_denied = player[6:11]
-                total_gibs, total_revives_given, total_times_revived, total_damage_received, total_damage_given = player[11:16]
-                total_useful_kills, total_double_kills, total_triple_kills, total_quad_kills = player[16:20]
-                total_multi_kills, total_mega_kills = player[20:22]
+                name, player_guid, kills, deaths, dpm, hits, shots = player[0:7]
+                total_hs, hsk, total_seconds, total_time_dead, total_denied = player[7:12]
+                total_gibs, total_revives_given, total_times_revived, total_damage_received, total_damage_given = player[12:17]
+                total_useful_kills, total_double_kills, total_triple_kills, total_quad_kills = player[17:21]
+                total_multi_kills, total_mega_kills = player[21:23]
 
                 # Handle NULL values
                 kills = kills or 0
@@ -140,30 +141,45 @@ class SessionEmbedBuilder:
                 else:
                     dmg_recv_display = f"{total_damage_received}"
 
-                # Compact format with icons (3-4 lines)
+                # Three-line format: Name, Combat stats, Support stats
                 medal = medals[global_idx] if global_idx < len(medals) else "🔹"
-                field_text += f"{medal} **{name}**\n"
-                field_text += f"⏱️ `{time_display}` • 💪 `{dpm:.0f} DPM` • 📊 `{dmg_given_display}⬆/{dmg_recv_display}⬇` • 🎯 `{acc:.1f}% ACC ({hits}/{shots})`\n"
-                field_text += f"⚔️ `{kills}K/{deaths}D/{total_gibs}G ({kd_ratio:.2f} KD)` • 💉 `{total_revives_given}↑/{total_times_revived}↓` • 🎯 `{total_useful_kills} UK` • 📈 `{total_hs} HS ({hs_rate:.1f}%)`\n"
 
-                # Line 4: Multikills (only if player has ANY) + death stats
-                multikills_text = ""
-                if total_double_kills > 0 or total_triple_kills > 0 or total_quad_kills > 0 or total_multi_kills > 0 or total_mega_kills > 0:
-                    multikill_parts = []
-                    if total_double_kills > 0:
-                        multikill_parts.append(f"{total_double_kills} DOUBLE")
-                    if total_triple_kills > 0:
-                        multikill_parts.append(f"{total_triple_kills} TRIPLE")
-                    if total_quad_kills > 0:
-                        multikill_parts.append(f"{total_quad_kills} QUAD")
-                    if total_multi_kills > 0:
-                        multikill_parts.append(f"{total_multi_kills} PENTA")
-                    if total_mega_kills > 0:
-                        multikill_parts.append(f"{total_mega_kills} MEGA")
+                # Build multikills string (abbreviated)
+                multikills_parts = []
+                if total_double_kills > 0:
+                    multikills_parts.append(f"{total_double_kills}DBL")
+                if total_triple_kills > 0:
+                    multikills_parts.append(f"{total_triple_kills}TPL")
+                if total_quad_kills > 0:
+                    multikills_parts.append(f"{total_quad_kills}QD")
+                if total_multi_kills > 0:
+                    multikills_parts.append(f"{total_multi_kills}PNT")
+                if total_mega_kills > 0:
+                    multikills_parts.append(f"{total_mega_kills}MGA")
 
-                    multikills_text = f"🔥 `{' • '.join(multikill_parts)}` • "
+                multikills_str = " ".join(multikills_parts) if multikills_parts else ""
+                multikills_display = f" • {multikills_str}" if multikills_str else ""
 
-                field_text += f"{multikills_text}💀 `{time_dead_display}` • ⏳ `{time_denied_display}`\n"
+                # Get achievement badges for this player
+                badges = ""
+                if player_badges and player_guid in player_badges:
+                    badges = f" {player_badges[player_guid]}"
+
+                # Line 1: Player name with badges
+                field_text += f"{medal} **{name}**{badges}\n"
+
+                # Line 2: Combat essentials (K/D, DPM, damage, accuracy, headshots)
+                field_text += (
+                    f"   {kills}K/{deaths}D/{total_gibs}G ({kd_ratio:.2f}) • "
+                    f"{dpm:.0f} DPM • {dmg_given_display}⬆/{dmg_recv_display}⬇ • "
+                    f"{acc:.1f}% ACC ({hits}/{shots}) • {total_hs} HS ({hs_rate:.1f}%)\n"
+                )
+
+                # Line 3: Support/meta stats (UK, revives, times, multikills)
+                field_text += (
+                    f"   {total_useful_kills} UK • {total_revives_given}↑/{total_times_revived}↓ • "
+                    f"⏱{time_display} 💀{time_dead_display} ⏳{time_denied_display}{multikills_display}\n\n"
+                )
             
             # Add field with appropriate name
             if field_idx == 0:
