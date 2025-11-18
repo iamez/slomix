@@ -1,6 +1,7 @@
 -- Migration: Add display_name support to player_links
 -- Date: 2025-11-18
 -- Description: Allow linked players to set custom display names
+-- Database: PostgreSQL (not SQL Server - QUOTED_IDENTIFIER warning does not apply)
 
 -- Add display_name column (the chosen name to display)
 ALTER TABLE player_links
