@@ -38,6 +38,7 @@ class SessionStatsAggregator:
         """
         query = f"""
             SELECT p.player_name,
+                p.player_guid,
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
                 CASE
