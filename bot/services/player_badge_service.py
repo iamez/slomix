@@ -178,7 +178,8 @@ class PlayerBadgeService:
             if obj_badge:
                 badges.append(obj_badge)
 
-            return "".join(badges)
+            # Stack duplicate badges (e.g., 🎯 appears in kills, games, and objectives)
+            return self._format_badges_with_stacking(badges)
 
         except Exception as e:
             logger.error(f"Error fetching badges for {player_guid}: {e}", exc_info=True)
@@ -201,6 +202,37 @@ class PlayerBadgeService:
                 highest = badge
                 break
         return highest
+
+    def _format_badges_with_stacking(self, badges: List[str]) -> str:
+        """
+        Format badges with stacking notation for duplicates.
+
+        If the same emoji appears multiple times (e.g., 🎯 from kills, games, and objectives),
+        show it once with a count: 🎯x3
+
+        Args:
+            badges: List of badge emojis
+
+        Returns:
+            Formatted badge string with stacking (e.g., "🎯x3💀🏆x2")
+        """
+        if not badges:
+            return ""
+
+        # Count occurrences of each badge
+        badge_counts = {}
+        for badge in badges:
+            badge_counts[badge] = badge_counts.get(badge, 0) + 1
+
+        # Format with stacking notation
+        formatted = []
+        for badge, count in badge_counts.items():
+            if count > 1:
+                formatted.append(f"{badge}x{count}")
+            else:
+                formatted.append(badge)
+
+        return "".join(formatted)
 
     async def get_player_badges_batch(self, player_guids: List[str]) -> Dict[str, str]:
         """
@@ -286,7 +318,7 @@ class PlayerBadgeService:
                 if obj_badge:
                     badges.append(obj_badge)
 
-                badge_map[guid] = "".join(badges)
+                badge_map[guid] = self._format_badges_with_stacking(badges)
 
             return badge_map
 
