@@ -140,7 +140,7 @@ class SessionEmbedBuilder:
                 else:
                     dmg_recv_display = f"{total_damage_received}"
 
-                # Two-line format with spacing
+                # Three-line format: Name, Combat stats, Support stats
                 medal = medals[global_idx] if global_idx < len(medals) else "🔹"
 
                 # Build multikills string (abbreviated)
@@ -159,14 +159,17 @@ class SessionEmbedBuilder:
                 multikills_str = " ".join(multikills_parts) if multikills_parts else ""
                 multikills_display = f" • {multikills_str}" if multikills_str else ""
 
-                # Line 1: Combat essentials (K/D, DPM, damage, accuracy, headshots)
+                # Line 1: Player name
+                field_text += f"{medal} **{name}**\n"
+
+                # Line 2: Combat essentials (K/D, DPM, damage, accuracy, headshots)
                 field_text += (
-                    f"{medal} **{name}** • {kills}K/{deaths}D/{total_gibs}G ({kd_ratio:.2f}) • "
+                    f"   {kills}K/{deaths}D/{total_gibs}G ({kd_ratio:.2f}) • "
                     f"{dpm:.0f} DPM • {dmg_given_display}⬆/{dmg_recv_display}⬇ • "
                     f"{acc:.1f}% ACC ({hits}/{shots}) • {total_hs} HS ({hs_rate:.1f}%)\n"
                 )
 
-                # Line 2: Support/meta stats (UK, revives, times, multikills)
+                # Line 3: Support/meta stats (UK, revives, times, multikills)
                 field_text += (
                     f"   {total_useful_kills} UK • {total_revives_given}↑/{total_times_revived}↓ • "
                     f"⏱{time_display} 💀{time_dead_display} ⏳{time_denied_display}{multikills_display}\n\n"
