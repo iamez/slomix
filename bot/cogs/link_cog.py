@@ -468,6 +468,7 @@ class LinkCog(commands.Cog, name="Link"):
                 f"💡 Try: `!list_players` to browse all players"
             )
 
+    @commands.cooldown(1, 30, commands.BucketType.user)
     @commands.command(name="link")
     async def link(self, ctx, target: Optional[str] = None, *, guid: Optional[str] = None):
         """

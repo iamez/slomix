@@ -161,6 +161,7 @@ class UltimateETLegacyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
+        intents.members = True  # Required for voice channel member detection
         super().__init__(command_prefix="!", intents=intents)
 
         # 📊 Database Configuration - Load config and create adapter
@@ -2345,6 +2346,11 @@ class UltimateETLegacyBot(commands.Bot):
         if isinstance(error, commands.CommandNotFound):
             await ctx.send(
                 "❌ Command not found. Use `!help_command` for available commands."
+            )
+        elif isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(
+                f"⏱️ Slow down! Try again in {error.retry_after:.1f}s",
+                delete_after=5
             )
         elif isinstance(error, commands.MissingRequiredArgument):
             await ctx.send(
