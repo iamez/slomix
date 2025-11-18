@@ -2322,7 +2322,7 @@ class UltimateETLegacyBot(commands.Bot):
                     ORDER BY round_date DESC, round_time DESC
                     LIMIT 1
                     """,
-                    cutoff_date, cutoff_date, cutoff_time_str
+                    (cutoff_date, cutoff_date, cutoff_time_str)
                 )
                 recent_activity = recent_round is not None
 

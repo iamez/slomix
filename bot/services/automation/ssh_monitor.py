@@ -574,7 +574,7 @@ class SSHMonitor:
                     SUM(kills) as total_kills,
                     SUM(deaths) as total_deaths
                 FROM player_comprehensive_stats
-                WHERE round_id = ?
+                WHERE round_id = $1
             """, (round_id,))
 
             player_count, kills, deaths = totals if totals else (0, 0, 0)
@@ -582,27 +582,27 @@ class SSHMonitor:
             # Get ALL players with comprehensive stats for this round
             top_players = await self.bot.db_adapter.fetch_all("""
                 SELECT
-                    player_name,
-                    player_guid,
-                    kills,
-                    deaths,
-                    gibs,
-                    damage_given,
-                    damage_received,
-                    accuracy,
-                    headshots,
-                    headshot_kills,
-                    time_played_seconds,
-                    time_dead_ratio,
-                    denied_playtime,
-                    most_useful_kills,
-                    revives_given,
-                    times_revived,
-                    double_kills,
-                    triple_kills,
-                    quad_kills,
-                    multi_kills,
-                    mega_kills
+                    p.player_name,
+                    p.player_guid,
+                    p.kills,
+                    p.deaths,
+                    p.gibs,
+                    p.damage_given,
+                    p.damage_received,
+                    p.accuracy,
+                    p.headshots,
+                    p.headshot_kills,
+                    p.time_played_seconds,
+                    p.time_dead_ratio,
+                    p.denied_playtime,
+                    p.most_useful_kills,
+                    p.revives_given,
+                    p.times_revived,
+                    p.double_kills,
+                    p.triple_kills,
+                    p.quad_kills,
+                    p.multi_kills,
+                    p.mega_kills
                 FROM player_comprehensive_stats p
                 LEFT JOIN (
                     SELECT round_id, player_guid, SUM(hits) as hits, SUM(shots) as shots
@@ -610,7 +610,7 @@ class SSHMonitor:
                     WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
                     GROUP BY round_id, player_guid
                 ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
-                WHERE p.round_id = ?
+                WHERE p.round_id = $1
                 ORDER BY p.kills DESC
             """, (round_id,))
 
