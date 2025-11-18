@@ -157,6 +157,10 @@ class LinkCog(commands.Cog, name="Link"):
 
             players = await self.bot.db_adapter.fetch_all(final_query)
 
+            # Calculate player counts from results
+            total_players = len(players)
+            linked_count = sum(1 for p in players if p[2] is not None)  # p[2] is discord_id
+
             if total_players == 0:
                 await ctx.send(
                     f"❌ No players found" + (f" with filter: {filter_type}" if filter_type else "")
