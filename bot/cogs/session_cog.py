@@ -113,28 +113,29 @@ class SessionCog(commands.Cog, name="Session Commands"):
             await ctx.send(f"📅 Loading session data for **{date_filter}**...")
 
             # Get round metadata (database-specific)
+            # Filter out R0 (warmup rounds) using round_number > 0
             if self.bot.config.database_type == 'sqlite':
                 query = """
-                    SELECT 
+                    SELECT
                         COUNT(DISTINCT round_id) / 2 as total_maps,
                         COUNT(DISTINCT round_id) as total_rounds,
                         COUNT(DISTINCT player_guid) as player_count,
                         MIN(round_date) as first_round,
                         MAX(round_date) as last_round
                     FROM player_comprehensive_stats
-                    WHERE DATE(round_date) = ?
+                    WHERE DATE(round_date) = ? AND round_number > 0
                 """
                 result = await self.bot.db_adapter.fetch_one(query, (date_filter,))
             else:  # PostgreSQL
                 query = """
-                    SELECT 
+                    SELECT
                         COUNT(DISTINCT round_id) / 2 as total_maps,
                         COUNT(DISTINCT round_id) as total_rounds,
                         COUNT(DISTINCT player_guid) as player_count,
                         MIN(round_date) as first_round,
                         MAX(round_date) as last_round
                     FROM player_comprehensive_stats
-                    WHERE round_date = $1
+                    WHERE round_date = $1 AND round_number > 0
                 """
                 result = await self.bot.db_adapter.fetch_one(query, (date_filter,))
             if not result or result[0] == 0:
@@ -152,12 +153,13 @@ class SessionCog(commands.Cog, name="Session Commands"):
             ) = result
 
             # Get unique maps played (database-specific)
+            # Filter out R0 (warmup rounds) using round_number > 0
             if self.bot.config.database_type == 'sqlite':
                 maps = await self.bot.db_adapter.fetch_all(
                     """
                     SELECT DISTINCT map_name
                     FROM player_comprehensive_stats
-                    WHERE DATE(round_date) = ?
+                    WHERE DATE(round_date) = ? AND round_number > 0
                     ORDER BY round_date
                 """,
                     (date_filter,)
@@ -167,7 +169,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     """
                     SELECT DISTINCT map_name, MIN(round_date) as first_seen
                     FROM player_comprehensive_stats
-                    WHERE round_date = $1
+                    WHERE round_date = $1 AND round_number > 0
                     GROUP BY map_name
                     ORDER BY first_seen
                 """,
@@ -194,10 +196,11 @@ class SessionCog(commands.Cog, name="Session Commands"):
             )
 
             # Get top players aggregated (database-specific)
+            # Filter out R0 (warmup rounds) using round_number > 0
             if self.bot.config.database_type == 'sqlite':
                 top_players = await self.bot.db_adapter.fetch_all(
                     """
-                    SELECT 
+                    SELECT
                         p.player_name,
                         SUM(p.kills) as kills,
                         SUM(p.deaths) as deaths,
@@ -207,7 +210,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                             ELSE 0
                         END as dpm
                     FROM player_comprehensive_stats p
-                    WHERE DATE(p.round_date) = ?
+                    WHERE DATE(p.round_date) = ? AND p.round_number > 0
                     GROUP BY p.player_name
                     ORDER BY kills DESC
                     LIMIT 5
@@ -217,7 +220,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
             else:  # PostgreSQL
                 top_players = await self.bot.db_adapter.fetch_all(
                     """
-                    SELECT 
+                    SELECT
                         p.player_name,
                         SUM(p.kills) as kills,
                         SUM(p.deaths) as deaths,
@@ -227,7 +230,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                             ELSE 0
                         END as dpm
                     FROM player_comprehensive_stats p
-                    WHERE p.round_date = $1
+                    WHERE p.round_date = $1 AND p.round_number > 0
                     GROUP BY p.player_name
                     ORDER BY kills DESC
                     LIMIT 5
