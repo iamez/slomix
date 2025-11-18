@@ -576,6 +576,55 @@ class UltimateETLegacyBot(commands.Bot):
                 f"✅ Database verified - all {len(required_tables)} required tables exist"
             )
 
+    # 🔌 SSH HELPER METHODS
+
+    async def ssh_list_remote_files(self, ssh_config: dict) -> list:
+        """
+        List files in remote SSH directory using provided config.
+        Used by sync_cog for manual sync operations.
+
+        Args:
+            ssh_config: Dict with keys: host, port, user, key_path, remote_path
+
+        Returns:
+            List of filenames in remote directory
+        """
+        import paramiko
+        import shlex
+
+        def _list_files_sync():
+            ssh = None
+            try:
+                ssh = paramiko.SSHClient()
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+                ssh.connect(
+                    hostname=ssh_config['host'],
+                    port=ssh_config['port'],
+                    username=ssh_config['user'],
+                    key_filename=os.path.expanduser(ssh_config['key_path']),
+                    timeout=10
+                )
+
+                safe_path = shlex.quote(ssh_config['remote_path'])
+                stdin, stdout, stderr = ssh.exec_command(f"ls -1 {safe_path}")  # nosec B601
+                files = stdout.read().decode().strip().split('\n')
+
+                return [f.strip() for f in files if f.strip()]
+
+            except Exception as e:
+                logger.error(f"❌ SSH list files error: {e}")
+                return []
+            finally:
+                if ssh:
+                    try:
+                        ssh.close()
+                    except Exception:
+                        pass
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _list_files_sync)
+
     # 🎙️ VOICE CHANNEL SESSION DETECTION
 
     async def on_voice_state_update(self, member, before, after):
