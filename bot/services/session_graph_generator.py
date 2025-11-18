@@ -95,7 +95,7 @@ class SessionGraphGenerator:
             fig.suptitle(f"Visual Performance Analytics - {latest_date}", fontsize=16, fontweight="bold", color='white')
 
             # Graph 1: Kills
-            axes[0, 0].bar(range(len(player_names)), kills, color="#57F287")
+            bars1 = axes[0, 0].bar(range(len(player_names)), kills, color="#57F287")
             axes[0, 0].set_title("Kills", fontweight="bold", color='white')
             axes[0, 0].set_xticks(range(len(player_names)))
             axes[0, 0].set_xticklabels(player_names, rotation=45, ha="right", color='white')
@@ -106,9 +106,15 @@ class SessionGraphGenerator:
             axes[0, 0].spines['top'].set_visible(False)
             axes[0, 0].spines['right'].set_visible(False)
             axes[0, 0].grid(True, alpha=0.2, color='white', axis='y')
+            # Add value labels on bars
+            for i, (bar, value) in enumerate(zip(bars1, kills)):
+                height = bar.get_height()
+                axes[0, 0].text(bar.get_x() + bar.get_width()/2., height,
+                               f'{int(value)}',
+                               ha='center', va='bottom', color='white', fontsize=9, fontweight='bold')
 
             # Graph 2: Deaths
-            axes[0, 1].bar(range(len(player_names)), deaths, color="#ED4245")
+            bars2 = axes[0, 1].bar(range(len(player_names)), deaths, color="#ED4245")
             axes[0, 1].set_title("Deaths", fontweight="bold", color='white')
             axes[0, 1].set_xticks(range(len(player_names)))
             axes[0, 1].set_xticklabels(player_names, rotation=45, ha="right", color='white')
@@ -119,9 +125,15 @@ class SessionGraphGenerator:
             axes[0, 1].spines['top'].set_visible(False)
             axes[0, 1].spines['right'].set_visible(False)
             axes[0, 1].grid(True, alpha=0.2, color='white', axis='y')
+            # Add value labels
+            for bar, value in zip(bars2, deaths):
+                height = bar.get_height()
+                axes[0, 1].text(bar.get_x() + bar.get_width()/2., height,
+                               f'{int(value)}',
+                               ha='center', va='bottom', color='white', fontsize=9, fontweight='bold')
 
             # Graph 3: DPM
-            axes[0, 2].bar(range(len(player_names)), dpm, color="#FEE75C")
+            bars3 = axes[0, 2].bar(range(len(player_names)), dpm, color="#FEE75C")
             axes[0, 2].set_title("DPM (Damage Per Minute)", fontweight="bold", color='white')
             axes[0, 2].set_xticks(range(len(player_names)))
             axes[0, 2].set_xticklabels(player_names, rotation=45, ha="right", color='white')
@@ -132,9 +144,15 @@ class SessionGraphGenerator:
             axes[0, 2].spines['top'].set_visible(False)
             axes[0, 2].spines['right'].set_visible(False)
             axes[0, 2].grid(True, alpha=0.2, color='white', axis='y')
+            # Add value labels
+            for bar, value in zip(bars3, dpm):
+                height = bar.get_height()
+                axes[0, 2].text(bar.get_x() + bar.get_width()/2., height,
+                               f'{int(value)}',
+                               ha='center', va='bottom', color='black', fontsize=9, fontweight='bold')
 
             # Graph 4: Time Played
-            axes[1, 0].bar(range(len(player_names)), time_played, color="#5865F2")
+            bars4 = axes[1, 0].bar(range(len(player_names)), time_played, color="#5865F2")
             axes[1, 0].set_title("Time Played (minutes)", fontweight="bold", color='white')
             axes[1, 0].set_xticks(range(len(player_names)))
             axes[1, 0].set_xticklabels(player_names, rotation=45, ha="right", color='white')
@@ -145,9 +163,15 @@ class SessionGraphGenerator:
             axes[1, 0].spines['top'].set_visible(False)
             axes[1, 0].spines['right'].set_visible(False)
             axes[1, 0].grid(True, alpha=0.2, color='white', axis='y')
+            # Add value labels
+            for bar, value in zip(bars4, time_played):
+                height = bar.get_height()
+                axes[1, 0].text(bar.get_x() + bar.get_width()/2., height,
+                               f'{value:.1f}',
+                               ha='center', va='bottom', color='white', fontsize=9, fontweight='bold')
 
             # Graph 5: Time Dead
-            axes[1, 1].bar(range(len(player_names)), time_dead, color="#EB459E")
+            bars5 = axes[1, 1].bar(range(len(player_names)), time_dead, color="#EB459E")
             axes[1, 1].set_title("Time Dead (minutes)", fontweight="bold", color='white')
             axes[1, 1].set_xticks(range(len(player_names)))
             axes[1, 1].set_xticklabels(player_names, rotation=45, ha="right", color='white')
@@ -158,9 +182,15 @@ class SessionGraphGenerator:
             axes[1, 1].spines['top'].set_visible(False)
             axes[1, 1].spines['right'].set_visible(False)
             axes[1, 1].grid(True, alpha=0.2, color='white', axis='y')
+            # Add value labels
+            for bar, value in zip(bars5, time_dead):
+                height = bar.get_height()
+                axes[1, 1].text(bar.get_x() + bar.get_width()/2., height,
+                               f'{value:.1f}',
+                               ha='center', va='bottom', color='white', fontsize=9, fontweight='bold')
 
             # Graph 6: Time Denied
-            axes[1, 2].bar(range(len(player_names)), denied, color="#9B59B6")
+            bars6 = axes[1, 2].bar(range(len(player_names)), denied, color="#9B59B6")
             axes[1, 2].set_title("Time Denied (seconds)", fontweight="bold", color='white')
             axes[1, 2].set_xticks(range(len(player_names)))
             axes[1, 2].set_xticklabels(player_names, rotation=45, ha="right", color='white')
@@ -171,6 +201,12 @@ class SessionGraphGenerator:
             axes[1, 2].spines['top'].set_visible(False)
             axes[1, 2].spines['right'].set_visible(False)
             axes[1, 2].grid(True, alpha=0.2, color='white', axis='y')
+            # Add value labels
+            for bar, value in zip(bars6, denied):
+                height = bar.get_height()
+                axes[1, 2].text(bar.get_x() + bar.get_width()/2., height,
+                               f'{int(value)}',
+                               ha='center', va='bottom', color='white', fontsize=9, fontweight='bold')
 
             plt.tight_layout()
 
@@ -244,8 +280,8 @@ class SessionGraphGenerator:
             width_eff = 0.35
 
             # Subplot 1: Damage Given vs Received
-            ax1.bar([i - width_eff / 2 for i in x_eff], eff_dmg_given, width_eff, label="Damage Given", color="#5865f2", alpha=0.8)
-            ax1.bar([i + width_eff / 2 for i in x_eff], eff_dmg_received, width_eff, label="Damage Received", color="#ed4245", alpha=0.8)
+            bars_given = ax1.bar([i - width_eff / 2 for i in x_eff], eff_dmg_given, width_eff, label="Damage Given", color="#5865f2", alpha=0.8)
+            bars_received = ax1.bar([i + width_eff / 2 for i in x_eff], eff_dmg_received, width_eff, label="Damage Received", color="#ed4245", alpha=0.8)
             ax1.set_xticks(x_eff)
             ax1.set_xticklabels(eff_names, rotation=20, ha="right", color="white", fontsize=9)
             ax1.set_ylabel("Damage", color="white", fontsize=11)
@@ -258,6 +294,17 @@ class SessionGraphGenerator:
             ax1.spines["right"].set_visible(False)
             ax1.grid(True, alpha=0.2, color="white", axis="y")
             ax1.legend(facecolor="#1e1f22", edgecolor="white", labelcolor="white", fontsize=9)
+            # Add value labels
+            for bar, value in zip(bars_given, eff_dmg_given):
+                height = bar.get_height()
+                ax1.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{int(value):,}',
+                        ha='center', va='bottom', color='white', fontsize=7)
+            for bar, value in zip(bars_received, eff_dmg_received):
+                height = bar.get_height()
+                ax1.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{int(value):,}',
+                        ha='center', va='bottom', color='white', fontsize=7)
 
             # Subplot 2: Damage Efficiency Ratio
             colors_ratio = ["#57f287" if r > 1.5 else "#fee75c" if r > 1.0 else "#ed4245" for r in eff_damage_ratio]
