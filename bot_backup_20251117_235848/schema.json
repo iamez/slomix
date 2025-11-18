@@ -1,0 +1,832 @@
+{
+  "player_aliases": [
+    {
+      "cid": 0,
+      "name": "id",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": true
+    },
+    {
+      "cid": 1,
+      "name": "guid",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 2,
+      "name": "alias",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 3,
+      "name": "first_seen",
+      "type": "TIMESTAMP",
+      "notnull": false,
+      "dflt_value": "CURRENT_TIMESTAMP",
+      "pk": false
+    },
+    {
+      "cid": 4,
+      "name": "last_seen",
+      "type": "TIMESTAMP",
+      "notnull": false,
+      "dflt_value": "CURRENT_TIMESTAMP",
+      "pk": false
+    },
+    {
+      "cid": 5,
+      "name": "times_seen",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "1",
+      "pk": false
+    }
+  ],
+  "player_comprehensive_stats": [
+    {
+      "cid": 0,
+      "name": "id",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": true
+    },
+    {
+      "cid": 1,
+      "name": "session_id",
+      "type": "INTEGER",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 2,
+      "name": "session_date",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 3,
+      "name": "map_name",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 4,
+      "name": "round_number",
+      "type": "INTEGER",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 5,
+      "name": "player_guid",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 6,
+      "name": "player_name",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 7,
+      "name": "clean_name",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 8,
+      "name": "team",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 9,
+      "name": "kills",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 10,
+      "name": "deaths",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 11,
+      "name": "damage_given",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 12,
+      "name": "damage_received",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 13,
+      "name": "team_damage_given",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 14,
+      "name": "team_damage_received",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 15,
+      "name": "gibs",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 16,
+      "name": "self_kills",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 17,
+      "name": "team_kills",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 18,
+      "name": "team_gibs",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 19,
+      "name": "headshot_kills",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 20,
+      "name": "time_played_seconds",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 21,
+      "name": "time_played_minutes",
+      "type": "REAL",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 22,
+      "name": "time_dead_minutes",
+      "type": "REAL",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 23,
+      "name": "time_dead_ratio",
+      "type": "REAL",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 24,
+      "name": "xp",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 25,
+      "name": "kd_ratio",
+      "type": "REAL",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 26,
+      "name": "dpm",
+      "type": "REAL",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 27,
+      "name": "efficiency",
+      "type": "REAL",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 28,
+      "name": "bullets_fired",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 29,
+      "name": "accuracy",
+      "type": "REAL",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 30,
+      "name": "kill_assists",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 31,
+      "name": "objectives_completed",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 32,
+      "name": "objectives_destroyed",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 33,
+      "name": "objectives_stolen",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 34,
+      "name": "objectives_returned",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 35,
+      "name": "dynamites_planted",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 36,
+      "name": "dynamites_defused",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 37,
+      "name": "times_revived",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 38,
+      "name": "revives_given",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 39,
+      "name": "most_useful_kills",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 40,
+      "name": "useless_kills",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 41,
+      "name": "kill_steals",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 42,
+      "name": "denied_playtime",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 43,
+      "name": "constructions",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 44,
+      "name": "tank_meatshield",
+      "type": "REAL",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 45,
+      "name": "double_kills",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 46,
+      "name": "triple_kills",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 47,
+      "name": "quad_kills",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 48,
+      "name": "multi_kills",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 49,
+      "name": "mega_kills",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 50,
+      "name": "killing_spree_best",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 51,
+      "name": "death_spree_worst",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 52,
+      "name": "created_at",
+      "type": "TIMESTAMP",
+      "notnull": false,
+      "dflt_value": "CURRENT_TIMESTAMP",
+      "pk": false
+    }
+  ],
+  "player_links": [
+    {
+      "cid": 0,
+      "name": "discord_id",
+      "type": "BIGINT",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": true
+    },
+    {
+      "cid": 1,
+      "name": "discord_username",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 2,
+      "name": "et_guid",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 3,
+      "name": "et_name",
+      "type": "TEXT",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 4,
+      "name": "linked_date",
+      "type": "TIMESTAMP",
+      "notnull": false,
+      "dflt_value": "CURRENT_TIMESTAMP",
+      "pk": false
+    },
+    {
+      "cid": 5,
+      "name": "verified",
+      "type": "BOOLEAN",
+      "notnull": false,
+      "dflt_value": "FALSE",
+      "pk": false
+    }
+  ],
+  "processed_files": [
+    {
+      "cid": 0,
+      "name": "id",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": true
+    },
+    {
+      "cid": 1,
+      "name": "filename",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 2,
+      "name": "file_hash",
+      "type": "TEXT",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 3,
+      "name": "success",
+      "type": "BOOLEAN",
+      "notnull": false,
+      "dflt_value": "1",
+      "pk": false
+    },
+    {
+      "cid": 4,
+      "name": "error_message",
+      "type": "TEXT",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 5,
+      "name": "processed_at",
+      "type": "TIMESTAMP",
+      "notnull": false,
+      "dflt_value": "CURRENT_TIMESTAMP",
+      "pk": false
+    }
+  ],
+  "session_teams": [
+    {
+      "cid": 0,
+      "name": "id",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": true
+    },
+    {
+      "cid": 1,
+      "name": "session_start_date",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 2,
+      "name": "map_name",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 3,
+      "name": "team_name",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 4,
+      "name": "player_guids",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 5,
+      "name": "player_names",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 6,
+      "name": "created_at",
+      "type": "TIMESTAMP",
+      "notnull": false,
+      "dflt_value": "CURRENT_TIMESTAMP",
+      "pk": false
+    }
+  ],
+  "sessions": [
+    {
+      "cid": 0,
+      "name": "id",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": true
+    },
+    {
+      "cid": 1,
+      "name": "session_date",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 2,
+      "name": "map_name",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 3,
+      "name": "round_number",
+      "type": "INTEGER",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 4,
+      "name": "defender_team",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 5,
+      "name": "winner_team",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 6,
+      "name": "time_limit",
+      "type": "TEXT",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 7,
+      "name": "actual_time",
+      "type": "TEXT",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 8,
+      "name": "created_at",
+      "type": "TIMESTAMP",
+      "notnull": false,
+      "dflt_value": "CURRENT_TIMESTAMP",
+      "pk": false
+    }
+  ],
+  "weapon_comprehensive_stats": [
+    {
+      "cid": 0,
+      "name": "id",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": null,
+      "pk": true
+    },
+    {
+      "cid": 1,
+      "name": "session_id",
+      "type": "INTEGER",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 2,
+      "name": "session_date",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 3,
+      "name": "map_name",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 4,
+      "name": "round_number",
+      "type": "INTEGER",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 5,
+      "name": "player_guid",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 6,
+      "name": "player_name",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 7,
+      "name": "weapon_name",
+      "type": "TEXT",
+      "notnull": true,
+      "dflt_value": null,
+      "pk": false
+    },
+    {
+      "cid": 8,
+      "name": "kills",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 9,
+      "name": "deaths",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 10,
+      "name": "headshots",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 11,
+      "name": "shots",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 12,
+      "name": "hits",
+      "type": "INTEGER",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 13,
+      "name": "accuracy",
+      "type": "REAL",
+      "notnull": false,
+      "dflt_value": "0",
+      "pk": false
+    },
+    {
+      "cid": 14,
+      "name": "created_at",
+      "type": "TIMESTAMP",
+      "notnull": false,
+      "dflt_value": "CURRENT_TIMESTAMP",
+      "pk": false
+    }
+  ]
+}
