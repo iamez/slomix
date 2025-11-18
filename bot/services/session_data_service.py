@@ -48,7 +48,8 @@ class SessionDataService:
                 SELECT 1 FROM player_comprehensive_stats p
                 WHERE p.round_id = s.id
             )
-            AND SUBSTR(s.round_date, 1, 4) = '2025'
+            AND s.round_number IN (1, 2)
+            AND (s.round_status IN ('completed', 'substitution') OR s.round_status IS NULL)
             ORDER BY
                 s.round_date DESC,
                 CAST(REPLACE(s.round_time, ':', '') AS INTEGER) DESC
@@ -92,12 +93,14 @@ class SessionDataService:
         # (exclude R0 match summaries to avoid triple-counting)
         # R0 contains cumulative R1+R2 data, so querying all three would give us: R0+R1+R2 = (R1+R2)+R1+R2 = wrong!
         # Using only R1+R2 lets SUM() aggregate correctly without duplication
+        # 🆕 Also exclude 'cancelled' rounds (restarts/warmups)
         sessions = await self.db_adapter.fetch_all(
             """
             SELECT id, map_name, round_number, actual_time
             FROM rounds
             WHERE gaming_session_id = ?
               AND round_number IN (1, 2)
+              AND (round_status = 'completed' OR round_status IS NULL)
             ORDER BY
                 round_date,
                 CAST(REPLACE(round_time, ':', '') AS INTEGER)
@@ -407,14 +410,29 @@ class SessionDataService:
                     detail_query = f"""
                         SELECT
                             CASE
-                                WHEN SUM(time_played_seconds) > 0
-                                THEN (SUM(damage_given) * 60.0) / SUM(time_played_seconds)
+                                WHEN session_total.total_seconds > 0
+                                THEN (SUM(damage_given) * 60.0) / session_total.total_seconds
                                 ELSE 0
                             END as weighted_dpm,
                             SUM(deaths),
                             SUM(revives_given),
                             SUM(gibs)
                         FROM player_comprehensive_stats
+                        CROSS JOIN (
+                            SELECT SUM(
+                                CASE
+                                    WHEN r.actual_time LIKE '%:%' THEN
+                                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
+                                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
+                                    ELSE
+                                        CAST(r.actual_time AS INTEGER)
+                                END
+                            ) as total_seconds
+                            FROM rounds r
+                            WHERE r.id IN ({session_ids_str})
+                              AND r.round_number IN (1, 2)
+                              AND (r.round_status = 'completed' OR r.round_status IS NULL)
+                        ) session_total
                         WHERE round_id IN ({session_ids_str})
                             AND player_name = ?
                             AND player_guid IN ({team_guids_placeholders})
