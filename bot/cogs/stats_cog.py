@@ -67,38 +67,71 @@ class StatsCog(commands.Cog, name="Stats"):
             # Get cache stats
             cache_info = self.stats_cache.stats()
 
+            # Get total player and round count
+            total_players = await self.bot.db_adapter.fetch_one(
+                "SELECT COUNT(DISTINCT player_guid) FROM player_comprehensive_stats"
+            )
+            total_rounds = await self.bot.db_adapter.fetch_one(
+                "SELECT COUNT(DISTINCT round_id) FROM rounds WHERE round_number IN (1, 2)"
+            )
+
+            # Determine status color
+            bot_latency = round(self.bot.latency * 1000)
+            if bot_latency < 100:
+                status_color = 0x57F287  # Green
+                status_emoji = "🟢"
+            elif bot_latency < 200:
+                status_color = 0xFEE75C  # Yellow
+                status_emoji = "🟡"
+            else:
+                status_color = 0xED4245  # Red
+                status_emoji = "🔴"
+
             embed = discord.Embed(
-                title="🏓 Ultimate Bot Status", color=0x00FF00
+                title="🏓 Bot Status & Performance",
+                description=f"{status_emoji} All systems operational",
+                color=status_color,
+                timestamp=datetime.now()
             )
+
             embed.add_field(
-                name="Bot Latency",
-                value=f"{round(self.bot.latency * 1000)}ms",
-                inline=True,
-            )
-            embed.add_field(
-                name="DB Latency", value=f"{round(db_latency)}ms", inline=True
-            )
-            embed.add_field(
-                name="Active Session",
-                value="Yes" if self.bot.current_session else "No",
-                inline=True,
-            )
-            embed.add_field(
-                name="Commands",
-                value=f"{len(list(self.bot.commands))}",
-                inline=True,
-            )
-            embed.add_field(
-                name="Query Cache",
-                value=f"{cache_info['valid_keys']} active / {cache_info['total_keys']} total",
-                inline=True,
-            )
-            embed.add_field(
-                name="Cache TTL",
-                value=f"{cache_info['ttl_seconds']}s",
+                name="⚡ Latency",
+                value=(
+                    f"**Discord:** `{bot_latency}ms`\n"
+                    f"**Database:** `{round(db_latency)}ms`"
+                ),
                 inline=True,
             )
 
+            embed.add_field(
+                name="📊 Statistics",
+                value=(
+                    f"**Players:** `{total_players[0] if total_players else 0:,}`\n"
+                    f"**Rounds:** `{total_rounds[0] if total_rounds else 0:,}`"
+                ),
+                inline=True,
+            )
+
+            embed.add_field(
+                name="⚙️ System",
+                value=(
+                    f"**Commands:** `{len(list(self.bot.commands))}`\n"
+                    f"**Session:** `{'Active' if self.bot.current_session else 'Idle'}`"
+                ),
+                inline=True,
+            )
+
+            cache_efficiency = (cache_info['valid_keys'] / cache_info['total_keys'] * 100) if cache_info['total_keys'] > 0 else 0
+            embed.add_field(
+                name="💾 Query Cache",
+                value=(
+                    f"**Active:** `{cache_info['valid_keys']}/{cache_info['total_keys']}`\n"
+                    f"**Efficiency:** `{cache_efficiency:.1f}%` • TTL: `{cache_info['ttl_seconds']}s`"
+                ),
+                inline=False,
+            )
+
+            embed.set_footer(text=f"Requested by {ctx.author.name}")
             await ctx.send(embed=embed)
 
         except Exception as e:
@@ -842,129 +875,176 @@ class StatsCog(commands.Cog, name="Stats"):
     @commands.command(name="help_command", aliases=["commands"])
     async def help_command(self, ctx):
         """📚 Show all available commands with examples"""
-        
+
         # Main Commands Embed
         embed1 = discord.Embed(
-            title="🚀 Ultimate ET:Legacy Bot - Command Reference",
-            description="**Use `!` prefix for all commands** | 📖 Full examples below",
-            color=0x0099FF,
+            title="🎮 ET:Legacy Stats Bot - Complete Command Reference",
+            description=(
+                "**All commands use `!` prefix** • "
+                "View detailed examples in next embed\n"
+                "🆕 **NEW:** Achievement badges (🏥🔧🎯) & custom display names!"
+            ),
+            color=0x5865F2,  # Discord Blurple
+            timestamp=datetime.now()
         )
 
         embed1.add_field(
-            name="📊 **Session Commands**",
+            name="📊 Session & Match Stats",
             value=(
-                "• `!last_session` - View latest gaming session with full stats\n"
-                "• `!session <date>` - View specific date session\n"
-                "  └ Example: `!session 2025-11-02`\n"
-                "• `!sessions` - List all recent gaming sessions\n"
-                "  └ Aliases: `!rounds`, `!list_sessions`, `!ls`\n"
-                "  └ Example: `!sessions 10` (filter by October)"
+                "• `!last_session [view]` - Latest session with multiple views\n"
+                "  └ Views: combat, obj, weapons, support, sprees, maps, graphs\n"
+                "• `!session <date>` - Specific date session\n"
+                "• `!sessions [month]` - List all sessions\n"
+                "  └ Aliases: `!rounds`, `!ls`"
             ),
             inline=False,
         )
 
         embed1.add_field(
-            name="🎯 **Player Stats**",
+            name="🎯 Player Statistics",
             value=(
-                "• `!stats <player>` - Individual player statistics\n"
-                "  └ Example: `!stats carniee`\n"
-                "• `!leaderboard [type]` - Top players by kills/accuracy/etc\n"
-                "• `!list_players` - Show all registered players\n"
-                "• `!compare <player1> <player2>` - Compare two players"
+                "• `!stats [player]` - Detailed player stats with badges 🏥🔧🎯\n"
+                "  └ Use player name, @mention, or leave empty (if linked)\n"
+                "• `!compare <player1> <player2>` - Head-to-head comparison\n"
+                "• `!leaderboard [type]` - Rankings (kills, kd, dpm, accuracy, etc)\n"
+                "  └ Alias: `!lb`, `!top`\n"
+                "• `!list_players [filter]` - Browse all players with badges\n"
+                "  └ Filters: linked, unlinked, active\n"
+                "  └ Alias: `!lp`, `!players`\n"
+                "• `!find_player <name>` - Search for player with aliases\n"
+                "  └ Alias: `!fp`"
             ),
             inline=False,
         )
 
         embed1.add_field(
-            name="👥 **Team Commands**",
+            name="🔗 Account Linking & Customization",
             value=(
-                "• `!teams [date]` - Show team rosters\n"
+                "• `!link [name/GUID]` - Link your Discord to in-game account\n"
+                "  └ Interactive reactions or use `!select <1-3>`\n"
+                "• `!unlink` - Remove your account link\n"
+                "• `!setname <name>` - Set custom display name 🎨\n"
+                "  └ `!setname alias <name>` - Use one of your aliases\n"
+                "  └ `!setname reset` - Reset to default\n"
+                "• `!myaliases` - View all your in-game aliases"
+            ),
+            inline=False,
+        )
+
+        embed1.add_field(
+            name="👥 Team Analysis",
+            value=(
+                "• `!teams [date]` - Team rosters with player lists\n"
+                "• `!team_history [player]` - Player's team participation\n"
                 "• `!session_score [date]` - Team scores & map breakdown\n"
-                "• `!lineup_changes [current] [previous]` - Who switched teams\n"
-                "• `!set_team_names <date> <team_a> <team_b>` - Custom names"
+                "• `!lineup_changes [dates]` - Track team changes"
             ),
             inline=False,
         )
 
         embed1.add_field(
-            name="🏆 **Achievements & Season**",
+            name="🏆 Achievements & Season",
             value=(
-                "• `!check_achievements [player]` - View achievements\n"
-                "• `!season_info` - Current season statistics"
+                "• `!achievements` - View all achievement badges info\n"
+                "  └ 🏥 Medic • 🔧 Engineer • 🎯 Sharpshooter\n"
+                "  └ 💪 Rambo • 💣 Demolition • 🔫 Machine Gunner\n"
+                "• `!check_achievements [player]` - Check player progress\n"
+                "• `!season_info` - Current season stats & champions"
             ),
             inline=False,
         )
 
         embed1.add_field(
-            name="🔧 **System Commands**",
+            name="⚙️ System & Admin",
             value=(
-                "• `!ping` - Check bot status & latency\n"
-                "• `!help` - Show this help menu"
+                "• `!ping` - Bot status, latency & database stats\n"
+                "• `!health` - Automation system health\n"
+                "• `!sync_today` / `!sync_week` / `!sync_month` - Sync stats\n"
+                "• `!help` - Show this comprehensive help"
             ),
             inline=False,
         )
 
         # Examples & Tips Embed
         embed2 = discord.Embed(
-            title="💡 Command Examples & Pro Tips",
-            color=0x00FF00,
+            title="💡 Quick Start Guide & Examples",
+            description="Master the bot with these common use cases",
+            color=0xFEE75C,  # Yellow
+            timestamp=datetime.now()
         )
 
         embed2.add_field(
-            name="📅 **Session Viewing**",
+            name="🎯 Getting Started (New Players)",
             value=(
                 "```\n"
-                "!last_session              → Latest session (6 graphs!)\n"
-                "!session 2025-11-02        → Specific date\n"
-                "!sessions                  → List all sessions\n"
-                "!sessions 10               → October sessions only\n"
-                "!sessions october          → Same as above\n"
+                "1. !link                   → Link your Discord account\n"
+                "2. !setname MyName         → Set your custom display name\n"
+                "3. !stats                  → View your stats with badges!\n"
+                "4. !last_session           → See latest gaming session\n"
                 "```"
             ),
             inline=False,
         )
 
         embed2.add_field(
-            name="🎯 **Player Stats**",
+            name="📊 Session Examples",
             value=(
                 "```\n"
-                "!stats carniee             → Full player stats\n"
-                "!leaderboard               → Top 10 by kills\n"
-                "!compare carniee superboyy → Head-to-head\n"
-                "!list_players              → All 45+ players\n"
+                "!last_session              → Latest session overview\n"
+                "!last_session combat       → Combat stats view\n"
+                "!last_session graphs       → Performance graphs\n"
+                "!session 2025-11-15        → Specific date\n"
+                "!sessions november         → Filter by month\n"
                 "```"
             ),
             inline=False,
         )
 
         embed2.add_field(
-            name="👥 **Team Analysis**",
+            name="🏆 Player Stats Examples",
             value=(
                 "```\n"
-                "!teams                     → Latest session teams\n"
-                "!session_score             → Team scores + maps\n"
-                "!lineup_changes            → Who switched sides\n"
-                "!lineup_changes 2025-11-02 → Compare with date\n"
+                "!stats                     → Your stats (if linked)\n"
+                "!stats playerName          → Search by name\n"
+                "!stats @User               → Stats for Discord user\n"
+                "!lb dpm                    → DPM leaderboard\n"
+                "!lp linked                 → Show only linked players\n"
+                "!compare player1 player2   → Head-to-head\n"
                 "```"
             ),
             inline=False,
         )
 
         embed2.add_field(
-            name="🔥 **Pro Tips**",
+            name="🎨 Customization Examples",
             value=(
-                "• **`!last_session`** shows 6 graphs:\n"
-                "  └ Player scores, K/D, Accuracy, Team KPD, Weapon usage, Headshots\n"
-                "• **Date format**: Always use `YYYY-MM-DD` (e.g., `2025-11-02`)\n"
-                "• **Player names**: Case-insensitive (`carniee` = `CARNIEE`)\n"
-                "• **Month filters**: Use numbers (`10`) or names (`october`, `oct`)\n"
-                "• **Aliases**: Many commands have shortcuts (e.g., `!ls` = `!sessions`)"
+                "```\n"
+                "!setname ProGamer          → Custom display name\n"
+                "!setname alias oldName     → Use one of your aliases\n"
+                "!setname reset             → Reset to default\n"
+                "!myaliases                 → See all your names\n"
+                "!achievements              → View badge requirements\n"
+                "```"
+            ),
+            inline=False,
+        )
+
+        embed2.add_field(
+            name="🔥 Pro Tips & Features",
+            value=(
+                "🏥 **Achievement Badges** auto-appear on player names!\n"
+                "  └ 🏥 Medic (50+ revives) • 🔧 Engineer (10+ constructions)\n"
+                "  └ 🎯 Sharpshooter (30%+ HS) • 💪 Rambo (500+ kills)\n\n"
+                "📅 **Date Formats**: `YYYY-MM-DD` or month names (`november`, `nov`)\n\n"
+                "⚡ **Quick Access**: Use `!lp` instead of `!list_players`\n\n"
+                "🔗 **Linking Benefits**: Use `!stats` without args, get @mentions\n\n"
+                "💾 **Cached**: Stats queries are cached for 5min (fast!)"
             ),
             inline=False,
         )
 
         embed2.set_footer(
-            text="💬 Questions? Ask in #bot-commands | 🐛 Report issues to admins"
+            text="💬 Questions? Ask in #support | 🐛 Issues? Report to admins | ⭐ Enjoy the bot!"
         )
 
         # Send both embeds
