@@ -254,15 +254,20 @@ class SessionCog(commands.Cog, name="Session Commands"):
 
             # Add all players (not just top 5!)
             if top_players:
+                # Batch fetch badges and display names to avoid N+1 queries
+                player_guids = [row[0] for row in top_players]
+                badges_dict = await self.badge_service.get_player_badges_batch(player_guids)
+                names_dict = await self.display_name_service.get_display_names_batch(player_guids)
+
                 player_text = ""
                 medals = ["🥇", "🥈", "🥉"] + [f"{i}." for i in range(4, 11)]
 
                 for i, row in enumerate(top_players):
                     guid, name, kills, deaths, damage, playtime = row
 
-                    # Get badge and display name
-                    badge = await self.badge_service.get_player_badges(guid)
-                    display_name = await self.display_name_service.get_display_name(guid)
+                    # Get badge and display name from batch dictionaries
+                    badge = badges_dict.get(guid, '')
+                    display_name = names_dict.get(guid, name)  # Fallback to query name if not found
 
                     kd = StatsCalculator.calculate_kd(kills, deaths)
                     dpm = (damage * 60.0 / playtime) if playtime > 0 else 0
@@ -389,7 +394,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                              )) as players
                         FROM rounds r
                         WHERE r.gaming_session_id IS NOT NULL
-                          AND r.round_date LIKE $1
+                          AND r.round_date LIKE ?
                         GROUP BY r.gaming_session_id, SUBSTR(r.round_date, 1, 10)
                         ORDER BY r.gaming_session_id DESC
                     """
