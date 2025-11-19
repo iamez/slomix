@@ -63,7 +63,7 @@ class PlayerFormatter:
                         SUM(headshot_kills) as total_headshots,
                         SUM(kills) as total_kills,
                         SUM(dynamites_planted) as total_dynamites,
-                        SUM(mg42_kills) as total_mg_kills
+                        SUM(mega_kills) as total_mg_kills
                     FROM player_comprehensive_stats
                     WHERE player_guid = $1
                 """, (player_guid,))
@@ -230,7 +230,7 @@ class PlayerFormatter:
                         SUM(headshot_kills) as total_headshots,
                         SUM(kills) as total_kills,
                         SUM(dynamites_planted) as total_dynamites,
-                        SUM(mg42_kills) as total_mg_kills
+                        SUM(mega_kills) as total_mg_kills
                     FROM player_comprehensive_stats
                     WHERE player_guid IN ({placeholders})
                     GROUP BY player_guid
