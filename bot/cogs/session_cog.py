@@ -262,7 +262,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
 
                     # Get badge and display name
                     badge = await self.badge_service.get_player_badges(guid)
-                    display_name = await self.display_name_service.get_display_name(guid, name)
+                    display_name = await self.display_name_service.get_display_name(guid)
 
                     kd = StatsCalculator.calculate_kd(kills, deaths)
                     dpm = (damage * 60.0 / playtime) if playtime > 0 else 0
