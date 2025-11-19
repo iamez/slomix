@@ -63,10 +63,10 @@ class SSHMonitor:
             "remote_path": os.getenv("REMOTE_STATS_PATH", "")
         }
         
-        # Discord configuration
-        stats_channel_env = os.getenv("STATS_CHANNEL_ID", "0")
-        self.stats_channel_id = int(stats_channel_env) if stats_channel_env.isdigit() else 0
-        
+        # Discord configuration - use production channel for all match posts
+        self.production_channel_id = bot.production_channel_id if hasattr(bot, 'production_channel_id') else 0
+        self.admin_channel_id = bot.admin_channel_id if hasattr(bot, 'admin_channel_id') else 0
+
         # Statistics (for monitoring health)
         self.last_check_time: Optional[datetime] = None
         self.files_processed_count = 0
@@ -181,6 +181,38 @@ class SSHMonitor:
         except Exception as e:
             logger.debug(f"Could not get voice player count: {e}")
             return -1  # Error means we should check anyway
+
+    def _detect_match_type(self) -> str:
+        """
+        Detect if match is 3v3, 6v6, or regular based on voice channel player counts.
+
+        Returns:
+            str: "3v3", "6v6", or "regular"
+        """
+        try:
+            if not hasattr(self.bot, 'gaming_voice_channels') or not self.bot.gaming_voice_channels:
+                return "regular"
+
+            # Count players in each voice channel
+            channel_counts = []
+            for channel_id in self.bot.gaming_voice_channels:
+                channel = self.bot.get_channel(channel_id)
+                if channel and isinstance(channel, discord.VoiceChannel):
+                    player_count = len(channel.members)
+                    if player_count > 0:
+                        channel_counts.append(player_count)
+
+            # Detect match type based on player distribution
+            if len(channel_counts) == 2:
+                if channel_counts[0] == 3 and channel_counts[1] == 3:
+                    return "3v3"
+                elif channel_counts[0] == 6 and channel_counts[1] == 6:
+                    return "6v6"
+
+            return "regular"
+        except Exception as e:
+            logger.debug(f"Could not detect match type: {e}")
+            return "regular"
 
     async def _monitoring_loop(self):
         """Main monitoring loop - runs continuously"""
@@ -521,10 +553,10 @@ class SSHMonitor:
     async def _post_round_stats(self, filename: str):
         """Post round statistics to Discord channel"""
         try:
-            channel = self.bot.get_channel(self.stats_channel_id)
-            
+            channel = self.bot.get_channel(self.production_channel_id)
+
             if not channel:
-                logger.error(f"❌ Stats channel {self.stats_channel_id} not found")
+                logger.error(f"❌ Production channel {self.production_channel_id} not found")
                 return
             
             # Get the round data from database (most recent round)
@@ -757,10 +789,10 @@ class SSHMonitor:
         from the Round 2 file (R1+R2 combined).
         """
         try:
-            channel = self.bot.get_channel(self.stats_channel_id)
-            
+            channel = self.bot.get_channel(self.production_channel_id)
+
             if not channel:
-                logger.error(f"❌ Stats channel {self.stats_channel_id} not found")
+                logger.error(f"❌ Production channel {self.production_channel_id} not found")
                 return
             
             # Extract map name from filename
