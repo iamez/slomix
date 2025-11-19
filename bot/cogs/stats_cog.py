@@ -130,7 +130,7 @@ class StatsCog(commands.Cog, name="Stats"):
                 mentioned_id = int(mentioned_user.id)  # Convert to int for PostgreSQL BIGINT
 
                 link = await self.bot.db_adapter.fetch_one(
-                    "SELECT et_guid, et_name FROM player_links WHERE discord_id = ?",
+                    "SELECT player_guid, player_name FROM player_links WHERE discord_id = ?",
                     (mentioned_id,),
                 )
 
@@ -148,7 +148,7 @@ class StatsCog(commands.Cog, name="Stats"):
                 discord_id = int(ctx.author.id)  # BIGINT in PostgreSQL
                 placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
                 link = await self.bot.db_adapter.fetch_one(
-                    f"SELECT et_guid, et_name FROM player_links WHERE discord_id = {placeholder}",
+                    f"SELECT player_guid, player_name FROM player_links WHERE discord_id = {placeholder}",
                     (discord_id,),
                 )
 
@@ -417,7 +417,7 @@ class StatsCog(commands.Cog, name="Stats"):
                 if m:
                     discord_id = int(m.group(1))  # Convert to int for PostgreSQL BIGINT
                     link = await self.bot.db_adapter.fetch_one(
-                        "SELECT et_guid, et_name FROM player_links WHERE discord_id = ?",
+                        "SELECT player_guid, player_name FROM player_links WHERE discord_id = ?",
                         (discord_id,),
                     )
 
@@ -971,8 +971,121 @@ class StatsCog(commands.Cog, name="Stats"):
         await ctx.send(embed=embed1)
         await ctx.send(embed=embed2)
 
+    @commands.command(name="badges", aliases=["badge_legend", "achievements_legend"])
+    async def badges_legend(self, ctx):
+        """🏅 Show achievement badge legend
+
+        Displays all available achievement badges and their requirements.
+        """
+        embed = discord.Embed(
+            title="🏅 Achievement Badge Legend",
+            description="Badges are earned through lifetime achievements across all sessions.\nThey appear next to your name in session stats!",
+            color=0xFFD700,
+        )
+
+        # Kill Milestones
+        embed.add_field(
+            name="💀 Kill Milestones",
+            value=(
+                "🎯 **100 kills**\n"
+                "💥 **500 kills**\n"
+                "💀 **1,000 kills**\n"
+                "⚔️ **2,500 kills**\n"
+                "☠️ **5,000 kills**\n"
+                "👑 **10,000 kills**"
+            ),
+            inline=True,
+        )
+
+        # Game Milestones
+        embed.add_field(
+            name="🎮 Games Played",
+            value=(
+                "🎮 **10 games**\n"
+                "🎯 **50 games**\n"
+                "🏆 **100 games**\n"
+                "⭐ **250 games**\n"
+                "💎 **500 games**\n"
+                "👑 **1,000 games**"
+            ),
+            inline=True,
+        )
+
+        # K/D Ratio
+        embed.add_field(
+            name="📊 K/D Ratio",
+            value=(
+                "⚖️ **1.0 K/D**\n"
+                "📈 **1.5 K/D**\n"
+                "🔥 **2.0 K/D**\n"
+                "💯 **3.0 K/D**"
+            ),
+            inline=True,
+        )
+
+        # Support & Objectives
+        embed.add_field(
+            name="🏥 Medic / Revives Given",
+            value=(
+                "💉 **100 revives**\n"
+                "🏥 **1,000 revives**\n"
+                "⚕️ **10,000 revives**"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="♻️ Times Revived",
+            value=(
+                "🔄 **50 revives**\n"
+                "♻️ **500 revives**\n"
+                "🔁 **5,000 revives**"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="🧨 Engineer / Dynamite",
+            value=(
+                "**Planted:**\n"
+                "💣 **50** • 🧨 **500** • 💥 **5,000**\n\n"
+                "**Defused:**\n"
+                "🛡️ **50** • 🔰 **500** • 🏛️ **5,000**"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="🎯 Objectives",
+            value=(
+                "*(Stolen + Returned)*\n\n"
+                "🎯 **25 objectives**\n"
+                "🏆 **250 objectives**\n"
+                "👑 **2,500 objectives**"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="\u200b",  # Empty field for spacing
+            value="\u200b",
+            inline=True,
+        )
+
+        embed.add_field(
+            name="\u200b",  # Empty field for spacing
+            value="\u200b",
+            inline=True,
+        )
+
+        embed.set_footer(
+            text="💡 Badges are calculated from your lifetime stats • Use !check_achievements to see your progress"
+        )
+
+        await ctx.send(embed=embed)
+
 
 async def setup(bot):
     """Load the Stats Cog"""
     await bot.add_cog(StatsCog(bot))
-    logger.info("✅ Stats Cog loaded (ping, check_achievements, compare, season_info, help_command)")
+    logger.info("✅ Stats Cog loaded (ping, check_achievements, compare, season_info, help_command, badges)")
