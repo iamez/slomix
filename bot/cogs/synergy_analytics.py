@@ -20,25 +20,27 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from analytics.synergy_detector import SynergyDetector, SynergyMetrics
 from analytics.config import config, is_enabled, is_command_enabled
+from bot.services.player_formatter import PlayerFormatter
 
 
 class SynergyAnalytics(commands.Cog):
     """
     Player chemistry and team synergy analysis
-    
+
     Commands:
     - !synergy @Player1 @Player2 - Show duo chemistry
     - !best_duos [limit] - Show top player pairs
     - !team_builder @P1 @P2... - Suggest balanced teams
     - !player_impact [@Player] - Show best/worst teammates
     """
-    
+
     def __init__(self, bot):
         self.bot = bot
         self.db_path = 'etlegacy_production.db'  # Database path
         self.detector = SynergyDetector(self.db_path)
         self.cache = {}  # Simple in-memory cache
-        
+        self.player_formatter = PlayerFormatter(bot.db_adapter)
+
         # Start background tasks if enabled
         if config.get('synergy_analytics.auto_recalculate'):
             self.recalculate_synergies_task.start()
@@ -177,14 +179,36 @@ class SynergyAnalytics(commands.Cog):
                 )
                 return
             
+            # Format player names with badges (batch processing for efficiency)
+            player_tuples = []
+            for duo in duos:
+                player_tuples.append((duo.player_a_guid, duo.player_a_name))
+                player_tuples.append((duo.player_b_guid, duo.player_b_name))
+
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_players = []
+            for guid, name in player_tuples:
+                if guid not in seen:
+                    seen.add(guid)
+                    unique_players.append((guid, name))
+
+            try:
+                formatted_names = await self.player_formatter.format_players_batch(
+                    unique_players, include_badges=True
+                )
+            except Exception as e:
+                print(f"Error formatting player names: {e}")
+                formatted_names = {guid: name for guid, name in unique_players}
+
             # Create embed
             embed = discord.Embed(
                 title=f"🏆 Top {len(duos)} Player Duos",
-                description="Best performing player combinations",
-                color=discord.Color.gold(),
+                description="Best performing player combinations • Achievement badges shown",
+                color=0xFFD700,  # Gold
                 timestamp=datetime.now()
             )
-            
+
             for idx, duo in enumerate(duos, 1):
                 # Determine rating emoji
                 if duo.synergy_score > 0.15:
@@ -195,20 +219,34 @@ class SynergyAnalytics(commands.Cog):
                     rating = "📊 Positive"
                 else:
                     rating = "📉 Neutral"
-                
+
+                # Get formatted names with badges
+                player_a = formatted_names.get(duo.player_a_guid, duo.player_a_name)
+                player_b = formatted_names.get(duo.player_b_guid, duo.player_b_name)
+
+                # Medal emojis for top 3
+                if idx == 1:
+                    medal = "🥇"
+                elif idx == 2:
+                    medal = "🥈"
+                elif idx == 3:
+                    medal = "🥉"
+                else:
+                    medal = f"`#{idx}`"
+
                 embed.add_field(
-                    name=f"{idx}. {duo.player_a_name} + {duo.player_b_name}",
+                    name=f"{medal} {player_a} **+** {player_b}",
                     value=(
-                        f"{rating}\n"
-                        f"**Synergy:** {duo.synergy_score:.3f} | "
-                        f"**Games:** {duo.games_same_team} | "
-                        f"**Perf Boost:** {duo.performance_boost_avg:+.1f}%\n"
-                        f"**Confidence:** {duo.confidence:.0%}"
+                        f"**{rating}**\n"
+                        f"📊 Synergy: `{duo.synergy_score:.3f}` • "
+                        f"🎮 Games: `{duo.games_same_team}` • "
+                        f"📈 Boost: `{duo.performance_boost_avg:+.1f}%`\n"
+                        f"🎯 Confidence: `{duo.confidence:.0%}`"
                     ),
                     inline=False
                 )
-            
-            embed.set_footer(text="💡 Higher synergy = better performance together")
+
+            embed.set_footer(text="💡 Higher synergy = better performance together • Based on actual game data")
             await ctx.send(embed=embed)
             
         except Exception as e:
@@ -275,46 +313,67 @@ class SynergyAnalytics(commands.Cog):
                 await ctx.send("⚠️ Could not find optimal team split.")
                 return
             
+            # Format player names with badges
+            all_players = result['team_a'] + result['team_b']
+            try:
+                formatted_names = await self.player_formatter.format_players_batch(
+                    all_players, include_badges=True
+                )
+            except Exception as e:
+                print(f"Error formatting player names: {e}")
+                formatted_names = {guid: name for guid, name in all_players}
+
             # Create embed
             embed = discord.Embed(
                 title="🎮 Optimized Team Split",
-                description="Balanced teams based on synergy analysis",
-                color=discord.Color.gold(),
+                description="Balanced teams based on synergy analysis • Achievement badges shown",
+                color=0xFFD700,  # Gold
                 timestamp=datetime.now()
             )
-            
-            # Team A
-            team_a_players = "\n".join([f"• {name}" for name in result['team_a_names']])
+
+            # Team A with badges
+            team_a_players = "\n".join([
+                f"• {formatted_names.get(guid, name)}"
+                for guid, name in result['team_a']
+            ])
             embed.add_field(
-                name=f"🔵 Team A (Synergy: {result['team_a_synergy']:.3f})",
-                value=team_a_players,
+                name=f"🔵 Team A • Synergy: `{result['team_a_synergy']:.3f}`",
+                value=team_a_players or "No players",
                 inline=True
             )
-            
-            # Team B
-            team_b_players = "\n".join([f"• {name}" for name in result['team_b_names']])
+
+            # Team B with badges
+            team_b_players = "\n".join([
+                f"• {formatted_names.get(guid, name)}"
+                for guid, name in result['team_b']
+            ])
             embed.add_field(
-                name=f"🔴 Team B (Synergy: {result['team_b_synergy']:.3f})",
-                value=team_b_players,
+                name=f"🔴 Team B • Synergy: `{result['team_b_synergy']:.3f}`",
+                value=team_b_players or "No players",
                 inline=True
             )
-            
+
             # Balance analysis
             balance = result['balance_rating']
             if balance > 0.9:
-                balance_text = "🟢 Excellent balance!"
+                balance_text = "🟢 **Excellent balance!**"
+                balance_emoji = "✨"
             elif balance > 0.7:
-                balance_text = "🟡 Good balance"
+                balance_text = "🟡 **Good balance**"
+                balance_emoji = "👍"
             else:
-                balance_text = "🟠 Fair balance"
-            
+                balance_text = "🟠 **Fair balance**"
+                balance_emoji = "📊"
+
             embed.add_field(
                 name="⚖️ Balance Rating",
-                value=f"{balance_text}\n{balance:.1%}",
+                value=f"{balance_emoji} {balance_text}\n```\n{balance:.1%}\n```",
                 inline=False
             )
-            
-            embed.set_footer(text=f"✅ Analyzed {result['combinations_checked']} possible splits")
+
+            embed.set_footer(
+                text=f"✅ Analyzed {result['combinations_checked']} possible splits • Requested by {ctx.author.name}"
+            )
             await ctx.send(embed=embed)
             
         except Exception as e:
@@ -374,27 +433,47 @@ class SynergyAnalytics(commands.Cog):
             
             # Sort by synergy score
             partners.sort(key=lambda x: x['synergy_score'], reverse=True)
-            
+
             # Get best and worst
             best_partners = partners[:5]
             worst_partners = partners[-5:] if len(partners) > 5 else []
-            
+
+            # Format all partner names with badges
+            all_partner_guids = [(p['partner_guid'], p['partner_name']) for p in partners]
+            try:
+                formatted_partner_names = await self.player_formatter.format_players_batch(
+                    all_partner_guids, include_badges=True
+                )
+            except Exception as e:
+                print(f"Error formatting partner names: {e}")
+                formatted_partner_names = {guid: name for guid, name in all_partner_guids}
+
+            # Format the main player's name with badges
+            try:
+                player_formatted = await self.player_formatter.format_player(
+                    player_guid, player_name, include_badges=True
+                )
+            except Exception as e:
+                print(f"Error formatting player name: {e}")
+                player_formatted = player_name
+
             # Create embed
             embed = discord.Embed(
-                title=f"🤝 Player Impact: {player_name}",
-                description=f"Teammate chemistry analysis ({len(partners)} partners)",
-                color=discord.Color.purple(),
+                title=f"🤝 Player Impact Analysis",
+                description=f"{player_formatted}\n\nTeammate chemistry analysis • `{len(partners)}` partners analyzed",
+                color=0x9B59B6,  # Purple
                 timestamp=datetime.now()
             )
-            
-            # Best teammates
+
+            # Best teammates with badges
             if best_partners:
                 best_text = ""
                 for idx, partner in enumerate(best_partners, 1):
                     score = partner['synergy_score']
                     games = partner['games']
-                    name = partner['partner_name']
-                    
+                    guid = partner['partner_guid']
+                    formatted_name = formatted_partner_names.get(guid, partner['partner_name'])
+
                     # Emoji based on synergy
                     if score > 0.15:
                         emoji = "🔥"
@@ -402,48 +481,63 @@ class SynergyAnalytics(commands.Cog):
                         emoji = "✅"
                     else:
                         emoji = "📊"
-                    
-                    best_text += f"{idx}. {emoji} **{name}**\n"
-                    best_text += f"   Synergy: {score:.3f} | {games} games\n"
-                
+
+                    best_text += f"{idx}. {emoji} {formatted_name}\n"
+                    best_text += f"   Synergy: `{score:.3f}` • Games: `{games}`\n"
+
                 embed.add_field(
                     name="🏆 Best Teammates",
-                    value=best_text,
+                    value=best_text.strip(),
                     inline=False
                 )
-            
+
             # Worst teammates (only if there are enough)
             if worst_partners and len(partners) > 5:
                 worst_text = ""
                 for idx, partner in enumerate(worst_partners, 1):
                     score = partner['synergy_score']
                     games = partner['games']
-                    name = partner['partner_name']
-                    
-                    worst_text += f"{idx}. **{name}**\n"
-                    worst_text += f"   Synergy: {score:.3f} | {games} games\n"
-                
+                    guid = partner['partner_guid']
+                    formatted_name = formatted_partner_names.get(guid, partner['partner_name'])
+
+                    worst_text += f"{idx}. {formatted_name}\n"
+                    worst_text += f"   Synergy: `{score:.3f}` • Games: `{games}`\n"
+
                 embed.add_field(
                     name="📉 Challenging Partnerships",
-                    value=worst_text,
+                    value=worst_text.strip(),
                     inline=False
                 )
-            
+
             # Average synergy
             avg_synergy = sum(p['synergy_score'] for p in partners) / len(partners)
             embed.add_field(
                 name="📊 Average Synergy",
-                value=f"{avg_synergy:.3f}",
+                value=f"```\n{avg_synergy:.3f}\n```",
                 inline=True
             )
-            
+
             embed.add_field(
                 name="👥 Unique Partners",
-                value=str(len(partners)),
+                value=f"```\n{len(partners)}\n```",
                 inline=True
             )
-            
-            embed.set_footer(text="💡 Based on games with 10+ matches together")
+
+            # Most games with
+            most_games_partner = max(partners, key=lambda x: x['games'])
+            most_games_name = formatted_partner_names.get(
+                most_games_partner['partner_guid'],
+                most_games_partner['partner_name']
+            )
+            embed.add_field(
+                name="🎮 Most Games With",
+                value=f"{most_games_name}\n`{most_games_partner['games']}` games",
+                inline=True
+            )
+
+            embed.set_footer(
+                text=f"💡 Based on games with 10+ matches together • Requested by {ctx.author.name}"
+            )
             await ctx.send(embed=embed)
             
         except Exception as e:
@@ -672,70 +766,83 @@ class SynergyAnalytics(commands.Cog):
         return partners
     
     async def _create_synergy_embed(self, synergy: SynergyMetrics) -> discord.Embed:
-        """Create beautiful synergy embed"""
+        """Create beautiful synergy embed with player badges"""
         # Determine rating
         if synergy.synergy_score > 0.15:
             rating = "🔥 Excellent"
-            color = discord.Color.green()
+            color = 0x57F287  # Green
         elif synergy.synergy_score > 0.08:
             rating = "✅ Good"
-            color = discord.Color.blue()
+            color = 0x5865F2  # Blurple
         elif synergy.synergy_score > 0.03:
             rating = "📊 Positive"
-            color = discord.Color.gold()
+            color = 0xFFD700  # Gold
         elif synergy.synergy_score > -0.03:
             rating = "📉 Neutral"
-            color = discord.Color.light_gray()
+            color = 0x99AAB5  # Gray
         else:
             rating = "⚠️ Poor"
-            color = discord.Color.red()
-        
+            color = 0xED4245  # Red
+
+        # Format player names with badges
+        try:
+            player_a_formatted = await self.player_formatter.format_player(
+                synergy.player_a_guid, synergy.player_a_name, include_badges=True
+            )
+            player_b_formatted = await self.player_formatter.format_player(
+                synergy.player_b_guid, synergy.player_b_name, include_badges=True
+            )
+        except Exception as e:
+            print(f"Error formatting player names: {e}")
+            player_a_formatted = synergy.player_a_name
+            player_b_formatted = synergy.player_b_name
+
         embed = discord.Embed(
-            title=f"⚔️ Player Synergy: {synergy.player_a_name} + {synergy.player_b_name}",
-            description=f"**Overall Rating:** {rating}",
+            title=f"⚔️ Player Synergy Analysis",
+            description=f"{player_a_formatted} **+** {player_b_formatted}\n\n**Overall Rating:** {rating}",
             color=color,
             timestamp=datetime.now()
         )
-        
-        # Stats
+
+        # Stats with better formatting
         embed.add_field(
             name="📊 Games Together",
-            value=f"{synergy.games_same_team} games on same team",
-            inline=False
+            value=f"```\n{synergy.games_same_team} games\n```",
+            inline=True
         )
-        
+
         embed.add_field(
             name="📈 Performance Boost",
-            value=f"{synergy.performance_boost_avg:+.1f}%",
+            value=f"```\n{synergy.performance_boost_avg:+.1f}%\n```",
             inline=True
         )
-        
+
         embed.add_field(
             name="💯 Synergy Score",
-            value=f"{synergy.synergy_score:.3f}",
+            value=f"```\n{synergy.synergy_score:.3f}\n```",
             inline=True
         )
-        
+
         embed.add_field(
-            name="🎯 Confidence",
-            value=f"{synergy.confidence:.0%}",
+            name="🎯 Confidence Level",
+            value=f"```\n{synergy.confidence:.0%}\n```",
             inline=True
         )
-        
-        # Analysis
+
+        # Analysis with better formatting
         if synergy.synergy_score > 0.08:
-            analysis = "These players perform significantly better together! 🎯"
+            analysis = "🎯 **These players perform significantly better together!**"
         elif synergy.synergy_score > 0.03:
-            analysis = "These players work well together. 👍"
+            analysis = "👍 **These players work well together.**"
         elif synergy.synergy_score > -0.03:
-            analysis = "No significant synergy detected yet."
+            analysis = "📊 **No significant synergy detected yet.**"
         else:
-            analysis = "These players may work better with different teammates."
-        
-        embed.add_field(name="📝 Analysis", value=analysis, inline=False)
-        
-        embed.set_footer(text="💡 Based on historical performance data")
-        
+            analysis = "⚠️ **These players may work better with different teammates.**"
+
+        embed.add_field(name="═══ Analysis ═══", value=analysis, inline=False)
+
+        embed.set_footer(text="💡 Based on historical performance data • Higher score = better chemistry")
+
         return embed
 
 
