@@ -1331,15 +1331,16 @@ class UltimateETLegacyBot(commands.Bot):
             # Create match_id (ORIGINAL BEHAVIOR - includes timestamp)
             match_id = f"{date_part}-{time_part}"
 
-            # Check if round already exists
+            # Check if round already exists (FIXED: includes round_time to prevent false duplicates)
             check_query = """
                 SELECT id FROM rounds
-                WHERE round_date = ? AND map_name = ? AND round_number = ?
+                WHERE round_date = ? AND round_time = ? AND map_name = ? AND round_number = ?
             """
             existing = await self.db_adapter.fetch_one(
                 check_query,
                 (
                     date_part,  # Use date_part not timestamp
+                    round_time,  # FIXED: Add round_time to prevent duplicate detection when same map played twice
                     stats_data["map_name"],
                     stats_data["round_num"],
                 ),
@@ -1877,9 +1878,6 @@ class UltimateETLegacyBot(commands.Bot):
             filename, ignore_startup_time=ignore_startup_time, check_db_only=check_db_only
         )
 
-    async def ssh_list_remote_files(self, ssh_config: dict) -> list:
-        """Delegate to SSHHandler.list_remote_files()"""
-        return await SSHHandler.list_remote_files(ssh_config)
 
     async def ssh_download_file(self, ssh_config: dict, filename: str, local_dir: str = "local_stats") -> str:
         """Delegate to SSHHandler.download_file()"""
@@ -2307,14 +2305,45 @@ class UltimateETLegacyBot(commands.Bot):
                 f"🎙️ Startup voice check: {total_players} players detected "
                 f"in {len(self.gaming_voice_channels)} monitored channels"
             )
-            
-            # Auto-start session if threshold met
-            if total_players >= self.session_start_threshold and not self.session_active:
+
+            # Check for recent database activity (within last 60 minutes)
+            # to avoid creating duplicate "session start" messages when bot restarts
+            # during an ongoing gaming session
+            recent_activity = False
+            if total_players >= self.session_start_threshold:
+                from datetime import datetime, timedelta
+                cutoff_time = datetime.now() - timedelta(minutes=60)
+                cutoff_date = cutoff_time.strftime('%Y-%m-%d')
+                cutoff_time_str = cutoff_time.strftime('%H%M%S')
+
+                recent_round = await self.db_adapter.fetch_one(
+                    """
+                    SELECT id FROM rounds
+                    WHERE (round_date > $1 OR (round_date = $2 AND round_time >= $3))
+                    ORDER BY round_date DESC, round_time DESC
+                    LIMIT 1
+                    """,
+                    (cutoff_date, cutoff_date, cutoff_time_str)
+                )
+                recent_activity = recent_round is not None
+
+                if recent_activity:
+                    logger.info(
+                        f"✅ Detected ongoing session (database activity within last 60min) - "
+                        f"skipping auto-start announcement"
+                    )
+
+            # Auto-start session if threshold met AND no recent activity
+            if total_players >= self.session_start_threshold and not self.session_active and not recent_activity:
                 logger.info(
                     f"🎮 AUTO-STARTING SESSION: {total_players} players detected "
                     f"(threshold: {self.session_start_threshold})"
                 )
                 await self._start_gaming_session(current_participants)
+            elif total_players >= self.session_start_threshold and recent_activity:
+                # Resume monitoring for ongoing session without announcement
+                self.session_active = True
+                self.session_participants = current_participants
             elif total_players > 0:
                 logger.info(
                     f"ℹ️  {total_players} players in voice but below threshold "

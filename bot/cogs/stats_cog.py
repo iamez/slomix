@@ -21,7 +21,6 @@ import discord
 from discord.ext import commands
 
 from bot.stats import StatsCalculator
-from bot.services.player_formatter import PlayerFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,6 @@ class StatsCog(commands.Cog, name="Stats"):
         self.stats_cache = bot.stats_cache
         self.season_manager = bot.season_manager
         self.achievements = bot.achievements
-        self.player_formatter = PlayerFormatter(bot.db_adapter)
         logger.info("📊 StatsCog initializing...")
 
     async def _ensure_player_name_alias(self):
@@ -69,71 +67,38 @@ class StatsCog(commands.Cog, name="Stats"):
             # Get cache stats
             cache_info = self.stats_cache.stats()
 
-            # Get total player and round count
-            total_players = await self.bot.db_adapter.fetch_one(
-                "SELECT COUNT(DISTINCT player_guid) FROM player_comprehensive_stats"
-            )
-            total_rounds = await self.bot.db_adapter.fetch_one(
-                "SELECT COUNT(DISTINCT round_id) FROM rounds WHERE round_number IN (1, 2)"
-            )
-
-            # Determine status color
-            bot_latency = round(self.bot.latency * 1000)
-            if bot_latency < 100:
-                status_color = 0x57F287  # Green
-                status_emoji = "🟢"
-            elif bot_latency < 200:
-                status_color = 0xFEE75C  # Yellow
-                status_emoji = "🟡"
-            else:
-                status_color = 0xED4245  # Red
-                status_emoji = "🔴"
-
             embed = discord.Embed(
-                title="🏓 Bot Status & Performance",
-                description=f"{status_emoji} All systems operational",
-                color=status_color,
-                timestamp=datetime.now()
+                title="🏓 Ultimate Bot Status", color=0x00FF00
             )
-
             embed.add_field(
-                name="⚡ Latency",
-                value=(
-                    f"**Discord:** `{bot_latency}ms`\n"
-                    f"**Database:** `{round(db_latency)}ms`"
-                ),
+                name="Bot Latency",
+                value=f"{round(self.bot.latency * 1000)}ms",
+                inline=True,
+            )
+            embed.add_field(
+                name="DB Latency", value=f"{round(db_latency)}ms", inline=True
+            )
+            embed.add_field(
+                name="Active Session",
+                value="Yes" if self.bot.current_session else "No",
+                inline=True,
+            )
+            embed.add_field(
+                name="Commands",
+                value=f"{len(list(self.bot.commands))}",
+                inline=True,
+            )
+            embed.add_field(
+                name="Query Cache",
+                value=f"{cache_info['valid_keys']} active / {cache_info['total_keys']} total",
+                inline=True,
+            )
+            embed.add_field(
+                name="Cache TTL",
+                value=f"{cache_info['ttl_seconds']}s",
                 inline=True,
             )
 
-            embed.add_field(
-                name="📊 Statistics",
-                value=(
-                    f"**Players:** `{total_players[0] if total_players else 0:,}`\n"
-                    f"**Rounds:** `{total_rounds[0] if total_rounds else 0:,}`"
-                ),
-                inline=True,
-            )
-
-            embed.add_field(
-                name="⚙️ System",
-                value=(
-                    f"**Commands:** `{len(list(self.bot.commands))}`\n"
-                    f"**Session:** `{'Active' if self.bot.current_session else 'Idle'}`"
-                ),
-                inline=True,
-            )
-
-            cache_efficiency = (cache_info['valid_keys'] / cache_info['total_keys'] * 100) if cache_info['total_keys'] > 0 else 0
-            embed.add_field(
-                name="💾 Query Cache",
-                value=(
-                    f"**Active:** `{cache_info['valid_keys']}/{cache_info['total_keys']}`\n"
-                    f"**Efficiency:** `{cache_efficiency:.1f}%` • TTL: `{cache_info['ttl_seconds']}s`"
-                ),
-                inline=False,
-            )
-
-            embed.set_footer(text=f"Requested by {ctx.author.name}")
             await ctx.send(embed=embed)
 
         except Exception as e:
@@ -165,7 +130,7 @@ class StatsCog(commands.Cog, name="Stats"):
                 mentioned_id = int(mentioned_user.id)  # Convert to int for PostgreSQL BIGINT
 
                 link = await self.bot.db_adapter.fetch_one(
-                    "SELECT et_guid, et_name FROM player_links WHERE discord_id = ?",
+                    "SELECT player_guid, player_name FROM player_links WHERE discord_id = ?",
                     (mentioned_id,),
                 )
 
@@ -183,7 +148,7 @@ class StatsCog(commands.Cog, name="Stats"):
                 discord_id = int(ctx.author.id)  # BIGINT in PostgreSQL
                 placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
                 link = await self.bot.db_adapter.fetch_one(
-                    f"SELECT et_guid, et_name FROM player_links WHERE discord_id = {placeholder}",
+                    f"SELECT player_guid, player_name FROM player_links WHERE discord_id = {placeholder}",
                     (discord_id,),
                 )
 
@@ -452,7 +417,7 @@ class StatsCog(commands.Cog, name="Stats"):
                 if m:
                     discord_id = int(m.group(1))  # Convert to int for PostgreSQL BIGINT
                     link = await self.bot.db_adapter.fetch_one(
-                        "SELECT et_guid, et_name FROM player_links WHERE discord_id = ?",
+                        "SELECT player_guid, player_name FROM player_links WHERE discord_id = ?",
                         (discord_id,),
                     )
 
@@ -661,45 +626,37 @@ class StatsCog(commands.Cog, name="Stats"):
             )
             plt.close()
 
-            # Get formatted names with badges
-            p1_formatted = await self.player_formatter.format_player(
-                p1_stats['guid'], p1_stats['name'], include_badges=True
-            )
-            p2_formatted = await self.player_formatter.format_player(
-                p2_stats['guid'], p2_stats['name'], include_badges=True
-            )
-
             # Create detailed comparison embed
             embed = discord.Embed(
-                title="⚔️ Player Comparison",
-                description=f"**{p1_formatted}** vs **{p2_formatted}**",
-                color=0x9B59B6,  # Purple
+                title="📊 Player Comparison",
+                description=f"**{p1_stats['name']}** vs **{p2_stats['name']}**",
+                color=0x9B59B6,
                 timestamp=datetime.now(),
             )
 
-            # Add stats comparison with enhanced formatting
+            # Add stats comparison
             embed.add_field(
-                name=f"📊 {p1_formatted}",
+                name=f"🎯 {p1_stats['name']}",
                 value=(
-                    f"**K/D Ratio:** `{p1_stats['kd']:.2f}`\n"
-                    f"**Accuracy:** `{p1_stats['accuracy']:.1f}%`\n"
-                    f"**DPM:** `{p1_stats['dpm']:.0f}`\n"
-                    f"**Headshots:** `{p1_stats['hs_pct']:.1f}%`\n"
-                    f"**Games:** `{p1_stats['games']:,}`\n"
-                    f"**Kills:** `{p1_stats['kills']:,}`"
+                    f"**K/D:** {p1_stats['kd']:.2f}\n"
+                    f"**Accuracy:** {p1_stats['accuracy']:.1f}%\n"
+                    f"**DPM:** {p1_stats['dpm']:.0f}\n"
+                    f"**Headshots:** {p1_stats['hs_pct']:.1f}%\n"
+                    f"**Games:** {p1_stats['games']:,}\n"
+                    f"**Kills:** {p1_stats['kills']:,}"
                 ),
                 inline=True,
             )
 
             embed.add_field(
-                name=f"📊 {p2_formatted}",
+                name=f"🎯 {p2_stats['name']}",
                 value=(
-                    f"**K/D Ratio:** `{p2_stats['kd']:.2f}`\n"
-                    f"**Accuracy:** `{p2_stats['accuracy']:.1f}%`\n"
-                    f"**DPM:** `{p2_stats['dpm']:.0f}`\n"
-                    f"**Headshots:** `{p2_stats['hs_pct']:.1f}%`\n"
-                    f"**Games:** `{p2_stats['games']:,}`\n"
-                    f"**Kills:** `{p2_stats['kills']:,}`"
+                    f"**K/D:** {p2_stats['kd']:.2f}\n"
+                    f"**Accuracy:** {p2_stats['accuracy']:.1f}%\n"
+                    f"**DPM:** {p2_stats['dpm']:.0f}\n"
+                    f"**Headshots:** {p2_stats['hs_pct']:.1f}%\n"
+                    f"**Games:** {p2_stats['games']:,}\n"
+                    f"**Kills:** {p2_stats['kills']:,}"
                 ),
                 inline=True,
             )
@@ -885,184 +842,250 @@ class StatsCog(commands.Cog, name="Stats"):
     @commands.command(name="help_command", aliases=["commands"])
     async def help_command(self, ctx):
         """📚 Show all available commands with examples"""
-
+        
         # Main Commands Embed
         embed1 = discord.Embed(
-            title="🎮 ET:Legacy Stats Bot - Complete Command Reference",
-            description=(
-                "**All commands use `!` prefix** • "
-                "View detailed examples in next embed\n"
-                "🆕 **NEW:** Achievement badges (🏥🔧🎯) & custom display names!"
-            ),
-            color=0x5865F2,  # Discord Blurple
-            timestamp=datetime.now()
+            title="🚀 Ultimate ET:Legacy Bot - Command Reference",
+            description="**Use `!` prefix for all commands** | 📖 Full examples below",
+            color=0x0099FF,
         )
 
         embed1.add_field(
-            name="📊 Session & Match Stats",
+            name="📊 **Session Commands**",
             value=(
-                "• `!last_session [view]` - Latest session with multiple views\n"
-                "  └ Views: combat, obj, weapons, support, sprees, maps, graphs\n"
-                "• `!session <date>` - Specific date session\n"
-                "• `!sessions [month]` - List all sessions\n"
-                "  └ Aliases: `!rounds`, `!ls`"
+                "• `!last_session` - View latest gaming session with full stats\n"
+                "• `!session <date>` - View specific date session\n"
+                "  └ Example: `!session 2025-11-02`\n"
+                "• `!sessions` - List all recent gaming sessions\n"
+                "  └ Aliases: `!rounds`, `!list_sessions`, `!ls`\n"
+                "  └ Example: `!sessions 10` (filter by October)"
             ),
             inline=False,
         )
 
         embed1.add_field(
-            name="🎯 Player Statistics",
+            name="🎯 **Player Stats**",
             value=(
-                "• `!stats [player]` - Detailed player stats with badges 🏥🔧🎯\n"
-                "  └ Use player name, @mention, or leave empty (if linked)\n"
-                "• `!compare <player1> <player2>` - Head-to-head comparison\n"
-                "• `!leaderboard [type]` - Rankings (kills, kd, dpm, accuracy, etc)\n"
-                "  └ Alias: `!lb`, `!top`\n"
-                "• `!list_players [filter]` - Browse all players with badges\n"
-                "  └ Filters: linked, unlinked, active\n"
-                "  └ Alias: `!lp`, `!players`\n"
-                "• `!find_player <name>` - Search for player with aliases\n"
-                "  └ Alias: `!fp`"
+                "• `!stats <player>` - Individual player statistics\n"
+                "  └ Example: `!stats carniee`\n"
+                "• `!leaderboard [type]` - Top players by kills/accuracy/etc\n"
+                "• `!list_players` - Show all registered players\n"
+                "• `!compare <player1> <player2>` - Compare two players"
             ),
             inline=False,
         )
 
         embed1.add_field(
-            name="🔗 Account Linking & Customization",
+            name="👥 **Team Commands**",
             value=(
-                "• `!link [name/GUID]` - Link your Discord to in-game account\n"
-                "  └ Interactive reactions or use `!select <1-3>`\n"
-                "• `!unlink` - Remove your account link\n"
-                "• `!setname <name>` - Set custom display name 🎨\n"
-                "  └ `!setname alias <name>` - Use one of your aliases\n"
-                "  └ `!setname reset` - Reset to default\n"
-                "• `!myaliases` - View all your in-game aliases"
-            ),
-            inline=False,
-        )
-
-        embed1.add_field(
-            name="👥 Team Analysis",
-            value=(
-                "• `!teams [date]` - Team rosters with player lists\n"
-                "• `!team_history [player]` - Player's team participation\n"
+                "• `!teams [date]` - Show team rosters\n"
                 "• `!session_score [date]` - Team scores & map breakdown\n"
-                "• `!lineup_changes [dates]` - Track team changes"
+                "• `!lineup_changes [current] [previous]` - Who switched teams\n"
+                "• `!set_team_names <date> <team_a> <team_b>` - Custom names"
             ),
             inline=False,
         )
 
         embed1.add_field(
-            name="🏆 Achievements & Season",
+            name="🏆 **Achievements & Season**",
             value=(
-                "• `!achievements` - View all achievement badges info\n"
-                "  └ 🏥 Medic • 🔧 Engineer • 🎯 Sharpshooter\n"
-                "  └ 💪 Rambo • 💣 Demolition • 🔫 Machine Gunner\n"
-                "• `!check_achievements [player]` - Check player progress\n"
-                "• `!season_info` - Current season stats & champions"
+                "• `!check_achievements [player]` - View achievements\n"
+                "• `!season_info` - Current season statistics"
             ),
             inline=False,
         )
 
         embed1.add_field(
-            name="⚙️ System & Admin",
+            name="🔧 **System Commands**",
             value=(
-                "• `!ping` - Bot status, latency & database stats\n"
-                "• `!health` - Automation system health\n"
-                "• `!sync_today` / `!sync_week` / `!sync_month` - Sync stats\n"
-                "• `!help` - Show this comprehensive help"
+                "• `!ping` - Check bot status & latency\n"
+                "• `!help` - Show this help menu"
             ),
             inline=False,
         )
 
         # Examples & Tips Embed
         embed2 = discord.Embed(
-            title="💡 Quick Start Guide & Examples",
-            description="Master the bot with these common use cases",
-            color=0xFEE75C,  # Yellow
-            timestamp=datetime.now()
+            title="💡 Command Examples & Pro Tips",
+            color=0x00FF00,
         )
 
         embed2.add_field(
-            name="🎯 Getting Started (New Players)",
+            name="📅 **Session Viewing**",
             value=(
                 "```\n"
-                "1. !link                   → Link your Discord account\n"
-                "2. !setname MyName         → Set your custom display name\n"
-                "3. !stats                  → View your stats with badges!\n"
-                "4. !last_session           → See latest gaming session\n"
+                "!last_session              → Latest session (6 graphs!)\n"
+                "!session 2025-11-02        → Specific date\n"
+                "!sessions                  → List all sessions\n"
+                "!sessions 10               → October sessions only\n"
+                "!sessions october          → Same as above\n"
                 "```"
             ),
             inline=False,
         )
 
         embed2.add_field(
-            name="📊 Session Examples",
+            name="🎯 **Player Stats**",
             value=(
                 "```\n"
-                "!last_session              → Latest session overview\n"
-                "!last_session combat       → Combat stats view\n"
-                "!last_session graphs       → Performance graphs\n"
-                "!session 2025-11-15        → Specific date\n"
-                "!sessions november         → Filter by month\n"
+                "!stats carniee             → Full player stats\n"
+                "!leaderboard               → Top 10 by kills\n"
+                "!compare carniee superboyy → Head-to-head\n"
+                "!list_players              → All 45+ players\n"
                 "```"
             ),
             inline=False,
         )
 
         embed2.add_field(
-            name="🏆 Player Stats Examples",
+            name="👥 **Team Analysis**",
             value=(
                 "```\n"
-                "!stats                     → Your stats (if linked)\n"
-                "!stats playerName          → Search by name\n"
-                "!stats @User               → Stats for Discord user\n"
-                "!lb dpm                    → DPM leaderboard\n"
-                "!lp linked                 → Show only linked players\n"
-                "!compare player1 player2   → Head-to-head\n"
+                "!teams                     → Latest session teams\n"
+                "!session_score             → Team scores + maps\n"
+                "!lineup_changes            → Who switched sides\n"
+                "!lineup_changes 2025-11-02 → Compare with date\n"
                 "```"
             ),
             inline=False,
         )
 
         embed2.add_field(
-            name="🎨 Customization Examples",
+            name="🔥 **Pro Tips**",
             value=(
-                "```\n"
-                "!setname ProGamer          → Custom display name\n"
-                "!setname alias oldName     → Use one of your aliases\n"
-                "!setname reset             → Reset to default\n"
-                "!myaliases                 → See all your names\n"
-                "!achievements              → View badge requirements\n"
-                "```"
-            ),
-            inline=False,
-        )
-
-        embed2.add_field(
-            name="🔥 Pro Tips & Features",
-            value=(
-                "🏥 **Achievement Badges** auto-appear on player names!\n"
-                "  └ 🏥 Medic (50+ revives) • 🔧 Engineer (10+ constructions)\n"
-                "  └ 🎯 Sharpshooter (30%+ HS) • 💪 Rambo (500+ kills)\n\n"
-                "📅 **Date Formats**: `YYYY-MM-DD` or month names (`november`, `nov`)\n\n"
-                "⚡ **Quick Access**: Use `!lp` instead of `!list_players`\n\n"
-                "🔗 **Linking Benefits**: Use `!stats` without args, get @mentions\n\n"
-                "💾 **Cached**: Stats queries are cached for 5min (fast!)"
+                "• **`!last_session`** shows 6 graphs:\n"
+                "  └ Player scores, K/D, Accuracy, Team KPD, Weapon usage, Headshots\n"
+                "• **Date format**: Always use `YYYY-MM-DD` (e.g., `2025-11-02`)\n"
+                "• **Player names**: Case-insensitive (`carniee` = `CARNIEE`)\n"
+                "• **Month filters**: Use numbers (`10`) or names (`october`, `oct`)\n"
+                "• **Aliases**: Many commands have shortcuts (e.g., `!ls` = `!sessions`)"
             ),
             inline=False,
         )
 
         embed2.set_footer(
-            text="💬 Questions? Ask in #support | 🐛 Issues? Report to admins | ⭐ Enjoy the bot!"
+            text="💬 Questions? Ask in #bot-commands | 🐛 Report issues to admins"
         )
 
         # Send both embeds
         await ctx.send(embed=embed1)
         await ctx.send(embed=embed2)
 
+    @commands.command(name="badges", aliases=["badge_legend", "achievements_legend"])
+    async def badges_legend(self, ctx):
+        """🏅 Show achievement badge legend
+
+        Displays all available achievement badges and their requirements.
+        """
+        embed = discord.Embed(
+            title="🏅 Achievement Badge Legend",
+            description="Badges are earned through lifetime achievements across all sessions.\nThey appear next to your name in session stats!",
+            color=0xFFD700,
+        )
+
+        # Kill Milestones
+        embed.add_field(
+            name="💀 Kill Milestones",
+            value=(
+                "🎯 **100 kills**\n"
+                "💥 **500 kills**\n"
+                "💀 **1,000 kills**\n"
+                "⚔️ **2,500 kills**\n"
+                "☠️ **5,000 kills**\n"
+                "👑 **10,000 kills**"
+            ),
+            inline=True,
+        )
+
+        # Game Milestones
+        embed.add_field(
+            name="🎮 Games Played",
+            value=(
+                "🎮 **10 games**\n"
+                "🎯 **50 games**\n"
+                "🏆 **100 games**\n"
+                "⭐ **250 games**\n"
+                "💎 **500 games**\n"
+                "👑 **1,000 games**"
+            ),
+            inline=True,
+        )
+
+        # K/D Ratio
+        embed.add_field(
+            name="📊 K/D Ratio",
+            value=(
+                "⚖️ **1.0 K/D**\n"
+                "📈 **1.5 K/D**\n"
+                "🔥 **2.0 K/D**\n"
+                "💯 **3.0 K/D**"
+            ),
+            inline=True,
+        )
+
+        # Support & Objectives
+        embed.add_field(
+            name="🏥 Medic / Revives Given",
+            value=(
+                "💉 **100 revives**\n"
+                "🏥 **1,000 revives**\n"
+                "⚕️ **10,000 revives**"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="♻️ Times Revived",
+            value=(
+                "🔄 **50 revives**\n"
+                "♻️ **500 revives**\n"
+                "🔁 **5,000 revives**"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="🧨 Engineer / Dynamite",
+            value=(
+                "**Planted:**\n"
+                "💣 **50** • 🧨 **500** • 💥 **5,000**\n\n"
+                "**Defused:**\n"
+                "🛡️ **50** • 🔰 **500** • 🏛️ **5,000**"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="🎯 Objectives",
+            value=(
+                "*(Stolen + Returned)*\n\n"
+                "🎯 **25 objectives**\n"
+                "🏆 **250 objectives**\n"
+                "👑 **2,500 objectives**"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="\u200b",  # Empty field for spacing
+            value="\u200b",
+            inline=True,
+        )
+
+        embed.add_field(
+            name="\u200b",  # Empty field for spacing
+            value="\u200b",
+            inline=True,
+        )
+
+        embed.set_footer(
+            text="💡 Badges are calculated from your lifetime stats • Use !check_achievements to see your progress"
+        )
+
+        await ctx.send(embed=embed)
+
 
 async def setup(bot):
     """Load the Stats Cog"""
     await bot.add_cog(StatsCog(bot))
-    logger.info("✅ Stats Cog loaded (ping, check_achievements, compare, season_info, help_command)")
+    logger.info("✅ Stats Cog loaded (ping, check_achievements, compare, season_info, help_command, badges)")
