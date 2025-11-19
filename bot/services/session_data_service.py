@@ -49,7 +49,7 @@ class SessionDataService:
                 WHERE p.round_id = s.id
             )
             AND s.round_number IN (1, 2)
-            AND (s.round_status IN ('completed', 'substitution') OR s.round_status IS NULL)
+            AND (s.round_status IN ('completed', 'cancelled', 'substitution') OR s.round_status IS NULL)
             ORDER BY
                 s.round_date DESC,
                 CAST(REPLACE(s.round_time, ':', '') AS INTEGER) DESC
@@ -93,14 +93,14 @@ class SessionDataService:
         # (exclude R0 match summaries to avoid triple-counting)
         # R0 contains cumulative R1+R2 data, so querying all three would give us: R0+R1+R2 = (R1+R2)+R1+R2 = wrong!
         # Using only R1+R2 lets SUM() aggregate correctly without duplication
-        # 🆕 Also exclude 'cancelled' rounds (restarts/warmups)
+        # Include 'completed', 'cancelled', and 'substitution' rounds (all have valid player stats)
         sessions = await self.db_adapter.fetch_all(
             """
             SELECT id, map_name, round_number, actual_time
             FROM rounds
             WHERE gaming_session_id = ?
               AND round_number IN (1, 2)
-              AND (round_status = 'completed' OR round_status IS NULL)
+              AND (round_status IN ('completed', 'cancelled', 'substitution') OR round_status IS NULL)
             ORDER BY
                 round_date,
                 CAST(REPLACE(round_time, ':', '') AS INTEGER)
