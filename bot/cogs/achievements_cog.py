@@ -35,7 +35,7 @@ class AchievementsCog(commands.Cog, name="Achievements"):
             !achievements help    → Same as medals
 
         Badges appear after player names in !last_session and represent lifetime achievements.
-        Duplicate badges stack (e.g., 🎯x3 means 3 different achievements with the same emoji).
+        Every achievement now has a unique emoji - no more stacking!
         """
         if subcommand and subcommand.lower() in ("medals", "help", "legend", "list"):
             await self._show_medals_legend(ctx)
@@ -48,8 +48,8 @@ class AchievementsCog(commands.Cog, name="Achievements"):
             title="🏆 Achievement System",
             description=(
                 "Earn badges for lifetime achievements! Badges appear after your name in !last_session.\n\n"
-                "**Badge Stacking:** If you earn multiple achievements with the same emoji, "
-                "they stack (e.g., 🎯x3 means 3 different 🎯 achievements)."
+                "**Unique Badges:** Every achievement now has its own unique emoji - "
+                "no more stacking confusion!"
             ),
             color=0xFFD700,  # Gold
             timestamp=datetime.now()
@@ -113,7 +113,7 @@ class AchievementsCog(commands.Cog, name="Achievements"):
             name="💀 Kill Milestones",
             value=(
                 "🎯 **First Blood Century** - 100 kills\n"
-                "💥 **Killing Machine** - 500 kills\n"
+                "🚀 **Killing Machine** - 500 kills\n"
                 "💀 **Thousand Killer** - 1,000 kills\n"
                 "⚔️ **Elite Warrior** - 2,500 kills\n"
                 "☠️ **Death Incarnate** - 5,000 kills\n"
@@ -126,11 +126,11 @@ class AchievementsCog(commands.Cog, name="Achievements"):
             name="🎮 Game Milestones",
             value=(
                 "🎮 **Getting Started** - 10 games\n"
-                "🎯 **Regular Player** - 50 games\n"
+                "🕹️ **Regular Player** - 50 games\n"
                 "🏆 **Dedicated Gamer** - 100 games\n"
                 "⭐ **Community Veteran** - 250 games\n"
                 "💎 **Hardcore Legend** - 500 games\n"
-                "👑 **Ultimate Champion** - 1,000 games"
+                "🌟 **Ultimate Champion** - 1,000 games"
             ),
             inline=False
         )
@@ -200,11 +200,11 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         )
 
         embed2.add_field(
-            name="🎯 Objective Achievements",
+            name="🚩 Objective Achievements",
             value=(
-                "🎯 **Objective Hunter** - 25 objectives\n"
-                "🏆 **Mission Specialist** - 250 objectives\n"
-                "👑 **Objective Master** - 2,500 objectives\n\n"
+                "🚩 **Objective Hunter** - 25 objectives\n"
+                "🎖️ **Mission Specialist** - 250 objectives\n"
+                "🏅 **Objective Master** - 2,500 objectives\n\n"
                 "*Combines objectives stolen + objectives returned*"
             ),
             inline=False
@@ -235,13 +235,13 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed3.add_field(
             name="📚 Badge Stacking",
             value=(
-                "Some emojis appear in multiple categories:\n"
-                "• 🎯 = Kills (100) OR Games (50) OR Objectives (25)\n"
-                "• 🏆 = Games (100) OR Objectives (250)\n"
-                "• 👑 = Kills (10K) OR Games (1K) OR Objectives (2.5K)\n\n"
-                "**If you earn all three**, they stack:\n"
-                "`🎯x3` = Earned all three 🎯 achievements\n"
-                "`👑x2` = Earned two different 👑 achievements"
+                "Each badge emoji is now unique! No more stacking confusion.\n\n"
+                "**Previous system**: Some emojis appeared multiple times:\n"
+                "• Old 🎯 = Kills (100) + Games (50) + Objectives (25) = 🎯x3\n\n"
+                "**New system**: Every achievement has its own emoji:\n"
+                "• 🎯 Kills (100), 🕹️ Games (50), 🚩 Objectives (25)\n"
+                "• 🚀 Kills (500), 🏆 Games (100), 🎖️ Objectives (250)\n"
+                "• 👑 Kills (10K), 🌟 Games (1K), 🏅 Objectives (2.5K)"
             ),
             inline=False
         )
