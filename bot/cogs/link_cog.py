@@ -42,6 +42,7 @@ from discord.ext import commands
 from bot.core.pagination_view import PaginationView
 from bot.stats import StatsCalculator
 from bot.services.player_display_name_service import PlayerDisplayNameService
+from bot.services.player_formatter import PlayerFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,7 @@ class LinkCog(commands.Cog, name="Link"):
         """
         self.bot = bot
         self.display_name_service = PlayerDisplayNameService(bot.db_adapter)
+        self.player_formatter = PlayerFormatter(bot.db_adapter)
         logger.info("🔗 LinkCog loaded")
 
     async def _ensure_player_name_alias(self, db_adapter) -> None:
@@ -199,7 +201,7 @@ class LinkCog(commands.Cog, name="Link"):
                     color=discord.Color.green(),
                 )
 
-                # Format player list (compact single-line per player)
+                # Format player list (compact single-line per player with badges)
                 player_lines = []
                 for (
                     guid,
@@ -212,6 +214,11 @@ class LinkCog(commands.Cog, name="Link"):
                 ) in page_players:
                     link_icon = "🔗" if discord_id else "❌"
                     kd = StatsCalculator.calculate_kd(kills, deaths)
+
+                    # Get formatted name with badges
+                    formatted_name = await self.player_formatter.format_player(
+                        guid, name, include_badges=True
+                    )
 
                     # Format last played date compactly
                     try:
@@ -233,8 +240,8 @@ class LinkCog(commands.Cog, name="Link"):
                         last_str = "?"
 
                     player_lines.append(
-                        f"{link_icon} **{name[:20]}** • "
-                        f"{sessions}s • {kills}K/{deaths}D ({kd:.1f}) • {last_str}"
+                        f"{link_icon} **{formatted_name[:30]}** • "
+                        f"`{sessions}s` • `{kills}K`/`{deaths}D` ({kd:.1f}) • {last_str}"
                     )
 
                 embed.add_field(

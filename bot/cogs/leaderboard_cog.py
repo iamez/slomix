@@ -22,6 +22,7 @@ from discord.ext import commands
 
 from bot.core.lazy_pagination_view import LazyPaginationView
 from bot.stats import StatsCalculator
+from bot.services.player_formatter import PlayerFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
     def __init__(self, bot):
         self.bot = bot
         self.stats_cache = bot.stats_cache
+        self.player_formatter = PlayerFormatter(bot.db_adapter)
         logger.info("🏆 LeaderboardCog initializing...")
 
     async def _ensure_player_name_alias(self):
@@ -333,57 +335,77 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 accuracy = StatsCalculator.calculate_accuracy(hits, shots)
                 hs_pct = StatsCalculator.calculate_headshot_percentage(hs, hits)
 
-                # Build embed
+                # Get formatted player name with badges and custom display name
+                formatted_name = await self.player_formatter.format_player(
+                    player_guid,
+                    primary_name,
+                    include_badges=True
+                )
+
+                # Build embed with enhanced title
                 embed = discord.Embed(
-                    title=f"📊 Stats for {primary_name}",
-                    color=0x0099FF,
+                    title=f"📊 Player Statistics",
+                    description=f"**{formatted_name}**",
+                    color=0x5865F2,  # Discord Blurple
                     timestamp=datetime.now(),
                 )
 
+                # Enhanced stat display with better formatting
                 embed.add_field(
-                    name="🎮 Overview",
+                    name="🎮 Career Overview",
                     value=(
-                        f"**Games Played:** {games:,}\n**K/D Ratio:** {kd_ratio:.2f}\n**Avg DPM:** {avg_dpm:.1f}"
-                        if avg_dpm
-                        else "0.0"
+                        f"**Rounds Played:** `{games:,}`\n"
+                        f"**K/D Ratio:** `{kd_ratio:.2f}`\n"
+                        f"**Avg DPM:** `{avg_dpm:.1f}`" if avg_dpm else "`0.0`"
                     ),
                     inline=True,
                 )
 
                 embed.add_field(
-                    name="⚔️ Combat",
-                    value=f"**Kills:** {kills:,}\n**Deaths:** {deaths:,}\n**Headshots:** {hs:,} ({hs_pct:.1f}%)",
+                    name="⚔️ Combat Stats",
+                    value=(
+                        f"**Kills:** `{kills:,}` 💀\n"
+                        f"**Deaths:** `{deaths:,}` ☠️\n"
+                        f"**Headshots:** `{hs:,}` ({hs_pct:.1f}%) 🎯"
+                    ),
                     inline=True,
                 )
 
                 embed.add_field(
-                    name="🎯 Accuracy",
-                    value=f"**Overall:** {accuracy:.1f}%\n**Damage Given:** {dmg:,}\n**Damage Taken:** {dmg_recv:,}",
+                    name="🎯 Performance",
+                    value=(
+                        f"**Accuracy:** `{accuracy:.1f}%`\n"
+                        f"**Damage:** `{dmg:,}` ⬆️\n"
+                        f"**Taken:** `{dmg_recv:,}` ⬇️"
+                    ),
                     inline=True,
                 )
 
+                # Enhanced weapons display
                 if fav_weapons:
+                    medals = ["🥇", "🥈", "🥉"]
                     weapons_text = "\n".join(
                         [
-                            f"**{w[0].replace('WS_', '').title()}:** {w[1]:,} kills"
-                            for w in fav_weapons
+                            f"{medals[i]} **{w[0].replace('WS_', '').replace('_', ' ').title()}** • `{w[1]:,} kills`"
+                            for i, w in enumerate(fav_weapons)
                         ]
                     )
                     embed.add_field(
-                        name="🔫 Favorite Weapons",
+                        name="🔫 Top Weapons",
                         value=weapons_text,
                         inline=False,
                     )
 
+                # Enhanced recent matches display
                 if recent:
                     recent_text = "\n".join(
                         [
-                            f"`{r[0]}` **{r[1]}** - {r[2]}K/{r[3]}D"
+                            f"`{r[0][:10]}` • **{r[1][:20]}** • `{r[2]}K` / `{r[3]}D`"
                             for r in recent
                         ]
                     )
                     embed.add_field(
-                        name="📅 Recent Matches",
+                        name="📅 Recent Activity",
                         value=recent_text,
                         inline=False,
                     )
