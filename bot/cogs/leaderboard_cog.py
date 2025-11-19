@@ -827,10 +827,16 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 if not results:
                     return None
 
+                # Get formatted names with badges for all players on this page
+                player_list = [(row[-1], row[0]) for row in results]  # (guid, name) tuples
+                formatted_names = await self.player_formatter.format_players_batch(
+                    player_list, include_badges=True
+                )
+
                 # Build embed
                 embed = discord.Embed(
                     title=title,
-                    color=0xFFD700,
+                    color=0xFFD700,  # Gold
                     timestamp=datetime.now(),
                 )
 
@@ -843,87 +849,85 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     if rank <= 3:
                         medal = medals[rank - 1]
                     else:
-                        medal = f"{rank}."
+                        medal = f"`#{rank}`"
 
-                    name = row[0]
                     player_guid = row[-1]
-                    if player_guid == "E587CA5F":
-                        name = f"{name} 👑"
+                    # Use formatted name with badges
+                    name = formatted_names.get(player_guid, row[0])
 
                     if stat == "kills":
                         kills, deaths, games = row[1], row[2], row[3]
                         kd = StatsCalculator.calculate_kd(kills, deaths)
                         leaderboard_text += (
-                            f"{medal} **{name}** - {kills:,}K "
-                            f"({kd:.2f} K/D, {games} games)\n"
+                            f"{medal} **{name}**\n"
+                            f"   `{kills:,}` kills • `{kd:.2f}` K/D • `{games}` games\n"
                         )
 
                     elif stat == "kd":
                         kills, deaths, games = row[1], row[2], row[3]
                         kd = StatsCalculator.calculate_kd(kills, deaths)
                         leaderboard_text += (
-                            f"{medal} **{name}** - {kd:.2f} K/D "
-                            f"({kills:,}K/{deaths:,}D, {games} games)\n"
+                            f"{medal} **{name}**\n"
+                            f"   `{kd:.2f}` K/D • `{kills:,}K`/`{deaths:,}D` • `{games}` games\n"
                         )
 
                     elif stat == "dpm":
                         avg_dpm, kills, games = row[1], row[2], row[3]
                         leaderboard_text += (
-                            f"{medal} **{name}** - {avg_dpm:.1f} DPM "
-                            f"({kills:,}K, {games} games)\n"
+                            f"{medal} **{name}**\n"
+                            f"   `{avg_dpm:.1f}` DPM • `{kills:,}` kills • `{games}` games\n"
                         )
 
                     elif stat == "accuracy":
                         hits, shots, kills, games = row[1], row[2], row[3], row[4]
                         acc = (hits / shots * 100) if shots > 0 else 0
                         leaderboard_text += (
-                            f"{medal} **{name}** - {acc:.1f}% Acc "
-                            f"({kills:,}K, {games} games)\n"
+                            f"{medal} **{name}**\n"
+                            f"   `{acc:.1f}%` accuracy • `{kills:,}` kills • `{games}` games\n"
                         )
 
                     elif stat == "headshots":
                         hs, hits, kills, games = row[1], row[2], row[3], row[4]
                         hs_pct = (hs / hits * 100) if hits > 0 else 0
                         leaderboard_text += (
-                            f"{medal} **{name}** - {hs_pct:.1f}% HS "
-                            f"({hs:,} HS, {games} games)\n"
+                            f"{medal} **{name}**\n"
+                            f"   `{hs_pct:.1f}%` HS rate • `{hs:,}` headshots • `{games}` games\n"
                         )
 
                     elif stat == "games":
                         games, kills, deaths = row[1], row[2], row[3]
                         kd = kills / deaths if deaths > 0 else kills
                         leaderboard_text += (
-                            f"{medal} **{name}** - {games:,} games "
-                            f"({kills:,}K, {kd:.2f} K/D)\n"
+                            f"{medal} **{name}**\n"
+                            f"   `{games:,}` games • `{kills:,}` kills • `{kd:.2f}` K/D\n"
                         )
 
                     elif stat == "revives":
                         revives, kills, games = row[1], row[2], row[3]
                         leaderboard_text += (
-                            f"{medal} **{name}** - {revives:,} "
-                            f"teammates revived "
-                            f"({kills:,}K, {games} games)\n"
+                            f"{medal} **{name}** 🏥\n"
+                            f"   `{revives:,}` revives • `{kills:,}` kills • `{games}` games\n"
                         )
 
                     elif stat == "gibs":
                         gibs, kills, games = row[1], row[2], row[3]
                         leaderboard_text += (
-                            f"{medal} **{name}** - {gibs:,} gibs "
-                            f"({kills:,}K, {games} games)\n"
+                            f"{medal} **{name}** 🦴\n"
+                            f"   `{gibs:,}` gibs • `{kills:,}` kills • `{games}` games\n"
                         )
 
                     elif stat == "objectives":
                         total_obj, completed, games = row[1], row[2], row[3]
                         leaderboard_text += (
-                            f"{medal} **{name}** - {total_obj:,} objectives "
-                            f"({completed} completed, {games} games)\n"
+                            f"{medal} **{name}** 🎯\n"
+                            f"   `{total_obj:,}` objectives • `{completed}` completed • `{games}` games\n"
                         )
 
                     elif stat == "efficiency":
                         avg_eff, kills, games = row[1], row[2], row[3]
                         leaderboard_text += (
-                            f"{medal} **{name}** - {avg_eff:.1f} efficiency "
-                            f"({kills:,}K, {games} games)\n"
+                            f"{medal} **{name}**\n"
+                            f"   `{avg_eff:.1f}` efficiency • `{kills:,}` kills • `{games}` games\n"
                         )
 
                     elif stat == "teamwork":
@@ -934,15 +938,15 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             else 0
                         )
                         leaderboard_text += (
-                            f"{medal} **{name}** - {team_pct:.2f}% "
-                            f"team damage ({games} games)\n"
+                            f"{medal} **{name}** 🤝\n"
+                            f"   `{team_pct:.2f}%` team damage • `{games}` games\n"
                         )
 
                     elif stat == "multikills":
                         total_multi, megas, games = row[1], row[2], row[3]
                         leaderboard_text += (
-                            f"{medal} **{name}** - {total_multi:,} "
-                            f"multikills ({megas} mega, {games} games)\n"
+                            f"{medal} **{name}** 🔥\n"
+                            f"   `{total_multi:,}` multikills • `{megas}` mega • `{games}` games\n"
                         )
 
                     elif stat == "grenades":
@@ -956,12 +960,10 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                         accuracy = (
                             (hits / throws * 100) if throws > 0 else 0
                         )
-                        aoe_emoji = "🔥" if aoe_ratio >= 3.0 else ""
+                        aoe_emoji = "🔥" if aoe_ratio >= 3.0 else "💣"
                         leaderboard_text += (
-                            f"{medal} **{name}** - {kills:,} kills "
-                            f"• {accuracy:.1f}% acc "
-                            f"• {aoe_ratio:.2f} AOE {aoe_emoji} "
-                            f"({games} games)\n"
+                            f"{medal} **{name}** {aoe_emoji}\n"
+                            f"   `{kills:,}` kills • `{accuracy:.1f}%` acc • `{aoe_ratio:.2f}` AOE • `{games}` games\n"
                         )
 
                 embed.description = leaderboard_text
