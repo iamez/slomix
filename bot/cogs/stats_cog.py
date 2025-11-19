@@ -21,6 +21,7 @@ import discord
 from discord.ext import commands
 
 from bot.stats import StatsCalculator
+from bot.services.player_formatter import PlayerFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class StatsCog(commands.Cog, name="Stats"):
         self.stats_cache = bot.stats_cache
         self.season_manager = bot.season_manager
         self.achievements = bot.achievements
+        self.player_formatter = PlayerFormatter(bot.db_adapter)
         logger.info("📊 StatsCog initializing...")
 
     async def _ensure_player_name_alias(self):
@@ -659,37 +661,45 @@ class StatsCog(commands.Cog, name="Stats"):
             )
             plt.close()
 
+            # Get formatted names with badges
+            p1_formatted = await self.player_formatter.format_player(
+                p1_stats['guid'], p1_stats['name'], include_badges=True
+            )
+            p2_formatted = await self.player_formatter.format_player(
+                p2_stats['guid'], p2_stats['name'], include_badges=True
+            )
+
             # Create detailed comparison embed
             embed = discord.Embed(
-                title="📊 Player Comparison",
-                description=f"**{p1_stats['name']}** vs **{p2_stats['name']}**",
-                color=0x9B59B6,
+                title="⚔️ Player Comparison",
+                description=f"**{p1_formatted}** vs **{p2_formatted}**",
+                color=0x9B59B6,  # Purple
                 timestamp=datetime.now(),
             )
 
-            # Add stats comparison
+            # Add stats comparison with enhanced formatting
             embed.add_field(
-                name=f"🎯 {p1_stats['name']}",
+                name=f"📊 {p1_formatted}",
                 value=(
-                    f"**K/D:** {p1_stats['kd']:.2f}\n"
-                    f"**Accuracy:** {p1_stats['accuracy']:.1f}%\n"
-                    f"**DPM:** {p1_stats['dpm']:.0f}\n"
-                    f"**Headshots:** {p1_stats['hs_pct']:.1f}%\n"
-                    f"**Games:** {p1_stats['games']:,}\n"
-                    f"**Kills:** {p1_stats['kills']:,}"
+                    f"**K/D Ratio:** `{p1_stats['kd']:.2f}`\n"
+                    f"**Accuracy:** `{p1_stats['accuracy']:.1f}%`\n"
+                    f"**DPM:** `{p1_stats['dpm']:.0f}`\n"
+                    f"**Headshots:** `{p1_stats['hs_pct']:.1f}%`\n"
+                    f"**Games:** `{p1_stats['games']:,}`\n"
+                    f"**Kills:** `{p1_stats['kills']:,}`"
                 ),
                 inline=True,
             )
 
             embed.add_field(
-                name=f"🎯 {p2_stats['name']}",
+                name=f"📊 {p2_formatted}",
                 value=(
-                    f"**K/D:** {p2_stats['kd']:.2f}\n"
-                    f"**Accuracy:** {p2_stats['accuracy']:.1f}%\n"
-                    f"**DPM:** {p2_stats['dpm']:.0f}\n"
-                    f"**Headshots:** {p2_stats['hs_pct']:.1f}%\n"
-                    f"**Games:** {p2_stats['games']:,}\n"
-                    f"**Kills:** {p2_stats['kills']:,}"
+                    f"**K/D Ratio:** `{p2_stats['kd']:.2f}`\n"
+                    f"**Accuracy:** `{p2_stats['accuracy']:.1f}%`\n"
+                    f"**DPM:** `{p2_stats['dpm']:.0f}`\n"
+                    f"**Headshots:** `{p2_stats['hs_pct']:.1f}%`\n"
+                    f"**Games:** `{p2_stats['games']:,}`\n"
+                    f"**Kills:** `{p2_stats['kills']:,}`"
                 ),
                 inline=True,
             )

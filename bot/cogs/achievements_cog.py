@@ -11,6 +11,7 @@ Commands:
 import discord
 from discord.ext import commands
 import logging
+from datetime import datetime
 
 logger = logging.getLogger("bot.cogs.achievements")
 
@@ -50,7 +51,8 @@ class AchievementsCog(commands.Cog, name="Achievements"):
                 "**Badge Stacking:** If you earn multiple achievements with the same emoji, "
                 "they stack (e.g., 🎯x3 means 3 different 🎯 achievements)."
             ),
-            color=0xFFD700,
+            color=0xFFD700,  # Gold
+            timestamp=datetime.now()
         )
 
         # Core Achievements
@@ -103,7 +105,8 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed1 = discord.Embed(
             title="⚔️ Combat Achievements",
             description="Earn these badges through kills, games played, and K/D ratio",
-            color=0xE74C3C,
+            color=0xE74C3C,  # Red
+            timestamp=datetime.now()
         )
 
         embed1.add_field(
@@ -150,7 +153,8 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed2 = discord.Embed(
             title="💉 Support & Objective Achievements",
             description="Earn these through teamwork and objective play",
-            color=0x57F287,
+            color=0x57F287,  # Green
+            timestamp=datetime.now()
         )
 
         embed2.add_field(
@@ -212,7 +216,8 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed3 = discord.Embed(
             title="❓ How Achievement Badges Work",
             description="Everything you need to know about earning and displaying badges",
-            color=0x5865F2,
+            color=0x5865F2,  # Discord Blurple
+            timestamp=datetime.now()
         )
 
         embed3.add_field(
