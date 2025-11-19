@@ -128,3 +128,4 @@ tools/*
 !.env.example
 !.gitignore
 !postgresql_database_manager.py
+node_modules/
