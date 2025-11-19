@@ -24,7 +24,7 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         self.bot = bot
         logger.info("🏆 AchievementsCog loaded")
 
-    @commands.command(name="achievements", aliases=["medals", "badges", "achievement"])
+    @commands.command(name="achievements", aliases=["medals", "achievement"])
     async def achievements(self, ctx, subcommand: str = None):
         """
         🏆 View achievement badge information
