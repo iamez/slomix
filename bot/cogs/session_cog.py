@@ -3,33 +3,39 @@
 Handles all session viewing and analytics commands for the Ultimate ET:Legacy Bot.
 
 Commands:
-- session: View specific session by date
-- last_session: View most recent session with multiple views
+- session: View specific session by date with multiple view modes
+- last_session: View most recent session (moved to LastSessionCog)
 - sessions: List all gaming sessions
 
-This cog contains ~3,600 lines of session viewing logic including:
-- Session summaries and detailed stats
-- Team analytics and composition
-- Performance graphs and visualizations
-- Weapon mastery breakdowns
-- Objective & support stats
-- Special awards and chaos stats
+This cog uses service-oriented architecture for session analytics:
+- SessionDataService: Database queries
+- SessionStatsAggregator: Statistical aggregations
+- SessionEmbedBuilder: Discord embed creation
+- SessionGraphGenerator: Performance graphs
+- SessionViewHandlers: Different view modes
+- PlayerBadgeService: Achievement badges
+- PlayerDisplayNameService: Custom display names
 """
 
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
-# import aiosqlite  # Removed - using database adapter
 import discord
 from discord.ext import commands
 
+# Import service layer
+from bot.services.session_data_service import SessionDataService
+from bot.services.session_stats_aggregator import SessionStatsAggregator
+from bot.services.session_embed_builder import SessionEmbedBuilder
+from bot.services.session_graph_generator import SessionGraphGenerator
+from bot.services.session_view_handlers import SessionViewHandlers
+from bot.services.player_badge_service import PlayerBadgeService
+from bot.services.player_display_name_service import PlayerDisplayNameService
+
 # Import shared utilities
-from bot.core.achievement_system import AchievementSystem
-from bot.core.season_manager import SeasonManager
 from bot.stats import StatsCalculator
-from bot.core.stats_cache import StatsCache
 from tools.stopwatch_scoring import StopwatchScoring
 
 logger = logging.getLogger("UltimateBot.SessionCog")
@@ -52,241 +58,226 @@ def _split_chunks(text: str, max_len: int = 900):
 
 
 class SessionCog(commands.Cog, name="Session Commands"):
-    """🎮 Session viewing and analytics commands"""
+    """🎮 Session viewing and analytics commands with service architecture"""
 
     def __init__(self, bot):
         self.bot = bot
-        # Use bot-level systems (initialized in bot's __init__)
-        self.stats_cache = bot.stats_cache
-        logger.info("🎮 SessionCog initializing...")
+        logger.info("🎮 SessionCog initializing with service architecture...")
 
+        # Initialize all services (same as LastSessionCog)
+        self.data_service = SessionDataService(bot.db_adapter, bot.db_path if hasattr(bot, 'db_path') else None)
+        self.stats_aggregator = SessionStatsAggregator(bot.db_adapter)
+        self.embed_builder = SessionEmbedBuilder()
+        self.graph_generator = SessionGraphGenerator(bot.db_adapter)
+        self.view_handlers = SessionViewHandlers(bot.db_adapter, StatsCalculator)
+        self.badge_service = PlayerBadgeService(bot.db_adapter)
+        self.display_name_service = PlayerDisplayNameService(bot.db_adapter)
+
+        logger.info("✅ All services initialized successfully")
+
+    async def _ensure_player_name_alias(self):
+        """Create TEMP VIEW alias for player_name if needed"""
+        try:
+            # Check if clean_name exists but player_name doesn't
+            if self.bot.config.database_type == 'sqlite':
+                columns = await self.bot.db_adapter.fetch_all("PRAGMA table_info(player_comprehensive_stats)")
+                col_names = [col[1] for col in columns]
+            else:  # PostgreSQL
+                columns = await self.bot.db_adapter.fetch_all("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'player_comprehensive_stats'
+                """)
+                col_names = [col[0] for col in columns]
+
+            if "clean_name" in col_names and "player_name" not in col_names:
+                await self.bot.db_adapter.execute("""
+                    CREATE TEMP VIEW IF NOT EXISTS player_name_alias AS
+                    SELECT *, clean_name as player_name
+                    FROM player_comprehensive_stats
+                """)
+                logger.debug("✅ Created player_name alias for clean_name")
+        except Exception as e:
+            logger.debug(f"player_name alias setup: {e}")
+
+    @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.command(name="session", aliases=["match", "game"])
-    async def session(self, ctx, *date_parts):
-        """📅 Show detailed session/match statistics for a full day
+    async def session(self, ctx, date_arg: str = None, subcommand: str = None):
+        """📅 Show detailed session/match statistics for a specific date
+
+        Displays comprehensive stats for all gaming sessions on the specified date.
+        Supports multiple view modes for different perspectives.
 
         Usage:
-        - !session 2025-09-30  (show session from specific date)
-        - !session 2025 9 30   (alternative format)
-        - !session             (show most recent session)
+        - !session 2025-11-15           → Overview (default view)
+        - !session 2025-11-15 combat    → Combat stats
+        - !session 2025-11-15 obj       → Objectives & support
+        - !session 2025-11-15 weapons   → Weapon mastery
+        - !session 2025-11-15 support   → Support activity
+        - !session 2025-11-15 sprees    → Killing sprees
+        - !session 2025-11-15 top       → Top 10 players (all players)
+        - !session 2025-11-15 maps      → Per-map summaries
+        - !session 2025-11-15 maps full → Round-by-round breakdown
+        - !session 2025-11-15 graphs    → Performance graphs
+        - !session                      → Show most recent session
 
-        Shows aggregated stats for entire day (all maps/rounds combined).
+        Date formats supported:
+        - YYYY-MM-DD (e.g., 2025-11-15)
+        - YYYY MM DD (e.g., 2025 11 15)
+        - yesterday, today
+        - More formats coming soon!
         """
         try:
-            # Parse date from arguments
-            if date_parts:
-                # Join parts: "2025 9 30" or "2025-09-30"
-                date_str = "-".join(str(p) for p in date_parts)
-                # Normalize format: ensure YYYY-MM-DD
-                parts = date_str.replace("-", " ").split()
-                if len(parts) >= 3:
-                    year, month, day = parts[0], parts[1], parts[2]
-                    date_filter = f"{year}-{int(month):02d}-{int(day):02d}"
+            # Setup database aliases
+            try:
+                await self._ensure_player_name_alias()
+            except Exception:
+                pass
+            # Step 1: Parse and normalize the date
+            target_date = None
+
+            if date_arg:
+                # Enhanced date parsing
+                date_lower = date_arg.lower()
+
+                if date_lower == "yesterday":
+                    target_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+                elif date_lower == "today":
+                    target_date = datetime.now().strftime("%Y-%m-%d")
+                elif "-" in date_arg:
+                    # Already in YYYY-MM-DD format
+                    target_date = date_arg
                 else:
-                    date_filter = date_str
+                    # Try to parse as date components (will handle in future enhancement)
+                    target_date = date_arg
             else:
-                # Get most recent date
-                if self.bot.config.database_type == 'sqlite':
-                    result = await self.bot.db_adapter.fetch_one(
-                        """
-                        SELECT DISTINCT DATE(round_date) as date
-                        FROM player_comprehensive_stats
-                        ORDER BY date DESC LIMIT 1
-                        """
-                    )
-                else:  # PostgreSQL
-                    result = await self.bot.db_adapter.fetch_one(
-                        """
-                        SELECT DISTINCT round_date
-                        FROM player_comprehensive_stats
-                        ORDER BY round_date DESC LIMIT 1
-                        """
-                    )
-                if not result:
-                    await ctx.send("❌ No rounds found in database")
-                    return
-                # Convert to string if it's a date object (PostgreSQL)
-                date_filter = str(result[0]) if result[0] else None
-                if not date_filter:
-                    await ctx.send("❌ No rounds found in database")
+                # No date provided - get the latest session date
+                target_date = await self.data_service.get_latest_session_date()
+                if not target_date:
+                    await ctx.send("❌ No sessions found in database")
                     return
 
-            await ctx.send(f"📅 Loading session data for **{date_filter}**...")
+            logger.info(f"📅 Fetching session data for date: {target_date}")
 
-            # Get round metadata (database-specific)
-            if self.bot.config.database_type == 'sqlite':
-                query = """
-                    SELECT 
-                        COUNT(DISTINCT round_id) / 2 as total_maps,
-                        COUNT(DISTINCT round_id) as total_rounds,
-                        COUNT(DISTINCT player_guid) as player_count,
-                        MIN(round_date) as first_round,
-                        MAX(round_date) as last_round
-                    FROM player_comprehensive_stats
-                    WHERE DATE(round_date) = ?
-                """
-                result = await self.bot.db_adapter.fetch_one(query, (date_filter,))
-            else:  # PostgreSQL
-                query = """
-                    SELECT 
-                        COUNT(DISTINCT round_id) / 2 as total_maps,
-                        COUNT(DISTINCT round_id) as total_rounds,
-                        COUNT(DISTINCT player_guid) as player_count,
-                        MIN(round_date) as first_round,
-                        MAX(round_date) as last_round
-                    FROM player_comprehensive_stats
-                    WHERE round_date = $1
-                """
-                result = await self.bot.db_adapter.fetch_one(query, (date_filter,))
-            if not result or result[0] == 0:
-                await ctx.send(
-                    f"❌ No round found for date: {date_filter}"
-                )
+            # Step 2: Fetch session data using the service
+            sessions, session_ids, session_ids_str, player_count = await self.data_service.fetch_session_data_by_date(
+                target_date
+            )
+
+            if not sessions:
+                await ctx.send(f"❌ No sessions found for date: **{target_date}**\n💡 Use `!sessions` to see all available dates")
                 return
 
-            (
-                total_maps,
-                total_rounds,
-                player_count,
-                first_round,
-                last_round,
-            ) = result
+            # Calculate total maps for display
+            total_maps = len(sessions) // 2
 
-            # Get unique maps played (database-specific)
-            if self.bot.config.database_type == 'sqlite':
-                maps = await self.bot.db_adapter.fetch_all(
-                    """
-                    SELECT DISTINCT map_name
-                    FROM player_comprehensive_stats
-                    WHERE DATE(round_date) = ?
-                    ORDER BY round_date
-                """,
-                    (date_filter,)
-                )
-            else:  # PostgreSQL
-                maps = await self.bot.db_adapter.fetch_all(
-                    """
-                    SELECT DISTINCT map_name, MIN(round_date) as first_seen
-                    FROM player_comprehensive_stats
-                    WHERE round_date = $1
-                    GROUP BY map_name
-                    ORDER BY first_seen
-                """,
-                    (date_filter,)
-                )
-            maps_list = [m[0] for m in maps]
+            logger.info(f"✅ Found {len(sessions)} rounds ({total_maps} maps) with {player_count} players")
 
-            # Build header embed
+            # Step 3: Route to appropriate view based on subcommand
+            if subcommand and subcommand.lower() in ("obj", "objectives"):
+                await self.view_handlers.show_objectives_view(ctx, target_date, session_ids, session_ids_str, player_count)
+                return
+
+            if subcommand and subcommand.lower() in ("combat",):
+                await self.view_handlers.show_combat_view(ctx, target_date, session_ids, session_ids_str, player_count)
+                return
+
+            if subcommand and subcommand.lower() in ("weapons", "weapon", "weap"):
+                await self.view_handlers.show_weapons_view(ctx, target_date, session_ids, session_ids_str, player_count)
+                return
+
+            if subcommand and subcommand.lower() in ("support",):
+                await self.view_handlers.show_support_view(ctx, target_date, session_ids, session_ids_str, player_count)
+                return
+
+            if subcommand and subcommand.lower() in ("sprees", "spree"):
+                await self.view_handlers.show_sprees_view(ctx, target_date, session_ids, session_ids_str, player_count)
+                return
+
+            if subcommand and subcommand.lower() in ("top", "top10"):
+                await self.view_handlers.show_top_view(ctx, target_date, session_ids, session_ids_str, player_count, total_maps)
+                return
+
+            # Maps view routing
+            if subcommand and subcommand.lower() == "maps":
+                # Check for "full" subcommand
+                parts = ctx.message.content.split()
+                if len(parts) > 2 and parts[2].lower() == "full":
+                    await self.view_handlers.show_maps_full_view(ctx, target_date, sessions, session_ids, session_ids_str, player_count)
+                else:
+                    await self.view_handlers.show_maps_view(ctx, target_date, sessions, session_ids, session_ids_str, player_count)
+                return
+
+            # Graphs view
+            if subcommand and subcommand.lower() in ("graphs", "graph"):
+                await self.view_handlers.show_graphs_view(ctx, target_date, session_ids, session_ids_str, player_count)
+                return
+
+            # Step 4: Default view - Overview (improved version of original)
+            # Build overview embed using the new data
             embed = discord.Embed(
-                title=f"📊 Session Summary: {date_filter}",
-                description=f"**{int(total_maps)} maps** • **{total_rounds} rounds** • **{player_count} players**",
+                title=f"📊 Session Summary: {target_date}",
+                description=f"**{total_maps} maps** • **{len(sessions)} rounds** • **{player_count} players**",
                 color=0x00FF88,
             )
+
+            # Get unique maps played
+            maps_set = set()
+            for session in sessions:
+                maps_set.add(session[1])  # map_name is at index 1
+            maps_list = sorted(list(maps_set))
 
             # Add maps played
             maps_text = ", ".join(maps_list)
             if len(maps_text) > 900:
-                maps_text = (
-                    ", ".join(maps_list[:8])
-                    + f" (+{len(maps_list) - 8} more)"
-                )
+                maps_text = ", ".join(maps_list[:8]) + f" (+{len(maps_list) - 8} more)"
             embed.add_field(
                 name="🗺️ Maps Played", value=maps_text, inline=False
             )
 
-            # Get top players aggregated (database-specific)
-            if self.bot.config.database_type == 'sqlite':
-                top_players = await self.bot.db_adapter.fetch_all(
-                    """
-                    SELECT
-                        p.player_name,
-                        SUM(p.kills) as kills,
-                        SUM(p.deaths) as deaths,
-                        CASE
-                            WHEN SUM(
-                                CASE
-                                    WHEN r.actual_time LIKE '%:%' THEN
-                                        (CAST(SUBSTR(r.actual_time, 1, INSTR(r.actual_time, ':')-1) AS INTEGER) * 60 +
-                                         CAST(SUBSTR(r.actual_time, INSTR(r.actual_time, ':')+1) AS INTEGER))
-                                    ELSE
-                                        CAST(r.actual_time AS INTEGER)
-                                END
-                            ) > 0
-                            THEN (SUM(p.damage_given) * 60.0) / SUM(
-                                CASE
-                                    WHEN r.actual_time LIKE '%:%' THEN
-                                        (CAST(SUBSTR(r.actual_time, 1, INSTR(r.actual_time, ':')-1) AS INTEGER) * 60 +
-                                         CAST(SUBSTR(r.actual_time, INSTR(r.actual_time, ':')+1) AS INTEGER))
-                                    ELSE
-                                        CAST(r.actual_time AS INTEGER)
-                                END
-                            )
-                            ELSE 0
-                        END as dpm
-                    FROM player_comprehensive_stats p
-                    JOIN rounds r ON p.round_id = r.id
-                    WHERE DATE(p.round_date) = ? AND r.round_number IN (1, 2)
-                      AND (r.round_status = 'completed' OR r.round_status IS NULL)
-                    GROUP BY p.player_name
-                    ORDER BY kills DESC
-                    LIMIT 5
-                """,
-                    (date_filter,)
-                )
-            else:  # PostgreSQL
-                top_players = await self.bot.db_adapter.fetch_all(
-                    """
-                    SELECT
-                        p.player_name,
-                        SUM(p.kills) as kills,
-                        SUM(p.deaths) as deaths,
-                        CASE
-                            WHEN SUM(
-                                CASE
-                                    WHEN r.actual_time LIKE '%:%' THEN
-                                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                                    ELSE
-                                        CAST(r.actual_time AS INTEGER)
-                                END
-                            ) > 0
-                            THEN (SUM(p.damage_given) * 60.0) / SUM(
-                                CASE
-                                    WHEN r.actual_time LIKE '%:%' THEN
-                                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                                    ELSE
-                                        CAST(r.actual_time AS INTEGER)
-                                END
-                            )
-                            ELSE 0
-                        END as dpm
-                    FROM player_comprehensive_stats p
-                    JOIN rounds r ON p.round_id = r.id
-                    WHERE p.round_date = $1 AND r.round_number IN (1, 2)
-                      AND (r.round_status = 'completed' OR r.round_status IS NULL)
-                    GROUP BY p.player_name
-                    ORDER BY kills DESC
-                    LIMIT 5
-                """,
-                    (date_filter,)
-                )
+            # Get top players with badges and display names
+            top_players_query = f"""
+                SELECT
+                    p.player_guid,
+                    p.player_name,
+                    SUM(p.kills) as kills,
+                    SUM(p.deaths) as deaths,
+                    SUM(p.damage_given) as damage,
+                    SUM(p.time_played_seconds) as playtime
+                FROM player_comprehensive_stats p
+                WHERE p.round_id IN ({session_ids_str})
+                GROUP BY p.player_guid, p.player_name
+                ORDER BY kills DESC
+                LIMIT 10
+            """
+            top_players = await self.bot.db_adapter.fetch_all(top_players_query, tuple(session_ids))
 
-            # Add top 5 players
+            # Add all players (not just top 5!)
             if top_players:
                 player_text = ""
-                medals = ["🥇", "🥈", "🥉", "4.", "5."]
-                for i, (name, kills, deaths, dpm) in enumerate(
-                    top_players
-                ):
+                medals = ["🥇", "🥈", "🥉"] + [f"{i}." for i in range(4, 11)]
+
+                for i, row in enumerate(top_players):
+                    guid, name, kills, deaths, damage, playtime = row
+
+                    # Get badge and display name
+                    badge = await self.badge_service.get_player_badge(guid, session_ids, session_ids_str)
+                    display_name = await self.display_name_service.get_display_name(guid, name)
+
                     kd = StatsCalculator.calculate_kd(kills, deaths)
-                    player_text += f"{medals[i]} **{name}** • {kills}K/{deaths}D ({kd:.2f}) • {dpm:.0f} DPM\n"
+                    dpm = (damage * 60.0 / playtime) if playtime > 0 else 0
+
+                    player_text += f"{medals[i]} {badge} **{display_name}** • {kills}K/{deaths}D ({kd:.2f}) • {dpm:.0f} DPM\n"
+
                 embed.add_field(
-                    name="🏆 Top Players", value=player_text, inline=False
+                    name=f"🏆 Top {len(top_players)} Players", value=player_text, inline=False
                 )
 
+            # Add helpful footer with available views
             embed.set_footer(
-                text="💡 Use !last_round for the most recent session with full details"
+                text="💡 Try: combat | obj | weapons | support | sprees | top | maps | graphs"
             )
+
             await ctx.send(embed=embed)
 
         except Exception as e:
