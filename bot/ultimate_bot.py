@@ -244,6 +244,21 @@ class UltimateETLegacyBot(commands.Bot):
             else []
         )
 
+        # Load channel configuration for routing
+        self.production_channel_id = int(os.getenv("PRODUCTION_CHANNEL_ID", "0"))
+        self.gather_channel_id = int(os.getenv("GATHER_CHANNEL_ID", "0"))
+        self.general_channel_id = int(os.getenv("GENERAL_CHANNEL_ID", "0"))
+        self.admin_channel_id = int(os.getenv("ADMIN_CHANNEL_ID", "0"))
+
+        # Public command channels (where stats commands work)
+        self.public_channels = [
+            ch for ch in [
+                self.production_channel_id,
+                self.gather_channel_id,
+                self.general_channel_id
+            ] if ch != 0
+        ]
+
         # Session thresholds
         self.session_start_threshold = int(
             os.getenv("SESSION_START_THRESHOLD", "6")
@@ -267,7 +282,20 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info(
                 f"🔒 Bot commands restricted to channels: {self.bot_command_channels}"
             )
-        else:
+
+        # Log channel routing configuration
+        if self.production_channel_id:
+            logger.info(f"📊 Production channel: {self.production_channel_id}")
+        if self.gather_channel_id:
+            logger.info(f"🎮 Gather channel: {self.gather_channel_id}")
+        if self.general_channel_id:
+            logger.info(f"💬 General channel: {self.general_channel_id}")
+        if self.admin_channel_id:
+            logger.info(f"🔐 Admin channel: {self.admin_channel_id}")
+        if self.public_channels:
+            logger.info(f"✅ Public commands enabled in: {self.public_channels}")
+
+        if not self.gaming_voice_channels:
             logger.warning(
                 "⚠️ No gaming voice channels configured - voice detection disabled"
             )
@@ -726,10 +754,9 @@ class UltimateETLegacyBot(commands.Bot):
             )
             logger.info("🔄 Monitoring enabled")
 
-            # Post to Discord if stats channel configured
-            stats_channel_id = os.getenv("STATS_CHANNEL_ID")
-            if stats_channel_id:
-                channel = self.get_channel(int(stats_channel_id))
+            # Post to Discord if production channel configured
+            if self.production_channel_id:
+                channel = self.get_channel(self.production_channel_id)
                 if channel:
                     embed = discord.Embed(
                         title="🎮 Gaming Session Started!",
@@ -794,10 +821,9 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info(f"👥 Participants: {len(self.session_participants)}")
             logger.info("�🔄 Monitoring disabled")
 
-            # Post session summary (will be implemented in next todo)
-            stats_channel_id = os.getenv("STATS_CHANNEL_ID")
-            if stats_channel_id:
-                channel = self.get_channel(int(stats_channel_id))
+            # Post session summary
+            if self.production_channel_id:
+                channel = self.get_channel(self.production_channel_id)
                 if channel:
                     # TODO: Post comprehensive session summary
                     embed = discord.Embed(
@@ -948,15 +974,14 @@ class UltimateETLegacyBot(commands.Bot):
             logger.debug(f"📤 Preparing Discord post for {filename}")
             
             # Get the stats channel
-            stats_channel_id = int(os.getenv("STATS_CHANNEL_ID", 0))
-            if not stats_channel_id:
-                logger.warning("⚠️ STATS_CHANNEL_ID not configured, skipping Discord post")
+            if not self.production_channel_id:
+                logger.warning("⚠️ PRODUCTION_CHANNEL_ID not configured, skipping Discord post")
                 return
-            
-            logger.debug(f"📡 Looking for channel ID: {stats_channel_id}")
-            channel = self.get_channel(stats_channel_id)
+
+            logger.debug(f"📡 Looking for production channel ID: {self.production_channel_id}")
+            channel = self.get_channel(self.production_channel_id)
             if not channel:
-                logger.error(f"❌ Stats channel {stats_channel_id} not found")
+                logger.error(f"❌ Production channel {self.production_channel_id} not found")
                 logger.error(f"   Available channels: {[c.id for c in self.get_all_channels()][:10]}")
                 return
             

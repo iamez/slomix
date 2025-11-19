@@ -25,6 +25,8 @@ import discord
 # import aiosqlite  # Removed - using database adapter
 from discord.ext import commands
 
+from bot.core.checks import is_admin_channel
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,13 +38,11 @@ class AdminCog(commands.Cog, name="Admin"):
         self.bot = bot
         logger.info("🔧 AdminCog loaded (cache_clear, weapon_diag)")
 
+    @is_admin_channel()
     @commands.command(name="cache_clear")
     async def cache_clear(self, ctx):
-        """🗑️ Clear query cache (Admin only)."""
+        """🗑️ Clear query cache (Admin only - use in admin channel)."""
         try:
-            if not ctx.author.guild_permissions.manage_guild:
-                await ctx.send("❌ You don't have permission to clear cache. **Required:** Manage Server")
-                return
 
             if hasattr(self.bot, 'get_cog'):
                 main_cog = self.bot.get_cog('ETLegacyCommands')
