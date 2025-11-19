@@ -8,7 +8,7 @@ Provides emoji badges based on player lifetime achievements:
 **Core Achievements:**
 - Kill milestones: 🎯 (1K) 💀 (5K) ☠️ (10K) 👑 (20K)
 - Game milestones: 🎮 (50) 🕹️ (500) 🏆 (5K) ⭐ (10K) 💎 (30K)
-- K/D milestones: 📉 (-0.5) ⚰️ (0.0) ⚖️ (1.0) 📈 (1.5) 🔥 (2.0) ⚡ (2.5) 💯 (3.0)
+- K/D milestones: ⚰️ (0.0) ⚖️ (1.0) 📈 (1.5) 🔥 (2.0) ⚡ (2.5) 💯 (3.0)
 
 **Phase 1: Support & Objectives:**
 - Revives given: 💉 (100) 🏥 (500) ⚕️ (5K)
@@ -49,7 +49,6 @@ class PlayerBadgeService:
     }
 
     KD_MILESTONES = {
-        -0.5: "📉",
         0.0: "⚰️",
         1.0: "⚖️",
         1.5: "📈",

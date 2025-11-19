@@ -61,7 +61,7 @@ class AchievementsCog(commands.Cog, name="Achievements"):
             value=(
                 "🎯💀☠️👑 **Kills** - Total enemy kills (1K-20K)\n"
                 "🎮🕹️🏆⭐💎 **Games** - Rounds played (50-30K)\n"
-                "📉⚰️⚖️📈🔥⚡💯 **K/D Ratio** - Kill/Death ratio (-0.5 to 3.0)"
+                "⚰️⚖️📈🔥⚡💯 **K/D Ratio** - Kill/Death ratio (0.0 to 3.0)"
             ),
             inline=False
         )
@@ -135,7 +135,6 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed1.add_field(
             name="📊 K/D Ratio Milestones",
             value=(
-                "📉 **Learning Curve** - -0.5 K/D or worse\n"
                 "⚰️ **Ground Zero** - 0.0 K/D (no kills yet)\n"
                 "⚖️ **Balanced Fighter** - 1.0 K/D (requires 20+ games)\n"
                 "📈 **Above Average** - 1.5 K/D\n"
