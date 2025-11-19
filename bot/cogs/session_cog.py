@@ -261,7 +261,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     guid, name, kills, deaths, damage, playtime = row
 
                     # Get badge and display name
-                    badge = await self.badge_service.get_player_badge(guid, session_ids, session_ids_str)
+                    badge = await self.badge_service.get_player_badges(guid)
                     display_name = await self.display_name_service.get_display_name(guid, name)
 
                     kd = StatsCalculator.calculate_kd(kills, deaths)
