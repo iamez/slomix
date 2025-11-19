@@ -1547,8 +1547,9 @@ class LinkCog(commands.Cog, name="Link"):
         # Build embed
         embed = discord.Embed(
             title=f"📝 {ctx.author.display_name}'s Aliases",
-            description=f"All names you've used in-game ({len(aliases)} total)",
+            description=f"All names you've used in-game • `{len(aliases)}` total aliases",
             color=0x5865F2,
+            timestamp=datetime.now()
         )
 
         # Group aliases for better display
@@ -1562,7 +1563,7 @@ class LinkCog(commands.Cog, name="Link"):
                 last_seen_str = "Unknown"
 
             alias_lines.append(
-                f"{i}. **{alias}** - Used {times_seen}x (last: {last_seen_str})"
+                f"{i}. **{alias}** • Used `{times_seen}x` • Last: `{last_seen_str}`"
             )
 
         # Split into fields if too many
@@ -1594,7 +1595,7 @@ class LinkCog(commands.Cog, name="Link"):
             inline=False
         )
 
-        embed.set_footer(text="🎮 Your display name appears in !last_session")
+        embed.set_footer(text=f"🎮 Your display name appears in !last_session • Requested by {ctx.author.name}")
         await ctx.send(embed=embed)
 
 
