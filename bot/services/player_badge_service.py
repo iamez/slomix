@@ -11,10 +11,10 @@ Provides emoji badges based on player lifetime achievements:
 - K/D milestones: 📉 (-0.5) ⚰️ (0.0) ⚖️ (1.0) 📈 (1.5) 🔥 (2.0) ⚡ (2.5) 💯 (3.0)
 
 **Phase 1: Support & Objectives:**
-- Revives given: 💉 (100) 🏥 (1K) ⚕️ (10K)
-- Times revived: 🔄 (50) ♻️ (500) 🔁 (5K)
-- Dynamites planted: 💣 (50) 🧨 (500) 💥 (5K)
-- Dynamites defused: 🛡️ (50) 🔰 (500) 🏛️ (5K)
+- Revives given: 💉 (100) 🏥 (500) ⚕️ (5K)
+- Times revived: 🔄 (100) ♻️ (500) 🔁 (3K)
+- Dynamites planted: 💣 (50) 🧨 (200) 💥 (1K)
+- Dynamites defused: 🛡️ (50) 🔰 (200) 🏛️ (1K)
 - Objectives (stolen+returned): 🚩 (25) 🎖️ (250) 🏅 (2.5K)
 
 **Future Phase 2:**
@@ -61,26 +61,26 @@ class PlayerBadgeService:
     # Phase 1: Support & Objective Milestones
     REVIVE_MILESTONES = {
         100: "💉",
-        1000: "🏥",
-        10000: "⚕️",
+        500: "🏥",
+        5000: "⚕️",
     }
 
     TIMES_REVIVED_MILESTONES = {
-        50: "🔄",
+        100: "🔄",
         500: "♻️",
-        5000: "🔁",
+        3000: "🔁",
     }
 
     DYNAMITE_PLANTED_MILESTONES = {
         50: "💣",
-        500: "🧨",
-        5000: "💥",
+        200: "🧨",
+        1000: "💥",
     }
 
     DYNAMITE_DEFUSED_MILESTONES = {
         50: "🛡️",
-        500: "🔰",
-        5000: "🏛️",
+        200: "🔰",
+        1000: "🏛️",
     }
 
     OBJECTIVE_MILESTONES = {
