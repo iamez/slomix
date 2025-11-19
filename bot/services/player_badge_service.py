@@ -6,8 +6,8 @@ Fetches and formats player achievement badges for display in session stats.
 Provides emoji badges based on player lifetime achievements:
 
 **Core Achievements:**
-- Kill milestones: 🎯 (100) 💥 (500) 💀 (1K) ⚔️ (2.5K) ☠️ (5K) 👑 (10K)
-- Game milestones: 🎮 (10) 🎯 (50) 🏆 (100) ⭐ (250) 💎 (500) 👑 (1K)
+- Kill milestones: 🎯 (100) 🚀 (500) 💀 (1K) ⚔️ (2.5K) ☠️ (5K) 👑 (10K)
+- Game milestones: 🎮 (10) 🕹️ (50) 🏆 (100) ⭐ (250) 💎 (500) 🌟 (1K)
 - K/D milestones: ⚖️ (1.0) 📈 (1.5) 🔥 (2.0) 💯 (3.0)
 
 **Phase 1: Support & Objectives:**
@@ -15,7 +15,7 @@ Provides emoji badges based on player lifetime achievements:
 - Times revived: 🔄 (50) ♻️ (500) 🔁 (5K)
 - Dynamites planted: 💣 (50) 🧨 (500) 💥 (5K)
 - Dynamites defused: 🛡️ (50) 🔰 (500) 🏛️ (5K)
-- Objectives (stolen+returned): 🎯 (25) 🏆 (250) 👑 (2.5K)
+- Objectives (stolen+returned): 🚩 (25) 🎖️ (250) 🏅 (2.5K)
 
 **Future Phase 2:**
 - Record holders (most kills in round/map/month/year)
@@ -35,7 +35,7 @@ class PlayerBadgeService:
     # Achievement thresholds (from AchievementSystem)
     KILL_MILESTONES = {
         100: "🎯",
-        500: "💥",
+        500: "🚀",
         1000: "💀",
         2500: "⚔️",
         5000: "☠️",
@@ -44,11 +44,11 @@ class PlayerBadgeService:
 
     GAME_MILESTONES = {
         10: "🎮",
-        50: "🎯",
+        50: "🕹️",
         100: "🏆",
         250: "⭐",
         500: "💎",
-        1000: "👑",
+        1000: "🌟",
     }
 
     KD_MILESTONES = {
@@ -84,9 +84,9 @@ class PlayerBadgeService:
     }
 
     OBJECTIVE_MILESTONES = {
-        25: "🎯",
-        250: "🏆",
-        2500: "👑",
+        25: "🚩",
+        250: "🎖️",
+        2500: "🏅",
     }
 
     def __init__(self, db_adapter):
