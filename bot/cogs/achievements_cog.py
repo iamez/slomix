@@ -59,9 +59,9 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed.add_field(
             name="⚔️ Combat Achievements",
             value=(
-                "🎯💥💀⚔️☠️👑 **Kills** - Total enemy kills\n"
-                "🎮🎯🏆⭐💎👑 **Games** - Rounds played\n"
-                "⚖️📈🔥💯 **K/D Ratio** - Kill/Death ratio"
+                "🎯💀☠️👑 **Kills** - Total enemy kills (1K-20K)\n"
+                "🎮🕹️🏆⭐💎 **Games** - Rounds played (50-30K)\n"
+                "📉⚰️⚖️📈🔥⚡💯 **K/D Ratio** - Kill/Death ratio (-0.5 to 3.0)"
             ),
             inline=False
         )
@@ -112,12 +112,10 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed1.add_field(
             name="💀 Kill Milestones",
             value=(
-                "🎯 **First Blood Century** - 100 kills\n"
-                "🚀 **Killing Machine** - 500 kills\n"
-                "💀 **Thousand Killer** - 1,000 kills\n"
-                "⚔️ **Elite Warrior** - 2,500 kills\n"
-                "☠️ **Death Incarnate** - 5,000 kills\n"
-                "👑 **Legendary Slayer** - 10,000 kills"
+                "🎯 **Thousand Killer** - 1,000 kills\n"
+                "💀 **Death Incarnate** - 5,000 kills\n"
+                "☠️ **Elite Slayer** - 10,000 kills\n"
+                "👑 **Legendary God** - 20,000 kills"
             ),
             inline=False
         )
@@ -125,12 +123,11 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed1.add_field(
             name="🎮 Game Milestones",
             value=(
-                "🎮 **Getting Started** - 10 games\n"
-                "🕹️ **Regular Player** - 50 games\n"
-                "🏆 **Dedicated Gamer** - 100 games\n"
-                "⭐ **Community Veteran** - 250 games\n"
-                "💎 **Hardcore Legend** - 500 games\n"
-                "🌟 **Ultimate Champion** - 1,000 games"
+                "🎮 **Getting Started** - 50 games\n"
+                "🕹️ **Regular Player** - 500 games\n"
+                "🏆 **Dedicated Gamer** - 5,000 games\n"
+                "⭐ **Community Veteran** - 10,000 games\n"
+                "💎 **Legendary Champion** - 30,000 games"
             ),
             inline=False
         )
@@ -138,10 +135,13 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed1.add_field(
             name="📊 K/D Ratio Milestones",
             value=(
+                "📉 **Learning Curve** - -0.5 K/D or worse\n"
+                "⚰️ **Ground Zero** - 0.0 K/D (no kills yet)\n"
                 "⚖️ **Balanced Fighter** - 1.0 K/D (requires 20+ games)\n"
                 "📈 **Above Average** - 1.5 K/D\n"
                 "🔥 **Elite Killer** - 2.0 K/D\n"
-                "💯 **Unstoppable** - 3.0 K/D\n\n"
+                "⚡ **Dominator** - 2.5 K/D\n"
+                "💯 **God Tier** - 3.0 K/D (nearly impossible)\n\n"
                 "*Calculated: Total Kills ÷ Total Deaths*"
             ),
             inline=False
@@ -233,15 +233,15 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         )
 
         embed3.add_field(
-            name="📚 Badge Stacking",
+            name="📚 No Badge Stacking",
             value=(
-                "Each badge emoji is now unique! No more stacking confusion.\n\n"
-                "**Previous system**: Some emojis appeared multiple times:\n"
-                "• Old 🎯 = Kills (100) + Games (50) + Objectives (25) = 🎯x3\n\n"
-                "**New system**: Every achievement has its own emoji:\n"
-                "• 🎯 Kills (100), 🕹️ Games (50), 🚩 Objectives (25)\n"
-                "• 🚀 Kills (500), 🏆 Games (100), 🎖️ Objectives (250)\n"
-                "• 👑 Kills (10K), 🌟 Games (1K), 🏅 Objectives (2.5K)"
+                "Each badge emoji is unique! Every achievement has its own distinct badge.\n\n"
+                "**Examples:**\n"
+                "• 🎯 = Only Kills (1K)\n"
+                "• 🎮 = Only Games (50)\n"
+                "• 🚩 = Only Objectives (25)\n"
+                "• 👑 = Only Kills (20K)\n\n"
+                "No more confusion about what a badge means!"
             ),
             inline=False
         )
