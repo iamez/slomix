@@ -70,10 +70,10 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed.add_field(
             name="💉 Support Achievements",
             value=(
-                "💉🏥⚕️ **Medic** - Teammates revived\n"
-                "🔄♻️🔁 **Survivor** - Times you were revived\n"
-                "💣🧨💥 **Demolition** - Dynamites planted\n"
-                "🛡️🔰🏛️ **Defuser** - Dynamites defused"
+                "💉🏥⚕️ **Medic** - Teammates revived (100-5K)\n"
+                "🔄♻️🔁 **Survivor** - Times you were revived (100-3K)\n"
+                "💣🧨💥 **Demolition** - Dynamites planted (50-1K)\n"
+                "🛡️🔰🏛️ **Defuser** - Dynamites defused (50-1K)"
             ),
             inline=False
         )
@@ -161,8 +161,8 @@ class AchievementsCog(commands.Cog, name="Achievements"):
             name="💉 Medic Achievements",
             value=(
                 "💉 **Field Medic** - 100 revives given\n"
-                "🏥 **Combat Surgeon** - 1,000 revives given\n"
-                "⚕️ **Miracle Worker** - 10,000 revives given\n\n"
+                "🏥 **Combat Surgeon** - 500 revives given\n"
+                "⚕️ **Miracle Worker** - 5,000 revives given\n\n"
                 "*Tracks teammates you successfully revived*"
             ),
             inline=False
@@ -171,9 +171,9 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed2.add_field(
             name="🔄 Survivor Achievements",
             value=(
-                "🔄 **Lucky One** - 50 times revived\n"
+                "🔄 **Lucky One** - 100 times revived\n"
                 "♻️ **Frequent Visitor** - 500 times revived\n"
-                "🔁 **Immortal** - 5,000 times revived\n\n"
+                "🔁 **Immortal** - 3,000 times revived\n\n"
                 "*Tracks how many times teammates revived you*"
             ),
             inline=False
@@ -183,8 +183,8 @@ class AchievementsCog(commands.Cog, name="Achievements"):
             name="💣 Demolition Achievements",
             value=(
                 "💣 **Demolitions Expert** - 50 dynamites planted\n"
-                "🧨 **Explosive Artist** - 500 dynamites planted\n"
-                "💥 **Master Demolitionist** - 5,000 dynamites planted"
+                "🧨 **Explosive Artist** - 200 dynamites planted\n"
+                "💥 **Master Demolitionist** - 1,000 dynamites planted"
             ),
             inline=False
         )
@@ -193,8 +193,8 @@ class AchievementsCog(commands.Cog, name="Achievements"):
             name="🛡️ Defuser Achievements",
             value=(
                 "🛡️ **Bomb Squad** - 50 dynamites defused\n"
-                "🔰 **Elite Defuser** - 500 dynamites defused\n"
-                "🏛️ **Fortress Guardian** - 5,000 dynamites defused"
+                "🔰 **Elite Defuser** - 200 dynamites defused\n"
+                "🏛️ **Fortress Guardian** - 1,000 dynamites defused"
             ),
             inline=False
         )
