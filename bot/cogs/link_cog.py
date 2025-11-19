@@ -357,9 +357,10 @@ class LinkCog(commands.Cog, name="Link"):
 
             # Build detailed results
             embed = discord.Embed(
-                title=f"🔍 Player Search Results: '{search_term}'",
-                description=f"Found **{len(guid_set)}** matching players (showing top {len(guid_list)})",
-                color=0x3498DB,
+                title=f"🔍 Player Search Results",
+                description=f"Search: **'{search_term}'** • Found **{len(guid_set)}** players (showing top {len(guid_list)})",
+                color=0x5865F2,  # Discord Blurple
+                timestamp=datetime.now()
             )
 
             for guid in guid_list:
@@ -402,26 +403,31 @@ class LinkCog(commands.Cog, name="Link"):
                     (guid,),
                 )
 
-                # Format data
+                # Format data with badges
                 if aliases:
                     primary_name = aliases[0][0]
-                    alias_list = [f"**{a[0]}**" for a in aliases]
-                    alias_str = ", ".join(alias_list)
-                    if len(aliases) < 3:
-                        alias_str += " _(only known name)_" if len(aliases) == 1 else ""
+                    # Get formatted name with badges
+                    formatted_name = await self.player_formatter.format_player(
+                        guid, primary_name, include_badges=True
+                    )
+                    alias_list = [f"`{a[0]}`" for a in aliases]
+                    alias_str = " • ".join(alias_list)
                 else:
-                    primary_name = "Unknown"
+                    formatted_name = "Unknown"
                     alias_str = "_(No aliases found)_"
 
                 if stats:
                     kills, deaths, games, last_seen = stats
-                    kd = kills / deaths if deaths and deaths > 0 else (kills if kills else 0)
-                    stats_str = f"**{kills:,}** K / **{deaths:,}** D / **{kd:.2f}** K/D\n**Games:** {games:,}"
+                    kd = StatsCalculator.calculate_kd(kills, deaths)
+                    stats_str = (
+                        f"**Stats:** `{kills:,}K` / `{deaths:,}D` / `{kd:.2f}` K/D\n"
+                        f"**Games:** `{games:,}` • **Last Seen:** `{last_seen[:10] if last_seen else 'Never'}`"
+                    )
                 else:
                     stats_str = "_(No stats found)_"
                     last_seen = "Never"
 
-                link_status = f"🔗 **Linked** to {link_row[0]}" if link_row else "❌ **Unlinked**"
+                link_status = f"🔗 Linked to `{link_row[0]}`" if link_row else "❌ Not linked"
 
                 # Calculate days ago for last_seen
                 try:
@@ -448,27 +454,26 @@ class LinkCog(commands.Cog, name="Link"):
                 except Exception:
                     last_str = last_seen
 
-                # Add field to embed
+                # Add field to embed with formatted name and badges
                 embed.add_field(
-                    name=f"🎮 {primary_name}",
+                    name=f"{formatted_name}",
                     value=(
-                        f"**GUID:** `{guid}` _(use this for !link)_\n"
-                        f"**Known as:** {alias_str}\n"
+                        f"**GUID:** `{guid}`\n"
+                        f"**Aliases:** {alias_str}\n"
                         f"{stats_str}\n"
-                        f"**Last Seen:** {last_str}\n"
                         f"**Status:** {link_status}"
                     ),
                     inline=False,
                 )
 
             # Add footer with usage hints
-                embed.set_footer(
-                    text=(
-                        f"💡 To link: !link {guid_list[0]} | "
-                        f"Admin link: !link @user {guid_list[0]} | "
-                        f"Requested by {ctx.author.display_name}"
-                    )
+            embed.set_footer(
+                text=(
+                    f"💡 Link: !link {guid_list[0]} | "
+                    f"Admin: !link @user {guid_list[0]} | "
+                    f"Requested by {ctx.author.display_name}"
                 )
+            )
 
                 await ctx.send(embed=embed)
 
