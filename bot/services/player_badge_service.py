@@ -6,9 +6,9 @@ Fetches and formats player achievement badges for display in session stats.
 Provides emoji badges based on player lifetime achievements:
 
 **Core Achievements:**
-- Kill milestones: 🎯 (100) 🚀 (500) 💀 (1K) ⚔️ (2.5K) ☠️ (5K) 👑 (10K)
-- Game milestones: 🎮 (10) 🕹️ (50) 🏆 (100) ⭐ (250) 💎 (500) 🌟 (1K)
-- K/D milestones: ⚖️ (1.0) 📈 (1.5) 🔥 (2.0) 💯 (3.0)
+- Kill milestones: 🎯 (1K) 💀 (5K) ☠️ (10K) 👑 (20K)
+- Game milestones: 🎮 (50) 🕹️ (500) 🏆 (5K) ⭐ (10K) 💎 (30K)
+- K/D milestones: 📉 (-0.5) ⚰️ (0.0) ⚖️ (1.0) 📈 (1.5) 🔥 (2.0) ⚡ (2.5) 💯 (3.0)
 
 **Phase 1: Support & Objectives:**
 - Revives given: 💉 (100) 🏥 (1K) ⚕️ (10K)
@@ -34,27 +34,27 @@ class PlayerBadgeService:
 
     # Achievement thresholds (from AchievementSystem)
     KILL_MILESTONES = {
-        100: "🎯",
-        500: "🚀",
-        1000: "💀",
-        2500: "⚔️",
-        5000: "☠️",
-        10000: "👑",
+        1000: "🎯",
+        5000: "💀",
+        10000: "☠️",
+        20000: "👑",
     }
 
     GAME_MILESTONES = {
-        10: "🎮",
-        50: "🕹️",
-        100: "🏆",
-        250: "⭐",
-        500: "💎",
-        1000: "🌟",
+        50: "🎮",
+        500: "🕹️",
+        5000: "🏆",
+        10000: "⭐",
+        30000: "💎",
     }
 
     KD_MILESTONES = {
+        -0.5: "📉",
+        0.0: "⚰️",
         1.0: "⚖️",
         1.5: "📈",
         2.0: "🔥",
+        2.5: "⚡",
         3.0: "💯",
     }
 
