@@ -208,9 +208,9 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     await self.view_handlers.show_maps_view(ctx, target_date, sessions, session_ids, session_ids_str, player_count)
                 return
 
-            # Graphs view
+            # Graphs view - TODO: Implement show_graphs_view in SessionViewHandlers
             if subcommand and subcommand.lower() in ("graphs", "graph"):
-                await self.view_handlers.show_graphs_view(ctx, target_date, session_ids, session_ids_str, player_count)
+                await ctx.send(f"📊 Graphs view is not yet implemented for date-specific sessions.\n💡 Try `!last_session graphs` for the most recent session's graphs.")
                 return
 
             # Step 4: Default view - Overview (improved version of original)
@@ -351,67 +351,91 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     )
                     return
 
-                # Use database adapter (works for both SQLite and PostgreSQL)
+                # Query by gaming_session_id to properly show individual sessions
                 if self.bot.config.database_type == 'sqlite':
                     query = """
-                        SELECT 
-                            DATE(round_date) as date,
-                            COUNT(DISTINCT round_id) / 2 as maps,
-                            COUNT(DISTINCT round_id) as rounds,
-                            COUNT(DISTINCT player_guid) as players,
-                            MIN(round_date) as first_round,
-                            MAX(round_date) as last_round
-                        FROM player_comprehensive_stats
-                        WHERE round_date LIKE ?
-                        GROUP BY DATE(round_date)
-                        ORDER BY date DESC
+                        SELECT
+                            r.gaming_session_id,
+                            SUBSTR(r.round_date, 1, 10) as date,
+                            MIN(r.round_date || ' ' || r.round_time) as session_start,
+                            MAX(r.round_date || ' ' || r.round_time) as session_end,
+                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) / 2 as maps,
+                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) as rounds,
+                            (SELECT COUNT(DISTINCT p.player_guid)
+                             FROM player_comprehensive_stats p
+                             WHERE p.round_id IN (
+                                SELECT id FROM rounds WHERE gaming_session_id = r.gaming_session_id
+                             )) as players
+                        FROM rounds r
+                        WHERE r.gaming_session_id IS NOT NULL
+                          AND SUBSTR(r.round_date, 1, 7) = ?
+                        GROUP BY r.gaming_session_id, SUBSTR(r.round_date, 1, 10)
+                        ORDER BY r.gaming_session_id DESC
                     """
-                    sessions = await self.bot.db_adapter.fetch_all(query, (f"{month_filter}%",))
+                    sessions = await self.bot.db_adapter.fetch_all(query, (month_filter,))
                 else:  # PostgreSQL
                     query = """
-                        SELECT 
-                            DATE(round_date::date) as date,
-                            COUNT(DISTINCT round_id) / 2 as maps,
-                            COUNT(DISTINCT round_id) as rounds,
-                            COUNT(DISTINCT player_guid) as players,
-                            MIN(round_date) as first_round,
-                            MAX(round_date) as last_round
-                        FROM player_comprehensive_stats
-                        WHERE round_date LIKE $1
-                        GROUP BY DATE(round_date::date)
-                        ORDER BY date DESC
+                        SELECT
+                            r.gaming_session_id,
+                            SUBSTR(r.round_date, 1, 10) as date,
+                            MIN(r.round_date || ' ' || r.round_time) as session_start,
+                            MAX(r.round_date || ' ' || r.round_time) as session_end,
+                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) / 2 as maps,
+                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) as rounds,
+                            (SELECT COUNT(DISTINCT p.player_guid)
+                             FROM player_comprehensive_stats p
+                             WHERE p.round_id IN (
+                                SELECT id FROM rounds WHERE gaming_session_id = r.gaming_session_id
+                             )) as players
+                        FROM rounds r
+                        WHERE r.gaming_session_id IS NOT NULL
+                          AND r.round_date LIKE $1
+                        GROUP BY r.gaming_session_id, SUBSTR(r.round_date, 1, 10)
+                        ORDER BY r.gaming_session_id DESC
                     """
                     sessions = await self.bot.db_adapter.fetch_all(query, (f"{month_filter}%",))
                 filter_text = month_filter
             else:
-                # Use database adapter (works for both SQLite and PostgreSQL)
+                # Query by gaming_session_id to properly show individual sessions
                 if self.bot.config.database_type == 'sqlite':
                     query = """
-                        SELECT 
-                            DATE(round_date) as date,
-                            COUNT(DISTINCT round_id) / 2 as maps,
-                            COUNT(DISTINCT round_id) as rounds,
-                            COUNT(DISTINCT player_guid) as players,
-                            MIN(round_date) as first_round,
-                            MAX(round_date) as last_round
-                        FROM player_comprehensive_stats
-                        GROUP BY DATE(round_date)
-                        ORDER BY date DESC
+                        SELECT
+                            r.gaming_session_id,
+                            SUBSTR(r.round_date, 1, 10) as date,
+                            MIN(r.round_date || ' ' || r.round_time) as session_start,
+                            MAX(r.round_date || ' ' || r.round_time) as session_end,
+                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) / 2 as maps,
+                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) as rounds,
+                            (SELECT COUNT(DISTINCT p.player_guid)
+                             FROM player_comprehensive_stats p
+                             WHERE p.round_id IN (
+                                SELECT id FROM rounds WHERE gaming_session_id = r.gaming_session_id
+                             )) as players
+                        FROM rounds r
+                        WHERE r.gaming_session_id IS NOT NULL
+                        GROUP BY r.gaming_session_id, SUBSTR(r.round_date, 1, 10)
+                        ORDER BY r.gaming_session_id DESC
                         LIMIT 20
                     """
                     sessions = await self.bot.db_adapter.fetch_all(query)
                 else:  # PostgreSQL
                     query = """
-                        SELECT 
-                            DATE(round_date::date) as date,
-                            COUNT(DISTINCT round_id) / 2 as maps,
-                            COUNT(DISTINCT round_id) as rounds,
-                            COUNT(DISTINCT player_guid) as players,
-                            MIN(round_date) as first_round,
-                            MAX(round_date) as last_round
-                        FROM player_comprehensive_stats
-                        GROUP BY DATE(round_date::date)
-                        ORDER BY date DESC
+                        SELECT
+                            r.gaming_session_id,
+                            SUBSTR(r.round_date, 1, 10) as date,
+                            MIN(r.round_date || ' ' || r.round_time) as session_start,
+                            MAX(r.round_date || ' ' || r.round_time) as session_end,
+                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) / 2 as maps,
+                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) as rounds,
+                            (SELECT COUNT(DISTINCT p.player_guid)
+                             FROM player_comprehensive_stats p
+                             WHERE p.round_id IN (
+                                SELECT id FROM rounds WHERE gaming_session_id = r.gaming_session_id
+                             )) as players
+                        FROM rounds r
+                        WHERE r.gaming_session_id IS NOT NULL
+                        GROUP BY r.gaming_session_id, SUBSTR(r.round_date, 1, 10)
+                        ORDER BY r.gaming_session_id DESC
                         LIMIT 20
                     """
                     sessions = await self.bot.db_adapter.fetch_all(query)
@@ -429,35 +453,54 @@ class SessionCog(commands.Cog, name="Session Commands"):
             )
 
             session_list = []
+            # Track sessions per date to number them
+            date_session_counts = {}
+
             for row in sessions:
                 # Handle both dict (PostgreSQL) and tuple (SQLite) results
                 if isinstance(row, dict):
+                    session_id = row['gaming_session_id']
                     date = row['date']
                     maps = row['maps']
                     rounds = row['rounds']
                     players = row['players']
-                    first = row['first_round']
-                    last = row['last_round']
+                    session_start = row['session_start']
+                    session_end = row['session_end']
                 else:
-                    date, maps, rounds, players, first, last = row
-                # Calculate duration
-                from datetime import datetime
+                    session_id, date, session_start, session_end, maps, rounds, players = row
 
+                # Count sessions per date for labeling
+                if date not in date_session_counts:
+                    date_session_counts[date] = 0
+                date_session_counts[date] += 1
+
+                # Calculate duration
                 try:
-                    first_dt = datetime.fromisoformat(
-                        first.replace("Z", "+00:00") if "Z" in first else first
+                    start_dt = datetime.fromisoformat(
+                        session_start.replace("Z", "+00:00") if "Z" in session_start else session_start
                     )
-                    last_dt = datetime.fromisoformat(
-                        last.replace("Z", "+00:00") if "Z" in last else last
+                    end_dt = datetime.fromisoformat(
+                        session_end.replace("Z", "+00:00") if "Z" in session_end else session_end
                     )
-                    duration = last_dt - first_dt
+                    duration = end_dt - start_dt
                     hours = duration.total_seconds() / 3600
                     duration_str = f"{hours:.1f}h"
+
+                    # Extract start time for display
+                    start_time = start_dt.strftime("%H:%M")
+                    end_time = end_dt.strftime("%H:%M")
+                    time_range = f"{start_time}-{end_time}"
                 except Exception:
                     duration_str = "N/A"
+                    time_range = ""
+
+                # Format session display
+                session_label = f"**{date}** (Session #{session_id})"
+                if time_range:
+                    session_label += f" {time_range}"
 
                 session_list.append(
-                    f"**{date}**\n"
+                    f"{session_label}\n"
                     f"└ {int(maps)} maps • {rounds} rounds • {players} players • {duration_str}"
                 )
 
