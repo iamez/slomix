@@ -1331,15 +1331,16 @@ class UltimateETLegacyBot(commands.Bot):
             # Create match_id (ORIGINAL BEHAVIOR - includes timestamp)
             match_id = f"{date_part}-{time_part}"
 
-            # Check if round already exists
+            # Check if round already exists (FIXED: includes round_time to prevent false duplicates)
             check_query = """
                 SELECT id FROM rounds
-                WHERE round_date = ? AND map_name = ? AND round_number = ?
+                WHERE round_date = ? AND round_time = ? AND map_name = ? AND round_number = ?
             """
             existing = await self.db_adapter.fetch_one(
                 check_query,
                 (
                     date_part,  # Use date_part not timestamp
+                    round_time,  # FIXED: Add round_time to prevent duplicate detection when same map played twice
                     stats_data["map_name"],
                     stats_data["round_num"],
                 ),
