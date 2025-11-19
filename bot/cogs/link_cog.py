@@ -475,12 +475,12 @@ class LinkCog(commands.Cog, name="Link"):
                 )
             )
 
-                await ctx.send(embed=embed)
+            await ctx.send(embed=embed)
 
-                # Log search for debugging
-                logger.info(
-                    f"🔍 Player search by {ctx.author}: '{search_term}' → {len(guid_set)} results"
-                )
+            # Log search for debugging
+            logger.info(
+                f"🔍 Player search by {ctx.author}: '{search_term}' → {len(guid_set)} results"
+            )
 
         except Exception as e:
             logger.error(f"Error in find_player command: {e}", exc_info=True)

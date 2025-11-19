@@ -49,7 +49,7 @@ class SessionDataService:
                 WHERE p.round_id = s.id
             )
             AND s.round_number IN (1, 2)
-            AND (s.round_status IN ('completed', 'substitution') OR s.round_status IS NULL)
+            AND (s.round_status IN ('completed', 'cancelled', 'substitution') OR s.round_status IS NULL)
             ORDER BY
                 s.round_date DESC,
                 CAST(REPLACE(s.round_time, ':', '') AS INTEGER) DESC
@@ -93,14 +93,14 @@ class SessionDataService:
         # (exclude R0 match summaries to avoid triple-counting)
         # R0 contains cumulative R1+R2 data, so querying all three would give us: R0+R1+R2 = (R1+R2)+R1+R2 = wrong!
         # Using only R1+R2 lets SUM() aggregate correctly without duplication
-        # 🆕 Also exclude 'cancelled' rounds (restarts/warmups)
+        # Include 'completed', 'cancelled', and 'substitution' rounds (all have valid player stats)
         sessions = await self.db_adapter.fetch_all(
             """
             SELECT id, map_name, round_number, actual_time
             FROM rounds
             WHERE gaming_session_id = ?
               AND round_number IN (1, 2)
-              AND (round_status = 'completed' OR round_status IS NULL)
+              AND (round_status IN ('completed', 'cancelled', 'substitution') OR round_status IS NULL)
             ORDER BY
                 round_date,
                 CAST(REPLACE(round_time, ':', '') AS INTEGER)
@@ -116,6 +116,80 @@ class SessionDataService:
         session_ids_str = ",".join("?" * len(session_ids))
 
         # Get unique player count for this gaming session
+        query = f"""
+            SELECT COUNT(DISTINCT player_guid)
+            FROM player_comprehensive_stats
+            WHERE round_id IN ({session_ids_str})
+        """
+        player_count_result = await self.db_adapter.fetch_one(query, tuple(session_ids))
+        player_count = player_count_result[0] if player_count_result else 0
+
+        return sessions, session_ids, session_ids_str, player_count
+
+    async def fetch_session_data_by_date(self, target_date: str) -> Tuple[Optional[List], Optional[List], Optional[str], int]:
+        """
+        Fetch session data for a specific date.
+
+        Handles the case where:
+        - A single date may have multiple gaming sessions
+        - A gaming session may span multiple dates (midnight crossover)
+
+        Strategy: Get ALL gaming_session_ids that have at least one round on the target date,
+        then fetch ALL rounds from those sessions (even rounds from adjacent dates).
+
+        This ensures complete session context. For example, if a session ran 23:00-01:00
+        crossing midnight, querying either date will show the complete session.
+
+        Args:
+            target_date: Date string in YYYY-MM-DD format
+
+        Returns:
+            (sessions, session_ids, session_ids_str, player_count) or (None, None, None, 0)
+        """
+        # Get all gaming_session_ids that have rounds on this date
+        result = await self.db_adapter.fetch_all(
+            """
+            SELECT DISTINCT gaming_session_id
+            FROM rounds
+            WHERE SUBSTR(round_date, 1, 10) = ?
+              AND gaming_session_id IS NOT NULL
+            ORDER BY gaming_session_id DESC
+            """,
+            (target_date,)
+        )
+
+        if not result:
+            return None, None, None, 0
+
+        # Extract session IDs (could be multiple sessions on same date)
+        gaming_session_ids = [row[0] for row in result]
+
+        # Get all rounds from ALL these gaming sessions (R1 and R2 only)
+        # This includes rounds that may be on adjacent dates due to midnight crossover
+        placeholders = ','.join('?' * len(gaming_session_ids))
+        sessions = await self.db_adapter.fetch_all(
+            f"""
+            SELECT id, map_name, round_number, actual_time
+            FROM rounds
+            WHERE gaming_session_id IN ({placeholders})
+              AND round_number IN (1, 2)
+              AND (round_status IN ('completed', 'cancelled', 'substitution') OR round_status IS NULL)
+            ORDER BY
+                gaming_session_id,
+                round_date,
+                CAST(REPLACE(round_time, ':', '') AS INTEGER)
+            """,
+            tuple(gaming_session_ids)
+        )
+
+        if not sessions:
+            return None, None, None, 0
+
+        # Extract round IDs
+        session_ids = [s[0] for s in sessions]
+        session_ids_str = ",".join("?" * len(session_ids))
+
+        # Get unique player count across all these sessions
         query = f"""
             SELECT COUNT(DISTINCT player_guid)
             FROM player_comprehensive_stats

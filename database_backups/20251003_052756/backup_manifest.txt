@@ -1,0 +1,5 @@
+Database Backup - 20251003_052756
+==================================================
+
+Main DB: etlegacy_production.db (7,827,456 bytes)
+Bot DB: bot/etlegacy_production.db (32,768 bytes)

@@ -972,7 +972,7 @@ class PostgreSQLDatabaseManager:
         """Insert player stats - ALL 51 FIELDS with INSERT VERIFICATION"""
         players = parsed_data.get('players', [])
         map_name = parsed_data.get('map_name', 'unknown')
-        round_number = parsed_data.get('round_number', 1)
+        round_number = parsed_data.get('round_num', parsed_data.get('round_number', 1))
         count = 0
         
         for player in players:
@@ -1084,7 +1084,7 @@ class PostgreSQLDatabaseManager:
         """Insert weapon stats with INSERT VERIFICATION"""
         players = parsed_data.get('players', [])
         map_name = parsed_data.get('map_name', 'unknown')
-        round_number = parsed_data.get('round_number', 1)
+        round_number = parsed_data.get('round_num', parsed_data.get('round_number', 1))
         count = 0
         
         for player in players:
