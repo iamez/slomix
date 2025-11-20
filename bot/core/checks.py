@@ -26,6 +26,11 @@ import logging
 logger = logging.getLogger("bot.core.checks")
 
 
+class ChannelCheckFailure(commands.CheckFailure):
+    """Custom exception for channel check failures with a user-friendly message."""
+    pass
+
+
 def is_admin_channel():
     """
     Decorator: Restrict command to admin channel only.
@@ -48,12 +53,7 @@ def is_admin_channel():
 
         # Check if command is in admin channel
         if ctx.channel.id != ctx.bot.admin_channel_id:
-            await ctx.send(f"❌ This command only works in <#{ctx.bot.admin_channel_id}>")
-            logger.warning(
-                f"User {ctx.author} tried admin command in channel {ctx.channel.id}, "
-                f"required channel: {ctx.bot.admin_channel_id}"
-            )
-            return False
+            raise ChannelCheckFailure(f"❌ This command only works in <#{ctx.bot.admin_channel_id}>")
 
         logger.debug(f"Admin command allowed from admin channel for {ctx.author}")
         return True
@@ -96,15 +96,9 @@ def is_public_channel():
 
             if channel_mentions:
                 channels_str = " or ".join(channel_mentions)
-                await ctx.send(f"❌ This command only works in {channels_str}")
+                raise ChannelCheckFailure(f"❌ This command only works in {channels_str}")
             else:
-                await ctx.send("❌ This command is not available in this channel")
-
-            logger.warning(
-                f"User {ctx.author} tried public command in channel {ctx.channel.id}, "
-                f"allowed channels: {ctx.bot.public_channels}"
-            )
-            return False
+                raise ChannelCheckFailure("❌ This command is not available in this channel")
 
         logger.debug(f"Public command allowed from channel {ctx.channel.id} for {ctx.author}")
         return True
