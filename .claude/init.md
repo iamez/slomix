@@ -9,7 +9,32 @@
 
 ---
 
-## Critical Rules - READ FIRST
+## ⚠️ CRITICAL RULES - READ FIRST ⚠️
+
+### 🚨 BRANCH POLICY (Version 1.0+)
+**NEVER COMMIT DIRECTLY TO MAIN!**
+
+1. ✅ **ALWAYS** create a feature branch for changes
+2. ✅ **ALWAYS** use descriptive branch names (e.g., `feature/new-command`, `fix/session-bug`)
+3. ✅ **ALWAYS** test thoroughly in the branch before merging
+4. ❌ **NEVER** push directly to `main` branch
+5. ❌ **NEVER** use `git commit` without being on a feature branch
+
+**Workflow:**
+```bash
+# Create and switch to feature branch
+git checkout -b feature/my-feature-name
+
+# Make changes, test, commit
+git add <files>
+git commit -m "description"
+git push origin feature/my-feature-name
+
+# When ready: merge via pull request or manually
+git checkout main
+git merge feature/my-feature-name
+git push origin main
+```
 
 ### Database Queries
 1. ✅ **ALWAYS** use `gaming_session_id` for session queries (NOT dates)
@@ -265,11 +290,13 @@ SELECT * FROM rounds ORDER BY id DESC LIMIT 5;
 - 📖 See repository maintenance guide for details
 
 ### Before Committing
-1. Check `git status` - ensure no trash files
-2. Review `git diff --cached --name-only`
-3. Add files individually, not with `git add -A`
-4. Update `docs/CHANGELOG.md` for significant changes
-5. Test thoroughly before pushing
+1. **Ensure you're on a feature branch** (NOT main!)
+2. Check `git status` - ensure no trash files
+3. Review `git diff --cached --name-only`
+4. Add files individually, not with `git add -A`
+5. Update `docs/CHANGELOG.md` for significant changes
+6. Test thoroughly before pushing
+7. Create pull request or merge only when tested
 
 ---
 
