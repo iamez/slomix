@@ -32,6 +32,11 @@ from bot.services.player_display_name_service import PlayerDisplayNameService
 
 logger = logging.getLogger("UltimateBot.SSHMonitor")
 
+# Logging levels for SSH Monitor
+LOG_LEVEL_QUIET = "QUIET"     # Only errors and critical events
+LOG_LEVEL_NORMAL = "NORMAL"   # Important events (default)
+LOG_LEVEL_VERBOSE = "VERBOSE" # All events including skipped checks
+
 
 class SSHMonitor:
     """
@@ -96,10 +101,57 @@ class SSHMonitor:
         self.grace_period_minutes = int(os.getenv("SSH_GRACE_PERIOD_MINUTES", "10"))
         self.last_voice_activity_time: Optional[datetime] = None
 
+        # Logging configuration
+        self.log_level = os.getenv("SSH_LOG_LEVEL", "NORMAL").upper()
+        if self.log_level not in [LOG_LEVEL_QUIET, LOG_LEVEL_NORMAL, LOG_LEVEL_VERBOSE]:
+            logger.warning(f"⚠️ Invalid SSH_LOG_LEVEL '{self.log_level}', using NORMAL")
+            self.log_level = LOG_LEVEL_NORMAL
+
+        # Statistics tracking for periodic summaries
+        self.skipped_checks_count = 0
+        self.last_summary_time: Optional[datetime] = None
+        self.summary_interval_minutes = 90  # Post summary every 90 minutes (between 60-120)
+
         logger.info("🔄 SSH Monitor service initialized")
         if self.voice_conditional:
             logger.info(f"🎙️ Voice-conditional mode: SSH checks only when players in voice (grace period: {self.grace_period_minutes}min)")
-    
+        logger.info(f"📊 Log level: {self.log_level}")
+
+    def _should_log(self, level: str) -> bool:
+        """
+        Check if we should log at the given level based on current log_level setting.
+
+        Hierarchy: QUIET < NORMAL < VERBOSE
+        """
+        levels = {
+            LOG_LEVEL_QUIET: 0,
+            LOG_LEVEL_NORMAL: 1,
+            LOG_LEVEL_VERBOSE: 2
+        }
+        return levels.get(level, 1) <= levels.get(self.log_level, 1)
+
+    async def _log_periodic_summary(self):
+        """
+        Log periodic summary stats.
+        Shows SSH Monitor status, player count, and skipped checks.
+        """
+        try:
+            voice_count = self._get_voice_player_count()
+            voice_status = f"{voice_count} players in voice" if voice_count >= 0 else "voice monitoring disabled"
+
+            summary = (
+                f"📊 SSH Monitor: {'Active' if self.is_monitoring else 'Inactive'}, "
+                f"{voice_status}, "
+                f"{self.skipped_checks_count} checks skipped, "
+                f"{self.files_processed_count} files processed"
+            )
+
+            logger.info(summary)
+            self.last_summary_time = datetime.now()
+
+        except Exception as e:
+            logger.debug(f"Error logging periodic summary: {e}")
+
     async def start_monitoring(self):
         """Start the SSH monitoring task"""
         logger.info(f"🔍 start_monitoring() called - ssh_enabled={self.ssh_enabled}")
@@ -155,7 +207,8 @@ class SSHMonitor:
                 ()
             )
             self.processed_files = {row[0] for row in rows}
-            logger.info(f"📋 Loaded {len(self.processed_files)} previously processed files")
+            if self._should_log(LOG_LEVEL_NORMAL):
+                logger.info(f"📋 Loaded {len(self.processed_files)} previously processed files")
         except Exception as e:
             logger.error(f"❌ Failed to load processed files: {e}")
     
@@ -222,6 +275,12 @@ class SSHMonitor:
             try:
                 start_time = datetime.now()
 
+                # Check if it's time for periodic summary
+                if self.last_summary_time is None:
+                    self.last_summary_time = datetime.now()
+                elif (datetime.now() - self.last_summary_time).total_seconds() / 60 >= self.summary_interval_minutes:
+                    await self._log_periodic_summary()
+
                 # Voice-conditional check: only check SSH if players are in voice
                 if self.voice_conditional:
                     voice_count = self._get_voice_player_count()
@@ -229,7 +288,8 @@ class SSHMonitor:
                     if voice_count > 0:
                         # Players in voice - update activity time and check SSH
                         self.last_voice_activity_time = datetime.now()
-                        logger.info(f"🎙️ {voice_count} player(s) in voice - checking SSH")
+                        if self._should_log(LOG_LEVEL_NORMAL):
+                            logger.info(f"🎙️ {voice_count} player(s) in voice - checking SSH")
 
                     elif voice_count == 0:
                         # No players in voice - check if we're in grace period
@@ -239,15 +299,20 @@ class SSHMonitor:
                             if time_since_activity < self.grace_period_minutes:
                                 # Still in grace period - continue checking
                                 remaining = self.grace_period_minutes - time_since_activity
-                                logger.info(f"⏳ Grace period: checking SSH ({remaining:.1f}min remaining)")
+                                if self._should_log(LOG_LEVEL_NORMAL):
+                                    logger.info(f"⏳ Grace period: checking SSH ({remaining:.1f}min remaining)")
                             else:
                                 # Grace period expired - skip SSH check
-                                logger.info("⏭️ Skipping SSH check: no players in voice (grace period expired)")
+                                self.skipped_checks_count += 1
+                                if self._should_log(LOG_LEVEL_VERBOSE):
+                                    logger.info("⏭️ Skipping SSH check: no players in voice (grace period expired)")
                                 await asyncio.sleep(self.check_interval)
                                 continue
                         else:
                             # Never had voice activity yet - skip SSH check
-                            logger.info("⏭️ Skipping SSH check: no players in voice channels")
+                            self.skipped_checks_count += 1
+                            if self._should_log(LOG_LEVEL_VERBOSE):
+                                logger.info("⏭️ Skipping SSH check: no players in voice channels")
                             await asyncio.sleep(self.check_interval)
                             continue
 
@@ -345,7 +410,8 @@ class SSHMonitor:
                         logger.debug(f"Skipping file with unparseable timestamp: {f}")
 
                 if self._is_first_check:
-                    logger.info(f"📅 First check: filtered {len(stats_files)} files to {len(time_filtered_files)} from last {self.startup_lookback_hours}h")
+                    if self._should_log(LOG_LEVEL_NORMAL):
+                        logger.info(f"📅 First check: filtered {len(stats_files)} files to {len(time_filtered_files)} from last {self.startup_lookback_hours}h")
                     self._is_first_check = False
                 stats_files = time_filtered_files
 
@@ -359,8 +425,9 @@ class SSHMonitor:
                 for filename in new_files:
                     await self._process_new_file(filename)
             else:
-                # Changed to INFO level so users can see monitoring is working
-                logger.info(f"✓ No new files (checked {len(stats_files)} files)")
+                # Only log "no new files" in VERBOSE mode to reduce noise
+                if self._should_log(LOG_LEVEL_VERBOSE):
+                    logger.info(f"✓ No new files (checked {len(stats_files)} files)")
 
         except Exception as e:
             logger.error(f"❌ Error checking for new files: {e}", exc_info=True)
@@ -444,10 +511,11 @@ class SSHMonitor:
             
             # Post stats to Discord
             await self._post_round_stats(filename)
-            
+
             # 🆕 If this is Round 2, also post match summary
             if '-round-2.txt' in filename:
-                logger.info("🏁 Round 2 detected - posting match summary...")
+                if self._should_log(LOG_LEVEL_NORMAL):
+                    logger.info("🏁 Round 2 detected - posting match summary...")
                 await self._post_match_summary(filename)
             
             # Mark as processed
@@ -530,7 +598,8 @@ class SSHMonitor:
             if len(self.download_times) > 100:
                 self.download_times.pop(0)
 
-            logger.info(f"✅ Downloaded {filename} in {download_duration:.2f}s")
+            if self._should_log(LOG_LEVEL_NORMAL):
+                logger.info(f"✅ Downloaded {filename} in {download_duration:.2f}s")
 
         return local_path
     
@@ -571,6 +640,7 @@ class SSHMonitor:
             
             # Post to channel
             await channel.send(embed=embed)
+            # Always log successful posts (even in QUIET mode - it's a critical event)
             logger.info(f"📊 Posted stats for {filename} to channel")
             
         except Exception as e:
@@ -815,6 +885,7 @@ class SSHMonitor:
             
             # Post to channel
             await channel.send(embed=embed)
+            # Always log successful match summary posts (even in QUIET mode - it's a critical event)
             logger.info(f"🏁 Posted match summary for {map_name}")
             
         except Exception as e:
