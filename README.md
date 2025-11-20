@@ -3,7 +3,7 @@
 > **Enterprise-level data pipeline transforming ET:Legacy gaming sessions into comprehensive, real-time statistics**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Data Integrity](https://img.shields.io/badge/data%20integrity-6%20layers-blue)](SAFETY_VALIDATION_SYSTEMS.md)
+[![Data Integrity](https://img.shields.io/badge/data%20integrity-6%20layers-blue)](docs/SAFETY_VALIDATION_SYSTEMS.md)
 [![Automation](https://img.shields.io/badge/automation-fully%20implemented-orange)](bot/services/automation/INTEGRATION_GUIDE.md)
 
 A **production-grade Discord bot** with **zero-downtime automation**, **6-layer data validation**, and **intelligent differential stat calculation** for ET:Legacy game servers.
@@ -34,7 +34,7 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 - ⚡ **Real-Time Processing** - VPS → Local → Database → Discord in <3 seconds per file
 - 🎯 **Zero Data Loss** - PostgreSQL transactions, rollback on error, 4,193 verified inserts
 
-**[📊 View Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation Systems](SAFETY_VALIDATION_SYSTEMS.md)** | **[🔄 Round 2 Pipeline Explained](ROUND_2_PIPELINE_EXPLAINED.txt)**
+**[📊 View Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation Systems](docs/SAFETY_VALIDATION_SYSTEMS.md)** | **[🔄 Round 2 Pipeline Explained](docs/ROUND_2_PIPELINE_EXPLAINED.txt)** | **[📝 Changelog](docs/CHANGELOG.md)**
 
 ---
 
@@ -124,7 +124,7 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 
 **Result:** Every data point verified at **multiple checkpoints** before commit.
 
-**[📖 Full Documentation: SAFETY_VALIDATION_SYSTEMS.md](SAFETY_VALIDATION_SYSTEMS.md)**
+**[📖 Full Documentation: SAFETY_VALIDATION_SYSTEMS.md](docs/SAFETY_VALIDATION_SYSTEMS.md)**
 
 ### **Special Safety Features**
 
@@ -145,7 +145,7 @@ Round 2: 23:41 (etl_adlernest) - Player vid: 42 kills cumulative
          Result: vid Round 2 stats = 22 kills (42 - 20)
 ```
 
-**[📖 Full Documentation: ROUND_2_PIPELINE_EXPLAINED.txt](ROUND_2_PIPELINE_EXPLAINED.txt)**
+**[📖 Full Documentation: ROUND_2_PIPELINE_EXPLAINED.txt](docs/ROUND_2_PIPELINE_EXPLAINED.txt)**
 
 #### **Gaming Session ID Calculation**
 Automatically groups rounds into gaming sessions:
@@ -356,12 +356,11 @@ slomix/
 │       └── Gaming session ID calculation
 │
 ├── 🔒 Safety & Validation Documentation
-│   └── SAFETY_VALIDATION_SYSTEMS.md     # Complete safety inventory
+│   └── docs/SAFETY_VALIDATION_SYSTEMS.md  # Complete safety inventory
 │
 ├── 📖 Pipeline Documentation
-│   ├── DATA_PIPELINE.md                 # Pipeline overview
-│   ├── ROUND_2_PIPELINE_EXPLAINED.txt   # Differential calculation
-│   └── docs/DATA_PIPELINE.md            # Detailed technical pipeline
+│   ├── docs/DATA_PIPELINE.md            # Detailed technical pipeline
+│   └── docs/ROUND_2_PIPELINE_EXPLAINED.txt  # Differential calculation
 │
 ├── 🤖 Automation Documentation
 │   └── bot/services/automation/INTEGRATION_GUIDE.md  # Automation setup
@@ -401,7 +400,7 @@ slomix/
 - **`bot/ultimate_bot.py`** - Main production bot (4,990 lines)
 - **`bot/community_stats_parser.py`** - Round 2 differential calculation (1,036 lines)
 - **`bot/core/database_adapter.py`** - Async DB abstraction layer
-- **`SAFETY_VALIDATION_SYSTEMS.md`** - Complete safety documentation
+- **`docs/SAFETY_VALIDATION_SYSTEMS.md`** - Complete safety documentation
 
 ---
 
@@ -492,7 +491,7 @@ if time_gap_minutes < 60:
 [OK] Successfully calculated Round 2-only stats for 8 players
 ```
 
-**[📖 Complete Documentation: ROUND_2_PIPELINE_EXPLAINED.txt](ROUND_2_PIPELINE_EXPLAINED.txt)**
+**[📖 Complete Documentation: ROUND_2_PIPELINE_EXPLAINED.txt](docs/ROUND_2_PIPELINE_EXPLAINED.txt)**
 
 ---
 
@@ -791,10 +790,10 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 ### **Getting Help**
 
 1. **Check Documentation:**
-   - [SAFETY_VALIDATION_SYSTEMS.md](SAFETY_VALIDATION_SYSTEMS.md) - Data integrity
-   - [ROUND_2_PIPELINE_EXPLAINED.txt](ROUND_2_PIPELINE_EXPLAINED.txt) - Differential logic
+   - [docs/SAFETY_VALIDATION_SYSTEMS.md](docs/SAFETY_VALIDATION_SYSTEMS.md) - Data integrity
+   - [docs/ROUND_2_PIPELINE_EXPLAINED.txt](docs/ROUND_2_PIPELINE_EXPLAINED.txt) - Differential logic
    - [bot/services/automation/INTEGRATION_GUIDE.md](bot/services/automation/INTEGRATION_GUIDE.md) - Automation setup
-   - [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) - Deployment guide
+   - [docs/DEPLOYMENT_CHECKLIST.md](docs/DEPLOYMENT_CHECKLIST.md) - Deployment guide
 
 2. **Check Logs:**
    - `logs/bot.log` - General operations
@@ -818,26 +817,37 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 
 ### **Getting Started**
 - [README.md](README.md) - This file
-- [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) - Deployment guide
+- [docs/DEPLOYMENT_CHECKLIST.md](docs/DEPLOYMENT_CHECKLIST.md) - Deployment guide
+- [docs/FRESH_INSTALL_GUIDE.md](docs/FRESH_INSTALL_GUIDE.md) - Fresh installation guide
 - [bot/services/automation/INTEGRATION_GUIDE.md](bot/services/automation/INTEGRATION_GUIDE.md) - Automation setup
-- [AI_AGENT_INSTRUCTIONS.md](AI_AGENT_INSTRUCTIONS.md) - For AI assistants
+- [docs/AI_AGENT_INSTRUCTIONS.md](docs/AI_AGENT_INSTRUCTIONS.md) - For AI assistants
 
 ### **System Architecture**
 - [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md) - Complete data pipeline
 - [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md) - Technical architecture
 - [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) - System overview
-- [SAFETY_VALIDATION_SYSTEMS.md](SAFETY_VALIDATION_SYSTEMS.md) - 6-layer safety
-- [ROUND_2_PIPELINE_EXPLAINED.txt](ROUND_2_PIPELINE_EXPLAINED.txt) - Differential calculation
+- [docs/SAFETY_VALIDATION_SYSTEMS.md](docs/SAFETY_VALIDATION_SYSTEMS.md) - 6-layer safety
+- [docs/ROUND_2_PIPELINE_EXPLAINED.txt](docs/ROUND_2_PIPELINE_EXPLAINED.txt) - Differential calculation
 
-### **Development**
+### **Reference & Guides**
 - [docs/FIELD_MAPPING.md](docs/FIELD_MAPPING.md) - Stats field reference
 - [docs/COMMANDS.md](docs/COMMANDS.md) - Bot commands reference
-- [DATA_PIPELINE.md](DATA_PIPELINE.md) - Pipeline overview
+- [docs/CONFIGURATION_REFERENCE.md](docs/CONFIGURATION_REFERENCE.md) - Configuration guide
+- [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) - Testing procedures
 
 ### **Operations & Deployment**
-- [VPS_SETUP.md](VPS_SETUP.md) - VPS setup instructions
-- [VPS_INSTALL.md](VPS_INSTALL.md) - VPS installation guide
-- [TEST_PLAN_VPS.md](TEST_PLAN_VPS.md) - VPS testing plan
+- [docs/VPS_DEPLOYMENT_GUIDE.md](docs/VPS_DEPLOYMENT_GUIDE.md) - VPS deployment
+- [docs/LINUX_DEPLOYMENT_GUIDE.md](docs/LINUX_DEPLOYMENT_GUIDE.md) - Linux deployment
+- [docs/LAPTOP_DEPLOYMENT_GUIDE.md](docs/LAPTOP_DEPLOYMENT_GUIDE.md) - Local deployment
+- [docs/DISASTER_RECOVERY.md](docs/DISASTER_RECOVERY.md) - Disaster recovery procedures
+
+### **System Documentation**
+- [docs/ACHIEVEMENT_SYSTEM.md](docs/ACHIEVEMENT_SYSTEM.md) - Achievement system
+- [docs/ADVANCED_TEAM_DETECTION.md](docs/ADVANCED_TEAM_DETECTION.md) - Team detection
+- [docs/SEASON_SYSTEM.md](docs/SEASON_SYSTEM.md) - Season system
+- [docs/STOPWATCH_IMPLEMENTATION.md](docs/STOPWATCH_IMPLEMENTATION.md) - Stopwatch mode
+- [docs/SUBSTITUTION_DETECTION.md](docs/SUBSTITUTION_DETECTION.md) - Player substitution
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) - Project changelog
 
 ---
 
