@@ -166,12 +166,15 @@ Implement atomic-like updates:
    └── Detect new version
 
 4. VERIFICATION PHASE (Daemon-Based Restart)
-   ├── RESTART DAEMON (nohup bash etdaemon.sh &)
+   ├── RESTART DAEMON (setsid bash etdaemon.sh - properly detached!)
    ├── Wait for daemon to auto-start server (checks every 60s)
    ├── Poll for screen session (up to 70s timeout)
    ├── Verify etlded process is running
    ├── Report restart time
    └── If server doesn't start within 70s → AUTOMATIC ROLLBACK
+
+   ⚠️ Critical: Daemon must be started with setsid to properly detach from SSH!
+               Otherwise SSH command hangs waiting for infinite loop to complete.
 
 5. SUCCESS PHASE
    ├── Download new pk3 to bot
@@ -342,6 +345,46 @@ Backup #2 - 20251119_092015
 **PK3:** legacy_v2.83.1-251-g19c7e89.pk3
 **Path:** ~/etlegacy_backups/backup_20251119_092015/
 ```
+
+---
+
+## 🐛 CRITICAL BUG FIX: SSH Daemon Hanging Issue
+
+### The Problem
+When restarting the daemon via SSH, the command would HANG for 30 seconds then timeout:
+
+```python
+# ❌ BROKEN - Hangs waiting for infinite loop to complete!
+restart_daemon_cmd = f"nohup bash {daemon_path} > /dev/null 2>&1 &"
+self.execute_ssh_command(restart_daemon_cmd)  # Blocks on recv_exit_status()
+```
+
+**Why it hangs:**
+- `etdaemon.sh` contains an infinite `while true` loop
+- `execute_ssh_command()` calls `recv_exit_status()` which waits for command to finish
+- Even with `nohup ... &`, the SSH channel waits for process completion
+- Daemon never completes → SSH times out after 30s → Exception → Rollback
+
+### The Fix
+Created `execute_ssh_background_command()` that uses `setsid` to properly detach:
+
+```python
+# ✅ FIXED - Properly detaches daemon from SSH session!
+daemon_started = self.execute_ssh_background_command(f"bash {daemon_path}")
+
+# Uses setsid internally:
+# setsid bash -c 'bash /path/to/etdaemon.sh' < /dev/null > /dev/null 2>&1 &
+```
+
+**How setsid works:**
+- Creates new session and detaches process from terminal
+- Process persists after SSH connection closes
+- No blocking on exit status
+- Returns immediately after initiating daemon
+
+**Applied to:**
+- Main update flow (PHASE 8: Restart daemon)
+- Rollback flow (_perform_rollback)
 
 ---
 
