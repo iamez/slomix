@@ -816,6 +816,8 @@ class ServerControl(commands.Cog):
             await self._update_progress(status_msg, "📦 Extracting archive...", discord.Color.blue())
             extract_cmd = """
                 cd ~/legacyupdate/temp
+                # Remove old extracted directories from previous failed attempts
+                rm -rf etlegacy-v* 2>/dev/null || true
                 tar -zxf etlegacy-update.tar.gz 2>&1
                 if [ $? -eq 0 ]; then echo 'SUCCESS'; else echo 'FAILED'; fi
             """
@@ -889,8 +891,12 @@ class ServerControl(commands.Cog):
                 fi
 
                 # Copy ONLY pk3 files from legacy/ (NOT .cfg files)
+                # IMPORTANT: Remove old pk3 files first to avoid duplicates!
                 if [ -d legacy ]; then
                     mkdir -p {self.server_install_path}/legacy
+                    # Remove old legacy pk3 files (keeps pak*.pk3 and custom maps)
+                    rm -f {self.server_install_path}/legacy/legacy_v*.pk3
+                    # Copy new pk3 files
                     cp -f legacy/*.pk3 {self.server_install_path}/legacy/ 2>&1
                 fi
 
