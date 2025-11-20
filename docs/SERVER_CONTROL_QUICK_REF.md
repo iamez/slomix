@@ -16,6 +16,7 @@
 ### Server
 - `!server_status` or `!status` - Check if online
 - `!server_restart` - Restart server (requires ✅)
+- `!et_update <url>` - Update ET:Legacy server from snapshot URL (requires ✅)
 
 ### Maps
 - `!map_list` or `!maps` - Show all maps
