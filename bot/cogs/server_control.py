@@ -173,8 +173,8 @@ class ServerControl(commands.Cog):
         self.rcon_port = int(os.getenv('RCON_PORT', 27960))
         self.rcon_password = os.getenv('RCON_PASSWORD', '')
         
-        # Admin Role - Check for channel instead of role
-        self.admin_channel_id = int(os.getenv('ADMIN_CHANNEL_ID', 0)) if os.getenv('ADMIN_CHANNEL_ID') else None
+        # Admin Channel - Get from bot's already-parsed config
+        self.admin_channel_id = bot.admin_channel_id if hasattr(bot, 'admin_channel_id') else None
         
         # Local audit logging
         self.audit_log_path = 'logs/server_control_access.log'
