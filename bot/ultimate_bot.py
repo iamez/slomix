@@ -553,8 +553,8 @@ class UltimateETLegacyBot(commands.Bot):
         try:
             from bot.services.automation import SSHMonitor, HealthMonitor, MetricsLogger, DatabaseMaintenance
 
-            # Get configuration from environment
-            admin_channel_id = int(os.getenv("ADMIN_CHANNEL_ID", "0"))
+            # Get configuration from already-parsed channel config
+            admin_channel_id = self.admin_channel_id
 
             # For PostgreSQL, we don't have a db_path, but metrics_logger needs one for its own SQLite db
             # Use a sensible default path for metrics database

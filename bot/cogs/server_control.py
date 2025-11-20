@@ -186,14 +186,7 @@ class ServerControl(commands.Cog):
         logger.info(f"   Screen: {self.screen_name}")
         logger.info(f"   RCON: {'Enabled' if self.rcon_enabled else 'Disabled'}")
         logger.info(f"   Admin Channel: {self.admin_channel_id or 'Not configured'}")
-    
-    def is_admin_channel(ctx):
-        """Check if command is in admin channel"""
-        cog = ctx.bot.get_cog('ServerControl')
-        if not cog or not cog.admin_channel_id:
-            return True  # If not configured, allow from anywhere
-        return ctx.channel.id == cog.admin_channel_id
-    
+
     async def log_action(self, ctx, action: str, details: str = ""):
         """Log admin action to local file"""
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
