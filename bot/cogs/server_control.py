@@ -318,7 +318,6 @@ class ServerControl(commands.Cog):
     
     @commands.command(name='server_start', aliases=['start', 'srv_start'])
     @is_admin_channel()
-    @commands.check(is_admin_channel)
     async def server_start(self, ctx):
         """🚀 Start the ET:Legacy server (Admin channel only)"""
         await self.log_action(ctx, "Server Start", "Attempting to start server...")
@@ -371,7 +370,6 @@ class ServerControl(commands.Cog):
     
     @commands.command(name='server_stop', aliases=['stop', 'srv_stop'])
     @is_admin_channel()
-    @commands.check(is_admin_channel)
     async def server_stop(self, ctx):
         """🛑 Stop the ET:Legacy server (Admin channel only)"""
         if not await self.confirm_action(ctx, "STOP server"):
@@ -426,7 +424,6 @@ class ServerControl(commands.Cog):
     
     @commands.command(name='server_restart', aliases=['restart', 'srv_restart'])
     @is_admin_channel()
-    @commands.check(is_admin_channel)
     async def server_restart(self, ctx):
         """🔄 Restart the ET:Legacy server (Admin channel only)"""
         if not await self.confirm_action(ctx, "RESTART server"):
@@ -495,7 +492,6 @@ class ServerControl(commands.Cog):
             await ctx.send(f"❌ Error listing maps: {e}")
     
     @commands.command(name='map_add', aliases=['addmap', 'upload_map'])
-    @commands.check(is_admin_channel)
     async def map_add(self, ctx):
         """➕ Upload new map to server (Admin channel only)
         
@@ -578,7 +574,6 @@ class ServerControl(commands.Cog):
             await self.log_action(ctx, "Map Upload Failed", f"❌ {sanitized_name} - {e}")
     
     @commands.command(name='map_change', aliases=['changemap', 'map'])
-    @commands.check(is_admin_channel)
     async def map_change(self, ctx, map_name: str):
         """🗺️ Change current map (Admin channel only)
         
@@ -612,7 +607,6 @@ class ServerControl(commands.Cog):
             await self.log_action(ctx, "Map Change Failed", f"❌ {map_name} - {e}")
     
     @commands.command(name='map_delete', aliases=['deletemap', 'remove_map'])
-    @commands.check(is_admin_channel)
     async def map_delete(self, ctx, map_name: str):
         """🗑️ Delete a map from server (Admin channel only)
         
@@ -661,7 +655,6 @@ class ServerControl(commands.Cog):
     # ========================================
     
     @commands.command(name='rcon')
-    @commands.check(is_admin_channel)
     async def rcon_command(self, ctx, *, command: str):
         """🎮 Send RCON command to server (Admin channel only)
         
@@ -704,7 +697,6 @@ class ServerControl(commands.Cog):
             await ctx.send(f"❌ Error executing RCON command: {e}")
     
     @commands.command(name='kick')
-    @commands.check(is_admin_channel)
     async def kick_player(self, ctx, player_id: int, *, reason: str = "Kicked by admin"):
         """👢 Kick a player from server (Admin channel only)
         
@@ -732,7 +724,6 @@ class ServerControl(commands.Cog):
             await ctx.send(f"❌ Error kicking player: {e}")
     
     @commands.command(name='say')
-    @commands.check(is_admin_channel)
     async def server_say(self, ctx, *, message: str):
         """💬 Send message to server chat (Admin channel only)
         
