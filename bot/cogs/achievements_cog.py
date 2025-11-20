@@ -13,6 +13,8 @@ from discord.ext import commands
 import logging
 from datetime import datetime
 
+from bot.core.checks import is_public_channel
+
 logger = logging.getLogger("bot.cogs.achievements")
 
 
@@ -24,6 +26,7 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         self.bot = bot
         logger.info("🏆 AchievementsCog loaded")
 
+    @is_public_channel()
     @commands.command(name="achievements", aliases=["medals", "achievement"])
     async def achievements(self, ctx, subcommand: str = None):
         """

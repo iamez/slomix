@@ -38,6 +38,8 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
+from bot.core.checks import is_public_channel
+
 # Import pagination view for interactive button navigation
 from bot.core.pagination_view import PaginationView
 from bot.stats import StatsCalculator
@@ -81,6 +83,7 @@ class LinkCog(commands.Cog, name="Link"):
         except Exception as e:
             logger.warning(f"Could not create player_name alias: {e}")
 
+    @is_public_channel()
     @commands.command(name="list_players", aliases=["players", "lp"])
     async def list_players(self, ctx, filter_type: Optional[str] = None, page: int = 1):
         """
@@ -279,6 +282,7 @@ class LinkCog(commands.Cog, name="Link"):
             logger.error(f"Error in list_players command: {e}", exc_info=True)
             await ctx.send(f"❌ Error listing players: {e}")
 
+    @is_public_channel()
     @commands.command(name="find_player", aliases=["findplayer", "fp", "search_player"])
     async def find_player(self, ctx, *, search_term: str):
         """
@@ -489,6 +493,7 @@ class LinkCog(commands.Cog, name="Link"):
                 f"💡 Try: `!list_players` to browse all players"
             )
 
+    @is_public_channel()
     @commands.cooldown(1, 30, commands.BucketType.user)
     @commands.command(name="link")
     async def link(self, ctx, target: Optional[str] = None, *, guid: Optional[str] = None):
@@ -1332,6 +1337,7 @@ class LinkCog(commands.Cog, name="Link"):
             logger.error(f"Error in admin link: {e}", exc_info=True)
             await ctx.send(f"❌ Error during admin linking: {e}")
 
+    @is_public_channel()
     @commands.command(name="unlink")
     async def unlink(self, ctx):
         """
@@ -1388,6 +1394,7 @@ class LinkCog(commands.Cog, name="Link"):
             logger.error(f"Error in unlink command: {e}", exc_info=True)
             await ctx.send(f"❌ Error unlinking account: {e}")
 
+    @is_public_channel()
     @commands.command(name="select")
     async def select_option(self, ctx, selection: Optional[int] = None):
         """
@@ -1437,6 +1444,7 @@ class LinkCog(commands.Cog, name="Link"):
         # This would require storing pending link requests per user
         # and checking if they have an active selection window
 
+    @is_public_channel()
     @commands.command(name="setname")
     async def setname(self, ctx, option: str = None, *, name: str = None):
         """
@@ -1514,6 +1522,7 @@ class LinkCog(commands.Cog, name="Link"):
         else:
             await ctx.send(f"❌ {message}")
 
+    @is_public_channel()
     @commands.command(name="myaliases", aliases=["aliases", "mynames"])
     async def myaliases(self, ctx):
         """

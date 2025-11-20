@@ -20,6 +20,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
+from bot.core.checks import is_public_channel
 from bot.stats import StatsCalculator
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ class StatsCog(commands.Cog, name="Stats"):
         except Exception:
             pass
 
+    @is_public_channel()
     @commands.command(name="ping")
     async def ping(self, ctx):
         """🏓 Check bot status and performance"""
@@ -105,6 +107,7 @@ class StatsCog(commands.Cog, name="Stats"):
             logger.error(f"Error in ping command: {e}")
             await ctx.send(f"❌ Bot error: {e}")
 
+    @is_public_channel()
     @commands.command(name="check_achievements", aliases=["check_achivements", "check_achievement"])
     async def check_achievements_cmd(self, ctx, *, player_name: Optional[str] = None):
         """🏆 Check your achievement progress
@@ -298,6 +301,7 @@ class StatsCog(commands.Cog, name="Stats"):
             )
             await ctx.send(f"❌ Error checking achievements: {e}")
 
+    @is_public_channel()
     @commands.command(name="compare")
     async def compare(self, ctx, player1_name: str, player2_name: str):
         """📊 Compare two players with a visual radar chart
@@ -710,6 +714,7 @@ class StatsCog(commands.Cog, name="Stats"):
             logger.error(f"Error in compare command: {e}", exc_info=True)
             await ctx.send(f"❌ Error generating comparison: {e}")
 
+    @is_public_channel()
     @commands.command(name="season_info", aliases=["season", "seasons"])
     async def season_info(self, ctx):
         """📅 Show current season information and champions
@@ -839,6 +844,7 @@ class StatsCog(commands.Cog, name="Stats"):
             logger.error(f"Error in season_info command: {e}", exc_info=True)
             await ctx.send(f"❌ Error retrieving season information: {e}")
 
+    @is_public_channel()
     @commands.command(name="help_command", aliases=["commands"])
     async def help_command(self, ctx):
         """📚 Show all available commands with examples"""
@@ -971,6 +977,7 @@ class StatsCog(commands.Cog, name="Stats"):
         await ctx.send(embed=embed1)
         await ctx.send(embed=embed2)
 
+    @is_public_channel()
     @commands.command(name="badges", aliases=["badge_legend", "achievements_legend"])
     async def badges_legend(self, ctx):
         """🏅 Show achievement badge legend

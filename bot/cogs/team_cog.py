@@ -12,6 +12,7 @@ import sqlite3
 from typing import Optional, List, Tuple
 from datetime import datetime
 
+from bot.core.checks import is_public_channel
 from bot.core.team_manager import TeamManager
 from bot.services.player_formatter import PlayerFormatter
 from tools.stopwatch_scoring import StopwatchScoring
@@ -60,6 +61,7 @@ class TeamCog(commands.Cog):
 
         return roster_text
     
+    @is_public_channel()
     @commands.command(name="teams")
     async def teams_command(self, ctx, date: Optional[str] = None):
         """Show team rosters for a session
@@ -131,7 +133,8 @@ class TeamCog(commands.Cog):
         finally:
             if 'db' in locals():
                 db.close()
-    
+
+    @is_public_channel()
     @commands.command(name="set_team_names")
     async def set_team_names_command(self, ctx, date: str, team_a: str, team_b: str):
         """Set custom team names for a session
@@ -189,7 +192,8 @@ class TeamCog(commands.Cog):
         finally:
             if 'db' in locals():
                 db.close()
-    
+
+    @is_public_channel()
     @commands.command(name="lineup_changes")
     async def lineup_changes_command(self, ctx, current_date: Optional[str] = None, previous_date: Optional[str] = None):
         """Show lineup changes between two sessions
@@ -293,7 +297,8 @@ class TeamCog(commands.Cog):
         finally:
             if 'db' in locals():
                 db.close()
-    
+
+    @is_public_channel()
     @commands.command(name="session_score")
     async def session_score_command(self, ctx, date: Optional[str] = None):
         """Show final score for a session

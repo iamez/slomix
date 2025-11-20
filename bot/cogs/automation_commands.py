@@ -18,6 +18,8 @@ from discord.ext import commands
 import logging
 from datetime import datetime
 
+from bot.core.checks import is_admin_channel
+
 logger = logging.getLogger("AutomationCommands")
 
 
@@ -28,6 +30,7 @@ class AutomationCommands(commands.Cog):
         self.bot = bot
         logger.info("✅ Automation Commands Cog loaded")
     
+    @is_admin_channel()
     @commands.command(name="health")
     async def health_command(self, ctx):
         """📊 Show comprehensive bot health status"""
@@ -43,6 +46,7 @@ class AutomationCommands(commands.Cog):
             logger.error(f"❌ Health command error: {e}")
             await ctx.send(f"❌ Error getting health status: {e}")
     
+    @is_admin_channel()
     @commands.command(name="ssh_stats")
     async def ssh_stats_command(self, ctx):
         """🔄 Show SSH monitor statistics and status"""
@@ -156,6 +160,7 @@ class AutomationCommands(commands.Cog):
             logger.error(f"❌ Start monitoring error: {e}")
             await ctx.send(f"❌ Error starting monitoring: {e}")
     
+    @is_admin_channel()
     @commands.command(name="stop_monitoring")
     @commands.has_permissions(administrator=True)
     async def stop_monitoring_command(self, ctx):

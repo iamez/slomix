@@ -25,6 +25,8 @@ from datetime import datetime, timedelta
 import discord
 from discord.ext import commands
 
+from bot.core.checks import is_public_channel
+
 # Import service layer
 from bot.services.session_data_service import SessionDataService
 from bot.services.session_stats_aggregator import SessionStatsAggregator
@@ -100,6 +102,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
         except Exception as e:
             logger.debug(f"player_name alias setup: {e}")
 
+    @is_public_channel()
     @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.command(name="session", aliases=["match", "game"])
     async def session(self, ctx, date_arg: str = None, subcommand: str = None):
@@ -293,6 +296,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
     # See bot/cogs/last_session_cog.py for the full implementation
     # This stub has been removed to avoid command conflicts
 
+    @is_public_channel()
     @commands.command(name="rounds", aliases=["sessions", "list_sessions", "ls"])
     async def list_sessions(self, ctx, *, month: str = None):
         """📅 List all gaming sessions, optionally filtered by month

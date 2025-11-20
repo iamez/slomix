@@ -63,6 +63,7 @@ class AdminCog(commands.Cog, name="Admin"):
             logger.error(f"Error in cache_clear: {e}", exc_info=True)
             await ctx.send(f"❌ Error clearing cache: {e}")
 
+    @is_admin_channel()
     @commands.command(name="reload")
     async def reload_bot(self, ctx):
         """🔄 Reload the bot (Admin only) - Reconnects to Discord with updated code."""
@@ -102,6 +103,7 @@ class AdminCog(commands.Cog, name="Admin"):
             logger.error(f"Error in reload_bot: {e}", exc_info=True)
             await ctx.send(f"❌ Error reloading bot: {e}")
 
+    @is_admin_channel()
     @commands.command(name="weapon_diag")
     async def weapon_diag(self, ctx, round_id: Optional[int] = None):
         """🧪 Diagnostic: show weapon stats aggregates for a session."""

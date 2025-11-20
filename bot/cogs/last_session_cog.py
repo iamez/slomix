@@ -17,6 +17,7 @@ from typing import Dict, List, Optional, Tuple
 import discord
 from discord.ext import commands
 
+from bot.core.checks import is_public_channel
 from tools.stopwatch_scoring import StopwatchScoring
 from bot.stats import StatsCalculator
 from bot.services.session_data_service import SessionDataService
@@ -73,6 +74,7 @@ class LastSessionCog(commands.Cog):
         except Exception as e:
             logger.debug(f"player_name alias setup: {e}")
 
+    @is_public_channel()
     @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.command(name="last_session", aliases=["last", "latest", "recent", "last_round"])
     async def last_session(self, ctx, subcommand: str = None):
@@ -236,6 +238,7 @@ class LastSessionCog(commands.Cog):
             logger.error(f"Error in last_session command: {e}", exc_info=True)
             await ctx.send(f"❌ Error retrieving last session: {e}")
 
+    @is_public_channel()
     @commands.command(name="team_history")
     async def team_history_command(self, ctx, days: int = 30):
         """📊 Show team performance history (PLACEHOLDER)"""
