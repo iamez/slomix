@@ -2438,6 +2438,14 @@ class UltimateETLegacyBot(commands.Bot):
             await ctx.send(
                 f"❌ Missing argument: {error.param}. Use `!help_command` for usage."
             )
+        elif isinstance(error, commands.CheckFailure):
+            # For channel check failures, just send the custom message without extra error text
+            from bot.core.checks import ChannelCheckFailure
+            if isinstance(error, ChannelCheckFailure):
+                await ctx.send(str(error))
+            else:
+                # Other check failures
+                await ctx.send(f"❌ {error}")
         else:
             error_logger = get_logger('bot.errors')
             error_logger.error(
