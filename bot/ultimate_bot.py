@@ -421,7 +421,23 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"Failed to initialize Rare Achievements Service: {e}")
             self.rare_achievements = None
+        # Initialize MVP voting service
+        try:
+            from bot.services.mvp_voting_service import create_mvp_voting_service
+            self.mvp_service = await create_mvp_voting_service(self.db_adapter)
+            logger.info("MVP Voting Service initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize MVP Voting Service: {e}")
+            self.mvp_service = None
 
+        # Initialize title system
+        try:
+            from bot.services.title_system import create_title_system
+            self.title_system = await create_title_system(self.db_adapter)
+            logger.info("Title System initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Title System: {e}")
+            self.title_system = None
 
         # � Load Admin Cog (database operations, maintenance commands)
         try:
@@ -518,10 +534,34 @@ class UltimateETLegacyBot(commands.Bot):
             await self.add_cog(PlayerInsightsCog(self))
             logger.info('Player Insights Cog loaded (records, trend, rating, map_stats, playstyle, personality)')
         except Exception as e:
+
+        # Load MVP Cog (MVP voting and statistics)
+        try:
+            from bot.cogs.mvp_cog import MVPCog
+            await self.add_cog(MVPCog(self))
+            logger.info('MVP Cog loaded (mvp_stats, mvp_leaderboard)')
+        except Exception as e:
+            logger.error(f'Failed to load MVP Cog: {e}', exc_info=True)
             logger.error(f'Failed to load Player Insights Cog: {e}', exc_info=True)
 
         # Load Recap Cog (weekly, monthly, yearly performance summaries)
         try:
+
+        # Load Title Cog (unlockable titles and badges)
+        try:
+            from bot.cogs.title_cog import TitleCog
+            await self.add_cog(TitleCog(self))
+            logger.info('Title Cog loaded (title, titles, all_titles)')
+        except Exception as e:
+            logger.error(f'Failed to load Title Cog: {e}', exc_info=True)
+
+        # Load Live Cog (real-time match updates)
+        try:
+            from bot.cogs.live_cog import LiveCog
+            await self.add_cog(LiveCog(self))
+            logger.info('Live Cog loaded (live, current, now, active)')
+        except Exception as e:
+            logger.error(f'Failed to load Live Cog: {e}', exc_info=True)
             from bot.cogs.recap_cog import RecapCog
             await self.add_cog(RecapCog(self))
             logger.info('Recap Cog loaded (recap_week, recap_month, recap_year)')
@@ -852,6 +892,54 @@ class UltimateETLegacyBot(commands.Bot):
 
             # Post session summary
             if self.production_channel_id:
+                    await channel.send(embed=embed)
+
+                    # Start MVP voting if enabled
+                    if hasattr(self, 'mvp_service') and self.mvp_service and self.current_session:
+                        try:
+                            # Get top players from the session
+                            session_stats_query = """
+                                SELECT
+                                    p.player_guid,
+                                    p.player_name,
+                                    SUM(p.kills) as total_kills,
+                                    SUM(p.deaths) as total_deaths
+                                FROM player_comprehensive_stats p
+                                JOIN rounds r ON p.round_id = r.id
+                                WHERE r.session_id = ?
+                                    AND r.round_number IN (1, 2)
+                                GROUP BY p.player_guid, p.player_name
+                                ORDER BY total_kills DESC
+                                LIMIT 5
+                            """
+                            top_players_rows = await self.db_adapter.fetch_all(
+                                session_stats_query,
+                                (self.current_session,)
+                            )
+
+                            if top_players_rows:
+                                top_players = [
+                                    {
+                                        'guid': row[0],
+                                        'name': row[1],
+                                        'kills': row[2],
+                                        'deaths': row[3]
+                                    }
+                                    for row in top_players_rows
+                                ]
+
+                                # Start MVP voting (non-blocking)
+                                asyncio.create_task(
+                                    self.mvp_service.start_voting(
+                                        bot=self,
+                                        channel=channel,
+                                        session_id=str(self.current_session),
+                                        top_players=top_players
+                                    )
+                                )
+                                logger.info(f"Started MVP voting for session {self.current_session}")
+                        except Exception as e:
+                            logger.error(f"Failed to start MVP voting: {e}")
                 channel = self.get_channel(self.production_channel_id)
                 if channel:
                     # TODO: Post comprehensive session summary
