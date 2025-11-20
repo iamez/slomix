@@ -183,6 +183,7 @@ class UltimateETLegacyBot(commands.Bot):
         self.bot_startup_time = datetime.now()  # Track when bot started (for auto-import filtering)
         self.current_session = None
         self.processed_files = set()
+        self.rare_achievements = None  # Will be initialized after db_adapter
         self.auto_link_enabled = True
         self.gather_queue = {"3v3": [], "6v6": []}
 
@@ -408,6 +409,18 @@ class UltimateETLegacyBot(commands.Bot):
 
         # ✅ CRITICAL: Validate schema FIRST
         await self.validate_database_schema()
+
+        # Initialize rare achievements service
+        try:
+            from bot.services.rare_achievements_service import RareAchievementsService
+            self.rare_achievements = RareAchievementsService(
+                db_adapter=self.db_adapter,
+                channel_id=self.production_channel_id
+            )
+            logger.info("Rare Achievements Service initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Rare Achievements Service: {e}")
+            self.rare_achievements = None
 
 
         # � Load Admin Cog (database operations, maintenance commands)
@@ -1216,6 +1229,20 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info(f"📤 Sending detailed stats embed to #{channel.name}...")
             await channel.send(embed=embed)
             logger.info(f"✅ Successfully posted stats for {len(players)} players to Discord!")
+
+            # Check for rare achievements and post alerts
+            if self.rare_achievements:
+                try:
+                    achievements = await self.rare_achievements.check_and_announce(
+                        bot=self,
+                        round_id=round_id,
+                        round_num=round_num,
+                        player_stats=players
+                    )
+                    if achievements:
+                        logger.info(f"Posted {len(achievements)} rare achievement(s)")
+                except Exception as e:
+                    logger.error(f"Error checking rare achievements: {e}")
             
             # 🗺️ Check if this was the last round for the map → post map summary
             await self._check_and_post_map_completion(round_id, map_name, round_num, channel)
