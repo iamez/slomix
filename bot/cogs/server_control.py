@@ -20,7 +20,7 @@ import re
 import shlex
 import socket
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -440,28 +440,249 @@ class ServerControl(commands.Cog):
         await ctx.invoke(self.bot.get_command('server_start'))
     
     # ========================================
-    # SERVER UPDATE & DEPLOYMENT
+    # SERVER UPDATE & DEPLOYMENT (PRODUCTION-READY)
     # ========================================
+
+    async def _detect_current_version(self) -> dict:
+        """Detect currently installed ET:Legacy version (version-agnostic)"""
+        try:
+            # Find current pk3 file using wildcard (works with any version)
+            find_cmd = f"find {self.server_install_path}/legacy/ -name 'legacy_v*.pk3' -type f -exec basename {{}} \\; 2>/dev/null | head -n 1"
+            output, error, exit_code = self.execute_ssh_command(find_cmd)
+            pk3_file = output.strip()
+
+            # Extract version from filename: legacy_v2.83.1-34-ga127043.pk3 -> v2.83.1-34-ga127043
+            if pk3_file:
+                version_match = re.search(r'legacy_(v[\d\.]+-[\d]+-g[a-f0-9]+)\.pk3', pk3_file)
+                if not version_match:
+                    # Fallback for different naming patterns
+                    version_match = re.search(r'legacy_(v[\d\.]+-[^\.]+)\.pk3', pk3_file)
+                version = version_match.group(1) if version_match else "unknown"
+            else:
+                pk3_file = "unknown"
+                version = "unknown"
+
+            return {'pk3_file': pk3_file, 'version': version}
+        except Exception as e:
+            logger.error(f"Error detecting version: {e}")
+            return {'pk3_file': 'unknown', 'version': 'unknown'}
+
+    async def _create_smart_backup(self, ctx, status_msg, extracted_dir: str) -> Optional[str]:
+        """Create timestamped backup of ONLY files that will be replaced
+
+        Args:
+            extracted_dir: Path to extracted update directory
+
+        Returns:
+            backup_dir path if successful, None otherwise
+        """
+        try:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_dir = f"~/etlegacy_backups/backup_{timestamp}"
+
+            await self._update_progress(status_msg, "🔍 Inspecting update contents...", discord.Color.blue())
+
+            # Inspect what files exist in the update
+            inspect_cmd = f"""
+                cd {extracted_dir}
+                echo "FILES_TO_BACKUP:"
+                [ -f etlded.x86_64 ] && echo "BINARY:etlded.x86_64"
+                [ -f etl.x86_64 ] && echo "BINARY:etl.x86_64"
+                [ -f etl_bot.x86_64 ] && echo "BINARY:etl_bot.x86_64"
+                [ -d legacy ] && find legacy -name '*.pk3' -type f | head -10 | while read f; do echo "PK3:$f"; done
+                [ -d libs ] && echo "LIBS:yes"
+                echo "INSPECT_DONE"
+            """
+            output, error, exit_code = self.execute_ssh_command(inspect_cmd)
+
+            files_to_backup = {
+                'binaries': [],
+                'pk3s': [],
+                'has_libs': False
+            }
+
+            for line in output.split('\n'):
+                if line.startswith('BINARY:'):
+                    files_to_backup['binaries'].append(line.split(':', 1)[1])
+                elif line.startswith('PK3:'):
+                    files_to_backup['pk3s'].append(line.split(':', 1)[1])
+                elif line.startswith('LIBS:'):
+                    files_to_backup['has_libs'] = True
+
+            await self._update_progress(
+                status_msg,
+                f"💾 Creating smart backup...\n"
+                f"**Binaries:** {len(files_to_backup['binaries'])}\n"
+                f"**PK3 files:** {len(files_to_backup['pk3s'])}\n"
+                f"**Libraries:** {'Yes' if files_to_backup['has_libs'] else 'No'}",
+                discord.Color.blue()
+            )
+
+            # Create backup directory structure
+            create_backup_cmd = f"""
+                mkdir -p {backup_dir}/binaries
+                mkdir -p {backup_dir}/legacy
+                mkdir -p {backup_dir}/libs
+                echo "BACKUP_TIMESTAMP:{timestamp}" > {backup_dir}/backup_info.txt
+            """
+            self.execute_ssh_command(create_backup_cmd)
+
+            # Backup binaries (only if they exist in update)
+            if files_to_backup['binaries']:
+                backup_binaries_cmd = f"""
+                    cd {self.server_install_path}
+                    cp -f etlded.x86_64 {backup_dir}/binaries/ 2>/dev/null || true
+                    cp -f etl*.x86_64 {backup_dir}/binaries/ 2>/dev/null || true
+                """
+                self.execute_ssh_command(backup_binaries_cmd)
+
+            # Backup ALL current pk3 files in legacy/ (only if update has pk3s)
+            if files_to_backup['pk3s']:
+                backup_pk3_cmd = f"""
+                    cd {self.server_install_path}/legacy
+                    cp -f legacy_v*.pk3 {backup_dir}/legacy/ 2>/dev/null || true
+                    cp -f pak*.pk3 {backup_dir}/legacy/ 2>/dev/null || true
+                """
+                self.execute_ssh_command(backup_pk3_cmd)
+
+            # Backup libraries (only if update has libs)
+            if files_to_backup['has_libs']:
+                backup_libs_cmd = f"""
+                    if [ -d {self.server_install_path}/libs ]; then
+                        cp -r {self.server_install_path}/libs/* {backup_dir}/libs/ 2>/dev/null || true
+                    fi
+                """
+                self.execute_ssh_command(backup_libs_cmd)
+
+            # Save version info and file list
+            version_info = await self._detect_current_version()
+            save_info_cmd = f"""
+                echo "PK3_FILE:{version_info['pk3_file']}" >> {backup_dir}/backup_info.txt
+                echo "VERSION:{version_info['version']}" >> {backup_dir}/backup_info.txt
+                echo "INSTALL_PATH:{self.server_install_path}" >> {backup_dir}/backup_info.txt
+                echo "BACKED_UP_BINARIES:{len(files_to_backup['binaries'])}" >> {backup_dir}/backup_info.txt
+                echo "BACKED_UP_PK3S:{len(files_to_backup['pk3s'])}" >> {backup_dir}/backup_info.txt
+            """
+            self.execute_ssh_command(save_info_cmd)
+
+            # Verify backup was created
+            verify_cmd = f"ls -la {backup_dir}/backup_info.txt 2>/dev/null && echo 'SUCCESS' || echo 'FAILED'"
+            output, error, exit_code = self.execute_ssh_command(verify_cmd)
+
+            if 'SUCCESS' not in output:
+                logger.error(f"Backup verification failed: {output} {error}")
+                return None
+
+            await self.log_action(ctx, "Smart Backup Created", f"Location: {backup_dir}")
+            return backup_dir
+
+        except Exception as e:
+            logger.error(f"Error creating backup: {e}", exc_info=True)
+            return None
+
+    async def _perform_rollback(self, backup_dir: str) -> bool:
+        """Restore from backup directory"""
+        try:
+            logger.info(f"Starting rollback from: {backup_dir}")
+
+            # Stop server
+            self.execute_ssh_command("pkill etlded; sleep 2")
+            await asyncio.sleep(3)
+
+            # Restore files
+            restore_cmd = f"""
+                # Restore binaries
+                if [ -d {backup_dir}/binaries ] && [ "$(ls -A {backup_dir}/binaries)" ]; then
+                    cp -f {backup_dir}/binaries/* {self.server_install_path}/ 2>&1
+                    chmod +x {self.server_install_path}/etlded.x86_64 2>/dev/null
+                fi
+
+                # Restore legacy pk3 files
+                if [ -d {backup_dir}/legacy ] && [ "$(ls -A {backup_dir}/legacy)" ]; then
+                    rm -f {self.server_install_path}/legacy/legacy_v*.pk3
+                    cp -f {backup_dir}/legacy/*.pk3 {self.server_install_path}/legacy/ 2>&1
+                fi
+
+                # Restore libs
+                if [ -d {backup_dir}/libs ] && [ "$(ls -A {backup_dir}/libs)" ]; then
+                    mkdir -p {self.server_install_path}/libs
+                    cp -rf {backup_dir}/libs/* {self.server_install_path}/libs/ 2>/dev/null || true
+                fi
+
+                echo 'RESTORE_COMPLETE'
+            """
+            output, error, exit_code = self.execute_ssh_command(restore_cmd, timeout=60)
+
+            if 'RESTORE_COMPLETE' not in output:
+                logger.error(f"Rollback restore failed: {output} {error}")
+                return False
+
+            # Restart server
+            start_cmd = f"cd {self.server_install_path} && screen -dmS {self.screen_name} {self.server_binary} +exec {self.server_config}"
+            self.execute_ssh_command(start_cmd)
+            await asyncio.sleep(5)
+
+            # Verify
+            verify_output, _, verify_exit = self.execute_ssh_command(f"screen -ls | grep {self.screen_name}")
+            success = verify_exit == 0 and self.screen_name in verify_output
+
+            if success:
+                logger.info("Rollback successful!")
+            else:
+                logger.error("Rollback failed - server did not start")
+
+            return success
+
+        except Exception as e:
+            logger.error(f"Error during rollback: {e}", exc_info=True)
+            return False
+
+    async def _cleanup_old_backups(self):
+        """Remove backups older than 7 days"""
+        try:
+            # Calculate cutoff date (7 days ago)
+            cutoff_date = datetime.now() - timedelta(days=7)
+            cutoff_timestamp = cutoff_date.strftime('%Y%m%d')
+
+            cleanup_cmd = f"""
+                find ~/etlegacy_backups -maxdepth 1 -type d -name 'backup_*' 2>/dev/null | while read backup; do
+                    backup_date=$(basename "$backup" | sed 's/backup_//' | cut -d'_' -f1)
+                    if [ "$backup_date" -lt "{cutoff_timestamp}" ]; then
+                        echo "Removing old backup: $backup"
+                        rm -rf "$backup"
+                    fi
+                done
+            """
+            output, error, exit_code = self.execute_ssh_command(cleanup_cmd)
+            if output.strip():
+                logger.info(f"Backup cleanup: {output}")
+        except Exception as e:
+            logger.error(f"Error cleaning up backups: {e}")
 
     @commands.command(name='et_update', aliases=['update_server', 'etlegacy_update'])
     @commands.check(is_admin_channel)
     async def et_update(self, ctx, update_url: str = None):
-        """🚀 Update ET:Legacy server with new snapshot (Admin channel only)
+        """🚀 Update ET:Legacy server with full backup and rollback capability
 
-        Downloads and installs ET:Legacy snapshot, then uploads new pk3 to Discord.
+        Features:
+        - Smart backup (only files being replaced, kept 7 days)
+        - Config preservation (never touches .cfg files)
+        - Version-agnostic (works with any ET:Legacy version)
+        - Automatic rollback on failure
+        - Minimal downtime (download first, stop server last)
+        - Full verification before declaring success
 
         Usage: !et_update <snapshot_url>
-        Example: !et_update https://github.com/etlegacy/etlegacy/releases/download/continuous/etlegacy-v2.83.1-x86_64.tar.gz
+        Example: !et_update https://www.etlegacy.com/workflow-files/dl/.../etlegacy-v2.83.2-275-g36c31ba-x86_64.tar.gz
         """
         if not update_url:
             await ctx.send(
                 "❌ Please provide the ET:Legacy snapshot download URL!\n\n"
                 "**Usage:** `!et_update <snapshot_url>`\n"
-                "**Example:** `!et_update https://github.com/etlegacy/etlegacy/releases/download/continuous/etlegacy-v2.83.1-x86_64.tar.gz`"
+                "**Example:** `!et_update https://www.etlegacy.com/workflow-files/dl/.../etlegacy-v2.83.2-x86_64.tar.gz`"
             )
             return
 
-        # Validate URL
         if not update_url.startswith(('http://', 'https://')):
             await ctx.send("❌ Invalid URL! Must start with http:// or https://")
             return
@@ -469,24 +690,40 @@ class ServerControl(commands.Cog):
         if not await self.confirm_action(ctx, "UPDATE ET:Legacy server"):
             return
 
-        await self.log_action(ctx, "ET:Legacy Update", f"URL: {update_url}")
+        await self.log_action(ctx, "ET:Legacy Update Started", f"URL: {update_url}")
 
-        # Create progress embed
         embed = discord.Embed(
             title="🚀 ET:Legacy Server Update",
-            description="Starting update process...",
+            description="Starting production-ready update process...",
             color=discord.Color.blue(),
             timestamp=datetime.now()
         )
-        embed.add_field(name="📥 Download URL", value=f"`{update_url[:100]}...`" if len(update_url) > 100 else f"`{update_url}`", inline=False)
+        embed.add_field(name="📥 URL", value=f"`{update_url[:75]}...`" if len(update_url) > 75 else f"`{update_url}`", inline=False)
         status_msg = await ctx.send(embed=embed)
 
+        backup_dir = None
+        rollback_needed = False
+
         try:
-            # Step 1: Download update file
+            # PHASE 1: Detect current version
+            await self._update_progress(status_msg, "🔍 Detecting current version...", discord.Color.blue())
+            old_version_info = await self._detect_current_version()
+            old_version = old_version_info['version']
+            old_pk3 = old_version_info['pk3_file']
+
+            await self._update_progress(
+                status_msg,
+                f"📋 Current version: `{old_version}`\n📦 Current pk3: `{old_pk3}`",
+                discord.Color.blue()
+            )
+            await asyncio.sleep(2)
+
+            # PHASE 2: Download (SERVER STILL RUNNING)
             await self._update_progress(status_msg, "📥 Downloading ET:Legacy snapshot...", discord.Color.blue())
             download_cmd = f"""
-                mkdir -p ~/legacyupdate/backup/logs
-                cd ~/legacyupdate/backup
+                mkdir -p ~/legacyupdate/temp
+                cd ~/legacyupdate/temp
+                rm -f etlegacy-update.tar.gz
                 wget -q '{update_url}' -O etlegacy-update.tar.gz 2>&1
                 if [ $? -eq 0 ]; then echo 'SUCCESS'; else echo 'FAILED'; fi
             """
@@ -497,10 +734,10 @@ class ServerControl(commands.Cog):
                 await self.log_action(ctx, "ET:Legacy Update Failed", "Download failed")
                 return
 
-            # Step 2: Extract tarball
+            # PHASE 3: Extract (SERVER STILL RUNNING)
             await self._update_progress(status_msg, "📦 Extracting archive...", discord.Color.blue())
             extract_cmd = """
-                cd ~/legacyupdate/backup
+                cd ~/legacyupdate/temp
                 tar -zxf etlegacy-update.tar.gz 2>&1
                 if [ $? -eq 0 ]; then echo 'SUCCESS'; else echo 'FAILED'; fi
             """
@@ -511,129 +748,161 @@ class ServerControl(commands.Cog):
                 await self.log_action(ctx, "ET:Legacy Update Failed", "Extraction failed")
                 return
 
-            # Step 3: Find extracted directory
-            find_dir_cmd = "cd ~/legacyupdate/backup && find . -maxdepth 1 -type d -name 'etlegacy-v*' | head -n 1"
+            # Find extracted directory
+            find_dir_cmd = "cd ~/legacyupdate/temp && find . -maxdepth 1 -type d -name 'etlegacy-v*' | head -n 1"
             output, error, exit_code = self.execute_ssh_command(find_dir_cmd)
-            extracted_dir = output.strip()
+            extracted_dir = output.strip().lstrip('./')
 
             if not extracted_dir:
                 await self._update_progress(status_msg, "❌ Could not find extracted directory!", discord.Color.red())
                 await self.log_action(ctx, "ET:Legacy Update Failed", "Extracted directory not found")
                 return
 
-            # Step 4: Backup old pk3 files and get old version
-            await self._update_progress(status_msg, "💾 Backing up old pk3 files...", discord.Color.blue())
-            backup_cmd = f"""
-                OLD_PK3=$(find /home/et/etlegacy-v2.83.1-x86_64/legacy/ -name "legacy_v2.83.1-*.pk3" -exec basename {{}} \\; 2>/dev/null | head -n 1)
-                echo "OLD_VERSION:$OLD_PK3"
-                find /home/et/etlegacy-v2.83.1-x86_64/legacy/ -name "legacy_v2.83.1-*.pk3" -exec mv {{}} ~/legacyupdate/backup/ \\; 2>/dev/null
-            """
-            output, error, exit_code = self.execute_ssh_command(backup_cmd)
-            old_version = "unknown"
-            for line in output.split('\n'):
-                if line.startswith('OLD_VERSION:'):
-                    old_version = line.split(':', 1)[1].strip()
-                    break
+            extracted_full_path = f"~/legacyupdate/temp/{extracted_dir}"
 
-            # Step 5: Stop server
-            await self._update_progress(status_msg, "🛑 Stopping server...", discord.Color.orange())
+            # PHASE 4: Smart Backup (Inspect first, backup only what's needed)
+            backup_dir = await self._create_smart_backup(ctx, status_msg, extracted_full_path)
+            if not backup_dir:
+                await self._update_progress(status_msg, "❌ Backup creation failed! Aborting for safety.", discord.Color.red())
+                await self.log_action(ctx, "ET:Legacy Update Aborted", "Backup creation failed")
+                return
+
+            await self._update_progress(
+                status_msg,
+                f"✅ Smart backup created!\n📁 `{backup_dir}`\n⏰ Retention: 7 days",
+                discord.Color.green()
+            )
+            await asyncio.sleep(2)
+
+            # PHASE 5: Stop server (MINIMIZE DOWNTIME - only stop after download/extract/backup)
+            await self._update_progress(status_msg, "🛑 Stopping server (downtime starts)...", discord.Color.orange())
             stop_cmd = "pkill etlded; sleep 2"
             self.execute_ssh_command(stop_cmd)
             await asyncio.sleep(3)
 
-            # Step 6: Copy new files
-            await self._update_progress(status_msg, "📂 Installing new files...", discord.Color.blue())
+            # PHASE 6: Install new files (SELECTIVE - preserve configs)
+            await self._update_progress(status_msg, "📂 Installing binaries and assets (preserving configs)...", discord.Color.blue())
+
+            # Copy ONLY binaries, pk3 files, and libs - PRESERVE all .cfg files
             install_cmd = f"""
-                cd ~/legacyupdate/backup/{extracted_dir}
-                cp -r * /home/et/etlegacy-v2.83.1-x86_64/
-                if [ $? -eq 0 ]; then echo 'SUCCESS'; else echo 'FAILED'; fi
+                cd {extracted_full_path}
+
+                # Copy binaries
+                if [ -f etlded.x86_64 ]; then
+                    cp -f etlded.x86_64 {self.server_install_path}/ && chmod +x {self.server_install_path}/etlded.x86_64
+                fi
+                cp -f etl*.x86_64 {self.server_install_path}/ 2>/dev/null || true
+                chmod +x {self.server_install_path}/etl*.x86_64 2>/dev/null || true
+
+                # Copy ONLY pk3 files from legacy/ (NOT .cfg files)
+                if [ -d legacy ]; then
+                    mkdir -p {self.server_install_path}/legacy
+                    cp -f legacy/*.pk3 {self.server_install_path}/legacy/ 2>&1
+                fi
+
+                # Copy libs
+                if [ -d libs ]; then
+                    mkdir -p {self.server_install_path}/libs
+                    cp -rf libs/* {self.server_install_path}/libs/ 2>/dev/null || true
+                fi
+
+                echo 'INSTALL_COMPLETE'
             """
             output, error, exit_code = self.execute_ssh_command(install_cmd, timeout=60)
 
-            if 'FAILED' in output or exit_code != 0:
+            if 'INSTALL_COMPLETE' not in output or exit_code != 0:
                 await self._update_progress(status_msg, f"❌ Installation failed!\n```{error}```", discord.Color.red())
-                await self.log_action(ctx, "ET:Legacy Update Failed", "Installation failed")
-                return
+                rollback_needed = True
+                raise Exception(f"Installation failed: {error}")
 
-            # Step 7: Find new pk3 file
-            await self._update_progress(status_msg, "🔍 Finding new pk3 file...", discord.Color.blue())
-            find_pk3_cmd = "find /home/et/etlegacy-v2.83.1-x86_64/legacy/ -name 'legacy_v2.83.1-*.pk3' -exec basename {} \\; 2>/dev/null | head -n 1"
-            output, error, exit_code = self.execute_ssh_command(find_pk3_cmd)
-            new_pk3_file = output.strip()
+            # PHASE 7: Detect new version
+            await self._update_progress(status_msg, "🔍 Detecting new version...", discord.Color.blue())
+            new_version_info = await self._detect_current_version()
+            new_version = new_version_info['version']
+            new_pk3 = new_version_info['pk3_file']
 
-            if not new_pk3_file:
-                await self._update_progress(status_msg, "⚠️ Update completed but new pk3 file not found!", discord.Color.orange())
-                await self.log_action(ctx, "ET:Legacy Update Partial", "pk3 file not found")
-                # Start server anyway
-                await self._start_server_after_update(ctx, status_msg)
-                return
+            if new_pk3 == old_pk3:
+                await self._update_progress(status_msg, "⚠️ Warning: Version appears unchanged!", discord.Color.orange())
 
-            # Step 8: Download pk3 file to local temp
-            await self._update_progress(status_msg, f"📥 Downloading {new_pk3_file}...", discord.Color.blue())
+            # PHASE 8: Start server
+            await self._update_progress(status_msg, "🚀 Starting server (ending downtime)...", discord.Color.blue())
+            start_cmd = f"cd {self.server_install_path} && screen -dmS {self.screen_name} {self.server_binary} +exec {self.server_config}"
+            self.execute_ssh_command(start_cmd)
+            await asyncio.sleep(5)
+
+            # PHASE 9: Verify server started
+            verify_output, _, verify_exit = self.execute_ssh_command(f"screen -ls | grep {self.screen_name}")
+            if verify_exit != 0 or self.screen_name not in verify_output:
+                await self._update_progress(status_msg, "❌ Server failed to start! Initiating rollback...", discord.Color.red())
+                rollback_needed = True
+                raise Exception("Server failed to start after update")
+
+            await self._update_progress(status_msg, "✅ Server verified running!", discord.Color.green())
+            await asyncio.sleep(2)
+
+            # PHASE 10: Download and upload pk3 to Discord
+            await self._update_progress(status_msg, f"📥 Downloading {new_pk3} for Discord...", discord.Color.blue())
 
             ssh = self.get_ssh_client()
             sftp = ssh.open_sftp()
 
-            temp_fd, temp_path = tempfile.mkstemp(suffix=f"_{new_pk3_file}", prefix="etlegacy_pk3_")
+            temp_fd, temp_path = tempfile.mkstemp(suffix=f"_{new_pk3}", prefix="etlegacy_pk3_")
             os.close(temp_fd)
 
-            remote_pk3_path = f"/home/et/etlegacy-v2.83.1-x86_64/legacy/{new_pk3_file}"
+            remote_pk3_path = f"{self.server_install_path}/legacy/{new_pk3}"
             sftp.get(remote_pk3_path, temp_path)
 
-            # Get file size
             file_size = os.path.getsize(temp_path)
             file_size_mb = file_size / 1024 / 1024
 
-            # Calculate MD5
             with open(temp_path, 'rb') as f:
                 file_hash = hashlib.md5(f.read()).hexdigest()
 
             sftp.close()
             ssh.close()
 
-            # Step 9: Upload to Discord
-            await self._update_progress(status_msg, f"📤 Uploading {new_pk3_file} to Discord...", discord.Color.blue())
-
-            # Check file size (Discord limit is 25MB for non-Nitro, 500MB for Nitro)
+            # Upload to Discord
             discord_limit_mb = 25
             if file_size_mb > discord_limit_mb:
-                await self._update_progress(
-                    status_msg,
-                    f"⚠️ File too large for Discord upload ({file_size_mb:.1f}MB > {discord_limit_mb}MB)\n"
-                    f"File is available on server at: `{remote_pk3_path}`",
-                    discord.Color.orange()
-                )
-                # Post summary without file
-                await self._post_update_summary(ctx, old_version, new_pk3_file, file_hash, file_size_mb, None)
+                await self._post_update_summary(ctx, old_version, new_version, file_hash, file_size_mb, None, backup_dir)
             else:
-                # Upload to Discord
-                discord_file = discord.File(temp_path, filename=new_pk3_file)
+                discord_file = discord.File(temp_path, filename=new_pk3)
+                await self._post_update_summary(ctx, old_version, new_version, file_hash, file_size_mb, discord_file, backup_dir)
 
-                # Post summary with file
-                await self._post_update_summary(ctx, old_version, new_pk3_file, file_hash, file_size_mb, discord_file)
-
-            # Clean up temp file
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
-            # Step 10: Clean up remote files
+            # PHASE 11: Cleanup temp files (NOT backups)
             cleanup_cmd = """
-                cd ~/legacyupdate/backup
+                cd ~/legacyupdate/temp
                 rm -f etlegacy-update.tar.gz
                 rm -rf etlegacy-v*
             """
             self.execute_ssh_command(cleanup_cmd)
 
-            # Step 11: Restart server
-            await self._start_server_after_update(ctx, status_msg)
+            # Cleanup old backups (>7 days)
+            await self._cleanup_old_backups()
 
             await self._update_progress(status_msg, "✅ Update completed successfully!", discord.Color.green())
-            await self.log_action(ctx, "ET:Legacy Update Success", f"{old_version} -> {new_pk3_file}")
+            await self.log_action(ctx, "ET:Legacy Update Success", f"{old_version} -> {new_version}")
 
         except Exception as e:
             logger.error(f"Error during ET:Legacy update: {e}", exc_info=True)
-            await self._update_progress(status_msg, f"❌ Update failed!\n```{str(e)}```", discord.Color.red())
-            await ctx.send(f"❌ Update failed with error: {e}")
+
+            if rollback_needed and backup_dir:
+                await self._update_progress(status_msg, "🔄 Attempting automatic rollback...", discord.Color.orange())
+                rollback_success = await self._perform_rollback(backup_dir)
+
+                if rollback_success:
+                    await self._update_progress(status_msg, f"✅ Rollback successful! Restored to {old_version}", discord.Color.green())
+                    await ctx.send(f"❌ Update failed but server was successfully rolled back to `{old_version}`\n💾 Backup preserved at: `{backup_dir}`")
+                else:
+                    await self._update_progress(status_msg, "❌ Rollback failed! Manual intervention required!", discord.Color.red())
+                    await ctx.send(f"⚠️ **CRITICAL**: Update AND rollback failed!\n💾 Backup at: `{backup_dir}`")
+            else:
+                await self._update_progress(status_msg, f"❌ Update failed!\n```{str(e)}```", discord.Color.red())
+                await ctx.send(f"❌ Update failed: {e}")
+
             await self.log_action(ctx, "ET:Legacy Update Failed", f"Exception: {e}")
 
     async def _update_progress(self, message: discord.Message, status: str, color: discord.Color):
@@ -649,35 +918,22 @@ class ServerControl(commands.Cog):
         except:
             pass  # Ignore edit failures
 
-    async def _start_server_after_update(self, ctx, status_msg):
-        """Start server after update"""
-        await self._update_progress(status_msg, "🚀 Starting server...", discord.Color.blue())
-        start_cmd = f"cd {self.server_install_path} && screen -dmS {self.screen_name} {self.server_binary} +exec {self.server_config}"
-        self.execute_ssh_command(start_cmd)
-        await asyncio.sleep(3)
-
-        # Verify it started
-        verify_output, _, verify_exit = self.execute_ssh_command(f"screen -ls | grep {self.screen_name}")
-        if verify_exit == 0 and self.screen_name in verify_output:
-            await self._update_progress(status_msg, "✅ Server restarted successfully!", discord.Color.green())
-        else:
-            await self._update_progress(status_msg, "⚠️ Server may not have started properly. Check manually.", discord.Color.orange())
-
-    async def _post_update_summary(self, ctx, old_version: str, new_version: str, file_hash: str, file_size_mb: float, discord_file: Optional[discord.File]):
-        """Post update summary with optional file attachment"""
+    async def _post_update_summary(self, ctx, old_version: str, new_version: str, file_hash: str, file_size_mb: float, discord_file: Optional[discord.File], backup_dir: str):
+        """Post update summary with version comparison and backup info"""
         embed = discord.Embed(
             title="✅ ET:Legacy Update Complete",
-            description="Server has been updated to the latest snapshot!",
+            description="Server has been updated successfully with full backup!",
             color=discord.Color.green(),
             timestamp=datetime.now()
         )
         embed.add_field(name="📦 Old Version", value=f"`{old_version}`", inline=True)
         embed.add_field(name="🆕 New Version", value=f"`{new_version}`", inline=True)
-        embed.add_field(name="📊 File Size", value=f"{file_size_mb:.2f} MB", inline=True)
+        embed.add_field(name="📊 PK3 Size", value=f"{file_size_mb:.2f} MB", inline=True)
         embed.add_field(name="🔐 MD5 Hash", value=f"`{file_hash}`", inline=False)
+        embed.add_field(name="💾 Backup", value=f"`{backup_dir}`\n⏰ Retention: 7 days\n🔄 Use `!et_rollback` if needed", inline=False)
         embed.add_field(
             name="📥 Download",
-            value="Attached below!" if discord_file else "File too large for Discord - available on server",
+            value="Attached below!" if discord_file else f"File too large for Discord\nAvailable on server",
             inline=False
         )
 
