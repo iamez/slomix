@@ -54,17 +54,24 @@ desktop.ini
 /archive/
 /asdf/
 /backups/
+/bot_backup_*/
 /database/
+/database_backups/
 /dev/
+/dev_tools/
 /fiveeyes/
 /local_stats/
+/migrations/
+/node_modules/
 /prompt_instructions/
 /scripts/
+/server/
 /temp/
 /tests/
 /test_files/
 /test_suite/
 /tmp/
+/tools/
 /publish_temp/
 /publish_clean/
 /github/
@@ -87,6 +94,8 @@ bot/ultimate_bot.py.bak
 # Exclude bot test data
 bot/local_stats/
 bot/tools/
+bot/backups/
+bot/diagnostics/
 
 # Exclude bot config (use .env instead)
 bot/config.json
@@ -128,5 +137,5 @@ tools/*
 !.env.example
 !.gitignore
 !postgresql_database_manager.py
-node_modules/
 .prodenv
+.envcopy
