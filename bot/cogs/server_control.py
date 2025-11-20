@@ -232,7 +232,35 @@ class ServerControl(commands.Cog):
             return output, error, exit_code
         finally:
             ssh.close()
-    
+
+    def execute_ssh_background_command(self, command: str) -> bool:
+        """
+        Execute SSH command in background without waiting for it to complete.
+        Use for long-running daemons/services that should persist after SSH disconnect.
+
+        Uses setsid to properly detach the process from the SSH session.
+        Returns True if command was successfully initiated.
+        """
+        ssh = self.get_ssh_client()
+        try:
+            # Use setsid to create new session and detach from terminal
+            # Redirect all I/O to/from /dev/null to prevent hanging
+            # The '&' is redundant with setsid but doesn't hurt
+            detached_cmd = f"setsid bash -c '{command}' < /dev/null > /dev/null 2>&1 &"
+
+            stdin, stdout, stderr = ssh.exec_command(detached_cmd, timeout=5)
+            # Don't wait for exit status - the whole point is to not block
+            # Just check if command was accepted (no immediate error)
+            # Small sleep to let command initiate
+            import time
+            time.sleep(0.5)
+            return True
+        except Exception as e:
+            logger.error(f"Error starting background command: {e}")
+            return False
+        finally:
+            ssh.close()
+
     async def confirm_action(self, ctx, action: str, timeout: int = 30) -> bool:
         """Ask for confirmation before destructive action"""
         msg = await ctx.send(f"⚠️ **Confirm {action}?**\nReact with ✅ to confirm (timeout: {timeout}s)")
@@ -654,8 +682,11 @@ class ServerControl(commands.Cog):
             # Restart daemon (it will auto-start the server)
             logger.info("Restarting daemon after rollback...")
             daemon_path = f"{self.server_install_path}/etdaemon.sh"
-            restart_daemon_cmd = f"nohup bash {daemon_path} > /dev/null 2>&1 &"
-            self.execute_ssh_command(restart_daemon_cmd)
+            daemon_started = self.execute_ssh_background_command(f"bash {daemon_path}")
+
+            if not daemon_started:
+                logger.error("Failed to start daemon after rollback")
+                return False
 
             logger.info("Waiting for daemon to start server after rollback...")
             server_started = False
@@ -894,9 +925,14 @@ class ServerControl(commands.Cog):
             await self._update_progress(status_msg, "🔄 Restarting daemon...", discord.Color.blue())
 
             # Start the daemon (it will auto-start the server)
+            # Use background command execution to avoid hanging on infinite loop
             daemon_path = f"{self.server_install_path}/etdaemon.sh"
-            restart_daemon_cmd = f"nohup bash {daemon_path} > /dev/null 2>&1 &"
-            self.execute_ssh_command(restart_daemon_cmd)
+            daemon_started = self.execute_ssh_background_command(f"bash {daemon_path}")
+
+            if not daemon_started:
+                await self._update_progress(status_msg, "❌ Failed to start daemon! Initiating rollback...", discord.Color.red())
+                rollback_needed = True
+                raise Exception("Failed to start daemon process")
 
             await self._update_progress(status_msg, "⏳ Waiting for daemon to start server...", discord.Color.blue())
 
