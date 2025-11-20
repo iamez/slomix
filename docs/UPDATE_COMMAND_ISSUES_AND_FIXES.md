@@ -158,19 +158,18 @@ Implement atomic-like updates:
 
 3. UPDATE PHASE (Minimal Downtime)
    ├── STOP SERVER (downtime starts here)
-   ├── Copy ONLY: binaries, pk3 files, libs
+   ├── Copy ONLY: binaries, pk3 files, .so libs, bin/
    ├── PRESERVE: all .cfg files, gamestats/, custom maps in etmain/
    ├── Set executable permissions on binaries
    ├── Verify all files copied successfully
    └── Detect new version
 
-4. VERIFICATION PHASE
-   ├── START SERVER
-   ├── Wait 5 seconds for initialization
-   ├── Check screen session exists
-   ├── Check etlded process is running
-   ├── Optional: RCON ping test
-   └── If ANY check fails → AUTOMATIC ROLLBACK
+4. VERIFICATION PHASE (Daemon-Based Restart)
+   ├── Wait for etdaemon.sh to auto-restart server (checks every 60s)
+   ├── Poll for screen session (up to 70s timeout)
+   ├── Verify etlded process is running
+   ├── Report restart time
+   └── If server doesn't start within 70s → AUTOMATIC ROLLBACK
 
 5. SUCCESS PHASE
    ├── Download new pk3 to bot
@@ -285,14 +284,15 @@ Implement atomic-like updates:
 📂 Installing new binaries and assets...
   ✓ etlded.x86_64 → updated
   ✓ legacy_v2.83.2-275-g36c31ba.pk3 → installed
-  ✓ libs/ → updated
+  ✓ *.so libraries → updated
+  ✓ bin/ directory → updated
   ✓ PRESERVED: vektor.cfg, server.cfg, gamestats/
 
 🔍 Detecting new version...
 🆕 New version: v2.83.2-275-g36c31ba
 
-🚀 Starting server...
-✅ Server restarted successfully! (downtime ended - 42 seconds total)
+⏳ Waiting for daemon to restart server...
+✅ Server verified running! (daemon restarted in 15s - total downtime: 35 seconds)
 
 📥 Downloading legacy_v2.83.2-275-g36c31ba.pk3 for Discord...
 📤 Uploading to Discord...
@@ -314,8 +314,9 @@ Implement atomic-like updates:
 🔄 Restoring from backup: ~/etlegacy_backups/backup_20251120_143022/
   ✓ Restored etlded.x86_64
   ✓ Restored legacy_v2.83.1-258-g29a4f12.pk3
-  ✓ Restored libs/
-🚀 Starting server with old version...
+  ✓ Restored *.so libraries
+  ✓ Restored bin/ directory
+⏳ Waiting for daemon to restart server with old version...
 ✅ Rollback successful! Server restored to v2.83.1-258-g29a4f12
 
 # Or manual rollback:

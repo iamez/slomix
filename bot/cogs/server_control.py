@@ -643,21 +643,29 @@ class ServerControl(commands.Cog):
                 logger.error(f"Rollback restore failed: {output} {error}")
                 return False
 
-            # Restart server
-            start_cmd = f"cd {self.server_install_path} && screen -dmS {self.screen_name} {self.server_binary} +exec {self.server_config}"
-            self.execute_ssh_command(start_cmd)
-            await asyncio.sleep(5)
+            # Wait for daemon to restart server (checks every 60s)
+            logger.info("Waiting for daemon to restart server after rollback...")
+            server_started = False
+            max_wait_seconds = 70
+            check_interval = 5
+            elapsed = 0
 
-            # Verify
-            verify_output, _, verify_exit = self.execute_ssh_command(f"screen -ls | grep {self.screen_name}")
-            success = verify_exit == 0 and self.screen_name in verify_output
+            while elapsed < max_wait_seconds:
+                await asyncio.sleep(check_interval)
+                elapsed += check_interval
 
-            if success:
+                verify_output, _, verify_exit = self.execute_ssh_command(f"screen -ls | grep {self.screen_name}")
+                if verify_exit == 0 and self.screen_name in verify_output:
+                    server_started = True
+                    logger.info(f"Server restarted successfully after {elapsed}s")
+                    break
+
+            if server_started:
                 logger.info("Rollback successful!")
             else:
-                logger.error("Rollback failed - server did not start")
+                logger.error("Rollback failed - server did not start within 70s")
 
-            return success
+            return server_started
 
         except Exception as e:
             logger.error(f"Error during rollback: {e}", exc_info=True)
@@ -860,20 +868,34 @@ class ServerControl(commands.Cog):
             if new_pk3 == old_pk3:
                 await self._update_progress(status_msg, "⚠️ Warning: Version appears unchanged!", discord.Color.orange())
 
-            # PHASE 8: Start server
-            await self._update_progress(status_msg, "🚀 Starting server (ending downtime)...", discord.Color.blue())
-            start_cmd = f"cd {self.server_install_path} && screen -dmS {self.screen_name} {self.server_binary} +exec {self.server_config}"
-            self.execute_ssh_command(start_cmd)
-            await asyncio.sleep(5)
+            # PHASE 8: Wait for daemon to restart server
+            # Note: etdaemon.sh checks every 60s and auto-restarts if screen session is missing
+            await self._update_progress(status_msg, "⏳ Waiting for daemon to restart server...", discord.Color.blue())
 
-            # PHASE 9: Verify server started
-            verify_output, _, verify_exit = self.execute_ssh_command(f"screen -ls | grep {self.screen_name}")
-            if verify_exit != 0 or self.screen_name not in verify_output:
+            # Poll for up to 70 seconds (daemon checks every 60s + buffer)
+            server_started = False
+            max_wait_seconds = 70
+            check_interval = 5
+            elapsed = 0
+
+            while elapsed < max_wait_seconds:
+                await asyncio.sleep(check_interval)
+                elapsed += check_interval
+
+                verify_output, _, verify_exit = self.execute_ssh_command(f"screen -ls | grep {self.screen_name}")
+                if verify_exit == 0 and self.screen_name in verify_output:
+                    server_started = True
+                    break
+
+                await self._update_progress(status_msg, f"⏳ Waiting for daemon restart... ({elapsed}/{max_wait_seconds}s)", discord.Color.blue())
+
+            # PHASE 9: Verify server started successfully
+            if not server_started:
                 await self._update_progress(status_msg, "❌ Server failed to start! Initiating rollback...", discord.Color.red())
                 rollback_needed = True
-                raise Exception("Server failed to start after update")
+                raise Exception("Server failed to start after update (daemon did not restart within 70s)")
 
-            await self._update_progress(status_msg, "✅ Server verified running!", discord.Color.green())
+            await self._update_progress(status_msg, f"✅ Server verified running! (daemon restarted in {elapsed}s)", discord.Color.green())
             await asyncio.sleep(2)
 
             # PHASE 10: Download and upload pk3 to Discord
