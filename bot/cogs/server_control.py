@@ -488,9 +488,11 @@ class ServerControl(commands.Cog):
                 echo "FILES_TO_BACKUP:"
                 [ -f etlded.x86_64 ] && echo "BINARY:etlded.x86_64"
                 [ -f etl.x86_64 ] && echo "BINARY:etl.x86_64"
-                [ -f etl_bot.x86_64 ] && echo "BINARY:etl_bot.x86_64"
+                [ -f etl_bot.x86_64.sh ] && echo "BINARY:etl_bot.x86_64.sh"
+                [ -f etlded_bot.x86_64.sh ] && echo "BINARY:etlded_bot.x86_64.sh"
+                find . -maxdepth 1 -name "*.so" -type f | while read f; do echo "LIBRARY:$(basename $f)"; done
                 [ -d legacy ] && find legacy -name '*.pk3' -type f | head -10 | while read f; do echo "PK3:$f"; done
-                [ -d libs ] && echo "LIBS:yes"
+                [ -d bin ] && echo "BIN_DIR:yes"
                 echo "INSPECT_DONE"
             """
             output, error, exit_code = self.execute_ssh_command(inspect_cmd)
@@ -498,7 +500,8 @@ class ServerControl(commands.Cog):
             files_to_backup = {
                 'binaries': [],
                 'pk3s': [],
-                'has_libs': False
+                'libraries': [],
+                'has_bin_dir': False
             }
 
             for line in output.split('\n'):
@@ -506,15 +509,18 @@ class ServerControl(commands.Cog):
                     files_to_backup['binaries'].append(line.split(':', 1)[1])
                 elif line.startswith('PK3:'):
                     files_to_backup['pk3s'].append(line.split(':', 1)[1])
-                elif line.startswith('LIBS:'):
-                    files_to_backup['has_libs'] = True
+                elif line.startswith('LIBRARY:'):
+                    files_to_backup['libraries'].append(line.split(':', 1)[1])
+                elif line.startswith('BIN_DIR:'):
+                    files_to_backup['has_bin_dir'] = True
 
             await self._update_progress(
                 status_msg,
                 f"💾 Creating smart backup...\n"
                 f"**Binaries:** {len(files_to_backup['binaries'])}\n"
                 f"**PK3 files:** {len(files_to_backup['pk3s'])}\n"
-                f"**Libraries:** {'Yes' if files_to_backup['has_libs'] else 'No'}",
+                f"**Libraries:** {len(files_to_backup['libraries'])}\n"
+                f"**Bin directory:** {'Yes' if files_to_backup['has_bin_dir'] else 'No'}",
                 discord.Color.blue()
             )
 
@@ -522,7 +528,8 @@ class ServerControl(commands.Cog):
             create_backup_cmd = f"""
                 mkdir -p {backup_dir}/binaries
                 mkdir -p {backup_dir}/legacy
-                mkdir -p {backup_dir}/libs
+                mkdir -p {backup_dir}/bin
+                mkdir -p {backup_dir}/root_libs
                 echo "BACKUP_TIMESTAMP:{timestamp}" > {backup_dir}/backup_info.txt
             """
             self.execute_ssh_command(create_backup_cmd)
@@ -532,7 +539,9 @@ class ServerControl(commands.Cog):
                 backup_binaries_cmd = f"""
                     cd {self.server_install_path}
                     cp -f etlded.x86_64 {backup_dir}/binaries/ 2>/dev/null || true
-                    cp -f etl*.x86_64 {backup_dir}/binaries/ 2>/dev/null || true
+                    cp -f etl.x86_64 {backup_dir}/binaries/ 2>/dev/null || true
+                    cp -f etl_bot.x86_64.sh {backup_dir}/binaries/ 2>/dev/null || true
+                    cp -f etlded_bot.x86_64.sh {backup_dir}/binaries/ 2>/dev/null || true
                 """
                 self.execute_ssh_command(backup_binaries_cmd)
 
@@ -545,14 +554,22 @@ class ServerControl(commands.Cog):
                 """
                 self.execute_ssh_command(backup_pk3_cmd)
 
-            # Backup libraries (only if update has libs)
-            if files_to_backup['has_libs']:
-                backup_libs_cmd = f"""
-                    if [ -d {self.server_install_path}/libs ]; then
-                        cp -r {self.server_install_path}/libs/* {backup_dir}/libs/ 2>/dev/null || true
+            # Backup .so libraries from root (only if update has them)
+            if files_to_backup['libraries']:
+                backup_so_cmd = f"""
+                    cd {self.server_install_path}
+                    cp -f *.so {backup_dir}/root_libs/ 2>/dev/null || true
+                """
+                self.execute_ssh_command(backup_so_cmd)
+
+            # Backup bin/ directory (only if update has it)
+            if files_to_backup['has_bin_dir']:
+                backup_bin_cmd = f"""
+                    if [ -d {self.server_install_path}/bin ]; then
+                        cp -r {self.server_install_path}/bin/* {backup_dir}/bin/ 2>/dev/null || true
                     fi
                 """
-                self.execute_ssh_command(backup_libs_cmd)
+                self.execute_ssh_command(backup_bin_cmd)
 
             # Save version info and file list
             version_info = await self._detect_current_version()
@@ -562,6 +579,8 @@ class ServerControl(commands.Cog):
                 echo "INSTALL_PATH:{self.server_install_path}" >> {backup_dir}/backup_info.txt
                 echo "BACKED_UP_BINARIES:{len(files_to_backup['binaries'])}" >> {backup_dir}/backup_info.txt
                 echo "BACKED_UP_PK3S:{len(files_to_backup['pk3s'])}" >> {backup_dir}/backup_info.txt
+                echo "BACKED_UP_LIBRARIES:{len(files_to_backup['libraries'])}" >> {backup_dir}/backup_info.txt
+                echo "BACKED_UP_BIN_DIR:{files_to_backup['has_bin_dir']}" >> {backup_dir}/backup_info.txt
             """
             self.execute_ssh_command(save_info_cmd)
 
@@ -595,6 +614,8 @@ class ServerControl(commands.Cog):
                 if [ -d {backup_dir}/binaries ] && [ "$(ls -A {backup_dir}/binaries)" ]; then
                     cp -f {backup_dir}/binaries/* {self.server_install_path}/ 2>&1
                     chmod +x {self.server_install_path}/etlded.x86_64 2>/dev/null
+                    chmod +x {self.server_install_path}/etl.x86_64 2>/dev/null
+                    chmod +x {self.server_install_path}/*.sh 2>/dev/null || true
                 fi
 
                 # Restore legacy pk3 files
@@ -603,10 +624,15 @@ class ServerControl(commands.Cog):
                     cp -f {backup_dir}/legacy/*.pk3 {self.server_install_path}/legacy/ 2>&1
                 fi
 
-                # Restore libs
-                if [ -d {backup_dir}/libs ] && [ "$(ls -A {backup_dir}/libs)" ]; then
-                    mkdir -p {self.server_install_path}/libs
-                    cp -rf {backup_dir}/libs/* {self.server_install_path}/libs/ 2>/dev/null || true
+                # Restore .so libraries from root
+                if [ -d {backup_dir}/root_libs ] && [ "$(ls -A {backup_dir}/root_libs)" ]; then
+                    cp -f {backup_dir}/root_libs/*.so {self.server_install_path}/ 2>/dev/null || true
+                fi
+
+                # Restore bin/ directory
+                if [ -d {backup_dir}/bin ] && [ "$(ls -A {backup_dir}/bin)" ]; then
+                    mkdir -p {self.server_install_path}/bin
+                    cp -rf {backup_dir}/bin/* {self.server_install_path}/bin/ 2>/dev/null || true
                 fi
 
                 echo 'RESTORE_COMPLETE'
@@ -783,7 +809,7 @@ class ServerControl(commands.Cog):
             # PHASE 6: Install new files (SELECTIVE - preserve configs)
             await self._update_progress(status_msg, "📂 Installing binaries and assets (preserving configs)...", discord.Color.blue())
 
-            # Copy ONLY binaries, pk3 files, and libs - PRESERVE all .cfg files
+            # Copy ONLY binaries, pk3 files, libraries, and bin/ - PRESERVE all .cfg files
             install_cmd = f"""
                 cd {extracted_full_path}
 
@@ -791,8 +817,15 @@ class ServerControl(commands.Cog):
                 if [ -f etlded.x86_64 ]; then
                     cp -f etlded.x86_64 {self.server_install_path}/ && chmod +x {self.server_install_path}/etlded.x86_64
                 fi
-                cp -f etl*.x86_64 {self.server_install_path}/ 2>/dev/null || true
-                chmod +x {self.server_install_path}/etl*.x86_64 2>/dev/null || true
+                if [ -f etl.x86_64 ]; then
+                    cp -f etl.x86_64 {self.server_install_path}/ && chmod +x {self.server_install_path}/etl.x86_64
+                fi
+                if [ -f etl_bot.x86_64.sh ]; then
+                    cp -f etl_bot.x86_64.sh {self.server_install_path}/ && chmod +x {self.server_install_path}/etl_bot.x86_64.sh
+                fi
+                if [ -f etlded_bot.x86_64.sh ]; then
+                    cp -f etlded_bot.x86_64.sh {self.server_install_path}/ && chmod +x {self.server_install_path}/etlded_bot.x86_64.sh
+                fi
 
                 # Copy ONLY pk3 files from legacy/ (NOT .cfg files)
                 if [ -d legacy ]; then
@@ -800,10 +833,13 @@ class ServerControl(commands.Cog):
                     cp -f legacy/*.pk3 {self.server_install_path}/legacy/ 2>&1
                 fi
 
-                # Copy libs
-                if [ -d libs ]; then
-                    mkdir -p {self.server_install_path}/libs
-                    cp -rf libs/* {self.server_install_path}/libs/ 2>/dev/null || true
+                # Copy .so libraries from root
+                cp -f *.so {self.server_install_path}/ 2>/dev/null || true
+
+                # Copy bin/ directory
+                if [ -d bin ]; then
+                    mkdir -p {self.server_install_path}/bin
+                    cp -rf bin/* {self.server_install_path}/bin/ 2>/dev/null || true
                 fi
 
                 echo 'INSTALL_COMPLETE'
