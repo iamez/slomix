@@ -248,7 +248,14 @@ class UltimateETLegacyBot(commands.Bot):
         self.production_channel_id = int(os.getenv("PRODUCTION_CHANNEL_ID", "0"))
         self.gather_channel_id = int(os.getenv("GATHER_CHANNEL_ID", "0"))
         self.general_channel_id = int(os.getenv("GENERAL_CHANNEL_ID", "0"))
-        self.admin_channel_id = int(os.getenv("ADMIN_CHANNEL_ID", "0"))
+
+        # Parse admin channels (supports comma-separated list)
+        admin_channels_str = os.getenv("ADMIN_CHANNEL_ID", "0")
+        self.admin_channels = [
+            int(ch.strip()) for ch in admin_channels_str.split(",") if ch.strip().isdigit()
+        ]
+        # Keep backward compatibility with single admin_channel_id
+        self.admin_channel_id = self.admin_channels[0] if self.admin_channels else 0
 
         # Public command channels (where stats commands work)
         self.public_channels = [
@@ -258,6 +265,9 @@ class UltimateETLegacyBot(commands.Bot):
                 self.general_channel_id
             ] if ch != 0
         ]
+
+        # All allowed channels (public + admin) for global check
+        self.all_allowed_channels = list(set(self.public_channels + self.admin_channels))
 
         # Session thresholds
         self.session_start_threshold = int(
@@ -393,6 +403,27 @@ class UltimateETLegacyBot(commands.Bot):
         """✅ Send message with rate limit delay"""
         await ctx.send(*args, **kwargs)
         await asyncio.sleep(delay)
+
+    async def bot_check(self, ctx):
+        """
+        Global check: Silently ignore commands from unauthorized channels.
+
+        Only responds to commands in:
+        - Public channels (production, gather, general)
+        - Admin channels
+
+        Commands from other channels are completely ignored (no response).
+        """
+        # If no channels configured, allow all
+        if not self.all_allowed_channels:
+            return True
+
+        # Check if command is in an allowed channel
+        if ctx.channel.id in self.all_allowed_channels:
+            return True
+
+        # Silently ignore - return False without sending any message
+        return False
 
     async def setup_hook(self):
         """🔧 Initialize all bot components"""
