@@ -20,6 +20,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
+from bot.core.checks import is_public_channel
 from bot.core.lazy_pagination_view import LazyPaginationView
 from bot.stats import StatsCalculator
 from bot.services.player_formatter import PlayerFormatter
@@ -57,6 +58,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
         except Exception:
             pass
 
+    @is_public_channel()
     @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.command(name="stats")
     async def stats(self, ctx, *, player_name: str = None):
@@ -435,6 +437,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
             logger.error(f"Error in stats command: {e}", exc_info=True)
             await ctx.send(f"❌ Error retrieving stats: {e}")
 
+    @is_public_channel()
     @commands.cooldown(1, 10, commands.BucketType.user)
     @commands.command(name="leaderboard", aliases=["lb", "top"])
     async def leaderboard(self, ctx, stat_type: str = "kills"):

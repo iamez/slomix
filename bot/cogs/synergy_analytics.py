@@ -18,6 +18,7 @@ import asyncio
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
+from bot.core.checks import is_public_channel
 from analytics.synergy_detector import SynergyDetector, SynergyMetrics
 from analytics.config import config, is_enabled, is_command_enabled
 from bot.services.player_formatter import PlayerFormatter
@@ -77,6 +78,7 @@ class SynergyAnalytics(commands.Cog):
     # COMMAND: !synergy
     # =========================================================================
     
+    @is_public_channel()
     @commands.command(name='synergy', aliases=['chemistry', 'duo'])
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def synergy_command(
@@ -149,6 +151,7 @@ class SynergyAnalytics(commands.Cog):
     # COMMAND: !best_duos
     # =========================================================================
     
+    @is_public_channel()
     @commands.command(name='best_duos', aliases=['top_duos', 'best_pairs'])
     @commands.cooldown(1, 10, commands.BucketType.channel)
     async def best_duos_command(self, ctx, limit: int = 10):
@@ -260,6 +263,7 @@ class SynergyAnalytics(commands.Cog):
     # COMMAND: !team_builder
     # =========================================================================
     
+    @is_public_channel()
     @commands.command(name='team_builder', aliases=['balance_teams', 'suggest_teams'])
     @commands.cooldown(1, 15, commands.BucketType.channel)
     async def team_builder_command(self, ctx, *players):
@@ -387,6 +391,7 @@ class SynergyAnalytics(commands.Cog):
     # COMMAND: !player_impact
     # =========================================================================
     
+    @is_public_channel()
     @commands.command(name='player_impact', aliases=['teammates', 'partners'])
     @commands.cooldown(1, 10, commands.BucketType.user)
     async def player_impact_command(self, ctx, player: Optional[str] = None):
@@ -551,20 +556,23 @@ class SynergyAnalytics(commands.Cog):
     # ADMIN COMMANDS
     # =========================================================================
     
+    @is_admin_channel()
     @commands.command(name='fiveeyes_enable')
     @commands.has_permissions(administrator=True)
     async def enable_command(self, ctx):
         """Enable FIVEEYES synergy analytics (Admin only)"""
         config.enable()
         await ctx.send("✅ **FIVEEYES synergy analytics enabled!**")
-    
+
+    @is_admin_channel()
     @commands.command(name='fiveeyes_disable')
     @commands.has_permissions(administrator=True)
     async def disable_command(self, ctx):
         """Disable FIVEEYES synergy analytics (Admin only)"""
         config.disable()
         await ctx.send("⚠️ **FIVEEYES synergy analytics disabled.**")
-    
+
+    @is_admin_channel()
     @commands.command(name='recalculate_synergies')
     @commands.has_permissions(administrator=True)
     async def recalculate_command(self, ctx):

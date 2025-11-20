@@ -21,6 +21,8 @@ from datetime import datetime, timedelta
 import discord
 from discord.ext import commands
 
+from bot.core.checks import is_admin_channel
+
 logger = logging.getLogger("UltimateBot.SyncCog")
 
 
@@ -91,6 +93,7 @@ class SyncCog(commands.Cog, name="Sync Commands"):
         except Exception:
             return True
 
+    @is_admin_channel()
     @commands.command(name="sync_stats", aliases=["syncstats", "sync_logs"])
     async def sync_stats(self, ctx, period: str = None):
         """🔄 Manually sync and process stats files from server
@@ -325,21 +328,25 @@ class SyncCog(commands.Cog, name="Sync Commands"):
             logger.error(f"Error in sync_stats: {e}")
             await ctx.send(f"❌ Sync error: {e}")
 
+    @is_admin_channel()
     @commands.command(name="sync_today", aliases=["sync1day"])
     async def sync_today(self, ctx):
         """🔄 Quick sync: Today's matches only (last 24 hours)"""
         await self.sync_stats(ctx, period="1day")
 
+    @is_admin_channel()
     @commands.command(name="sync_week", aliases=["sync1week"])
     async def sync_week(self, ctx):
         """🔄 Quick sync: This week's matches (last 7 days)"""
         await self.sync_stats(ctx, period="1week")
 
+    @is_admin_channel()
     @commands.command(name="sync_month", aliases=["sync1month"])
     async def sync_month(self, ctx):
         """🔄 Quick sync: This month's matches (last 30 days)"""
         await self.sync_stats(ctx, period="1month")
 
+    @is_admin_channel()
     @commands.command(name="sync_all")
     async def sync_all(self, ctx):
         """🔄 Quick sync: ALL unprocessed files (no time filter)"""

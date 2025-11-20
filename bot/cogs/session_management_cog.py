@@ -17,6 +17,8 @@ from datetime import datetime
 import discord
 from discord.ext import commands
 
+from bot.core.checks import is_admin_channel
+
 logger = logging.getLogger("UltimateBot.SessionManagementCog")
 
 
@@ -27,6 +29,7 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
         self.bot = bot
         logger.info("🎬 SessionManagementCog initializing...")
 
+    @is_admin_channel()
     @commands.command(name="session_start")
     async def session_start(self, ctx, *, map_name: str = "Unknown"):
         """🎬 Start a new gaming session
@@ -86,6 +89,7 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
             except Exception:
                 pass
 
+    @is_admin_channel()
     @commands.command(name="session_end")
     async def session_end(self, ctx):
         """🏁 Stop SSH monitoring

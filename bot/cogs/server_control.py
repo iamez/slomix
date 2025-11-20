@@ -28,6 +28,8 @@ import discord
 import paramiko
 from discord.ext import commands
 
+from bot.core.checks import is_admin_channel
+
 logger = logging.getLogger('ServerControl')
 
 
@@ -253,6 +255,7 @@ class ServerControl(commands.Cog):
     # SERVER PROCESS CONTROL
     # ========================================
     
+    @is_admin_channel()
     @commands.command(name='server_status', aliases=['status', 'srv_status'])
     async def server_status(self, ctx):
         """💚 Check if ET:Legacy server is running"""
@@ -314,6 +317,7 @@ class ServerControl(commands.Cog):
             await ctx.send(f"❌ Error checking status: {e}")
     
     @commands.command(name='server_start', aliases=['start', 'srv_start'])
+    @is_admin_channel()
     @commands.check(is_admin_channel)
     async def server_start(self, ctx):
         """🚀 Start the ET:Legacy server (Admin channel only)"""
@@ -366,6 +370,7 @@ class ServerControl(commands.Cog):
             await self.log_action(ctx, "Server Start Failed", f"❌ Exception: {e}")
     
     @commands.command(name='server_stop', aliases=['stop', 'srv_stop'])
+    @is_admin_channel()
     @commands.check(is_admin_channel)
     async def server_stop(self, ctx):
         """🛑 Stop the ET:Legacy server (Admin channel only)"""
@@ -420,6 +425,7 @@ class ServerControl(commands.Cog):
             await self.log_action(ctx, "Server Stop Failed", f"❌ Exception: {e}")
     
     @commands.command(name='server_restart', aliases=['restart', 'srv_restart'])
+    @is_admin_channel()
     @commands.check(is_admin_channel)
     async def server_restart(self, ctx):
         """🔄 Restart the ET:Legacy server (Admin channel only)"""
