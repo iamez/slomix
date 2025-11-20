@@ -205,6 +205,28 @@ timestamp           TEXT
 UNIQUE(player_name, session_id, round_num)
 ```
 
+**`mvp_votes`** - Community MVP voting results (Engagement Features - v1.1+)
+```sql
+id                  SERIAL PRIMARY KEY
+session_id          TEXT NOT NULL      -- Gaming session ID
+player_guid         TEXT NOT NULL      -- Player GUID
+player_name         TEXT NOT NULL      -- Player name
+vote_count          INTEGER NOT NULL   -- Votes received
+total_votes         INTEGER NOT NULL   -- Total votes cast
+voted_at            TIMESTAMP          -- When voting occurred
+UNIQUE(session_id, player_guid)
+```
+
+**`player_titles`** - Unlockable player titles and badges (Engagement Features - v1.1+)
+```sql
+id                  SERIAL PRIMARY KEY
+player_guid         TEXT NOT NULL      -- Player GUID
+title_id            TEXT NOT NULL      -- Title identifier (e.g., 'sharpshooter')
+unlocked_at         TIMESTAMP          -- When title was unlocked
+is_equipped         BOOLEAN            -- Currently displayed title
+UNIQUE(player_guid, title_id)
+```
+
 ---
 
 ## ðŸŽ¯ Core Features
