@@ -498,6 +498,14 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info('✅ Team System Cog loaded (teams, lineup_changes, session_score)')
         except Exception as e:
             logger.error(f'Failed to load Team System Cog: {e}', exc_info=True)
+
+        # Load Player Insights Cog (records, trends, ratings, playstyle)
+        try:
+            from bot.cogs.player_insights_cog import PlayerInsightsCog
+            await self.add_cog(PlayerInsightsCog(self))
+            logger.info('Player Insights Cog loaded (records, trend, rating, map_stats, playstyle, personality)')
+        except Exception as e:
+            logger.error(f'Failed to load Player Insights Cog: {e}', exc_info=True)
         # �🎯 FIVEEYES: Load synergy analytics cog (SAFE - disabled by default)
         try:
             await self.load_extension("cogs.synergy_analytics")
