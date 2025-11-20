@@ -51,6 +51,7 @@ This document lists the Discord bot commands found in the repository, their alia
 | `server_start` | `start`, `srv_start` | Start the game server |
 | `server_stop` | `stop`, `srv_stop` | Stop the server |
 | `server_restart` | `restart`, `srv_restart` | Restart the server |
+| `et_update` | `update_server`, `etlegacy_update` | Update ET:Legacy server with new snapshot and upload pk3 to Discord |
 | `map_list` | `maps`, `listmaps` | List available maps |
 | `map_add` | `addmap`, `upload_map` | Upload/add a map |
 | `map_change` | `changemap`, `map` | Change current map |
