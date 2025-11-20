@@ -157,7 +157,8 @@ Implement atomic-like updates:
    └── DO NOT backup configs (they stay in place)
 
 3. UPDATE PHASE (Minimal Downtime)
-   ├── STOP SERVER (downtime starts here)
+   ├── STOP DAEMON (pkill -f etdaemon.sh)
+   ├── STOP SERVER (pkill etlded) - downtime starts here
    ├── Copy ONLY: binaries, pk3 files, .so libs, bin/
    ├── PRESERVE: all .cfg files, gamestats/, custom maps in etmain/
    ├── Set executable permissions on binaries
@@ -165,7 +166,8 @@ Implement atomic-like updates:
    └── Detect new version
 
 4. VERIFICATION PHASE (Daemon-Based Restart)
-   ├── Wait for etdaemon.sh to auto-restart server (checks every 60s)
+   ├── RESTART DAEMON (nohup bash etdaemon.sh &)
+   ├── Wait for daemon to auto-start server (checks every 60s)
    ├── Poll for screen session (up to 70s timeout)
    ├── Verify etlded process is running
    ├── Report restart time
@@ -280,7 +282,10 @@ Implement atomic-like updates:
 📁 Location: ~/etlegacy_backups/backup_20251120_143022/
 ⏰ Retention: 7 days
 
-🛑 Stopping server... (downtime starts)
+🛑 Stopping daemon and server... (downtime starts)
+  ✓ Daemon stopped (etdaemon.sh)
+  ✓ Server stopped (etlded)
+
 📂 Installing new binaries and assets...
   ✓ etlded.x86_64 → updated
   ✓ legacy_v2.83.2-275-g36c31ba.pk3 → installed
@@ -291,8 +296,9 @@ Implement atomic-like updates:
 🔍 Detecting new version...
 🆕 New version: v2.83.2-275-g36c31ba
 
-⏳ Waiting for daemon to restart server...
-✅ Server verified running! (daemon restarted in 15s - total downtime: 35 seconds)
+🔄 Restarting daemon...
+⏳ Waiting for daemon to start server...
+✅ Server verified running! (daemon started server in 15s - total downtime: 35 seconds)
 
 📥 Downloading legacy_v2.83.2-275-g36c31ba.pk3 for Discord...
 📤 Uploading to Discord...
@@ -311,12 +317,14 @@ Implement atomic-like updates:
 ```bash
 # If update fails:
 ❌ Server failed to start! Initiating automatic rollback...
+🛑 Stopping daemon and server...
 🔄 Restoring from backup: ~/etlegacy_backups/backup_20251120_143022/
   ✓ Restored etlded.x86_64
   ✓ Restored legacy_v2.83.1-258-g29a4f12.pk3
   ✓ Restored *.so libraries
   ✓ Restored bin/ directory
-⏳ Waiting for daemon to restart server with old version...
+🔄 Restarting daemon...
+⏳ Waiting for daemon to start server with old version...
 ✅ Rollback successful! Server restored to v2.83.1-258-g29a4f12
 
 # Or manual rollback:

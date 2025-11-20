@@ -604,8 +604,16 @@ class ServerControl(commands.Cog):
         try:
             logger.info(f"Starting rollback from: {backup_dir}")
 
-            # Stop server
-            self.execute_ssh_command("pkill etlded; sleep 2")
+            # Stop daemon and server
+            stop_cmd = """
+                # Kill daemon process
+                pkill -f etdaemon.sh
+                sleep 1
+                # Kill server process
+                pkill etlded
+                sleep 2
+            """
+            self.execute_ssh_command(stop_cmd)
             await asyncio.sleep(3)
 
             # Restore files
@@ -643,8 +651,13 @@ class ServerControl(commands.Cog):
                 logger.error(f"Rollback restore failed: {output} {error}")
                 return False
 
-            # Wait for daemon to restart server (checks every 60s)
-            logger.info("Waiting for daemon to restart server after rollback...")
+            # Restart daemon (it will auto-start the server)
+            logger.info("Restarting daemon after rollback...")
+            daemon_path = f"{self.server_install_path}/etdaemon.sh"
+            restart_daemon_cmd = f"nohup bash {daemon_path} > /dev/null 2>&1 &"
+            self.execute_ssh_command(restart_daemon_cmd)
+
+            logger.info("Waiting for daemon to start server after rollback...")
             server_started = False
             max_wait_seconds = 70
             check_interval = 5
@@ -808,9 +821,18 @@ class ServerControl(commands.Cog):
             )
             await asyncio.sleep(2)
 
-            # PHASE 5: Stop server (MINIMIZE DOWNTIME - only stop after download/extract/backup)
-            await self._update_progress(status_msg, "🛑 Stopping server (downtime starts)...", discord.Color.orange())
-            stop_cmd = "pkill etlded; sleep 2"
+            # PHASE 5: Stop daemon and server (MINIMIZE DOWNTIME - only stop after download/extract/backup)
+            await self._update_progress(status_msg, "🛑 Stopping daemon and server (downtime starts)...", discord.Color.orange())
+
+            # Kill daemon first (otherwise it will keep restarting the server)
+            stop_cmd = """
+                # Kill daemon process
+                pkill -f etdaemon.sh
+                sleep 1
+                # Kill server process
+                pkill etlded
+                sleep 2
+            """
             self.execute_ssh_command(stop_cmd)
             await asyncio.sleep(3)
 
@@ -868,9 +890,15 @@ class ServerControl(commands.Cog):
             if new_pk3 == old_pk3:
                 await self._update_progress(status_msg, "⚠️ Warning: Version appears unchanged!", discord.Color.orange())
 
-            # PHASE 8: Wait for daemon to restart server
-            # Note: etdaemon.sh checks every 60s and auto-restarts if screen session is missing
-            await self._update_progress(status_msg, "⏳ Waiting for daemon to restart server...", discord.Color.blue())
+            # PHASE 8: Restart daemon and wait for server to start
+            await self._update_progress(status_msg, "🔄 Restarting daemon...", discord.Color.blue())
+
+            # Start the daemon (it will auto-start the server)
+            daemon_path = f"{self.server_install_path}/etdaemon.sh"
+            restart_daemon_cmd = f"nohup bash {daemon_path} > /dev/null 2>&1 &"
+            self.execute_ssh_command(restart_daemon_cmd)
+
+            await self._update_progress(status_msg, "⏳ Waiting for daemon to start server...", discord.Color.blue())
 
             # Poll for up to 70 seconds (daemon checks every 60s + buffer)
             server_started = False
@@ -887,7 +915,8 @@ class ServerControl(commands.Cog):
                     server_started = True
                     break
 
-                await self._update_progress(status_msg, f"⏳ Waiting for daemon restart... ({elapsed}/{max_wait_seconds}s)", discord.Color.blue())
+                if elapsed % 10 == 0:  # Update every 10 seconds
+                    await self._update_progress(status_msg, f"⏳ Waiting for daemon to start server... ({elapsed}/{max_wait_seconds}s)", discord.Color.blue())
 
             # PHASE 9: Verify server started successfully
             if not server_started:
