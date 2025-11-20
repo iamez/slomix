@@ -1,9 +1,11 @@
-# ET:Legacy Discord Bot - AI Context
+# Slomix - ET:Legacy Discord Bot
 
+**Version**: 1.0 (Released: November 20, 2025)
 **Project**: ET:Legacy Statistics Discord Bot
 **Database**: PostgreSQL (primary), SQLite (fallback)
 **Language**: Python 3.11+
 **Discord.py**: Version 2.0+
+**Status**: Production-Ready ✅
 
 ---
 
@@ -25,6 +27,47 @@
 ```
 ET:Legacy Game Server → SSH Monitor → Parser → PostgreSQL → Discord Bot → Users
                         (30s poll)   (50+ fields)  (6 tables)   (63 commands)
+```
+
+---
+
+## 🎉 Version 1.0 Release (November 20, 2025)
+
+### Release Milestone
+**Slomix** is now officially production-ready and fully documented!
+
+### What's Included in 1.0:
+- ✅ **63 Discord Commands** - Complete bot functionality
+- ✅ **6-Layer Data Validation** - ACID-compliant PostgreSQL pipeline
+- ✅ **Full Automation** - SSH monitoring, voice detection, auto-posting
+- ✅ **Achievement System** - Player badges and lifetime stats
+- ✅ **Advanced Team Detection** - Accurate team-swap handling
+- ✅ **Differential R2 Calculation** - Smart Round 2 stat parsing
+- ✅ **Gaming Session Tracking** - 60-minute gap detection
+- ✅ **Comprehensive Documentation** - Complete technical docs
+
+### Repository Cleanup (Nov 20, 2025)
+- 🧹 Removed **~6.5 GB** of development artifacts from GitHub
+- 📁 Organized all documentation into `/docs/` structure
+- 🛡️ Updated `.gitignore` to prevent future clutter
+- 📚 Created comprehensive documentation index
+- ✨ Clean root directory with only essential files
+
+### Documentation Structure:
+```
+docs/
+├── SAFETY_VALIDATION_SYSTEMS.md
+├── CHANGELOG.md
+├── DATA_PIPELINE.md
+├── FIELD_MAPPING.md
+├── COMMANDS.md
+├── SYSTEM_ARCHITECTURE.md
+├── TECHNICAL_OVERVIEW.md
+├── DEPLOYMENT_CHECKLIST.md
+├── FRESH_INSTALL_GUIDE.md
+├── AI_COMPREHENSIVE_SYSTEM_GUIDE.md
+├── archive/ (historical documentation)
+└── [30+ additional system docs]
 ```
 
 ---
@@ -111,10 +154,12 @@ ET:Legacy Game Server → SSH Monitor → Parser → PostgreSQL → Discord Bot 
 - `postgresql_database_manager.py` - Database CLI manager
 
 ### Documentation (READ THESE FIRST)
-- `AI_COMPREHENSIVE_SYSTEM_GUIDE.md` - Complete system reference
-- `DUPLICATE_DETECTION_BUG.md` - Nov 19 bug fix details
-- `BUGFIX_SESSION_NOV3_2025.md` - Nov 3 critical fixes
-- `VALIDATION_FINDINGS_NOV3.md` - Data validation (100% accurate)
+- `docs/AI_COMPREHENSIVE_SYSTEM_GUIDE.md` - Complete system reference
+- `docs/SAFETY_VALIDATION_SYSTEMS.md` - 6-layer validation system
+- `docs/DATA_PIPELINE.md` - Complete data pipeline
+- `docs/SYSTEM_ARCHITECTURE.md` - System architecture
+- `docs/COMMANDS.md` - All 63 bot commands
+- `docs/archive/` - Historical bug fixes and audits
 
 ### Services (New Architecture)
 - `bot/services/player_badge_service.py` - Achievement badges
@@ -179,24 +224,27 @@ SELECT * FROM rounds ORDER BY id DESC LIMIT 5;
 
 ---
 
-## System Status (Current)
+## System Status (Version 1.0)
 
-✅ Parser: 100% functional, R2 differential validated
-✅ Database: PostgreSQL, no corruption, 100% accurate
-✅ Bot Commands: All 63 commands functional
-✅ SSH Monitoring: Active (30-second polling)
-✅ Duplicate Detection: Fixed (includes round_time)
-✅ Gaming Session Logic: Fixed (60-minute gaps, handles midnight)
-✅ Player Aggregation: Fixed (uses player_guid)
-✅ Achievement System: Active, rebalanced thresholds
-✅ Automation: Voice channel monitoring + scheduled tasks
+✅ **Parser**: 100% functional, R2 differential validated
+✅ **Database**: PostgreSQL, no corruption, 100% accurate
+✅ **Bot Commands**: All 63 commands functional
+✅ **SSH Monitoring**: Active (30-second polling)
+✅ **Duplicate Detection**: Fixed (includes round_time)
+✅ **Gaming Session Logic**: Fixed (60-minute gaps, handles midnight)
+✅ **Player Aggregation**: Fixed (uses player_guid)
+✅ **Achievement System**: Active, rebalanced thresholds
+✅ **Automation**: Voice channel monitoring + scheduled tasks
+✅ **Documentation**: Complete and organized in /docs/
+✅ **Repository**: Clean and maintainable (50-100 MB)
+✅ **Production Ready**: Fully tested and validated
 
 ---
 
 ## Before Making Changes
 
-1. Read `AI_COMPREHENSIVE_SYSTEM_GUIDE.md` for full context
-2. Check recent commits and BUGFIX_*.md files
+1. Read `docs/AI_COMPREHENSIVE_SYSTEM_GUIDE.md` for full context
+2. Check recent commits and `docs/archive/` for historical fixes
 3. Understand current implementation completely
 4. Identify root cause, not symptoms
 5. Test with actual data, especially edge cases:
@@ -207,7 +255,27 @@ SELECT * FROM rounds ORDER BY id DESC LIMIT 5;
 
 ---
 
-**Last Updated**: 2025-11-19
+## Maintenance Guidelines (Version 1.0+)
+
+### Repository Cleanliness
+- ✅ Keep root directory minimal (12-15 files only)
+- ✅ All documentation goes in `/docs/`
+- ✅ All bot code goes in `/bot/`
+- ❌ Never commit: logs, backups, test scripts, database files
+- 📖 See repository maintenance guide for details
+
+### Before Committing
+1. Check `git status` - ensure no trash files
+2. Review `git diff --cached --name-only`
+3. Add files individually, not with `git add -A`
+4. Update `docs/CHANGELOG.md` for significant changes
+5. Test thoroughly before pushing
+
+---
+
+**Version**: 1.0
+**Release Date**: November 20, 2025
+**Last Updated**: 2025-11-20
 **Schema Version**: 2.0
-**Critical Fixes**: 5 major bugs fixed (Nov 2025)
-**Status**: Production-ready, validated
+**Repository Size**: ~50-100 MB (cleaned)
+**Status**: Production-ready, fully documented, maintainable ✅
