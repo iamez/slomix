@@ -506,6 +506,14 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info('Player Insights Cog loaded (records, trend, rating, map_stats, playstyle, personality)')
         except Exception as e:
             logger.error(f'Failed to load Player Insights Cog: {e}', exc_info=True)
+
+        # Load Recap Cog (weekly, monthly, yearly performance summaries)
+        try:
+            from bot.cogs.recap_cog import RecapCog
+            await self.add_cog(RecapCog(self))
+            logger.info('Recap Cog loaded (recap_week, recap_month, recap_year)')
+        except Exception as e:
+            logger.error(f'Failed to load Recap Cog: {e}', exc_info=True)
         # �🎯 FIVEEYES: Load synergy analytics cog (SAFE - disabled by default)
         try:
             await self.load_extension("cogs.synergy_analytics")
