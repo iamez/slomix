@@ -440,6 +440,253 @@ class ServerControl(commands.Cog):
         await ctx.invoke(self.bot.get_command('server_start'))
     
     # ========================================
+    # SERVER UPDATE & DEPLOYMENT
+    # ========================================
+
+    @commands.command(name='et_update', aliases=['update_server', 'etlegacy_update'])
+    @commands.check(is_admin_channel)
+    async def et_update(self, ctx, update_url: str = None):
+        """🚀 Update ET:Legacy server with new snapshot (Admin channel only)
+
+        Downloads and installs ET:Legacy snapshot, then uploads new pk3 to Discord.
+
+        Usage: !et_update <snapshot_url>
+        Example: !et_update https://github.com/etlegacy/etlegacy/releases/download/continuous/etlegacy-v2.83.1-x86_64.tar.gz
+        """
+        if not update_url:
+            await ctx.send(
+                "❌ Please provide the ET:Legacy snapshot download URL!\n\n"
+                "**Usage:** `!et_update <snapshot_url>`\n"
+                "**Example:** `!et_update https://github.com/etlegacy/etlegacy/releases/download/continuous/etlegacy-v2.83.1-x86_64.tar.gz`"
+            )
+            return
+
+        # Validate URL
+        if not update_url.startswith(('http://', 'https://')):
+            await ctx.send("❌ Invalid URL! Must start with http:// or https://")
+            return
+
+        if not await self.confirm_action(ctx, "UPDATE ET:Legacy server"):
+            return
+
+        await self.log_action(ctx, "ET:Legacy Update", f"URL: {update_url}")
+
+        # Create progress embed
+        embed = discord.Embed(
+            title="🚀 ET:Legacy Server Update",
+            description="Starting update process...",
+            color=discord.Color.blue(),
+            timestamp=datetime.now()
+        )
+        embed.add_field(name="📥 Download URL", value=f"`{update_url[:100]}...`" if len(update_url) > 100 else f"`{update_url}`", inline=False)
+        status_msg = await ctx.send(embed=embed)
+
+        try:
+            # Step 1: Download update file
+            await self._update_progress(status_msg, "📥 Downloading ET:Legacy snapshot...", discord.Color.blue())
+            download_cmd = f"""
+                mkdir -p ~/legacyupdate/backup/logs
+                cd ~/legacyupdate/backup
+                wget -q '{update_url}' -O etlegacy-update.tar.gz 2>&1
+                if [ $? -eq 0 ]; then echo 'SUCCESS'; else echo 'FAILED'; fi
+            """
+            output, error, exit_code = self.execute_ssh_command(download_cmd, timeout=120)
+
+            if 'FAILED' in output or exit_code != 0:
+                await self._update_progress(status_msg, f"❌ Download failed!\n```{error}```", discord.Color.red())
+                await self.log_action(ctx, "ET:Legacy Update Failed", "Download failed")
+                return
+
+            # Step 2: Extract tarball
+            await self._update_progress(status_msg, "📦 Extracting archive...", discord.Color.blue())
+            extract_cmd = """
+                cd ~/legacyupdate/backup
+                tar -zxf etlegacy-update.tar.gz 2>&1
+                if [ $? -eq 0 ]; then echo 'SUCCESS'; else echo 'FAILED'; fi
+            """
+            output, error, exit_code = self.execute_ssh_command(extract_cmd, timeout=60)
+
+            if 'FAILED' in output or exit_code != 0:
+                await self._update_progress(status_msg, f"❌ Extraction failed!\n```{error}```", discord.Color.red())
+                await self.log_action(ctx, "ET:Legacy Update Failed", "Extraction failed")
+                return
+
+            # Step 3: Find extracted directory
+            find_dir_cmd = "cd ~/legacyupdate/backup && find . -maxdepth 1 -type d -name 'etlegacy-v*' | head -n 1"
+            output, error, exit_code = self.execute_ssh_command(find_dir_cmd)
+            extracted_dir = output.strip()
+
+            if not extracted_dir:
+                await self._update_progress(status_msg, "❌ Could not find extracted directory!", discord.Color.red())
+                await self.log_action(ctx, "ET:Legacy Update Failed", "Extracted directory not found")
+                return
+
+            # Step 4: Backup old pk3 files and get old version
+            await self._update_progress(status_msg, "💾 Backing up old pk3 files...", discord.Color.blue())
+            backup_cmd = f"""
+                OLD_PK3=$(find /home/et/etlegacy-v2.83.1-x86_64/legacy/ -name "legacy_v2.83.1-*.pk3" -exec basename {{}} \\; 2>/dev/null | head -n 1)
+                echo "OLD_VERSION:$OLD_PK3"
+                find /home/et/etlegacy-v2.83.1-x86_64/legacy/ -name "legacy_v2.83.1-*.pk3" -exec mv {{}} ~/legacyupdate/backup/ \\; 2>/dev/null
+            """
+            output, error, exit_code = self.execute_ssh_command(backup_cmd)
+            old_version = "unknown"
+            for line in output.split('\n'):
+                if line.startswith('OLD_VERSION:'):
+                    old_version = line.split(':', 1)[1].strip()
+                    break
+
+            # Step 5: Stop server
+            await self._update_progress(status_msg, "🛑 Stopping server...", discord.Color.orange())
+            stop_cmd = "pkill etlded; sleep 2"
+            self.execute_ssh_command(stop_cmd)
+            await asyncio.sleep(3)
+
+            # Step 6: Copy new files
+            await self._update_progress(status_msg, "📂 Installing new files...", discord.Color.blue())
+            install_cmd = f"""
+                cd ~/legacyupdate/backup/{extracted_dir}
+                cp -r * /home/et/etlegacy-v2.83.1-x86_64/
+                if [ $? -eq 0 ]; then echo 'SUCCESS'; else echo 'FAILED'; fi
+            """
+            output, error, exit_code = self.execute_ssh_command(install_cmd, timeout=60)
+
+            if 'FAILED' in output or exit_code != 0:
+                await self._update_progress(status_msg, f"❌ Installation failed!\n```{error}```", discord.Color.red())
+                await self.log_action(ctx, "ET:Legacy Update Failed", "Installation failed")
+                return
+
+            # Step 7: Find new pk3 file
+            await self._update_progress(status_msg, "🔍 Finding new pk3 file...", discord.Color.blue())
+            find_pk3_cmd = "find /home/et/etlegacy-v2.83.1-x86_64/legacy/ -name 'legacy_v2.83.1-*.pk3' -exec basename {} \\; 2>/dev/null | head -n 1"
+            output, error, exit_code = self.execute_ssh_command(find_pk3_cmd)
+            new_pk3_file = output.strip()
+
+            if not new_pk3_file:
+                await self._update_progress(status_msg, "⚠️ Update completed but new pk3 file not found!", discord.Color.orange())
+                await self.log_action(ctx, "ET:Legacy Update Partial", "pk3 file not found")
+                # Start server anyway
+                await self._start_server_after_update(ctx, status_msg)
+                return
+
+            # Step 8: Download pk3 file to local temp
+            await self._update_progress(status_msg, f"📥 Downloading {new_pk3_file}...", discord.Color.blue())
+
+            ssh = self.get_ssh_client()
+            sftp = ssh.open_sftp()
+
+            temp_fd, temp_path = tempfile.mkstemp(suffix=f"_{new_pk3_file}", prefix="etlegacy_pk3_")
+            os.close(temp_fd)
+
+            remote_pk3_path = f"/home/et/etlegacy-v2.83.1-x86_64/legacy/{new_pk3_file}"
+            sftp.get(remote_pk3_path, temp_path)
+
+            # Get file size
+            file_size = os.path.getsize(temp_path)
+            file_size_mb = file_size / 1024 / 1024
+
+            # Calculate MD5
+            with open(temp_path, 'rb') as f:
+                file_hash = hashlib.md5(f.read()).hexdigest()
+
+            sftp.close()
+            ssh.close()
+
+            # Step 9: Upload to Discord
+            await self._update_progress(status_msg, f"📤 Uploading {new_pk3_file} to Discord...", discord.Color.blue())
+
+            # Check file size (Discord limit is 25MB for non-Nitro, 500MB for Nitro)
+            discord_limit_mb = 25
+            if file_size_mb > discord_limit_mb:
+                await self._update_progress(
+                    status_msg,
+                    f"⚠️ File too large for Discord upload ({file_size_mb:.1f}MB > {discord_limit_mb}MB)\n"
+                    f"File is available on server at: `{remote_pk3_path}`",
+                    discord.Color.orange()
+                )
+                # Post summary without file
+                await self._post_update_summary(ctx, old_version, new_pk3_file, file_hash, file_size_mb, None)
+            else:
+                # Upload to Discord
+                discord_file = discord.File(temp_path, filename=new_pk3_file)
+
+                # Post summary with file
+                await self._post_update_summary(ctx, old_version, new_pk3_file, file_hash, file_size_mb, discord_file)
+
+            # Clean up temp file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+            # Step 10: Clean up remote files
+            cleanup_cmd = """
+                cd ~/legacyupdate/backup
+                rm -f etlegacy-update.tar.gz
+                rm -rf etlegacy-v*
+            """
+            self.execute_ssh_command(cleanup_cmd)
+
+            # Step 11: Restart server
+            await self._start_server_after_update(ctx, status_msg)
+
+            await self._update_progress(status_msg, "✅ Update completed successfully!", discord.Color.green())
+            await self.log_action(ctx, "ET:Legacy Update Success", f"{old_version} -> {new_pk3_file}")
+
+        except Exception as e:
+            logger.error(f"Error during ET:Legacy update: {e}", exc_info=True)
+            await self._update_progress(status_msg, f"❌ Update failed!\n```{str(e)}```", discord.Color.red())
+            await ctx.send(f"❌ Update failed with error: {e}")
+            await self.log_action(ctx, "ET:Legacy Update Failed", f"Exception: {e}")
+
+    async def _update_progress(self, message: discord.Message, status: str, color: discord.Color):
+        """Update the progress embed message"""
+        try:
+            embed = discord.Embed(
+                title="🚀 ET:Legacy Server Update",
+                description=status,
+                color=color,
+                timestamp=datetime.now()
+            )
+            await message.edit(embed=embed)
+        except:
+            pass  # Ignore edit failures
+
+    async def _start_server_after_update(self, ctx, status_msg):
+        """Start server after update"""
+        await self._update_progress(status_msg, "🚀 Starting server...", discord.Color.blue())
+        start_cmd = f"cd {self.server_install_path} && screen -dmS {self.screen_name} {self.server_binary} +exec {self.server_config}"
+        self.execute_ssh_command(start_cmd)
+        await asyncio.sleep(3)
+
+        # Verify it started
+        verify_output, _, verify_exit = self.execute_ssh_command(f"screen -ls | grep {self.screen_name}")
+        if verify_exit == 0 and self.screen_name in verify_output:
+            await self._update_progress(status_msg, "✅ Server restarted successfully!", discord.Color.green())
+        else:
+            await self._update_progress(status_msg, "⚠️ Server may not have started properly. Check manually.", discord.Color.orange())
+
+    async def _post_update_summary(self, ctx, old_version: str, new_version: str, file_hash: str, file_size_mb: float, discord_file: Optional[discord.File]):
+        """Post update summary with optional file attachment"""
+        embed = discord.Embed(
+            title="✅ ET:Legacy Update Complete",
+            description="Server has been updated to the latest snapshot!",
+            color=discord.Color.green(),
+            timestamp=datetime.now()
+        )
+        embed.add_field(name="📦 Old Version", value=f"`{old_version}`", inline=True)
+        embed.add_field(name="🆕 New Version", value=f"`{new_version}`", inline=True)
+        embed.add_field(name="📊 File Size", value=f"{file_size_mb:.2f} MB", inline=True)
+        embed.add_field(name="🔐 MD5 Hash", value=f"`{file_hash}`", inline=False)
+        embed.add_field(
+            name="📥 Download",
+            value="Attached below!" if discord_file else "File too large for Discord - available on server",
+            inline=False
+        )
+
+        if discord_file:
+            await ctx.send(embed=embed, file=discord_file)
+        else:
+            await ctx.send(embed=embed)
+
+    # ========================================
     # MAP MANAGEMENT
     # ========================================
     
