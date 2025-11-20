@@ -46,14 +46,22 @@ def is_admin_channel():
             await ctx.send("Refreshing cache...")
     """
     async def predicate(ctx):
-        # Check if bot has admin channel configured
-        if not hasattr(ctx.bot, 'admin_channel_id') or ctx.bot.admin_channel_id == 0:
-            logger.debug("Admin channel not configured, allowing command from any channel")
-            return True
+        # Check if bot has admin channels configured
+        admin_channels = getattr(ctx.bot, 'admin_channels', [])
+        if not admin_channels:
+            # Fallback to single admin_channel_id for backward compatibility
+            admin_channel_id = getattr(ctx.bot, 'admin_channel_id', 0)
+            if admin_channel_id == 0:
+                logger.debug("Admin channel not configured, allowing command from any channel")
+                return True
+            admin_channels = [admin_channel_id]
 
-        # Check if command is in admin channel
-        if ctx.channel.id != ctx.bot.admin_channel_id:
-            raise ChannelCheckFailure(f"❌ This command only works in <#{ctx.bot.admin_channel_id}>")
+        # Check if command is in an admin channel
+        if ctx.channel.id not in admin_channels:
+            # Format channel mentions for error message
+            channel_mentions = [f"<#{ch}>" for ch in admin_channels]
+            channels_str = " or ".join(channel_mentions)
+            raise ChannelCheckFailure(f"❌ This command only works in {channels_str}")
 
         logger.debug(f"Admin command allowed from admin channel for {ctx.author}")
         return True
