@@ -14,7 +14,7 @@ set -e  # Exit on error
 VERSION="1.0.0"
 
 # Installation modes
-MODE="interactive"  # Can be: interactive, full, vps, env-only
+MODE=""  # Can be: full, vps, env-only (empty means default interactive setup)
 INTERACTION_MODE="interactive"  # Can be: interactive, auto
 SKIP_POSTGRESQL=false
 SKIP_SYSTEMD=false
@@ -592,6 +592,8 @@ configure_bot() {
         
         read -p "$(echo -e ${BOLD}Discord Guild ID \(optional\): ${NC})" GUILD_ID
         read -p "$(echo -e ${BOLD}Stats Channel ID \(optional\): ${NC})" STATS_CHANNEL
+    else
+        print_warning "Auto mode: Discord token must be set manually in .env file"
     fi
     
     print_step "Creating .env configuration..."
@@ -837,6 +839,14 @@ show_completion_summary() {
         echo ""
     fi
     
+    # Warn if Discord token is not set
+    if [ -z "$DISCORD_TOKEN" ] && [ "$INTERACTION_MODE" = "auto" ]; then
+        echo -e "${YELLOW}${BOLD}⚠️  IMPORTANT: Discord token not configured${NC}"
+        echo -e "${YELLOW}   Edit $DEPLOY_DIR/.env and set:${NC}"
+        echo "   DISCORD_BOT_TOKEN=your_token_here"
+        echo ""
+    fi
+    
     echo -e "${GREEN}${BOLD}✓ Installation successful!${NC}"
     if [ "$SKIP_SYSTEMD" = false ]; then
         echo -e "${BOLD}Test the bot in Discord with commands like: !last_session, !stats, !leaderboard${NC}"
@@ -850,6 +860,12 @@ show_completion_summary() {
 
 main() {
     parse_arguments "$@"
+    
+    # If no mode specified, default to interactive VPS setup
+    if [ -z "$MODE" ]; then
+        MODE="vps"
+        print_info "No mode specified, defaulting to --vps mode"
+    fi
     
     # Show banner
     print_header "ET:Legacy Discord Bot - Installation v${VERSION}"
