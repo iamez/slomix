@@ -1,12 +1,16 @@
 # Linux VPS Setup - Quick Start
 
+> **Note:** This guide has been updated to use the new unified `install.sh` script.  
+> Old scripts (`setup_linux_bot.sh`, `vps_install.sh`, `vps_setup.sh`) are deprecated.  
+> See [INSTALL_SCRIPTS_DEPRECATED.md](../INSTALL_SCRIPTS_DEPRECATED.md) for migration details.
+
 ## One-Command Installation
 
-### Step 1: Copy setup script to your VPS
+### Step 1: Copy install script to your VPS
 
 ```bash
 # On your Windows machine, from the stats directory
-scp -i ~/.ssh/etlegacy_bot setup_linux_bot.sh et@puran.hehe.si:/tmp/
+scp -i ~/.ssh/etlegacy_bot install.sh et@puran.hehe.si:/tmp/
 ```
 
 ### Step 2: Run the setup script on VPS
@@ -15,8 +19,13 @@ scp -i ~/.ssh/etlegacy_bot setup_linux_bot.sh et@puran.hehe.si:/tmp/
 # SSH into your VPS
 ssh -i ~/.ssh/etlegacy_bot et@puran.hehe.si
 
-# Run the setup script
-sudo bash /tmp/setup_linux_bot.sh
+# Run the unified install script
+sudo bash /tmp/install.sh --full --interactive
+```
+
+**Alternative: Automated (non-interactive) installation**
+```bash
+sudo bash /tmp/install.sh --full --auto
 ```
 
 The script will:
@@ -31,12 +40,48 @@ The script will:
 
 ---
 
+## Installation Options
+
+The unified `install.sh` script supports multiple modes:
+
+### Full Installation (Recommended for new VPS)
+```bash
+# Interactive (prompts for all settings)
+sudo ./install.sh --full --interactive
+
+# Automatic (auto-generates passwords)
+sudo ./install.sh --full --auto
+```
+
+### VPS Setup (Repository already cloned)
+```bash
+# Interactive
+sudo ./install.sh --vps --interactive
+
+# Automatic
+sudo ./install.sh --vps --auto
+```
+
+### Environment Only (No database/systemd)
+```bash
+# For development or testing
+./install.sh --env-only
+```
+
+### View All Options
+```bash
+./install.sh --help
+```
+
+---
+
 ## What You'll Need
 
-When the script runs, it will ask for:
+When using interactive mode (`--interactive`), the script will ask for:
 - **Discord Bot Token** - From your `.env` file: `DISCORD_BOT_TOKEN`
+- **PostgreSQL Password** - Will be auto-generated in `--auto` mode or prompted in `--interactive` mode
 
-That's the only manual input needed!
+In auto mode (`--auto`), passwords are generated automatically and saved to `.env`.
 
 ---
 
@@ -68,7 +113,7 @@ bash update_bot.sh
 ## Files Created
 
 - `/slomix/` - Bot code and repository
-- `/slomix/bot/config.json` - Bot configuration (with your token)
+- `/slomix/.env` - Bot configuration (with your token and database password)
 - `/etc/systemd/system/etlegacy-bot.service` - Service file
 - PostgreSQL database: `etlegacy` (user: `etlegacy_user`)
 
@@ -94,7 +139,7 @@ sudo systemctl restart etlegacy-bot
 sudo journalctl -u etlegacy-bot -n 50
 
 # Check config
-cat /slomix/bot/config.json
+cat /slomix/.env
 ```
 
 ### Database connection issues
@@ -121,20 +166,26 @@ sudo chmod -R 755 /home/et/.etlegacy/legacy/gamestats/
 
 ## Configuration from .env
 
-The setup script uses these default values:
+The install script uses these default values:
 
 **PostgreSQL:**
 - Host: `localhost`
 - Port: `5432`
 - Database: `etlegacy`
 - User: `etlegacy_user`
-- Password: `etlegacy_secure_2025`
+- Password: Auto-generated (saved to `.env`)
 
 **Paths:**
-- Deploy directory: `/slomix`
-- Stats path: `/home/et/.etlegacy/legacy/gamestats`
+- Deploy directory: `/slomix` (configurable with `--deploy-dir`)
+- Stats path: `local_stats/`
 
-You can edit the script if you need different values.
+You can customize these with command-line options:
+```bash
+sudo ./install.sh --full --auto \
+  --deploy-dir /opt/mybot \
+  --pg-user myuser \
+  --pg-database mydb
+```
 
 ---
 
@@ -142,17 +193,23 @@ You can edit the script if you need different values.
 
 After installation:
 
-1. **Secure config.json**
+1. **Secure .env file**
    ```bash
-   chmod 600 /slomix/bot/config.json
+   chmod 600 /slomix/.env
+   ```
+   (This is done automatically by the install script)
+
+2. **Review generated password**
+   ```bash
+   cat /slomix/.env | grep POSTGRES_PASSWORD
    ```
 
-2. **Change PostgreSQL password** (optional)
+3. **Change PostgreSQL password** (optional)
    ```bash
    sudo -u postgres psql
    ALTER USER etlegacy_user WITH PASSWORD 'your_new_password';
    \q
-   # Update /slomix/bot/config.json with new password
+   # Update /slomix/.env with new password
    ```
 
 3. **Firewall rules**
@@ -160,6 +217,28 @@ After installation:
    # PostgreSQL should only listen on localhost (default)
    sudo ss -tunlp | grep 5432
    ```
+
+---
+
+## Migrating from Old Scripts
+
+If you previously used `setup_linux_bot.sh`, `vps_install.sh`, or `vps_setup.sh`:
+
+- All functionality is preserved in `install.sh`
+- See [INSTALL_SCRIPTS_DEPRECATED.md](../INSTALL_SCRIPTS_DEPRECATED.md) for migration guide
+- Old scripts still work but show deprecation warnings
+
+**Migration examples:**
+```bash
+# Old: ./setup_linux_bot.sh
+# New: sudo ./install.sh --full --interactive
+
+# Old: ./vps_install.sh
+# New: sudo ./install.sh --vps --auto
+
+# Old: ./vps_setup.sh
+# New: sudo ./install.sh --vps --interactive
+```
 
 ---
 
