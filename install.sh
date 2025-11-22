@@ -412,7 +412,19 @@ setup_database() {
     # Generate or prompt for password
     if [ "$INTERACTION_MODE" = "auto" ] && [ -z "$PG_PASSWORD" ]; then
         # Generate a secure password (alphanumeric, 32 characters)
-        PG_PASSWORD=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
+        # Use multiple methods as fallback for reliability
+        if command -v openssl >/dev/null 2>&1; then
+            PG_PASSWORD=$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32)
+        else
+            PG_PASSWORD=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
+        fi
+        
+        # Validate password length (should be exactly 32 characters)
+        if [ ${#PG_PASSWORD} -ne 32 ]; then
+            print_error "Failed to generate secure password"
+            exit 1
+        fi
+        
         print_success "Generated secure database password: $PG_PASSWORD"
     elif [ -z "$PG_PASSWORD" ]; then
         echo ""
