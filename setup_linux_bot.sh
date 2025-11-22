@@ -1,8 +1,31 @@
 #!/bin/bash
 ################################################################################
 # ET:Legacy Discord Bot - Linux VPS Setup Script
-# Automated installation and configuration for Ubuntu/Debian
+# 
+# ⚠️  DEPRECATED - This script is deprecated in favor of install.sh
+# Please use: sudo ./install.sh --full --interactive
+# See INSTALL_SCRIPTS_DEPRECATED.md for details
 ################################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "⚠️  DEPRECATION NOTICE"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "This script (setup_linux_bot.sh) is DEPRECATED."
+echo ""
+echo "Please use the unified installation script instead:"
+echo "  sudo ./install.sh --full --interactive"
+echo ""
+echo "The new script has all the same features plus more flexibility."
+echo "See INSTALL_SCRIPTS_DEPRECATED.md for the migration guide."
+echo ""
+read -p "Continue with deprecated script anyway? [y/N] " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Installation cancelled. Please use: sudo ./install.sh --full --interactive"
+    exit 1
+fi
+echo ""
 
 set -e  # Exit on error
 

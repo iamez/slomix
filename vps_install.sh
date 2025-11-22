@@ -1,6 +1,29 @@
 #!/bin/bash
 # ET:Legacy Discord Bot - VPS Installation Script
-# Run this on your Linux VPS in /home/samba/share/slomix_discord/
+# 
+# ⚠️  DEPRECATED - This script is deprecated in favor of install.sh
+# Please use: sudo ./install.sh --vps --auto
+# See INSTALL_SCRIPTS_DEPRECATED.md for details
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "⚠️  DEPRECATION NOTICE"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "This script (vps_install.sh) is DEPRECATED."
+echo ""
+echo "Please use the unified installation script instead:"
+echo "  sudo ./install.sh --vps --auto"
+echo ""
+echo "The new script has all the same features plus more flexibility."
+echo "See INSTALL_SCRIPTS_DEPRECATED.md for the migration guide."
+echo ""
+read -p "Continue with deprecated script anyway? [y/N] " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Installation cancelled. Please use: sudo ./install.sh --vps --auto"
+    exit 1
+fi
+echo ""
 
 set -e  # Exit on any error
 
