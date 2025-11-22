@@ -1,0 +1,32 @@
+[Unit]
+Description=Slomix ET:Legacy Discord Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=user
+Group=user
+WorkingDirectory=/home/user/slomix
+
+# Use venv python if it exists, otherwise system python
+ExecStart=/bin/bash -c 'if [ -d venv ]; then source venv/bin/activate && exec python3 bot/ultimate_bot.py; else exec /usr/local/bin/python3 bot/ultimate_bot.py; fi'
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=slomix
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+
+# Security (optional but recommended)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
