@@ -411,7 +411,8 @@ setup_database() {
     
     # Generate or prompt for password
     if [ "$INTERACTION_MODE" = "auto" ] && [ -z "$PG_PASSWORD" ]; then
-        PG_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+        # Generate a secure password (alphanumeric, 32 characters)
+        PG_PASSWORD=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
         print_success "Generated secure database password: $PG_PASSWORD"
     elif [ -z "$PG_PASSWORD" ]; then
         echo ""
@@ -427,8 +428,9 @@ setup_database() {
         fi
     fi
     
-    # Escape password for SQL
-    PG_PASSWORD_ESCAPED="${PG_PASSWORD//\'/\'\'}"
+    # Escape password for SQL by doubling single quotes and escaping backslashes
+    PG_PASSWORD_ESCAPED="${PG_PASSWORD//\\/\\\\}"
+    PG_PASSWORD_ESCAPED="${PG_PASSWORD_ESCAPED//\'/\'\'}"
     
     print_step "Creating database user: $PG_USER"
     sudo -u postgres psql -c "CREATE USER $PG_USER WITH PASSWORD '$PG_PASSWORD_ESCAPED';" 2>/dev/null || print_warning "User already exists"
@@ -861,10 +863,17 @@ show_completion_summary() {
 main() {
     parse_arguments "$@"
     
-    # If no mode specified, default to interactive VPS setup
+    # If no mode specified, show help and exit
     if [ -z "$MODE" ]; then
-        MODE="vps"
-        print_info "No mode specified, defaulting to --vps mode"
+        echo -e "${RED}${BOLD}Error: No installation mode specified${NC}\n"
+        echo "Please specify an installation mode:"
+        echo "  --full       Complete installation (clone repo + PostgreSQL + systemd)"
+        echo "  --vps        VPS setup (PostgreSQL + systemd, assumes repo exists)"
+        echo "  --env-only   Python environment only (no database/systemd)"
+        echo ""
+        echo "Run './install.sh --help' for detailed usage information"
+        echo ""
+        exit 1
     fi
     
     # Show banner
