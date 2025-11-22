@@ -235,6 +235,49 @@ Automatically groups rounds into gaming sessions:
 
 ### **Installation**
 
+#### **Option 1: Automated Installation (Recommended)**
+
+Use the unified installation script with your preferred mode:
+
+```bash
+# 1. Clone repository
+git clone https://github.com/iamez/slomix.git
+cd slomix
+
+# 2. Run unified installer (choose one option below)
+
+# Full automated VPS installation (PostgreSQL + systemd + bot)
+sudo ./install.sh --full --auto
+
+# Interactive installation with prompts
+sudo ./install.sh --full --interactive
+
+# VPS setup (assumes repo already exists)
+sudo ./install.sh --vps --auto
+
+# Development environment only (Python + venv, no database)
+./install.sh --env-only
+
+# Custom installation directory
+sudo ./install.sh --full --deploy-dir /opt/etlegacy-bot --auto
+```
+
+**Installation Modes:**
+- `--full` - Complete installation from scratch (clones repo, sets up PostgreSQL, creates systemd service)
+- `--vps` - VPS setup assuming repo exists (PostgreSQL + systemd)
+- `--env-only` - Python environment only (no root required, no database/systemd)
+- `--interactive` - Prompts for all settings (default)
+- `--auto` - Non-interactive with auto-generated passwords
+
+**Additional Options:**
+- `--skip-postgresql` - Skip PostgreSQL installation
+- `--skip-systemd` - Skip systemd service creation
+- `--skip-git` - Skip repository cloning
+- `--skip-import` - Skip initial database import
+- `--help` - Show all options and examples
+
+#### **Option 2: Manual Installation**
+
 ```bash
 # 1. Clone repository
 git clone https://github.com/iamez/slomix.git

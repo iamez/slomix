@@ -1,4 +1,30 @@
 #!/usr/bin/env bash
+# setup_linux_env.sh
+# 
+# ⚠️  DEPRECATED - This script is deprecated in favor of install.sh
+# Please use: ./install.sh --env-only
+# See INSTALL_SCRIPTS_DEPRECATED.md for details
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "⚠️  DEPRECATION NOTICE"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "This script (setup_linux_env.sh) is DEPRECATED."
+echo ""
+echo "Please use the unified installation script instead:"
+echo "  ./install.sh --env-only"
+echo ""
+echo "The new script has all the same features plus more flexibility."
+echo "See INSTALL_SCRIPTS_DEPRECATED.md for the migration guide."
+echo ""
+read -p "Continue with deprecated script anyway? [y/N] " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Installation cancelled. Please use: ./install.sh --env-only"
+    exit 1
+fi
+echo ""
+
 set -euo pipefail
 
 # setup_linux_env.sh
