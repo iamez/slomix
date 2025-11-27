@@ -30,6 +30,7 @@ from bot.core.database_adapter import create_adapter, DatabaseAdapter
 from bot.config import load_config
 from bot.stats import StatsCalculator
 from bot.automation import SSHHandler, FileTracker
+from bot.services.voice_session_service import VoiceSessionService
 
 # Load environment variables if available
 try:
@@ -195,6 +196,10 @@ class UltimateETLegacyBot(commands.Bot):
         )
         logger.info("✅ Core systems initialized (cache, seasons, achievements, file_tracker)")
 
+        # 🎙️ Voice Session Service (manages gaming session detection)
+        self.voice_session_service = VoiceSessionService(self, self.config, self.db_adapter)
+        logger.info("✅ Voice session service initialized")
+
         # 🤖 Automation System Flags (OFF by default for dev/testing)
         self.automation_enabled = self.config.automation_enabled
         self.ssh_enabled = self.config.ssh_enabled
@@ -208,11 +213,6 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(
                 "⚠️ Automation system DISABLED (set AUTOMATION_ENABLED=true to enable)"
             )
-        # 🎙️ Voice Channel Session Detection
-        self.session_active = False
-        self.session_start_time = None
-        self.session_participants = set()  # Discord user IDs
-        self.session_end_timer = None  # For 5-minute buffer
         
         # SSH monitoring optimization - counter-based intervals
         self.ssh_check_counter = 0  # Tracks cycles for interval-based checking
@@ -653,197 +653,8 @@ class UltimateETLegacyBot(commands.Bot):
     # 🎙️ VOICE CHANNEL SESSION DETECTION
 
     async def on_voice_state_update(self, member, before, after):
-        """🎙️ Detect gaming sessions based on voice channel activity"""
-        if not self.automation_enabled:
-            return  # Automation disabled
-
-        if not self.gaming_voice_channels:
-            return  # Voice detection disabled
-
-        try:
-            # Count players in gaming voice channels
-            total_players = 0
-            current_participants = set()
-
-            for channel_id in self.gaming_voice_channels:
-                channel = self.get_channel(channel_id)
-                if channel and isinstance(channel, discord.VoiceChannel):
-                    total_players += len(channel.members)
-                    current_participants.update(
-                        [m.id for m in channel.members]
-                    )
-
-            logger.debug(
-                f"🎙️ Voice update: {total_players} players in gaming channels"
-            )
-
-            # Session Start Detection
-            if (
-                total_players >= self.session_start_threshold
-                and not self.session_active
-            ):
-                await self._start_gaming_session(current_participants)
-
-            # Session End Detection
-            elif (
-                total_players < self.session_end_threshold
-                and self.session_active
-            ):
-                # Cancel existing timer if any
-                if self.session_end_timer:
-                    self.session_end_timer.cancel()
-
-                # Start 5-minute countdown
-                self.session_end_timer = asyncio.create_task(
-                    self._delayed_session_end(current_participants)
-                )
-
-            # Update participants if session active
-            elif self.session_active:
-                # Add new participants
-                new_participants = (
-                    current_participants - self.session_participants
-                )
-                if new_participants:
-                    self.session_participants.update(new_participants)
-                    logger.info(
-                        f"👥 New participants joined: {len(new_participants)}"
-                    )
-
-                # Cancel end timer if people came back
-                if (
-                    self.session_end_timer
-                    and total_players >= self.session_end_threshold
-                ):
-                    self.session_end_timer.cancel()
-                    self.session_end_timer = None
-                    logger.info(
-                        f"⏰ Session end cancelled - players returned ({total_players} in voice)"
-                    )
-
-        except Exception as e:
-            logger.error(f"Voice state update error: {e}", exc_info=True)
-
-    async def _start_gaming_session(self, participants):
-        """🎮 Start a gaming session when 6+ players in voice"""
-        try:
-            self.session_active = True
-            self.session_start_time = discord.utils.utcnow()
-            self.session_participants = participants.copy()
-
-            # Enable monitoring
-            self.monitoring = True
-
-            logger.info(
-                f"🎮 GAMING SESSION STARTED! {len(participants)} players detected"
-            )
-            logger.info("🔄 Monitoring enabled")
-
-            # Post to Discord if production channel configured
-            if self.production_channel_id:
-                channel = self.get_channel(self.production_channel_id)
-                if channel:
-                    embed = discord.Embed(
-                        title="🎮 Gaming Session Started!",
-                        description=f"{len(participants)} players detected in voice channels",
-                        color=0x00FF00,
-                        timestamp=self.session_start_time,
-                    )
-                    embed.add_field(
-                        name="Status",
-                        value="Monitoring enabled automatically",
-                        inline=False,
-                    )
-                    embed.set_footer(text="Good luck and have fun! �")
-                    await channel.send(embed=embed)
-
-        except Exception as e:
-            logger.error(f"Error starting gaming session: {e}", exc_info=True)
-
-    async def _delayed_session_end(self, last_participants):
-        """⏰ Wait 5 minutes before ending session (allows bathroom breaks)"""
-        try:
-            logger.info(
-                f"⏰ Session end timer started - waiting {self.session_end_delay}s..."
-            )
-            await asyncio.sleep(self.session_end_delay)
-
-            # Re-check player count after delay
-            total_players = 0
-            for channel_id in self.gaming_voice_channels:
-                channel = self.get_channel(channel_id)
-                if channel and isinstance(channel, discord.VoiceChannel):
-                    total_players += len(channel.members)
-
-            if total_players >= self.session_end_threshold:
-                logger.info(
-                    f"⏰ Session end cancelled - players returned ({total_players} in voice)"
-                )
-                return
-
-            # Still empty after delay - end session
-            await self._end_gaming_session()
-
-        except asyncio.CancelledError:
-            logger.debug("⏰ Session end timer cancelled")
-        except Exception as e:
-            logger.error(f"Error in delayed session end: {e}", exc_info=True)
-
-    async def _end_gaming_session(self):
-        """🏁 End gaming session and post summary"""
-        try:
-            if not self.session_active:
-                return
-
-            end_time = discord.utils.utcnow()
-            duration = end_time - self.session_start_time
-
-            # Disable monitoring
-            self.monitoring = False
-
-            logger.info("🏁 GAMING SESSION ENDED!")
-            logger.info(f"⏱️ Duration: {duration}")
-            logger.info(f"👥 Participants: {len(self.session_participants)}")
-            logger.info("🔄 Monitoring disabled")
-
-            # Post session summary
-            if self.production_channel_id:
-                channel = self.get_channel(self.production_channel_id)
-                if channel:
-                    # TODO: Post comprehensive session summary
-                    embed = discord.Embed(
-                        title="🏁 Gaming Session Complete!",
-                        description=f"Duration: {self._format_duration(duration)}",
-                        color=0xFFD700,
-                        timestamp=datetime.now(),
-                    )
-                    embed.add_field(
-                        name="👥 Participants",
-                        value=f"{len(self.session_participants)} players",
-                        inline=True,
-                    )
-                    embed.set_footer(text="Thanks for playing! GG! 🎮")
-                    await channel.send(embed=embed)
-
-            # Reset session state
-            self.session_active = False
-            self.session_start_time = None
-            self.session_participants = set()
-            self.session_end_timer = None
-
-        except Exception as e:
-            logger.error(f"Error ending gaming session: {e}", exc_info=True)
-
-    def _format_duration(self, duration):
-        """Format timedelta as human-readable string"""
-        total_seconds = int(duration.total_seconds())
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-
-        if hours > 0:
-            return f"{hours}h {minutes}m"
-        else:
-            return f"{minutes}m"
+        """🎙️ Detect gaming sessions based on voice channel activity (delegates to service)"""
+        await self.voice_session_service.handle_voice_state_change(member, before, after)
 
     # 🔌 SSH MONITORING HELPER METHODS
 
@@ -1921,70 +1732,6 @@ class UltimateETLegacyBot(commands.Bot):
         """Delegate to SSHHandler.download_file()"""
         return await SSHHandler.download_file(ssh_config, filename, local_dir)
 
-    async def _auto_end_session(self):
-        """Auto-end session and post summary"""
-        try:
-            logger.info("🏁 Auto-ending gaming session...")
-
-            # Mark session as ended
-            self.session_active = False
-            self.session_end_timer = None
-
-            # Post session summary to Discord
-            channel = self.get_channel(self.stats_channel_id)
-            if not channel:
-                logger.error("❌ Stats channel not found")
-                return
-
-            # Create round end notification
-            embed = discord.Embed(
-                title="🏁 Gaming Session Ended",
-                description=(
-                    "All players have left voice channels.\n"
-                    "Generating session summary..."
-                ),
-                color=0xFF8800,
-                timestamp=datetime.now(),
-            )
-            await channel.send(embed=embed)
-
-            # Generate and post !last_session summary
-            # (Reuse the last_session command logic)
-            try:
-                # Query database for most recent session
-                query = """
-                    SELECT DISTINCT DATE(round_date) as date
-                    FROM player_comprehensive_stats
-                    ORDER BY date DESC
-                    LIMIT 1
-                """
-                row = await self.db_adapter.fetch_one(query)
-
-                if row:
-                    round_date = row[0]
-                    logger.info(
-                        f"📊 Posting auto-summary for {round_date}"
-                    )
-
-                    # Use last_session logic to generate embeds
-                    # (This would call the existing last_session code)
-                    await channel.send(
-                        f"📊 **Session Summary for {round_date}**\n"
-                        f"Use `!last_session` for full details!"
-                    )
-
-                logger.info("✅ Session auto-ended successfully")
-
-            except Exception as e:
-                logger.error(f"❌ Failed to generate session summary: {e}")
-                await channel.send(
-                    "⚠️ Session ended but summary generation failed. "
-                    "Use `!last_session` for details."
-                )
-
-        except Exception as e:
-            logger.error(f"Auto-end session error: {e}")
-
     # ==================== BACKGROUND TASKS ====================
 
     @tasks.loop(seconds=60)
@@ -2311,84 +2058,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(f"Could not clear slash commands: {e}")
         
         # 🆕 AUTO-DETECT ACTIVE GAMING SESSION ON STARTUP
-        await self._check_voice_channels_on_startup()
-
-    async def _check_voice_channels_on_startup(self):
-        """
-        Check voice channels on bot startup and auto-start session if players detected.
-        
-        This ensures the bot doesn't miss active sessions if it restarts
-        while players are already in voice.
-        """
-        try:
-            if not self.automation_enabled or not self.gaming_voice_channels:
-                return
-            
-            # Wait a moment for Discord cache to populate
-            await asyncio.sleep(2)
-            
-            # Count players in gaming voice channels
-            total_players = 0
-            current_participants = set()
-            
-            for channel_id in self.gaming_voice_channels:
-                channel = self.get_channel(channel_id)
-                if channel and hasattr(channel, "members"):
-                    for member in channel.members:
-                        if not member.bot:
-                            total_players += 1
-                            current_participants.add(member.id)
-            
-            logger.info(
-                f"🎙️ Startup voice check: {total_players} players detected "
-                f"in {len(self.gaming_voice_channels)} monitored channels"
-            )
-
-            # Check for recent database activity (within last 60 minutes)
-            # to avoid creating duplicate "session start" messages when bot restarts
-            # during an ongoing gaming session
-            recent_activity = False
-            if total_players >= self.session_start_threshold:
-                cutoff_time = datetime.now() - timedelta(minutes=60)
-                cutoff_date = cutoff_time.strftime('%Y-%m-%d')
-                cutoff_time_str = cutoff_time.strftime('%H%M%S')
-
-                recent_round = await self.db_adapter.fetch_one(
-                    """
-                    SELECT id FROM rounds
-                    WHERE (round_date > $1 OR (round_date = $2 AND round_time >= $3))
-                    ORDER BY round_date DESC, round_time DESC
-                    LIMIT 1
-                    """,
-                    (cutoff_date, cutoff_date, cutoff_time_str)
-                )
-                recent_activity = recent_round is not None
-
-                if recent_activity:
-                    logger.info(
-                        f"✅ Detected ongoing session (database activity within last 60min) - "
-                        f"skipping auto-start announcement"
-                    )
-
-            # Auto-start session if threshold met AND no recent activity
-            if total_players >= self.session_start_threshold and not self.session_active and not recent_activity:
-                logger.info(
-                    f"🎮 AUTO-STARTING SESSION: {total_players} players detected "
-                    f"(threshold: {self.session_start_threshold})"
-                )
-                await self._start_gaming_session(current_participants)
-            elif total_players >= self.session_start_threshold and recent_activity:
-                # Resume monitoring for ongoing session without announcement
-                self.session_active = True
-                self.session_participants = current_participants
-            elif total_players > 0:
-                logger.info(
-                    f"ℹ️  {total_players} players in voice but below threshold "
-                    f"({self.session_start_threshold} needed to auto-start)"
-                )
-                
-        except Exception as e:
-            logger.error(f"❌ Error checking voice channels on startup: {e}", exc_info=True)
+        await self.voice_session_service.check_startup_voice_state()
 
     async def on_command(self, ctx):
         """Track command execution start"""
