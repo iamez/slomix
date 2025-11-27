@@ -2,8 +2,8 @@
 
 **Project**: ultimate_bot.py Refactoring (12-Week Plan)
 **Started**: 2025-11-27
-**Status**: ✅ Week 3-4 Complete (Configuration Object)
-**Current Phase**: Ready for Week 5-6 (StatsImportService)
+**Status**: ⏭️ Week 5-6 Skipped (SQLite not in use)
+**Current Phase**: Ready for Week 7-8 (VoiceSessionService)
 
 ---
 
@@ -13,8 +13,8 @@
 |-------|------|--------|----------|
 | **Bug Fixes** | 1-2 | ✅ COMPLETE | 4/4 bugs fixed |
 | **Configuration Object** | 3-4 | ✅ COMPLETE | All config consolidated |
-| **StatsImportService** | 5-6 | 🔜 NEXT | Not started |
-| **VoiceSessionService** | 7-8 | ⏳ PENDING | Not started |
+| **StatsImportService** | 5-6 | ⏭️ SKIPPED | SQLite only - not in use |
+| **VoiceSessionService** | 7-8 | 🔜 NEXT | Not started |
 | **RoundPublisherService** | 9-10 | ⏳ PENDING | Not started |
 | **Repository Pattern** | 11-12 | ⏳ PENDING | Not started |
 
@@ -124,11 +124,47 @@
 
 ---
 
-## 🔜 NEXT: Week 5-6 - StatsImportService
+## ⏭️ SKIPPED: Week 5-6 - StatsImportService
 
-**Target Start**: 2025-11-27 or 2025-11-28
-**Estimated Effort**: 1 week implementation + 1 week testing
-**Risk Level**: LOW (no logic changes)
+**Decision Date**: 2025-11-27 15:15 UTC
+**Reason**: SQLite-only code not used in production
+**Reconnaissance Report**: `WEEK_5-6_RECONNAISSANCE_REPORT.md`
+
+### Why Skipped ✅
+
+During Phase A reconnaissance, discovered that:
+1. **Production uses PostgreSQL** → Delegates to `postgresql_database_manager.py`
+2. **SQLite path never runs** → User confirmed PostgreSQL-only setup
+3. **5 methods are dormant** → Only used if `database_type == "sqlite"` (never true)
+4. **No value in extraction** → Refactoring unused code doesn't improve production
+
+### Methods Analyzed (Not Extracted)
+- `process_gamestats_file()` - Entry point (has dual path: PostgreSQL vs SQLite)
+- `_import_stats_to_db()` - 151 lines (SQLite only)
+- `_insert_player_stats()` - 233 lines (SQLite only)
+- `_calculate_gaming_session_id()` - 83 lines (SQLite only)
+- `_update_player_alias()` - 36 lines (SQLite only)
+
+**Total**: ~503 lines remain in bot (SQLite fallback code)
+
+### Decision Rationale ✅
+- ✅ Focus on production code (not dev/test fallback)
+- ✅ Avoid touching recently-fixed code (6 hours old)
+- ✅ Move to higher-value refactoring (VoiceSessionService)
+- ✅ Pragmatic: Don't extract what you don't use
+
+### Verification ✅
+- ✅ Confirmed: `config.database_type == "postgresql"` in production
+- ✅ Confirmed: PostgreSQL path uses external manager
+- ✅ Confirmed: User does not use SQLite
+
+---
+
+## 🔜 NEXT: Week 7-8 - VoiceSessionService
+
+**Target Start**: 2025-11-27 (today) or when ready
+**Estimated Effort**: 1-2 weeks
+**Risk Level**: MEDIUM
 
 ### Objectives
 1. Create enhanced `bot/config.py` with dataclass
@@ -458,17 +494,26 @@ In `ultimate_bot.py`:
 - ✅ Committed changes: d1b9293
 - ✅ Week 3-4 COMPLETE
 
-### Next Session: StatsImportService (Week 5-6)
+### 2025-11-27 Session 3: StatsImportService Reconnaissance (Week 5-6)
+- ✅ Phase A reconnaissance completed
+- ✅ Analyzed all 5 methods (~503 lines)
+- ✅ Discovered SQLite-only code path
+- ✅ Confirmed production uses PostgreSQL exclusively
+- ✅ Created comprehensive report: `WEEK_5-6_RECONNAISSANCE_REPORT.md`
+- ✅ **Decision**: Skip Week 5-6 (SQLite not in use)
+- ✅ Week 5-6 SKIPPED (smart decision!)
+
+### Next Session: VoiceSessionService (Week 7-8)
 **When to start**: When user gives green light
 
 **What to do**:
 1. Read this PROGRESS.md file first
-2. Check current status above (should show Week 5-6 next)
-3. Review Week 5-6 section for objectives
-4. Create feature branch: `refactor/stats-import-service`
-5. Extract 5 methods (~600 lines) to new service
+2. Check current status above (should show Week 7-8 next)
+3. Review Week 7-8 section for objectives
+4. Create feature branch: `refactor/voice-session-service`
+5. Extract 6 voice monitoring methods (~300 lines)
 6. Update bot to delegate to service
-7. Test thoroughly
+7. Test thoroughly (voice state changes, session start/end)
 8. Update this file when complete
 
 ---
@@ -548,6 +593,6 @@ git checkout -b refactor/configuration-object  # or whatever phase we're on
 
 ---
 
-**Last Updated**: 2025-11-27 14:50 UTC
+**Last Updated**: 2025-11-27 15:20 UTC
 **Updated By**: Claude (AI Assistant)
-**Current Status**: ✅ Week 3-4 Complete, Ready for Week 5-6
+**Current Status**: ⏭️ Week 5-6 Skipped, Ready for Week 7-8
