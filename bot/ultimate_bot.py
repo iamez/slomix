@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import io
 import discord
@@ -59,7 +59,7 @@ setup_logging(getattr(logging, log_level))
 logger = get_logger("bot.core")
 logger.info("🚀 ET:LEGACY DISCORD BOT - STARTING UP")
 logger.info(f"📝 Log Level: {log_level}")
-logger.info(f"� Python: {sys.version}")
+logger.info(f"🐍 Python: {sys.version}")
 logger.info(f"📦 Discord.py: {discord.__version__}")
 
 # ======================================================================
@@ -196,11 +196,9 @@ class UltimateETLegacyBot(commands.Bot):
         logger.info("✅ Core systems initialized (cache, seasons, achievements, file_tracker)")
 
         # 🤖 Automation System Flags (OFF by default for dev/testing)
-        self.automation_enabled = (
-            os.getenv("AUTOMATION_ENABLED", "false").lower() == "true"
-        )
-        self.ssh_enabled = os.getenv("SSH_ENABLED", "false").lower() == "true"
-        
+        self.automation_enabled = self.config.automation_enabled
+        self.ssh_enabled = self.config.ssh_enabled
+
         # Enable monitoring when SSH is enabled (for auto stats posting)
         self.monitoring = self.ssh_enabled
 
@@ -210,7 +208,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(
                 "⚠️ Automation system DISABLED (set AUTOMATION_ENABLED=true to enable)"
             )
-        # �️ Voice Channel Session Detection
+        # 🎙️ Voice Channel Session Detection
         self.session_active = False
         self.session_start_time = None
         self.session_participants = set()  # Discord user IDs
@@ -220,65 +218,21 @@ class UltimateETLegacyBot(commands.Bot):
         self.ssh_check_counter = 0  # Tracks cycles for interval-based checking
         self.last_file_download_time = None  # Track last file download for grace period logic
 
-        # Load gaming voice channel IDs from .env
-        gaming_channels_str = os.getenv("GAMING_VOICE_CHANNELS", "")
-        self.gaming_voice_channels = (
-            [
-                int(ch.strip())
-                for ch in gaming_channels_str.split(",")
-                if ch.strip()
-            ]
-            if gaming_channels_str
-            else []
-        )
-
-        # Load allowed bot command channels from .env
-        bot_channels_str = os.getenv("BOT_COMMAND_CHANNELS", "")
-        self.bot_command_channels = (
-            [
-                int(ch.strip())
-                for ch in bot_channels_str.split(",")
-                if ch.strip()
-            ]
-            if bot_channels_str
-            else []
-        )
-
-        # Load channel configuration for routing
-        self.production_channel_id = int(os.getenv("PRODUCTION_CHANNEL_ID", "0"))
-        self.gather_channel_id = int(os.getenv("GATHER_CHANNEL_ID", "0"))
-        self.general_channel_id = int(os.getenv("GENERAL_CHANNEL_ID", "0"))
-
-        # Parse admin channels (supports comma-separated list)
-        admin_channels_str = os.getenv("ADMIN_CHANNEL_ID", "0")
-        self.admin_channels = [
-            int(ch.strip()) for ch in admin_channels_str.split(",") if ch.strip().isdigit()
-        ]
-        # Keep backward compatibility with single admin_channel_id
-        self.admin_channel_id = self.admin_channels[0] if self.admin_channels else 0
-
-        # Public command channels (where stats commands work)
-        self.public_channels = [
-            ch for ch in [
-                self.production_channel_id,
-                self.gather_channel_id,
-                self.general_channel_id
-            ] if ch != 0
-        ]
-
-        # All allowed channels (public + admin) for global check
-        self.all_allowed_channels = list(set(self.public_channels + self.admin_channels))
+        # Load channel configuration from config object
+        self.gaming_voice_channels = self.config.gaming_voice_channels
+        self.bot_command_channels = self.config.bot_command_channels
+        self.production_channel_id = self.config.production_channel_id
+        self.gather_channel_id = self.config.gather_channel_id
+        self.general_channel_id = self.config.general_channel_id
+        self.admin_channels = self.config.admin_channels
+        self.admin_channel_id = self.config.admin_channel_id
+        self.public_channels = self.config.public_channels
+        self.all_allowed_channels = self.config.all_allowed_channels
 
         # Session thresholds
-        self.session_start_threshold = int(
-            os.getenv("SESSION_START_THRESHOLD", "6")
-        )
-        self.session_end_threshold = int(
-            os.getenv("SESSION_END_THRESHOLD", "2")
-        )
-        self.session_end_delay = int(
-            os.getenv("SESSION_END_DELAY", "300")
-        )  # 5 minutes
+        self.session_start_threshold = self.config.session_start_threshold
+        self.session_end_threshold = self.config.session_end_threshold
+        self.session_end_delay = self.config.session_end_delay
 
         if self.gaming_voice_channels:
             logger.info(
@@ -310,7 +264,7 @@ class UltimateETLegacyBot(commands.Bot):
                 "⚠️ No gaming voice channels configured - voice detection disabled"
             )
 
-        # �🏆 Awards and achievements tracking
+        # 🏆 Awards and achievements tracking
         self.awards_cache = {}
         self.mvp_cache = {}
 
@@ -558,7 +512,7 @@ class UltimateETLegacyBot(commands.Bot):
 
             # For PostgreSQL, we don't have a db_path, but metrics_logger needs one for its own SQLite db
             # Use a sensible default path for metrics database
-            metrics_db_path = os.getenv("METRICS_DB_PATH", "bot/data/metrics.db")
+            metrics_db_path = self.config.metrics_db_path
 
             # Create automation services in correct order (MetricsLogger first, it's needed by HealthMonitor)
             self.metrics = MetricsLogger(db_path=metrics_db_path)
@@ -643,9 +597,9 @@ class UltimateETLegacyBot(commands.Bot):
                 f"Database missing required tables: {missing_tables}"
             )
 
-            logger.info(
-                f"✅ Database verified - all {len(required_tables)} required tables exist"
-            )
+        logger.info(
+            f"✅ Database verified - all {len(required_tables)} required tables exist"
+        )
 
     # 🔌 SSH HELPER METHODS
 
@@ -693,7 +647,7 @@ class UltimateETLegacyBot(commands.Bot):
                     except Exception:
                         pass
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _list_files_sync)
 
     # 🎙️ VOICE CHANNEL SESSION DETECTION
@@ -850,7 +804,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info("🏁 GAMING SESSION ENDED!")
             logger.info(f"⏱️ Duration: {duration}")
             logger.info(f"👥 Participants: {len(self.session_participants)}")
-            logger.info("�🔄 Monitoring disabled")
+            logger.info("🔄 Monitoring disabled")
 
             # Post session summary
             if self.production_channel_id:
@@ -891,7 +845,7 @@ class UltimateETLegacyBot(commands.Bot):
         else:
             return f"{minutes}m"
 
-    # � SSH MONITORING HELPER METHODS
+    # 🔌 SSH MONITORING HELPER METHODS
 
     # NOTE: SSH operations moved to bot/automation/ssh_handler.py
     # - SSHHandler.parse_gamestats_filename()
@@ -1138,7 +1092,7 @@ class UltimateETLegacyBot(commands.Bot):
             
             # Rank emoji/number helper
             def get_rank_display(rank):
-                """Get rank emoji for top 3, numbers with emojis for 4+"""
+                """Get rank emoji for top 3, number emojis for 4+"""
                 if rank == 1:
                     return "🥇"
                 elif rank == 2:
@@ -1146,13 +1100,11 @@ class UltimateETLegacyBot(commands.Bot):
                 elif rank == 3:
                     return "🥉"
                 else:
-                    # Convert number to digit emojis (4-9 use number emojis, 10+ use digits)
-                    num_str = str(rank)
-                    emoji_map = {
-                        '0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
-                        '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'
-                    }
-                    return ''.join(emoji_map.get(digit, digit) for digit in num_str)
+                    # Use number emojis for ranks 4+ (e.g., 4 → 4️⃣, 10 → 1️⃣0️⃣)
+                    rank_str = str(rank)
+                    emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+                                   '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
+                    return ''.join(emoji_digits[d] for d in rank_str)
             
             # Split into chunks of 5 for Discord field limits (more stats per player = fewer per field)
             chunk_size = 5
@@ -1377,15 +1329,25 @@ class UltimateETLegacyBot(commands.Bot):
             timestamp = "-".join(filename.split("-")[:4])  # Full timestamp YYYY-MM-DD-HHMMSS
             date_part = "-".join(filename.split("-")[:3])  # Date YYYY-MM-DD
             time_part = filename.split("-")[3] if len(filename.split("-")) > 3 else "000000"  # HHMMSS
-            
+
             # Store time as HHMMSS (NO COLONS) to match postgresql_database_manager format
             if len(time_part) == 6:
                 round_time = time_part  # Keep as HHMMSS: "221941"
             else:
                 round_time = "000000"
-            
-            # Create match_id (ORIGINAL BEHAVIOR - includes timestamp)
-            match_id = f"{date_part}-{time_part}"
+
+            # Create match_id - for R2 files, use R1's timestamp so they share same match_id
+            if stats_data.get('r1_filename'):
+                # This is an R2 file with matched R1 - extract R1's timestamp
+                r1_filename = stats_data['r1_filename']
+                r1_parts = r1_filename.split("-")
+                r1_date = "-".join(r1_parts[:3])  # YYYY-MM-DD
+                r1_time = r1_parts[3] if len(r1_parts) > 3 else "000000"  # HHMMSS
+                match_id = f"{r1_date}-{r1_time}"
+                logger.info(f"🔗 R2 matched to R1: using R1 timestamp for match_id: {match_id}")
+            else:
+                # R1 file or orphan R2 - use own timestamp
+                match_id = f"{date_part}-{time_part}"
 
             # Check if round already exists (FIXED: includes round_time to prevent false duplicates)
             check_query = """
@@ -1509,61 +1471,81 @@ class UltimateETLegacyBot(commands.Bot):
     async def _calculate_gaming_session_id(self, round_date: str, round_time: str) -> int:
         """
         Calculate gaming_session_id using 60-minute gap logic.
-        
+
+        FIXED: Now finds the chronologically PREVIOUS round (before current round),
+        not the latest round in the database. This allows importing old rounds
+        without breaking session grouping.
+
         Args:
             round_date: Date string like '2025-11-06'
             round_time: Time string like '234153' (HHMMSS) or '23:41:53' (HH:MM:SS)
-        
+
         Returns:
             gaming_session_id (integer, starts at 1)
         """
         try:
             from datetime import datetime, timedelta
-            
-            # Get most recent round with gaming_session_id
+
+            # Parse current timestamp first
+            try:
+                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H%M%S')
+            except ValueError:
+                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')
+
+            # Get the chronologically PREVIOUS round (before current round)
+            # This allows importing old rounds without messing up session IDs
             query = """
                 SELECT gaming_session_id, round_date, round_time
                 FROM rounds
                 WHERE gaming_session_id IS NOT NULL
+                  AND (round_date < ? OR (round_date = ? AND round_time < ?))
                 ORDER BY round_date DESC, round_time DESC
                 LIMIT 1
             """
-            last_round = await self.db_adapter.fetch_one(query)
-            
-            if not last_round:
-                # First round ever
-                return 1
-            
-            last_session_id = last_round[0]
-            last_date = last_round[1]
-            last_time = last_round[2]
-            
-            # Parse current timestamp (handle both HHMMSS and HH:MM:SS formats)
+            prev_round = await self.db_adapter.fetch_one(
+                query,
+                (round_date, round_date, round_time)
+            )
+
+            if not prev_round:
+                # No previous round - this is first round OR earliest round being imported
+                # Get max session_id and increment, or start at 1
+                max_query = "SELECT MAX(gaming_session_id) FROM rounds WHERE gaming_session_id IS NOT NULL"
+                max_session = await self.db_adapter.fetch_val(max_query, ())
+
+                if max_session:
+                    new_session_id = max_session + 1
+                    logger.info(f"🎮 New gaming session #{new_session_id} (first round in chronological order)")
+                    return new_session_id
+                else:
+                    logger.info(f"🎮 Starting first gaming session #1")
+                    return 1
+
+            prev_session_id = prev_round[0]
+            prev_date = prev_round[1]
+            prev_time = prev_round[2]
+
+            # Parse previous timestamp
             try:
-                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H%M%S')
+                prev_dt = datetime.strptime(f"{prev_date} {prev_time}", '%Y-%m-%d %H%M%S')
             except ValueError:
-                # Fallback to format with colons
-                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')
-            
-            # Parse last timestamp (handle both HHMMSS and HH:MM:SS formats from DB)
-            try:
-                last_dt = datetime.strptime(f"{last_date} {last_time}", '%Y-%m-%d %H%M%S')
-            except ValueError:
-                # Fallback to format with colons
-                last_dt = datetime.strptime(f"{last_date} {last_time}", '%Y-%m-%d %H:%M:%S')
-            
-            # Calculate time gap
-            gap = current_dt - last_dt
+                prev_dt = datetime.strptime(f"{prev_date} {prev_time}", '%Y-%m-%d %H:%M:%S')
+
+            # Calculate time gap (current - previous, should always be positive)
+            gap = current_dt - prev_dt
             gap_minutes = gap.total_seconds() / 60
-            
+
             # If gap > 60 minutes, start new session
             if gap_minutes > 60:
-                new_session_id = last_session_id + 1
-                logger.info(f"🎮 New gaming session #{new_session_id} (gap: {gap_minutes:.1f} min)")
+                # Get max session_id and increment
+                max_query = "SELECT MAX(gaming_session_id) FROM rounds WHERE gaming_session_id IS NOT NULL"
+                max_session = await self.db_adapter.fetch_val(max_query, ())
+                new_session_id = (max_session or 0) + 1
+                logger.info(f"🎮 New gaming session #{new_session_id} (gap: {gap_minutes:.1f} min from previous round)")
                 return new_session_id
             else:
-                logger.debug(f"🎮 Continuing session #{last_session_id} (gap: {gap_minutes:.1f} min)")
-                return last_session_id
+                logger.debug(f"🎮 Continuing session #{prev_session_id} (gap: {gap_minutes:.1f} min from previous round)")
+                return prev_session_id
                 
         except Exception as e:
             logger.warning(f"⚠️ Error calculating gaming_session_id: {e}. Using NULL.")
@@ -2096,13 +2078,13 @@ class UltimateETLegacyBot(commands.Bot):
             )
             
             # ========== SSH CHECK EXECUTION ==========
-            # Build SSH config
+            # Build SSH config from config object
             ssh_config = {
-                "host": os.getenv("SSH_HOST"),
-                "port": int(os.getenv("SSH_PORT", 22)),
-                "user": os.getenv("SSH_USER"),
-                "key_path": os.getenv("SSH_KEY_PATH", ""),
-                "remote_path": os.getenv("REMOTE_STATS_PATH"),
+                "host": self.config.ssh_host,
+                "port": self.config.ssh_port,
+                "user": self.config.ssh_user,
+                "key_path": self.config.ssh_key_path,
+                "remote_path": self.config.ssh_remote_path,
             }
 
             # Validate SSH config
@@ -2367,7 +2349,6 @@ class UltimateETLegacyBot(commands.Bot):
             # during an ongoing gaming session
             recent_activity = False
             if total_players >= self.session_start_threshold:
-                from datetime import datetime, timedelta
                 cutoff_time = datetime.now() - timedelta(minutes=60)
                 cutoff_date = cutoff_time.strftime('%Y-%m-%d')
                 cutoff_time_str = cutoff_time.strftime('%H%M%S')
@@ -2457,6 +2438,10 @@ class UltimateETLegacyBot(commands.Bot):
         )
 
         if isinstance(error, commands.CommandNotFound):
+            # Silently ignore CommandNotFound in unauthorized channels
+            if self.bot_command_channels and ctx.channel.id not in self.bot_command_channels:
+                return  # Don't send error message in unauthorized channels
+
             await ctx.send(
                 "❌ Command not found. Use `!help_command` for available commands."
             )
@@ -2491,15 +2476,15 @@ class UltimateETLegacyBot(commands.Bot):
 def main():
     """🚀 Start the Ultimate ET:Legacy Discord Bot"""
 
-    # Get Discord token
-    token = os.getenv("DISCORD_BOT_TOKEN")
+    # Create bot (config is loaded in __init__)
+    bot = UltimateETLegacyBot()
+
+    # Get Discord token from config
+    token = bot.config.discord_token
     if not token:
         logger.error("❌ DISCORD_BOT_TOKEN not found in environment variables!")
         logger.info("Please set your Discord bot token in the .env file")
         return
-
-    # Create and run bot
-    bot = UltimateETLegacyBot()
 
     try:
         logger.info("🚀 Starting Ultimate ET:Legacy Bot...")
