@@ -14,7 +14,7 @@ Extracted from ultimate_bot.py as part of Week 7-8 refactoring.
 import asyncio
 import discord
 from datetime import datetime, timedelta
-from typing import Set, Optional
+from typing import Set, Optional, Dict, List
 import logging
 
 logger = logging.getLogger('VoiceSessionService')
@@ -49,6 +49,16 @@ class VoiceSessionService:
         self.session_start_time: Optional[datetime] = None
         self.session_participants: Set[int] = set()  # Discord user IDs
         self.session_end_timer: Optional[asyncio.Task] = None
+
+        # Team Split Detection (Phase 2: Competitive Analytics)
+        self.channel_distribution: Dict[int, Set[int]] = {}  # {channel_id: {user_ids}}
+        self.team_split_detected: bool = False
+        self.team_a_channel_id: Optional[int] = None
+        self.team_b_channel_id: Optional[int] = None
+        self.team_a_guids: List[str] = []
+        self.team_b_guids: List[str] = []
+        self.last_split_time: Optional[datetime] = None
+        self.prediction_cooldown_minutes: int = config.prediction_cooldown_minutes
 
         logger.info("✅ VoiceSessionService initialized")
 
@@ -350,19 +360,19 @@ class VoiceSessionService:
                 f"in {len(self.config.gaming_voice_channels)} monitored channels"
             )
 
-            # Check for recent database activity (within last 60 minutes)
+            # Check for recent database activity (within configured session gap)
             # to avoid creating duplicate "session start" messages when bot restarts
             # during an ongoing gaming session
             recent_activity = False
             if total_players >= self.config.session_start_threshold:
-                cutoff_time = datetime.now() - timedelta(minutes=60)
+                cutoff_time = datetime.now() - timedelta(minutes=self.config.session_gap_minutes)
                 cutoff_date = cutoff_time.strftime('%Y-%m-%d')
                 cutoff_time_str = cutoff_time.strftime('%H%M%S')
 
                 recent_round = await self.db_adapter.fetch_one(
                     """
                     SELECT id FROM rounds
-                    WHERE (round_date > $1 OR (round_date = $2 AND round_time >= $3))
+                    WHERE (round_date > ? OR (round_date = ? AND round_time >= ?))
                     ORDER BY round_date DESC, round_time DESC
                     LIMIT 1
                     """,
@@ -372,7 +382,7 @@ class VoiceSessionService:
 
                 if recent_activity:
                     logger.info(
-                        f"✅ Detected ongoing session (database activity within last 60min) - "
+                        f"✅ Detected ongoing session (database activity within last {self.config.session_gap_minutes}min) - "
                         f"skipping auto-start announcement"
                     )
 
@@ -414,3 +424,138 @@ class VoiceSessionService:
             return f"{hours}h {minutes}m"
         else:
             return f"{minutes}m"
+
+    async def _detect_team_split(self) -> Optional[Dict]:
+        """
+        Detect when players split into two roughly equal team channels.
+
+        Phase 2: Competitive Analytics - Team Split Detection
+
+        Returns:
+            {
+                'team_a_discord_ids': [user_id1, user_id2, ...],
+                'team_b_discord_ids': [user_id3, user_id4, ...],
+                'team_a_channel_id': channel_id_1,
+                'team_b_channel_id': channel_id_2,
+                'team_a_guids': ['GUID1', 'GUID2', ...],
+                'team_b_guids': ['GUID3', 'GUID4', ...],
+                'format': '4v4',
+                'confidence': 'high',
+                'guid_coverage': 0.85
+            }
+            OR None if no valid team split detected
+        """
+        # 1. Count players in each gaming voice channel
+        distribution = {}
+        for channel_id in self.config.gaming_voice_channels:
+            channel = self.bot.get_channel(channel_id)
+            if channel and hasattr(channel, 'members'):
+                member_ids = {m.id for m in channel.members if not m.bot}
+                if member_ids:
+                    distribution[channel_id] = member_ids
+
+        # 2. Need exactly 2 active channels for team split
+        if len(distribution) != 2:
+            return None
+
+        # 3. Get the two channels
+        channels = list(distribution.items())
+        channel_a_id, users_a = channels[0]
+        channel_b_id, users_b = channels[1]
+
+        count_a = len(users_a)
+        count_b = len(users_b)
+        total = count_a + count_b
+
+        # 4. Minimum 6 players for competitive match
+        if total < self.config.min_players_for_prediction:
+            return None
+
+        # 5. Teams must be roughly equal (max 1 player difference)
+        if abs(count_a - count_b) > 1:
+            return None
+
+        # 6. Determine format
+        format_map = {6: "3v3", 8: "4v4", 10: "5v5", 12: "6v6"}
+        format_str = format_map.get(total, f"{count_a}v{count_b}")
+
+        # 7. Resolve Discord IDs to Player GUIDs
+        team_a_guids = await self._resolve_discord_ids_to_guids(list(users_a))
+        team_b_guids = await self._resolve_discord_ids_to_guids(list(users_b))
+
+        # 8. Check if we have enough GUIDs mapped
+        guid_coverage = (len(team_a_guids) + len(team_b_guids)) / total
+        if guid_coverage < self.config.min_guid_coverage:
+            logger.warning(
+                f"⚠️ Low GUID coverage ({guid_coverage:.0%}), skipping team split "
+                f"(need {self.config.min_guid_coverage:.0%})"
+            )
+            return None
+
+        # 9. Confidence based on balance and GUID coverage
+        confidence = "high" if (count_a == count_b and guid_coverage > 0.8) else "medium"
+
+        logger.info(
+            f"✅ Team split detected: {format_str} "
+            f"({count_a} vs {count_b}), "
+            f"confidence={confidence}, "
+            f"GUID coverage={guid_coverage:.0%}"
+        )
+
+        return {
+            'team_a_discord_ids': list(users_a),
+            'team_b_discord_ids': list(users_b),
+            'team_a_channel_id': channel_a_id,
+            'team_b_channel_id': channel_b_id,
+            'team_a_guids': team_a_guids,
+            'team_b_guids': team_b_guids,
+            'format': format_str,
+            'confidence': confidence,
+            'guid_coverage': guid_coverage
+        }
+
+    async def _resolve_discord_ids_to_guids(
+        self,
+        discord_ids: List[int]
+    ) -> List[str]:
+        """
+        Convert Discord user IDs to ET:Legacy player GUIDs.
+
+        Phase 2: Competitive Analytics - GUID Resolution
+
+        Uses the player_links table to map Discord IDs to game GUIDs.
+
+        Args:
+            discord_ids: List of Discord user IDs
+
+        Returns:
+            List of player GUIDs (skips unmapped IDs)
+        """
+        if not discord_ids:
+            return []
+
+        # Build query with correct number of placeholders for PostgreSQL
+        placeholders = ', '.join([f'${i+1}' for i in range(len(discord_ids))])
+        query = f"""
+            SELECT discord_id, et_guid
+            FROM player_links
+            WHERE discord_id IN ({placeholders})
+        """
+
+        rows = await self.db_adapter.fetch_all(query, tuple(discord_ids))
+
+        # Build mapping
+        id_to_guid = {int(row[0]): row[1] for row in rows}
+
+        # Return GUIDs in order (skip unmapped)
+        guids = []
+        for discord_id in discord_ids:
+            if discord_id in id_to_guid:
+                guids.append(id_to_guid[discord_id])
+
+        logger.debug(
+            f"GUID resolution: {len(guids)}/{len(discord_ids)} Discord IDs mapped "
+            f"({len(guids)/len(discord_ids)*100:.0f}% coverage)"
+        )
+
+        return guids
