@@ -11,6 +11,7 @@ Phase 3: Competitive Analytics
 """
 
 import logging
+import json
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 
@@ -125,6 +126,220 @@ class PredictionEngine:
             'key_insight': key_insight,
             'weighted_score': round(weighted_score, 3)
         }
+
+    async def store_prediction(
+        self,
+        prediction: Dict,
+        split_data: Dict,
+        session_date: str,
+        discord_channel_id: Optional[int] = None,
+        discord_message_id: Optional[int] = None
+    ) -> int:
+        """
+        Store prediction in database for accuracy tracking.
+
+        Args:
+            prediction: Result from predict_match()
+            split_data: Team split data from voice service
+            session_date: Date of gaming session (YYYY-MM-DD)
+            discord_channel_id: Optional Discord channel where prediction was posted
+            discord_message_id: Optional Discord message ID for editing
+
+        Returns:
+            prediction_id: Database ID of stored prediction
+        """
+        try:
+            # Extract factor details
+            h2h = prediction['factors']['h2h']
+            form = prediction['factors']['form']
+            map_perf = prediction['factors']['map']
+            subs = prediction['factors']['subs']
+
+            # Prepare JSON fields
+            team_a_guids_json = json.dumps(split_data['team_a_guids'])
+            team_b_guids_json = json.dumps(split_data['team_b_guids'])
+            team_a_discord_ids_json = json.dumps([int(id) for id in split_data['team_a_discord_ids']])
+            team_b_discord_ids_json = json.dumps([int(id) for id in split_data['team_b_discord_ids']])
+
+            # Prepare details JSON
+            h2h_details_json = json.dumps({
+                'matches': h2h.get('matches', 0),
+                'team_a_wins': h2h.get('team_a_wins', 0),
+                'team_b_wins': h2h.get('team_b_wins', 0),
+                'details': h2h.get('details', '')
+            })
+
+            form_details_json = json.dumps({
+                'team_a_form': form.get('team_a_form', '?-?'),
+                'team_b_form': form.get('team_b_form', '?-?'),
+                'details': form.get('details', '')
+            })
+
+            map_details_json = json.dumps({
+                'details': map_perf.get('details', '')
+            })
+
+            subs_details_json = json.dumps({
+                'team_a_subs': subs.get('team_a_subs', 0),
+                'team_b_subs': subs.get('team_b_subs', 0),
+                'details': subs.get('details', '')
+            })
+
+            query = """
+                INSERT INTO match_predictions (
+                    session_date,
+                    map_name,
+                    format,
+                    team_a_channel_id,
+                    team_b_channel_id,
+                    team_a_guids,
+                    team_b_guids,
+                    team_a_discord_ids,
+                    team_b_discord_ids,
+                    team_a_win_probability,
+                    team_b_win_probability,
+                    confidence,
+                    confidence_score,
+                    h2h_score,
+                    form_score,
+                    map_score,
+                    subs_score,
+                    weighted_score,
+                    key_insight,
+                    h2h_details,
+                    form_details,
+                    map_details,
+                    subs_details,
+                    discord_channel_id,
+                    discord_message_id,
+                    guid_coverage
+                ) VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                    $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+                    $21, $22, $23, $24, $25, $26
+                )
+                RETURNING id
+            """
+
+            params = (
+                session_date,
+                split_data.get('map_name'),
+                split_data['format'],
+                split_data['team_a_channel_id'],
+                split_data['team_b_channel_id'],
+                team_a_guids_json,
+                team_b_guids_json,
+                team_a_discord_ids_json,
+                team_b_discord_ids_json,
+                prediction['team_a_win_probability'],
+                prediction['team_b_win_probability'],
+                prediction['confidence'],
+                prediction['confidence_score'],
+                h2h['score'],
+                form['score'],
+                map_perf['score'],
+                subs['score'],
+                prediction['weighted_score'],
+                prediction['key_insight'],
+                h2h_details_json,
+                form_details_json,
+                map_details_json,
+                subs_details_json,
+                discord_channel_id,
+                discord_message_id,
+                split_data['guid_coverage']
+            )
+
+            result = await self.db.fetch_one(query, params)
+            prediction_id = result[0]
+
+            logger.info(f"💾 Prediction stored: ID={prediction_id}")
+            return prediction_id
+
+        except Exception as e:
+            logger.error(f"❌ Failed to store prediction: {e}", exc_info=True)
+            raise
+
+    async def update_prediction_outcome(
+        self,
+        prediction_id: int,
+        actual_winner: int,
+        team_a_score: int,
+        team_b_score: int
+    ) -> None:
+        """
+        Update prediction with actual match outcome.
+
+        Args:
+            prediction_id: Database ID of prediction
+            actual_winner: 1 = Team A won, 2 = Team B won, 0 = draw
+            team_a_score: Rounds won by Team A
+            team_b_score: Rounds won by Team B
+        """
+        try:
+            # Get original prediction
+            query_get = """
+                SELECT team_a_win_probability, team_b_win_probability
+                FROM match_predictions
+                WHERE id = $1
+            """
+            result = await self.db.fetch_one(query_get, (prediction_id,))
+
+            if not result:
+                logger.warning(f"⚠️ Prediction {prediction_id} not found")
+                return
+
+            team_a_prob, team_b_prob = result
+
+            # Determine if prediction was correct
+            predicted_winner = 1 if team_a_prob > team_b_prob else 2
+            if team_a_prob == team_b_prob:
+                predicted_winner = 0  # Toss-up
+
+            prediction_correct = (predicted_winner == actual_winner)
+
+            # Calculate accuracy (Brier score: lower is better, 0 = perfect)
+            # For binary outcomes, Brier score = (p - actual)^2
+            if actual_winner == 1:
+                brier_score = (1.0 - team_a_prob) ** 2
+            elif actual_winner == 2:
+                brier_score = (1.0 - team_b_prob) ** 2
+            else:
+                brier_score = 0.5  # Draw case
+
+            # Convert to accuracy (higher is better, 1 = perfect)
+            prediction_accuracy = 1.0 - brier_score
+
+            # Update database
+            query_update = """
+                UPDATE match_predictions
+                SET actual_winner = $1,
+                    team_a_actual_score = $2,
+                    team_b_actual_score = $3,
+                    prediction_correct = $4,
+                    prediction_accuracy = $5,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $6
+            """
+
+            await self.db.execute(query_update, (
+                actual_winner,
+                team_a_score,
+                team_b_score,
+                prediction_correct,
+                prediction_accuracy,
+                prediction_id
+            ))
+
+            logger.info(
+                f"✅ Prediction {prediction_id} updated: "
+                f"{'CORRECT' if prediction_correct else 'WRONG'} "
+                f"(Accuracy: {prediction_accuracy:.2%})"
+            )
+
+        except Exception as e:
+            logger.error(f"❌ Failed to update prediction outcome: {e}", exc_info=True)
+            raise
 
     async def _analyze_head_to_head(
         self,
