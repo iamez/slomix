@@ -439,6 +439,364 @@ class PredictionsCog(commands.Cog, name="Predictions"):
         else:
             return "just now"
 
+    @commands.command(name='prediction_trends')
+    async def prediction_trends(self, ctx, days: int = 30):
+        """
+        View prediction accuracy trends over time.
+
+        Usage:
+            !prediction_trends [days]
+
+        Shows daily accuracy trends and identifies patterns.
+
+        Examples:
+            !prediction_trends       - Last 30 days
+            !prediction_trends 7     - Last week
+            !prediction_trends 90    - Last 3 months
+        """
+        try:
+            # Validate days
+            if days < 1 or days > 365:
+                await ctx.send("❌ Days must be between 1 and 365")
+                return
+
+            cutoff_date = datetime.now() - timedelta(days=days)
+
+            # Get daily accuracy trends
+            query = """
+                SELECT
+                    DATE(prediction_time) as pred_date,
+                    COUNT(*) as total,
+                    COUNT(CASE WHEN actual_winner IS NOT NULL THEN 1 END) as completed,
+                    COUNT(CASE WHEN prediction_correct = true THEN 1 END) as correct,
+                    AVG(CASE WHEN actual_winner IS NOT NULL THEN prediction_accuracy END) as avg_accuracy
+                FROM match_predictions
+                WHERE prediction_time >= $1
+                GROUP BY DATE(prediction_time)
+                ORDER BY pred_date DESC
+                LIMIT 30
+            """
+
+            rows = await self.db.fetch_all(query, (cutoff_date,))
+
+            if not rows:
+                await ctx.send(f"📊 No predictions found in the last {days} days.")
+                return
+
+            # Build embed
+            embed = discord.Embed(
+                title="📈 Prediction Accuracy Trends",
+                description=f"Daily trends over last {days} days",
+                color=0x3498DB,
+                timestamp=datetime.now()
+            )
+
+            # Calculate overall trend
+            total_predictions = sum(r[1] for r in rows)
+            total_completed = sum(r[2] for r in rows)
+            total_correct = sum(r[3] for r in rows)
+            overall_accuracy = (total_correct / total_completed * 100) if total_completed > 0 else 0
+
+            embed.add_field(
+                name="📊 Overall Summary",
+                value=(
+                    f"**Total Predictions:** {total_predictions}\n"
+                    f"**Completed:** {total_completed}\n"
+                    f"**Accuracy:** {overall_accuracy:.1f}%"
+                ),
+                inline=False
+            )
+
+            # Show recent days (last 7)
+            recent_days = []
+            for pred_date, total, completed, correct, avg_acc in rows[:7]:
+                if completed > 0:
+                    daily_accuracy = (correct / completed * 100)
+                    accuracy_emoji = "🟢" if daily_accuracy >= 70 else "🟠" if daily_accuracy >= 50 else "🔴"
+                    recent_days.append(
+                        f"{pred_date}: {accuracy_emoji} **{daily_accuracy:.0f}%** ({correct}/{completed})"
+                    )
+                else:
+                    recent_days.append(f"{pred_date}: ⏳ Pending ({total} predictions)")
+
+            if recent_days:
+                embed.add_field(
+                    name="📅 Recent Days",
+                    value="\n".join(recent_days),
+                    inline=False
+                )
+
+            # Trend analysis
+            if len(rows) >= 7:
+                # Compare last 7 days vs previous 7 days
+                recent_accuracy = sum(r[3] for r in rows[:7]) / max(sum(r[2] for r in rows[:7]), 1) * 100
+                previous_accuracy = sum(r[3] for r in rows[7:14]) / max(sum(r[2] for r in rows[7:14]), 1) * 100
+
+                if recent_accuracy > previous_accuracy + 5:
+                    trend = f"📈 **Improving** (+{recent_accuracy - previous_accuracy:.1f}%)"
+                elif recent_accuracy < previous_accuracy - 5:
+                    trend = f"📉 **Declining** ({recent_accuracy - previous_accuracy:.1f}%)"
+                else:
+                    trend = "➡️ **Stable**"
+
+                embed.add_field(
+                    name="📊 Trend",
+                    value=trend,
+                    inline=False
+                )
+
+            # Best day
+            best_day = max(((r[0], r[3] / max(r[2], 1) * 100, r[2]) for r in rows if r[2] > 0),
+                          key=lambda x: x[1], default=None)
+            if best_day:
+                embed.add_field(
+                    name="🏆 Best Day",
+                    value=f"{best_day[0]}: **{best_day[1]:.0f}%** ({best_day[2]} matches)",
+                    inline=True
+                )
+
+            # Worst day
+            worst_day = min(((r[0], r[3] / max(r[2], 1) * 100, r[2]) for r in rows if r[2] > 0),
+                           key=lambda x: x[1], default=None)
+            if worst_day:
+                embed.add_field(
+                    name="📉 Worst Day",
+                    value=f"{worst_day[0]}: **{worst_day[1]:.0f}%** ({worst_day[2]} matches)",
+                    inline=True
+                )
+
+            embed.set_footer(text="Competitive Analytics • Tracking improvement over time")
+
+            await ctx.send(embed=embed)
+            logger.info(f"📈 {ctx.author} viewed prediction trends ({days} days)")
+
+        except Exception as e:
+            logger.error(f"❌ Error in !prediction_trends: {e}", exc_info=True)
+            await ctx.send("❌ Failed to generate trends. Check logs for details.")
+
+    @commands.command(name='prediction_leaderboard')
+    async def prediction_leaderboard(self, ctx, category: str = "predictable"):
+        """
+        View prediction leaderboards.
+
+        Usage:
+            !prediction_leaderboard [category]
+
+        Categories:
+            predictable - Most predictable players (accurate predictions)
+            unpredictable - Least predictable players (inaccurate predictions)
+            active - Most active players in predictions
+
+        Examples:
+            !prediction_leaderboard
+            !prediction_leaderboard unpredictable
+            !prediction_leaderboard active
+        """
+        try:
+            if category not in ["predictable", "unpredictable", "active"]:
+                await ctx.send("❌ Category must be: predictable, unpredictable, or active")
+                return
+
+            # Query to get player prediction statistics
+            query = """
+                SELECT
+                    player_guid,
+                    COUNT(*) as total_predictions,
+                    COUNT(CASE WHEN actual_winner IS NOT NULL THEN 1 END) as completed,
+                    COUNT(CASE WHEN prediction_correct = true THEN 1 END) as correct,
+                    AVG(CASE WHEN actual_winner IS NOT NULL THEN prediction_accuracy END) as avg_accuracy
+                FROM (
+                    SELECT
+                        unnest(
+                            CASE
+                                WHEN team_a_guids::text LIKE '%' || pl.et_guid || '%' THEN ARRAY[pl.et_guid]
+                                WHEN team_b_guids::text LIKE '%' || pl.et_guid || '%' THEN ARRAY[pl.et_guid]
+                                ELSE ARRAY[]::text[]
+                            END
+                        ) as player_guid,
+                        mp.actual_winner,
+                        mp.prediction_correct,
+                        mp.prediction_accuracy
+                    FROM match_predictions mp
+                    CROSS JOIN player_links pl
+                    WHERE mp.prediction_time >= $1
+                ) subq
+                WHERE player_guid IS NOT NULL
+                GROUP BY player_guid
+                HAVING COUNT(CASE WHEN actual_winner IS NOT NULL THEN 1 END) >= 3
+            """
+
+            cutoff_date = datetime.now() - timedelta(days=30)
+            rows = await self.db.fetch_all(query, (cutoff_date,))
+
+            if not rows:
+                await ctx.send("📊 Not enough data for leaderboard. Need at least 3 completed predictions per player.")
+                return
+
+            # Get player names
+            guids = [r[0] for r in rows]
+            name_query = f"""
+                SELECT DISTINCT player_guid, player_name
+                FROM player_comprehensive_stats
+                WHERE player_guid IN ({','.join([f"${i+1}" for i in range(len(guids))])})
+            """
+            name_rows = await self.db.fetch_all(name_query, tuple(guids))
+            guid_to_name = {r[0]: r[1] for r in name_rows}
+
+            # Sort based on category
+            if category == "predictable":
+                # Highest accuracy
+                sorted_rows = sorted(rows, key=lambda x: x[4] or 0, reverse=True)[:10]
+                title = "🏆 Most Predictable Players"
+                desc = "Players with highest prediction accuracy"
+                color = 0x00FF00
+            elif category == "unpredictable":
+                # Lowest accuracy
+                sorted_rows = sorted(rows, key=lambda x: x[4] or 0)[:10]
+                title = "🎲 Most Unpredictable Players"
+                desc = "Players with lowest prediction accuracy (wildcard factor!)"
+                color = 0xFF0000
+            else:  # active
+                # Most predictions
+                sorted_rows = sorted(rows, key=lambda x: x[1], reverse=True)[:10]
+                title = "⭐ Most Active Players"
+                desc = "Players who appear in most predictions"
+                color = 0x3498DB
+
+            # Build embed
+            embed = discord.Embed(
+                title=title,
+                description=f"{desc}\n*Last 30 days, minimum 3 completed matches*",
+                color=color,
+                timestamp=datetime.now()
+            )
+
+            # Add leaderboard entries
+            for rank, (guid, total, completed, correct, avg_acc) in enumerate(sorted_rows, 1):
+                player_name = guid_to_name.get(guid, f"Player_{guid[:8]}")
+                accuracy = (correct / completed * 100) if completed > 0 else 0
+                avg_acc_pct = (avg_acc * 100) if avg_acc else 0
+
+                # Medal emojis
+                medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"{rank}.")
+
+                if category == "active":
+                    value = (
+                        f"**Predictions:** {total} (completed: {completed})\n"
+                        f"**Accuracy:** {accuracy:.0f}% ({correct} correct)"
+                    )
+                else:
+                    value = (
+                        f"**Accuracy:** {accuracy:.0f}% (Brier: {avg_acc_pct:.1f}%)\n"
+                        f"**Matches:** {completed} completed, {total} total"
+                    )
+
+                embed.add_field(
+                    name=f"{medal} {player_name}",
+                    value=value,
+                    inline=False
+                )
+
+            embed.set_footer(text="Competitive Analytics • Player Performance Tracking")
+
+            await ctx.send(embed=embed)
+            logger.info(f"🏆 {ctx.author} viewed {category} leaderboard")
+
+        except Exception as e:
+            logger.error(f"❌ Error in !prediction_leaderboard: {e}", exc_info=True)
+            await ctx.send(f"❌ Failed to generate leaderboard: {str(e)}")
+
+    @commands.command(name='map_predictions')
+    async def map_predictions(self, ctx, map_name: str = None):
+        """
+        View prediction statistics by map.
+
+        Usage:
+            !map_predictions [map_name]
+
+        Examples:
+            !map_predictions           - All maps
+            !map_predictions goldrush  - Specific map
+        """
+        try:
+            if map_name:
+                # Specific map stats
+                query = """
+                    SELECT
+                        map_name,
+                        COUNT(*) as total,
+                        COUNT(CASE WHEN actual_winner IS NOT NULL THEN 1 END) as completed,
+                        COUNT(CASE WHEN prediction_correct = true THEN 1 END) as correct,
+                        AVG(CASE WHEN actual_winner IS NOT NULL THEN prediction_accuracy END) as avg_accuracy,
+                        AVG(team_a_win_probability) as avg_team_a_prob
+                    FROM match_predictions
+                    WHERE LOWER(map_name) LIKE LOWER($1)
+                    GROUP BY map_name
+                """
+                rows = await self.db.fetch_all(query, (f"%{map_name}%",))
+            else:
+                # All maps
+                query = """
+                    SELECT
+                        COALESCE(map_name, 'Unknown') as map_name,
+                        COUNT(*) as total,
+                        COUNT(CASE WHEN actual_winner IS NOT NULL THEN 1 END) as completed,
+                        COUNT(CASE WHEN prediction_correct = true THEN 1 END) as correct,
+                        AVG(CASE WHEN actual_winner IS NOT NULL THEN prediction_accuracy END) as avg_accuracy,
+                        AVG(team_a_win_probability) as avg_team_a_prob
+                    FROM match_predictions
+                    GROUP BY map_name
+                    ORDER BY COUNT(*) DESC
+                    LIMIT 10
+                """
+                rows = await self.db.fetch_all(query, ())
+
+            if not rows:
+                await ctx.send(f"📊 No predictions found{f' for map: {map_name}' if map_name else ''}.")
+                return
+
+            # Build embed
+            embed = discord.Embed(
+                title=f"🗺️ Map Prediction Statistics{f': {map_name}' if map_name else ''}",
+                description="Prediction performance by map",
+                color=0x3498DB,
+                timestamp=datetime.now()
+            )
+
+            for map_name_val, total, completed, correct, avg_acc, avg_prob in rows:
+                accuracy = (correct / completed * 100) if completed > 0 else 0
+                avg_acc_pct = (avg_acc * 100) if avg_acc else 0
+                avg_prob_pct = (avg_prob * 100) if avg_prob else 50
+
+                # Determine if map favors Team A or Team B
+                if avg_prob_pct > 55:
+                    bias = f"🔵 Team A favored (+{avg_prob_pct - 50:.0f}%)"
+                elif avg_prob_pct < 45:
+                    bias = f"🔴 Team B favored (+{50 - avg_prob_pct:.0f}%)"
+                else:
+                    bias = "⚪ Balanced"
+
+                value = (
+                    f"**Predictions:** {total} (completed: {completed})\n"
+                    f"**Accuracy:** {accuracy:.0f}% (Brier: {avg_acc_pct:.1f}%)\n"
+                    f"**Bias:** {bias}"
+                )
+
+                embed.add_field(
+                    name=f"📍 {map_name_val}",
+                    value=value,
+                    inline=False
+                )
+
+            embed.set_footer(text="Competitive Analytics • Map Analysis")
+
+            await ctx.send(embed=embed)
+            logger.info(f"🗺️ {ctx.author} viewed map predictions{f' for {map_name}' if map_name else ''}")
+
+        except Exception as e:
+            logger.error(f"❌ Error in !map_predictions: {e}", exc_info=True)
+            await ctx.send("❌ Failed to fetch map statistics. Check logs for details.")
+
     @commands.command(name='prediction_help')
     async def prediction_help(self, ctx):
         """Show help for prediction commands."""
@@ -463,6 +821,24 @@ class PredictionsCog(commands.Cog, name="Predictions"):
         embed.add_field(
             name="!my_predictions",
             value="View predictions for matches you played in",
+            inline=False
+        )
+
+        embed.add_field(
+            name="!prediction_trends [days]",
+            value="View accuracy trends over time with best/worst days",
+            inline=False
+        )
+
+        embed.add_field(
+            name="!prediction_leaderboard [category]",
+            value="Player leaderboards (predictable/unpredictable/active)",
+            inline=False
+        )
+
+        embed.add_field(
+            name="!map_predictions [map]",
+            value="Map-specific prediction statistics and bias analysis",
             inline=False
         )
 
