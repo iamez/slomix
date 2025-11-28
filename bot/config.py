@@ -116,9 +116,16 @@ class BotConfig:
         self.session_start_threshold: int = int(self._get_config('SESSION_START_THRESHOLD', '6'))
         self.session_end_threshold: int = int(self._get_config('SESSION_END_THRESHOLD', '2'))
         self.session_end_delay: int = int(self._get_config('SESSION_END_DELAY', '300'))  # seconds
+        self.session_gap_minutes: int = int(self._get_config('SESSION_GAP_MINUTES', '60'))  # minutes between gaming sessions
 
         # ==================== AUTOMATION SYSTEM ====================
         self.automation_enabled: bool = self._get_config('AUTOMATION_ENABLED', 'false').lower() == 'true'
+
+        # ==================== HEALTH MONITOR CONFIGURATION ====================
+        self.health_error_threshold: int = int(self._get_config('HEALTH_ERROR_THRESHOLD', '10'))
+        self.health_ssh_error_threshold: int = int(self._get_config('HEALTH_SSH_ERROR_THRESHOLD', '5'))
+        self.health_db_error_threshold: int = int(self._get_config('HEALTH_DB_ERROR_THRESHOLD', '5'))
+        self.health_alert_cooldown: int = int(self._get_config('HEALTH_ALERT_COOLDOWN', '300'))  # seconds
 
         # ==================== SSH CONFIGURATION ====================
         self.ssh_enabled: bool = self._get_config('SSH_ENABLED', 'false').lower() == 'true'
@@ -145,6 +152,24 @@ class BotConfig:
         self.rcon_host: str = self._get_config('RCON_HOST', 'localhost')
         self.rcon_port: int = int(self._get_config('RCON_PORT', '27960'))
         self.rcon_password: str = self._get_config('RCON_PASSWORD', '')
+
+        # ==================== COMPETITIVE ANALYTICS FEATURE FLAGS ====================
+        # Phase 2: Team split detection
+        self.enable_team_split_detection: bool = self._get_config('ENABLE_TEAM_SPLIT_DETECTION', 'false').lower() == 'true'
+
+        # Phase 3: Match predictions
+        self.enable_match_predictions: bool = self._get_config('ENABLE_MATCH_PREDICTIONS', 'false').lower() == 'true'
+
+        # Phase 4: Live scoring
+        self.enable_live_scoring: bool = self._get_config('ENABLE_LIVE_SCORING', 'false').lower() == 'true'
+
+        # Logging and debugging
+        self.enable_prediction_logging: bool = self._get_config('ENABLE_PREDICTION_LOGGING', 'true').lower() == 'true'
+
+        # Thresholds and limits
+        self.prediction_cooldown_minutes: int = int(self._get_config('PREDICTION_COOLDOWN_MINUTES', '5'))
+        self.min_players_for_prediction: int = int(self._get_config('MIN_PLAYERS_FOR_PREDICTION', '6'))
+        self.min_guid_coverage: float = float(self._get_config('MIN_GUID_COVERAGE', '0.5'))  # 50% must have linked GUIDs
 
         logger.info(f"🔧 Configuration loaded: database_type={self.database_type}")
     
