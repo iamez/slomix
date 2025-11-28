@@ -207,7 +207,7 @@ class UltimateETLegacyBot(commands.Bot):
         logger.info("✅ Round publisher service initialized")
 
         # 📁 File Repository (data access layer for processed files)
-        self.file_repository = FileRepository(self.db_adapter)
+        self.file_repository = FileRepository(self.db_adapter, self.config)
         logger.info("✅ File repository initialized")
 
         # 🤖 Automation System Flags (OFF by default for dev/testing)

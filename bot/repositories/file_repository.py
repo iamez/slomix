@@ -14,14 +14,16 @@ logger = logging.getLogger("bot.repositories.file_repository")
 class FileRepository:
     """Repository for processed files data access"""
 
-    def __init__(self, db_adapter):
+    def __init__(self, db_adapter, config):
         """
         Initialize file repository
 
         Args:
             db_adapter: Database adapter (PostgreSQL or SQLite)
+            config: Bot configuration object
         """
         self.db_adapter = db_adapter
+        self.config = config
 
     async def get_processed_filenames(self) -> Set[str]:
         """
@@ -39,10 +41,14 @@ class FileRepository:
             {'2025-11-27-183045-goldrush-round-1.txt', ...}
         """
         try:
-            # Query works for both SQLite and PostgreSQL
-            # SQLite: success = 1 (integer)
-            # PostgreSQL: success = true (boolean, but 1 works too)
-            query = "SELECT filename FROM processed_files WHERE success = 1"
+            # Database-specific query for success column
+            # SQLite: success is INTEGER (0/1)
+            # PostgreSQL: success is BOOLEAN (true/false)
+            if self.config.database_type == "sqlite":
+                query = "SELECT filename FROM processed_files WHERE success = 1"
+            else:  # PostgreSQL
+                query = "SELECT filename FROM processed_files WHERE success = true"
+
             rows = await self.db_adapter.fetch_all(query)
 
             # Convert rows to set of filenames
