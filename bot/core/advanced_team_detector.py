@@ -52,27 +52,31 @@ class AdvancedTeamDetector:
     4. Player Behavior Patterns - Play style and timing analysis
     """
     
-    def __init__(self, db_path: str = "bot/etlegacy_production.db"):
-        self.db_path = db_path
+    def __init__(self, db_adapter):
+        """
+        Initialize AdvancedTeamDetector with async database adapter.
+
+        Args:
+            db_adapter: DatabaseAdapter instance (supports both SQLite and PostgreSQL)
+        """
+        self.db = db_adapter
         self.min_confidence_threshold = 0.7  # 70% confidence to accept
         self.historical_weight = 0.4  # 40% weight for historical patterns
         self.consensus_weight = 0.35  # 35% weight for multi-round consensus
         self.cooccurrence_weight = 0.25  # 25% weight for co-occurrence
     
-    def detect_session_teams(
+    async def detect_session_teams(
         self,
-        db: sqlite3.Connection,
         session_date: str,
         use_historical: bool = True
     ) -> Dict[str, Dict]:
         """
         Main detection method - combines all strategies
-        
+
         Args:
-            db: Database connection
             session_date: Session date (YYYY-MM-DD format)
             use_historical: Whether to use historical pattern analysis
-            
+
         Returns:
             {
                 'Team A': {
@@ -90,30 +94,30 @@ class AdvancedTeamDetector:
             }
         """
         logger.info(f"🔍 Starting advanced team detection for {session_date}")
-        
+
         # Get all player data for this session
-        players_data = self._get_session_player_data(db, session_date)
-        
+        players_data = await self._get_session_player_data(session_date)
+
         if not players_data:
             logger.error(f"No player data found for session {session_date}")
             return {}
-        
+
         logger.info(f"Found {len(players_data)} unique players in session")
-        
+
         # Strategy 1: Historical Pattern Analysis
         historical_scores = {}
         if use_historical:
-            historical_scores = self._analyze_historical_patterns(db, players_data, session_date)
+            historical_scores = await self._analyze_historical_patterns(players_data, session_date)
             logger.info(f"Historical analysis: {len(historical_scores)} players with history")
-        
+
         # Strategy 2: Multi-Round Consensus
-        consensus_scores = self._analyze_multi_round_consensus(db, session_date, players_data)
+        consensus_scores = await self._analyze_multi_round_consensus(session_date, players_data)
         logger.info(f"Consensus analysis: Analyzed all rounds")
-        
+
         # Strategy 3: Co-occurrence Matrix
-        cooccurrence_scores = self._analyze_cooccurrence(db, session_date, players_data)
+        cooccurrence_scores = await self._analyze_cooccurrence(session_date, players_data)
         logger.info(f"Co-occurrence analysis: Complete")
-        
+
         # Combine all strategies with weighted scoring
         player_scores = self._combine_strategies(
             players_data,
@@ -121,30 +125,27 @@ class AdvancedTeamDetector:
             consensus_scores,
             cooccurrence_scores
         )
-        
+
         # Cluster players into two teams
         team_a, team_b, metadata = self._cluster_into_teams(player_scores)
-        
+
         logger.info(f"✅ Detection complete: Team A ({len(team_a['guids'])} players), "
                    f"Team B ({len(team_b['guids'])} players), "
                    f"Avg confidence: {metadata['avg_confidence']:.2%}")
-        
+
         return {
             'Team A': team_a,
             'Team B': team_b,
             'metadata': metadata
         }
     
-    def _get_session_player_data(
+    async def _get_session_player_data(
         self,
-        db: sqlite3.Connection,
         session_date: str
     ) -> Dict[str, Dict]:
         """Get all player participation data for the session"""
-        cursor = db.cursor()
-        
         query = """
-            SELECT 
+            SELECT
                 player_guid,
                 player_name,
                 round_number,
@@ -153,12 +154,11 @@ class AdvancedTeamDetector:
                 deaths,
                 time_played_seconds
             FROM player_comprehensive_stats
-            WHERE round_date LIKE ?
+            WHERE round_date LIKE $1
             ORDER BY round_number, player_guid
         """
-        
-        cursor.execute(query, (f"{session_date}%",))
-        rows = cursor.fetchall()
+
+        rows = await self.db.fetch_all(query, (f"{session_date}%",))
         
         # Organize by player
         players = {}
@@ -180,47 +180,42 @@ class AdvancedTeamDetector:
         
         return players
     
-    def _analyze_historical_patterns(
+    async def _analyze_historical_patterns(
         self,
-        db: sqlite3.Connection,
         current_players: Dict[str, Dict],
         session_date: str
     ) -> Dict[str, PlayerTeamScore]:
         """
         Analyze previous sessions to find recurring team patterns
-        
+
         Strategy: Look at the last 10 sessions, find which players
         consistently play together.
         """
-        cursor = db.cursor()
-        
         # Get recent sessions (last 30 days, max 10 sessions)
         query = """
             SELECT DISTINCT SUBSTR(round_date, 1, 10) as date
             FROM rounds
-            WHERE SUBSTR(round_date, 1, 10) < ?
+            WHERE SUBSTR(round_date, 1, 10) < $1
             ORDER BY date DESC
             LIMIT 10
         """
-        cursor.execute(query, (session_date,))
-        previous_sessions = [row[0] for row in cursor.fetchall()]
-        
+        rows = await self.db.fetch_all(query, (session_date,))
+        previous_sessions = [row[0] for row in rows]
+
         if not previous_sessions:
             logger.info("No historical data available")
             return {}
-        
+
         # For each previous session, get team compositions
         historical_teammates = defaultdict(lambda: defaultdict(int))
-        
+
         for prev_date in previous_sessions:
             # Try to get stored teams
-            cursor.execute("""
+            teams_data = await self.db.fetch_all("""
                 SELECT team_name, player_guids
                 FROM session_teams
-                WHERE session_start_date LIKE ? AND map_name = 'ALL'
+                WHERE session_start_date LIKE $1 AND map_name = 'ALL'
             """, (f"{prev_date}%",))
-            
-            teams_data = cursor.fetchall()
             
             if not teams_data:
                 continue
@@ -293,13 +288,12 @@ class AdvancedTeamDetector:
     
     def _analyze_multi_round_consensus(
         self,
-        db: sqlite3.Connection,
         session_date: str,
         players_data: Dict[str, Dict]
     ) -> Dict[str, PlayerTeamScore]:
         """
         Analyze all rounds to find consensus team assignments
-        
+
         Strategy: Players who are consistently on the same game-team
         across multiple rounds are likely on the same persistent team.
         """
@@ -408,13 +402,12 @@ class AdvancedTeamDetector:
     
     def _analyze_cooccurrence(
         self,
-        db: sqlite3.Connection,
         session_date: str,
         players_data: Dict[str, Dict]
     ) -> Dict[str, PlayerTeamScore]:
         """
         Co-occurrence analysis (similar to existing method but improved)
-        
+
         This is the fallback method when historical/consensus don't work.
         """
         from itertools import combinations
