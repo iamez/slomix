@@ -1074,10 +1074,39 @@ class PostgreSQLDatabaseManager:
                     obj_stats.get('death_spree', 0)
                 )
 
+                # 🔗 CRITICAL: Update player aliases for !stats and !link commands
+                try:
+                    # Convert string date to datetime for PostgreSQL compatibility
+                    last_seen_datetime = datetime.strptime(round_date, '%Y-%m-%d') if isinstance(round_date, str) else round_date
+
+                    # Check if this GUID+alias combination exists
+                    existing = await conn.fetchval(
+                        'SELECT times_seen FROM player_aliases WHERE guid = $1 AND alias = $2',
+                        guid, name
+                    )
+
+                    if existing:
+                        # Update existing alias: increment times_seen and update last_seen
+                        await conn.execute(
+                            '''UPDATE player_aliases
+                               SET times_seen = times_seen + 1, last_seen = $1
+                               WHERE guid = $2 AND alias = $3''',
+                            last_seen_datetime, guid, name
+                        )
+                    else:
+                        # Insert new alias
+                        await conn.execute(
+                            '''INSERT INTO player_aliases (guid, alias, first_seen, last_seen, times_seen)
+                               VALUES ($1, $2, $3, $4, 1)''',
+                            guid, name, last_seen_datetime, last_seen_datetime
+                        )
+                except Exception as alias_error:
+                    logger.debug(f"Failed to update alias for {guid}/{name}: {alias_error}")
+
                 count += 1
             except Exception as e:
                 logger.warning(f"Failed to insert player {player.get('name')}: {e}")
-        
+
         return count
     
     async def _insert_weapon_stats(self, conn, round_id: int, round_date: str, parsed_data: Dict) -> int:

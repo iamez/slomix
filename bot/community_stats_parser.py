@@ -13,6 +13,20 @@ import discord
 
 from bot.stats import StatsCalculator
 
+# =============================================================================
+# FILENAME FORMAT: YYYY-MM-DD-HHMMSS-<map_name>-round-<N>.txt
+# Example: 2025-10-02-232818-erdenberg_t2-round-2.txt
+#
+# The timestamp (first 17 characters) is used for:
+# - Deduplication (file_tracker.py)
+# - Round 1/Round 2 pairing (differential calculation)
+# - Session identification (match_id generation)
+#
+# ROUND 2 DIFFERENTIAL CALCULATION:
+# Round 2 files contain CUMULATIVE stats from both rounds.
+# To get Round 2-only stats: R2_cumulative - R1 = R2_only
+# =============================================================================
+
 # C0RNP0RN3.LUA weapon enumeration (the actual format used)
 C0RNP0RN3_WEAPONS = {
     0: "WS_KNIFE",
@@ -425,12 +439,15 @@ class C0RNP0RN3StatsParser:
             round_1_result, round_2_cumulative_result
         )
 
+        # 🆕 ATTACH R1 FILENAME so importer can use R1's timestamp for match_id
+        round_2_only_result['r1_filename'] = os.path.basename(round_1_file_path)
+
         # 🆕 ATTACH MATCH SUMMARY (cumulative R2 data) to the result
         # This will be stored as round_number=0 for easy querying
         match_summary = round_2_cumulative_result.copy()
         match_summary['round_num'] = 0  # Special round number for match summary
         match_summary['is_match_summary'] = True
-        
+
         # Attach match summary to the Round 2 differential result
         round_2_only_result['match_summary'] = match_summary
 
@@ -672,10 +689,12 @@ class C0RNP0RN3StatsParser:
                     round_time_seconds = 300  # Default 5 minutes if unknown
 
             # Calculate DPM for all players using SECONDS
+            # NOTE: In stopwatch mode, all players play the full round duration (teams locked)
             for player in players:
                 damage_given = player.get('damage_given', 0)
 
                 # Store time in SECONDS (integer)
+                # In stopwatch: everyone plays full round, so round_time_seconds is correct
                 player['time_played_seconds'] = round_time_seconds
 
                 # Create display format (MM:SS)
@@ -881,6 +900,12 @@ class C0RNP0RN3StatsParser:
             if (total_kills + total_deaths) > 0:
                 efficiency = total_kills / (total_kills + total_deaths) * 100
 
+            # ⚠️ CRITICAL DISTINCTION - DO NOT CONFUSE THESE TWO:
+            # 1. player['headshots'] = Sum of all weapon headshot HITS (shots that hit head, may not kill)
+            # 2. objective_stats['headshot_kills'] = TAB field 14 (kills where FINAL BLOW was to head)
+            # These are DIFFERENT stats! Database stores headshot_kills, NOT weapon sum.
+            # Validated Nov 3, 2025: 100% accuracy confirmed.
+
             return {
                 'guid': guid[:8],  # Truncate GUID
                 'clean_name': clean_name,  # ✅ FIXED: Use clean_name
@@ -890,7 +915,7 @@ class C0RNP0RN3StatsParser:
                 'rounds': rounds,
                 'kills': total_kills,
                 'deaths': total_deaths,
-                'headshots': total_headshots,  # ⚠️ IMPORTANT: This is sum of weapon headshot HITS (not kills!)
+                'headshots': total_headshots,  # Sum of weapon headshot HITS (not kills!)
                 'kd_ratio': kd_ratio,
                 'shots_total': total_shots,
                 'hits_total': total_hits,
@@ -900,14 +925,8 @@ class C0RNP0RN3StatsParser:
                 'dpm': objective_stats.get('dpm', 0.0),
                 'weapon_stats': weapon_stats,
                 'efficiency': efficiency,
-                'objective_stats': objective_stats,  # ✅ Contains headshot_KILLS (TAB field 14) + revives + all other stats
+                'objective_stats': objective_stats,  # Contains headshot_KILLS (TAB field 14)
             }
-            
-            # ⚠️ CRITICAL DISTINCTION - DO NOT CONFUSE THESE TWO:
-            # 1. player['headshots'] = Sum of all weapon headshot HITS (shots that hit head, may not kill)
-            # 2. objective_stats['headshot_kills'] = TAB field 14 (kills where FINAL BLOW was to head)
-            # These are DIFFERENT stats! Database stores headshot_kills, NOT weapon sum.
-            # Validated Nov 3, 2025: 100% accuracy confirmed.
 
         except Exception as e:
             print(f"Error parsing player line: {e}")

@@ -359,8 +359,8 @@ class SSHMonitor:
                 for filename in new_files:
                     await self._process_new_file(filename)
             else:
-                # Changed to INFO level so users can see monitoring is working
-                logger.info(f"✓ No new files (checked {len(stats_files)} files)")
+                # Use DEBUG level for routine "no new files" checks to reduce log noise
+                logger.debug(f"✓ No new files (checked {len(stats_files)} files)")
 
         except Exception as e:
             logger.error(f"❌ Error checking for new files: {e}", exc_info=True)
@@ -557,6 +557,13 @@ class SSHMonitor:
 
             if not channel:
                 logger.error(f"❌ Production channel {self.production_channel_id} not found")
+                # Notify admin channel about configuration issue
+                admin_channel = self.bot.get_channel(self.admin_channel_id)
+                if admin_channel:
+                    await admin_channel.send(
+                        f"⚠️ **Config Issue:** Production channel {self.production_channel_id} not found. "
+                        f"Stats for `{filename}` could not be posted."
+                    )
                 return
             
             # Get the round data from database (most recent round)
