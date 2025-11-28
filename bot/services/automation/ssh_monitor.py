@@ -53,14 +53,14 @@ class SSHMonitor:
         """
         self.bot = bot
         
-        # SSH configuration from environment
-        self.ssh_enabled = os.getenv("SSH_ENABLED", "false").lower() == "true"
+        # SSH configuration from bot config object
+        self.ssh_enabled = bot.config.ssh_enabled
         self.ssh_config = {
-            "host": os.getenv("SSH_HOST", ""),
-            "port": int(os.getenv("SSH_PORT", "22")),
-            "user": os.getenv("SSH_USER", ""),
-            "key_path": os.getenv("SSH_KEY_PATH", ""),
-            "remote_path": os.getenv("REMOTE_STATS_PATH", "")
+            "host": bot.config.ssh_host,
+            "port": bot.config.ssh_port,
+            "user": bot.config.ssh_user,
+            "key_path": bot.config.ssh_key_path,
+            "remote_path": bot.config.ssh_remote_path
         }
         
         # Discord configuration - use production channel for all match posts
@@ -78,7 +78,7 @@ class SSHMonitor:
         self.processed_files = set()
         self.check_times = []
         self.download_times = []
-        self.check_interval = int(os.getenv("SSH_CHECK_INTERVAL", "60"))  # seconds
+        self.check_interval = bot.config.ssh_check_interval  # seconds
 
         # Startup optimization: only check recent files on first check
 
@@ -86,14 +86,14 @@ class SSHMonitor:
         self.badge_service = PlayerBadgeService(bot.db_adapter)
         self.display_name_service = PlayerDisplayNameService(bot.db_adapter)
         self._is_first_check = True
-        self.startup_lookback_hours = int(os.getenv("SSH_STARTUP_LOOKBACK_HOURS", "24"))
+        self.startup_lookback_hours = bot.config.ssh_startup_lookback_hours
 
         # Voice-conditional monitoring: only check SSH when players are in voice channels
-        self.voice_conditional = os.getenv("SSH_VOICE_CONDITIONAL", "true").lower() == "true"
+        self.voice_conditional = bot.config.ssh_voice_conditional
 
         # Grace period: continue checking SSH for X minutes after players leave voice
         # (catches files that appear shortly after game ends)
-        self.grace_period_minutes = int(os.getenv("SSH_GRACE_PERIOD_MINUTES", "10"))
+        self.grace_period_minutes = bot.config.ssh_grace_period_minutes
         self.last_voice_activity_time: Optional[datetime] = None
 
         logger.info("🔄 SSH Monitor service initialized")
@@ -359,8 +359,8 @@ class SSHMonitor:
                 for filename in new_files:
                     await self._process_new_file(filename)
             else:
-                # Changed to INFO level so users can see monitoring is working
-                logger.info(f"✓ No new files (checked {len(stats_files)} files)")
+                # Use DEBUG level for routine "no new files" checks to reduce log noise
+                logger.debug(f"✓ No new files (checked {len(stats_files)} files)")
 
         except Exception as e:
             logger.error(f"❌ Error checking for new files: {e}", exc_info=True)
@@ -557,6 +557,13 @@ class SSHMonitor:
 
             if not channel:
                 logger.error(f"❌ Production channel {self.production_channel_id} not found")
+                # Notify admin channel about configuration issue
+                admin_channel = self.bot.get_channel(self.admin_channel_id)
+                if admin_channel:
+                    await admin_channel.send(
+                        f"⚠️ **Config Issue:** Production channel {self.production_channel_id} not found. "
+                        f"Stats for `{filename}` could not be posted."
+                    )
                 return
             
             # Get the round data from database (most recent round)
@@ -731,7 +738,14 @@ class SSHMonitor:
                 dmg_recv_display = f"{dmg_recv/1000:.1f}K" if dmg_recv >= 1000 else f"{dmg_recv}"
 
                 # Medal (top 3)
-                medal = medals[i] if i < len(medals) else "🔹"
+                if i < len(medals):
+                    medal = medals[i]
+                else:
+                    # Generate number emoji for ranks beyond 3
+                    rank_num = str(i + 1)
+                    emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+                                   '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
+                    medal = ''.join(emoji_digits[d] for d in rank_num)
 
                 # Get achievement badges
                 badges = ""
@@ -982,7 +996,14 @@ class SSHMonitor:
                 dmg_recv_display = f"{dmg_recv/1000:.1f}K" if dmg_recv >= 1000 else f"{dmg_recv}"
 
                 # Medal (top 3)
-                medal = medals[i] if i < len(medals) else "🔹"
+                if i < len(medals):
+                    medal = medals[i]
+                else:
+                    # Generate number emoji for ranks beyond 3
+                    rank_num = str(i + 1)
+                    emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+                                   '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
+                    medal = ''.join(emoji_digits[d] for d in rank_num)
 
                 # Get achievement badges
                 badges = ""

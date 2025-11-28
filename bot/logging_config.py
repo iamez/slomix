@@ -161,7 +161,7 @@ def setup_logging(log_level=logging.INFO):
 def log_command_execution(ctx, command_name, start_time=None, end_time=None, error=None):
     """
     Log command execution with full context
-    
+
     Args:
         ctx: Discord context
         command_name: Name of the command
@@ -170,9 +170,10 @@ def log_command_execution(ctx, command_name, start_time=None, end_time=None, err
         error: Exception if command failed (optional)
     """
     logger = logging.getLogger('bot.commands')
-    
+
     # Build context info
-    user = f"{ctx.author.name}#{ctx.author.discriminator} ({ctx.author.id})"
+    # Note: Discord removed discriminators in 2023, use display_name instead
+    user = f"{ctx.author.display_name} ({ctx.author.id})"
     guild = f"{ctx.guild.name} ({ctx.guild.id})" if ctx.guild else "DM"
     channel = f"#{ctx.channel.name} ({ctx.channel.id})" if hasattr(ctx.channel, 'name') else f"DM ({ctx.channel.id})"
     
@@ -242,7 +243,7 @@ def log_stats_import(filename, round_count=0, player_count=0, weapon_count=0, du
 def log_performance_warning(operation, duration, threshold=1.0):
     """
     Log slow operations that exceed threshold
-    
+
     Args:
         operation: Description of the operation
         duration: How long it took in seconds
@@ -251,6 +252,26 @@ def log_performance_warning(operation, duration, threshold=1.0):
     if duration > threshold:
         logger = logging.getLogger('bot.performance')
         logger.warning(f"⚠️ SLOW OPERATION [{duration:.2f}s]: {operation}")
+
+
+def log_automation_event(event_type, details, success=True, error=None):
+    """
+    Log automation events (SSH monitor, file tracker, etc.)
+
+    Args:
+        event_type: Type of event (e.g., 'SSH_DOWNLOAD', 'FILE_PROCESS', 'STATS_IMPORT')
+        details: Description of the event
+        success: Whether the event succeeded
+        error: Exception if event failed (optional)
+    """
+    logger = logging.getLogger('bot.automation')
+
+    if error:
+        logger.error(f"❌ {event_type} FAILED: {details} | Error: {error}", exc_info=True)
+    elif success:
+        logger.info(f"✓ {event_type}: {details}")
+    else:
+        logger.warning(f"⚠️ {event_type}: {details}")
 
 
 def get_logger(name):

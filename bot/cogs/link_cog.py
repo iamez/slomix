@@ -243,7 +243,7 @@ class LinkCog(commands.Cog, name="Link"):
                         last_str = "?"
 
                     player_lines.append(
-                        f"{link_icon} **{formatted_name[:30]}** • "
+                        f"{link_icon} **{formatted_name[:30]}** • `{guid}` • "
                         f"`{sessions}s` • `{kills}K`/`{deaths}D` ({kd:.1f}) • {last_str}"
                     )
 
@@ -435,7 +435,6 @@ class LinkCog(commands.Cog, name="Link"):
 
                 # Calculate days ago for last_seen
                 try:
-                    from datetime import datetime
                     last_date = datetime.fromisoformat(
                         last_seen.replace("Z", "+00:00") if "Z" in last_seen else last_seen
                     )
@@ -631,19 +630,39 @@ class LinkCog(commands.Cog, name="Link"):
                 color=0x3498DB,
             )
 
+            # Optimize: Fetch all aliases in a single query (avoid N+1 problem)
+            all_guids = [player[0] for player in top_players]
+            if self.bot.config.database_type == 'sqlite':
+                placeholders = ', '.join(['?'] * len(all_guids))
+                alias_query = f"""
+                    SELECT guid, alias, last_seen, times_seen
+                    FROM player_aliases
+                    WHERE guid IN ({placeholders})
+                    ORDER BY guid, last_seen DESC, times_seen DESC
+                """
+            else:  # PostgreSQL
+                placeholders = ', '.join([f'${i+1}' for i in range(len(all_guids))])
+                alias_query = f"""
+                    SELECT guid, alias, last_seen, times_seen
+                    FROM player_aliases
+                    WHERE guid IN ({placeholders})
+                    ORDER BY guid, last_seen DESC, times_seen DESC
+                """
+
+            all_aliases = await self.bot.db_adapter.fetch_all(alias_query, all_guids)
+
+            # Group aliases by GUID
+            aliases_by_guid = {}
+            for alias_row in all_aliases:
+                guid_key = alias_row[0]
+                if guid_key not in aliases_by_guid:
+                    aliases_by_guid[guid_key] = []
+                aliases_by_guid[guid_key].append((alias_row[1], alias_row[2], alias_row[3]))
+
             options_data = []
             for idx, (guid, last_date, kills, deaths, games) in enumerate(top_players, 1):
-                # Get top 3 aliases for this GUID
-                aliases = await self.bot.db_adapter.fetch_all(
-                    """
-                    SELECT alias, last_seen, times_seen
-                    FROM player_aliases
-                    WHERE guid = ?
-                    ORDER BY last_seen DESC, times_seen DESC
-                    LIMIT 3
-                """,
-                    (guid,),
-                )
+                # Get aliases from pre-fetched data
+                aliases = aliases_by_guid.get(guid, [])[:3]
 
                 # Format aliases
                 if aliases:
@@ -654,16 +673,28 @@ class LinkCog(commands.Cog, name="Link"):
                         alias_str += " _(only name)_"
                 else:
                     # Fallback to most recent name
-                    name_row = await self.bot.db_adapter.fetch_one(
-                        """
-                        SELECT player_name 
-                        FROM player_comprehensive_stats 
-                        WHERE player_guid = ? 
-                        ORDER BY round_date DESC 
-                        LIMIT 1
-                    """,
-                        (guid,),
-                    )
+                    if self.bot.config.database_type == 'sqlite':
+                        name_row = await self.bot.db_adapter.fetch_one(
+                            """
+                            SELECT player_name
+                            FROM player_comprehensive_stats
+                            WHERE player_guid = ?
+                            ORDER BY round_date DESC
+                            LIMIT 1
+                        """,
+                            (guid,),
+                        )
+                    else:  # PostgreSQL
+                        name_row = await self.bot.db_adapter.fetch_one(
+                            """
+                            SELECT player_name
+                            FROM player_comprehensive_stats
+                            WHERE player_guid = $1
+                            ORDER BY round_date DESC
+                            LIMIT 1
+                        """,
+                            (guid,),
+                        )
                     primary_name = name_row[0] if name_row else "Unknown"
                     alias_str = primary_name
 
@@ -696,14 +727,17 @@ class LinkCog(commands.Cog, name="Link"):
 
             # Add reaction emojis
             emojis = ["1️⃣", "2️⃣", "3️⃣"][:len(top_players)]
+            cancel_emoji = "❌"
+
             for emoji in emojis:
                 await message.add_reaction(emoji)
+            await message.add_reaction(cancel_emoji)
 
             # Wait for reaction
             def check(reaction, user):
                 return (
                     user == ctx.author
-                    and str(reaction.emoji) in emojis
+                    and str(reaction.emoji) in emojis + [cancel_emoji]
                     and reaction.message.id == message.id
                 )
 
@@ -711,6 +745,15 @@ class LinkCog(commands.Cog, name="Link"):
                 reaction, user = await self.bot.wait_for(
                     "reaction_add", timeout=60.0, check=check
                 )
+
+                # Handle cancellation
+                if str(reaction.emoji) == cancel_emoji:
+                    await message.clear_reactions()
+                    await ctx.send(
+                        "❌ Link cancelled.\n\n"
+                        "💡 Use `!link` to try again or `!find_player <name>` to search for a specific player"
+                    )
+                    return
 
                 # Get selected index
                 selected_idx = emojis.index(str(reaction.emoji))

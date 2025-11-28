@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """
 ULTIMATE ET:LEGACY DISCORD BOT - COG-BASED VERSION
-
-This module contains the ET:Legacy discord bot commands. The file is large
-and contains many helper classes and Cog commands. Only minimal top-level
-initialization is present here; heavy lifting is done inside Cog methods.
 """
 
 import asyncio
@@ -12,7 +8,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import io
 import discord
@@ -30,6 +26,9 @@ from bot.core.database_adapter import create_adapter, DatabaseAdapter
 from bot.config import load_config
 from bot.stats import StatsCalculator
 from bot.automation import SSHHandler, FileTracker
+from bot.services.voice_session_service import VoiceSessionService
+from bot.services.round_publisher_service import RoundPublisherService
+from bot.repositories import FileRepository
 
 # Load environment variables if available
 try:
@@ -59,7 +58,7 @@ setup_logging(getattr(logging, log_level))
 logger = get_logger("bot.core")
 logger.info("🚀 ET:LEGACY DISCORD BOT - STARTING UP")
 logger.info(f"📝 Log Level: {log_level}")
-logger.info(f"� Python: {sys.version}")
+logger.info(f"🐍 Python: {sys.version}")
 logger.info(f"📦 Discord.py: {discord.__version__}")
 
 # ======================================================================
@@ -195,12 +194,22 @@ class UltimateETLegacyBot(commands.Bot):
         )
         logger.info("✅ Core systems initialized (cache, seasons, achievements, file_tracker)")
 
+        # 🎙️ Voice Session Service (manages gaming session detection)
+        self.voice_session_service = VoiceSessionService(self, self.config, self.db_adapter)
+        logger.info("✅ Voice session service initialized")
+
+        # 📊 Round Publisher Service (manages Discord auto-posting of stats)
+        self.round_publisher = RoundPublisherService(self, self.config, self.db_adapter)
+        logger.info("✅ Round publisher service initialized")
+
+        # 📁 File Repository (data access layer for processed files)
+        self.file_repository = FileRepository(self.db_adapter, self.config)
+        logger.info("✅ File repository initialized")
+
         # 🤖 Automation System Flags (OFF by default for dev/testing)
-        self.automation_enabled = (
-            os.getenv("AUTOMATION_ENABLED", "false").lower() == "true"
-        )
-        self.ssh_enabled = os.getenv("SSH_ENABLED", "false").lower() == "true"
-        
+        self.automation_enabled = self.config.automation_enabled
+        self.ssh_enabled = self.config.ssh_enabled
+
         # Enable monitoring when SSH is enabled (for auto stats posting)
         self.monitoring = self.ssh_enabled
 
@@ -210,75 +219,26 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(
                 "⚠️ Automation system DISABLED (set AUTOMATION_ENABLED=true to enable)"
             )
-        # �️ Voice Channel Session Detection
-        self.session_active = False
-        self.session_start_time = None
-        self.session_participants = set()  # Discord user IDs
-        self.session_end_timer = None  # For 5-minute buffer
         
         # SSH monitoring optimization - counter-based intervals
         self.ssh_check_counter = 0  # Tracks cycles for interval-based checking
         self.last_file_download_time = None  # Track last file download for grace period logic
 
-        # Load gaming voice channel IDs from .env
-        gaming_channels_str = os.getenv("GAMING_VOICE_CHANNELS", "")
-        self.gaming_voice_channels = (
-            [
-                int(ch.strip())
-                for ch in gaming_channels_str.split(",")
-                if ch.strip()
-            ]
-            if gaming_channels_str
-            else []
-        )
-
-        # Load allowed bot command channels from .env
-        bot_channels_str = os.getenv("BOT_COMMAND_CHANNELS", "")
-        self.bot_command_channels = (
-            [
-                int(ch.strip())
-                for ch in bot_channels_str.split(",")
-                if ch.strip()
-            ]
-            if bot_channels_str
-            else []
-        )
-
-        # Load channel configuration for routing
-        self.production_channel_id = int(os.getenv("PRODUCTION_CHANNEL_ID", "0"))
-        self.gather_channel_id = int(os.getenv("GATHER_CHANNEL_ID", "0"))
-        self.general_channel_id = int(os.getenv("GENERAL_CHANNEL_ID", "0"))
-
-        # Parse admin channels (supports comma-separated list)
-        admin_channels_str = os.getenv("ADMIN_CHANNEL_ID", "0")
-        self.admin_channels = [
-            int(ch.strip()) for ch in admin_channels_str.split(",") if ch.strip().isdigit()
-        ]
-        # Keep backward compatibility with single admin_channel_id
-        self.admin_channel_id = self.admin_channels[0] if self.admin_channels else 0
-
-        # Public command channels (where stats commands work)
-        self.public_channels = [
-            ch for ch in [
-                self.production_channel_id,
-                self.gather_channel_id,
-                self.general_channel_id
-            ] if ch != 0
-        ]
-
-        # All allowed channels (public + admin) for global check
-        self.all_allowed_channels = list(set(self.public_channels + self.admin_channels))
+        # Load channel configuration from config object
+        self.gaming_voice_channels = self.config.gaming_voice_channels
+        self.bot_command_channels = self.config.bot_command_channels
+        self.production_channel_id = self.config.production_channel_id
+        self.gather_channel_id = self.config.gather_channel_id
+        self.general_channel_id = self.config.general_channel_id
+        self.admin_channels = self.config.admin_channels
+        self.admin_channel_id = self.config.admin_channel_id
+        self.public_channels = self.config.public_channels
+        self.all_allowed_channels = self.config.all_allowed_channels
 
         # Session thresholds
-        self.session_start_threshold = int(
-            os.getenv("SESSION_START_THRESHOLD", "6")
-        )
-        self.session_end_threshold = int(
-            os.getenv("SESSION_END_THRESHOLD", "2")
-        )
-        self.session_end_delay = int(
-            os.getenv("SESSION_END_DELAY", "300")
-        )  # 5 minutes
+        self.session_start_threshold = self.config.session_start_threshold
+        self.session_end_threshold = self.config.session_end_threshold
+        self.session_end_delay = self.config.session_end_delay
 
         if self.gaming_voice_channels:
             logger.info(
@@ -310,7 +270,7 @@ class UltimateETLegacyBot(commands.Bot):
                 "⚠️ No gaming voice channels configured - voice detection disabled"
             )
 
-        # �🏆 Awards and achievements tracking
+        # 🏆 Awards and achievements tracking
         self.awards_cache = {}
         self.mvp_cache = {}
 
@@ -549,6 +509,21 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(f"⚠️  Could not load Server Control cog: {e}")
             logger.warning("Bot will continue without server control features")
 
+        # 🔮 COMPETITIVE ANALYTICS: Load prediction cogs (Phase 5)
+        try:
+            await self.load_extension("cogs.predictions_cog")
+            logger.info("✅ Predictions cog loaded (!predictions, !prediction_stats, !my_predictions)")
+        except Exception as e:
+            logger.warning(f"⚠️  Could not load Predictions cog: {e}")
+            logger.warning("Bot will continue without prediction commands")
+
+        try:
+            await self.load_extension("cogs.admin_predictions_cog")
+            logger.info("✅ Admin Predictions cog loaded (!admin_predictions, !update_prediction_outcome)")
+        except Exception as e:
+            logger.warning(f"⚠️  Could not load Admin Predictions cog: {e}")
+            logger.warning("Bot will continue without admin prediction commands")
+
         # 🤖 AUTOMATION: Initialize automation services
         try:
             from bot.services.automation import SSHMonitor, HealthMonitor, MetricsLogger, DatabaseMaintenance
@@ -558,7 +533,7 @@ class UltimateETLegacyBot(commands.Bot):
 
             # For PostgreSQL, we don't have a db_path, but metrics_logger needs one for its own SQLite db
             # Use a sensible default path for metrics database
-            metrics_db_path = os.getenv("METRICS_DB_PATH", "bot/data/metrics.db")
+            metrics_db_path = self.config.metrics_db_path
 
             # Create automation services in correct order (MetricsLogger first, it's needed by HealthMonitor)
             self.metrics = MetricsLogger(db_path=metrics_db_path)
@@ -643,9 +618,9 @@ class UltimateETLegacyBot(commands.Bot):
                 f"Database missing required tables: {missing_tables}"
             )
 
-            logger.info(
-                f"✅ Database verified - all {len(required_tables)} required tables exist"
-            )
+        logger.info(
+            f"✅ Database verified - all {len(required_tables)} required tables exist"
+        )
 
     # 🔌 SSH HELPER METHODS
 
@@ -693,205 +668,16 @@ class UltimateETLegacyBot(commands.Bot):
                     except Exception:
                         pass
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _list_files_sync)
 
     # 🎙️ VOICE CHANNEL SESSION DETECTION
 
     async def on_voice_state_update(self, member, before, after):
-        """🎙️ Detect gaming sessions based on voice channel activity"""
-        if not self.automation_enabled:
-            return  # Automation disabled
+        """🎙️ Detect gaming sessions based on voice channel activity (delegates to service)"""
+        await self.voice_session_service.handle_voice_state_change(member, before, after)
 
-        if not self.gaming_voice_channels:
-            return  # Voice detection disabled
-
-        try:
-            # Count players in gaming voice channels
-            total_players = 0
-            current_participants = set()
-
-            for channel_id in self.gaming_voice_channels:
-                channel = self.get_channel(channel_id)
-                if channel and isinstance(channel, discord.VoiceChannel):
-                    total_players += len(channel.members)
-                    current_participants.update(
-                        [m.id for m in channel.members]
-                    )
-
-            logger.debug(
-                f"🎙️ Voice update: {total_players} players in gaming channels"
-            )
-
-            # Session Start Detection
-            if (
-                total_players >= self.session_start_threshold
-                and not self.session_active
-            ):
-                await self._start_gaming_session(current_participants)
-
-            # Session End Detection
-            elif (
-                total_players < self.session_end_threshold
-                and self.session_active
-            ):
-                # Cancel existing timer if any
-                if self.session_end_timer:
-                    self.session_end_timer.cancel()
-
-                # Start 5-minute countdown
-                self.session_end_timer = asyncio.create_task(
-                    self._delayed_session_end(current_participants)
-                )
-
-            # Update participants if session active
-            elif self.session_active:
-                # Add new participants
-                new_participants = (
-                    current_participants - self.session_participants
-                )
-                if new_participants:
-                    self.session_participants.update(new_participants)
-                    logger.info(
-                        f"👥 New participants joined: {len(new_participants)}"
-                    )
-
-                # Cancel end timer if people came back
-                if (
-                    self.session_end_timer
-                    and total_players >= self.session_end_threshold
-                ):
-                    self.session_end_timer.cancel()
-                    self.session_end_timer = None
-                    logger.info(
-                        f"⏰ Session end cancelled - players returned ({total_players} in voice)"
-                    )
-
-        except Exception as e:
-            logger.error(f"Voice state update error: {e}", exc_info=True)
-
-    async def _start_gaming_session(self, participants):
-        """🎮 Start a gaming session when 6+ players in voice"""
-        try:
-            self.session_active = True
-            self.session_start_time = discord.utils.utcnow()
-            self.session_participants = participants.copy()
-
-            # Enable monitoring
-            self.monitoring = True
-
-            logger.info(
-                f"🎮 GAMING SESSION STARTED! {len(participants)} players detected"
-            )
-            logger.info("🔄 Monitoring enabled")
-
-            # Post to Discord if production channel configured
-            if self.production_channel_id:
-                channel = self.get_channel(self.production_channel_id)
-                if channel:
-                    embed = discord.Embed(
-                        title="🎮 Gaming Session Started!",
-                        description=f"{len(participants)} players detected in voice channels",
-                        color=0x00FF00,
-                        timestamp=self.session_start_time,
-                    )
-                    embed.add_field(
-                        name="Status",
-                        value="Monitoring enabled automatically",
-                        inline=False,
-                    )
-                    embed.set_footer(text="Good luck and have fun! �")
-                    await channel.send(embed=embed)
-
-        except Exception as e:
-            logger.error(f"Error starting gaming session: {e}", exc_info=True)
-
-    async def _delayed_session_end(self, last_participants):
-        """⏰ Wait 5 minutes before ending session (allows bathroom breaks)"""
-        try:
-            logger.info(
-                f"⏰ Session end timer started - waiting {self.session_end_delay}s..."
-            )
-            await asyncio.sleep(self.session_end_delay)
-
-            # Re-check player count after delay
-            total_players = 0
-            for channel_id in self.gaming_voice_channels:
-                channel = self.get_channel(channel_id)
-                if channel and isinstance(channel, discord.VoiceChannel):
-                    total_players += len(channel.members)
-
-            if total_players >= self.session_end_threshold:
-                logger.info(
-                    f"⏰ Session end cancelled - players returned ({total_players} in voice)"
-                )
-                return
-
-            # Still empty after delay - end session
-            await self._end_gaming_session()
-
-        except asyncio.CancelledError:
-            logger.debug("⏰ Session end timer cancelled")
-        except Exception as e:
-            logger.error(f"Error in delayed session end: {e}", exc_info=True)
-
-    async def _end_gaming_session(self):
-        """🏁 End gaming session and post summary"""
-        try:
-            if not self.session_active:
-                return
-
-            end_time = discord.utils.utcnow()
-            duration = end_time - self.session_start_time
-
-            # Disable monitoring
-            self.monitoring = False
-
-            logger.info("🏁 GAMING SESSION ENDED!")
-            logger.info(f"⏱️ Duration: {duration}")
-            logger.info(f"👥 Participants: {len(self.session_participants)}")
-            logger.info("�🔄 Monitoring disabled")
-
-            # Post session summary
-            if self.production_channel_id:
-                channel = self.get_channel(self.production_channel_id)
-                if channel:
-                    # TODO: Post comprehensive session summary
-                    embed = discord.Embed(
-                        title="🏁 Gaming Session Complete!",
-                        description=f"Duration: {self._format_duration(duration)}",
-                        color=0xFFD700,
-                        timestamp=datetime.now(),
-                    )
-                    embed.add_field(
-                        name="👥 Participants",
-                        value=f"{len(self.session_participants)} players",
-                        inline=True,
-                    )
-                    embed.set_footer(text="Thanks for playing! GG! 🎮")
-                    await channel.send(embed=embed)
-
-            # Reset session state
-            self.session_active = False
-            self.session_start_time = None
-            self.session_participants = set()
-            self.session_end_timer = None
-
-        except Exception as e:
-            logger.error(f"Error ending gaming session: {e}", exc_info=True)
-
-    def _format_duration(self, duration):
-        """Format timedelta as human-readable string"""
-        total_seconds = int(duration.total_seconds())
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-
-        if hours > 0:
-            return f"{hours}h {minutes}m"
-        else:
-            return f"{minutes}m"
-
-    # � SSH MONITORING HELPER METHODS
+    # 🔌 SSH MONITORING HELPER METHODS
 
     # NOTE: SSH operations moved to bot/automation/ssh_handler.py
     # - SSHHandler.parse_gamestats_filename()
@@ -994,376 +780,8 @@ class UltimateETLegacyBot(commands.Bot):
                 "stats_data": None,
             }
 
-    async def post_round_stats_auto(self, filename: str, result: dict):
-        """
-        🆕 Auto-post round statistics to Discord after processing
-        
-        Called automatically by endstats_monitor after successful file processing.
-        Shows ALL players with detailed stats.
-        """
-        try:
-            logger.debug(f"📤 Preparing Discord post for {filename}")
-            
-            # Get the stats channel
-            if not self.production_channel_id:
-                logger.warning("⚠️ PRODUCTION_CHANNEL_ID not configured, skipping Discord post")
-                return
 
-            logger.debug(f"📡 Looking for production channel ID: {self.production_channel_id}")
-            channel = self.get_channel(self.production_channel_id)
-            if not channel:
-                logger.error(f"❌ Production channel {self.production_channel_id} not found")
-                logger.error(f"   Available channels: {[c.id for c in self.get_all_channels()][:10]}")
-                return
-            
-            logger.debug(f"✅ Found channel: {channel.name}")
-            
-            # Get round_id from result
-            round_id = result.get('round_id')
-            stats_data = result.get('stats_data', {})
-            
-            if not round_id:
-                logger.warning(f"⚠️ No round_id for {filename}, skipping post")
-                return
-            
-            # Get basic round info from parser (for round outcome/winner)
-            round_num = stats_data.get('round_num', stats_data.get('round', 1))
-            map_name = stats_data.get('map_name', stats_data.get('map', 'Unknown'))
-            winner_team = stats_data.get('winner_team', 'Unknown')
-            round_outcome = stats_data.get('round_outcome', '')
-            round_duration = stats_data.get('actual_time', stats_data.get('map_time', 'Unknown'))
-            
-            # 🔥 FETCH ALL PLAYER DATA FROM DATABASE (not from parser!)
-            # This gives us access to ALL 54 fields, not just the limited parser output
-            logger.debug(f"📊 Fetching full player data from database for session {round_id}, round {round_num}...")
-            
-            # Get round info (time limit, actual time)
-            round_query = """
-                SELECT time_limit, actual_time, winner_team, round_outcome
-                FROM rounds
-                WHERE id = ?
-            """
-            round_info = await self.db_adapter.fetch_one(round_query, (round_id,))
-            
-            time_limit = round_info[0] if round_info else 'Unknown'
-            actual_time = round_info[1] if round_info else 'Unknown'
-            db_winner_team = round_info[2] if round_info else winner_team
-            db_round_outcome = round_info[3] if round_info else round_outcome
-            
-            # Get player stats
-            players_query = """
-                SELECT 
-                    player_name, team, kills, deaths, damage_given, damage_received,
-                    team_damage_given, team_damage_received, gibs, headshots,
-                    accuracy, revives_given, times_revived, time_dead_minutes,
-                    efficiency, kd_ratio, time_played_minutes, dpm
-                FROM player_comprehensive_stats
-                WHERE round_id = ? AND round_number = ?
-                ORDER BY kills DESC
-            """
-            rows = await self.db_adapter.fetch_all(players_query, (round_id, round_num))
-            
-            # Convert to dict format
-            players = []
-            for row in rows:
-                    players.append({
-                        'name': row[0],
-                        'team': row[1],
-                        'kills': row[2],
-                        'deaths': row[3],
-                        'damage_given': row[4],
-                        'damage_received': row[5],
-                        'team_damage_given': row[6],
-                        'team_damage_received': row[7],
-                        'gibs': row[8],
-                        'headshots': row[9],
-                        'accuracy': row[10],
-                        'revives': row[11],
-                        'times_revived': row[12],
-                        'time_dead': row[13],
-                        'efficiency': row[14],
-                        'kd_ratio': row[15],
-                        'time_played': row[16],
-                        'dpm': row[17]
-                    })
-            
-            logger.info(f"📊 Fetched {len(players)} players with FULL stats from database")
-            
-            logger.info(f"📋 Creating embed: Round {round_num}, Map {map_name}, {len(players)} players")
-            
-            # Determine round type
-            round_type = "Round 1" if round_num == 1 else "Round 2"
-            
-            # Build title - simple and clean
-            title = f"🎮 {round_type} Complete - {map_name}"
-            
-            description_parts = []
-            
-            # Add time information (limit vs actual)
-            if time_limit and actual_time and time_limit != 'Unknown' and actual_time != 'Unknown':
-                description_parts.append(f"⏱️ **Time:** {actual_time} / {time_limit}")
-            elif actual_time and actual_time != 'Unknown':
-                description_parts.append(f"⏱️ **Duration:** {actual_time}")
-            
-            # Add round outcome - use DB values if available
-            outcome_to_show = db_round_outcome if db_round_outcome else round_outcome
-            winner_to_show = db_winner_team if db_winner_team and str(db_winner_team) != 'Unknown' else winner_team
-            
-            # Build outcome line
-            outcome_line = ""
-            if winner_to_show and str(winner_to_show) != 'Unknown':
-                outcome_line = f"🏆 **Winner:** {winner_to_show}"
-            if outcome_to_show:
-                if outcome_line:
-                    outcome_line += f" ({outcome_to_show})"
-                else:
-                    outcome_line = f"🏆 **Outcome:** {outcome_to_show}"
-            
-            if outcome_line:
-                description_parts.append(outcome_line)
-            
-            # Determine embed color based on round type
-            embed_color = discord.Color.blue() if round_num == 1 else discord.Color.red()
-            
-            # Create main embed
-            embed = discord.Embed(
-                title=title,
-                description="\n".join(description_parts),
-                color=embed_color,
-                timestamp=datetime.now()
-            )
-            
-            # Sort all players by kills
-            players_sorted = sorted(players, key=lambda p: p.get('kills', 0), reverse=True)
-            
-            # Rank emoji/number helper
-            def get_rank_display(rank):
-                """Get rank emoji for top 3, numbers with emojis for 4+"""
-                if rank == 1:
-                    return "🥇"
-                elif rank == 2:
-                    return "🥈"
-                elif rank == 3:
-                    return "🥉"
-                else:
-                    # Convert number to digit emojis (4-9 use number emojis, 10+ use digits)
-                    num_str = str(rank)
-                    emoji_map = {
-                        '0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
-                        '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'
-                    }
-                    return ''.join(emoji_map.get(digit, digit) for digit in num_str)
-            
-            # Split into chunks of 5 for Discord field limits (more stats per player = fewer per field)
-            chunk_size = 5
-            for i in range(0, len(players_sorted), chunk_size):
-                chunk = players_sorted[i:i + chunk_size]
-                field_name = f'📊 Players {i+1}-{min(i+chunk_size, len(players_sorted))}'
-                
-                player_lines = []
-                for idx, player in enumerate(chunk):
-                    rank = i + idx + 1  # Global rank across all chunks
-                    rank_display = get_rank_display(rank)
-                    
-                    name = player.get('name', 'Unknown')[:16]
-                    kills = player.get('kills', 0)
-                    deaths = player.get('deaths', 0)
-                    dmg = player.get('damage_given', 0)
-                    dmgr = player.get('damage_received', 0)
-                    acc = player.get('accuracy', 0)
-                    hs = player.get('headshots', 0)
-                    dpm = player.get('dpm', 0)
-                    revives = player.get('revives', 0)
-                    got_revived = player.get('times_revived', 0)
-                    gibs = player.get('gibs', 0)
-                    team_dmg_given = player.get('team_damage_given', 0)
-                    team_dmg_rcvd = player.get('team_damage_received', 0)
-                    time_dead = player.get('time_dead', 0)
-                    
-                    kd_str = f'{kills}/{deaths}'
-                    
-                    # Line 1: Rank + Name + Core stats (simplified)
-                    line1 = (
-                        f"{rank_display} **{name}** • K/D:`{kd_str}` "
-                        f"DMG:`{int(dmg):,}` DPM:`{int(dpm)}` "
-                        f"ACC:`{acc:.1f}%` HS:`{hs}`"
-                    )
-                    
-                    # Line 2: Support stats (simplified)
-                    line2 = (
-                        f"     ↳ Rev:`{revives}/{got_revived}` Gibs:`{gibs}` "
-                        f"TmDmg:`{int(team_dmg_given)}` Dead:`{time_dead:.1f}m`"
-                    )
-                    
-                    player_lines.append(f"{line1}\n{line2}")
-                
-                embed.add_field(
-                    name=field_name,
-                    value='\n'.join(player_lines) if player_lines else 'No stats',
-                    inline=False
-                )
-            
-            # Calculate round totals (comprehensive)
-            total_kills = sum(p.get('kills', 0) for p in players)
-            total_deaths = sum(p.get('deaths', 0) for p in players)
-            total_dmg = sum(p.get('damage_given', 0) for p in players)
-            total_hs = sum(p.get('headshots', 0) for p in players)
-            total_revives = sum(p.get('revives', 0) for p in players)
-            total_gibs = sum(p.get('gibs', 0) for p in players)
-            total_team_dmg = sum(p.get('team_damage_given', 0) for p in players)
-            avg_acc = sum(p.get('accuracy', 0) for p in players) / len(players) if players else 0
-            avg_dpm = sum(p.get('dpm', 0) for p in players) / len(players) if players else 0
-            avg_time_dead = sum(p.get('time_dead', 0) for p in players) / len(players) if players else 0
-            
-            embed.add_field(
-                name="📊 Round Summary",
-                value=(
-                    f"**Totals:** Kills:`{total_kills}` Deaths:`{total_deaths}` HS:`{total_hs}` "
-                    f"Damage:`{int(total_dmg):,}` TeamDmg:`{int(total_team_dmg):,}`\n"
-                    f"**Averages:** Accuracy:`{avg_acc:.1f}%` DPM:`{int(avg_dpm)}` DeadTime:`{avg_time_dead:.1f}m`"
-                ),
-                inline=False
-            )
-            
-            embed.set_footer(text=f"Round ID: {round_id} | {filename}")
-            
-            # Post to channel
-            logger.info(f"📤 Sending detailed stats embed to #{channel.name}...")
-            await channel.send(embed=embed)
-            logger.info(f"✅ Successfully posted stats for {len(players)} players to Discord!")
-            
-            # 🗺️ Check if this was the last round for the map → post map summary
-            await self._check_and_post_map_completion(round_id, map_name, round_num, channel)
-            
-            logger.info("=" * 60)
-            
-        except Exception as e:
-            logger.error(f"❌ Error posting round stats to Discord: {e}", exc_info=True)
 
-    async def _check_and_post_map_completion(self, round_id: int, map_name: str, current_round: int, channel):
-        """
-        Check if we just finished the last round of a map.
-        If so, post aggregate map statistics.
-        """
-        try:
-            # Check if there are any more rounds for this map in this session
-            query = """
-                SELECT MAX(round_number) as max_round, COUNT(DISTINCT round_number) as round_count
-                FROM player_comprehensive_stats
-                WHERE round_id = ? AND map_name = ?
-            """
-            row = await self.db_adapter.fetch_one(query, (round_id, map_name))
-            
-            if not row:
-                return
-            
-            max_round, round_count = row
-            
-            logger.debug(f"🗺️ Map check: {map_name} - current round {current_round}, max in DB: {max_round}, total rounds: {round_count}")
-            
-            # If current round matches max round in DB, this is the last round for the map
-            if current_round == max_round and round_count >= 2:
-                logger.info(f"🏁 Map complete! {map_name} finished after {round_count} rounds. Posting map summary...")
-                await self._post_map_summary(round_id, map_name, channel)
-            else:
-                logger.debug(f"⏳ Map {map_name} not complete yet (round {current_round}/{max_round})")
-                    
-        except Exception as e:
-            logger.error(f"❌ Error checking map completion: {e}", exc_info=True)
-
-    async def _post_map_summary(self, round_id: int, map_name: str, channel):
-        """
-        Post aggregate statistics for all rounds of a completed map.
-        """
-        try:
-            logger.info(f"📊 Generating map summary for {map_name}...")
-            
-            # Get map-level aggregate stats
-            map_query = """
-                SELECT 
-                    COUNT(DISTINCT round_number) as total_rounds,
-                    COUNT(DISTINCT player_guid) as unique_players,
-                    SUM(kills) as total_kills,
-                    SUM(deaths) as total_deaths,
-                    SUM(damage_given) as total_damage,
-                    SUM(headshot_kills) as total_headshots,
-                    AVG(accuracy) as avg_accuracy
-                FROM player_comprehensive_stats
-                WHERE round_id = ? AND map_name = ?
-            """
-            map_stats = await self.db_adapter.fetch_one(map_query, (round_id, map_name))
-            
-            if not map_stats:
-                logger.warning(f"⚠️ No map stats found for {map_name}")
-                return
-            
-            total_rounds, unique_players, total_kills, total_deaths, total_damage, total_headshots, avg_accuracy = map_stats
-            
-            # Get top 5 players across all rounds on this map
-            top_players_query = """
-                SELECT 
-                    player_name,
-                    SUM(kills) as total_kills,
-                    SUM(deaths) as total_deaths,
-                    SUM(damage_given) as total_damage,
-                    AVG(accuracy) as avg_accuracy
-                FROM player_comprehensive_stats
-                WHERE round_id = ? AND map_name = ?
-                GROUP BY player_guid
-                ORDER BY total_kills DESC
-                LIMIT 5
-            """
-            top_players = await self.db_adapter.fetch_all(top_players_query, (round_id, map_name))
-            
-            # Create embed
-            embed = discord.Embed(
-                title=f"🗺️ {map_name.upper()} - Map Complete!",
-                description=f"Aggregate stats from **{total_rounds} rounds**",
-                color=discord.Color.gold(),
-                timestamp=datetime.now()
-            )
-            
-            # Map overview
-            kd_ratio = total_kills / total_deaths if total_deaths > 0 else total_kills
-            embed.add_field(
-                    name="📊 Map Overview",
-                    value=(
-                        f"**Rounds Played:** {total_rounds}\n"
-                        f"**Unique Players:** {unique_players}\n"
-                        f"**Total Kills:** {total_kills:,}\n"
-                        f"**Total Deaths:** {total_deaths:,}\n"
-                        f"**K/D Ratio:** {kd_ratio:.2f}\n"
-                        f"**Total Damage:** {int(total_damage):,}\n"
-                        f"**Total Headshots:** {total_headshots}\n"
-                        f"**Avg Accuracy:** {avg_accuracy:.1f}%"
-                    ),
-                    inline=False
-            )
-            
-            # Top performers
-            if top_players:
-                top_lines = []
-                for i, (name, kills, deaths, damage, acc) in enumerate(top_players, 1):
-                    kd = kills / deaths if deaths > 0 else kills
-                    top_lines.append(
-                        f"{i}. **{name}** - {kills}/{deaths} K/D ({kd:.2f}) | {int(damage):,} DMG | {acc:.1f}% ACC"
-                    )
-                
-                embed.add_field(
-                    name="🏆 Top Performers (All Rounds)",
-                    value="\n".join(top_lines),
-                    inline=False
-                )
-            
-            embed.set_footer(text=f"Round ID: {round_id}")
-            
-            # Post to channel
-            logger.info(f"📤 Posting map summary to #{channel.name}...")
-            await channel.send(embed=embed)
-            logger.info(f"✅ Map summary posted for {map_name}!")
-                
-        except Exception as e:
-            logger.error(f"❌ Error posting map summary: {e}", exc_info=True)
 
     async def _import_stats_to_db(self, stats_data, filename):
         """Import parsed stats to database"""
@@ -1377,15 +795,25 @@ class UltimateETLegacyBot(commands.Bot):
             timestamp = "-".join(filename.split("-")[:4])  # Full timestamp YYYY-MM-DD-HHMMSS
             date_part = "-".join(filename.split("-")[:3])  # Date YYYY-MM-DD
             time_part = filename.split("-")[3] if len(filename.split("-")) > 3 else "000000"  # HHMMSS
-            
+
             # Store time as HHMMSS (NO COLONS) to match postgresql_database_manager format
             if len(time_part) == 6:
                 round_time = time_part  # Keep as HHMMSS: "221941"
             else:
                 round_time = "000000"
-            
-            # Create match_id (ORIGINAL BEHAVIOR - includes timestamp)
-            match_id = f"{date_part}-{time_part}"
+
+            # Create match_id - for R2 files, use R1's timestamp so they share same match_id
+            if stats_data.get('r1_filename'):
+                # This is an R2 file with matched R1 - extract R1's timestamp
+                r1_filename = stats_data['r1_filename']
+                r1_parts = r1_filename.split("-")
+                r1_date = "-".join(r1_parts[:3])  # YYYY-MM-DD
+                r1_time = r1_parts[3] if len(r1_parts) > 3 else "000000"  # HHMMSS
+                match_id = f"{r1_date}-{r1_time}"
+                logger.info(f"🔗 R2 matched to R1: using R1 timestamp for match_id: {match_id}")
+            else:
+                # R1 file or orphan R2 - use own timestamp
+                match_id = f"{date_part}-{time_part}"
 
             # Check if round already exists (FIXED: includes round_time to prevent false duplicates)
             check_query = """
@@ -1509,61 +937,81 @@ class UltimateETLegacyBot(commands.Bot):
     async def _calculate_gaming_session_id(self, round_date: str, round_time: str) -> int:
         """
         Calculate gaming_session_id using 60-minute gap logic.
-        
+
+        FIXED: Now finds the chronologically PREVIOUS round (before current round),
+        not the latest round in the database. This allows importing old rounds
+        without breaking session grouping.
+
         Args:
             round_date: Date string like '2025-11-06'
             round_time: Time string like '234153' (HHMMSS) or '23:41:53' (HH:MM:SS)
-        
+
         Returns:
             gaming_session_id (integer, starts at 1)
         """
         try:
             from datetime import datetime, timedelta
-            
-            # Get most recent round with gaming_session_id
+
+            # Parse current timestamp first
+            try:
+                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H%M%S')
+            except ValueError:
+                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')
+
+            # Get the chronologically PREVIOUS round (before current round)
+            # This allows importing old rounds without messing up session IDs
             query = """
                 SELECT gaming_session_id, round_date, round_time
                 FROM rounds
                 WHERE gaming_session_id IS NOT NULL
+                  AND (round_date < ? OR (round_date = ? AND round_time < ?))
                 ORDER BY round_date DESC, round_time DESC
                 LIMIT 1
             """
-            last_round = await self.db_adapter.fetch_one(query)
-            
-            if not last_round:
-                # First round ever
-                return 1
-            
-            last_session_id = last_round[0]
-            last_date = last_round[1]
-            last_time = last_round[2]
-            
-            # Parse current timestamp (handle both HHMMSS and HH:MM:SS formats)
+            prev_round = await self.db_adapter.fetch_one(
+                query,
+                (round_date, round_date, round_time)
+            )
+
+            if not prev_round:
+                # No previous round - this is first round OR earliest round being imported
+                # Get max session_id and increment, or start at 1
+                max_query = "SELECT MAX(gaming_session_id) FROM rounds WHERE gaming_session_id IS NOT NULL"
+                max_session = await self.db_adapter.fetch_val(max_query, ())
+
+                if max_session:
+                    new_session_id = max_session + 1
+                    logger.info(f"🎮 New gaming session #{new_session_id} (first round in chronological order)")
+                    return new_session_id
+                else:
+                    logger.info(f"🎮 Starting first gaming session #1")
+                    return 1
+
+            prev_session_id = prev_round[0]
+            prev_date = prev_round[1]
+            prev_time = prev_round[2]
+
+            # Parse previous timestamp
             try:
-                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H%M%S')
+                prev_dt = datetime.strptime(f"{prev_date} {prev_time}", '%Y-%m-%d %H%M%S')
             except ValueError:
-                # Fallback to format with colons
-                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')
-            
-            # Parse last timestamp (handle both HHMMSS and HH:MM:SS formats from DB)
-            try:
-                last_dt = datetime.strptime(f"{last_date} {last_time}", '%Y-%m-%d %H%M%S')
-            except ValueError:
-                # Fallback to format with colons
-                last_dt = datetime.strptime(f"{last_date} {last_time}", '%Y-%m-%d %H:%M:%S')
-            
-            # Calculate time gap
-            gap = current_dt - last_dt
+                prev_dt = datetime.strptime(f"{prev_date} {prev_time}", '%Y-%m-%d %H:%M:%S')
+
+            # Calculate time gap (current - previous, should always be positive)
+            gap = current_dt - prev_dt
             gap_minutes = gap.total_seconds() / 60
-            
-            # If gap > 60 minutes, start new session
-            if gap_minutes > 60:
-                new_session_id = last_session_id + 1
-                logger.info(f"🎮 New gaming session #{new_session_id} (gap: {gap_minutes:.1f} min)")
+
+            # If gap > session_gap_minutes, start new session
+            if gap_minutes > self.config.session_gap_minutes:
+                # Get max session_id and increment
+                max_query = "SELECT MAX(gaming_session_id) FROM rounds WHERE gaming_session_id IS NOT NULL"
+                max_session = await self.db_adapter.fetch_val(max_query, ())
+                new_session_id = (max_session or 0) + 1
+                logger.info(f"🎮 New gaming session #{new_session_id} (gap: {gap_minutes:.1f} min from previous round)")
                 return new_session_id
             else:
-                logger.debug(f"🎮 Continuing session #{last_session_id} (gap: {gap_minutes:.1f} min)")
-                return last_session_id
+                logger.debug(f"🎮 Continuing session #{prev_session_id} (gap: {gap_minutes:.1f} min from previous round)")
+                return prev_session_id
                 
         except Exception as e:
             logger.warning(f"⚠️ Error calculating gaming_session_id: {e}. Using NULL.")
@@ -1838,86 +1286,7 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"❌ Failed to update alias for {guid}/{alias}: {e}")
 
-    async def post_round_summary(self, file_info, result):
-        """
-        Post round summary to Discord channel
 
-        Handles:
-        - Round 1 complete (single embed)
-        - Round 2 complete (2 embeds: round summary + map summary)
-        """
-        try:
-            channel = self.get_channel(self.stats_channel_id)
-            if not channel:
-                logger.error("❌ Stats channel not found")
-                return
-
-            stats_data = result.get("stats_data")
-            if not stats_data:
-                return
-
-            # Round summary embed
-            round_embed = discord.Embed(
-                title=f"🎯 {file_info['map_name']} - "
-                f"Round {file_info['round_number']} Complete",
-                color=0x00FF00,
-                timestamp=datetime.now(),
-            )
-
-            # Add top 3 players
-            players = stats_data.get("players", [])[:3]
-            top_players_text = "\n".join(
-                [
-                    f"**{i+1}.** {p['name']} - "
-                    f"{p.get('kills', 0)}K/{p.get('deaths', 0)}D "
-                    f"({p.get('dpm', 0):.0f} DPM)"
-                    for i, p in enumerate(players)
-                ]
-            )
-
-            round_embed.add_field(
-                name="🏆 Top Performers",
-                value=top_players_text or "No data",
-                inline=False,
-            )
-
-            await channel.send(embed=round_embed)
-
-            # If round 2, also post map summary
-            if file_info["is_map_complete"]:
-                await self.post_map_summary(file_info, stats_data)
-
-            logger.info(
-                f"✅ Posted round summary for "
-                f"{file_info['map_name']} R{file_info['round_number']}"
-            )
-
-        except Exception as e:
-            logger.error(f"❌ Failed to post round summary: {e}")
-
-    async def post_map_summary(self, file_info, stats_data):
-        """Post map summary after round 2 completes"""
-        try:
-            channel = self.get_channel(self.stats_channel_id)
-            if not channel:
-                return
-
-            map_embed = discord.Embed(
-                title=f"🗺️ {file_info['map_name']} - MAP COMPLETE",
-                description="Both rounds finished!",
-                color=0xFFD700,
-                timestamp=datetime.now(),
-            )
-
-            map_embed.add_field(
-                name="📊 Status",
-                value="Map completed - Check stats above for details",
-                inline=False,
-            )
-
-            await channel.send(embed=map_embed)
-
-        except Exception as e:
             logger.error(f"❌ Failed to post map summary: {e}")
 
     # NOTE: File tracking methods moved to bot/automation/file_tracker.py
@@ -1938,70 +1307,6 @@ class UltimateETLegacyBot(commands.Bot):
     async def ssh_download_file(self, ssh_config: dict, filename: str, local_dir: str = "local_stats") -> str:
         """Delegate to SSHHandler.download_file()"""
         return await SSHHandler.download_file(ssh_config, filename, local_dir)
-
-    async def _auto_end_session(self):
-        """Auto-end session and post summary"""
-        try:
-            logger.info("🏁 Auto-ending gaming session...")
-
-            # Mark session as ended
-            self.session_active = False
-            self.session_end_timer = None
-
-            # Post session summary to Discord
-            channel = self.get_channel(self.stats_channel_id)
-            if not channel:
-                logger.error("❌ Stats channel not found")
-                return
-
-            # Create round end notification
-            embed = discord.Embed(
-                title="🏁 Gaming Session Ended",
-                description=(
-                    "All players have left voice channels.\n"
-                    "Generating session summary..."
-                ),
-                color=0xFF8800,
-                timestamp=datetime.now(),
-            )
-            await channel.send(embed=embed)
-
-            # Generate and post !last_session summary
-            # (Reuse the last_session command logic)
-            try:
-                # Query database for most recent session
-                query = """
-                    SELECT DISTINCT DATE(round_date) as date
-                    FROM player_comprehensive_stats
-                    ORDER BY date DESC
-                    LIMIT 1
-                """
-                row = await self.db_adapter.fetch_one(query)
-
-                if row:
-                    round_date = row[0]
-                    logger.info(
-                        f"📊 Posting auto-summary for {round_date}"
-                    )
-
-                    # Use last_session logic to generate embeds
-                    # (This would call the existing last_session code)
-                    await channel.send(
-                        f"📊 **Session Summary for {round_date}**\n"
-                        f"Use `!last_session` for full details!"
-                    )
-
-                logger.info("✅ Session auto-ended successfully")
-
-            except Exception as e:
-                logger.error(f"❌ Failed to generate session summary: {e}")
-                await channel.send(
-                    "⚠️ Session ended but summary generation failed. "
-                    "Use `!last_session` for details."
-                )
-
-        except Exception as e:
-            logger.error(f"Auto-end session error: {e}")
 
     # ==================== BACKGROUND TASKS ====================
 
@@ -2096,13 +1401,13 @@ class UltimateETLegacyBot(commands.Bot):
             )
             
             # ========== SSH CHECK EXECUTION ==========
-            # Build SSH config
+            # Build SSH config from config object
             ssh_config = {
-                "host": os.getenv("SSH_HOST"),
-                "port": int(os.getenv("SSH_PORT", 22)),
-                "user": os.getenv("SSH_USER"),
-                "key_path": os.getenv("SSH_KEY_PATH", ""),
-                "remote_path": os.getenv("REMOTE_STATS_PATH"),
+                "host": self.config.ssh_host,
+                "port": self.config.ssh_port,
+                "user": self.config.ssh_user,
+                "key_path": self.config.ssh_key_path,
+                "remote_path": self.config.ssh_remote_path,
             }
 
             # Validate SSH config
@@ -2169,7 +1474,7 @@ class UltimateETLegacyBot(commands.Bot):
                         # 🆕 AUTO-POST to Discord after processing!
                         if result and result.get('success'):
                             logger.info(f"📊 Posting to Discord: {result.get('player_count', 0)} players")
-                            await self.post_round_stats_auto(filename, result)
+                            await self.round_publisher.publish_round_stats(filename, result)
                             logger.info(f"✅ Successfully processed and posted: {filename}")
                         else:
                             error_msg = result.get('error', 'Unknown error') if result else 'No result'
@@ -2198,12 +1503,11 @@ class UltimateETLegacyBot(commands.Bot):
         🔄 Cache Refresh Task - Runs every 30 seconds
 
         Keeps in-memory cache in sync with database
+        Uses FileRepository for data access (Repository Pattern)
         """
         try:
-            # Refresh processed files cache
-            query = "SELECT filename FROM processed_files WHERE success = 1"
-            rows = await self.db_adapter.fetch_all(query)
-            self.processed_files = {row[0] for row in rows}
+            # Refresh processed files cache via repository
+            self.processed_files = await self.file_repository.get_processed_filenames()
 
         except Exception as e:
             logger.debug(f"Cache refresh error: {e}")
@@ -2329,85 +1633,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(f"Could not clear slash commands: {e}")
         
         # 🆕 AUTO-DETECT ACTIVE GAMING SESSION ON STARTUP
-        await self._check_voice_channels_on_startup()
-
-    async def _check_voice_channels_on_startup(self):
-        """
-        Check voice channels on bot startup and auto-start session if players detected.
-        
-        This ensures the bot doesn't miss active sessions if it restarts
-        while players are already in voice.
-        """
-        try:
-            if not self.automation_enabled or not self.gaming_voice_channels:
-                return
-            
-            # Wait a moment for Discord cache to populate
-            await asyncio.sleep(2)
-            
-            # Count players in gaming voice channels
-            total_players = 0
-            current_participants = set()
-            
-            for channel_id in self.gaming_voice_channels:
-                channel = self.get_channel(channel_id)
-                if channel and hasattr(channel, "members"):
-                    for member in channel.members:
-                        if not member.bot:
-                            total_players += 1
-                            current_participants.add(member.id)
-            
-            logger.info(
-                f"🎙️ Startup voice check: {total_players} players detected "
-                f"in {len(self.gaming_voice_channels)} monitored channels"
-            )
-
-            # Check for recent database activity (within last 60 minutes)
-            # to avoid creating duplicate "session start" messages when bot restarts
-            # during an ongoing gaming session
-            recent_activity = False
-            if total_players >= self.session_start_threshold:
-                from datetime import datetime, timedelta
-                cutoff_time = datetime.now() - timedelta(minutes=60)
-                cutoff_date = cutoff_time.strftime('%Y-%m-%d')
-                cutoff_time_str = cutoff_time.strftime('%H%M%S')
-
-                recent_round = await self.db_adapter.fetch_one(
-                    """
-                    SELECT id FROM rounds
-                    WHERE (round_date > $1 OR (round_date = $2 AND round_time >= $3))
-                    ORDER BY round_date DESC, round_time DESC
-                    LIMIT 1
-                    """,
-                    (cutoff_date, cutoff_date, cutoff_time_str)
-                )
-                recent_activity = recent_round is not None
-
-                if recent_activity:
-                    logger.info(
-                        f"✅ Detected ongoing session (database activity within last 60min) - "
-                        f"skipping auto-start announcement"
-                    )
-
-            # Auto-start session if threshold met AND no recent activity
-            if total_players >= self.session_start_threshold and not self.session_active and not recent_activity:
-                logger.info(
-                    f"🎮 AUTO-STARTING SESSION: {total_players} players detected "
-                    f"(threshold: {self.session_start_threshold})"
-                )
-                await self._start_gaming_session(current_participants)
-            elif total_players >= self.session_start_threshold and recent_activity:
-                # Resume monitoring for ongoing session without announcement
-                self.session_active = True
-                self.session_participants = current_participants
-            elif total_players > 0:
-                logger.info(
-                    f"ℹ️  {total_players} players in voice but below threshold "
-                    f"({self.session_start_threshold} needed to auto-start)"
-                )
-                
-        except Exception as e:
-            logger.error(f"❌ Error checking voice channels on startup: {e}", exc_info=True)
+        await self.voice_session_service.check_startup_voice_state()
 
     async def on_command(self, ctx):
         """Track command execution start"""
@@ -2457,6 +1683,10 @@ class UltimateETLegacyBot(commands.Bot):
         )
 
         if isinstance(error, commands.CommandNotFound):
+            # Silently ignore CommandNotFound in unauthorized channels
+            if self.bot_command_channels and ctx.channel.id not in self.bot_command_channels:
+                return  # Don't send error message in unauthorized channels
+
             await ctx.send(
                 "❌ Command not found. Use `!help_command` for available commands."
             )
@@ -2491,15 +1721,15 @@ class UltimateETLegacyBot(commands.Bot):
 def main():
     """🚀 Start the Ultimate ET:Legacy Discord Bot"""
 
-    # Get Discord token
-    token = os.getenv("DISCORD_BOT_TOKEN")
+    # Create bot (config is loaded in __init__)
+    bot = UltimateETLegacyBot()
+
+    # Get Discord token from config
+    token = bot.config.discord_token
     if not token:
         logger.error("❌ DISCORD_BOT_TOKEN not found in environment variables!")
         logger.info("Please set your Discord bot token in the .env file")
         return
-
-    # Create and run bot
-    bot = UltimateETLegacyBot()
 
     try:
         logger.info("🚀 Starting Ultimate ET:Legacy Bot...")

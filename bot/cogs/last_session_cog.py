@@ -143,6 +143,27 @@ class LastSessionCog(commands.Cog):
                 await self.view_handlers.show_top_view(ctx, latest_date, session_ids, session_ids_str, player_count, total_maps)
                 return
 
+            if subcommand and subcommand.lower() in ("graphs", "graph", "charts"):
+                # Generate performance graphs
+                graph_image = await self.graph_generator.generate_performance_graphs(
+                    latest_date, session_ids, session_ids_str
+                )
+
+                if graph_image:
+                    # Send the graph as a Discord file
+                    file = discord.File(graph_image, filename=f"session_{latest_date}_graphs.png")
+                    embed = discord.Embed(
+                        title=f"📊 Performance Graphs - {latest_date}",
+                        description=f"Top 10 players across {total_maps} maps",
+                        color=0x00D9FF,
+                        timestamp=datetime.now()
+                    )
+                    embed.set_image(url=f"attachment://session_{latest_date}_graphs.png")
+                    await ctx.send(embed=embed, file=file)
+                else:
+                    await ctx.send("❌ Could not generate performance graphs for this session")
+                return
+
             # Maps view routing
             if subcommand and subcommand.lower() == "maps":
                 # Check for "full" subcommand
@@ -232,7 +253,26 @@ class LastSessionCog(commands.Cog):
                 team_1_name, team_2_name, team_1_score, team_2_score, hardcoded_teams is not None,
                 scoring_result, player_badges
             )
-            await ctx.send(embed=embed1)
+
+            # Try to send the embed, handle size limit errors
+            try:
+                await ctx.send(embed=embed1)
+            except discord.errors.HTTPException as e:
+                if "Embed size exceeds maximum size" in str(e) or "50035" in str(e):
+                    # Embed is too large, send truncated version
+                    await ctx.send(
+                        f"⚠️ **Session is too large to display in one message!**\n\n"
+                        f"📅 **Session:** {latest_date}\n"
+                        f"🎮 **Players:** {player_count}\n"
+                        f"🗺️ **Rounds:** {rounds_played} ({unique_maps} unique maps)\n\n"
+                        f"💡 **Try using specific views instead:**\n"
+                        f"• `!last_session top` - Top players\n"
+                        f"• `!last_session combat` - Combat stats\n"
+                        f"• `!last_session maps` - Map breakdown\n"
+                        f"• `!last_session graphs` - Performance graphs"
+                    )
+                else:
+                    raise
 
         except Exception as e:
             logger.error(f"Error in last_session command: {e}", exc_info=True)

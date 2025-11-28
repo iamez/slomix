@@ -170,7 +170,7 @@ class SessionViewHandlers:
             GROUP BY p.player_name, session_total.total_seconds
             ORDER BY kills DESC
         """
-        combat_rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        combat_rows = await self.db_adapter.fetch_all(query, tuple(session_ids) + tuple(session_ids))
 
         if not combat_rows:
             await ctx.send("❌ No combat data available for latest session")
@@ -360,7 +360,7 @@ class SessionViewHandlers:
             GROUP BY p.player_name, session_total.total_seconds
             ORDER BY kills DESC
         """
-        top_players = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        top_players = await self.db_adapter.fetch_all(query, tuple(session_ids) + tuple(session_ids))
 
         embed = discord.Embed(
             title=f"🏆 All Players - {latest_date}",
@@ -502,9 +502,9 @@ class SessionViewHandlers:
                 color=0x5865F2,
                 timestamp=datetime.now()
             )
-        
+
             # Split players into multiple fields (3 per field to avoid 1024 char limit)
-            medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟", "1️⃣1️⃣", "1️⃣2️⃣"]
+            medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "1️⃣0️⃣", "1️⃣1️⃣", "1️⃣2️⃣"]
             players_per_field = 3
         
             for field_idx in range(0, len(players), players_per_field):
@@ -540,7 +540,14 @@ class SessionViewHandlers:
                     denied_min = int(time_denied // 60)
                     denied_sec = int(time_denied % 60)
                 
-                    medal = medals[global_idx] if global_idx < len(medals) else "🔹"
+                    if global_idx < len(medals):
+                        medal = medals[global_idx]
+                    else:
+                        # Generate number emoji for ranks beyond 12 (e.g., 13 → 1️⃣3️⃣)
+                        rank_num = str(global_idx + 1)
+                        emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+                                       '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
+                        medal = ''.join(emoji_digits[d] for d in rank_num)
                 
                     field_text += f"{medal} **{name}**\n"
                     field_text += f"`{kills}K/{deaths}D ({kd:.2f})` • `{dpm:.0f} DPM` • `{acc:.1f}% ACC`\n"
@@ -689,9 +696,9 @@ class SessionViewHandlers:
             color=color,
             timestamp=datetime.now()
         )
-    
+
         # Split players into fields (3 per field)
-        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟", "1️⃣1️⃣", "1️⃣2️⃣"]
+        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "1️⃣0️⃣", "1️⃣1️⃣", "1️⃣2️⃣"]
         players_per_field = 3
     
         for field_idx in range(0, len(players), players_per_field):

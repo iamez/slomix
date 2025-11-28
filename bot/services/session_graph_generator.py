@@ -48,31 +48,16 @@ class SessionGraphGenerator:
                     SUM(p.kills) as kills,
                     SUM(p.deaths) as deaths,
                     CASE
-                        WHEN session_total.total_seconds > 0
-                        THEN (SUM(p.damage_given) * 60.0) / session_total.total_seconds
+                        WHEN SUM(p.time_played_seconds) > 0
+                        THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
                         ELSE 0
                     END as dpm,
-                    session_total.total_seconds as time_played,
+                    SUM(p.time_played_seconds) as time_played,
                     CAST(SUM(p.time_played_seconds * p.time_dead_ratio / 100.0) AS INTEGER) as time_dead,
                     SUM(p.denied_playtime) as denied
                 FROM player_comprehensive_stats p
-                CROSS JOIN (
-                    SELECT SUM(
-                        CASE
-                            WHEN r.actual_time LIKE '%:%' THEN
-                                CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                                CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                            ELSE
-                                CAST(r.actual_time AS INTEGER)
-                        END
-                    ) as total_seconds
-                    FROM rounds r
-                    WHERE r.id IN ({session_ids_str})
-                      AND r.round_number IN (1, 2)
-                      AND (r.round_status = 'completed' OR r.round_status IS NULL)
-                ) session_total
                 WHERE p.round_id IN ({session_ids_str})
-                GROUP BY p.player_name, session_total.total_seconds
+                GROUP BY p.player_name
                 ORDER BY kills DESC
                 LIMIT 10
             """
