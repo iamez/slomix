@@ -72,17 +72,23 @@ class SubstitutionDetector:
     Detects player substitutions and roster changes
     """
     
-    def __init__(self):
+    def __init__(self, db_adapter):
+        """
+        Initialize SubstitutionDetector with async database adapter.
+
+        Args:
+            db_adapter: DatabaseAdapter instance (supports both SQLite and PostgreSQL)
+        """
+        self.db = db_adapter
         self.substitution_window = 1  # Detect subs within N rounds
         
-    def analyze_session_roster_changes(
+    async def analyze_session_roster_changes(
         self,
-        db: sqlite3.Connection,
         session_date: str
     ) -> Dict:
         """
         Analyze roster changes throughout a session
-        
+
         Returns:
             {
                 'player_activity': {guid: PlayerActivity},
@@ -95,16 +101,16 @@ class SubstitutionDetector:
             }
         """
         logger.info(f"🔍 Analyzing roster changes for {session_date}")
-        
+
         # Get all player activity
-        player_activity = self._get_player_activity(db, session_date)
-        
+        player_activity = await self._get_player_activity(session_date)
+
         if not player_activity:
             logger.warning("No player activity found")
             return {}
-        
+
         # Get round-by-round rosters
-        round_rosters = self._get_round_rosters(db, session_date)
+        round_rosters = await self._get_round_rosters(session_date)
         
         # Detect changes
         roster_changes = self._detect_roster_changes(round_rosters, player_activity)
@@ -151,27 +157,23 @@ class SubstitutionDetector:
         
         return result
     
-    def _get_player_activity(
+    async def _get_player_activity(
         self,
-        db: sqlite3.Connection,
         session_date: str
     ) -> Dict[str, PlayerActivity]:
         """Get detailed player activity for session"""
-        cursor = db.cursor()
-        
         query = """
-            SELECT 
+            SELECT
                 player_guid,
                 player_name,
                 round_number,
                 team
             FROM player_comprehensive_stats
-            WHERE round_date LIKE ?
+            WHERE round_date LIKE $1
             ORDER BY round_number, player_guid
         """
-        
-        cursor.execute(query, (f"{session_date}%",))
-        rows = cursor.fetchall()
+
+        rows = await self.db.fetch_all(query, (f"{session_date}%",))
         
         # Build activity records
         activity = {}
@@ -193,14 +195,11 @@ class SubstitutionDetector:
         
         return activity
     
-    def _get_round_rosters(
+    async def _get_round_rosters(
         self,
-        db: sqlite3.Connection,
         session_date: str
     ) -> Dict[int, Dict]:
         """Get rosters for each round"""
-        cursor = db.cursor()
-        
         query = """
             SELECT DISTINCT
                 round_number,
@@ -208,12 +207,11 @@ class SubstitutionDetector:
                 player_guid,
                 player_name
             FROM player_comprehensive_stats
-            WHERE round_date LIKE ?
+            WHERE round_date LIKE $1
             ORDER BY round_number, team, player_guid
         """
-        
-        cursor.execute(query, (f"{session_date}%",))
-        rows = cursor.fetchall()
+
+        rows = await self.db.fetch_all(query, (f"{session_date}%",))
         
         rosters = defaultdict(lambda: {'team1': set(), 'team2': set()})
         
