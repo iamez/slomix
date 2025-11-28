@@ -27,6 +27,14 @@ except ImportError:
     PREDICTION_ENGINE_AVAILABLE = False
     logger.warning("⚠️ PredictionEngine not available")
 
+# Phase 4: Import prediction embed builder
+try:
+    from bot.services.prediction_embed_builder import PredictionEmbedBuilder
+    PREDICTION_EMBED_AVAILABLE = True
+except ImportError:
+    PREDICTION_EMBED_AVAILABLE = False
+    logger.warning("⚠️ PredictionEmbedBuilder not available")
+
 
 class VoiceSessionService:
     """
@@ -76,6 +84,13 @@ class VoiceSessionService:
             self.prediction_engine = None
             if config.enable_match_predictions and not PREDICTION_ENGINE_AVAILABLE:
                 logger.warning("⚠️ Match predictions enabled but engine unavailable")
+
+        # Prediction Embed Builder (Phase 4: Discord Integration)
+        if PREDICTION_EMBED_AVAILABLE:
+            self.prediction_embed_builder = PredictionEmbedBuilder()
+            logger.info("✅ PredictionEmbedBuilder enabled")
+        else:
+            self.prediction_embed_builder = None
 
         logger.info("✅ VoiceSessionService initialized")
 
@@ -519,8 +534,48 @@ class VoiceSessionService:
                             )
                             logger.info(f"💡 Insight: {prediction['key_insight']}")
 
-                            # Phase 4: This is where we'll store prediction in database
-                            # Phase 4: This is where we'll post prediction to Discord
+                            # Phase 4: Store prediction in database and post to Discord
+                            if self.prediction_embed_builder:
+                                try:
+                                    # Get player names for better display
+                                    player_names = await self._get_player_names(
+                                        split_data['team_a_guids'] + split_data['team_b_guids']
+                                    )
+
+                                    # Build prediction embed
+                                    embed = self.prediction_embed_builder.build_prediction_embed(
+                                        prediction,
+                                        split_data,
+                                        player_names
+                                    )
+
+                                    # Post to Discord (production channel)
+                                    channel = self.bot.get_channel(self.config.production_channel_id)
+                                    if channel:
+                                        message = await channel.send(embed=embed)
+                                        discord_message_id = message.id
+                                        discord_channel_id = channel.id
+                                        logger.info(f"📤 Prediction posted to Discord (msg_id={discord_message_id})")
+                                    else:
+                                        discord_message_id = None
+                                        discord_channel_id = None
+                                        logger.warning("⚠️ Production channel not found, prediction not posted")
+
+                                    # Store prediction in database
+                                    session_date = datetime.now().strftime('%Y-%m-%d')
+                                    prediction_id = await self.prediction_engine.store_prediction(
+                                        prediction,
+                                        split_data,
+                                        session_date,
+                                        discord_channel_id,
+                                        discord_message_id
+                                    )
+
+                                    logger.info(f"✅ Prediction workflow complete (id={prediction_id})")
+
+                                except Exception as e:
+                                    logger.error(f"❌ Failed to post/store prediction: {e}", exc_info=True)
+
                             if self.config.enable_prediction_logging:
                                 logger.debug(f"📊 Full prediction: {prediction}")
 
@@ -678,3 +733,47 @@ class VoiceSessionService:
         )
 
         return guids
+
+    async def _get_player_names(
+        self,
+        guids: List[str]
+    ) -> Dict[str, str]:
+        """
+        Get player names for given GUIDs.
+
+        Phase 4: Discord Integration - Player name lookup
+
+        Args:
+            guids: List of player GUIDs
+
+        Returns:
+            Dict mapping GUID to player name
+        """
+        if not guids:
+            return {}
+
+        try:
+            # Build query with correct number of placeholders
+            placeholders = ', '.join([f'${i+1}' for i in range(len(guids))])
+            query = f"""
+                SELECT DISTINCT player_guid, player_name
+                FROM player_comprehensive_stats
+                WHERE player_guid IN ({placeholders})
+                ORDER BY id DESC
+            """
+
+            rows = await self.db_adapter.fetch_all(query, tuple(guids))
+
+            # Build mapping (use most recent name for each GUID)
+            guid_to_name = {}
+            for guid, name in rows:
+                if guid not in guid_to_name:
+                    guid_to_name[guid] = name
+
+            logger.debug(f"Player name lookup: {len(guid_to_name)}/{len(guids)} GUIDs resolved")
+
+            return guid_to_name
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get player names: {e}", exc_info=True)
+            return {}
