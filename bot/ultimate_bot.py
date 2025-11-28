@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """
 ULTIMATE ET:LEGACY DISCORD BOT - COG-BASED VERSION
-
-This module contains the ET:Legacy discord bot commands. The file is large
-and contains many helper classes and Cog commands. Only minimal top-level
-initialization is present here; heavy lifting is done inside Cog methods.
 """
 
 import asyncio
@@ -513,6 +509,21 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(f"⚠️  Could not load Server Control cog: {e}")
             logger.warning("Bot will continue without server control features")
 
+        # 🔮 COMPETITIVE ANALYTICS: Load prediction cogs (Phase 5)
+        try:
+            await self.load_extension("cogs.predictions_cog")
+            logger.info("✅ Predictions cog loaded (!predictions, !prediction_stats, !my_predictions)")
+        except Exception as e:
+            logger.warning(f"⚠️  Could not load Predictions cog: {e}")
+            logger.warning("Bot will continue without prediction commands")
+
+        try:
+            await self.load_extension("cogs.admin_predictions_cog")
+            logger.info("✅ Admin Predictions cog loaded (!admin_predictions, !update_prediction_outcome)")
+        except Exception as e:
+            logger.warning(f"⚠️  Could not load Admin Predictions cog: {e}")
+            logger.warning("Bot will continue without admin prediction commands")
+
         # 🤖 AUTOMATION: Initialize automation services
         try:
             from bot.services.automation import SSHMonitor, HealthMonitor, MetricsLogger, DatabaseMaintenance
@@ -990,8 +1001,8 @@ class UltimateETLegacyBot(commands.Bot):
             gap = current_dt - prev_dt
             gap_minutes = gap.total_seconds() / 60
 
-            # If gap > 60 minutes, start new session
-            if gap_minutes > 60:
+            # If gap > session_gap_minutes, start new session
+            if gap_minutes > self.config.session_gap_minutes:
                 # Get max session_id and increment
                 max_query = "SELECT MAX(gaming_session_id) FROM rounds WHERE gaming_session_id IS NOT NULL"
                 max_session = await self.db_adapter.fetch_val(max_query, ())
