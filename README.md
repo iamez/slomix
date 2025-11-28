@@ -10,13 +10,26 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 
 ## 🔥 Recent Updates (November 2025)
 
-**Latest Features & Enhancements:**
+### **🎯 MAJOR: Competitive Analytics System (Weeks 11-12)** 🆕
+
+**The prediction system is HERE!** An AI-powered match prediction engine with 12 new commands:
+
+- 🔮 **Match Predictions** - AI predicts match outcomes when teams split into voice channels
+- 📊 **4-Factor Algorithm** - H2H (40%), Form (25%), Map Performance (20%), Substitutions (15%)
+- 🎯 **Confidence Scoring** - High/Medium/Low confidence based on data quality
+- 📈 **Accuracy Tracking** - Brier score calculation, trend analysis, performance metrics
+- 🏆 **Player Leaderboards** - Most predictable, unpredictable (wildcards), and active players
+- 🗺️ **Map Analytics** - Map-specific prediction accuracy and team bias detection
+- 💬 **12 New Commands** - 7 user commands + 5 admin commands for complete analytics
+
+**Status:** Fully functional, ready to enable after monitoring week (64% of project complete, 39/61 hours)
+
+**Latest Session Enhancements:**
 - 🏆 **Achievement System** - Player badges for medics, engineers, combat specialists, and more!
 - 🎨 **Custom Display Names** - Linked players can set personalized display names
 - 📊 **Enhanced Performance Graphs** - Exact value labels on all stat visualizations
 - 📢 **Upgraded Auto-Posting** - Now shows ALL players with comprehensive stats (not just top performers)
 - 🎯 **Improved Session Output** - Redesigned !last_session format with achievement badges
-- 🐛 **Bug Fixes** - Fixed !list_players command, Codacy warnings, and various production issues
 
 **Previous Critical Optimizations:**
 - ✅ **Voice-Conditional SSH Monitoring** - Only checks SSH when players in voice (massive resource savings!)
@@ -170,7 +183,44 @@ Automatically groups rounds into gaming sessions:
 
 ## 🌟 Features
 
-### **Production-Ready** ✅
+### **🔮 Competitive Analytics - AI Match Predictions** 🆕
+
+**The most advanced prediction system for any gaming stats platform:**
+
+#### **Prediction Engine**
+- 🤖 **Automatic Detection** - Detects when players split into team voice channels (3v3, 4v4, 5v5, 6v6)
+- 🧠 **4-Factor Algorithm** - Weighted analysis of Head-to-Head (40%), Recent Form (25%), Map Performance (20%), Substitutions (15%)
+- 🎯 **Confidence Scoring** - High/Medium/Low confidence based on historical data quality
+- 📊 **Real-Time Probability** - Live win probability calculations (30-70% range with sigmoid scaling)
+- ⏱️ **Cooldown Management** - Smart 5-minute cooldown prevents prediction spam
+
+#### **Analytics & Commands**
+- 📈 **!predictions** - View recent predictions with beautiful embeds
+- 📊 **!prediction_stats** - Accuracy statistics dashboard (overall, by confidence level, recent trends)
+- 👤 **!my_predictions** - Personal match history and performance
+- 📉 **!prediction_trends** - Daily accuracy trends with improvement detection
+- 🏆 **!prediction_leaderboard** - Rankings: Most predictable, wildcards, most active players
+- 🗺️ **!map_predictions** - Map-specific accuracy and team bias detection
+- ❓ **!prediction_help** - Complete user documentation
+
+#### **Admin Tools**
+- 🔧 **!admin_predictions** - Advanced filtering (pending, completed, correct, incorrect)
+- ✏️ **!update_prediction_outcome** - Manual result updates with Brier score calculation
+- 🔄 **!recalculate_predictions** - Batch accuracy recalculation
+- 📊 **!prediction_performance** - System performance dashboard
+- 🛠️ **!admin_prediction_help** - Admin documentation
+
+#### **Database & Tracking**
+- 💾 **3 New Tables** - match_predictions (35 columns), session_results (21 columns), map_performance (13 columns)
+- 🎯 **Accuracy Tracking** - Brier score calculation, prediction correctness, confidence analysis
+- 📊 **Trend Analysis** - Week-over-week comparison, best/worst days, improving/declining detection
+- 🏅 **Leaderboards** - Player predictability rankings with minimum 3 matches filter
+
+**[📖 Implementation Guide](COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md)** | **[📊 Progress Tracker](IMPLEMENTATION_PROGRESS_TRACKER.md)**
+
+---
+
+### **Production-Ready Statistics** ✅
 
 #### **Intelligent Stats System**
 - 📊 **53+ Statistics Tracked** - K/D, DPM, accuracy, efficiency, headshots, damage, playtime
@@ -297,6 +347,26 @@ GAMING_VOICE_CHANNELS=947583652957659166,1029097483697143938
 
 ## 📋 Commands
 
+### **🔮 Prediction Commands** 🆕
+
+**User Commands (7):**
+- `!predictions [limit]` - View recent predictions (default: 10)
+- `!prediction_stats [days]` - Accuracy statistics dashboard (default: 30 days)
+- `!my_predictions` - Your personal match prediction history
+- `!prediction_trends [days]` - Daily accuracy trends and analysis (default: 30 days)
+- `!prediction_leaderboard [category]` - Player rankings (predictable/unpredictable/active)
+- `!map_predictions [map]` - Map-specific prediction statistics
+- `!prediction_help` - Complete prediction system documentation
+
+**Admin Commands (5):**
+- `!admin_predictions [status] [limit]` - Advanced prediction filtering
+- `!update_prediction_outcome <id> <winner> <score_a> <score_b>` - Update match results
+- `!recalculate_predictions [days]` - Recalculate accuracy for recent predictions
+- `!prediction_performance` - System performance dashboard
+- `!admin_prediction_help` - Admin documentation and tools
+
+---
+
 ### **Player Statistics**
 - `!stats <player>` - Full player statistics (K/D, DPM, accuracy, etc.)
 - `!stats @user` - Stats for Discord-linked player
@@ -340,11 +410,17 @@ GAMING_VOICE_CHANNELS=947583652957659166,1029097483697143938
 slomix/
 ├── 📊 Core Systems
 │   ├── bot/
-│   │   ├── ultimate_bot.py              # Main bot (4,990 lines)
+│   │   ├── ultimate_bot.py              # Main bot (enhanced with predictions)
 │   │   ├── community_stats_parser.py    # Round 1/2 differential parser (1,036 lines)
 │   │   ├── cogs/
 │   │   │   ├── last_session_cog.py      # Session stats & summaries
+│   │   │   ├── predictions_cog.py       # 🆕 Prediction user commands (862 lines)
+│   │   │   ├── admin_predictions_cog.py # 🆕 Prediction admin tools (530 lines)
 │   │   │   └── sync_cog.py              # VPS sync commands
+│   │   ├── services/
+│   │   │   ├── prediction_engine.py     # 🆕 AI prediction engine (540 lines)
+│   │   │   ├── prediction_embed_builder.py # 🆕 Beautiful prediction embeds (395 lines)
+│   │   │   └── voice_session_service.py # 🆕 Team split detection
 │   │   ├── core/
 │   │   │   ├── database_adapter.py      # PostgreSQL/SQLite abstraction
 │   │   │   └── stats_cache.py           # TTL-based caching (300s)
@@ -384,10 +460,20 @@ slomix/
 │   │   ├── DATA_PIPELINE.md             # Pipeline documentation
 │   │   ├── FIELD_MAPPING.md             # Stats fields reference
 │   │   ├── SYSTEM_ARCHITECTURE.md       # Architecture docs
-│   │   └── TECHNICAL_OVERVIEW.md        # Technical guide
+│   │   ├── TECHNICAL_OVERVIEW.md        # Technical guide
+│   │   └── COMPETITIVE_ANALYTICS_MASTER_PLAN.md # 🆕 Prediction system design
 │   ├── DEPLOYMENT_CHECKLIST.md          # Deployment guide
+│   ├── COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md # 🆕 Prediction implementation
+│   ├── IMPLEMENTATION_PROGRESS_TRACKER.md # 🆕 Project progress (64% complete)
+│   ├── WEEK_HANDOFF_MEMORY.md           # 🆕 Week handoff documentation
+│   ├── GEMINI_IMPLEMENTATION_GUIDE.md   # 🆕 Website developer guide
 │   ├── VPS_SETUP.md                     # VPS setup instructions
 │   └── AI_AGENT_INSTRUCTIONS.md         # For AI assistants
+│
+├── 🌐 Website (Separate Project - In Development)
+│   ├── website/backend/                 # FastAPI backend
+│   ├── website/index.html               # Tailwind CSS frontend
+│   └── website/js/app.js                # SPA logic
 │
 └── 🔧 Development Tools
     ├── check_last_session_data.py       # Diagnostic scripts
@@ -397,10 +483,13 @@ slomix/
 
 **Key Files:**
 - **`postgresql_database_manager.py`** - ALL database operations (1,573 lines: create, import, rebuild, validate)
-- **`bot/ultimate_bot.py`** - Main production bot (4,990 lines)
+- **`bot/ultimate_bot.py`** - Main production bot (enhanced with predictions)
 - **`bot/community_stats_parser.py`** - Round 2 differential calculation (1,036 lines)
+- **`bot/services/prediction_engine.py`** - 🆕 AI prediction engine (540 lines)
+- **`bot/cogs/predictions_cog.py`** - 🆕 User prediction commands (862 lines)
 - **`bot/core/database_adapter.py`** - Async DB abstraction layer
 - **`docs/SAFETY_VALIDATION_SYSTEMS.md`** - Complete safety documentation
+- **`IMPLEMENTATION_PROGRESS_TRACKER.md`** - 🆕 Project progress tracking
 
 ---
 
@@ -428,6 +517,25 @@ processed_files (filename, processed_at, success, error_message)
 player_links (discord_user_id, player_guid, linked_at)
 player_aliases (guid, alias, times_seen, last_seen)
 session_teams (session_id, player_guid, team)
+
+-- 🆕 Competitive Analytics Tables (Weeks 11-12)
+match_predictions (35 columns, 6 indexes)
+    ├── Prediction: team_a/b_guids, team_a/b_win_probability, confidence
+    ├── Factors: h2h_score, form_score, map_score, subs_score, weighted_score
+    ├── Metadata: prediction_time, session_date, format (3v3, 4v4, etc.)
+    ├── Results: actual_winner, prediction_correct, prediction_accuracy
+    └── Discord: discord_message_id, discord_channel_id
+
+session_results (21 columns)
+    ├── Session: session_date, gaming_session_id, format, total_rounds
+    ├── Teams: team_1/2_guids, team_1/2_names, team_1/2_score
+    ├── Outcome: winning_team, round_details (JSON)
+    └── Timing: session_start_time, session_end_time, duration
+
+map_performance (13 columns)
+    ├── Player: player_guid, map_name
+    ├── Stats: matches_played, wins, losses, win_rate
+    └── Performance: avg_kills, avg_deaths, avg_kd_ratio, avg_dpm
 ```
 
 **Gaming Session ID:**
@@ -816,11 +924,23 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 ## 📚 Documentation Index
 
 ### **Getting Started**
-- [README.md](README.md) - This file
+- [README.md](README.md) - This file (you are here!)
 - [docs/DEPLOYMENT_CHECKLIST.md](docs/DEPLOYMENT_CHECKLIST.md) - Deployment guide
 - [docs/FRESH_INSTALL_GUIDE.md](docs/FRESH_INSTALL_GUIDE.md) - Fresh installation guide
 - [bot/services/automation/INTEGRATION_GUIDE.md](bot/services/automation/INTEGRATION_GUIDE.md) - Automation setup
 - [docs/AI_AGENT_INSTRUCTIONS.md](docs/AI_AGENT_INSTRUCTIONS.md) - For AI assistants
+
+### **🆕 Competitive Analytics (Prediction System)**
+- [COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md](COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md) - Complete implementation guide
+- [IMPLEMENTATION_PROGRESS_TRACKER.md](IMPLEMENTATION_PROGRESS_TRACKER.md) - Project progress (64% complete, 39/61 hours)
+- [WEEK_HANDOFF_MEMORY.md](WEEK_HANDOFF_MEMORY.md) - Week handoff documentation
+- [docs/COMPETITIVE_ANALYTICS_MASTER_PLAN.md](docs/COMPETITIVE_ANALYTICS_MASTER_PLAN.md) - System design and architecture
+- [GEMINI_IMPLEMENTATION_GUIDE.md](GEMINI_IMPLEMENTATION_GUIDE.md) - Website integration guide
+
+### **🆕 Website Project (In Development)**
+- [WEBSITE_PROJECT_REVIEW.md](WEBSITE_PROJECT_REVIEW.md) - Technical review (8/10 rating)
+- [WEBSITE_VISION_REVIEW_2025-11-28.md](WEBSITE_VISION_REVIEW_2025-11-28.md) - Strategic vision (9.5/10 rating)
+- [WEBSITE_APPJS_CHANGES_2025-11-28.md](WEBSITE_APPJS_CHANGES_2025-11-28.md) - Recent changes analysis
 
 ### **System Architecture**
 - [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md) - Complete data pipeline
