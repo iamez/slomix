@@ -133,6 +133,11 @@ class VoiceSessionService:
                         f"⏰ Session end cancelled - players returned ({total_players} in voice)"
                     )
 
+            # ========== PHASE 2: TEAM SPLIT DETECTION ==========
+            # Check for team splits during active sessions
+            if self.session_active and self.config.enable_team_split_detection:
+                await self._check_team_split()
+
         except Exception as e:
             logger.error(f"Voice state update error: {e}", exc_info=True)
 
@@ -424,6 +429,82 @@ class VoiceSessionService:
             return f"{hours}h {minutes}m"
         else:
             return f"{minutes}m"
+
+    async def _check_team_split(self):
+        """
+        Check for team split and update state.
+
+        Phase 2: Competitive Analytics - Team Split Detection Handler
+
+        Called by handle_voice_state_change() when session is active
+        and team split detection is enabled.
+        """
+        try:
+            # Detect team split
+            split_data = await self._detect_team_split()
+
+            if split_data:
+                # Check if this is a NEW split or same as before
+                is_new_split = (
+                    not self.team_split_detected
+                    or split_data['team_a_channel_id'] != self.team_a_channel_id
+                    or split_data['team_b_channel_id'] != self.team_b_channel_id
+                )
+
+                # Check cooldown (don't spam if teams keep splitting)
+                if self.last_split_time:
+                    time_since_last = datetime.now() - self.last_split_time
+                    cooldown = timedelta(minutes=self.prediction_cooldown_minutes)
+                    if time_since_last < cooldown and not is_new_split:
+                        logger.debug(
+                            f"⏳ Team split detected but in cooldown "
+                            f"({time_since_last.seconds}s / {cooldown.seconds}s)"
+                        )
+                        return
+
+                # Update state
+                self.team_split_detected = True
+                self.team_a_channel_id = split_data['team_a_channel_id']
+                self.team_b_channel_id = split_data['team_b_channel_id']
+                self.team_a_guids = split_data['team_a_guids']
+                self.team_b_guids = split_data['team_b_guids']
+                self.last_split_time = datetime.now()
+
+                # Log event
+                if is_new_split:
+                    logger.info(
+                        f"🎮 NEW TEAM SPLIT DETECTED! {split_data['format']} "
+                        f"(Confidence: {split_data['confidence']}, "
+                        f"GUID Coverage: {split_data['guid_coverage']:.0%})"
+                    )
+                    logger.info(
+                        f"   Team A: {len(split_data['team_a_discord_ids'])} players "
+                        f"({len(split_data['team_a_guids'])} mapped)"
+                    )
+                    logger.info(
+                        f"   Team B: {len(split_data['team_b_discord_ids'])} players "
+                        f"({len(split_data['team_b_guids'])} mapped)"
+                    )
+
+                    # Phase 3 will trigger prediction engine here
+                    if self.config.enable_prediction_logging:
+                        logger.info(
+                            "💡 [Phase 3 TODO] This is where prediction engine "
+                            "would be triggered with team GUIDs"
+                        )
+
+            else:
+                # No split detected - reset state
+                if self.team_split_detected:
+                    logger.info("ℹ️ Team split ended (players merged or left)")
+                    self.team_split_detected = False
+                    self.team_a_channel_id = None
+                    self.team_b_channel_id = None
+                    self.team_a_guids = []
+                    self.team_b_guids = []
+
+        except Exception as e:
+            logger.error(f"❌ Error checking team split: {e}", exc_info=True)
 
     async def _detect_team_split(self) -> Optional[Dict]:
         """
