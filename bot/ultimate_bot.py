@@ -32,6 +32,7 @@ from bot.stats import StatsCalculator
 from bot.automation import SSHHandler, FileTracker
 from bot.services.voice_session_service import VoiceSessionService
 from bot.services.round_publisher_service import RoundPublisherService
+from bot.repositories import FileRepository
 
 # Load environment variables if available
 try:
@@ -204,6 +205,10 @@ class UltimateETLegacyBot(commands.Bot):
         # 📊 Round Publisher Service (manages Discord auto-posting of stats)
         self.round_publisher = RoundPublisherService(self, self.config, self.db_adapter)
         logger.info("✅ Round publisher service initialized")
+
+        # 📁 File Repository (data access layer for processed files)
+        self.file_repository = FileRepository(self.db_adapter)
+        logger.info("✅ File repository initialized")
 
         # 🤖 Automation System Flags (OFF by default for dev/testing)
         self.automation_enabled = self.config.automation_enabled
@@ -1487,12 +1492,11 @@ class UltimateETLegacyBot(commands.Bot):
         🔄 Cache Refresh Task - Runs every 30 seconds
 
         Keeps in-memory cache in sync with database
+        Uses FileRepository for data access (Repository Pattern)
         """
         try:
-            # Refresh processed files cache
-            query = "SELECT filename FROM processed_files WHERE success = 1"
-            rows = await self.db_adapter.fetch_all(query)
-            self.processed_files = {row[0] for row in rows}
+            # Refresh processed files cache via repository
+            self.processed_files = await self.file_repository.get_processed_filenames()
 
         except Exception as e:
             logger.debug(f"Cache refresh error: {e}")
