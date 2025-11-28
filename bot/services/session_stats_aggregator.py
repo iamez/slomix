@@ -42,15 +42,15 @@ class SessionStatsAggregator:
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
                 CASE
-                    WHEN session_total.total_seconds > 0
-                    THEN (SUM(p.damage_given) * 60.0) / session_total.total_seconds
+                    WHEN SUM(p.time_played_seconds) > 0
+                    THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
                     ELSE 0
                 END as weighted_dpm,
                 COALESCE(SUM(w.hits), 0) as total_hits,
                 COALESCE(SUM(w.shots), 0) as total_shots,
                 COALESCE(SUM(w.headshots), 0) as total_headshots,
                 SUM(p.headshot_kills) as headshot_kills,
-                session_total.total_seconds as total_seconds,
+                SUM(p.time_played_seconds) as total_seconds,
                 CAST(SUM(p.time_played_seconds * p.time_dead_ratio / 100.0) AS INTEGER) as total_time_dead,
                 SUM(p.denied_playtime) as total_denied,
                 SUM(p.gibs) as total_gibs,
@@ -65,21 +65,6 @@ class SessionStatsAggregator:
                 SUM(p.multi_kills) as total_multi_kills,
                 SUM(p.mega_kills) as total_mega_kills
             FROM player_comprehensive_stats p
-            CROSS JOIN (
-                SELECT SUM(
-                    CASE
-                        WHEN r.actual_time LIKE '%:%' THEN
-                            CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                            CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                        ELSE
-                            CAST(r.actual_time AS INTEGER)
-                    END
-                ) as total_seconds
-                FROM rounds r
-                WHERE r.id IN ({session_ids_str})
-                  AND r.round_number IN (1, 2)
-                  AND (r.round_status = 'completed' OR r.round_status IS NULL)
-            ) session_total
             LEFT JOIN (
                 SELECT round_id, player_guid,
                     SUM(hits) as hits,
@@ -90,11 +75,10 @@ class SessionStatsAggregator:
                 GROUP BY round_id, player_guid
             ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
             WHERE p.round_id IN ({session_ids_str})
-            GROUP BY p.player_guid, p.player_name, session_total.total_seconds
+            GROUP BY p.player_guid, p.player_name
             ORDER BY kills DESC
         """
-        # Pass session_ids twice: once for line 78 (rounds), once for line 91 (player_stats)
-        return await self.db_adapter.fetch_all(query, tuple(session_ids) + tuple(session_ids))
+        return await self.db_adapter.fetch_all(query, tuple(session_ids))
 
     async def aggregate_team_stats(self, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict] = None, name_to_team: Optional[Dict] = None):
         """
@@ -183,36 +167,20 @@ class SessionStatsAggregator:
         return await self.db_adapter.fetch_all(query, tuple(session_ids))
 
     async def get_dpm_leaderboard(self, session_ids: List, session_ids_str: str, limit: int = 10):
-        """Get DPM leaderboard based on total session duration (not individual playtime)"""
+        """Get DPM leaderboard based on individual player playtime"""
         query = f"""
             SELECT player_name,
                 CASE
-                    WHEN session_total.total_seconds > 0
-                    THEN (SUM(damage_given) * 60.0) / session_total.total_seconds
+                    WHEN SUM(time_played_seconds) > 0
+                    THEN (SUM(damage_given) * 60.0) / SUM(time_played_seconds)
                     ELSE 0
                 END as weighted_dpm,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths
             FROM player_comprehensive_stats
-            CROSS JOIN (
-                SELECT SUM(
-                    CASE
-                        WHEN r.actual_time LIKE '%:%' THEN
-                            CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                            CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                        ELSE
-                            CAST(r.actual_time AS INTEGER)
-                    END
-                ) as total_seconds
-                FROM rounds r
-                WHERE r.id IN ({session_ids_str})
-                  AND r.round_number IN (1, 2)
-                  AND (r.round_status = 'completed' OR r.round_status IS NULL)
-            ) session_total
             WHERE round_id IN ({session_ids_str})
-            GROUP BY player_guid, player_name, session_total.total_seconds
+            GROUP BY player_guid, player_name
             ORDER BY weighted_dpm DESC
             LIMIT {limit}
         """
-        # Pass session_ids twice: once for line 207 (rounds), once for line 211 (player_stats)
-        return await self.db_adapter.fetch_all(query, tuple(session_ids) + tuple(session_ids))
+        return await self.db_adapter.fetch_all(query, tuple(session_ids))

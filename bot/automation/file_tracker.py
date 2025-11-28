@@ -36,6 +36,7 @@ class FileTracker:
         self.config = config
         self.bot_startup_time = bot_startup_time
         self.processed_files = processed_files  # Reference to bot's set
+        self._process_lock = asyncio.Lock()  # Prevent race conditions
 
     async def should_process_file(
         self, filename: str, ignore_startup_time: bool = False, check_db_only: bool = False
@@ -58,6 +59,13 @@ class FileTracker:
         Returns:
             bool: True if file should be processed, False if already done
         """
+        async with self._process_lock:  # Prevent race conditions
+            return await self._should_process_file_impl(filename, ignore_startup_time, check_db_only)
+
+    async def _should_process_file_impl(
+        self, filename: str, ignore_startup_time: bool, check_db_only: bool
+    ) -> bool:
+        """Internal implementation of should_process_file (called under lock)"""
         try:
             # 1. Check file age - only import files created AFTER bot startup
             # This prevents importing old files on bot restart while allowing live updates
@@ -277,10 +285,15 @@ class FileTracker:
                     f"⚠️  Found {len(unimported)} unimported files in local_stats/ "
                     f"(total: {len(files)} files)"
                 )
-                logger.warning(
-                    f"💡 To import them, use: python postgresql_database_manager.py "
-                    f"or !import command"
-                )
+                if self.config.database_type == "postgresql":
+                    logger.warning(
+                        f"💡 To import them, use: python postgresql_database_manager.py "
+                        f"or !import command"
+                    )
+                else:
+                    logger.warning(
+                        f"💡 To import them, use the !import command"
+                    )
                 # Show a few examples (don't spam log)
                 if len(unimported) <= 5:
                     for f in unimported:
