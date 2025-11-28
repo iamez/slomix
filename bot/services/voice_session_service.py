@@ -19,6 +19,14 @@ import logging
 
 logger = logging.getLogger('VoiceSessionService')
 
+# Phase 3: Import prediction engine
+try:
+    from bot.services.prediction_engine import PredictionEngine
+    PREDICTION_ENGINE_AVAILABLE = True
+except ImportError:
+    PREDICTION_ENGINE_AVAILABLE = False
+    logger.warning("⚠️ PredictionEngine not available")
+
 
 class VoiceSessionService:
     """
@@ -59,6 +67,15 @@ class VoiceSessionService:
         self.team_b_guids: List[str] = []
         self.last_split_time: Optional[datetime] = None
         self.prediction_cooldown_minutes: int = config.prediction_cooldown_minutes
+
+        # Prediction Engine (Phase 3: Competitive Analytics)
+        if PREDICTION_ENGINE_AVAILABLE and config.enable_match_predictions:
+            self.prediction_engine = PredictionEngine(db_adapter)
+            logger.info("✅ PredictionEngine enabled")
+        else:
+            self.prediction_engine = None
+            if config.enable_match_predictions and not PREDICTION_ENGINE_AVAILABLE:
+                logger.warning("⚠️ Match predictions enabled but engine unavailable")
 
         logger.info("✅ VoiceSessionService initialized")
 
@@ -486,12 +503,33 @@ class VoiceSessionService:
                         f"({len(split_data['team_b_guids'])} mapped)"
                     )
 
-                    # Phase 3 will trigger prediction engine here
-                    if self.config.enable_prediction_logging:
-                        logger.info(
-                            "💡 [Phase 3 TODO] This is where prediction engine "
-                            "would be triggered with team GUIDs"
-                        )
+                    # Phase 3: Trigger prediction engine
+                    if self.prediction_engine and len(split_data['team_a_guids']) > 0 and len(split_data['team_b_guids']) > 0:
+                        try:
+                            prediction = await self.prediction_engine.predict_match(
+                                split_data['team_a_guids'],
+                                split_data['team_b_guids'],
+                                map_name=None  # Map detection in Phase 4
+                            )
+
+                            logger.info(
+                                f"🔮 PREDICTION: Team A {prediction['team_a_win_probability']:.0%} vs "
+                                f"Team B {prediction['team_b_win_probability']:.0%} "
+                                f"(Confidence: {prediction['confidence']})"
+                            )
+                            logger.info(f"💡 Insight: {prediction['key_insight']}")
+
+                            # Phase 4: This is where we'll store prediction in database
+                            # Phase 4: This is where we'll post prediction to Discord
+                            if self.config.enable_prediction_logging:
+                                logger.debug(f"📊 Full prediction: {prediction}")
+
+                        except Exception as e:
+                            logger.error(f"❌ Prediction failed: {e}", exc_info=True)
+                    elif self.config.enable_match_predictions and not self.prediction_engine:
+                        logger.warning("⚠️ Predictions enabled but engine not available")
+                    elif len(split_data['team_a_guids']) == 0 or len(split_data['team_b_guids']) == 0:
+                        logger.warning("⚠️ Cannot predict: No GUIDs mapped for one or both teams")
 
             else:
                 # No split detected - reset state
