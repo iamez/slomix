@@ -29,6 +29,7 @@ import paramiko
 from discord.ext import commands
 
 from bot.core.checks import is_admin_channel
+from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger('ServerControl')
 
@@ -281,8 +282,8 @@ class ServerControl(commands.Cog):
                         player_lines = [line for line in status.split('\n') if line.strip() and not line.startswith('map:') and not line.startswith('num score')]
                         player_count = len(player_lines)
                         player_info = f"\n**Players:** {player_count} online"
-                    except:
-                        pass
+                    except Exception:
+                        pass  # RCON status check is optional
                 
                 embed = discord.Embed(
                     title="✅ Server Online",
@@ -307,7 +308,7 @@ class ServerControl(commands.Cog):
         
         except Exception as e:
             logger.error(f"Error checking server status: {e}", exc_info=True)
-            await ctx.send(f"❌ Error checking status: {e}")
+            await ctx.send(f"❌ Error checking status: {sanitize_error_message(e)}")
     
     @commands.command(name='server_start', aliases=['start', 'srv_start'])
     @is_admin_channel()
@@ -353,13 +354,14 @@ class ServerControl(commands.Cog):
                 await ctx.send(embed=embed)
                 await self.log_action(ctx, "Server Start Success", f"Screen: {self.screen_name}")
             else:
-                await ctx.send(f"⚠️ Server may not have started properly. Check logs.\nOutput: {output}\nError: {error}")
+                await ctx.send(
+                    f"⚠️ Server may not have started properly. Check logs.")
                 await self.log_action(ctx, "Server Start Failed", f"Exit code: {exit_code}")
         
         except Exception as e:
             logger.error(f"Error starting server: {e}", exc_info=True)
-            await ctx.send(f"❌ Error starting server: {e}")
-            await self.log_action(ctx, "Server Start Failed", f"❌ Exception: {e}")
+            await ctx.send(f"❌ Error starting server: {sanitize_error_message(e)}")
+            await self.log_action(ctx, "Server Start Failed", f"❌ Exception")
     
     @commands.command(name='server_stop', aliases=['stop', 'srv_stop'])
     @is_admin_channel()
@@ -379,8 +381,8 @@ class ServerControl(commands.Cog):
                     rcon.send_command('quit')
                     rcon.close()
                     await asyncio.sleep(2)
-                except:
-                    pass
+                except Exception:
+                    pass  # RCON quit is optional, we'll kill screen anyway
             
             # Kill screen session
             stop_command = f"screen -S {self.screen_name} -X quit"
@@ -412,8 +414,8 @@ class ServerControl(commands.Cog):
         
         except Exception as e:
             logger.error(f"Error stopping server: {e}", exc_info=True)
-            await ctx.send(f"❌ Error stopping server: {e}")
-            await self.log_action(ctx, "Server Stop Failed", f"❌ Exception: {e}")
+            await ctx.send(f"❌ Error stopping server: {sanitize_error_message(e)}")
+            await self.log_action(ctx, "Server Stop Failed", f"❌ Exception")
     
     @commands.command(name='server_restart', aliases=['restart', 'srv_restart'])
     @is_admin_channel()
@@ -482,7 +484,7 @@ class ServerControl(commands.Cog):
         
         except Exception as e:
             logger.error(f"Error listing maps: {e}", exc_info=True)
-            await ctx.send(f"❌ Error listing maps: {e}")
+            await ctx.send(f"❌ Error listing maps: {sanitize_error_message(e)}")
     
     @commands.command(name='map_add', aliases=['addmap', 'upload_map'])
     async def map_add(self, ctx):
@@ -563,8 +565,8 @@ class ServerControl(commands.Cog):
         
         except Exception as e:
             logger.error(f"Error uploading map: {e}", exc_info=True)
-            await ctx.send(f"❌ Error uploading map: {e}")
-            await self.log_action(ctx, "Map Upload Failed", f"❌ {sanitized_name} - {e}")
+            await ctx.send(f"❌ Error uploading map: {sanitize_error_message(e)}")
+            await self.log_action(ctx, "Map Upload Failed", f"❌ {sanitized_name}")
     
     @commands.command(name='map_change', aliases=['changemap', 'map'])
     async def map_change(self, ctx, map_name: str):
@@ -596,8 +598,8 @@ class ServerControl(commands.Cog):
         
         except Exception as e:
             logger.error(f"Error changing map: {e}", exc_info=True)
-            await ctx.send(f"❌ Error changing map: {e}")
-            await self.log_action(ctx, "Map Change Failed", f"❌ {map_name} - {e}")
+            await ctx.send(f"❌ Error changing map: {sanitize_error_message(e)}")
+            await self.log_action(ctx, "Map Change Failed", f"❌ {map_name}")
     
     @commands.command(name='map_delete', aliases=['deletemap', 'remove_map'])
     async def map_delete(self, ctx, map_name: str):
@@ -635,13 +637,14 @@ class ServerControl(commands.Cog):
                 await ctx.send(embed=embed)
                 await self.log_action(ctx, "Map Delete Success", map_name)
             else:
-                await ctx.send(f"❌ Failed to delete map. It may not exist.\nError: {error}")
+                await ctx.send(
+                    f"❌ Failed to delete map. Error: {sanitize_error_message(error)}")
                 await self.log_action(ctx, "Map Delete Failed", f"{map_name} - {error}")
         
         except Exception as e:
             logger.error(f"Error deleting map: {e}", exc_info=True)
-            await ctx.send(f"❌ Error deleting map: {e}")
-            await self.log_action(ctx, "Map Delete Failed", f"❌ {map_name} - {e}")
+            await ctx.send(f"❌ Error deleting map: {sanitize_error_message(e)}")
+            await self.log_action(ctx, "Map Delete Failed", f"❌ {map_name}")
     
     # ========================================
     # RCON COMMANDS
@@ -687,7 +690,8 @@ class ServerControl(commands.Cog):
         
         except Exception as e:
             logger.error(f"Error executing RCON: {e}", exc_info=True)
-            await ctx.send(f"❌ Error executing RCON command: {e}")
+            await ctx.send(
+                f"❌ Error executing RCON command: {sanitize_error_message(e)}")
     
     @commands.command(name='kick')
     async def kick_player(self, ctx, player_id: int, *, reason: str = "Kicked by admin"):
@@ -714,7 +718,7 @@ class ServerControl(commands.Cog):
         
         except Exception as e:
             logger.error(f"Error kicking player: {e}", exc_info=True)
-            await ctx.send(f"❌ Error kicking player: {e}")
+            await ctx.send(f"❌ Error kicking player: {sanitize_error_message(e)}")
     
     @commands.command(name='say')
     async def server_say(self, ctx, *, message: str):
@@ -739,7 +743,7 @@ class ServerControl(commands.Cog):
         
         except Exception as e:
             logger.error(f"Error sending message: {e}", exc_info=True)
-            await ctx.send(f"❌ Error sending message: {e}")
+            await ctx.send(f"❌ Error sending message: {sanitize_error_message(e)}")
     
     # ========================================
     # ERROR HANDLERS
@@ -765,7 +769,8 @@ class ServerControl(commands.Cog):
             )
         else:
             logger.error(f"Command error: {error}", exc_info=True)
-            await ctx.send(f"❌ An error occurred: {error}")
+            await ctx.send(
+                f"❌ An error occurred: {sanitize_error_message(error)}")
 
 
 async def setup(bot):

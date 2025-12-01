@@ -18,6 +18,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.utils import sanitize_error_message
 from tools.stopwatch_scoring import StopwatchScoring
 from bot.stats import StatsCalculator
 from bot.services.session_data_service import SessionDataService
@@ -276,7 +277,9 @@ class LastSessionCog(commands.Cog):
 
         except Exception as e:
             logger.error(f"Error in last_session command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error retrieving last session: {e}")
+            await ctx.send(
+                f"❌ Error retrieving last session: {sanitize_error_message(e)}"
+            )
 
     @is_public_channel()
     @commands.command(name="team_history")

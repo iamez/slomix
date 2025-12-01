@@ -9,7 +9,7 @@ import discord
 from discord.ext import commands, tasks
 import sys
 import os
-import traceback
+import logging
 from typing import Optional, List
 from datetime import datetime
 import asyncio
@@ -18,10 +18,13 @@ import asyncio
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from bot.core.checks import is_public_channel
+from bot.core.checks import is_public_channel, is_admin_channel
+from bot.core.utils import sanitize_error_message
 from analytics.synergy_detector import SynergyDetector, SynergyMetrics
 from analytics.config import config, is_enabled, is_command_enabled
 from bot.services.player_formatter import PlayerFormatter
+
+logger = logging.getLogger(__name__)
 
 
 class SynergyAnalytics(commands.Cog):
@@ -63,8 +66,7 @@ class SynergyAnalytics(commands.Cog):
     
     async def cog_command_error(self, ctx, error):
         """Handle errors in this cog without crashing bot"""
-        print(f"❌ Error in SynergyAnalytics: {error}")
-        traceback.print_exc()
+        logger.error(f"Error in SynergyAnalytics: {error}", exc_info=True)
         
         if config.get('error_handling.fail_silently'):
             await ctx.send(
@@ -141,8 +143,7 @@ class SynergyAnalytics(commands.Cog):
             await ctx.send(embed=embed)
             
         except Exception as e:
-            print(f"Error in synergy_command: {e}")
-            traceback.print_exc()
+            logger.error(f"Error in synergy_command: {e}", exc_info=True)
             await ctx.send(
                 "⚠️ Could not calculate synergy. Please try again later."
             )
@@ -253,8 +254,7 @@ class SynergyAnalytics(commands.Cog):
             await ctx.send(embed=embed)
             
         except Exception as e:
-            print(f"Error in best_duos_command: {e}")
-            traceback.print_exc()
+            logger.error(f"Error in best_duos_command: {e}", exc_info=True)
             await ctx.send(
                 "⚠️ Could not fetch best duos. Please try again later."
             )
@@ -381,8 +381,7 @@ class SynergyAnalytics(commands.Cog):
             await ctx.send(embed=embed)
             
         except Exception as e:
-            print(f"Error in team_builder_command: {e}")
-            traceback.print_exc()
+            logger.error(f"Error in team_builder_command: {e}", exc_info=True)
             await ctx.send(
                 "⚠️ Could not build teams. Please try again later."
             )
@@ -546,8 +545,7 @@ class SynergyAnalytics(commands.Cog):
             await ctx.send(embed=embed)
             
         except Exception as e:
-            print(f"Error in player_impact_command: {e}")
-            traceback.print_exc()
+            logger.error(f"Error in player_impact_command: {e}", exc_info=True)
             await ctx.send(
                 "⚠️ Could not calculate player impact. Please try again later."
             )
@@ -584,7 +582,8 @@ class SynergyAnalytics(commands.Cog):
             self.cache.clear()  # Clear cache
             await ctx.send(f"✅ Recalculated {count} player synergies successfully!")
         except Exception as e:
-            await ctx.send(f"❌ Error during recalculation: {e}")
+            await ctx.send(
+                f"❌ Error during recalculation: {sanitize_error_message(e)}")
     
     # =========================================================================
     # BACKGROUND TASKS

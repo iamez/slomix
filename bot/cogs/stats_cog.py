@@ -21,6 +21,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.utils import escape_like_pattern_for_query, sanitize_error_message
 from bot.stats import StatsCalculator
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ class StatsCog(commands.Cog, name="Stats"):
 
         except Exception as e:
             logger.error(f"Error in ping command: {e}")
-            await ctx.send(f"❌ Bot error: {e}")
+            await ctx.send(f"❌ Bot error: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="check_achievements", aliases=["check_achivements", "check_achievement"])
@@ -166,9 +167,13 @@ class StatsCog(commands.Cog, name="Stats"):
 
             # Handle player name search
             else:
+                # Escape LIKE pattern special chars to prevent injection
+                safe_pattern = escape_like_pattern_for_query(player_name)
                 result = await self.bot.db_adapter.fetch_one(
-                    "SELECT guid, alias FROM player_aliases WHERE LOWER(alias) LIKE LOWER(?) ORDER BY last_seen DESC LIMIT 1",
-                    (f"%{player_name}%",),
+                    "SELECT guid, alias FROM player_aliases "
+                    "WHERE LOWER(alias) LIKE LOWER(?) ESCAPE '\\' "
+                    "ORDER BY last_seen DESC LIMIT 1",
+                    (safe_pattern,),
                 )
 
                 if not result:
@@ -299,7 +304,8 @@ class StatsCog(commands.Cog, name="Stats"):
             logger.error(
                 f"Error in check_achievements command: {e}", exc_info=True
             )
-            await ctx.send(f"❌ Error checking achievements: {e}")
+            await ctx.send(
+                f"❌ Error checking achievements: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="compare")
@@ -429,9 +435,13 @@ class StatsCog(commands.Cog, name="Stats"):
                         return await get_player_stats_by_guid(link[0], link[1])
 
                 # Try player_aliases first (name search)
+                # Escape LIKE pattern special chars to prevent injection
+                safe_pattern = escape_like_pattern_for_query(player_name)
                 result = await self.bot.db_adapter.fetch_one(
-                    "SELECT guid, alias FROM player_aliases WHERE LOWER(alias) LIKE LOWER(?) ORDER BY last_seen DESC LIMIT 1",
-                    (f"%{player_name}%",),
+                    "SELECT guid, alias FROM player_aliases "
+                    "WHERE LOWER(alias) LIKE LOWER(?) ESCAPE '\\' "
+                    "ORDER BY last_seen DESC LIMIT 1",
+                    (safe_pattern,),
                 )
 
                 if not result:
@@ -712,7 +722,7 @@ class StatsCog(commands.Cog, name="Stats"):
 
         except Exception as e:
             logger.error(f"Error in compare command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error generating comparison: {e}")
+            await ctx.send(f"❌ Error generating comparison: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="season_info", aliases=["season", "seasons"])
@@ -842,7 +852,8 @@ class StatsCog(commands.Cog, name="Stats"):
 
         except Exception as e:
             logger.error(f"Error in season_info command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error retrieving season information: {e}")
+            await ctx.send(
+                f"❌ Error retrieving season information: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="help_command", aliases=["commands"])

@@ -8,9 +8,20 @@
 
 A **production-grade Discord bot** with **zero-downtime automation**, **6-layer data validation**, and **intelligent differential stat calculation** for ET:Legacy game servers.
 
-## 🔥 Recent Updates (November 2025)
+## 🔥 Recent Updates (December 2025)
 
-### **🎯 MAJOR: Competitive Analytics System (Weeks 11-12)** 🆕
+### **🔧 v1.0.1: Critical Bug Fixes (December 1, 2025)** 🆕
+
+**Live Posting Fixed!** Resolved race condition that prevented Discord stats posting:
+
+- 🔴 **SSHMonitor Race Condition** - Fixed critical bug where two monitoring systems competed for files, causing live Discord posting to fail
+- 🔇 **Silent Channel Checks** - Bot no longer announces "wrong channel" errors; silently ignores commands in non-configured channels
+- 📢 **Channel Filtering Fix** - Fixed bot responding to commands in wrong channels
+- 🌐 **Website Fixes** - Fixed HTML corruption, JS duplicate functions, and SQL injection vulnerability
+
+**Technical:** SSHMonitor auto-start disabled; `endstats_monitor` now handles SSH + DB import + Discord posting as single system.
+
+### **🎯 MAJOR: Competitive Analytics System (Weeks 11-12)**
 
 **The prediction system is HERE!** An AI-powered match prediction engine with 12 new commands:
 

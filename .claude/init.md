@@ -1,6 +1,6 @@
 # Slomix - ET:Legacy Discord Bot
 
-**Version**: 1.0 (Released: November 20, 2025)
+**Version**: 1.0.1 (Released: December 1, 2025)
 **Project**: ET:Legacy Statistics Discord Bot
 **Database**: PostgreSQL (primary), SQLite (fallback)
 **Language**: Python 3.11+
@@ -97,9 +97,29 @@ docs/
 
 ---
 
-## Recent Major Fixes (Nov 2025)
+## Recent Major Fixes (Dec 2025)
 
-### 1. Gaming Session Detection Bug (FIXED Nov 3)
+### 1. SSHMonitor Race Condition (FIXED Dec 1) 🆕
+- **Problem**: Two monitoring systems (SSHMonitor + endstats_monitor) competed for files. SSHMonitor processed files first, marking them as "already processed" before Discord posting could occur.
+- **Fix**: Disabled SSHMonitor auto-start. endstats_monitor now handles SSH + DB import + Discord posting as single unified system.
+- **Location**: `bot/ultimate_bot.py` lines 551-568
+
+### 2. Channel Checks Silent Ignore (FIXED Dec 1) 🆕
+- **Problem**: `is_public_channel()` and `is_admin_channel()` raised exceptions and sent error messages when commands used in wrong channels.
+- **Fix**: Changed to silently `return False` instead of raising `ChannelCheckFailure`.
+- **Location**: `bot/core/checks.py`
+
+### 3. on_message Channel Filtering (FIXED Dec 1) 🆕
+- **Problem**: Bot responded to commands in wrong channels when `bot_command_channels` was not configured.
+- **Fix**: Now uses `public_channels` config as fallback for channel filtering.
+- **Location**: `bot/ultimate_bot.py` `on_message` handler
+
+### 4. Website Security Fixes (FIXED Dec 1) 🆕
+- Fixed HTML corruption in `website/index.html`
+- Fixed duplicate function declarations in `website/js/app.js`
+- Added SQL injection protection via `escape_like_pattern()` in `website/backend/routers/api.py`
+
+### 5. Gaming Session Detection Bug (FIXED Nov 3)
 - **Problem**: Date-based queries included orphan rounds
 - **Fix**: Use `WHERE round_id IN (session_ids_list)` instead of date filters
 
@@ -249,12 +269,14 @@ SELECT * FROM rounds ORDER BY id DESC LIMIT 5;
 
 ---
 
-## System Status (Version 1.0)
+## System Status (Version 1.0.1)
 
 ✅ **Parser**: 100% functional, R2 differential validated
 ✅ **Database**: PostgreSQL, no corruption, 100% accurate
 ✅ **Bot Commands**: All 63 commands functional
-✅ **SSH Monitoring**: Active (30-second polling)
+✅ **SSH Monitoring**: endstats_monitor handles all SSH operations (SSHMonitor disabled)
+✅ **Live Posting**: Fixed - endstats_monitor posts to Discord after DB import
+✅ **Channel Checks**: Silent ignore for wrong channels (no error messages)
 ✅ **Duplicate Detection**: Fixed (includes round_time)
 ✅ **Gaming Session Logic**: Fixed (60-minute gaps, handles midnight)
 ✅ **Player Aggregation**: Fixed (uses player_guid)
@@ -262,6 +284,7 @@ SELECT * FROM rounds ORDER BY id DESC LIMIT 5;
 ✅ **Automation**: Voice channel monitoring + scheduled tasks
 ✅ **Documentation**: Complete and organized in /docs/
 ✅ **Repository**: Clean and maintainable (50-100 MB)
+✅ **Website**: HTML/JS/SQL injection fixes applied
 ✅ **Production Ready**: Fully tested and validated
 
 ---
@@ -300,9 +323,9 @@ SELECT * FROM rounds ORDER BY id DESC LIMIT 5;
 
 ---
 
-**Version**: 1.0
-**Release Date**: November 20, 2025
-**Last Updated**: 2025-11-20
+**Version**: 1.0.1
+**Release Date**: December 1, 2025
+**Last Updated**: 2025-12-01
 **Schema Version**: 2.0
 **Repository Size**: ~50-100 MB (cleaned)
 **Status**: Production-ready, fully documented, maintainable ✅

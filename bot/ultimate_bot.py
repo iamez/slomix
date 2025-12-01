@@ -20,6 +20,7 @@ from tools.stopwatch_scoring import StopwatchScoring
 
 # Import extracted core classes
 from bot.core import StatsCache, SeasonManager, AchievementSystem
+from bot.core.utils import sanitize_error_message
 
 # Import database adapter and config for PostgreSQL migration
 from bot.core.database_adapter import create_adapter, DatabaseAdapter
@@ -547,11 +548,22 @@ class UltimateETLegacyBot(commands.Bot):
             await self.load_extension("cogs.automation_commands")
             logger.info("✅ Automation Commands cog loaded")
 
-            # Auto-start SSH monitoring if enabled
+            # NOTE: SSHMonitor service is DISABLED - endstats_monitor task handles everything
+            # SSHMonitor only downloads + imports, but endstats_monitor also posts to Discord.
+            # Having both running causes a race condition where SSHMonitor processes files first,
+            # marking them as "already processed" before endstats_monitor can post to Discord.
+            # 
+            # The endstats_monitor task loop (line ~1315) handles:
+            # 1. SSH connection to game server
+            # 2. File download
+            # 3. Database import
+            # 4. Discord posting via RoundPublisherService
+            #
+            # SSHMonitor service remains available for manual control via !automation commands
             logger.info(f"🔍 Bot ssh_enabled={self.ssh_enabled} (from SSH_ENABLED env var)")
             if self.ssh_enabled:
-                logger.info("🔄 SSH monitoring enabled - starting automatically...")
-                await self.ssh_monitor.start_monitoring()
+                logger.info("⏭️ SSHMonitor auto-start DISABLED (endstats_monitor handles SSH + Discord posting)")
+                # await self.ssh_monitor.start_monitoring()  # DISABLED - causes race condition
             else:
                 logger.info("⏭️ SSH monitoring not enabled, skipping auto-start")
 
@@ -1342,11 +1354,11 @@ class UltimateETLegacyBot(commands.Bot):
             try:
                 import pytz
                 cet = pytz.timezone("Europe/Paris")
-            except:
+            except ImportError:
                 try:
                     from zoneinfo import ZoneInfo
                     cet = ZoneInfo("Europe/Paris")
-                except:
+                except ImportError:
                     cet = None
             
             now = datetime.now(cet) if cet else datetime.now()
@@ -1603,10 +1615,12 @@ class UltimateETLegacyBot(commands.Bot):
         if message.author.bot:
             return
         
-        # Check if channel restriction is enabled and if message is in allowed channel
-        if self.bot_command_channels:
-            if message.channel.id not in self.bot_command_channels:
-                # Silently ignore commands in non-whitelisted channels
+        # Only process commands in allowed channels
+        # Use bot_command_channels if set, otherwise fall back to public_channels
+        allowed_channels = self.bot_command_channels or self.public_channels
+        if allowed_channels:
+            if message.channel.id not in allowed_channels:
+                # Silently ignore messages in non-whitelisted channels
                 return
         
         # Process commands normally
@@ -1683,9 +1697,10 @@ class UltimateETLegacyBot(commands.Bot):
         )
 
         if isinstance(error, commands.CommandNotFound):
-            # Silently ignore CommandNotFound in unauthorized channels
-            if self.bot_command_channels and ctx.channel.id not in self.bot_command_channels:
-                return  # Don't send error message in unauthorized channels
+            # Silently ignore CommandNotFound - could be commands for other bots
+            # Only respond in designated bot command channels (if configured)
+            if not self.bot_command_channels or ctx.channel.id not in self.bot_command_channels:
+                return  # Don't respond to unknown commands - might be for another bot
 
             await ctx.send(
                 "❌ Command not found. Use `!help_command` for available commands."
@@ -1706,14 +1721,14 @@ class UltimateETLegacyBot(commands.Bot):
                 await ctx.send(str(error))
             else:
                 # Other check failures
-                await ctx.send(f"❌ {error}")
+                await ctx.send(f"❌ {sanitize_error_message(error)}")
         else:
             error_logger = get_logger('bot.errors')
             error_logger.error(
                 f"Command error in !{ctx.command.name if ctx.command else 'unknown'}: {error}",
                 exc_info=True
             )
-            await ctx.send(f"❌ An error occurred: {error}")
+            await ctx.send(f"❌ An error occurred: {sanitize_error_message(error)}")
 
 
 
