@@ -8,6 +8,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Nothing yet
+
+---
+
+## [1.0.1] - 2025-12-01
+
+### December 2025 Maintenance Release - Critical Bug Fixes
+
+### Fixed
+- **CRITICAL: SSHMonitor Race Condition** - Fixed live Discord posting not working due to race condition between SSHMonitor service and endstats_monitor task. Both were running simultaneously causing files to be marked "processed" before Discord posting could occur. Solution: Disabled SSHMonitor auto-start; endstats_monitor now handles SSH + DB import + Discord posting.
+- **Channel Permission Checks** - `is_public_channel()` and `is_admin_channel()` decorators now silently return `False` instead of raising exceptions and sending error messages. Bot no longer announces "wrong channel" to users.
+- **on_message Channel Filtering** - Fixed bot responding to commands in wrong channels. Now properly uses `public_channels` config as fallback when `bot_command_channels` is not set.
+- **Website HTML Corruption** - Fixed `website/index.html` structure that was corrupted (duplicate opening tags, malformed document structure).
+- **Website JS Duplicate Functions** - Fixed `website/js/app.js` with duplicate `loadLeaderboard()` function declarations and broken `loadMatches()` function.
+- **Website SQL Injection** - Added `escape_like_pattern()` function to `website/backend/routers/api.py` to prevent SQL injection via search patterns.
+
+### Changed
+- SSHMonitor service is now initialized but NOT auto-started on bot startup
+- SSHMonitor remains available for manual control via `!automation` commands
+- endstats_monitor task loop is now the sole handler for: SSH connection, file download, database import, and Discord posting
+
+### Technical Details
+- **Root Cause**: Two monitoring systems (SSHMonitor + endstats_monitor) were competing for the same files. SSHMonitor downloaded files first, marking them as "processed" in local filesystem. When endstats_monitor ran, `should_process_file()` check #3 ("does file exist locally?") returned True, skipping the file before Discord posting could occur.
+- **Files Modified**: `bot/ultimate_bot.py`, `bot/core/checks.py`, `bot/services/automation/ssh_monitor.py`, `website/index.html`, `website/js/app.js`, `website/backend/routers/api.py`
+
+---
+
+## [1.0.0] - 2025-11-20
+
+### Version 1.0 Release - Production Ready
+
+### Added
 - Achievement badge system for players (medic, engineer, sharpshooter, rambo, objective specialist)
 - Custom display name system for linked Discord accounts
 - `!set_display_name` command to set personalized display names

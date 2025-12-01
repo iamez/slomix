@@ -518,7 +518,11 @@ class SessionDataService:
                     player_name, kills, guid = result
 
                     # Get detailed stats for MVP
+                    # Using CTE to avoid duplicate placeholder references
                     detail_query = f"""
+                        WITH target_sessions AS (
+                            SELECT id FROM rounds WHERE id IN ({session_ids_str})
+                        )
                         SELECT
                             CASE
                                 WHEN session_total.total_seconds > 0
@@ -540,11 +544,11 @@ class SessionDataService:
                                 END
                             ) as total_seconds
                             FROM rounds r
-                            WHERE r.id IN ({session_ids_str})
+                            WHERE r.id IN (SELECT id FROM target_sessions)
                               AND r.round_number IN (1, 2)
                               AND (r.round_status = 'completed' OR r.round_status IS NULL)
                         ) session_total
-                        WHERE round_id IN ({session_ids_str})
+                        WHERE round_id IN (SELECT id FROM target_sessions)
                             AND player_name = ?
                             AND player_guid IN ({team_guids_placeholders})
                     """

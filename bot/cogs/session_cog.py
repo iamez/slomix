@@ -26,6 +26,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.utils import sanitize_error_message
 
 # Import service layer
 from bot.services.session_data_service import SessionDataService
@@ -290,7 +291,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
 
         except Exception as e:
             logger.error(f"Error in session command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error retrieving session: {e}")
+            await ctx.send(f"❌ Error retrieving session: {sanitize_error_message(e)}")
 
     # NOTE: !last_session command has been moved to Last Round Cog
     # See bot/cogs/last_session_cog.py for the full implementation
@@ -531,7 +532,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
 
         except Exception as e:
             logger.error(f"Error in list_sessions command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error listing sessions: {e}")
+            await ctx.send(f"❌ Error listing sessions: {sanitize_error_message(e)}")
 
 
 async def setup(bot):

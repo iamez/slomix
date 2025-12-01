@@ -26,6 +26,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_admin_channel
+from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class AdminCog(commands.Cog, name="Admin"):
                 await ctx.send("❌ Cache system not available")
         except Exception as e:
             logger.error(f"Error in cache_clear: {e}", exc_info=True)
-            await ctx.send(f"❌ Error clearing cache: {e}")
+            await ctx.send(f"❌ Error clearing cache: {sanitize_error_message(e)}")
 
     @is_admin_channel()
     @commands.command(name="reload")
@@ -101,7 +102,7 @@ class AdminCog(commands.Cog, name="Admin"):
             
         except Exception as e:
             logger.error(f"Error in reload_bot: {e}", exc_info=True)
-            await ctx.send(f"❌ Error reloading bot: {e}")
+            await ctx.send(f"❌ Error reloading bot: {sanitize_error_message(e)}")
 
     @is_admin_channel()
     @commands.command(name="weapon_diag")
@@ -132,7 +133,7 @@ class AdminCog(commands.Cog, name="Admin"):
             await ctx.send(msg)
         except Exception as e:
             logger.error(f"Error in weapon_diag: {e}", exc_info=True)
-            await ctx.send(f"❌ weapon_diag failed: {e}")
+            await ctx.send(f"❌ weapon_diag failed: {sanitize_error_message(e)}")
 
 
 async def setup(bot):

@@ -18,6 +18,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_admin_channel
+from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger("UltimateBot.TeamManagementCog")
 
@@ -97,7 +98,7 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
 
         except Exception as e:
             logger.error(f"Error in set_teams: {e}", exc_info=True)
-            await ctx.send(f"❌ Error setting teams: {e}")
+            await ctx.send(f"❌ Error setting teams: {sanitize_error_message(e)}")
 
     @is_admin_channel()
     @commands.command(name="assign_player")
@@ -207,7 +208,7 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
 
         except Exception as e:
             logger.error(f"Error in assign_player: {e}", exc_info=True)
-            await ctx.send(f"❌ Error assigning player: {e}")
+            await ctx.send(f"❌ Error assigning player: {sanitize_error_message(e)}")
 
 
 async def setup(bot):

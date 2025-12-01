@@ -3,6 +3,7 @@ Channel Permission Checks for Discord Commands
 ================================================
 
 Provides decorators for restricting commands to specific channels.
+Commands in wrong channels are SILENTLY IGNORED (no error message sent).
 
 Usage:
     from bot.core.checks import is_admin_channel, is_public_channel
@@ -10,13 +11,13 @@ Usage:
     @is_admin_channel()
     @commands.command()
     async def admin_command(self, ctx):
-        # Only works in admin channel
+        # Only works in admin channel - silently ignored elsewhere
         pass
 
     @is_public_channel()
     @commands.command()
     async def stats_command(self, ctx):
-        # Only works in public stats channels
+        # Only works in public stats channels - silently ignored elsewhere
         pass
 """
 
@@ -27,13 +28,14 @@ logger = logging.getLogger("bot.core.checks")
 
 
 class ChannelCheckFailure(commands.CheckFailure):
-    """Custom exception for channel check failures with a user-friendly message."""
+    """Custom exception for channel check failures (kept for backward compatibility)."""
     pass
 
 
 def is_admin_channel():
     """
     Decorator: Restrict command to admin channel only.
+    Commands in wrong channels are SILENTLY IGNORED.
 
     If ADMIN_CHANNEL_ID is configured, the command will only work in that channel.
     Anyone posting in the admin channel is treated as an admin (no role checks).
@@ -58,10 +60,9 @@ def is_admin_channel():
 
         # Check if command is in an admin channel
         if ctx.channel.id not in admin_channels:
-            # Format channel mentions for error message
-            channel_mentions = [f"<#{ch}>" for ch in admin_channels]
-            channels_str = " or ".join(channel_mentions)
-            raise ChannelCheckFailure(f"❌ This command only works in {channels_str}")
+            # SILENTLY IGNORE - return False without sending error message
+            logger.debug(f"Command ignored in channel {ctx.channel.id} (not admin channel)")
+            return False
 
         logger.debug(f"Admin command allowed from admin channel for {ctx.author}")
         return True
@@ -72,6 +73,7 @@ def is_admin_channel():
 def is_public_channel():
     """
     Decorator: Restrict command to public stats channels.
+    Commands in wrong channels are SILENTLY IGNORED.
 
     Public channels include:
     - Production channel (regular match stats)
@@ -96,17 +98,9 @@ def is_public_channel():
 
         # Check if command is in a public channel
         if ctx.channel.id not in ctx.bot.public_channels:
-            # Format channel mentions for error message
-            channel_mentions = []
-            for ch_id in ctx.bot.public_channels:
-                if ch_id != 0:
-                    channel_mentions.append(f"<#{ch_id}>")
-
-            if channel_mentions:
-                channels_str = " or ".join(channel_mentions)
-                raise ChannelCheckFailure(f"❌ This command only works in {channels_str}")
-            else:
-                raise ChannelCheckFailure("❌ This command is not available in this channel")
+            # SILENTLY IGNORE - return False without sending error message
+            logger.debug(f"Command ignored in channel {ctx.channel.id} (not public channel)")
+            return False
 
         logger.debug(f"Public command allowed from channel {ctx.channel.id} for {ctx.author}")
         return True
@@ -117,6 +111,7 @@ def is_public_channel():
 def is_allowed_channel(allowed_channel_ids: list):
     """
     Decorator: Restrict command to specific channel IDs.
+    Commands in wrong channels are SILENTLY IGNORED.
 
     This is a generic version for custom channel restrictions.
 
@@ -132,8 +127,8 @@ def is_allowed_channel(allowed_channel_ids: list):
     """
     async def predicate(ctx):
         if ctx.channel.id not in allowed_channel_ids:
-            channel_mentions = " or ".join([f"<#{ch}>" for ch in allowed_channel_ids])
-            await ctx.send(f"❌ This command only works in {channel_mentions}")
+            # SILENTLY IGNORE - return False without sending error message
+            logger.debug(f"Command ignored in channel {ctx.channel.id} (not in allowed list)")
             return False
         return True
 

@@ -442,13 +442,11 @@ class SSHMonitor:
                 logger.error(f"❌ Failed to import: {filename}")
                 return
             
-            # Post stats to Discord
-            await self._post_round_stats(filename)
-            
-            # 🆕 If this is Round 2, also post match summary
-            if '-round-2.txt' in filename:
-                logger.info("🏁 Round 2 detected - posting match summary...")
-                await self._post_match_summary(filename)
+            # NOTE: Discord posting is handled by endstats_monitor + RoundPublisherService
+            # in ultimate_bot.py. SSHMonitor only handles file download and DB import.
+            # The duplicate posting code below was removed to prevent:
+            # 1. Double-posting (both systems were posting)
+            # 2. Embed field overflow errors (SSHMonitor didn't handle 1024 char limit)
             
             # Mark as processed
             self.processed_files.add(filename)

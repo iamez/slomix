@@ -22,6 +22,7 @@ from discord.ext import commands
 
 from bot.core.checks import is_public_channel
 from bot.core.lazy_pagination_view import LazyPaginationView
+from bot.core.utils import escape_like_pattern_for_query, sanitize_error_message
 from bot.stats import StatsCalculator
 from bot.services.player_formatter import PlayerFormatter
 
@@ -191,16 +192,24 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                         primary_name = alias_result[1]
                     else:
                         # Fallback to player_comprehensive_stats
-                        placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
+                        # Escape LIKE pattern to prevent injection
+                        safe_pattern = escape_like_pattern_for_query(
+                            player_name
+                        )
+                        placeholder = (
+                            '$1' if self.bot.config.database_type
+                            == 'postgresql' else '?'
+                        )
                         result = await self.bot.db_adapter.fetch_one(
                             f"""
                             SELECT player_guid, player_name
                             FROM player_comprehensive_stats
                             WHERE LOWER(player_name) LIKE LOWER({placeholder})
+                                  ESCAPE '\\'
                             GROUP BY player_guid, player_name
                             LIMIT 1
                         """,
-                            (f"%{player_name}%",),
+                            (safe_pattern,),
                         )
                         if not result:
                             await ctx.send(
@@ -435,7 +444,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
         except Exception as e:
             logger.error(f"Error in stats command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error retrieving stats: {e}")
+            await ctx.send(f"❌ Error retrieving stats: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.cooldown(1, 10, commands.BucketType.user)
@@ -993,7 +1002,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
         except Exception as e:
             logger.error(f"Error in leaderboard command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error retrieving leaderboard: {e}")
+            await ctx.send(f"❌ Error retrieving leaderboard: {sanitize_error_message(e)}")
 
 
 async def setup(bot):

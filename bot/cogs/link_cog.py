@@ -39,6 +39,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.utils import escape_like_pattern_for_query, sanitize_error_message
 
 # Import pagination view for interactive button navigation
 from bot.core.pagination_view import PaginationView
@@ -280,7 +281,7 @@ class LinkCog(commands.Cog, name="Link"):
 
         except Exception as e:
             logger.error(f"Error in list_players command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error listing players: {e}")
+            await ctx.send(f"❌ Error listing players: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="find_player", aliases=["findplayer", "fp", "search_player"])
@@ -313,19 +314,22 @@ class LinkCog(commands.Cog, name="Link"):
         """
         try:
             # Database-specific placeholder
-            placeholder = "?" if self.bot.config.database_type == 'sqlite' else "$1"
+            ph = "?" if self.bot.config.database_type == 'sqlite' else "$1"
+            
+            # Escape LIKE pattern to prevent injection
+            safe_pattern = escape_like_pattern_for_query(search_term)
             
             # Search in player_aliases (uses 'guid' and 'alias' columns)
             alias_guids = await self.bot.db_adapter.fetch_all(
                 f"""
                 SELECT DISTINCT pa.guid, MAX(pa.last_seen) as last_seen
                 FROM player_aliases pa
-                WHERE LOWER(pa.alias) LIKE LOWER({placeholder})
+                WHERE LOWER(pa.alias) LIKE LOWER({ph}) ESCAPE '\\'
                 GROUP BY pa.guid
                 ORDER BY last_seen DESC
                 LIMIT 10
             """,
-                (f"%{search_term}%",),
+                (safe_pattern,),
             )
             alias_guids = [row[0] for row in alias_guids]
 
@@ -334,12 +338,12 @@ class LinkCog(commands.Cog, name="Link"):
                 f"""
                 SELECT DISTINCT player_guid, MAX(round_date) as max_date
                 FROM player_comprehensive_stats
-                WHERE LOWER(player_name) LIKE LOWER({placeholder})
+                WHERE LOWER(player_name) LIKE LOWER({ph}) ESCAPE '\\'
                 GROUP BY player_guid
                 ORDER BY max_date DESC
                 LIMIT 10
             """,
-                (f"%{search_term}%",),
+                (safe_pattern,),
             )
             stats_guids = [row[0] for row in stats_guids]
 
@@ -818,7 +822,7 @@ class LinkCog(commands.Cog, name="Link"):
 
         except Exception as e:
             logger.error(f"Error in smart self-link: {e}", exc_info=True)
-            await ctx.send(f"❌ Error during self-linking: {e}")
+            await ctx.send(f"❌ Error during self-linking: {sanitize_error_message(e)}")
 
     async def _link_by_guid(self, ctx, discord_id: str, guid: str):
         """Direct GUID linking with confirmation."""
@@ -972,7 +976,7 @@ class LinkCog(commands.Cog, name="Link"):
 
         except Exception as e:
             logger.error(f"Error in GUID link: {e}", exc_info=True)
-            await ctx.send(f"❌ Error linking by GUID: {e}")
+            await ctx.send(f"❌ Error linking by GUID: {sanitize_error_message(e)}")
 
     async def _link_by_name(self, ctx, discord_id: str, player_name: str):
         """Name search linking with fuzzy matching."""
@@ -1148,7 +1152,7 @@ class LinkCog(commands.Cog, name="Link"):
 
         except Exception as e:
             logger.error(f"Error in name link: {e}", exc_info=True)
-            await ctx.send(f"❌ Error linking by name: {e}")
+            await ctx.send(f"❌ Error linking by name: {sanitize_error_message(e)}")
 
     async def _admin_link(self, ctx, target_user: discord.User, guid: str):
         """Admin linking: Link another user's Discord to a GUID."""
@@ -1378,7 +1382,7 @@ class LinkCog(commands.Cog, name="Link"):
 
         except Exception as e:
             logger.error(f"Error in admin link: {e}", exc_info=True)
-            await ctx.send(f"❌ Error during admin linking: {e}")
+            await ctx.send(f"❌ Error during admin linking: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="unlink")
@@ -1435,7 +1439,7 @@ class LinkCog(commands.Cog, name="Link"):
 
         except Exception as e:
             logger.error(f"Error in unlink command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error unlinking account: {e}")
+            await ctx.send(f"❌ Error unlinking account: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="select")

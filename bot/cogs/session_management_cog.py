@@ -18,6 +18,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_admin_channel
+from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger("UltimateBot.SessionManagementCog")
 
@@ -85,7 +86,8 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
         except Exception as e:
             logger.error(f"Error in session_start: {e}", exc_info=True)
             try:
-                await ctx.send(f"❌ Error starting session: {e}")
+                await ctx.send(
+                    f"❌ Error starting session: {sanitize_error_message(e)}")
             except Exception:
                 pass
 
@@ -122,7 +124,7 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
 
         except Exception as e:
             logger.error(f"Error ending session: {e}", exc_info=True)
-            await ctx.send(f"❌ Error ending session: {e}")
+            await ctx.send(f"❌ Error ending session: {sanitize_error_message(e)}")
 
 
 async def setup(bot):
