@@ -1427,6 +1427,13 @@ class UltimateETLegacyBot(commands.Bot):
         if not self.monitoring or not self.ssh_enabled:
             return
 
+        # ========== SKIP IF WEBSOCKET IS CONNECTED ==========
+        # When WebSocket push is active, no need for SSH polling
+        if (hasattr(self, 'ws_client') and self.ws_client 
+                and self.ws_client.is_connected):
+            logger.debug("⏭️ Skipping SSH check - WebSocket push is active")
+            return
+
         try:
             # ========== DEAD HOURS CHECK (02:00-11:00 CET) ==========
             try:
