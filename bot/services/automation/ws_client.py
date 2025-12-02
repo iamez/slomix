@@ -141,6 +141,8 @@ class StatsWebSocketClient:
                         if auth_response != "AUTH_OK":
                             logger.error(f"❌ WebSocket authentication failed: {auth_response}")
                             self._connected = False
+                            await asyncio.sleep(backoff)  # Wait before retry
+                            backoff = min(backoff * 2, max_backoff)
                             continue
                     
                     logger.info(f"✅ Connected to VPS WebSocket (reconnects: {self.reconnect_count})")
