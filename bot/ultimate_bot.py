@@ -636,7 +636,8 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info(f"📥 WebSocket notification: {filename}")
             
             # Check if already processed (race condition prevention)
-            if await self.file_tracker.is_file_processed(filename):
+            # should_process_file returns True if file needs processing
+            if not await self.file_tracker.should_process_file(filename):
                 logger.debug(f"⏭️ File already processed: {filename}")
                 return
             
