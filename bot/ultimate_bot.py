@@ -659,6 +659,13 @@ class UltimateETLegacyBot(commands.Bot):
                 logger.error(f"❌ Failed to download: {filename}")
                 return
             
+            # Track download time for grace period logic (fallback SSH uses this)
+            self.last_file_download_time = datetime.now()
+            
+            # Wait 3 seconds for file to fully write on remote
+            logger.debug("⏳ Waiting 3s for file to fully write...")
+            await asyncio.sleep(3)
+            
             # Process the file (parse + import + Discord post)
             result = await self.process_gamestats_file(local_path, filename)
             
