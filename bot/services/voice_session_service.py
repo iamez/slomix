@@ -710,6 +710,7 @@ class VoiceSessionService:
 
         # Build query with correct number of placeholders for PostgreSQL
         placeholders = ', '.join([f'${i+1}' for i in range(len(discord_ids))])
+        # nosec B608 - placeholders are parameterized, not user input
         query = f"""
             SELECT discord_id, et_guid
             FROM player_links

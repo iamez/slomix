@@ -93,7 +93,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 link = await self.bot.db_adapter.fetch_one(
                     """
-                    SELECT et_guid, et_name FROM player_links
+                    SELECT player_guid, player_name FROM player_links
                     WHERE discord_id = ?
                 """,
                     (mentioned_id,),
@@ -141,10 +141,10 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
             elif not player_name:
                 discord_id = int(ctx.author.id)  # Convert to integer for PostgreSQL BIGINT
                 query = """
-                    SELECT et_guid, et_name FROM player_links
+                    SELECT player_guid, player_name FROM player_links
                     WHERE discord_id = $1
                 """ if self.bot.config.database_type == 'postgresql' else """
-                    SELECT et_guid, et_name FROM player_links
+                    SELECT player_guid, player_name FROM player_links
                     WHERE discord_id = ?
                 """
                 link = await self.bot.db_adapter.fetch_one(query, (discord_id,))
@@ -164,8 +164,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 # Try exact match in player_links first
                 link = await self.bot.db_adapter.fetch_one(
                     """
-                    SELECT et_guid, et_name FROM player_links
-                    WHERE LOWER(et_name) = LOWER(?)
+                    SELECT player_guid, player_name FROM player_links
+                    WHERE LOWER(player_name) = LOWER(?)
                     LIMIT 1
                 """,
                     (player_name,),

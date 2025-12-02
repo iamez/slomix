@@ -18,21 +18,49 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 
-async def get_db() -> AsyncGenerator[DatabaseAdapter, None]:
+# Global singleton connection pool
+_db_pool: DatabaseAdapter = None
+
+
+async def init_db_pool():
+    """Initialize the database connection pool once at startup"""
+    global _db_pool
+
+    if _db_pool is not None:
+        return _db_pool
+
     config = load_config()
     db_type = os.getenv("DATABASE_TYPE", config.database_type).lower()
     adapter_kwargs = config.get_database_adapter_kwargs()
 
     if db_type == "sqlite":
-        db_adapter = create_local_adapter(**adapter_kwargs)
+        _db_pool = create_local_adapter(**adapter_kwargs)
     elif db_type == "postgresql":
-        # Use bot core adapter for PostgreSQL
-        db_adapter = create_postgres_adapter(**adapter_kwargs)
+        _db_pool = create_postgres_adapter(**adapter_kwargs)
     else:
         raise ValueError(f"Unsupported database type: {db_type}")
 
-    try:
-        await db_adapter.connect()
-        yield db_adapter
-    finally:
-        await db_adapter.close()
+    await _db_pool.connect()
+    print(f"✅ Database pool initialized ({db_type})")
+    return _db_pool
+
+
+async def close_db_pool():
+    """Close the database connection pool at shutdown"""
+    global _db_pool
+    if _db_pool:
+        await _db_pool.close()
+        _db_pool = None
+        print("✅ Database pool closed")
+
+
+async def get_db() -> AsyncGenerator[DatabaseAdapter, None]:
+    """Dependency that yields the shared database pool"""
+    global _db_pool
+
+    # Initialize if not already done (shouldn't happen if main.py startup event works)
+    if _db_pool is None:
+        await init_db_pool()
+
+    yield _db_pool
+    # Don't close here - pool stays open for reuse!

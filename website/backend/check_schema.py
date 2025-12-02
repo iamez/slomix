@@ -22,36 +22,28 @@ async def check_schema():
         pass
 
     db = create_adapter(**adapter_kwargs)
-    await db.connect()
-
     try:
-        # Check for player_links table
-        print("Checking for 'player_links' table...")
-        exists = await db.fetch_val(
+        # List all tables
+        print("Listing all tables...")
+        tables = await db.fetch_all(
             """
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                AND table_name = 'player_links'
-            );
-        """
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public';
+            """
         )
-        print(f"Table 'player_links' exists: {exists}")
-
-        if exists:
-            # Show columns
-            columns = await db.fetch_all(
-                """
-                SELECT column_name, data_type 
-                FROM information_schema.columns 
-                WHERE table_name = 'player_links';
+        # Check rounds schema
+        print("Checking rounds schema...")
+        columns = await db.fetch_all(
             """
-            )
-            print("Columns:")
-            for col in columns:
-                print(f" - {col[0]} ({col[1]})")
-        else:
-            print("Table does not exist.")
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'rounds';
+            """
+        )
+        print("Rounds Columns:")
+        for col in columns:
+            print(f" - {col[0]} ({col[1]})")
 
     finally:
         await db.close()

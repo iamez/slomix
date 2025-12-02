@@ -361,7 +361,7 @@ class ServerControl(commands.Cog):
         except Exception as e:
             logger.error(f"Error starting server: {e}", exc_info=True)
             await ctx.send(f"❌ Error starting server: {sanitize_error_message(e)}")
-            await self.log_action(ctx, "Server Start Failed", f"❌ Exception")
+            await self.log_action(ctx, "Server Start Failed", "❌ Exception")
     
     @commands.command(name='server_stop', aliases=['stop', 'srv_stop'])
     @is_admin_channel()
@@ -415,7 +415,7 @@ class ServerControl(commands.Cog):
         except Exception as e:
             logger.error(f"Error stopping server: {e}", exc_info=True)
             await ctx.send(f"❌ Error stopping server: {sanitize_error_message(e)}")
-            await self.log_action(ctx, "Server Stop Failed", f"❌ Exception")
+            await self.log_action(ctx, "Server Stop Failed", "❌ Exception")
     
     @commands.command(name='server_restart', aliases=['restart', 'srv_restart'])
     @is_admin_channel()

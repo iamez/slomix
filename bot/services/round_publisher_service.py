@@ -12,7 +12,6 @@ Extracted from ultimate_bot.py as part of Week 9-10 refactoring.
 
 import discord
 from datetime import datetime
-from typing import Set, Optional
 import logging
 
 logger = logging.getLogger('RoundPublisherService')
@@ -224,7 +223,7 @@ class RoundPublisherService:
                     kills = player.get('kills', 0)
                     deaths = player.get('deaths', 0)
                     dmg = player.get('damage_given', 0)
-                    dmgr = player.get('damage_received', 0)
+                    _dmgr = player.get('damage_received', 0)  # Reserved for future use
                     acc = player.get('accuracy', 0)
                     hs = player.get('headshots', 0)
                     dpm = player.get('dpm', 0)
@@ -232,7 +231,7 @@ class RoundPublisherService:
                     got_revived = player.get('times_revived', 0)
                     gibs = player.get('gibs', 0)
                     team_dmg_given = player.get('team_damage_given', 0)
-                    team_dmg_rcvd = player.get('team_damage_received', 0)
+                    _team_dmg_rcvd = player.get('team_damage_received', 0)  # Reserved
                     time_dead = player.get('time_dead', 0)
 
                     kd_str = f'{kills}/{deaths}'
@@ -263,8 +262,8 @@ class RoundPublisherService:
             total_deaths = sum(p.get('deaths', 0) for p in players)
             total_dmg = sum(p.get('damage_given', 0) for p in players)
             total_hs = sum(p.get('headshots', 0) for p in players)
-            total_revives = sum(p.get('revives', 0) for p in players)
-            total_gibs = sum(p.get('gibs', 0) for p in players)
+            _total_revives = sum(p.get('revives', 0) for p in players)  # Reserved
+            _total_gibs = sum(p.get('gibs', 0) for p in players)  # Reserved
             total_team_dmg = sum(p.get('team_damage_given', 0) for p in players)
             avg_acc = sum(p.get('accuracy', 0) for p in players) / len(players) if players else 0
             avg_dpm = sum(p.get('dpm', 0) for p in players) / len(players) if players else 0

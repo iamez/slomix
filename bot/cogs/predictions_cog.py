@@ -12,7 +12,6 @@ Commands:
 import discord
 from discord.ext import commands
 import logging
-from typing import Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger('PredictionsCog')
@@ -345,7 +344,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
 
             # Build embed
             embed = discord.Embed(
-                title=f"🔮 Your Match Predictions",
+                title="🔮 Your Match Predictions",
                 description=f"Predictions for **{ctx.author.display_name}** (last 10 matches)",
                 color=0x3498DB,
                 timestamp=datetime.now()
@@ -358,7 +357,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 # Determine which team the player was on
                 import json
                 team_a_list = json.loads(team_a_guids)
-                team_b_list = json.loads(team_b_guids)
+                _team_b_list = json.loads(team_b_guids)
 
                 if player_guid in team_a_list:
                     your_team = "Team A"
@@ -381,9 +380,9 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 if actual_winner is None:
                     pred_status = f"Predicted: **{your_prob:.0%}** win chance"
                 elif pred_correct:
-                    pred_status = f"✅ Prediction Correct"
+                    pred_status = "✅ Prediction Correct"
                 else:
-                    pred_status = f"❌ Prediction Incorrect"
+                    pred_status = "❌ Prediction Incorrect"
 
                 time_ago = self._format_time_ago(pred_time)
 

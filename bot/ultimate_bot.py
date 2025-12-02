@@ -996,7 +996,7 @@ class UltimateETLegacyBot(commands.Bot):
                     logger.info(f"🎮 New gaming session #{new_session_id} (first round in chronological order)")
                     return new_session_id
                 else:
-                    logger.info(f"🎮 Starting first gaming session #1")
+                    logger.info("🎮 Starting first gaming session #1")
                     return 1
 
             prev_session_id = prev_round[0]
