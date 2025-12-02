@@ -125,7 +125,10 @@ class StopwatchScoringService:
         try:
             # Get rounds for this session
             if session_ids:
-                placeholders = ','.join(['$' + str(i+1) for i in range(len(session_ids))])
+                placeholders = ','.join(
+                    ['$' + str(i+1) for i in range(len(session_ids))]
+                )
+                # nosec B608 - safe: parameterized placeholders ($1, $2...)
                 rounds_query = f"""
                     SELECT map_name, match_id, round_number, defender_team,
                            winner_team, time_limit, actual_time

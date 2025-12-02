@@ -189,9 +189,9 @@ class SSHHandler:
             # Ensure connections are closed even on error
             try:
                 sftp.close()
-            except Exception:
-                pass
+            except Exception as e:  # nosec B110 - intentional cleanup suppression
+                logger.debug(f"SFTP close ignored: {e}")
             try:
                 ssh.close()
-            except Exception:
-                pass
+            except Exception as e:  # nosec B110 - intentional cleanup suppression
+                logger.debug(f"SSH close ignored: {e}")
