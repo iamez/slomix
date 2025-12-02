@@ -282,7 +282,7 @@ class ServerControl(commands.Cog):
                         player_lines = [line for line in status.split('\n') if line.strip() and not line.startswith('map:') and not line.startswith('num score')]
                         player_count = len(player_lines)
                         player_info = f"\n**Players:** {player_count} online"
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass  # RCON status check is optional
                 
                 embed = discord.Embed(
