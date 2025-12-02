@@ -12,7 +12,7 @@ Phase 3: Competitive Analytics
 
 import logging
 import json
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)

@@ -175,8 +175,8 @@ class LinkCog(commands.Cog, name="Link"):
 
             unlinked_count = total_players - linked_count
 
-            # Pagination settings
-            players_per_page = 15
+            # Pagination settings - reduced to 10 to stay under 1024 char limit
+            players_per_page = 10
             total_pages = (total_players + players_per_page - 1) // players_per_page
 
             # Generate ONLY requested pages for button navigation (lazy loading)
@@ -226,31 +226,41 @@ class LinkCog(commands.Cog, name="Link"):
 
                     # Format last played date compactly
                     try:
-                        last_date = datetime.fromisoformat(
-                            last_played.replace("Z", "+00:00") if "Z" in last_played else last_played
-                        )
-                        days_ago = (datetime.now() - last_date).days
-                        if days_ago == 0:
-                            last_str = "today"
-                        elif days_ago == 1:
-                            last_str = "1d"
-                        elif days_ago < 7:
-                            last_str = f"{days_ago}d"
-                        elif days_ago < 30:
-                            last_str = f"{days_ago//7}w"
+                        if last_played is None:
+                            last_str = "?"
                         else:
-                            last_str = f"{days_ago//30}mo"
+                            last_played_str = str(last_played)
+                            last_date = datetime.fromisoformat(
+                                last_played_str.replace("Z", "+00:00") if "Z" in last_played_str else last_played_str
+                            )
+                            days_ago = (datetime.now() - last_date).days
+                            if days_ago == 0:
+                                last_str = "today"
+                            elif days_ago == 1:
+                                last_str = "1d"
+                            elif days_ago < 7:
+                                last_str = f"{days_ago}d"
+                            elif days_ago < 30:
+                                last_str = f"{days_ago//7}w"
+                            else:
+                                last_str = f"{days_ago//30}mo"
                     except Exception:
                         last_str = "?"
 
                     player_lines.append(
-                        f"{link_icon} **{formatted_name[:30]}** • `{guid}` • "
-                        f"`{sessions}s` • `{kills}K`/`{deaths}D` ({kd:.1f}) • {last_str}"
+                        f"{link_icon} **{formatted_name[:20]}** `{guid}` "
+                        f"{sessions}s {kills}K/{deaths}D ({kd:.1f}) {last_str}"
                     )
+
+                # Ensure field value doesn't exceed 1024 characters
+                field_value = "\n".join(player_lines)
+                if len(field_value) > 1024:
+                    # Truncate and add indicator
+                    field_value = field_value[:1000] + "\n... (truncated)"
 
                 embed.add_field(
                     name=f"Players {start_idx+1}-{end_idx}",
-                    value="\n".join(player_lines),
+                    value=field_value,
                     inline=False,
                 )
 
@@ -406,7 +416,7 @@ class LinkCog(commands.Cog, name="Link"):
                     """
                     SELECT discord_username
                     FROM player_links
-                    WHERE et_guid = ?
+                    WHERE player_guid = ?
                 """,
                     (guid,),
                 )
@@ -497,7 +507,7 @@ class LinkCog(commands.Cog, name="Link"):
             )
 
     @is_public_channel()
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 10, commands.BucketType.user)
     @commands.command(name="link")
     async def link(self, ctx, target: Optional[str] = None, *, guid: Optional[str] = None):
         """
@@ -768,8 +778,8 @@ class LinkCog(commands.Cog, name="Link"):
                     await self.bot.db_adapter.execute(
                         """
                         INSERT OR REPLACE INTO player_links
-                        (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                        VALUES (?, ?, ?, ?, datetime('now'), 1)
+                        (discord_id, discord_username, player_guid, player_name, linked_at)
+                        VALUES (?, ?, ?, ?, datetime('now'))
                         """,
                         (discord_id, str(ctx.author), selected["guid"], selected["name"]),
                     )
@@ -777,14 +787,13 @@ class LinkCog(commands.Cog, name="Link"):
                     await self.bot.db_adapter.execute(
                         """
                         INSERT INTO player_links
-                        (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, true)
+                        (discord_id, discord_username, player_guid, player_name, linked_at)
+                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
                         ON CONFLICT (discord_id) DO UPDATE SET
                             discord_username = EXCLUDED.discord_username,
-                            et_guid = EXCLUDED.et_guid,
-                            et_name = EXCLUDED.et_name,
-                            linked_date = EXCLUDED.linked_date,
-                            verified = EXCLUDED.verified
+                            player_guid = EXCLUDED.player_guid,
+                            player_name = EXCLUDED.player_name,
+                            linked_at = EXCLUDED.linked_at
                         """,
                         (discord_id, str(ctx.author), selected["guid"], selected["name"]),
                     )
@@ -938,8 +947,8 @@ class LinkCog(commands.Cog, name="Link"):
                         await self.bot.db_adapter.execute(
                             """
                             INSERT OR REPLACE INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES (?, ?, ?, ?, datetime('now'), 1)
+                            (discord_id, discord_username, player_guid, player_name, linked_at)
+                            VALUES (?, ?, ?, ?, datetime('now'))
                             """,
                             (discord_id, str(ctx.author), guid, primary_name),
                         )
@@ -947,14 +956,13 @@ class LinkCog(commands.Cog, name="Link"):
                         await self.bot.db_adapter.execute(
                             """
                             INSERT INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, true)
+                            (discord_id, discord_username, player_guid, player_name, linked_at)
+                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
                             ON CONFLICT (discord_id) DO UPDATE SET
                                 discord_username = EXCLUDED.discord_username,
-                                et_guid = EXCLUDED.et_guid,
-                                et_name = EXCLUDED.et_name,
-                                linked_date = EXCLUDED.linked_date,
-                                verified = EXCLUDED.verified
+                                player_guid = EXCLUDED.player_guid,
+                                player_name = EXCLUDED.player_name,
+                                linked_at = EXCLUDED.linked_at
                             """,
                             (discord_id, str(ctx.author), guid, primary_name),
                         )
@@ -984,10 +992,11 @@ class LinkCog(commands.Cog, name="Link"):
             # Search in player_aliases first
             alias_rows = await self.bot.db_adapter.fetch_all(
                 """
-                SELECT DISTINCT pa.guid
+                SELECT pa.guid, MAX(pa.last_seen) as max_last_seen
                 FROM player_aliases pa
                 WHERE LOWER(pa.alias) LIKE LOWER(?)
-                ORDER BY pa.last_seen DESC
+                GROUP BY pa.guid
+                ORDER BY max_last_seen DESC
                 LIMIT 5
             """,
                 (f"%{player_name}%",),
@@ -1117,8 +1126,8 @@ class LinkCog(commands.Cog, name="Link"):
                         await self.bot.db_adapter.execute(
                             """
                             INSERT OR REPLACE INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES (?, ?, ?, ?, datetime('now'), 1)
+                            (discord_id, discord_username, player_guid, player_name, linked_at)
+                            VALUES (?, ?, ?, ?, datetime('now'))
                             """,
                             (discord_id, str(ctx.author), selected["guid"], selected["name"]),
                         )
@@ -1126,14 +1135,13 @@ class LinkCog(commands.Cog, name="Link"):
                         await self.bot.db_adapter.execute(
                             """
                             INSERT INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, true)
+                            (discord_id, discord_username, player_guid, player_name, linked_at)
+                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
                             ON CONFLICT (discord_id) DO UPDATE SET
                                 discord_username = EXCLUDED.discord_username,
-                                et_guid = EXCLUDED.et_guid,
-                                et_name = EXCLUDED.et_name,
-                                linked_date = EXCLUDED.linked_date,
-                                verified = EXCLUDED.verified
+                                player_guid = EXCLUDED.player_guid,
+                                player_name = EXCLUDED.player_name,
+                                linked_at = EXCLUDED.linked_at
                             """,
                             (discord_id, str(ctx.author), selected["guid"], selected["name"]),
                         )
@@ -1318,8 +1326,8 @@ class LinkCog(commands.Cog, name="Link"):
                         await self.bot.db_adapter.execute(
                             """
                             INSERT OR REPLACE INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES (?, ?, ?, ?, datetime('now'), 1)
+                            (discord_id, discord_username, player_guid, player_name, linked_at)
+                            VALUES (?, ?, ?, ?, datetime('now'))
                             """,
                             (target_discord_id, str(target_user), guid, primary_name),
                         )
@@ -1327,14 +1335,13 @@ class LinkCog(commands.Cog, name="Link"):
                         await self.bot.db_adapter.execute(
                             """
                             INSERT INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, true)
+                            (discord_id, discord_username, player_guid, player_name, linked_at)
+                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
                             ON CONFLICT (discord_id) DO UPDATE SET
                                 discord_username = EXCLUDED.discord_username,
-                                et_guid = EXCLUDED.et_guid,
-                                et_name = EXCLUDED.et_name,
-                                linked_date = EXCLUDED.linked_date,
-                                verified = EXCLUDED.verified
+                                player_guid = EXCLUDED.player_guid,
+                                player_name = EXCLUDED.player_name,
+                                linked_at = EXCLUDED.linked_at
                             """,
                             (target_discord_id, str(target_user), guid, primary_name),
                         )

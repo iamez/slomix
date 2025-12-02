@@ -11,6 +11,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")
 sys.path.append(project_root)
 
 from website.backend.routers import api, auth, predictions
+from website.backend.dependencies import init_db_pool, close_db_pool
 
 # Load environment variables
 load_dotenv(os.path.join(project_root, ".env"))
@@ -38,9 +39,16 @@ app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("🚀 Slomix Website Backend Started")
+    logger.info("🚀 Slomix Website Backend Starting...")
+    await init_db_pool()  # Initialize shared DB pool once
+    logger.info("✅ Slomix Website Backend Ready")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    logger.info("🛑 Slomix Website Backend Stopped")
+    logger.info("🛑 Slomix Website Backend Stopping...")
+    await close_db_pool()  # Clean up DB pool
+    logger.info("✅ Slomix Website Backend Stopped")
+
+
+# Trigger reload

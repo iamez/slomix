@@ -1,5 +1,5 @@
 // Navigation Logic (Global)
-window.navigateTo = function (viewId) {
+window.navigateTo = function (viewId, updateHistory = true) {
     console.log('Navigating to:', viewId);
 
     // Hide all views
@@ -24,13 +24,33 @@ window.navigateTo = function (viewId) {
     const link = document.getElementById(`link-${viewId}`);
     if (link) link.classList.add('active');
 
+    // Update URL hash (for browser history)
+    if (updateHistory) {
+        const hash = viewId === 'home' ? '' : `#/${viewId}`;
+        window.location.hash = hash;
+    }
+
     // Scroll to top
     window.scrollTo(0, 0);
+
+    // Load view-specific data
+    if (viewId === 'matches') {
+        loadMatchesView();
+    } else if (viewId === 'community') {
+        loadCommunityView();
+    }
 };
 
+// Handle browser back/forward buttons
+window.addEventListener('popstate', () => {
+    const hash = window.location.hash.replace('#/', '');
+    const viewId = hash || 'home';
+    navigateTo(viewId, false); // Don't update history again
+});
+
 // Slomix Frontend Logic
-const API_BASE = 'http://localhost:8000/api';
-const AUTH_BASE = 'http://localhost:8000/auth';
+const API_BASE = window.location.origin + '/api';
+const AUTH_BASE = window.location.origin + '/auth';
 
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
@@ -43,22 +63,113 @@ async function initApp() {
     try {
         const status = await fetchJSON(`${API_BASE}/status`);
         console.log('API Status:', status);
-        document.getElementById('server-status-dot').classList.remove('bg-red-500');
-        document.getElementById('server-status-dot').classList.add('bg-green-500');
-        document.getElementById('server-status-text').textContent = 'Online';
+        const statusDot = document.getElementById('server-status-dot');
+        const statusText = document.getElementById('server-status-text');
+        if (statusDot) {
+            statusDot.classList.remove('bg-red-500');
+            statusDot.classList.add('bg-green-500');
+        }
+        if (statusText) statusText.textContent = 'Online';
     } catch (e) {
         console.error('API Offline:', e);
-        document.getElementById('server-status-dot').classList.add('bg-red-500');
-        document.getElementById('server-status-text').textContent = 'Offline';
+        const statusDot = document.getElementById('server-status-dot');
+        const statusText = document.getElementById('server-status-text');
+        if (statusDot) statusDot.classList.add('bg-red-500');
+        if (statusText) statusText.textContent = 'Offline';
     }
 
     // Load Data
     loadSeasonInfo();
     loadLastSession();
-    loadPredictions(); // New
-    loadLeaderboard();
-    loadMatches();
+    loadPredictions();
+    updateLiveSession(); // Live Updates
+    loadQuickLeaders();  // Sidebar widget leaderboard
+    loadMatches();       // Matches view
     checkLoginStatus();
+    initCharts();
+
+    // Handle initial URL hash (for direct links)
+    const hash = window.location.hash.replace('#/', '');
+    if (hash && hash !== 'home') {
+        navigateTo(hash, false);
+    }
+}
+
+function initCharts() {
+    // Check if elements exist before initializing
+    const eloCanvas = document.getElementById('eloChart');
+    const radarCanvas = document.getElementById('compareRadarChart');
+
+    if (eloCanvas) {
+        const ctxElo = eloCanvas.getContext('2d');
+        const gradientElo = ctxElo.createLinearGradient(0, 0, 0, 400);
+        gradientElo.addColorStop(0, 'rgba(59, 130, 246, 0.2)');
+        gradientElo.addColorStop(1, 'rgba(59, 130, 246, 0)');
+
+        new Chart(ctxElo, {
+            type: 'line',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                datasets: [{
+                    label: 'Skill Rating',
+                    data: [1200, 1350, 1320, 1450, 1500, 1520],
+                    borderColor: '#3b82f6',
+                    backgroundColor: gradientElo,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#0f172a',
+                    pointBorderColor: '#3b82f6'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { grid: { color: 'rgba(255,255,255,0.05)' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    if (radarCanvas) {
+        const ctxCompare = radarCanvas.getContext('2d');
+        new Chart(ctxCompare, {
+            type: 'radar',
+            data: {
+                labels: ['Aim', 'Survival', 'Obj', 'Support', 'Impact', 'Spree'],
+                datasets: [
+                    {
+                        label: 'BAMBAM',
+                        data: [85, 92, 40, 60, 95, 80],
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        borderColor: '#3b82f6',
+                        pointBackgroundColor: '#3b82f6',
+                    },
+                    {
+                        label: 'Snake',
+                        data: [75, 80, 85, 90, 70, 60],
+                        backgroundColor: 'rgba(244, 63, 94, 0.2)',
+                        borderColor: '#f43f5e',
+                        pointBackgroundColor: '#f43f5e',
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    r: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        angleLines: { color: 'rgba(255,255,255,0.05)' },
+                        pointLabels: { color: '#94a3b8' }
+                    }
+                }
+            }
+        });
+    }
 }
 
 async function loadPredictions() {
@@ -141,6 +252,160 @@ async function loadPredictions() {
     }
 }
 
+async function updateLiveSession() {
+    try {
+        const data = await fetchJSON(`${API_BASE}/stats/live-session`);
+        const widget = document.getElementById('live-session-widget');
+
+        if (!widget) return;
+
+        if (data.active) {
+            widget.classList.remove('hidden');
+            document.getElementById('live-players').textContent = data.current_players;
+            document.getElementById('live-rounds').textContent = data.rounds_completed;
+            document.getElementById('live-map').textContent = data.current_map;
+        } else {
+            widget.classList.add('hidden');
+        }
+    } catch (e) {
+        console.error('Failed to update live session:', e);
+    }
+}
+
+// Poll every 10 seconds
+setInterval(updateLiveSession, 10000);
+
+async function loadPlayerProfile(playerName) {
+    navigateTo('profile');
+
+    // Reset UI
+    document.getElementById('profile-name').textContent = playerName;
+    document.getElementById('profile-initials').textContent = playerName.substring(0, 2).toUpperCase();
+
+    try {
+        const data = await fetchJSON(`${API_BASE}/stats/player/${encodeURIComponent(playerName)}`);
+        const stats = data.stats;
+
+        // Update Header
+        document.getElementById('profile-name').textContent = data.name;
+        document.getElementById('profile-playtime').textContent = stats.playtime_hours + 'h';
+        document.getElementById('profile-seen').textContent = new Date(stats.last_seen).toLocaleDateString();
+        document.getElementById('profile-dpm').textContent = stats.dpm;
+
+        // Update Cards
+        document.getElementById('profile-kd').textContent = stats.kd;
+        document.getElementById('profile-kills').textContent = stats.kills;
+        document.getElementById('profile-deaths').textContent = stats.deaths;
+
+        document.getElementById('profile-winrate').textContent = stats.win_rate + '%';
+        document.getElementById('profile-wins').textContent = stats.wins;
+        document.getElementById('profile-games').textContent = stats.games;
+
+        document.getElementById('profile-xp').textContent = stats.total_xp.toLocaleString();
+        document.getElementById('profile-damage').textContent = (stats.damage / 1000).toFixed(1) + 'k';
+
+    } catch (e) {
+        console.error('Failed to load profile:', e);
+        alert('Player not found!');
+        navigateTo('home');
+    }
+}
+
+// Leaderboard Logic
+let currentLbStat = 'dpm';
+let currentLbPeriod = '30d';
+
+async function loadLeaderboard() {
+    const tbody = document.getElementById('leaderboard-body');
+    if (!tbody) return;
+
+    // Show loading state
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="6" class="px-6 py-12 text-center text-slate-500">
+                <i data-lucide="loader" class="w-6 h-6 animate-spin mx-auto mb-2"></i>
+                Loading data...
+            </td>
+        </tr>
+    `;
+    lucide.createIcons();
+
+    try {
+        const data = await fetchJSON(`${API_BASE}/stats/leaderboard?stat=${currentLbStat}&period=${currentLbPeriod}&limit=50`);
+
+        tbody.innerHTML = '';
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-500">No data found for this period.</td></tr>';
+            return;
+        }
+
+        data.forEach(row => {
+            // Highlight the main value based on selected stat
+            let valueClass = 'text-slate-300';
+            if (currentLbStat === 'dpm') valueClass = 'text-brand-emerald font-bold';
+            if (currentLbStat === 'kills') valueClass = 'text-brand-rose font-bold';
+            if (currentLbStat === 'kd') valueClass = 'text-brand-blue font-bold';
+
+            const html = `
+                <tr class="hover:bg-white/5 transition group">
+                    <td class="px-6 py-4 font-mono text-slate-500">#${row.rank}</td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400 group-hover:text-white group-hover:bg-brand-blue transition">
+                                ${row.name.substring(0, 2).toUpperCase()}
+                            </div>
+                            <span class="font-bold text-white cursor-pointer hover:underline" onclick="loadPlayerProfile('${row.name}')">${row.name}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-right font-mono ${valueClass}">${row.value}</td>
+                    <td class="px-6 py-4 text-right text-slate-400">${row.sessions}</td>
+                    <td class="px-6 py-4 text-right text-slate-400">${row.kills}</td>
+                    <td class="px-6 py-4 text-right font-mono text-slate-300">${row.kd}</td>
+                </tr>
+            `;
+            tbody.insertAdjacentHTML('beforeend', html);
+        });
+
+    } catch (e) {
+        console.error('Failed to load leaderboard:', e);
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-red-500">Failed to load data.</td></tr>';
+    }
+}
+
+function updateLeaderboardFilter(type, value) {
+    if (type === 'stat') {
+        currentLbStat = value;
+        // Update UI buttons
+        ['dpm', 'kills', 'kd'].forEach(s => {
+            const btn = document.getElementById(`btn-stat-${s}`);
+            if (s === value) {
+                btn.className = 'px-4 py-2 rounded-md text-sm font-bold bg-brand-blue text-white shadow-lg transition';
+            } else {
+                btn.className = 'px-4 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white transition';
+            }
+        });
+        // Update column header
+        const colHeader = document.getElementById('lb-col-value');
+        if (colHeader) colHeader.textContent = value.toUpperCase();
+    }
+
+    if (type === 'period') {
+        currentLbPeriod = value;
+        // Update UI buttons
+        ['7d', '30d', 'season', 'all'].forEach(p => {
+            const btn = document.getElementById(`btn-period-${p}`);
+            if (p === value) {
+                btn.className = 'px-4 py-2 rounded-md text-sm font-bold bg-brand-purple text-white shadow-lg transition';
+            } else {
+                btn.className = 'px-4 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white transition';
+            }
+        });
+    }
+
+    loadLeaderboard();
+}
+
 async function fetchJSON(url) {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -157,6 +422,10 @@ async function checkLoginStatus() {
         const userEl = document.getElementById('auth-user');
         userEl.classList.remove('hidden');
         userEl.classList.add('flex');
+
+        // Update Nav Username
+        const navName = document.getElementById('nav-username');
+        if (navName) navName.textContent = user.linked_player || user.username;
 
         // Check Link
         if (!user.linked_player) {
@@ -191,11 +460,16 @@ async function loadLastSession() {
         const data = await fetchJSON(`${API_BASE}/stats/last-session`);
         console.log('Last Session:', data);
 
-        // Update "Last Session" widget
-        document.getElementById('ls-date').textContent = data.date;
-        document.getElementById('ls-players').textContent = data.player_count;
-        document.getElementById('ls-rounds').textContent = data.rounds;
-        document.getElementById('ls-maps').textContent = data.maps.length;
+        // Update "Last Session" widget (with null checks)
+        const lsDate = document.getElementById('ls-date');
+        const lsPlayers = document.getElementById('ls-players');
+        const lsRounds = document.getElementById('ls-rounds');
+        const lsMaps = document.getElementById('ls-maps');
+
+        if (lsDate) lsDate.textContent = data.date;
+        if (lsPlayers) lsPlayers.textContent = data.player_count;
+        if (lsRounds) lsRounds.textContent = data.rounds;
+        if (lsMaps) lsMaps.textContent = data.maps.length;
 
         // Render detailed view
         renderSessionDetails(data);
@@ -362,7 +636,7 @@ function renderSessionDetails(data) {
     });
 }
 
-async function loadLeaderboard() {
+async function loadQuickLeaders() {
     try {
         const leaders = await fetchJSON(`${API_BASE}/stats/leaderboard?limit=5`);
         const list = document.getElementById('quick-leaders-list');
@@ -381,81 +655,65 @@ async function loadLeaderboard() {
                         <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">${initials}</div>
                         <div class="text-sm font-bold text-white group-hover:text-brand-blue transition">${player.name}</div>
                     </div>
-                    <div class="text-sm font-mono font-bold text-brand-emerald">${player.dpm} DPM</div>
+                    <div class="text-sm font-mono font-bold text-brand-emerald">${Math.round(player.value)} DPM</div>
                 </div>
             `;
             list.insertAdjacentHTML('beforeend', html);
         });
     } catch (e) {
-        console.error('Failed to load leaderboard:', e);
+        console.error('Failed to load quick leaders:', e);
         const list = document.getElementById('quick-leaders-list');
         if (list) list.innerHTML = '<div class="text-center text-red-500 text-xs py-4">Failed to load</div>';
     }
 }
 
-async function loadMatches() {
+async function loadRecentMatches() {
     try {
         const matches = await fetchJSON(`${API_BASE}/stats/matches?limit=5`);
-        const list = document.getElementById('match-history-list');
+        const list = document.getElementById('recent-matches-list');
         if (!list) return;
 
         list.innerHTML = '';
 
         if (matches.length === 0) {
-            list.innerHTML = '<div class="text-center text-slate-500 py-12">No matches found</div>';
+            list.innerHTML = '<div class="text-center text-slate-500 py-4">No recent matches found</div>';
             return;
         }
 
         matches.forEach(match => {
             const winnerColor = match.winner === 'Allies' ? 'text-brand-blue' : 'text-brand-rose';
-            const winnerBg = match.winner === 'Allies' ? 'bg-brand-blue/10 border-brand-blue/20 text-brand-blue' : 'bg-brand-rose/10 border-brand-rose/20 text-brand-rose';
+            const winnerBg = match.winner === 'Allies' ? 'bg-brand-blue/20 text-brand-blue' : 'bg-brand-rose/20 text-brand-rose';
 
-            // Calculate relative time (simple version)
+            // Calculate relative time
             const date = new Date(match.date);
             const now = new Date();
             const diffMs = now - date;
             const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
-            const timeAgo = diffHrs > 24 ? Math.floor(diffHrs / 24) + 'd ago' : diffHrs + 'h ago';
+            const timeAgo = diffHrs > 24 ? Math.floor(diffHrs / 24) + 'd ago' : diffHrs < 1 ? 'Just now' : diffHrs + 'h ago';
 
             const html = `
-            <div class="glass-card p-4 md:p-6 rounded-xl flex flex-col md:flex-row items-center justify-between gap-6 cursor-pointer group"
-                onclick="navigateTo('match-details')">
-                <div class="flex items-center gap-6 w-full md:w-auto">
-                    <div class="w-16 h-16 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center flex-shrink-0">
-                        <span class="text-xs font-bold text-slate-500 uppercase">${match.map_name.substring(0, 3)}</span>
+            <div class="glass-card p-3 rounded-lg hover:bg-white/5 transition cursor-pointer group" onclick="navigateTo('matches')">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-10 h-10 rounded bg-slate-800 border border-white/10 flex items-center justify-center flex-shrink-0">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase">${match.map_name.substring(0, 3)}</span>
                     </div>
-                    <div>
-                        <div class="flex items-center gap-3 mb-1">
-                            <h3 class="text-lg font-bold text-white group-hover:text-brand-blue transition">${match.map_name}</h3>
-                            <span class="px-2 py-0.5 rounded ${winnerBg} text-[10px] font-bold uppercase">${match.winner} Victory</span>
-                        </div>
-                        <div class="text-sm text-slate-400 font-mono">${timeAgo} • ${match.duration}</div>
+                    <div class="flex-1">
+                        <div class="text-sm font-bold text-white group-hover:text-brand-purple transition">${match.map_name}</div>
+                        <div class="text-[10px] text-slate-400 font-mono">${timeAgo}</div>
                     </div>
                 </div>
-
-                <div class="flex items-center gap-8 md:gap-12">
-                    <div class="text-center">
-                        <div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Winner</div>
-                        <div class="text-xl font-black ${winnerColor}">${match.winner.toUpperCase()}</div>
-                    </div>
-                    <div class="h-8 w-px bg-white/10"></div>
-                    <div class="text-center">
-                        <div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Round</div>
-                        <div class="text-xl font-black text-white">${match.round_number}</div>
-                    </div>
+                <div class="flex items-center justify-between pl-13">
+                    <span class="px-2 py-0.5 rounded ${winnerBg} text-[10px] font-bold uppercase">${match.winner}</span>
+                    <span class="text-xs text-slate-400">Round ${match.round_number}</span>
                 </div>
-
-                <button class="w-full md:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-bold text-white transition border border-white/5">
-                    Details
-                </button>
             </div>
             `;
             list.insertAdjacentHTML('beforeend', html);
         });
     } catch (e) {
         console.error('Failed to load matches:', e);
-        const list = document.getElementById('match-history-list');
-        if (list) list.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load matches</div>';
+        const list = document.getElementById('recent-matches-list');
+        if (list) list.innerHTML = '<div class="text-center text-red-500 py-4">Failed to load matches</div>';
     }
 }
 
@@ -583,13 +841,445 @@ async function searchHeroPlayer(query) {
                 </div>
                 <span class="text-xs text-brand-blue font-bold opacity-0 group-hover:opacity-100 transition">VIEW STATS</span>
             `;
-                // For now, just link/claim. In future, navigate to profile.
-                div.onclick = () => linkPlayer(name);
+                div.onclick = () => {
+                    heroSearchResults.classList.add('hidden');
+                    heroSearchInput.value = '';
+                    loadPlayerProfile(name);
+                };
                 heroSearchResults.appendChild(div);
             });
         }
         heroSearchResults.classList.remove('hidden');
     } catch (e) {
         console.error(e);
+    }
+}
+
+// [Removed duplicate/malformed loadMatchesView and nested functions]
+
+// Load Matches View with all matches
+async function loadMatchesView(filter = 'all') {
+    const grid = document.getElementById('matches-grid');
+    if (!grid) return;
+
+    // Show loading
+    grid.innerHTML = '<div class="text-center py-12"><i data-lucide="loader" class="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4"></i><div class="text-slate-400">Loading matches...</div></div>';
+    lucide.createIcons();
+
+    try {
+        const matches = await fetchJSON(`${API_BASE}/stats/matches?limit=50`);
+
+        grid.innerHTML = '';
+
+        if (matches.length === 0) {
+            grid.innerHTML = '<div class="text-center text-slate-500 py-12">No matches found</div>';
+            return;
+        }
+
+        matches.forEach(match => {
+            const winnerColor = match.winner === 'Allies' ? 'text-brand-emerald' : 'text-brand-rose';
+            const winnerBg = match.winner === 'Allies' ? 'bg-brand-emerald/10 border-brand-emerald/20' : 'bg-brand-rose/10 border-brand-rose/20';
+
+            // Calculate relative time
+            const date = new Date(match.date);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+            const timeAgo = diffHrs > 24 ? Math.floor(diffHrs / 24) + 'd ago' : diffHrs < 1 ? 'Just now' : diffHrs + 'h ago';
+
+            const html = `
+            <div class="glass-panel p-6 rounded-xl hover:bg-white/5 transition cursor-pointer group">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="w-16 h-16 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center">
+                                <span class="text-xs font-bold text-slate-500 uppercase">${match.map_name.substring(0, 3)}</span>
+                            </div>
+                            <div>
+                                <div class="text-lg font-bold text-white group-hover:text-brand-cyan transition">${match.map_name}</div>
+                                <div class="text-sm text-slate-400 font-mono">${timeAgo}</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-xs text-slate-500 uppercase mb-2">Winner</div>
+                                <div class="flex items-center gap-2">
+                                    <div class="px-3 py-1 rounded ${winnerBg} border">
+                                        <span class="text-sm font-bold ${winnerColor}">${match.winner}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-xs text-slate-500 uppercase mb-2">Round</div>
+                                <div class="text-xl font-black text-white">${match.round_number}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-bold transition">
+                        View Details
+                    </button>
+                </div>
+            </div>
+            `;
+            grid.insertAdjacentHTML('beforeend', html);
+        });
+    } catch (e) {
+        console.error('Failed to load matches:', e);
+        grid.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load matches</div>';
+    }
+}
+
+// Load Maps View
+async function loadMapsView() {
+    const grid = document.getElementById('maps-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '<div class="text-center py-12"><i data-lucide="loader" class="w-8 h-8 text-brand-cyan animate-spin mx-auto mb-4"></i><div class="text-slate-400">Loading map statistics...</div></div>';
+    lucide.createIcons();
+
+    try {
+        // Get map data from recent matches
+        const matches = await fetchJSON(`${API_BASE}/stats/matches?limit=200`);
+
+        // Aggregate map statistics
+        const mapStats = {};
+        matches.forEach(match => {
+            if (!mapStats[match.map_name]) {
+                mapStats[match.map_name] = {
+                    name: match.map_name,
+                    plays: 0,
+                    alliedWins: 0,
+                    axisWins: 0
+                };
+            }
+            mapStats[match.map_name].plays++;
+            if (match.winner === 'Allies') {
+                mapStats[match.map_name].alliedWins++;
+            } else {
+                mapStats[match.map_name].axisWins++;
+            }
+        });
+
+        grid.innerHTML = '';
+
+        // Display map cards
+        Object.values(mapStats).forEach(map => {
+            const winRate = ((map.alliedWins / map.plays) * 100).toFixed(1);
+            const borderColor = winRate > 55 ? 'border-brand-emerald' : winRate < 45 ? 'border-brand-rose' : 'border-brand-cyan';
+
+            const html = `
+            <div class="glass-card p-6 rounded-xl border-l-4 ${borderColor} hover:scale-105 transition-transform cursor-pointer">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-16 h-16 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center">
+                        <span class="text-xs font-bold text-slate-400 uppercase">${map.name.substring(0, 3)}</span>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-2xl font-black text-white">${map.plays}</div>
+                        <div class="text-xs text-slate-500 uppercase">Plays</div>
+                    </div>
+                </div>
+                <h3 class="text-lg font-bold text-white mb-3">${map.name}</h3>
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Allied Win Rate</span>
+                        <span class="font-bold text-brand-blue">${winRate}%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div class="bg-brand-blue h-full" style="width: ${winRate}%"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 pt-2">
+                        <div class="text-center p-2 bg-slate-800/50 rounded">
+                            <div class="text-xs text-slate-500">Allied</div>
+                            <div class="font-bold text-brand-blue">${map.alliedWins}</div>
+                        </div>
+                        <div class="text-center p-2 bg-slate-800/50 rounded">
+                            <div class="text-xs text-slate-500">Axis</div>
+                            <div class="font-bold text-brand-rose">${map.axisWins}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+            grid.insertAdjacentHTML('beforeend', html);
+        });
+    } catch (e) {
+        console.error('Failed to load maps:', e);
+        grid.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load map statistics</div>';
+    }
+}
+
+// Load Weapons View
+async function loadWeaponsView() {
+    const grid = document.getElementById('weapons-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '<div class="text-center py-12"><i data-lucide="loader" class="w-8 h-8 text-brand-rose animate-spin mx-auto mb-4"></i><div class="text-slate-400">Loading weapon statistics...</div></div>';
+    lucide.createIcons();
+
+    // Sample weapon data (would come from API in production)
+    const weapons = [
+        { name: 'Thompson', category: 'SMG', kills: 15420, accuracy: 28.5, usage: 45, color: 'brand-blue' },
+        { name: 'MP40', category: 'SMG', kills: 14832, accuracy: 27.2, usage: 42, color: 'brand-rose' },
+        { name: 'K43', category: 'Rifle', kills: 8945, accuracy: 35.8, usage: 25, color: 'brand-purple' },
+        { name: 'Panzerfaust', category: 'Heavy', kills: 4520, accuracy: 18.2, usage: 15, color: 'brand-amber' },
+        { name: 'FG42', category: 'Rifle', kills: 7230, accuracy: 32.1, usage: 22, color: 'brand-cyan' },
+        { name: 'Sten', category: 'SMG', kills: 6820, accuracy: 26.4, usage: 20, color: 'brand-emerald' }
+    ];
+
+    setTimeout(() => {
+        grid.innerHTML = '';
+
+        weapons.forEach(weapon => {
+            const html = `
+            <div class="glass-card p-6 rounded-xl border-l-4 border-${weapon.color} hover:scale-105 transition-transform cursor-pointer">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="px-3 py-1 rounded bg-slate-800 border border-white/10">
+                        <span class="text-xs font-bold text-slate-400 uppercase">${weapon.category}</span>
+                    </div>
+                    <div class="text-${weapon.color} text-2xl">
+                        <i data-lucide="crosshair"></i>
+                    </div>
+                </div>
+                <h3 class="text-xl font-black text-white mb-4">${weapon.name}</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm text-slate-400">Total Kills</span>
+                        <span class="font-bold text-white">${weapon.kills.toLocaleString()}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm text-slate-400">Accuracy</span>
+                        <span class="font-bold text-${weapon.color}">${weapon.accuracy}%</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm text-slate-400">Usage Rate</span>
+                        <span class="font-bold text-slate-300">${weapon.usage}%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden mt-2">
+                        <div class="bg-${weapon.color} h-full" style="width: ${weapon.usage}%"></div>
+                    </div>
+                </div>
+            </div>
+            `;
+            grid.insertAdjacentHTML('beforeend', html);
+        });
+        lucide.createIcons();
+    }, 500);
+}
+
+// Update navigateTo to load all views
+const originalNavigateTo = window.navigateTo;
+window.navigateTo = function (viewId) {
+    originalNavigateTo.call(this, viewId);
+
+    // Remove old view-specific loading (already in navigateTo)
+    // Add new view loaders
+    if (viewId === 'maps') {
+        loadMapsView();
+    } else if (viewId === 'weapons') {
+        loadWeaponsView();
+    }
+};
+
+// Community Logic
+let currentCommunityTab = 'clips';
+
+function loadCommunityView() {
+    switchCommunityTab(currentCommunityTab);
+}
+
+function switchCommunityTab(tab) {
+    currentCommunityTab = tab;
+
+    // Update Buttons
+    const btnClips = document.getElementById('btn-tab-clips');
+    const btnConfigs = document.getElementById('btn-tab-configs');
+
+    if (tab === 'clips') {
+        btnClips.className = 'px-6 py-2 rounded-lg font-bold bg-brand-rose text-white shadow-lg transition';
+        btnConfigs.className = 'px-6 py-2 rounded-lg font-bold text-slate-400 hover:text-white transition';
+        document.getElementById('community-clips').classList.remove('hidden');
+        document.getElementById('community-configs').classList.add('hidden');
+        loadClips();
+    } else {
+        btnClips.className = 'px-6 py-2 rounded-lg font-bold text-slate-400 hover:text-white transition';
+        btnConfigs.className = 'px-6 py-2 rounded-lg font-bold bg-brand-rose text-white shadow-lg transition';
+        document.getElementById('community-clips').classList.add('hidden');
+        document.getElementById('community-configs').classList.remove('hidden');
+        loadConfigs();
+    }
+}
+
+async function loadClips() {
+    const grid = document.getElementById('clips-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '<div class="col-span-full text-center py-8"><i data-lucide="loader" class="w-8 h-8 animate-spin mx-auto text-brand-rose"></i></div>';
+    lucide.createIcons();
+
+    try {
+        const clips = await fetchJSON(`${API_BASE}/community/clips`);
+        grid.innerHTML = '';
+
+        if (clips.length === 0) {
+            grid.innerHTML = '<div class="col-span-full text-center text-slate-500 py-8">No clips found. Be the first to submit!</div>';
+            return;
+        }
+
+        clips.forEach(clip => {
+            const html = `
+            <div class="glass-card rounded-xl overflow-hidden group">
+                <div class="aspect-video bg-slate-900 relative">
+                    <img src="https://img.youtube.com/vi/${getYouTubeID(clip.url)}/maxresdefault.jpg" 
+                         class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition duration-500"
+                         onerror="this.src='https://placehold.co/600x400/1e293b/475569?text=No+Thumbnail'">
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-300">
+                        <a href="${clip.url}" target="_blank" class="w-12 h-12 bg-brand-rose rounded-full flex items-center justify-center text-white shadow-lg transform hover:scale-110 transition">
+                            <i data-lucide="play" class="w-5 h-5 ml-1"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="p-4">
+                    <h3 class="font-bold text-white mb-1 truncate">${clip.title}</h3>
+                    <div class="flex justify-between items-center text-xs text-slate-400">
+                        <span>by <span class="text-brand-blue font-bold">${clip.author}</span></span>
+                        <span>${clip.views} views</span>
+                    </div>
+                </div>
+            </div>
+            `;
+            grid.insertAdjacentHTML('beforeend', html);
+        });
+        lucide.createIcons();
+    } catch (e) {
+        console.error('Failed to load clips:', e);
+        grid.innerHTML = '<div class="col-span-full text-center text-red-500 py-8">Failed to load clips.</div>';
+    }
+}
+
+async function loadConfigs() {
+    const list = document.getElementById('configs-list');
+    if (!list) return;
+
+    list.innerHTML = '<div class="text-center py-8"><i data-lucide="loader" class="w-8 h-8 animate-spin mx-auto text-brand-rose"></i></div>';
+    lucide.createIcons();
+
+    try {
+        const configs = await fetchJSON(`${API_BASE}/community/configs`);
+        list.innerHTML = '';
+
+        if (configs.length === 0) {
+            list.innerHTML = '<div class="text-center text-slate-500 py-8">No configs found. Share yours!</div>';
+            return;
+        }
+
+        configs.forEach(cfg => {
+            const html = `
+            <div class="glass-panel p-4 rounded-xl flex items-center justify-between gap-4 hover:bg-white/5 transition group">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded bg-slate-800 flex items-center justify-center text-brand-rose">
+                        <i data-lucide="file-code" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-white group-hover:text-brand-rose transition">${cfg.title}</h3>
+                        <div class="text-xs text-slate-400">by <span class="font-bold text-slate-300">${cfg.author}</span> • ${cfg.downloads} downloads</div>
+                        <p class="text-xs text-slate-500 mt-1">${cfg.description}</p>
+                    </div>
+                </div>
+                <button class="px-4 py-2 rounded-lg bg-white/5 hover:bg-brand-rose hover:text-white text-slate-400 text-sm font-bold transition flex items-center gap-2">
+                    <i data-lucide="download" class="w-4 h-4"></i> Download
+                </button>
+            </div>
+            `;
+            list.insertAdjacentHTML('beforeend', html);
+        });
+        lucide.createIcons();
+    } catch (e) {
+        console.error('Failed to load configs:', e);
+        list.innerHTML = '<div class="text-center text-red-500 py-8">Failed to load configs.</div>';
+    }
+}
+
+function getYouTubeID(url) {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+}
+
+// Upload Modal Logic
+function openUploadModal(type = 'clip') {
+    const modal = document.getElementById('upload-modal');
+    const title = document.getElementById('modal-title');
+    const typeInput = document.getElementById('upload-type');
+    const fieldUrl = document.getElementById('field-url');
+    const fieldContent = document.getElementById('field-content');
+
+    if (type === 'clip') {
+        title.textContent = 'Submit Clip';
+        typeInput.value = 'clip';
+        fieldUrl.classList.remove('hidden');
+        fieldContent.classList.add('hidden');
+        document.getElementById('upload-url').required = true;
+        document.getElementById('upload-content').required = false;
+    } else {
+        title.textContent = 'Submit Config';
+        typeInput.value = 'config';
+        fieldUrl.classList.add('hidden');
+        fieldContent.classList.remove('hidden');
+        document.getElementById('upload-url').required = false;
+        document.getElementById('upload-content').required = true;
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function closeUploadModal() {
+    document.getElementById('upload-modal').classList.add('hidden');
+    document.getElementById('upload-form').reset();
+}
+
+async function handleUpload(e) {
+    e.preventDefault();
+
+    const type = document.getElementById('upload-type').value;
+    const title = document.getElementById('upload-title').value;
+    const desc = document.getElementById('upload-desc').value;
+
+    const payload = {
+        title: title,
+        description: desc
+    };
+
+    if (type === 'clip') {
+        payload.url = document.getElementById('upload-url').value;
+    } else {
+        payload.content = document.getElementById('upload-content').value;
+    }
+
+    try {
+        const endpoint = type === 'clip' ? 'clips' : 'configs';
+        const res = await fetch(`${API_BASE}/community/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            if (res.status === 401) {
+                alert('You must be logged in to submit content.');
+                return;
+            }
+            throw new Error('Upload failed');
+        }
+
+        alert('Submission successful!');
+        closeUploadModal();
+
+        // Refresh list
+        if (type === 'clip') loadClips();
+        else loadConfigs();
+
+    } catch (err) {
+        console.error(err);
+        alert('Failed to submit content. Please try again.');
     }
 }

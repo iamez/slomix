@@ -292,7 +292,7 @@ class FileTracker:
                     )
                 else:
                     logger.warning(
-                        f"💡 To import them, use the !import command"
+                        "💡 To import them, use the !import command"
                     )
                 # Show a few examples (don't spam log)
                 if len(unimported) <= 5:

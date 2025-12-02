@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 import logging

@@ -13,8 +13,6 @@ Admin Commands:
 import discord
 from discord.ext import commands
 import logging
-import json
-from typing import Optional
 from datetime import datetime
 
 logger = logging.getLogger('AdminPredictionsCog')
@@ -158,7 +156,9 @@ class AdminPredictionsCog(commands.Cog, name="Admin Predictions"):
                     inline=False
                 )
 
-            embed.set_footer(text=f"Use !update_prediction_outcome <id> <winner> to update results")
+            embed.set_footer(
+                text="Use !update_prediction_outcome <id> <winner> to update results"
+            )
 
             await ctx.send(embed=embed)
             logger.info(f"🔧 {ctx.author} viewed admin predictions (status={status}, count={len(rows)})")
@@ -357,7 +357,7 @@ class AdminPredictionsCog(commands.Cog, name="Admin Predictions"):
             try:
                 size_row = await self.db.fetch_one(size_query, ())
                 pred_size, results_size, map_size = size_row
-            except:
+            except Exception:
                 pred_size = results_size = map_size = "N/A"
 
             # Build embed
