@@ -61,10 +61,10 @@ except ImportError:
 
 
 # ==================== CONFIGURATION ====================
-# Override via environment variables
+# Override via environment variables, or edit defaults here
 
 WS_PORT = int(os.getenv('WS_PORT', '8765'))
-WS_AUTH_TOKEN = os.getenv('WS_AUTH_TOKEN', '')  # Empty = no auth required
+WS_AUTH_TOKEN = os.getenv('WS_AUTH_TOKEN', 'YOUR_SECRET_TOKEN_HERE')  # Change this!
 STATS_DIR = os.getenv('STATS_DIR', '/home/et/.etlegacy/legacy/gamestats')
 
 # ========================================================
