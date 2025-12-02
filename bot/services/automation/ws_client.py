@@ -166,7 +166,7 @@ class StatsWebSocketClient:
             except ConnectionRefusedError:
                 self._connected = False
                 self._ws = None
-                logger.warning(f"🚫 WebSocket connection refused (VPS server not running?)")
+                logger.warning("🚫 WebSocket refused (VPS down?)")
                 
             except Exception as e:
                 self._connected = False

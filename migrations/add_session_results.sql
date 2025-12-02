@@ -2,6 +2,7 @@
 -- Created: 2025-11-28
 -- Purpose: Track actual match outcomes for prediction accuracy analysis
 -- Phase: 4 - Database Tables & Live Scoring
+-- Note: PostgreSQL dialect - SET QUOTED_IDENTIFIER/ANSI_NULLS not applicable
 
 -- ============================================================================
 -- TABLE: session_results

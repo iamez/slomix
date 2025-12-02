@@ -331,12 +331,14 @@ async def get_leaderboard(
         start_date = datetime(2020, 1, 1).date()
 
     # Base query parts
+    # nosec B608 - These clauses are static strings, not user-controlled input
     where_clause = "WHERE time_played_seconds > 0 AND DATE(round_date) >= $1"
     group_by = "GROUP BY player_name"
     # Removed session count filter - table doesn't track sessions, only rounds/dates
     having = ""  # No HAVING clause needed for basic leaderboard
 
     if stat == "dpm":
+        # nosec B608 - where_clause, group_by, having are static strings
         query = f"""
             WITH player_stats AS (
                 SELECT

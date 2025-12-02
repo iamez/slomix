@@ -1,5 +1,22 @@
 // Navigation Logic (Global)
-window.navigateTo = function (viewId, updateHistory = true) {
+/* global lucide, Chart, API_BASE, AUTH_BASE, fetchJSON */
+/* exported navigateTo, loadMatches, loadLeaderboard, loadPlayerProfile */
+
+/**
+ * Escape HTML special characters to prevent XSS attacks.
+ * Use this for any user-controlled data inserted into HTML.
+ * @param {string} str - The string to escape
+ * @returns {string} - HTML-safe string
+ */
+function escapeHtml(str) {
+    if (str == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+}
+
+// Define navigateTo globally (fixes 'navigateTo is not defined')
+const navigateTo = window.navigateTo = function (viewId, updateHistory = true) {
     console.log('Navigating to:', viewId);
 
     // Hide all views
@@ -84,7 +101,7 @@ async function initApp() {
     loadPredictions();
     updateLiveSession(); // Live Updates
     loadQuickLeaders();  // Sidebar widget leaderboard
-    loadMatches();       // Matches view
+    loadMatchesView();   // Matches view
     checkLoginStatus();
     initCharts();
 
@@ -211,8 +228,8 @@ async function loadPredictions() {
                 <div class="glass-card p-4 rounded-xl border ${statusBorder} hover:bg-white/5 transition group relative overflow-hidden">
                     <div class="flex justify-between items-start mb-4">
                         <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-bold text-slate-500 uppercase bg-slate-800 px-1.5 py-0.5 rounded">${pred.format}</span>
-                            <span class="text-[10px] font-mono text-slate-400">${timeAgo}</span>
+                            <span class="text-[10px] font-bold text-slate-500 uppercase bg-slate-800 px-1.5 py-0.5 rounded">${escapeHtml(pred.format)}</span>
+                            <span class="text-[10px] font-mono text-slate-400">${escapeHtml(timeAgo)}</span>
                         </div>
                         ${statusBadge}
                     </div>
@@ -237,7 +254,7 @@ async function loadPredictions() {
                     <div class="pt-3 border-t border-white/5">
                         <div class="flex items-center gap-2 text-xs text-slate-400">
                             <i class="fas fa-brain text-brand-purple"></i>
-                            <span>Confidence: <span class="text-white font-bold uppercase">${pred.confidence}</span></span>
+                            <span>Confidence: <span class="text-white font-bold uppercase">${escapeHtml(pred.confidence)}</span></span>
                         </div>
                     </div>
                 </div>
@@ -347,15 +364,17 @@ async function loadLeaderboard() {
             if (currentLbStat === 'kills') valueClass = 'text-brand-rose font-bold';
             if (currentLbStat === 'kd') valueClass = 'text-brand-blue font-bold';
 
+            const safeName = escapeHtml(row.name);
+            const safeInitials = escapeHtml(row.name.substring(0, 2).toUpperCase());
             const html = `
                 <tr class="hover:bg-white/5 transition group">
                     <td class="px-6 py-4 font-mono text-slate-500">#${row.rank}</td>
                     <td class="px-6 py-4">
                         <div class="flex items-center gap-3">
                             <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400 group-hover:text-white group-hover:bg-brand-blue transition">
-                                ${row.name.substring(0, 2).toUpperCase()}
+                                ${safeInitials}
                             </div>
-                            <span class="font-bold text-white cursor-pointer hover:underline" onclick="loadPlayerProfile('${row.name}')">${row.name}</span>
+                            <span class="font-bold text-white cursor-pointer hover:underline" onclick="loadPlayerProfile('${safeName}')">${safeName}</span>
                         </div>
                     </td>
                     <td class="px-6 py-4 text-right font-mono ${valueClass}">${row.value}</td>
@@ -609,25 +628,30 @@ function renderSessionDetails(data) {
         const winnerColor = match.winner === 'Allies' ? 'text-brand-blue' : 'text-brand-rose';
         const winnerBg = match.winner === 'Allies' ? 'bg-brand-blue/10 border-brand-blue/20' : 'bg-brand-rose/10 border-brand-rose/20';
 
+        const safeMapName = escapeHtml(match.map_name);
+        const safeMapAbbrev = escapeHtml(match.map_name.substring(0, 3));
+        const safeWinner = escapeHtml(match.winner);
+        const safeOutcome = escapeHtml(match.outcome || 'Victory');
+        const safeDuration = escapeHtml(match.duration);
         const html = `
             <div class="glass-card p-4 rounded-xl flex items-center justify-between gap-4 hover:bg-white/5 transition group">
                 <div class="flex items-center gap-4">
                     <div class="w-12 h-12 rounded bg-slate-800 flex items-center justify-center font-bold text-slate-500 text-xs uppercase border border-white/5">
-                        ${match.map_name.substring(0, 3)}
+                        ${safeMapAbbrev}
                     </div>
                     <div>
-                        <div class="font-bold text-white group-hover:text-brand-cyan transition">${match.map_name}</div>
-                        <div class="text-xs text-slate-500 font-mono">Round ${match.round_number} • ${match.duration}</div>
+                        <div class="font-bold text-white group-hover:text-brand-cyan transition">${safeMapName}</div>
+                        <div class="text-xs text-slate-500 font-mono">Round ${match.round_number} • ${safeDuration}</div>
                     </div>
                 </div>
                 
                 <div class="flex items-center gap-6">
                     <div class="text-right">
                         <div class="text-[10px] uppercase font-bold text-slate-500">Winner</div>
-                        <div class="font-black ${winnerColor}">${match.winner}</div>
+                        <div class="font-black ${winnerColor}">${safeWinner}</div>
                     </div>
                     <div class="px-3 py-1 rounded ${winnerBg} text-xs font-bold text-white">
-                        ${match.outcome || 'Victory'}
+                        ${safeOutcome}
                     </div>
                 </div>
             </div>
@@ -646,14 +670,15 @@ async function loadQuickLeaders() {
 
         leaders.forEach((player, index) => {
             const rankColor = index === 0 ? 'text-brand-gold' : index === 1 ? 'text-slate-400' : 'text-brand-rose';
-            const initials = player.name.substring(0, 2).toUpperCase();
+            const safeInitials = escapeHtml(player.name.substring(0, 2).toUpperCase());
+            const safeName = escapeHtml(player.name);
 
             const html = `
                 <div class="flex items-center justify-between group cursor-pointer">
                     <div class="flex items-center gap-3">
                         <div class="font-mono font-bold ${rankColor} text-sm">${player.rank}</div>
-                        <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">${initials}</div>
-                        <div class="text-sm font-bold text-white group-hover:text-brand-blue transition">${player.name}</div>
+                        <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">${safeInitials}</div>
+                        <div class="text-sm font-bold text-white group-hover:text-brand-blue transition">${safeName}</div>
                     </div>
                     <div class="text-sm font-mono font-bold text-brand-emerald">${Math.round(player.value)} DPM</div>
                 </div>
@@ -691,19 +716,22 @@ async function loadRecentMatches() {
             const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
             const timeAgo = diffHrs > 24 ? Math.floor(diffHrs / 24) + 'd ago' : diffHrs < 1 ? 'Just now' : diffHrs + 'h ago';
 
+            const safeMapName = escapeHtml(match.map_name);
+            const safeMapAbbrev = escapeHtml(match.map_name.substring(0, 3));
+            const safeWinner = escapeHtml(match.winner);
             const html = `
             <div class="glass-card p-3 rounded-lg hover:bg-white/5 transition cursor-pointer group" onclick="navigateTo('matches')">
                 <div class="flex items-center gap-3 mb-2">
                     <div class="w-10 h-10 rounded bg-slate-800 border border-white/10 flex items-center justify-center flex-shrink-0">
-                        <span class="text-[10px] font-bold text-slate-500 uppercase">${match.map_name.substring(0, 3)}</span>
+                        <span class="text-[10px] font-bold text-slate-500 uppercase">${safeMapAbbrev}</span>
                     </div>
                     <div class="flex-1">
-                        <div class="text-sm font-bold text-white group-hover:text-brand-purple transition">${match.map_name}</div>
+                        <div class="text-sm font-bold text-white group-hover:text-brand-purple transition">${safeMapName}</div>
                         <div class="text-[10px] text-slate-400 font-mono">${timeAgo}</div>
                     </div>
                 </div>
                 <div class="flex items-center justify-between pl-13">
-                    <span class="px-2 py-0.5 rounded ${winnerBg} text-[10px] font-bold uppercase">${match.winner}</span>
+                    <span class="px-2 py-0.5 rounded ${winnerBg} text-[10px] font-bold uppercase">${safeWinner}</span>
                     <span class="text-xs text-slate-400">Round ${match.round_number}</span>
                 </div>
             </div>
@@ -762,7 +790,8 @@ async function searchPlayer(query) {
         results.forEach(name => {
             const div = document.createElement('div');
             div.className = 'p-3 rounded bg-white/5 hover:bg-white/10 cursor-pointer flex justify-between items-center transition';
-            div.innerHTML = `<span class="font-bold text-white">${name}</span> <span class="text-xs text-brand-blue font-bold">CLAIM</span>`;
+            const safeName = escapeHtml(name);
+            div.innerHTML = `<span class="font-bold text-white">${safeName}</span> <span class="text-xs text-brand-blue font-bold">CLAIM</span>`;
             div.onclick = () => linkPlayer(name);
             list.appendChild(div);
         });
@@ -832,12 +861,14 @@ async function searchHeroPlayer(query) {
             results.forEach(name => {
                 const div = document.createElement('div');
                 div.className = 'p-4 hover:bg-white/5 cursor-pointer flex justify-between items-center transition border-b border-white/5 last:border-0';
+                const safeName = escapeHtml(name);
+                const safeInitials = escapeHtml(name.substring(0, 2).toUpperCase());
                 div.innerHTML = `
                 <div class="flex items-center gap-3">
                     <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">
-                        ${name.substring(0, 2).toUpperCase()}
+                        ${safeInitials}
                     </div>
-                    <span class="font-bold text-white">${name}</span>
+                    <span class="font-bold text-white">${safeName}</span>
                 </div>
                 <span class="text-xs text-brand-blue font-bold opacity-0 group-hover:opacity-100 transition">VIEW STATS</span>
             `;
@@ -887,16 +918,19 @@ async function loadMatchesView(filter = 'all') {
             const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
             const timeAgo = diffHrs > 24 ? Math.floor(diffHrs / 24) + 'd ago' : diffHrs < 1 ? 'Just now' : diffHrs + 'h ago';
 
+            const safeMapName = escapeHtml(match.map_name);
+            const safeMapAbbrev = escapeHtml(match.map_name.substring(0, 3));
+            const safeWinner = escapeHtml(match.winner);
             const html = `
             <div class="glass-panel p-6 rounded-xl hover:bg-white/5 transition cursor-pointer group">
                 <div class="flex justify-between items-start">
                     <div class="flex-1">
                         <div class="flex items-center gap-4 mb-4">
                             <div class="w-16 h-16 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center">
-                                <span class="text-xs font-bold text-slate-500 uppercase">${match.map_name.substring(0, 3)}</span>
+                                <span class="text-xs font-bold text-slate-500 uppercase">${safeMapAbbrev}</span>
                             </div>
                             <div>
-                                <div class="text-lg font-bold text-white group-hover:text-brand-cyan transition">${match.map_name}</div>
+                                <div class="text-lg font-bold text-white group-hover:text-brand-cyan transition">${safeMapName}</div>
                                 <div class="text-sm text-slate-400 font-mono">${timeAgo}</div>
                             </div>
                         </div>
@@ -905,7 +939,7 @@ async function loadMatchesView(filter = 'all') {
                                 <div class="text-xs text-slate-500 uppercase mb-2">Winner</div>
                                 <div class="flex items-center gap-2">
                                     <div class="px-3 py-1 rounded ${winnerBg} border">
-                                        <span class="text-sm font-bold ${winnerColor}">${match.winner}</span>
+                                        <span class="text-sm font-bold ${winnerColor}">${safeWinner}</span>
                                     </div>
                                 </div>
                             </div>

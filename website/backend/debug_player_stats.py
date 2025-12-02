@@ -19,7 +19,7 @@ async def debug_stats():
     await db.connect()
 
     try:
-        print(f"Querying random player...")
+        print("Querying random player...")
         query = "SELECT player_name FROM player_comprehensive_stats LIMIT 1"
         row = await db.fetch_one(query)
 

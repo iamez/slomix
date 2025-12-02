@@ -1,5 +1,4 @@
 import asyncio
-import os
 from bot.core.database_adapter import create_adapter as create_postgres_adapter
 from bot.config import load_config
 

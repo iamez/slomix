@@ -1,3 +1,18 @@
+/* global API_BASE, fetchJSON, lucide */
+
+/**
+ * Escape HTML special characters to prevent XSS attacks.
+ * Use this for any user-controlled data inserted into HTML.
+ * @param {string} str - The string to escape
+ * @returns {string} - HTML-safe string
+ */
+function escapeHtmlRecords(str) {
+    if (str == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+}
+
 let currentRecordsData = {};
 let currentMapFilter = '';
 
@@ -28,7 +43,7 @@ async function loadMapFilter(selectElement) {
         if (maps && Array.isArray(maps)) {
             const currentVal = selectElement.value;
             selectElement.innerHTML = '<option value="">All Maps</option>' +
-                maps.map(map => `<option value="${map}">${map}</option>`).join('');
+                maps.map(map => `<option value="${escapeHtmlRecords(map)}">${escapeHtmlRecords(map)}</option>`).join('');
             selectElement.value = currentVal;
         }
     } catch (e) {
@@ -83,6 +98,9 @@ async function fetchAndRenderRecords() {
 
             const topRecord = recordList[0];
             const value = formatRecordValue(topRecord.value);
+            const safePlayer = escapeHtmlRecords(topRecord.player);
+            const safePlayerInitials = escapeHtmlRecords(topRecord.player.substring(0, 2).toUpperCase());
+            const safeMap = escapeHtmlRecords(topRecord.map);
 
             const html = `
                 <div class="glass-card p-6 rounded-xl hover:bg-white/5 transition group relative overflow-hidden cursor-pointer border border-white/5 hover:border-white/10"
@@ -101,7 +119,7 @@ async function fetchAndRenderRecords() {
                     <div class="mb-4">
                         <div class="text-4xl font-black text-white mb-1 tracking-tight">${value}</div>
                         <div class="text-xs text-slate-500 font-mono flex items-center gap-2">
-                            <span class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">${topRecord.map}</span>
+                            <span class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">${safeMap}</span>
                             <span>${new Date(topRecord.date).toLocaleDateString()}</span>
                         </div>
                     </div>
@@ -109,10 +127,10 @@ async function fetchAndRenderRecords() {
                     <div class="flex items-center justify-between pt-4 border-t border-white/5">
                         <div class="flex items-center gap-3">
                             <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">
-                                ${topRecord.player.substring(0, 2).toUpperCase()}
+                                ${safePlayerInitials}
                             </div>
                             <div class="font-bold text-white group-hover:text-brand-blue transition">
-                                ${topRecord.player}
+                                ${safePlayer}
                             </div>
                         </div>
                         <div class="text-xs text-brand-blue font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
@@ -146,9 +164,9 @@ function openRecordModal(categoryKey) {
     if (!modal || !currentRecordsData[categoryKey]) return;
 
     const records = currentRecordsData[categoryKey];
-    const catName = categoryKey.replace('_', ' ').toUpperCase();
+    const catName = escapeHtmlRecords(categoryKey.replace('_', ' ').toUpperCase());
 
-    // Set Title
+    // Set Title - catName is sanitized, so safe to use innerHTML for formatting
     titleEl.innerHTML = `<span>${catName}</span> <span class="text-slate-500 text-sm font-normal ml-2">Top 5 All-Time</span>`;
 
     // Build Content
@@ -156,14 +174,16 @@ function openRecordModal(categoryKey) {
         const isFirst = index === 0;
         const rankColor = isFirst ? 'text-brand-gold' : 'text-slate-400';
         const bgClass = isFirst ? 'bg-brand-gold/10 border-brand-gold/20' : 'bg-slate-800/50 border-white/5';
+        const safePlayer = escapeHtmlRecords(rec.player);
+        const safeMap = escapeHtmlRecords(rec.map);
 
         return `
             <div class="flex items-center justify-between p-3 rounded-lg border ${bgClass} hover:bg-white/5 transition">
                 <div class="flex items-center gap-4">
                     <div class="font-mono font-bold text-lg w-6 text-center ${rankColor}">#${index + 1}</div>
                     <div class="flex flex-col">
-                        <span class="font-bold text-white ${isFirst ? 'text-lg' : ''}">${rec.player}</span>
-                        <span class="text-xs text-slate-500 font-mono">${rec.map} â€¢ ${new Date(rec.date).toLocaleDateString()}</span>
+                        <span class="font-bold text-white ${isFirst ? 'text-lg' : ''}">${safePlayer}</span>
+                        <span class="text-xs text-slate-500 font-mono">${safeMap} • ${new Date(rec.date).toLocaleDateString()}</span>
                     </div>
                 </div>
                 <div class="font-black text-white ${isFirst ? 'text-2xl' : 'text-xl'}">

@@ -108,6 +108,9 @@ class StatsNotifyServer:
             if self.auth_token:
                 try:
                     token = await asyncio.wait_for(websocket.recv(), timeout=10)
+                    # Debug logging
+                    logger.info(f"🔑 Received: len={len(token)}, '{token[:8]}...{token[-4:]}'")
+                    logger.info(f"🔑 Expected: len={len(self.auth_token)}, '{self.auth_token[:8]}...{self.auth_token[-4:]}'")
                     if token.strip() != self.auth_token:
                         logger.warning(f"🚫 Auth failed from {client_addr}")
                         await websocket.send("AUTH_FAILED")
@@ -228,7 +231,7 @@ class StatsNotifyServer:
         # Start WebSocket server
         async with websockets.serve(
             self.handler,
-            "0.0.0.0",
+            "0.0.0.0",  # nosec B104 - must accept external
             self.port,
             ping_interval=30,
             ping_timeout=10

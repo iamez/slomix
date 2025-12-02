@@ -307,7 +307,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
             if not link_row:
                 await ctx.send(
                     "❌ You haven't linked your account yet!\n"
-                    f"Use `!link` to connect your Discord account to your ET:Legacy profile."
+                    "Use `!link` to connect your Discord account to your ET:Legacy profile."
                 )
                 return
 

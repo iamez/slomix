@@ -27,7 +27,7 @@ This module provides advanced player performance metrics:
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger("bot.core.frag_potential")
 

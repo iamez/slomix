@@ -355,7 +355,7 @@ class ServerControl(commands.Cog):
                 await self.log_action(ctx, "Server Start Success", f"Screen: {self.screen_name}")
             else:
                 await ctx.send(
-                    f"⚠️ Server may not have started properly. Check logs.")
+                    "⚠️ Server may not have started properly. Check logs.")
                 await self.log_action(ctx, "Server Start Failed", f"Exit code: {exit_code}")
         
         except Exception as e:
