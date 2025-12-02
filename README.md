@@ -1014,8 +1014,10 @@ This is a private project. All rights reserved.
 - [asyncpg](https://github.com/MagicStack/asyncpg) - PostgreSQL async driver
 - [PostgreSQL](https://www.postgresql.org/) - Production database
 - [ET:Legacy](https://www.etlegacy.com/) - Game engine
+- [gamestats.lua](https://github.com/x0rnn) by **x0rnn (c0rn)** - The stats Lua mod that makes this all possible
 
 **Special Thanks:**
+- **x0rnn** for creating the gamestats.lua (c0rnp0rn.lua) - without his work, this bot wouldn't exist
 - ET:Legacy community for EndStats mod
 - Discord.py community for excellent documentation
 - PostgreSQL team for rock-solid database

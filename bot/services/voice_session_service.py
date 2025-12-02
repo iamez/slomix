@@ -112,6 +112,41 @@ class VoiceSessionService:
         if not self.config.gaming_voice_channels:
             return  # Voice detection disabled
 
+        # ========== VOICE LOGGING ==========
+        # Log when players join/leave gaming voice channels
+        if self.config.enable_voice_logging:
+            before_channel = before.channel
+            after_channel = after.channel
+            
+            # Check if this involves a gaming voice channel
+            before_is_gaming = (
+                before_channel and before_channel.id in self.config.gaming_voice_channels
+            )
+            after_is_gaming = (
+                after_channel and after_channel.id in self.config.gaming_voice_channels
+            )
+            
+            if before_is_gaming or after_is_gaming:
+                if before_channel != after_channel:
+                    if after_is_gaming and not before_is_gaming:
+                        # Joined a gaming channel
+                        logger.info(
+                            f"🔊 {member.display_name} (ID: {member.id}) "
+                            f"joined #{after_channel.name}"
+                        )
+                    elif before_is_gaming and not after_is_gaming:
+                        # Left a gaming channel
+                        logger.info(
+                            f"🔇 {member.display_name} (ID: {member.id}) "
+                            f"left #{before_channel.name}"
+                        )
+                    elif before_is_gaming and after_is_gaming:
+                        # Switched between gaming channels
+                        logger.info(
+                            f"🔀 {member.display_name} (ID: {member.id}) "
+                            f"moved #{before_channel.name} → #{after_channel.name}"
+                        )
+
         try:
             # Count players in gaming voice channels
             total_players = 0

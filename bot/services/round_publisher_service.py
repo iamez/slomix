@@ -236,24 +236,32 @@ class RoundPublisherService:
 
                     kd_str = f'{kills}/{deaths}'
 
-                    # Line 1: Rank + Name + Core stats (simplified)
+                    # Line 1: Rank + Name + Core combat stats
                     line1 = (
-                        f"{rank_display} **{name}** • K/D:`{kd_str}` "
-                        f"DMG:`{int(dmg):,}` DPM:`{int(dpm)}` "
-                        f"ACC:`{acc:.1f}%` HS:`{hs}`"
+                        f"{rank_display} **{name}**\n"
+                        f"    ⚔️ K/D: `{kd_str}`  |  DMG: `{int(dmg):,}`  |  "
+                        f"DPM: `{int(dpm)}`"
                     )
 
-                    # Line 2: Support stats (simplified)
+                    # Line 2: Accuracy and support stats
                     line2 = (
-                        f"     ↳ Rev:`{revives}/{got_revived}` Gibs:`{gibs}` "
-                        f"TmDmg:`{int(team_dmg_given)}` Dead:`{time_dead:.1f}m`"
+                        f"    🎯 ACC: `{acc:.1f}%`  |  HS: `{hs}`  |  "
+                        f"Rev: `{revives}/{got_revived}`"
                     )
 
-                    player_lines.append(f"{line1}\n{line2}")
+                    # Line 3: Additional stats
+                    line3 = (
+                        f"    💀 Gibs: `{gibs}`  |  TmDmg: `{int(team_dmg_given)}`  |  "
+                        f"Dead: `{time_dead:.1f}m`"
+                    )
 
+                    # Combine with spacing between players
+                    player_lines.append(f"{line1}\n{line2}\n{line3}")
+
+                # Join with blank line between players for readability
                 embed.add_field(
                     name=field_name,
-                    value='\n'.join(player_lines) if player_lines else 'No stats',
+                    value='\n\n'.join(player_lines) if player_lines else 'No stats',
                     inline=False
                 )
 

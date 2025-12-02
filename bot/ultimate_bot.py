@@ -31,6 +31,14 @@ from bot.services.voice_session_service import VoiceSessionService
 from bot.services.round_publisher_service import RoundPublisherService
 from bot.repositories import FileRepository
 
+# WebSocket client for push-based file notifications (optional)
+try:
+    from bot.services.automation.ws_client import StatsWebSocketClient, is_websocket_available
+    WS_CLIENT_AVAILABLE = is_websocket_available()
+except ImportError:
+    WS_CLIENT_AVAILABLE = False
+    StatsWebSocketClient = None
+
 # Load environment variables if available
 try:
     from dotenv import load_dotenv
@@ -588,13 +596,82 @@ class UltimateETLegacyBot(commands.Bot):
         #     self.voice_session_monitor.start()
         logger.info("✅ Background tasks started (optimized SSH monitoring with voice detection)")
 
+        # ========== WEBSOCKET PUSH NOTIFICATIONS (Optional) ==========
+        # If enabled, bot connects OUT to VPS for instant file notifications
+        # Falls back to SSH polling if WebSocket unavailable/disconnected
+        self.ws_client = None
+        if self.config.ws_enabled and WS_CLIENT_AVAILABLE:
+            try:
+                self.ws_client = StatsWebSocketClient(
+                    self.config,
+                    on_new_file=self._handle_ws_file_notification
+                )
+                self.ws_client.start()
+                logger.info("🔌 WebSocket client started (push notifications enabled)")
+            except Exception as e:
+                logger.warning(f"⚠️ WebSocket client failed to start: {e}")
+                logger.info("📡 Falling back to SSH polling only")
+        elif self.config.ws_enabled and not WS_CLIENT_AVAILABLE:
+            logger.warning("⚠️ WS_ENABLED=true but websockets library not installed")
+            logger.info("   Run: pip install websockets")
+        else:
+            logger.debug("📡 WebSocket push disabled (using SSH polling)")
+
         logger.info("✅ Ultimate Bot initialization complete!")
         logger.info(
             f"📋 Commands available: {[cmd.name for cmd in self.commands]}"
         )
 
+    async def _handle_ws_file_notification(self, filename: str):
+        """
+        Handle file notification from WebSocket push.
+        
+        Called by StatsWebSocketClient when VPS notifies of new file.
+        Downloads file via SSH, processes, and posts to Discord.
+        
+        Args:
+            filename: Name of the new stats file on remote server
+        """
+        try:
+            logger.info(f"📥 WebSocket notification: {filename}")
+            
+            # Check if already processed (race condition prevention)
+            if await self.file_tracker.is_file_processed(filename):
+                logger.debug(f"⏭️ File already processed: {filename}")
+                return
+            
+            # Build SSH config
+            ssh_config = {
+                "host": self.config.ssh_host,
+                "port": self.config.ssh_port,
+                "user": self.config.ssh_user,
+                "key_path": self.config.ssh_key_path,
+                "remote_path": self.config.ssh_remote_path,
+            }
+            
+            # Download file via SSH
+            local_path = await self.ssh_download_file(
+                ssh_config, filename, self.config.stats_directory
+            )
+            
+            if not local_path:
+                logger.error(f"❌ Failed to download: {filename}")
+                return
+            
+            # Process the file (parse + import + Discord post)
+            result = await self.process_gamestats_file(local_path, filename)
+            
+            if result and result.get('success'):
+                # Post to Discord via round publisher
+                await self.round_publisher.publish_round_stats(filename, result)
+                logger.info(f"✅ WebSocket-triggered import complete: {filename}")
+            else:
+                logger.warning(f"⚠️ File processed but no stats: {filename}")
+                
+        except Exception as e:
+            logger.error(f"❌ WebSocket file handler error: {e}", exc_info=True)
+
     async def initialize_database(self):
-        """📊 Verify database tables exist (created by recreate_database.py)"""
         # Verify critical tables exist
         required_tables = [
             "rounds",

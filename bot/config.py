@@ -171,6 +171,18 @@ class BotConfig:
         self.min_players_for_prediction: int = int(self._get_config('MIN_PLAYERS_FOR_PREDICTION', '6'))
         self.min_guid_coverage: float = float(self._get_config('MIN_GUID_COVERAGE', '0.5'))  # 50% must have linked GUIDs
 
+        # ==================== WEBSOCKET PUSH NOTIFICATIONS ====================
+        # Bot connects OUT to VPS WebSocket server (no ports needed on bot machine)
+        self.ws_enabled: bool = self._get_config('WS_ENABLED', 'false').lower() == 'true'
+        self.ws_host: str = self._get_config('WS_HOST', '')  # VPS hostname/IP
+        self.ws_port: int = int(self._get_config('WS_PORT', '8765'))
+        self.ws_auth_token: str = self._get_config('WS_AUTH_TOKEN', '')  # Shared secret for authentication
+        self.ws_reconnect_delay: int = int(self._get_config('WS_RECONNECT_DELAY', '5'))  # seconds between reconnect attempts
+
+        # ==================== VOICE CHANNEL LOGGING ====================
+        # Log when players join/leave gaming voice channels
+        self.enable_voice_logging: bool = self._get_config('ENABLE_VOICE_LOGGING', 'false').lower() == 'true'
+
         logger.info(f"🔧 Configuration loaded: database_type={self.database_type}")
     
     def _load_config_file(self):
