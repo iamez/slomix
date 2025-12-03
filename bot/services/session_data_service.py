@@ -172,7 +172,7 @@ class SessionDataService:
         # This includes rounds that may be on adjacent dates due to midnight crossover
         placeholders = ",".join("?" * len(gaming_session_ids))
         sessions = await self.db_adapter.fetch_all(
-            """
+            f"""
             SELECT id, map_name, round_number, actual_time
             FROM rounds
             WHERE gaming_session_id IN ({placeholders})
@@ -182,7 +182,7 @@ class SessionDataService:
                 gaming_session_id,
                 round_date,
                 CAST(REPLACE(round_time, ':', '') AS INTEGER)
-            """,
+            """,  # nosec B608 - parameterized
             tuple(gaming_session_ids),
         )
 
@@ -220,11 +220,11 @@ class SessionDataService:
             # Get the date range for these session_ids
             placeholders = ",".join("?" * len(session_ids))
             dates_result = await self.db_adapter.fetch_all(
-                """
+                f"""
                 SELECT DISTINCT SUBSTR(round_date, 1, 10) as date
                 FROM rounds
                 WHERE id IN ({placeholders})
-                """,
+                """,  # nosec B608 - parameterized
                 tuple(session_ids),
             )
             dates = [row[0] for row in dates_result]
@@ -235,12 +235,12 @@ class SessionDataService:
             # Query session_teams for these dates
             date_placeholders = ",".join("?" * len(dates))
             rows = await self.db_adapter.fetch_all(
-                """
+                f"""
                 SELECT team_name, player_guids, player_names
                 FROM session_teams
                 WHERE session_start_date IN ({date_placeholders}) AND map_name = 'ALL'
                 ORDER BY team_name
-                """,
+                """,  # nosec B608 - parameterized
                 tuple(dates),
             )
 

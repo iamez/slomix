@@ -196,15 +196,11 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                         safe_pattern = escape_like_pattern_for_query(
                             player_name
                         )
-                        placeholder = (
-                            '$1' if self.bot.config.database_type
-                            == 'postgresql' else '?'
-                        )
                         result = await self.bot.db_adapter.fetch_one(
                             """
                             SELECT player_guid, player_name
                             FROM player_comprehensive_stats
-                            WHERE LOWER(player_name) LIKE LOWER({placeholder})
+                            WHERE LOWER(player_name) LIKE LOWER(?)
                                   ESCAPE '\\'
                             GROUP BY player_guid, player_name
                             LIMIT 1

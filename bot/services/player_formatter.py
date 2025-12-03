@@ -149,12 +149,12 @@ class PlayerFormatter:
         placeholders = ','.join(['?' for _ in guids])
 
         try:
-            display_names = await self.db_adapter.fetch_all("""
+            display_names = await self.db_adapter.fetch_all(f"""
                 SELECT player_guid, display_name
                 FROM player_links
                 WHERE player_guid IN ({placeholders})
                 AND display_name IS NOT NULL
-            """, tuple(guids))
+            """, tuple(guids))  # nosec B608
 
             display_name_map = {row[0]: row[1] for row in display_names}
         except Exception as e:
@@ -165,7 +165,7 @@ class PlayerFormatter:
         badge_map = {}
         if include_badges:
             try:
-                stats = await self.db_adapter.fetch_all("""
+                stats = await self.db_adapter.fetch_all(f"""
                     SELECT
                         player_guid,
                         SUM(revives_given) as total_revives,
@@ -177,7 +177,7 @@ class PlayerFormatter:
                     FROM player_comprehensive_stats
                     WHERE player_guid IN ({placeholders})
                     GROUP BY player_guid
-                """, tuple(guids))
+                """, tuple(guids))  # nosec B608
 
                 for row in stats:
                     guid = row[0]

@@ -109,7 +109,7 @@ class PlayerDisplayNameService:
 
             # Get all custom display names
             # Safe: placeholders are "?" only, user data passed via tuple
-            link_query = """
+            link_query = f"""
                 SELECT player_guid, display_name
                 FROM player_links
                 WHERE player_guid IN ({placeholders})
@@ -125,7 +125,7 @@ class PlayerDisplayNameService:
                 # Build placeholders for remaining GUIDs (safe: no user input)
                 alias_placeholders = ",".join("?" * len(remaining_guids))
                 # Safe: placeholders are "?" only, user data passed via tuple
-                alias_query = """
+                alias_query = f"""
                     SELECT DISTINCT ON (guid) guid, alias
                     FROM player_aliases
                     WHERE guid IN ({alias_placeholders})
@@ -149,7 +149,7 @@ class PlayerDisplayNameService:
             still_remaining = [guid for guid in player_guids if guid not in display_names]
             if still_remaining:
                 stats_placeholders = ",".join("?" * len(still_remaining))
-                stats_query = """
+                stats_query = f"""
                     SELECT DISTINCT player_guid, player_name
                     FROM player_comprehensive_stats
                     WHERE player_guid IN ({stats_placeholders})

@@ -1054,7 +1054,6 @@ class SynergyAnalytics(commands.Cog):
             List of split dictionaries sorted by balance rating
         """
         from itertools import combinations
-        import heapq
         
         num_players = len(player_list)
         team_size = num_players // 2

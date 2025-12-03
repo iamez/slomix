@@ -323,9 +323,6 @@ class LinkCog(commands.Cog, name="Link"):
             - Link status (linked/unlinked)
         """
         try:
-            # Database-specific placeholder
-            ph = "?" if self.bot.config.database_type == 'sqlite' else "$1"
-            
             # Escape LIKE pattern to prevent injection
             safe_pattern = escape_like_pattern_for_query(search_term)
             
