@@ -396,7 +396,6 @@ class SynergyAnalytics(commands.Cog):
     # COMMAND: !team_builder
     # =========================================================================
     
-    @is_public_channel()
     @commands.command(name='team_builder', aliases=['tb', 'build_teams'])
     @commands.cooldown(1, 15, commands.BucketType.channel)
     async def team_builder_command(self, ctx, *players):
@@ -523,7 +522,6 @@ class SynergyAnalytics(commands.Cog):
     # COMMAND: !suggest_teams
     # =========================================================================
     
-    @is_public_channel()
     @commands.command(name='suggest_teams', aliases=['suggest', 'balance', 'st'])
     @commands.cooldown(1, 30, commands.BucketType.channel)
     async def suggest_teams_command(self, ctx):
