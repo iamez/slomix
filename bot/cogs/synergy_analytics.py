@@ -385,6 +385,156 @@ class SynergyAnalytics(commands.Cog):
             await ctx.send(
                 "⚠️ Could not build teams. Please try again later."
             )
+
+    # =========================================================================
+    # COMMAND: !suggest_teams
+    # =========================================================================
+    
+    @is_public_channel()
+    @commands.command(name='suggest_teams', aliases=['suggest', 'balance_teams'])
+    @commands.cooldown(1, 30, commands.BucketType.channel)
+    async def suggest_teams_command(self, ctx):
+        """
+        Auto-suggest balanced teams based on players in voice channels
+        
+        Usage:
+            !suggest_teams
+        
+        Detects players in monitored voice channels and suggests balanced teams.
+        """
+        if not is_command_enabled('team_builder'):
+            await ctx.send("🔒 Team suggestions are currently disabled.")
+            return
+        
+        try:
+            # Get monitored voice channels
+            monitored_channels = ['Fireteam Triglav', 'Fireteam Barje']
+            
+            # Collect all members in monitored voice channels
+            voice_members = []
+            channel_info = []
+            
+            for guild in self.bot.guilds:
+                for vc in guild.voice_channels:
+                    if vc.name in monitored_channels:
+                        for member in vc.members:
+                            if not member.bot:
+                                voice_members.append(member)
+                        if vc.members:
+                            channel_info.append(f"{vc.name}: {len([m for m in vc.members if not m.bot])}")
+            
+            if len(voice_members) < 4:
+                await ctx.send(
+                    f"❌ Need at least 4 players in voice channels for team balancing.\n"
+                    f"**Current:** {', '.join(channel_info) if channel_info else 'No players detected'}\n"
+                    f"**Tip:** Join a monitored voice channel: {', '.join(monitored_channels)}"
+                )
+                return
+            
+            async with ctx.typing():
+                # Resolve Discord IDs to GUIDs
+                player_list = []
+                unlinked_players = []
+                
+                for member in voice_members:
+                    guid = await self._get_player_guid(member.display_name)
+                    if guid:
+                        player_list.append((guid, member.display_name))
+                    else:
+                        unlinked_players.append(member.display_name)
+                
+                if len(player_list) < 4:
+                    await ctx.send(
+                        f"❌ Not enough linked players for team balancing.\n"
+                        f"**Linked:** {len(player_list)} • **Unlinked:** {len(unlinked_players)}\n"
+                        f"**Unlinked players:** {', '.join(unlinked_players)}\n"
+                        f"💡 Use `!link <player_name>` to link Discord accounts to game names."
+                    )
+                    return
+                
+                # Optimize team split
+                result = await self._optimize_teams(player_list)
+            
+            if not result:
+                await ctx.send("⚠️ Could not find optimal team split.")
+                return
+            
+            # Format player names with badges
+            all_players = result['team_a'] + result['team_b']
+            try:
+                formatted_names = await self.player_formatter.format_players_batch(
+                    all_players, include_badges=True
+                )
+            except Exception as e:
+                logger.warning(f"Error formatting player names: {e}")
+                formatted_names = {guid: name for guid, name in all_players}
+
+            # Create embed
+            embed = discord.Embed(
+                title="🎮 Team Suggestions",
+                description=f"Auto-balanced teams from {len(voice_members)} players in voice",
+                color=0x00D166,  # Green
+                timestamp=datetime.now()
+            )
+
+            # Team A with badges
+            team_a_players = "\n".join([
+                f"• {formatted_names.get(guid, name)}"
+                for guid, name in result['team_a']
+            ])
+            embed.add_field(
+                name=f"🔵 Team 1 • Synergy: `{result['team_a_synergy']:.3f}`",
+                value=team_a_players or "No players",
+                inline=True
+            )
+
+            # Team B with badges
+            team_b_players = "\n".join([
+                f"• {formatted_names.get(guid, name)}"
+                for guid, name in result['team_b']
+            ])
+            embed.add_field(
+                name=f"🔴 Team 2 • Synergy: `{result['team_b_synergy']:.3f}`",
+                value=team_b_players or "No players",
+                inline=True
+            )
+
+            # Balance analysis
+            balance = result['balance_rating']
+            if balance > 0.9:
+                balance_text = "🟢 **Excellent balance!** Very even match expected"
+                prediction = "50% - 50%"
+            elif balance > 0.7:
+                balance_text = "🟡 **Good balance** Competitive match"
+                prediction = "55% - 45%"
+            else:
+                balance_text = "🟠 **Fair balance** One team may have advantage"
+                prediction = "60% - 40%"
+
+            embed.add_field(
+                name="⚖️ Balance Rating",
+                value=f"{balance_text}\n📊 Balance: `{balance:.1%}` • Predicted: `{prediction}`",
+                inline=False
+            )
+
+            # Show unlinked players warning
+            if unlinked_players:
+                embed.add_field(
+                    name="⚠️ Unlinked Players (not included)",
+                    value=", ".join(unlinked_players),
+                    inline=False
+                )
+
+            embed.set_footer(
+                text=f"✅ Analyzed {result['combinations_checked']} combinations • Use !team_builder for manual picks"
+            )
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error in suggest_teams_command: {e}", exc_info=True)
+            await ctx.send(
+                "⚠️ Could not generate team suggestions. Please try again later."
+            )
     
     # =========================================================================
     # COMMAND: !player_impact
