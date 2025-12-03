@@ -105,6 +105,8 @@ class SessionGraphGenerator:
         """
         try:
             # Comprehensive query with all needed stats
+            # Generate placeholders for IN clause
+            placeholders = ','.join(['?' for _ in session_ids])
             query = f"""
                 SELECT p.player_name,
                        SUM(p.kills) as kills,
@@ -126,7 +128,7 @@ class SessionGraphGenerator:
                        p.player_guid,
                        COUNT(DISTINCT p.round_id) as rounds_played
                 FROM player_comprehensive_stats p
-                WHERE p.round_id IN ({session_ids_str})
+                WHERE p.round_id IN ({placeholders})
                 GROUP BY p.player_guid, p.player_name
                 ORDER BY kills DESC
                 LIMIT 10
@@ -489,8 +491,10 @@ class SessionGraphGenerator:
         try:
             # Get per-round data for timeline
             # Order by round_date + round_time to get true chronological order
+            # Generate placeholders for IN clause
+            placeholders = ','.join(['?' for _ in session_ids])
             query = f"""
-                SELECT 
+                SELECT
                     p.player_name,
                     r.map_name,
                     r.round_number,
@@ -504,7 +508,7 @@ class SessionGraphGenerator:
                     r.round_time
                 FROM player_comprehensive_stats p
                 JOIN rounds r ON p.round_id = r.id
-                WHERE p.round_id IN ({session_ids_str})
+                WHERE p.round_id IN ({placeholders})
                 ORDER BY r.round_date, r.round_time, r.round_number
             """
             all_rounds = await self.db_adapter.fetch_all(
@@ -648,7 +652,6 @@ class SessionGraphGenerator:
                           color='white', fontsize=13, pad=10)
 
             # Create form summary table
-            col_width = 1.0 / min(4, len(top_player_names))
             for idx, name in enumerate(top_player_names[:8]):
                 col = idx % 4
                 row = idx // 4

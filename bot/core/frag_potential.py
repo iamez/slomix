@@ -328,22 +328,25 @@ class FragPotentialCalculator:
         cls,
         db_adapter,
         session_ids: List[int],
-        session_ids_str: str
+        session_ids_str: str = None
     ) -> List[PlayerMetrics]:
         """
         Analyze all players in a session and return their metrics
-        
+
         Args:
             db_adapter: Database adapter for queries
             session_ids: List of round IDs in the session
-            session_ids_str: Comma-separated string of round IDs for SQL
-            
+            session_ids_str: Deprecated parameter (kept for compatibility)
+
         Returns:
             List of PlayerMetrics for all players, sorted by FragPotential
         """
-        # Query all player stats for the session
+        # Generate placeholders for parameterized query
+        placeholders = ','.join(['?' for _ in session_ids])
+
+        # Query all player stats for the session - using f-string for placeholder substitution
         query = f"""
-            SELECT 
+            SELECT
                 p.player_name,
                 p.player_guid,
                 SUM(p.kills) as kills,
@@ -360,11 +363,11 @@ class FragPotentialCalculator:
                 SUM(p.objectives_returned) as obj_returned,
                 COUNT(DISTINCT p.round_id) as rounds_played
             FROM player_comprehensive_stats p
-            WHERE p.round_id IN ({session_ids_str})
+            WHERE p.round_id IN ({placeholders})
             GROUP BY p.player_guid, p.player_name
             ORDER BY SUM(p.damage_given) DESC
         """
-        
+
         rows = await db_adapter.fetch_all(query, tuple(session_ids))
         
         if not rows:

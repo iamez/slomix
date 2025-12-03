@@ -56,8 +56,6 @@ async def close_db_pool():
 
 async def get_db() -> AsyncGenerator[DatabaseAdapter, None]:
     """Dependency that yields the shared database pool"""
-    global _db_pool
-
     # Initialize if not already done (shouldn't happen if main.py startup event works)
     if _db_pool is None:
         await init_db_pool()

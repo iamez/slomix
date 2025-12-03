@@ -181,7 +181,7 @@ class ServerControl(commands.Cog):
         self.audit_log_path = 'logs/server_control_access.log'
         os.makedirs('logs', exist_ok=True)
         
-        logger.info(f"✅ ServerControl initialized")
+        logger.info("✅ ServerControl initialized")
         logger.info(f"   SSH: {self.ssh_user}@{self.ssh_host}:{self.ssh_port}")
         logger.info(f"   Server Path: {self.server_install_path}")
         logger.info(f"   Screen: {self.screen_name}")
@@ -381,8 +381,8 @@ class ServerControl(commands.Cog):
                     rcon.send_command('quit')
                     rcon.close()
                     await asyncio.sleep(2)
-                except Exception:
-                    pass  # RCON quit is optional, we'll kill screen anyway
+                except Exception as e:
+                    logger.debug(f"RCON quit failed (optional): {e}")  # RCON quit is optional, we'll kill screen anyway
             
             # Kill screen session
             stop_command = f"screen -S {self.screen_name} -X quit"
@@ -397,7 +397,7 @@ class ServerControl(commands.Cog):
             if verify_exit != 0 or self.screen_name not in verify_output:
                 embed = discord.Embed(
                     title="✅ Server Stopped",
-                    description=f"ET:Legacy server has been stopped",
+                    description="ET:Legacy server has been stopped",
                     color=discord.Color.orange(),
                     timestamp=datetime.now()
                 )
@@ -523,11 +523,11 @@ class ServerControl(commands.Cog):
             os.close(temp_fd)  # Close the file descriptor, we'll use the path
             await attachment.save(temp_path)
             
-            # Calculate MD5 hash
+            # Calculate SHA256 hash for integrity verification
             with open(temp_path, 'rb') as f:
-                file_hash = hashlib.md5(f.read()).hexdigest()
-            
-            await ctx.send(f"📤 Uploading to server... (MD5: `{file_hash}`)")
+                file_hash = hashlib.sha256(f.read()).hexdigest()
+
+            await ctx.send(f"📤 Uploading to server... (SHA256: `{file_hash[:16]}...`)")
             
             # Upload via SSH
             ssh = self.get_ssh_client()
@@ -764,7 +764,7 @@ class ServerControl(commands.Cog):
             admin_channel = self.bot.get_channel(self.admin_channel_id) if self.admin_channel_id else None
             channel_mention = admin_channel.mention if admin_channel else "the admin channel"
             await ctx.send(
-                f"❌ **Permission Denied**\n"
+                "❌ **Permission Denied**\n"
                 f"This command can only be used in {channel_mention}!"
             )
         else:

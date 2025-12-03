@@ -27,21 +27,21 @@ Write-Host "=" * 70 -ForegroundColor Gray
 $env:PYTHONIOENCODING = 'utf-8'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Build command
+# Build command arguments safely
+$arguments = @('tools/simple_bulk_import.py')
 if ($Pattern) {
     Write-Host "[FILES] Pattern: $Pattern" -ForegroundColor Yellow
-    $command = "python tools/simple_bulk_import.py $Pattern"
+    $arguments += $Pattern
 } else {
     Write-Host "[FILES] Importing all files from local_stats/" -ForegroundColor Yellow
-    $command = "python tools/simple_bulk_import.py"
 }
 
 Write-Host "[START] Starting import...`n" -ForegroundColor Green
 Write-Host "=" * 70 -ForegroundColor Gray
 
-# Run import and capture output
+# Run import and capture output (safely without Invoke-Expression)
 $startTime = Get-Date
-$output = Invoke-Expression $command 2>&1
+$output = & python $arguments 2>&1
 
 # Show last N lines
 $output | Select-Object -Last $ShowLast

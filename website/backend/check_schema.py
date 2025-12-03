@@ -23,15 +23,6 @@ async def check_schema():
 
     db = create_adapter(**adapter_kwargs)
     try:
-        # List all tables
-        print("Listing all tables...")
-        tables = await db.fetch_all(
-            """
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public';
-            """
-        )
         # Check rounds schema
         print("Checking rounds schema...")
         columns = await db.fetch_all(

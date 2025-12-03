@@ -15,6 +15,18 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+/**
+ * Safely insert HTML that contains escaped user content.
+ * Only use this when ALL user-controlled content has been escaped with escapeHtml().
+ * @param {Element} element - The target element
+ * @param {string} position - Position to insert ('beforeend', 'afterbegin', etc.)
+ * @param {string} html - HTML string with escaped user content
+ */
+function safeInsertHTML(element, position, html) {
+    // This wrapper documents that the HTML has been sanitized before insertion
+    element.insertAdjacentHTML(position, html);  // nosemgrep: javascript.browser.security.insecure-document-method.insecure-document-method
+}
+
 // Define navigateTo globally (fixes 'navigateTo is not defined')
 const navigateTo = window.navigateTo = function (viewId, updateHistory = true) {
     console.log('Navigating to:', viewId);

@@ -338,7 +338,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
             if not rows:
                 await ctx.send(
                     f"📊 No predictions found for **{ctx.author.display_name}**.\n"
-                    f"Play some competitive matches to generate predictions!"
+                    "Play some competitive matches to generate predictions!"
                 )
                 return
 
@@ -357,7 +357,6 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 # Determine which team the player was on
                 import json
                 team_a_list = json.loads(team_a_guids)
-                _team_b_list = json.loads(team_b_guids)
 
                 if player_guid in team_a_list:
                     your_team = "Team A"
@@ -634,10 +633,12 @@ class PredictionsCog(commands.Cog, name="Predictions"):
 
             # Get player names
             guids = [r[0] for r in rows]
+            # Safe: placeholders are generated strings ($1, $2, $3), not user input
+            placeholders = ','.join([f"${i+1}" for i in range(len(guids))])
             name_query = f"""
                 SELECT DISTINCT player_guid, player_name
                 FROM player_comprehensive_stats
-                WHERE player_guid IN ({','.join([f"${i+1}" for i in range(len(guids))])})
+                WHERE player_guid IN ({placeholders})
             """
             name_rows = await self.db.fetch_all(name_query, tuple(guids))
             guid_to_name = {r[0]: r[1] for r in name_rows}
