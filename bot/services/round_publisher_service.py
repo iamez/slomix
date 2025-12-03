@@ -215,8 +215,8 @@ class RoundPublisherService:
                                    '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
                     return ''.join(emoji_digits[d] for d in rank_str)
 
-            # Split into chunks for Discord field limits
-            chunk_size = 5
+            # Split into chunks for Discord field limits (1024 chars per field)
+            chunk_size = 8
             for i in range(0, len(players_sorted), chunk_size):
                 chunk = players_sorted[i:i + chunk_size]
                 # Use invisible character for field name (required but hidden)
