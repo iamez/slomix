@@ -10,7 +10,19 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 
 ## 🔥 Recent Updates (December 2025)
 
-### **🔧 v1.0.1: Critical Bug Fixes (December 1, 2025)** 🆕
+### **🚀 v1.0.2: Real-Time Push & Voice Logging (December 3, 2025)** 🆕
+
+**Instant stats updates and enhanced Discord posting!**
+
+- 🔌 **WebSocket Real-Time Push** - VPS notifies bot instantly when new stats files are written (replaces 60s SSH polling)
+- 🎙️ **Voice Session Logging** - Track player voice channel activity for gaming sessions
+- 📤 **Round Publisher Service** - Auto-post rich Discord embeds with ALL player stats after each round
+- 🎯 **Team Suggestion Commands** - `!suggest_teams` and `!balance_teams` for AI-powered team balancing
+- 📊 **Enhanced Round Stats** - Compact 2-line format with K/D, DPM, damage, accuracy, headshots, revives, team damage, multikills, time played/dead/denied
+
+**Technical:** WebSocket push via `vps_ws_notifier.py` on VPS, round publisher with 8-player chunks, fixed SQL nosec bug and command conflicts.
+
+### **🔧 v1.0.1: Critical Bug Fixes (December 1, 2025)**
 
 **Live Posting Fixed!** Resolved race condition that prevented Discord stats posting:
 
@@ -352,6 +364,15 @@ SSH_GRACE_PERIOD_MINUTES=10
 
 # Voice Channels (comma-separated IDs for voice-conditional monitoring)
 GAMING_VOICE_CHANNELS=947583652957659166,1029097483697143938
+
+# WebSocket Real-Time Push (Optional - replaces SSH polling)
+WS_ENABLED=false
+WS_HOST=your.vps.ip
+WS_PORT=8765
+WS_AUTH_TOKEN=your_secret_token
+
+# Voice Logging
+ENABLE_VOICE_LOGGING=false
 ```
 
 ---
@@ -408,6 +429,10 @@ GAMING_VOICE_CHANNELS=947583652957659166,1029097483697143938
 - `!rebuild_sessions` - Recalculate gaming sessions
 - `!health` - System health check
 
+### **🎯 Team Balancing** 🆕
+- `!suggest_teams` - AI-powered team suggestions from voice channel players
+- `!balance_teams` - Alias for suggest_teams
+
 ### **Help & Info**
 - `!help` - Show all commands
 - `!mvp` - MVP awards for session
@@ -429,9 +454,10 @@ slomix/
 │   │   │   ├── admin_predictions_cog.py # 🆕 Prediction admin tools (530 lines)
 │   │   │   └── sync_cog.py              # VPS sync commands
 │   │   ├── services/
-│   │   │   ├── prediction_engine.py     # 🆕 AI prediction engine (540 lines)
-│   │   │   ├── prediction_embed_builder.py # 🆕 Beautiful prediction embeds (395 lines)
-│   │   │   └── voice_session_service.py # 🆕 Team split detection
+│   │   │   ├── prediction_engine.py     # AI prediction engine (540 lines)
+│   │   │   ├── prediction_embed_builder.py # Beautiful prediction embeds (395 lines)
+│   │   │   ├── round_publisher_service.py # 🆕 Auto-post round stats to Discord
+│   │   │   └── voice_session_service.py # 🆕 Voice logging & team split detection
 │   │   ├── core/
 │   │   │   ├── database_adapter.py      # PostgreSQL/SQLite abstraction
 │   │   │   └── stats_cache.py           # TTL-based caching (300s)

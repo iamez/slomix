@@ -12,6 +12,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.2] - 2025-12-03
+
+### December 2025 Feature Release - Real-Time Push & Voice Logging
+
+### Added
+- **WebSocket Real-Time Push System** - Instant file detection from VPS via WebSocket (replaces 60s SSH polling)
+  - `vps_ws_notifier.py` - VPS-side file watcher that pushes notifications to bot
+  - Bot receives instant alerts when new stats files are written
+  - Config: `WS_ENABLED`, `WS_HOST`, `WS_PORT`, `WS_AUTH_TOKEN`
+- **Voice Session Logging** - Track player voice channel activity for gaming sessions
+  - Logs join/leave events for configured gaming voice channels
+  - Config: `ENABLE_VOICE_LOGGING=true`
+- **Round Publisher Service** - Auto-post rich Discord embeds after each round
+  - Shows ALL players ranked by kills with comprehensive stats
+  - Compact 2-line format: Name on line 1, all stats on line 2-3
+  - Stats include: K/D/G, DPM, damage dealt/received, accuracy, headshots, revives, team damage, time played/dead/denied, multikills
+  - Map completion summaries posted after Round 2
+- **Team Suggestion Commands** - AI-powered team balancing
+  - `!suggest_teams` - Suggest balanced teams from voice channel players
+  - `!balance_teams` - Alias for suggest_teams
+  - Uses historical player stats to optimize team balance
+- **FiveEyes Synergy Analytics Framework** - Infrastructure for player synergy tracking (disabled by default)
+  - `fiveeyes_config.json` - Configuration for synergy analytics
+  - Synergy calculation and team optimization algorithms ready for future activation
+
+### Changed
+- **SSH Monitoring Now Optional** - WebSocket push is preferred method for instant file detection
+- **Round Stats Format Enhanced** - New compact 2-line format with all stats including multikills and time denied
+- **Player Chunk Size Increased** - Bumped from 5 to 8 players per embed field (typical games don't split across fields)
+
+### Fixed
+- **SQL Nosec Comment Bug** - Fixed `# nosec B608` comment appearing inside SQL query string causing PostgreSQL syntax errors
+- **Command Alias Conflicts** - Resolved `balance_teams` and `suggest_teams` alias conflicts between team_builder and synergy_analytics cogs
+- **Channel Check Decorators** - Removed `@is_public_channel()` from team commands that was blocking execution
+
+### Technical Details
+- **New Files**: `bot/services/round_publisher_service.py`, `bot/services/voice_session_service.py`, `tools/vps_ws_notifier.py`
+- **Config Additions**: WebSocket settings (`WS_*`), voice logging (`ENABLE_VOICE_LOGGING`)
+- **Branch**: Merged from `feature/websocket-push-voice-logging` (PR #22)
+
+---
+
 ## [1.0.1] - 2025-12-01
 
 ### December 2025 Maintenance Release - Critical Bug Fixes
