@@ -1047,7 +1047,7 @@ class UltimateETLegacyBot(commands.Bot):
             gaming_session_id (integer, starts at 1)
         """
         try:
-            from datetime import datetime, timedelta
+            # datetime and timedelta already imported at module level
 
             # Parse current timestamp first
             try:
@@ -1356,7 +1356,7 @@ class UltimateETLegacyBot(commands.Bot):
         """
         try:
             # Convert string date to datetime for PostgreSQL compatibility
-            from datetime import datetime
+            # datetime already imported at module level
             if isinstance(last_seen_date, str):
                 last_seen_datetime = datetime.strptime(last_seen_date, '%Y-%m-%d')
             else:
