@@ -205,9 +205,11 @@ class ServerControl(commands.Cog):
             logger.error(f"Failed to write audit log: {e}")
     
     def get_ssh_client(self) -> paramiko.SSHClient:
-        """Create and connect SSH client"""
+        """Create and connect SSH client with configurable host key verification"""
+        from bot.automation.ssh_handler import configure_ssh_host_key_policy
+        
         ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        configure_ssh_host_key_policy(ssh)
         ssh.connect(
             hostname=self.ssh_host,
             port=self.ssh_port,
@@ -256,8 +258,9 @@ class ServerControl(commands.Cog):
         await ctx.send("🔍 Checking server status...")
         
         try:
-            # Check if screen session exists
-            output, error, exit_code = self.execute_ssh_command(f"screen -ls | grep {self.screen_name}")
+            # Check if screen session exists (use shlex.quote for safety)
+            safe_screen = shlex.quote(self.screen_name)
+            output, error, exit_code = self.execute_ssh_command(f"screen -ls | grep {safe_screen}")
             
             if exit_code == 0 and self.screen_name in output:
                 # Server is running - get more details
@@ -316,8 +319,9 @@ class ServerControl(commands.Cog):
         """🚀 Start the ET:Legacy server (Admin channel only)"""
         await self.log_action(ctx, "Server Start", "Attempting to start server...")
         
-        # Check if already running
-        check_output, _, check_exit = self.execute_ssh_command(f"screen -ls | grep {self.screen_name}")
+        # Check if already running (use shlex.quote for safety)
+        safe_screen = shlex.quote(self.screen_name)
+        check_output, _, check_exit = self.execute_ssh_command(f"screen -ls | grep {safe_screen}")
         if check_exit == 0 and self.screen_name in check_output:
             await ctx.send("⚠️ Server is already running!")
             return
@@ -325,10 +329,11 @@ class ServerControl(commands.Cog):
         await ctx.send("🚀 Starting ET:Legacy server...")
         
         try:
-            # Start server in screen session using vektor.cfg
+            # Start server in screen session using vektor.cfg (use shlex.quote for safety)
+            safe_install_path = shlex.quote(self.server_install_path)
             start_command = (
-                f"cd {self.server_install_path} && "
-                f"screen -dmS {self.screen_name} {self.server_binary} +exec {self.server_config}"
+                f"cd {safe_install_path} && "
+                f"screen -dmS {safe_screen} {self.server_binary} +exec {self.server_config}"
             )
             
             output, error, exit_code = self.execute_ssh_command(start_command)
@@ -337,7 +342,7 @@ class ServerControl(commands.Cog):
             await asyncio.sleep(3)
             
             # Verify it started
-            verify_output, _, verify_exit = self.execute_ssh_command(f"screen -ls | grep {self.screen_name}")
+            verify_output, _, verify_exit = self.execute_ssh_command(f"screen -ls | grep {safe_screen}")
             
             if verify_exit == 0 and self.screen_name in verify_output:
                 embed = discord.Embed(
@@ -384,15 +389,16 @@ class ServerControl(commands.Cog):
                 except Exception as e:
                     logger.debug(f"RCON quit failed (optional): {e}")  # RCON quit is optional, we'll kill screen anyway
             
-            # Kill screen session
-            stop_command = f"screen -S {self.screen_name} -X quit"
+            # Kill screen session (use shlex.quote for safety)
+            safe_screen = shlex.quote(self.screen_name)
+            stop_command = f"screen -S {safe_screen} -X quit"
             output, error, exit_code = self.execute_ssh_command(stop_command)
             
             # Wait for shutdown
             await asyncio.sleep(2)
             
             # Verify stopped
-            verify_output, _, verify_exit = self.execute_ssh_command(f"screen -ls | grep {self.screen_name}")
+            verify_output, _, verify_exit = self.execute_ssh_command(f"screen -ls | grep {safe_screen}")
             
             if verify_exit != 0 or self.screen_name not in verify_output:
                 embed = discord.Embed(

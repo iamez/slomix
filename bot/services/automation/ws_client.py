@@ -137,7 +137,8 @@ class StatsWebSocketClient:
                     # Authenticate with shared token
                     if self.config.ws_auth_token:
                         token = self.config.ws_auth_token
-                        logger.debug(f"🔑 Sending token (len={len(token)}): {token[:8]}...{token[-4:]}")
+                        # Security: only log length, not token content
+                        logger.debug(f"🔑 Sending auth token (len={len(token)})")
                         await ws.send(token)
                         auth_response = await asyncio.wait_for(ws.recv(), timeout=5)
                         if auth_response != "AUTH_OK":

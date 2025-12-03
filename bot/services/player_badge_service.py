@@ -275,7 +275,9 @@ class PlayerBadgeService:
                 GROUP BY p.player_guid
             """  # nosec B608
 
-            results = await self.db_adapter.fetch_all(query, tuple(player_guids))
+            results = await self.db_adapter.fetch_all(
+                query.format(placeholders=placeholders), tuple(player_guids)
+            )
 
             badge_map = {}
             for row in results:

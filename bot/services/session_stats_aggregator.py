@@ -71,7 +71,7 @@ class SessionStatsAggregator:
                     SUM(shots) as shots,
                     SUM(headshots) as headshots
                 FROM weapon_comprehensive_stats
-            WHERE round_id NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
+                WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
                 GROUP BY round_id, player_guid
             ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
             WHERE p.round_id IN ({session_ids_str})
