@@ -467,7 +467,7 @@ class SessionEmbedBuilder:
                 awards["selfkill_master"] = {"player": name, "value": selfkills}
 
             # Kill Thief
-            if steals > awards["kill_thie"]["value"]:
+            if steals > awards["kill_thief"]["value"]:
                 awards["kill_thief"] = {"player": name, "value": steals}
 
             # Spray & Pray
@@ -546,9 +546,9 @@ class SessionEmbedBuilder:
             count = int(awards["selfkill_master"]["value"])
             awards_text.append(f"💣 **Self-Destruct Master:** `{player}` ({count} self-kills)")
 
-        if awards["kill_thie"]["value"] >= 5:
-            player = awards["kill_thie"]["player"]
-            count = int(awards["kill_thie"]["value"])
+        if awards["kill_thief"]["value"] >= 5:
+            player = awards["kill_thief"]["player"]
+            count = int(awards["kill_thief"]["value"])
             awards_text.append(f"🦹 **Kill Thief:** `{player}` ({count} stolen kills)")
 
         if awards["spray_pray"]["value"] >= 50:
