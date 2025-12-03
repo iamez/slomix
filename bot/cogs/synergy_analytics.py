@@ -1108,6 +1108,7 @@ class SynergyAnalytics(commands.Cog):
         
         # Pick diverse options - ensure team compositions differ significantly
         selected = []
+        selected_indices = []  # Track indices separately for diversity check
         used_compositions = set()
         
         for split in all_splits:
@@ -1121,8 +1122,8 @@ class SynergyAnalytics(commands.Cog):
             
             # Check diversity: at least 2 players must be different from previous selections
             is_diverse = True
-            for prev in selected:
-                overlap_a = len(split['team_a_indices'] & prev['team_a_indices'])
+            for prev_indices in selected_indices:
+                overlap_a = len(split['team_a_indices'] & prev_indices)
                 # If more than half are the same, it's not diverse enough
                 if overlap_a > len(split['team_a_indices']) - 1:
                     is_diverse = False
@@ -1137,6 +1138,7 @@ class SynergyAnalytics(commands.Cog):
                 split_clean['team_b_names'] = [name for _, name in split['team_b']]
                 split_clean['option_number'] = len(selected) + 1
                 selected.append(split_clean)
+                selected_indices.append(split['team_a_indices'])  # Track for diversity
                 used_compositions.add(comp_key)
                 used_compositions.add(reverse_key)
             
