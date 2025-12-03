@@ -105,13 +105,15 @@ class RoundPublisherService:
             db_winner_team = round_info[2] if round_info else winner_team
             db_round_outcome = round_info[3] if round_info else round_outcome
 
-            # Get player stats
+            # Get player stats (expanded to include multikills and time denied)
             players_query = """
                 SELECT
                     player_name, team, kills, deaths, damage_given, damage_received,
                     team_damage_given, team_damage_received, gibs, headshots,
                     accuracy, revives_given, times_revived, time_dead_minutes,
-                    efficiency, kd_ratio, time_played_minutes, dpm
+                    efficiency, kd_ratio, time_played_minutes, dpm,
+                    double_kills, triple_kills, quad_kills, multi_kills, mega_kills,
+                    denied_playtime
                 FROM player_comprehensive_stats
                 WHERE round_id = ? AND round_number = ?
                 ORDER BY kills DESC
@@ -139,7 +141,13 @@ class RoundPublisherService:
                         'efficiency': row[14],
                         'kd_ratio': row[15],
                         'time_played': row[16],
-                        'dpm': row[17]
+                        'dpm': row[17],
+                        'double_kills': row[18] or 0,
+                        'triple_kills': row[19] or 0,
+                        'quad_kills': row[20] or 0,
+                        'multi_kills': row[21] or 0,
+                        'mega_kills': row[22] or 0,
+                        'time_denied': row[23] or 0
                     })
 
             logger.info(f"📊 Fetched {len(players)} players with FULL stats from database")
@@ -207,7 +215,7 @@ class RoundPublisherService:
                                    '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
                     return ''.join(emoji_digits[d] for d in rank_str)
 
-            # Split into chunks of 5 for Discord field limits (more stats per player = fewer per field)
+            # Split into chunks for Discord field limits
             chunk_size = 5
             for i in range(0, len(players_sorted), chunk_size):
                 chunk = players_sorted[i:i + chunk_size]
@@ -221,39 +229,85 @@ class RoundPublisherService:
                     name = player.get('name', 'Unknown')[:16]
                     kills = player.get('kills', 0)
                     deaths = player.get('deaths', 0)
-                    dmg = player.get('damage_given', 0)
-                    acc = player.get('accuracy', 0)
-                    hs = player.get('headshots', 0)
-                    dpm = player.get('dpm', 0)
-                    revives = player.get('revives', 0)
-                    got_revived = player.get('times_revived', 0)
                     gibs = player.get('gibs', 0)
-                    team_dmg_given = player.get('team_damage_given', 0)
-                    time_dead = player.get('time_dead', 0)
+                    kd_ratio = player.get('kd_ratio', 0) or 0
+                    dpm = player.get('dpm', 0) or 0
+                    dmg = player.get('damage_given', 0) or 0
+                    dmg_recv = player.get('damage_received', 0) or 0
+                    acc = player.get('accuracy', 0) or 0
+                    hs = player.get('headshots', 0) or 0
+                    revives = player.get('revives', 0) or 0
+                    got_revived = player.get('times_revived', 0) or 0
+                    team_dmg = player.get('team_damage_given', 0) or 0
+                    time_dead = player.get('time_dead', 0) or 0
+                    time_denied = player.get('time_denied', 0) or 0
+                    time_played = player.get('time_played', 0) or 0
 
-                    kd_str = f'{kills}/{deaths}'
+                    # Multikills
+                    double_kills = player.get('double_kills', 0) or 0
+                    triple_kills = player.get('triple_kills', 0) or 0
+                    quad_kills = player.get('quad_kills', 0) or 0
+                    multi_kills = player.get('multi_kills', 0) or 0
+                    mega_kills = player.get('mega_kills', 0) or 0
 
-                    # Line 1: Rank + Name + Core combat stats
-                    line1 = (
-                        f"{rank_display} **{name}**\n"
-                        f"    ⚔️ K/D: `{kd_str}`  |  DMG: `{int(dmg):,}`  |  "
-                        f"DPM: `{int(dpm)}`"
-                    )
+                    # Format damage (K if over 1000)
+                    if dmg >= 1000:
+                        dmg_str = f"{dmg/1000:.1f}K"
+                    else:
+                        dmg_str = f"{int(dmg)}"
 
-                    # Line 2: Accuracy and support stats
+                    if dmg_recv >= 1000:
+                        dmg_recv_str = f"{dmg_recv/1000:.1f}K"
+                    else:
+                        dmg_recv_str = f"{int(dmg_recv)}"
+
+                    # Format times as M:SS
+                    dead_min = int(time_dead)
+                    dead_sec = int((time_dead % 1) * 60)
+                    time_dead_str = f"{dead_min}:{dead_sec:02d}"
+
+                    denied_min = int(time_denied // 60)
+                    denied_sec = int(time_denied % 60)
+                    time_denied_str = f"{denied_min}:{denied_sec:02d}"
+
+                    played_min = int(time_played)
+                    played_sec = int((time_played % 1) * 60)
+                    time_played_str = f"{played_min}:{played_sec:02d}"
+
+                    # Build multikills string (only if any)
+                    multikills_parts = []
+                    if double_kills > 0:
+                        multikills_parts.append(f"{double_kills}x2")
+                    if triple_kills > 0:
+                        multikills_parts.append(f"{triple_kills}x3")
+                    if quad_kills > 0:
+                        multikills_parts.append(f"{quad_kills}x4")
+                    if multi_kills > 0:
+                        multikills_parts.append(f"{multi_kills}x5")
+                    if mega_kills > 0:
+                        multikills_parts.append(f"{mega_kills}x6")
+                    multikills_str = " ".join(multikills_parts)
+
+                    # Line 1: Rank + Name
+                    line1 = f"{rank_display} **{name}**"
+
+                    # Line 2: All combat stats (compact format like session_embed)
+                    # K/D/G (ratio) • DPM • DMG↑/↓ • ACC • HS • Rev±
+                    # Gibs TmDmg • ⏱Played 💀Dead ⏳Denied • Multikills
                     line2 = (
-                        f"    🎯 ACC: `{acc:.1f}%`  |  HS: `{hs}`  |  "
-                        f"Rev: `{revives}/{got_revived}`"
+                        f"{kills}K/{deaths}D/{gibs}G ({kd_ratio:.2f}) "
+                        f"DPM:{int(dpm)} {dmg_str}⬆/{dmg_recv_str}⬇ "
+                        f"ACC:{acc:.1f}% HS:{hs} Rev:{revives}↑/{got_revived}↓"
                     )
-
-                    # Line 3: Additional stats
                     line3 = (
-                        f"    💀 Gibs: `{gibs}`  |  TmDmg: `{int(team_dmg_given)}`  |  "
-                        f"Dead: `{time_dead:.1f}m`"
+                        f"TmDmg:{int(team_dmg)} "
+                        f"⏱{time_played_str} 💀{time_dead_str} ⏳{time_denied_str}"
                     )
+                    if multikills_str:
+                        line3 += f" 🔥{multikills_str}"
 
-                    # Combine with spacing between players
-                    player_lines.append(f"{line1}\n{line2}\n{line3}")
+                    # Combine: Name on line 1, stats on line 2+3 with indent
+                    player_lines.append(f"{line1}\n↳ {line2}\n↳ {line3}")
 
                 # Join with blank line between players for readability
                 embed.add_field(
