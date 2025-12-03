@@ -91,6 +91,12 @@ class VoiceSessionService:
             logger.info("✅ PredictionEmbedBuilder enabled")
         else:
             self.prediction_embed_builder = None
+        
+        # Team Suggestion Auto-Trigger (Phase 5: Smart Team Building)
+        self.team_suggest_debounce_task: Optional[asyncio.Task] = None
+        self.last_team_suggest_count: int = 0
+        self.team_suggest_cooldown_seconds: int = 30
+        self.team_suggest_thresholds: List[int] = [4, 6, 8, 10]  # Trigger at these counts
 
         logger.info("✅ VoiceSessionService initialized")
 
@@ -204,6 +210,12 @@ class VoiceSessionService:
             # Check for team splits during active sessions
             if self.session_active and self.config.enable_team_split_detection:
                 await self._check_team_split()
+            
+            # ========== PHASE 5: TEAM SUGGESTION AUTO-TRIGGER ==========
+            # Auto-suggest teams when even number of players gather
+            await self._maybe_trigger_team_suggestions(
+                total_players, current_participants
+            )
 
         except Exception as e:
             logger.error(f"Voice state update error: {e}", exc_info=True)
@@ -497,6 +509,100 @@ class VoiceSessionService:
         else:
             return f"{minutes}m"
 
+    async def _maybe_trigger_team_suggestions(
+        self, player_count: int, participants: Set[int]
+    ):
+        """
+        Auto-trigger team suggestions when even numbers gather.
+        
+        Phase 5: Smart Team Building - triggers notification when
+        4, 6, 8, or 10 linked players are in voice.
+        
+        Uses 30-second debounce to avoid spam.
+        """
+        # Only trigger at threshold counts (4, 6, 8, 10)
+        if player_count not in self.team_suggest_thresholds:
+            self.last_team_suggest_count = player_count
+            return
+        
+        # Skip if we already triggered at this count
+        if player_count == self.last_team_suggest_count:
+            return
+        
+        # Cancel any pending debounce
+        if self.team_suggest_debounce_task:
+            self.team_suggest_debounce_task.cancel()
+        
+        # Start debounce timer
+        self.team_suggest_debounce_task = asyncio.create_task(
+            self._debounced_team_suggest(player_count, participants)
+        )
+    
+    async def _debounced_team_suggest(
+        self, player_count: int, participants: Set[int]
+    ):
+        """
+        Wait for debounce period then post team suggestion notification.
+        """
+        try:
+            # Wait for 30 seconds (debounce)
+            await asyncio.sleep(self.team_suggest_cooldown_seconds)
+            
+            # Recount players - they might have left
+            current_count = 0
+            for channel_id in self.config.gaming_voice_channels:
+                channel = self.bot.get_channel(channel_id)
+                if channel and isinstance(channel, discord.VoiceChannel):
+                    current_count += len([m for m in channel.members if not m.bot])
+            
+            # Only proceed if count is still at threshold
+            if current_count not in self.team_suggest_thresholds:
+                logger.debug(
+                    f"Team suggest cancelled - player count changed to {current_count}"
+                )
+                return
+            
+            # Check how many are linked
+            discord_ids = list(participants)
+            guids = await self._resolve_discord_ids_to_guids(discord_ids)
+            linked_count = len(guids)
+            
+            if linked_count < 4:
+                logger.debug(
+                    f"Team suggest skipped - only {linked_count} linked players"
+                )
+                return
+            
+            # Post notification to production channel
+            if self.config.production_channel_id:
+                channel = self.bot.get_channel(self.config.production_channel_id)
+                if channel:
+                    embed = discord.Embed(
+                        title="🎮 Team Suggestion Ready!",
+                        description=(
+                            f"**{current_count}** players detected • "
+                            f"**{linked_count}** linked\n\n"
+                            f"Use `!suggest_teams` to see balanced team options!"
+                        ),
+                        color=0x00D166,
+                        timestamp=datetime.now()
+                    )
+                    embed.set_footer(
+                        text="Vote on team suggestions with reactions"
+                    )
+                    await channel.send(embed=embed)
+                    logger.info(
+                        f"🎮 Auto team suggest triggered: {current_count} players"
+                    )
+            
+            # Update last count
+            self.last_team_suggest_count = current_count
+            
+        except asyncio.CancelledError:
+            logger.debug("Team suggest debounce cancelled")
+        except Exception as e:
+            logger.error(f"Error in team suggest trigger: {e}", exc_info=True)
+
     async def _check_team_split(self):
         """
         Check for team split and update state.
@@ -746,7 +852,7 @@ class VoiceSessionService:
         # Build query with correct number of placeholders for PostgreSQL
         placeholders = ', '.join([f'${i+1}' for i in range(len(discord_ids))])
         query = f"""  # nosec B608 - parameterized placeholders, not user input
-            SELECT discord_id, et_guid
+            SELECT discord_id, player_guid
             FROM player_links
             WHERE discord_id IN ({placeholders})
         """
