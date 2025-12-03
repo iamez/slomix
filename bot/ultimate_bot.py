@@ -738,8 +738,10 @@ class UltimateETLegacyBot(commands.Bot):
         def _list_files_sync():
             ssh = None
             try:
+                from bot.automation.ssh_handler import configure_ssh_host_key_policy
+                
                 ssh = paramiko.SSHClient()
-                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                configure_ssh_host_key_policy(ssh)
 
                 ssh.connect(
                     hostname=ssh_config['host'],

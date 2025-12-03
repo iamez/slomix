@@ -369,12 +369,13 @@ class SSHMonitor:
     def _list_remote_files_sync(self) -> list:
         """List files in remote SSH directory (synchronous - use in executor)"""
         import paramiko
+        from bot.automation.ssh_handler import configure_ssh_host_key_policy
 
         ssh = None
         try:
             # Create SSH client
             ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            configure_ssh_host_key_policy(ssh)
 
             # Connect
             ssh.connect(
@@ -469,6 +470,7 @@ class SSHMonitor:
         """Download file from remote server (synchronous - use in executor)"""
         import paramiko
         from scp import SCPClient
+        from bot.automation.ssh_handler import configure_ssh_host_key_policy
 
         download_start = datetime.now()
         ssh = None
@@ -476,7 +478,7 @@ class SSHMonitor:
         try:
             # Create SSH client
             ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            configure_ssh_host_key_policy(ssh)
 
             # Connect
             ssh.connect(
