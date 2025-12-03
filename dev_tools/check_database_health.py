@@ -16,10 +16,9 @@ print("-" * 80)
 
 for table in tables:
     try:
-        # nosec B608 - table names are hardcoded constants, not user input
-        count = cursor.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        count = cursor.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]  # nosec B608 - hardcoded table names
         # Get column count
-        pragma = cursor.execute(f"PRAGMA table_info({table})").fetchall()
+        pragma = cursor.execute(f"PRAGMA table_info({table})").fetchall()  # nosec B608
         cols = len(pragma)
         
         status = "✅" if count > 0 else "⚠️ EMPTY"

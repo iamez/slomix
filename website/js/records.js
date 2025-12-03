@@ -54,6 +54,7 @@ async function loadMapFilter(selectElement) {
         const maps = await fetchJSON(`${API_BASE}/stats/maps`);
         if (maps && Array.isArray(maps)) {
             const currentVal = selectElement.value;
+            // nosemgrep: javascript.browser.security.innerHTML-property-set - all map data is escaped with escapeHtmlRecords()
             selectElement.innerHTML = '<option value="">All Maps</option>' +
                 maps.map(map => `<option value="${escapeHtmlRecords(map)}">${escapeHtmlRecords(map)}</option>`).join('');
             selectElement.value = currentVal;
@@ -181,7 +182,8 @@ function openRecordModal(categoryKey) {
     // Set Title - catName is sanitized, so safe to use innerHTML for formatting
     titleEl.innerHTML = `<span>${catName}</span> <span class="text-slate-500 text-sm font-normal ml-2">Top 5 All-Time</span>`;
 
-    // Build Content
+    // Build Content - all user data (player, map) is escaped with escapeHtmlRecords()
+    // nosemgrep: javascript.browser.security.innerHTML-property-set
     contentEl.innerHTML = records.map((rec, index) => {
         const isFirst = index === 0;
         const rankColor = isFirst ? 'text-brand-gold' : 'text-slate-400';

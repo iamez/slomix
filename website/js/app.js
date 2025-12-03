@@ -219,7 +219,7 @@ async function loadPredictions() {
             const probA = pred.team_a_probability * 100;
             const probB = pred.team_b_probability * 100;
 
-            // Determine status
+            // Determine status - static HTML badges, no user input
             let statusBadge = '';
             let statusBorder = 'border-white/5';
 
@@ -538,7 +538,7 @@ function renderSessionDetails(data) {
                 <div class="text-2xl font-black text-brand-emerald">18m</div> 
             </div>
         </div>
-    `;
+    `;  // nosemgrep: javascript.browser.security.insecure-document-method.insecure-document-method - static HTML only, no user input
     container.insertAdjacentHTML('beforeend', summaryHtml);
 
     // 2. Add Charts Section

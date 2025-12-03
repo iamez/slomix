@@ -71,8 +71,7 @@ async def check_4way_sync(target_date=None):
     # Don't capture output so password prompt shows
     ssh_cmd = f"ssh -p {ssh_port} {ssh_user}@{ssh_host} ls -1 {remote_path}/{target_date}*.txt 2>/dev/null"
     try:
-        # nosec B602 B603 - Admin tool with hardcoded SSH command
-        result = subprocess.run(ssh_cmd, shell=True, capture_output=True, text=True, timeout=30, input=None)
+        result = subprocess.run(ssh_cmd, shell=True, capture_output=True, text=True, timeout=30, input=None)  # nosec B602 B603 - admin tool
         ls_output = result.stdout.strip()
         if not ls_output or result.returncode != 0:
             print("   ⚠️  No files found or connection failed")
