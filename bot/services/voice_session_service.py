@@ -851,11 +851,11 @@ class VoiceSessionService:
 
         # Build query with correct number of placeholders for PostgreSQL
         placeholders = ', '.join([f'${i+1}' for i in range(len(discord_ids))])
-        query = f"""  # nosec B608 - parameterized placeholders, not user input
+        query = f"""
             SELECT discord_id, player_guid
             FROM player_links
             WHERE discord_id IN ({placeholders})
-        """
+        """  # nosec B608 - parameterized placeholders, not user input
 
         rows = await self.db_adapter.fetch_all(query, tuple(discord_ids))
 
