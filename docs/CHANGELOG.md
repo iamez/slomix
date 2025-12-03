@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.2] - 2025-12-03
+## [1.0.2] - 2025-12-04
 
 ### December 2025 Feature Release - Real-Time Push & Voice Logging
 
@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SQL Nosec Comment Bug** - Fixed `# nosec B608` comment appearing inside SQL query string causing PostgreSQL syntax errors
 - **Command Alias Conflicts** - Resolved `balance_teams` and `suggest_teams` alias conflicts between team_builder and synergy_analytics cogs
 - **Channel Check Decorators** - Removed `@is_public_channel()` from team commands that was blocking execution
+- **Critical SQL Placeholder Bugs** - Fixed 12 queries using `{placeholders}` in regular strings instead of f-strings (would silently fail)
+- **Kill Thief Typo** - Fixed `kill_thie` → `kill_thief` in session_embed_builder.py (would cause KeyError)
+- **Foreign Key Constraint Mapping** - Fixed empty string `''` to `'f'` in validate_vps_schema.py
+- **Unused Variables** - Removed unused `ph`, `placeholder`, `heapq` variables
+- **Redundant Imports** - Removed duplicate `datetime` imports in ultimate_bot.py
 
 ### Technical Details
 - **New Files**: `bot/services/round_publisher_service.py`, `bot/services/voice_session_service.py`, `tools/vps_ws_notifier.py`
