@@ -32,7 +32,7 @@ async def main():
         print(f"  {match_id}: {count} copies")
         total_to_delete += (count - 1)
 
-    print(f"\n📊 Summary:")
+    print("\n📊 Summary:")
     print(f"  Duplicate match_ids: {len(duplicates)}")
     print(f"  Total duplicate entries to delete: {total_to_delete}")
 
@@ -66,7 +66,7 @@ async def main():
         deleted_count += rows_deleted
         print(f"  ✅ Deleted {rows_deleted} duplicate(s) for {match_id}")
 
-    print(f"\n✅ Deletion complete!")
+    print("\n✅ Deletion complete!")
     print(f"   Total entries deleted: {deleted_count}")
 
     # Verify cleanup

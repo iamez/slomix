@@ -56,7 +56,7 @@ cursor.execute("""
 """)
 
 result = cursor.fetchone()
-print(f"\nUsing MAX(time_played) deduplication:")
+print("\nUsing MAX(time_played) deduplication:")
 print(f"   Round 1: {result[0]} total records, {result[1]} unique players")
 
 # Show the actual deduplicated records for one player

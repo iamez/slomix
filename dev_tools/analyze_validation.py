@@ -58,10 +58,10 @@ print("="*80)
 print("VALIDATION ANALYSIS - NOV 2 SESSION")
 print("="*80)
 
-print(f"\n1. HEADSHOTS MISMATCH ANALYSIS")
+print("\n1. HEADSHOTS MISMATCH ANALYSIS")
 print(f"   Total instances: {len(headshot_issues)}")
-print(f"   Pattern: Raw files show MORE headshots than database")
-print(f"\n   Sample mismatches:")
+print("   Pattern: Raw files show MORE headshots than database")
+print("\n   Sample mismatches:")
 for i, issue in enumerate(headshot_issues[:10]):
     print(f"     {issue['name']:20s} Raw: {issue['raw']:3d}  DB: {issue['db']:3d}  Missing: {issue['diff']:3d}")
 
@@ -72,17 +72,17 @@ if headshot_issues:
     total_missing = sum(i['diff'] for i in headshot_issues)
     avg_missing = total_missing / len(headshot_issues)
     
-    print(f"\n   Statistics:")
+    print("\n   Statistics:")
     print(f"     Total headshots in raw files: {total_raw}")
     print(f"     Total headshots in database:  {total_db}")
     print(f"     Total missing:                 {total_missing}")
     print(f"     Average missing per instance:  {avg_missing:.1f}")
     print(f"     Percentage lost:               {100*total_missing/total_raw:.1f}%")
 
-print(f"\n2. WEAPON DEATHS MISMATCH ANALYSIS")
+print("\n2. WEAPON DEATHS MISMATCH ANALYSIS")
 print(f"   Total instances: {len(weapon_death_issues)}")
-print(f"   Pattern: Raw files show weapon deaths, database has 0")
-print(f"\n   Weapons affected:")
+print("   Pattern: Raw files show weapon deaths, database has 0")
+print("\n   Weapons affected:")
 weapon_counts = defaultdict(int)
 for issue in weapon_death_issues:
     weapon_counts[issue['weapon']] += 1
@@ -92,16 +92,16 @@ for weapon, count in sorted(weapon_counts.items(), key=lambda x: -x[1])[:15]:
 if weapon_death_issues:
     total_weapon_deaths = sum(i['raw'] for i in weapon_death_issues)
     print(f"\n   Total weapon deaths in raw files: {total_weapon_deaths}")
-    print(f"   Total weapon deaths in database:  0 (ALL MISSING)")
+    print("   Total weapon deaths in database:  0 (ALL MISSING)")
 
-print(f"\n3. OTHER ISSUES")
+print("\n3. OTHER ISSUES")
 print(f"   Total instances: {len(other_issues)}")
 if other_issues:
-    print(f"\n   Sample issues:")
+    print("\n   Sample issues:")
     for issue in other_issues[:10]:
         print(f"     {issue['name']:20s} {issue['issue']}")
 
-print(f"\n4. SUMMARY BY ROUND TYPE")
+print("\n4. SUMMARY BY ROUND TYPE")
 # Parse round types from file
 round_1_count = content.count('-round-1.txt')
 round_2_count = content.count('-round-2.txt')
@@ -109,21 +109,21 @@ print(f"   Round 1 files: {round_1_count}")
 print(f"   Round 2 files: {round_2_count}")
 print(f"   Total files:   {round_1_count + round_2_count}")
 
-print(f"\n5. KEY FINDINGS")
-print(f"   ✓ All Round 2 files now parse successfully (emoji fix worked)")
-print(f"   ✗ Headshots: Database consistently has FEWER headshots than raw files")
-print(f"   ✗ Weapon deaths: Database shows 0 for ALL weapon deaths (raw files have them)")
-print(f"   ✗ 0.9% success rate - only 1 player matched perfectly across all 18 rounds")
+print("\n5. KEY FINDINGS")
+print("   ✓ All Round 2 files now parse successfully (emoji fix worked)")
+print("   ✗ Headshots: Database consistently has FEWER headshots than raw files")
+print("   ✗ Weapon deaths: Database shows 0 for ALL weapon deaths (raw files have them)")
+print("   ✗ 0.9% success rate - only 1 player matched perfectly across all 18 rounds")
 
-print(f"\n6. ROOT CAUSE HYPOTHESIS")
-print(f"   The weapon deaths issue suggests:")
-print(f"     - Parser IS extracting weapon deaths from raw files (validation sees them)")
-print(f"     - Database insertion may NOT be storing weapon deaths")
-print(f"     - OR database query returns wrong table/columns")
-print(f"")
-print(f"   The headshots issue suggests:")
-print(f"     - Headshots calculation bug in parser or database insertion")
-print(f"     - May be related to Round 2 differential calculation")
-print(f"     - Affects BOTH Round 1 and Round 2 data")
+print("\n6. ROOT CAUSE HYPOTHESIS")
+print("   The weapon deaths issue suggests:")
+print("     - Parser IS extracting weapon deaths from raw files (validation sees them)")
+print("     - Database insertion may NOT be storing weapon deaths")
+print("     - OR database query returns wrong table/columns")
+print("")
+print("   The headshots issue suggests:")
+print("     - Headshots calculation bug in parser or database insertion")
+print("     - May be related to Round 2 differential calculation")
+print("     - Affects BOTH Round 1 and Round 2 data")
 
 print("\n" + "="*80)

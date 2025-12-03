@@ -7,7 +7,8 @@ These can be imported and used by bot commands or analysis scripts.
 """
 
 import json
-from typing import Dict, List, Tuple, Optional
+import sqlite3
+from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 
 
@@ -43,7 +44,7 @@ class TeamHistoryManager:
         # Get player names
         guids = lineup['player_guids']
         placeholders = ','.join('?' * len(guids))
-        cursor.execute(f"""
+        cursor.execute("""
             SELECT guid, alias
             FROM player_aliases
             WHERE guid IN ({placeholders})

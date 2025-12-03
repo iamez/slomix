@@ -40,7 +40,7 @@ class SessionViewHandlers:
 
     async def show_objectives_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show objectives & support stats only"""
-        query = f"""
+        query = """
             SELECT clean_name, xp, kill_assists, objectives_stolen, objectives_returned,
                 dynamites_planted, dynamites_defused, times_revived,
                 double_kills, triple_kills, quad_kills, multi_kills, mega_kills,
@@ -49,20 +49,20 @@ class SessionViewHandlers:
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
         """
-        awards_rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        awards_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
         if not awards_rows:
             await ctx.send("❌ No objective/support data available for latest session")
             return
 
         # Also fetch revives GIVEN per player
-        rev_query = f"""
+        rev_query = """
             SELECT clean_name, SUM(revives_given) as revives_given
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
             GROUP BY clean_name
         """
-        rev_rows = await self.db_adapter.fetch_all(rev_query, tuple(session_ids))
+        rev_rows = await self.db_adapter.fetch_all(rev_query.format(session_ids_str=session_ids_str), tuple(session_ids))
         revives_map = {r[0]: (r[1] or 0) for r in rev_rows}
 
         # Aggregate per-player across rounds
@@ -137,7 +137,7 @@ class SessionViewHandlers:
 
     async def show_combat_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show combat-focused stats only"""
-        query = f"""
+        query = """
             SELECT p.player_name,
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
@@ -170,7 +170,7 @@ class SessionViewHandlers:
             GROUP BY p.player_name, session_total.total_seconds
             ORDER BY kills DESC
         """
-        combat_rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        combat_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids) + tuple(session_ids))
 
         if not combat_rows:
             await ctx.send("❌ No combat data available for latest session")
@@ -205,7 +205,7 @@ class SessionViewHandlers:
 
     async def show_weapons_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show weapon mastery stats only"""
-        query = f"""
+        query = """
             SELECT p.player_name, w.weapon_name,
                 SUM(w.kills) as weapon_kills,
                 SUM(w.hits) as hits,
@@ -220,7 +220,7 @@ class SessionViewHandlers:
             HAVING SUM(w.kills) > 0
             ORDER BY p.player_name, SUM(w.kills) DESC
         """
-        pw_rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        pw_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
         if not pw_rows:
             await ctx.send("❌ No weapon data available for latest session")
@@ -254,7 +254,7 @@ class SessionViewHandlers:
 
     async def show_support_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show support activity stats only"""
-        query = f"""
+        query = """
             SELECT p.player_name,
                 SUM(p.revives_given) as revives_given,
                 SUM(p.times_revived) as times_revived,
@@ -265,7 +265,7 @@ class SessionViewHandlers:
             GROUP BY p.player_name
             ORDER BY revives_given DESC
         """
-        sup_rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        sup_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
         if not sup_rows:
             await ctx.send("❌ No support data available for latest session")
@@ -288,7 +288,7 @@ class SessionViewHandlers:
 
     async def show_sprees_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show killing sprees & multikills only"""
-        query = f"""
+        query = """
             SELECT p.player_name,
                 SUM(p.killing_spree_best) as best_spree,
                 SUM(p.double_kills) as doubles,
@@ -302,7 +302,7 @@ class SessionViewHandlers:
             GROUP BY p.player_name
             ORDER BY best_spree DESC, megas DESC
         """
-        spree_rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        spree_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
         if not spree_rows:
             await ctx.send("❌ No spree data available for latest session")
@@ -327,7 +327,7 @@ class SessionViewHandlers:
 
     async def show_top_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int, total_maps: int):
         """Show all players ranked by kills"""
-        query = f"""
+        query = """
             SELECT p.player_name,
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
@@ -360,7 +360,7 @@ class SessionViewHandlers:
             GROUP BY p.player_name, session_total.total_seconds
             ORDER BY kills DESC
         """
-        top_players = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        top_players = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids) + tuple(session_ids))
 
         embed = discord.Embed(
             title=f"🏆 All Players - {latest_date}",
@@ -404,10 +404,9 @@ class SessionViewHandlers:
         await ctx.send(embed=embed)
 
     async def show_maps_view(self, ctx, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
-        """Show popular stats per map (map summaries only)"""
+        """Show map summaries only - matches live round_publisher_service format"""
 
         # Group sessions into matches (R1 + R2 pairs)
-        # Don't group by map_name - this would combine duplicate maps!
         map_matches = []
         i = 0
         while i < len(sessions):
@@ -420,7 +419,6 @@ class SessionViewHandlers:
                 match_rounds.append(round_id)
                 i += 1
 
-            # Store this match
             if match_rounds:
                 map_matches.append((current_map, match_rounds))
 
@@ -429,7 +427,6 @@ class SessionViewHandlers:
         for map_name, _ in map_matches:
             map_counts[map_name] = map_counts.get(map_name, 0) + 1
 
-        # Track which occurrence we're on for each map
         map_occurrence = {}
 
         # For each match, get aggregated stats (both rounds combined)
@@ -444,25 +441,29 @@ class SessionViewHandlers:
             else:
                 display_map_name = map_name
         
-            # Get all players for this map (aggregated across both rounds)
-            query = f"""
+            # Query with time_played and denied_playtime
+            query = """
+                WITH target_rounds AS (
+                    SELECT id FROM rounds WHERE id IN ({map_ids_str})
+                )
                 SELECT p.player_name,
                     SUM(p.kills) as kills,
                     SUM(p.deaths) as deaths,
+                    SUM(p.damage_given) as dmg_given,
+                    SUM(p.gibs) as gibs,
+                    SUM(p.headshot_kills) as headshots,
+                    AVG(p.accuracy) as accuracy,
+                    SUM(p.revives_given) as revives,
+                    SUM(p.times_revived) as times_revived,
+                    SUM(p.time_dead_minutes) as time_dead,
+                    SUM(p.team_damage_given) as team_dmg,
+                    SUM(p.time_played_minutes) as time_played,
+                    SUM(p.denied_playtime) as time_denied,
                     CASE
                         WHEN map_total.total_seconds > 0
                         THEN (SUM(p.damage_given) * 60.0) / map_total.total_seconds
                         ELSE 0
-                    END as dpm,
-                    SUM(p.damage_given) as dmg_given,
-                    SUM(p.damage_received) as dmg_received,
-                    SUM(p.gibs) as gibs,
-                    SUM(p.headshot_kills) as headshots,
-                    map_total.total_seconds as time_played,
-                    SUM(p.time_dead_minutes) as time_dead_minutes,
-                    SUM(p.denied_playtime) as time_denied,
-                    COALESCE(SUM(w.hits), 0) as total_hits,
-                    COALESCE(SUM(w.shots), 0) as total_shots
+                    END as dpm
                 FROM player_comprehensive_stats p
                 CROSS JOIN (
                     SELECT SUM(
@@ -475,17 +476,11 @@ class SessionViewHandlers:
                         END
                     ) as total_seconds
                     FROM rounds r
-                    WHERE r.id IN ({map_ids_str})
+                    WHERE r.id IN (SELECT id FROM target_rounds)
                       AND r.round_number IN (1, 2)
                       AND (r.round_status = 'completed' OR r.round_status IS NULL)
                 ) map_total
-                LEFT JOIN (
-                    SELECT round_id, player_guid, SUM(hits) as hits, SUM(shots) as shots
-                    FROM weapon_comprehensive_stats
-                    WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
-                    GROUP BY round_id, player_guid
-                ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
-                WHERE p.round_id IN ({map_ids_str})
+                WHERE p.round_id IN (SELECT id FROM target_rounds)
                 GROUP BY p.player_name, map_total.total_seconds
                 ORDER BY kills DESC
             """
@@ -495,69 +490,130 @@ class SessionViewHandlers:
             if not players:
                 continue
         
-            # Build embed for this map
+            # Build embed matching live format
             embed = discord.Embed(
-                title=f"🗺️ Map Stats: {display_map_name}",
-                description=f"{len(players)} players • Map Summary (both rounds)",
-                color=0x5865F2,
+                title=f"🗺️ {display_map_name.upper()} - Map Complete!",
+                description=f"Aggregate stats from **{len(map_session_ids)} rounds** • {len(players)} players",
+                color=discord.Color.gold(),
                 timestamp=datetime.now()
             )
-        
-            # Split players into multiple fields (3 per field to avoid 1024 char limit)
-            medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟", "1️⃣1️⃣", "1️⃣2️⃣"]
-            players_per_field = 3
-        
-            for field_idx in range(0, len(players), players_per_field):
-                field_players = players[field_idx:field_idx + players_per_field]
-                field_text = ""
-            
-                for i, player in enumerate(field_players):
-                    global_idx = field_idx + i
-                    name, kills, deaths, dpm, dmg_given, dmg_received, gibs, hs, time_played, time_dead, time_denied, hits, shots = player
+
+            # Rank emoji helper
+            def get_rank_display(rank):
+                if rank == 1:
+                    return "🥇"
+                elif rank == 2:
+                    return "🥈"
+                elif rank == 3:
+                    return "🥉"
+                else:
+                    rank_str = str(rank)
+                    emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+                                   '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
+                    return ''.join(emoji_digits[d] for d in rank_str)
+
+            # Smart chunking - split evenly based on player count
+            # For 6 players: 3+3, for 8: 4+4, for 10: 5+5, for 12: 6+6
+            # For odd numbers: larger chunk first (7: 4+3)
+            total_players = len(players)
+            if total_players <= 6:
+                # Small games: split in half
+                chunk_size = (total_players + 1) // 2  # Rounds up for first half
+            elif total_players <= 10:
+                # Medium games: max 5 per chunk
+                chunk_size = 5
+            else:
+                # Large games: max 6 per chunk  
+                chunk_size = 6
+
+            for i in range(0, len(players), chunk_size):
+                chunk = players[i:i + chunk_size]
                 
+                # Use "All Players" for single chunk, otherwise show range
+                if total_players <= chunk_size:
+                    field_name = '📊 All Players'
+                else:
+                    field_name = f'📊 Players {i+1}-{i+len(chunk)}'
+                
+                player_lines = []
+                for idx, player in enumerate(chunk):
+                    rank = i + idx + 1
+                    rank_display = get_rank_display(rank)
+                    
+                    (name, kills, deaths, dmg, gibs, hs, acc, revives, 
+                     got_revived, time_dead, team_dmg, time_played, time_denied, dpm) = player
+                    
                     # Handle nulls
                     kills = kills or 0
                     deaths = deaths or 0
-                    dpm = dpm or 0
-                    dmg_given = dmg_given or 0
-                    dmg_received = dmg_received or 0
+                    dmg = dmg or 0
                     gibs = gibs or 0
                     hs = hs or 0
-                    time_played = time_played or 0
+                    acc = acc or 0
+                    revives = revives or 0
+                    got_revived = got_revived or 0
                     time_dead = time_dead or 0
+                    team_dmg = team_dmg or 0
+                    time_played = time_played or 0
                     time_denied = time_denied or 0
-                    hits = hits or 0
-                    shots = shots or 0
+                    dpm = dpm or 0
+                    
+                    name = (name or 'Unknown')[:16]
+                    kd_str = f'{kills}/{deaths}'
+                    
+                    # Format time_played as MM:SS
+                    tp_min = int(time_played)
+                    tp_sec = int((time_played - tp_min) * 60)
+                    
+                    # Format time_denied as MM:SS (it's in seconds)
+                    td_min = int(time_denied // 60)
+                    td_sec = int(time_denied % 60)
+                    
+                    # Line 1: Rank + Name + Core stats
+                    line1 = (
+                        f"{rank_display} **{name}** • K/D:`{kd_str}` "
+                        f"DMG:`{int(dmg):,}` DPM:`{int(dpm)}` "
+                        f"ACC:`{acc:.1f}%` HS:`{hs}`"
+                    )
+                    
+                    # Line 2: Support + Time stats
+                    line2 = (
+                        f"     ↳ Rev:`{int(revives)}/{int(got_revived)}` Gibs:`{gibs}` "
+                        f"TmDmg:`{int(team_dmg)}` "
+                        f"⏱️`{tp_min}:{tp_sec:02d}` 💀`{time_dead:.1f}m` ⏳`{td_min}:{td_sec:02d}`"
+                    )
+                    
+                    player_lines.append(f"{line1}\n{line2}")
                 
-                    # Calculate metrics
-                    kd = kills / deaths if deaths > 0 else kills
-                    acc = (hits / shots * 100) if shots > 0 else 0
-                
-                    # Format times
-                    play_min = int(time_played // 60)
-                    play_sec = int(time_played % 60)
-                    dead_min = int(time_dead)
-                    denied_min = int(time_denied // 60)
-                    denied_sec = int(time_denied % 60)
-                
-                    medal = medals[global_idx] if global_idx < len(medals) else "🔹"
-                
-                    field_text += f"{medal} **{name}**\n"
-                    field_text += f"`{kills}K/{deaths}D ({kd:.2f})` • `{dpm:.0f} DPM` • `{acc:.1f}% ACC`\n"
-                    field_text += f"💥 `{dmg_given:,}↑ / {dmg_received:,}↓` • 🦴 `{gibs}` • 🎯 `{hs} HS`\n"
-                    field_text += f"⏱️ `{play_min}:{play_sec:02d}` • 💀 `{dead_min}m` • ⏳ `{denied_min}:{denied_sec:02d}`\n"
-            
-                # Add field
-                if field_idx == 0:
-                    field_name = "📊 All Players"
-                else:
-                    field_name = "\u200b"
-            
-                embed.add_field(name=field_name, value=field_text.rstrip(), inline=False)
+                embed.add_field(
+                    name=field_name,
+                    value='\n'.join(player_lines) if player_lines else 'No stats',
+                    inline=False
+                )
+
+            # Add round summary
+            total_kills = sum((p[1] or 0) for p in players)
+            total_deaths = sum((p[2] or 0) for p in players)
+            total_dmg = sum((p[3] or 0) for p in players)
+            total_hs = sum((p[5] or 0) for p in players)
+            total_team_dmg = sum((p[10] or 0) for p in players)
+            avg_acc = sum((p[6] or 0) for p in players) / len(players) if players else 0
+            avg_dpm = sum((p[13] or 0) for p in players) / len(players) if players else 0
+            avg_time_dead = sum((p[9] or 0) for p in players) / len(players) if players else 0
+
+            embed.add_field(
+                name="📊 Round Summary",
+                value=(
+                    f"**Totals:** Kills:`{total_kills}` Deaths:`{total_deaths}` HS:`{total_hs}` "
+                    f"Damage:`{int(total_dmg):,}` TeamDmg:`{int(total_team_dmg):,}`\n"
+                    f"**Averages:** Accuracy:`{avg_acc:.1f}%` DPM:`{int(avg_dpm)}` DeadTime:`{avg_time_dead:.1f}m`"
+                ),
+                inline=False
+            )
         
-            embed.set_footer(text=f"Round: {latest_date} • Use !last_session maps full for round-by-round")
+            embed.set_footer(text=f"Session: {latest_date} • Use !last_session maps full for round-by-round")
             await ctx.send(embed=embed)
-            await asyncio.sleep(3)  # 3 second delay between maps
+            await asyncio.sleep(3)
 
     async def show_maps_full_view(self, ctx, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
         """Show round-by-round breakdown for each map"""
@@ -619,29 +675,34 @@ class SessionViewHandlers:
                 await asyncio.sleep(3)
 
     async def _send_round_stats(self, ctx, map_name: str, round_label: str, round_session_ids: List, latest_date: str):
-        """Helper to send stats for a single round or map summary"""
-    
+        """
+        Send round stats embed - matches live round_publisher_service format exactly
+        """
         round_ids_str = ','.join('?' * len(round_session_ids))
     
-        # Get all players for this round
-        query = f"""
+        # Using CTE to avoid duplicate placeholder references
+        query = """
+            WITH target_rounds AS (
+                SELECT id FROM rounds WHERE id IN ({round_ids_str})
+            )
             SELECT p.player_name,
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
+                SUM(p.damage_given) as dmg_given,
+                SUM(p.gibs) as gibs,
+                SUM(p.headshot_kills) as headshots,
+                AVG(p.accuracy) as accuracy,
+                SUM(p.revives_given) as revives,
+                SUM(p.times_revived) as times_revived,
+                SUM(p.time_dead_minutes) as time_dead,
+                SUM(p.team_damage_given) as team_dmg,
+                SUM(p.time_played_minutes) as time_played,
+                SUM(p.denied_playtime) as time_denied,
                 CASE
                     WHEN round_total.total_seconds > 0
                     THEN (SUM(p.damage_given) * 60.0) / round_total.total_seconds
                     ELSE 0
-                END as dpm,
-                SUM(p.damage_given) as dmg_given,
-                SUM(p.damage_received) as dmg_received,
-                SUM(p.gibs) as gibs,
-                SUM(p.headshot_kills) as headshots,
-                round_total.total_seconds as time_played,
-                SUM(p.time_dead_minutes) as time_dead_minutes,
-                SUM(p.denied_playtime) as time_denied,
-                COALESCE(SUM(w.hits), 0) as total_hits,
-                COALESCE(SUM(w.shots), 0) as total_shots
+                END as dpm
             FROM player_comprehensive_stats p
             CROSS JOIN (
                 SELECT SUM(
@@ -654,17 +715,11 @@ class SessionViewHandlers:
                     END
                 ) as total_seconds
                 FROM rounds r
-                WHERE r.id IN ({round_ids_str})
+                WHERE r.id IN (SELECT id FROM target_rounds)
                   AND r.round_number IN (1, 2)
                   AND (r.round_status = 'completed' OR r.round_status IS NULL)
             ) round_total
-            LEFT JOIN (
-                SELECT round_id, player_guid, SUM(hits) as hits, SUM(shots) as shots
-                FROM weapon_comprehensive_stats
-                WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
-                GROUP BY round_id, player_guid
-            ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
-            WHERE p.round_id IN ({round_ids_str})
+            WHERE p.round_id IN (SELECT id FROM target_rounds)
             GROUP BY p.player_name, round_total.total_seconds
             ORDER BY kills DESC
         """
@@ -676,71 +731,133 @@ class SessionViewHandlers:
     
         # Determine color based on round
         if "Round 1" in round_label:
-            color = 0xED4245  # Red
+            color = discord.Color.blue()
         elif "Round 2" in round_label:
-            color = 0x5865F2  # Blue
+            color = discord.Color.red()
         else:
-            color = 0x57F287  # Green (summary)
+            color = discord.Color.gold()  # Map summary
     
-        # Build embed
+        # Build title matching live format
+        if "Summary" in round_label:
+            title = f"🗺️ {map_name.upper()} - Map Complete!"
+            description = f"Aggregate stats from **{len(round_session_ids)} rounds** • {len(players)} players"
+        else:
+            title = f"🎮 {round_label} Complete - {map_name}"
+            description = f"**Players:** {len(players)}"
+    
         embed = discord.Embed(
-            title=f"🗺️ {map_name} - {round_label}",
-            description=f"{len(players)} players",
+            title=title,
+            description=description,
             color=color,
             timestamp=datetime.now()
         )
-    
-        # Split players into fields (3 per field)
-        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟", "1️⃣1️⃣", "1️⃣2️⃣"]
-        players_per_field = 3
-    
-        for field_idx in range(0, len(players), players_per_field):
-            field_players = players[field_idx:field_idx + players_per_field]
-            field_text = ""
-        
-            for i, player in enumerate(field_players):
-                global_idx = field_idx + i
-                name, kills, deaths, dpm, dmg_given, dmg_received, gibs, hs, time_played, time_dead, time_denied, hits, shots = player
+
+        # Rank emoji helper
+        def get_rank_display(rank):
+            if rank == 1:
+                return "🥇"
+            elif rank == 2:
+                return "🥈"
+            elif rank == 3:
+                return "🥉"
+            else:
+                rank_str = str(rank)
+                emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+                               '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
+                return ''.join(emoji_digits[d] for d in rank_str)
+
+        # Smart chunking based on player count
+        total_players = len(players)
+        if total_players <= 6:
+            chunk_size = (total_players + 1) // 2
+        elif total_players <= 10:
+            chunk_size = 5
+        else:
+            chunk_size = 6
+
+        for i in range(0, len(players), chunk_size):
+            chunk = players[i:i + chunk_size]
             
+            if total_players <= chunk_size:
+                field_name = '📊 All Players'
+            else:
+                field_name = f'📊 Players {i+1}-{i+len(chunk)}'
+            
+            player_lines = []
+            for idx, player in enumerate(chunk):
+                rank = i + idx + 1
+                rank_display = get_rank_display(rank)
+                
+                (name, kills, deaths, dmg, gibs, hs, acc, revives,
+                 got_revived, time_dead, team_dmg, time_played, time_denied, dpm) = player
+                
                 # Handle nulls
                 kills = kills or 0
                 deaths = deaths or 0
-                dpm = dpm or 0
-                dmg_given = dmg_given or 0
-                dmg_received = dmg_received or 0
+                dmg = dmg or 0
                 gibs = gibs or 0
                 hs = hs or 0
-                time_played = time_played or 0
+                acc = acc or 0
+                revives = revives or 0
+                got_revived = got_revived or 0
                 time_dead = time_dead or 0
+                team_dmg = team_dmg or 0
+                time_played = time_played or 0
                 time_denied = time_denied or 0
-                hits = hits or 0
-                shots = shots or 0
+                dpm = dpm or 0
+                
+                name = (name or 'Unknown')[:16]
+                kd_str = f'{kills}/{deaths}'
+                
+                # Format time_played as MM:SS
+                tp_min = int(time_played)
+                tp_sec = int((time_played - tp_min) * 60)
+                
+                # Format time_denied as MM:SS (it's in seconds)
+                td_min = int(time_denied // 60)
+                td_sec = int(time_denied % 60)
+                
+                # Line 1: Rank + Name + Core stats
+                line1 = (
+                    f"{rank_display} **{name}** • K/D:`{kd_str}` "
+                    f"DMG:`{int(dmg):,}` DPM:`{int(dpm)}` "
+                    f"ACC:`{acc:.1f}%` HS:`{hs}`"
+                )
+                
+                # Line 2: Support + Time stats
+                line2 = (
+                    f"     ↳ Rev:`{int(revives)}/{int(got_revived)}` Gibs:`{gibs}` "
+                    f"TmDmg:`{int(team_dmg)}` "
+                    f"⏱️`{tp_min}:{tp_sec:02d}` 💀`{time_dead:.1f}m` ⏳`{td_min}:{td_sec:02d}`"
+                )
+                
+                player_lines.append(f"{line1}\n{line2}")
             
-                # Calculate metrics
-                kd = kills / deaths if deaths > 0 else kills
-                acc = (hits / shots * 100) if shots > 0 else 0
-            
-                # Format times
-                play_min = int(time_played // 60)
-                play_sec = int(time_played % 60)
-                dead_min = int(time_dead)
-                denied_min = int(time_denied // 60)
-                denied_sec = int(time_denied % 60)
-            
-                medal = medals[global_idx] if global_idx < len(medals) else "🔹"
-            
-                field_text += f"{medal} **{name}**\n"
-                field_text += f"`{kills}K/{deaths}D ({kd:.2f})` • `{dpm:.0f} DPM` • `{acc:.1f}% ACC`\n"
-                field_text += f"💥 `{dmg_given:,}↑ / {dmg_received:,}↓` • 🦴 `{gibs}` • 🎯 `{hs} HS`\n"
-                field_text += f"⏱️ `{play_min}:{play_sec:02d}` • 💀 `{dead_min}m` • ⏳ `{denied_min}:{denied_sec:02d}`\n"
-        
-            # Add field
-            if field_idx == 0:
-                field_name = "📊 All Players"
-            else:
-                field_name = "\u200b"
-        
-            embed.add_field(name=field_name, value=field_text.rstrip(), inline=False)
+            embed.add_field(
+                name=field_name,
+                value='\n'.join(player_lines) if player_lines else 'No stats',
+                inline=False
+            )
+
+        # Add round summary
+        total_kills = sum((p[1] or 0) for p in players)
+        total_deaths = sum((p[2] or 0) for p in players)
+        total_dmg = sum((p[3] or 0) for p in players)
+        total_hs = sum((p[5] or 0) for p in players)
+        total_team_dmg = sum((p[10] or 0) for p in players)
+        avg_acc = sum((p[6] or 0) for p in players) / len(players) if players else 0
+        avg_dpm = sum((p[13] or 0) for p in players) / len(players) if players else 0
+        avg_time_dead = sum((p[9] or 0) for p in players) / len(players) if players else 0
+
+        embed.add_field(
+            name="📊 Round Summary",
+            value=(
+                f"**Totals:** Kills:`{total_kills}` Deaths:`{total_deaths}` HS:`{total_hs}` "
+                f"Damage:`{int(total_dmg):,}` TeamDmg:`{int(total_team_dmg):,}`\n"
+                f"**Averages:** Accuracy:`{avg_acc:.1f}%` DPM:`{int(avg_dpm)}` DeadTime:`{avg_time_dead:.1f}m`"
+            ),
+            inline=False
+        )
     
-        embed.set_footer(text=f"Round: {latest_date}")
+        embed.set_footer(text=f"Session: {latest_date}")
         await ctx.send(embed=embed)

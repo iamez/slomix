@@ -103,7 +103,7 @@ async def test_parser():
             print(f"❌ Parse failed: {parsed.get('error') if parsed else 'No data'}")
             return False
         
-        print(f"✅ Parsed successfully")
+        print("✅ Parsed successfully")
         print(f"   Map: {parsed.get('map_name')}")
         print(f"   Players: {len(parsed.get('players', []))}")
         return True

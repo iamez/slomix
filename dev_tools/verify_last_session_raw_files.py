@@ -62,7 +62,7 @@ for sess in previous_sessions:
 print(f"\n✅ Gaming Round: {len(gaming_session_ids)} rounds (IDs: {min(gaming_session_ids)} - {max(gaming_session_ids)})")
 
 # Step 2: Get all session details from database
-cursor.execute(f"""
+cursor.execute("""
     SELECT id, round_date, round_time, map_name, round_number, match_id
     FROM rounds
     WHERE id IN ({','.join('?' * len(gaming_session_ids))})
@@ -72,7 +72,7 @@ cursor.execute(f"""
 db_sessions = cursor.fetchall()
 
 print(f"\n{'='*100}")
-print(f"📋 VERIFYING EACH ROUND")
+print("📋 VERIFYING EACH ROUND")
 print(f"{'='*100}\n")
 
 verification_results = []
@@ -96,13 +96,13 @@ for db_id, db_date, db_time, db_map, db_round, db_match_id in db_sessions:
     print(f"   Expected file: {expected_filename}")
     
     if not file_path.exists():
-        print(f"   ❌ FILE NOT FOUND!")
+        print("   ❌ FILE NOT FOUND!")
         missing_files.append((db_id, expected_filename))
         verification_results.append(("MISSING", db_id, expected_filename))
         print()
         continue
     
-    print(f"   ✅ File exists")
+    print("   ✅ File exists")
     
     # Parse the raw file
     try:
@@ -140,7 +140,7 @@ for db_id, db_date, db_time, db_map, db_round, db_match_id in db_sessions:
         print(f"   Players: {len(raw_players)} in file, {len(db_players)} in DB")
         
         if len(raw_players) != len(db_players):
-            print(f"   ⚠️  PLAYER COUNT MISMATCH!")
+            print("   ⚠️  PLAYER COUNT MISMATCH!")
             data_mismatches.append((db_id, "Player count", len(raw_players), len(db_players)))
         
         # Check each player
@@ -174,7 +174,7 @@ for db_id, db_date, db_time, db_map, db_round, db_match_id in db_sessions:
                     mismatches_in_session.append(f"{raw['name']}: {', '.join(issues)}")
         
         if not mismatches_in_session:
-            print(f"   ✅ All player stats MATCH!")
+            print("   ✅ All player stats MATCH!")
             verification_results.append(("OK", db_id, expected_filename))
         else:
             print(f"   ❌ {len(mismatches_in_session)} issues found")
@@ -204,14 +204,14 @@ print(f"💥 PARSE ERRORS: {error_count}")
 
 if missing_files:
     print(f"\n{'='*100}")
-    print(f"❌ MISSING FILES:")
+    print("❌ MISSING FILES:")
     print(f"{'='*100}")
     for db_id, filename in missing_files:
         print(f"   Session ID {db_id}: {filename}")
 
 if data_mismatches:
     print(f"\n{'='*100}")
-    print(f"⚠️  DATA MISMATCHES:")
+    print("⚠️  DATA MISMATCHES:")
     print(f"{'='*100}")
     for db_id, filename, issues in data_mismatches:
         print(f"\n   Session ID {db_id}: {filename}")
@@ -219,7 +219,7 @@ if data_mismatches:
             print(f"      - {issue}")
 
 if ok_count == len(verification_results):
-    print(f"\n🎉 ALL CHECKS PASSED! Database perfectly matches raw stats files!")
+    print("\n🎉 ALL CHECKS PASSED! Database perfectly matches raw stats files!")
 else:
     print(f"\n⚠️  {len(verification_results) - ok_count} issues found - review above")
 

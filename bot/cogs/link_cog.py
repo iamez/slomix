@@ -39,6 +39,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.utils import escape_like_pattern_for_query, sanitize_error_message
 
 # Import pagination view for interactive button navigation
 from bot.core.pagination_view import PaginationView
@@ -168,14 +169,14 @@ class LinkCog(commands.Cog, name="Link"):
 
             if total_players == 0:
                 await ctx.send(
-                    f"❌ No players found" + (f" with filter: {filter_type}" if filter_type else "")
+                    "❌ No players found" + (f" with filter: {filter_type}" if filter_type else "")
                 )
                 return
 
             unlinked_count = total_players - linked_count
 
-            # Pagination settings
-            players_per_page = 15
+            # Pagination settings - reduced to 10 to stay under 1024 char limit
+            players_per_page = 10
             total_pages = (total_players + players_per_page - 1) // players_per_page
 
             # Generate ONLY requested pages for button navigation (lazy loading)
@@ -225,31 +226,41 @@ class LinkCog(commands.Cog, name="Link"):
 
                     # Format last played date compactly
                     try:
-                        last_date = datetime.fromisoformat(
-                            last_played.replace("Z", "+00:00") if "Z" in last_played else last_played
-                        )
-                        days_ago = (datetime.now() - last_date).days
-                        if days_ago == 0:
-                            last_str = "today"
-                        elif days_ago == 1:
-                            last_str = "1d"
-                        elif days_ago < 7:
-                            last_str = f"{days_ago}d"
-                        elif days_ago < 30:
-                            last_str = f"{days_ago//7}w"
+                        if last_played is None:
+                            last_str = "?"
                         else:
-                            last_str = f"{days_ago//30}mo"
+                            last_played_str = str(last_played)
+                            last_date = datetime.fromisoformat(
+                                last_played_str.replace("Z", "+00:00") if "Z" in last_played_str else last_played_str
+                            )
+                            days_ago = (datetime.now() - last_date).days
+                            if days_ago == 0:
+                                last_str = "today"
+                            elif days_ago == 1:
+                                last_str = "1d"
+                            elif days_ago < 7:
+                                last_str = f"{days_ago}d"
+                            elif days_ago < 30:
+                                last_str = f"{days_ago//7}w"
+                            else:
+                                last_str = f"{days_ago//30}mo"
                     except Exception:
                         last_str = "?"
 
                     player_lines.append(
-                        f"{link_icon} **{formatted_name[:30]}** • "
-                        f"`{sessions}s` • `{kills}K`/`{deaths}D` ({kd:.1f}) • {last_str}"
+                        f"{link_icon} **{formatted_name[:20]}** `{guid}` "
+                        f"{sessions}s {kills}K/{deaths}D ({kd:.1f}) {last_str}"
                     )
+
+                # Ensure field value doesn't exceed 1024 characters
+                field_value = "\n".join(player_lines)
+                if len(field_value) > 1024:
+                    # Truncate and add indicator
+                    field_value = field_value[:1000] + "\n... (truncated)"
 
                 embed.add_field(
                     name=f"Players {start_idx+1}-{end_idx}",
-                    value="\n".join(player_lines),
+                    value=field_value,
                     inline=False,
                 )
 
@@ -280,7 +291,7 @@ class LinkCog(commands.Cog, name="Link"):
 
         except Exception as e:
             logger.error(f"Error in list_players command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error listing players: {e}")
+            await ctx.send(f"❌ Error listing players: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="find_player", aliases=["findplayer", "fp", "search_player"])
@@ -312,34 +323,34 @@ class LinkCog(commands.Cog, name="Link"):
             - Link status (linked/unlinked)
         """
         try:
-            # Database-specific placeholder
-            placeholder = "?" if self.bot.config.database_type == 'sqlite' else "$1"
+            # Escape LIKE pattern to prevent injection
+            safe_pattern = escape_like_pattern_for_query(search_term)
             
             # Search in player_aliases (uses 'guid' and 'alias' columns)
             alias_guids = await self.bot.db_adapter.fetch_all(
-                f"""
+                """
                 SELECT DISTINCT pa.guid, MAX(pa.last_seen) as last_seen
                 FROM player_aliases pa
-                WHERE LOWER(pa.alias) LIKE LOWER({placeholder})
+                WHERE LOWER(pa.alias) LIKE LOWER({ph}) ESCAPE '\\'
                 GROUP BY pa.guid
                 ORDER BY last_seen DESC
                 LIMIT 10
             """,
-                (f"%{search_term}%",),
+                (safe_pattern,),
             )
             alias_guids = [row[0] for row in alias_guids]
 
             # Also search main stats table
             stats_guids = await self.bot.db_adapter.fetch_all(
-                f"""
+                """
                 SELECT DISTINCT player_guid, MAX(round_date) as max_date
                 FROM player_comprehensive_stats
-                WHERE LOWER(player_name) LIKE LOWER({placeholder})
+                WHERE LOWER(player_name) LIKE LOWER({ph}) ESCAPE '\\'
                 GROUP BY player_guid
                 ORDER BY max_date DESC
                 LIMIT 10
             """,
-                (f"%{search_term}%",),
+                (safe_pattern,),
             )
             stats_guids = [row[0] for row in stats_guids]
 
@@ -349,10 +360,10 @@ class LinkCog(commands.Cog, name="Link"):
             if not guid_set:
                 await ctx.send(
                     f"❌ No players found matching **'{search_term}'**\n\n"
-                    f"💡 **Tips:**\n"
-                    f"   • Try a shorter/partial name\n"
-                    f"   • Use `!list_players` to browse all players\n"
-                    f"   • Check spelling - search is case-insensitive"
+                    "💡 **Tips:**\n"
+                    "   • Try a shorter/partial name\n"
+                    "   • Use `!list_players` to browse all players\n"
+                    "   • Check spelling - search is case-insensitive"
                 )
                 return
 
@@ -361,7 +372,7 @@ class LinkCog(commands.Cog, name="Link"):
 
             # Build detailed results
             embed = discord.Embed(
-                title=f"🔍 Player Search Results",
+                title="🔍 Player Search Results",
                 description=f"Search: **'{search_term}'** • Found **{len(guid_set)}** players (showing top {len(guid_list)})",
                 color=0x5865F2,  # Discord Blurple
                 timestamp=datetime.now()
@@ -402,7 +413,7 @@ class LinkCog(commands.Cog, name="Link"):
                     """
                     SELECT discord_username
                     FROM player_links
-                    WHERE et_guid = ?
+                    WHERE player_guid = ?
                 """,
                     (guid,),
                 )
@@ -435,7 +446,6 @@ class LinkCog(commands.Cog, name="Link"):
 
                 # Calculate days ago for last_seen
                 try:
-                    from datetime import datetime
                     last_date = datetime.fromisoformat(
                         last_seen.replace("Z", "+00:00") if "Z" in last_seen else last_seen
                     )
@@ -490,11 +500,11 @@ class LinkCog(commands.Cog, name="Link"):
             logger.error(f"Error in find_player command: {e}", exc_info=True)
             await ctx.send(
                 f"❌ Error searching for players: {e}\n\n"
-                f"💡 Try: `!list_players` to browse all players"
+                "💡 Try: `!list_players` to browse all players"
             )
 
     @is_public_channel()
-    @commands.cooldown(1, 30, commands.BucketType.user)
+    @commands.cooldown(1, 10, commands.BucketType.user)
     @commands.command(name="link")
     async def link(self, ctx, target: Optional[str] = None, *, guid: Optional[str] = None):
         """
@@ -547,7 +557,7 @@ class LinkCog(commands.Cog, name="Link"):
             # Check if already linked
             placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
             existing = await self.bot.db_adapter.fetch_one(
-                f"""
+                """
                 SELECT player_name, player_guid FROM player_links
                 WHERE discord_id = {placeholder}
             """,
@@ -557,8 +567,8 @@ class LinkCog(commands.Cog, name="Link"):
             if existing:
                 await ctx.send(
                     f"⚠️ You're already linked to **{existing[0]}** (GUID: `{existing[1]}`)\n\n"
-                    f"Use `!unlink` first to change your linked account.\n"
-                    f"Use `!stats` to see your stats!"
+                    "Use `!unlink` first to change your linked account.\n"
+                    "Use `!stats` to see your stats!"
                 )
                 return
 
@@ -580,7 +590,7 @@ class LinkCog(commands.Cog, name="Link"):
             logger.error(f"Error in link command: {e}", exc_info=True)
             await ctx.send(
                 f"❌ Error linking account: {e}\n\n"
-                f"💡 Try: `!find_player <name>` to search for players with GUIDs"
+                "💡 Try: `!find_player <name>` to search for players with GUIDs"
             )
 
     async def _smart_self_link(self, ctx, discord_id: str):
@@ -623,27 +633,49 @@ class LinkCog(commands.Cog, name="Link"):
                 title="🔍 Link Your Account",
                 description=(
                     f"Found **{len(top_players)}** potential matches!\n\n"
-                    f"**Select your account:**\n"
-                    f"• React with 1️⃣/2️⃣/3️⃣ below\n"
-                    f"• Or use `!select <number>` within 60 seconds\n"
-                    f"• Or use `!find_player <name>` to search"
+                    "**Select your account:**\n"
+                    "• React with 1️⃣/2️⃣/3️⃣ below\n"
+                    "• Or use `!select <number>` within 60 seconds\n"
+                    "• Or use `!find_player <name>` to search"
                 ),
                 color=0x3498DB,
             )
 
+            # Optimize: Fetch all aliases in a single query (avoid N+1 problem)
+            all_guids = [player[0] for player in top_players]
+            if self.bot.config.database_type == 'sqlite':
+                # Safe: placeholders are generated strings (?, ?, ?), not user input
+                placeholders = ', '.join(['?'] * len(all_guids))
+                alias_query = f"""
+                    SELECT guid, alias, last_seen, times_seen
+                    FROM player_aliases
+                    WHERE guid IN ({placeholders})
+                    ORDER BY guid, last_seen DESC, times_seen DESC
+                """
+            else:  # PostgreSQL
+                # Safe: placeholders are generated strings ($1, $2, $3), not user input
+                placeholders = ', '.join([f'${i+1}' for i in range(len(all_guids))])
+                alias_query = f"""
+                    SELECT guid, alias, last_seen, times_seen
+                    FROM player_aliases
+                    WHERE guid IN ({placeholders})
+                    ORDER BY guid, last_seen DESC, times_seen DESC
+                """
+
+            all_aliases = await self.bot.db_adapter.fetch_all(alias_query, all_guids)
+
+            # Group aliases by GUID
+            aliases_by_guid = {}
+            for alias_row in all_aliases:
+                guid_key = alias_row[0]
+                if guid_key not in aliases_by_guid:
+                    aliases_by_guid[guid_key] = []
+                aliases_by_guid[guid_key].append((alias_row[1], alias_row[2], alias_row[3]))
+
             options_data = []
             for idx, (guid, last_date, kills, deaths, games) in enumerate(top_players, 1):
-                # Get top 3 aliases for this GUID
-                aliases = await self.bot.db_adapter.fetch_all(
-                    """
-                    SELECT alias, last_seen, times_seen
-                    FROM player_aliases
-                    WHERE guid = ?
-                    ORDER BY last_seen DESC, times_seen DESC
-                    LIMIT 3
-                """,
-                    (guid,),
-                )
+                # Get aliases from pre-fetched data
+                aliases = aliases_by_guid.get(guid, [])[:3]
 
                 # Format aliases
                 if aliases:
@@ -654,16 +686,28 @@ class LinkCog(commands.Cog, name="Link"):
                         alias_str += " _(only name)_"
                 else:
                     # Fallback to most recent name
-                    name_row = await self.bot.db_adapter.fetch_one(
-                        """
-                        SELECT player_name 
-                        FROM player_comprehensive_stats 
-                        WHERE player_guid = ? 
-                        ORDER BY round_date DESC 
-                        LIMIT 1
-                    """,
-                        (guid,),
-                    )
+                    if self.bot.config.database_type == 'sqlite':
+                        name_row = await self.bot.db_adapter.fetch_one(
+                            """
+                            SELECT player_name
+                            FROM player_comprehensive_stats
+                            WHERE player_guid = ?
+                            ORDER BY round_date DESC
+                            LIMIT 1
+                        """,
+                            (guid,),
+                        )
+                    else:  # PostgreSQL
+                        name_row = await self.bot.db_adapter.fetch_one(
+                            """
+                            SELECT player_name
+                            FROM player_comprehensive_stats
+                            WHERE player_guid = $1
+                            ORDER BY round_date DESC
+                            LIMIT 1
+                        """,
+                            (guid,),
+                        )
                     primary_name = name_row[0] if name_row else "Unknown"
                     alias_str = primary_name
 
@@ -696,14 +740,17 @@ class LinkCog(commands.Cog, name="Link"):
 
             # Add reaction emojis
             emojis = ["1️⃣", "2️⃣", "3️⃣"][:len(top_players)]
+            cancel_emoji = "❌"
+
             for emoji in emojis:
                 await message.add_reaction(emoji)
+            await message.add_reaction(cancel_emoji)
 
             # Wait for reaction
             def check(reaction, user):
                 return (
                     user == ctx.author
-                    and str(reaction.emoji) in emojis
+                    and str(reaction.emoji) in emojis + [cancel_emoji]
                     and reaction.message.id == message.id
                 )
 
@@ -711,6 +758,15 @@ class LinkCog(commands.Cog, name="Link"):
                 reaction, user = await self.bot.wait_for(
                     "reaction_add", timeout=60.0, check=check
                 )
+
+                # Handle cancellation
+                if str(reaction.emoji) == cancel_emoji:
+                    await message.clear_reactions()
+                    await ctx.send(
+                        "❌ Link cancelled.\n\n"
+                        "💡 Use `!link` to try again or `!find_player <name>` to search for a specific player"
+                    )
+                    return
 
                 # Get selected index
                 selected_idx = emojis.index(str(reaction.emoji))
@@ -721,8 +777,8 @@ class LinkCog(commands.Cog, name="Link"):
                     await self.bot.db_adapter.execute(
                         """
                         INSERT OR REPLACE INTO player_links
-                        (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                        VALUES (?, ?, ?, ?, datetime('now'), 1)
+                        (discord_id, discord_username, player_guid, player_name, linked_at)
+                        VALUES (?, ?, ?, ?, datetime('now'))
                         """,
                         (discord_id, str(ctx.author), selected["guid"], selected["name"]),
                     )
@@ -730,14 +786,13 @@ class LinkCog(commands.Cog, name="Link"):
                     await self.bot.db_adapter.execute(
                         """
                         INSERT INTO player_links
-                        (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, true)
+                        (discord_id, discord_username, player_guid, player_name, linked_at)
+                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
                         ON CONFLICT (discord_id) DO UPDATE SET
                             discord_username = EXCLUDED.discord_username,
-                            et_guid = EXCLUDED.et_guid,
-                            et_name = EXCLUDED.et_name,
-                            linked_date = EXCLUDED.linked_date,
-                            verified = EXCLUDED.verified
+                            player_guid = EXCLUDED.player_guid,
+                            player_name = EXCLUDED.player_name,
+                            linked_at = EXCLUDED.linked_at
                         """,
                         (discord_id, str(ctx.author), selected["guid"], selected["name"]),
                     )
@@ -775,7 +830,7 @@ class LinkCog(commands.Cog, name="Link"):
 
         except Exception as e:
             logger.error(f"Error in smart self-link: {e}", exc_info=True)
-            await ctx.send(f"❌ Error during self-linking: {e}")
+            await ctx.send(f"❌ Error during self-linking: {sanitize_error_message(e)}")
 
     async def _link_by_guid(self, ctx, discord_id: str, guid: str):
         """Direct GUID linking with confirmation."""
@@ -800,10 +855,10 @@ class LinkCog(commands.Cog, name="Link"):
             if not stats or stats[0] is None:
                 await ctx.send(
                     f"❌ GUID `{guid}` not found in database.\n\n"
-                    f"💡 **Try:**\n"
-                    f"   • `!find_player <name>` to search by name\n"
-                    f"   • `!list_players` to browse all players\n"
-                    f"   • Double-check the GUID spelling"
+                    "💡 **Try:**\n"
+                    "   • `!find_player <name>` to search by name\n"
+                    "   • `!list_players` to browse all players\n"
+                    "   • Double-check the GUID spelling"
                 )
                 return
 
@@ -891,8 +946,8 @@ class LinkCog(commands.Cog, name="Link"):
                         await self.bot.db_adapter.execute(
                             """
                             INSERT OR REPLACE INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES (?, ?, ?, ?, datetime('now'), 1)
+                            (discord_id, discord_username, player_guid, player_name, linked_at)
+                            VALUES (?, ?, ?, ?, datetime('now'))
                             """,
                             (discord_id, str(ctx.author), guid, primary_name),
                         )
@@ -900,14 +955,13 @@ class LinkCog(commands.Cog, name="Link"):
                         await self.bot.db_adapter.execute(
                             """
                             INSERT INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, true)
+                            (discord_id, discord_username, player_guid, player_name, linked_at)
+                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
                             ON CONFLICT (discord_id) DO UPDATE SET
                                 discord_username = EXCLUDED.discord_username,
-                                et_guid = EXCLUDED.et_guid,
-                                et_name = EXCLUDED.et_name,
-                                linked_date = EXCLUDED.linked_date,
-                                verified = EXCLUDED.verified
+                                player_guid = EXCLUDED.player_guid,
+                                player_name = EXCLUDED.player_name,
+                                linked_at = EXCLUDED.linked_at
                             """,
                             (discord_id, str(ctx.author), guid, primary_name),
                         )
@@ -915,7 +969,7 @@ class LinkCog(commands.Cog, name="Link"):
                     await message.clear_reactions()
                     await ctx.send(
                         f"✅ Successfully linked to **{primary_name}** (GUID: `{guid}`)\n\n"
-                        f"💡 Use `!stats` to see your stats!"
+                        "💡 Use `!stats` to see your stats!"
                     )
 
                     logger.info(f"✅ GUID link: {ctx.author} linked to {primary_name} (GUID: {guid})")
@@ -929,7 +983,7 @@ class LinkCog(commands.Cog, name="Link"):
 
         except Exception as e:
             logger.error(f"Error in GUID link: {e}", exc_info=True)
-            await ctx.send(f"❌ Error linking by GUID: {e}")
+            await ctx.send(f"❌ Error linking by GUID: {sanitize_error_message(e)}")
 
     async def _link_by_name(self, ctx, discord_id: str, player_name: str):
         """Name search linking with fuzzy matching."""
@@ -937,10 +991,11 @@ class LinkCog(commands.Cog, name="Link"):
             # Search in player_aliases first
             alias_rows = await self.bot.db_adapter.fetch_all(
                 """
-                SELECT DISTINCT pa.guid
+                SELECT pa.guid, MAX(pa.last_seen) as max_last_seen
                 FROM player_aliases pa
                 WHERE LOWER(pa.alias) LIKE LOWER(?)
-                ORDER BY pa.last_seen DESC
+                GROUP BY pa.guid
+                ORDER BY max_last_seen DESC
                 LIMIT 5
             """,
                 (f"%{player_name}%",),
@@ -974,10 +1029,10 @@ class LinkCog(commands.Cog, name="Link"):
             if not guid_set:
                 await ctx.send(
                     f"❌ No player found matching **'{player_name}'**\n\n"
-                    f"💡 **Try:**\n"
+                    "💡 **Try:**\n"
                     f"   • `!find_player {player_name}` for detailed search\n"
-                    f"   • `!link` (no arguments) to see top players\n"
-                    f"   • `!list_players` to browse all players"
+                    "   • `!link` (no arguments) to see top players\n"
+                    "   • `!list_players` to browse all players"
                 )
                 return
 
@@ -1070,8 +1125,8 @@ class LinkCog(commands.Cog, name="Link"):
                         await self.bot.db_adapter.execute(
                             """
                             INSERT OR REPLACE INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES (?, ?, ?, ?, datetime('now'), 1)
+                            (discord_id, discord_username, player_guid, player_name, linked_at)
+                            VALUES (?, ?, ?, ?, datetime('now'))
                             """,
                             (discord_id, str(ctx.author), selected["guid"], selected["name"]),
                         )
@@ -1079,14 +1134,13 @@ class LinkCog(commands.Cog, name="Link"):
                         await self.bot.db_adapter.execute(
                             """
                             INSERT INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, true)
+                            (discord_id, discord_username, player_guid, player_name, linked_at)
+                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
                             ON CONFLICT (discord_id) DO UPDATE SET
                                 discord_username = EXCLUDED.discord_username,
-                                et_guid = EXCLUDED.et_guid,
-                                et_name = EXCLUDED.et_name,
-                                linked_date = EXCLUDED.linked_date,
-                                verified = EXCLUDED.verified
+                                player_guid = EXCLUDED.player_guid,
+                                player_name = EXCLUDED.player_name,
+                                linked_at = EXCLUDED.linked_at
                             """,
                             (discord_id, str(ctx.author), selected["guid"], selected["name"]),
                         )
@@ -1094,7 +1148,7 @@ class LinkCog(commands.Cog, name="Link"):
                     await message.clear_reactions()
                     await ctx.send(
                         f"✅ Successfully linked to **{selected['name']}** (GUID: `{selected['guid']}`)\n\n"
-                        f"💡 Use `!stats` to see your stats!"
+                        "💡 Use `!stats` to see your stats!"
                     )
 
                     logger.info(f"✅ Name link: {ctx.author} linked to {selected['name']} (GUID: {selected['guid']})")
@@ -1105,7 +1159,7 @@ class LinkCog(commands.Cog, name="Link"):
 
         except Exception as e:
             logger.error(f"Error in name link: {e}", exc_info=True)
-            await ctx.send(f"❌ Error linking by name: {e}")
+            await ctx.send(f"❌ Error linking by name: {sanitize_error_message(e)}")
 
     async def _admin_link(self, ctx, target_user: discord.User, guid: str):
         """Admin linking: Link another user's Discord to a GUID."""
@@ -1125,11 +1179,11 @@ class LinkCog(commands.Cog, name="Link"):
             if len(guid) != 8 or not all(c in "0123456789ABCDEFabcdef" for c in guid):
                 await ctx.send(
                     f"❌ Invalid GUID format: `{guid}`\n\n"
-                    f"**GUIDs must be exactly 8 hexadecimal characters** (e.g., `D8423F90`)\n\n"
-                    f"💡 **Find the GUID:**\n"
+                    "**GUIDs must be exactly 8 hexadecimal characters** (e.g., `D8423F90`)\n\n"
+                    "💡 **Find the GUID:**\n"
                     f"   • `!find_player {guid}` to search by name\n"
-                    f"   • `!list_players` to browse all players\n"
-                    f"   • Then use: `!link @user <GUID>`"
+                    "   • `!list_players` to browse all players\n"
+                    "   • Then use: `!link @user <GUID>`"
                 )
                 return
 
@@ -1137,7 +1191,7 @@ class LinkCog(commands.Cog, name="Link"):
 
             # Check if target already linked
             existing = await self.bot.db_adapter.fetch_one(
-                f"""
+                """
                 SELECT player_name, player_guid FROM player_links
                 WHERE discord_id = ?
             """,
@@ -1148,7 +1202,7 @@ class LinkCog(commands.Cog, name="Link"):
                 await ctx.send(
                     f"⚠️ {target_user.mention} is already linked to "
                     f"**{existing[0]}** (GUID: `{existing[1]}`)\n\n"
-                    f"They need to `!unlink` first."
+                    "They need to `!unlink` first."
                 )
                 return
 
@@ -1172,7 +1226,7 @@ class LinkCog(commands.Cog, name="Link"):
             if not stats or stats[0] is None:
                 await ctx.send(
                     f"❌ GUID `{guid}` not found in database.\n\n"
-                    f"💡 Use `!find_player <name>` to search for the correct GUID."
+                    "💡 Use `!find_player <name>` to search for the correct GUID."
                 )
                 return
 
@@ -1271,8 +1325,8 @@ class LinkCog(commands.Cog, name="Link"):
                         await self.bot.db_adapter.execute(
                             """
                             INSERT OR REPLACE INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES (?, ?, ?, ?, datetime('now'), 1)
+                            (discord_id, discord_username, player_guid, player_name, linked_at)
+                            VALUES (?, ?, ?, ?, datetime('now'))
                             """,
                             (target_discord_id, str(target_user), guid, primary_name),
                         )
@@ -1280,14 +1334,13 @@ class LinkCog(commands.Cog, name="Link"):
                         await self.bot.db_adapter.execute(
                             """
                             INSERT INTO player_links
-                            (discord_id, discord_username, et_guid, et_name, linked_date, verified)
-                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, true)
+                            (discord_id, discord_username, player_guid, player_name, linked_at)
+                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
                             ON CONFLICT (discord_id) DO UPDATE SET
                                 discord_username = EXCLUDED.discord_username,
-                                et_guid = EXCLUDED.et_guid,
-                                et_name = EXCLUDED.et_name,
-                                linked_date = EXCLUDED.linked_date,
-                                verified = EXCLUDED.verified
+                                player_guid = EXCLUDED.player_guid,
+                                player_name = EXCLUDED.player_name,
+                                linked_at = EXCLUDED.linked_at
                             """,
                             (target_discord_id, str(target_user), guid, primary_name),
                         )
@@ -1335,7 +1388,7 @@ class LinkCog(commands.Cog, name="Link"):
 
         except Exception as e:
             logger.error(f"Error in admin link: {e}", exc_info=True)
-            await ctx.send(f"❌ Error during admin linking: {e}")
+            await ctx.send(f"❌ Error during admin linking: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="unlink")
@@ -1358,7 +1411,7 @@ class LinkCog(commands.Cog, name="Link"):
             # Check if linked
             placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
             existing = await self.bot.db_adapter.fetch_one(
-                f"""
+                """
                 SELECT player_name, player_guid FROM player_links
                 WHERE discord_id = ?
             """,
@@ -1385,14 +1438,14 @@ class LinkCog(commands.Cog, name="Link"):
 
             await ctx.send(
                 f"✅ Successfully unlinked from **{player_name}** (GUID: `{guid}`)\n\n"
-                f"💡 Your stats are still saved. Use `!link` to re-link anytime!"
+                "💡 Your stats are still saved. Use `!link` to re-link anytime!"
             )
 
             logger.info(f"🔓 Unlink: {ctx.author} unlinked from {player_name} (GUID: {guid})")
 
         except Exception as e:
             logger.error(f"Error in unlink command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error unlinking account: {e}")
+            await ctx.send(f"❌ Error unlinking account: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="select")
@@ -1431,13 +1484,13 @@ class LinkCog(commands.Cog, name="Link"):
 
         await ctx.send(
             f"💡 You selected option **{selection}**!\n\n"
-            f"**Note:** The `!select` command currently requires integration "
-            f"with the link workflow.\n\n"
-            f"**For now:**\n"
-            f"• Use the reaction emojis (1️⃣/2️⃣/3️⃣) on the link message\n"
-            f"• Or use `!link <GUID>` to link directly\n"
-            f"• Or use `!find_player <name>` to find GUIDs\n\n"
-            f"**Tip:** React to the message above within 60 seconds!"
+            "**Note:** The `!select` command currently requires integration "
+            "with the link workflow.\n\n"
+            "**For now:**\n"
+            "• Use the reaction emojis (1️⃣/2️⃣/3️⃣) on the link message\n"
+            "• Or use `!link <GUID>` to link directly\n"
+            "• Or use `!find_player <name>` to find GUIDs\n\n"
+            "**Tip:** React to the message above within 60 seconds!"
         )
 
         # TODO: Implement persistent selection state

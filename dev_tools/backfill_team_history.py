@@ -273,7 +273,7 @@ def backfill_all_sessions():
     conn.close()
     
     print(f"\n{'='*60}")
-    print(f"✅ Backfill complete!")
+    print("✅ Backfill complete!")
     print(f"{'='*60}")
     print(f"  Processed: {success_count}")
     print(f"  Skipped:   {skip_count}")
@@ -290,7 +290,7 @@ def backfill_all_sessions():
     cursor.execute("SELECT COUNT(*) FROM session_results")
     result_count = cursor.fetchone()[0]
     
-    print(f"\n📊 Database Stats:")
+    print("\n📊 Database Stats:")
     print(f"  Unique lineups: {lineup_count}")
     print(f"  Session results: {result_count}")
     
@@ -302,7 +302,7 @@ def backfill_all_sessions():
         LIMIT 5
     """)
     
-    print(f"\n🏆 Top Lineups by Sessions Played:")
+    print("\n🏆 Top Lineups by Sessions Played:")
     for i, (pc, sessions, wins, losses, ties) in enumerate(cursor.fetchall(), 1):
         wr = (wins / sessions * 100) if sessions > 0 else 0
         print(f"  {i}. {pc} players: {sessions} sessions ({wins}W-{losses}L-{ties}T, {wr:.1f}% WR)")

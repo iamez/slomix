@@ -81,7 +81,7 @@ def validate_round1(file_path):
     
     session = cursor.fetchone()
     if not session:
-        print(f"   ⚠️  Round not found in database!")
+        print("   ⚠️  Round not found in database!")
         mismatches.append(f"{file_path.name}: Session not in database")
         return
     
@@ -149,8 +149,8 @@ def validate_round2(file_path):
     
     print(f"\n{'='*100}")
     print(f"🔄 ROUND 2: {file_path.name}")
-    print(f"   ⚠️  Note: Round 2 raw file contains R1+R2 combined stats")
-    print(f"   ⚠️  Database should contain ONLY R2 differential (R2-R1)")
+    print("   ⚠️  Note: Round 2 raw file contains R1+R2 combined stats")
+    print("   ⚠️  Database should contain ONLY R2 differential (R2-R1)")
     
     # Parse R2 file (contains R1+R2 combined)
     parsed_r2 = parser.parse_stats_file(str(file_path))
@@ -167,7 +167,7 @@ def validate_round2(file_path):
     
     if not r1_candidates:
         print(f"   ⚠️  R1 file not found for date {file_date} and map {map_name}")
-        print(f"   ⚠️  Cannot validate differential without R1 file")
+        print("   ⚠️  Cannot validate differential without R1 file")
         return
     
     if len(r1_candidates) > 1:
@@ -199,7 +199,7 @@ def validate_round2(file_path):
     
     session = cursor.fetchone()
     if not session:
-        print(f"   ⚠️  Round not found in database!")
+        print("   ⚠️  Round not found in database!")
         mismatches.append(f"{file_path.name}: Session not in database")
         return
     
@@ -238,7 +238,7 @@ def validate_round2(file_path):
         
         db_row = cursor.fetchone()
         if not db_row:
-            print(f"         ❌ Player not found in database")
+            print("         ❌ Player not found in database")
             mismatches.append(f"{file_path.name}: Player {name} missing from R2")
             continue
         
@@ -259,7 +259,7 @@ def validate_round2(file_path):
                 player_ok = False
         
         if player_ok:
-            print(f"         ✅ All differentials match!")
+            print("         ✅ All differentials match!")
             validated += 1
 
 # Run validations

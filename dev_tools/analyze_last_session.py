@@ -28,7 +28,7 @@ by_session_map = defaultdict(list)
 for round_date, map_name, round_num in session_data:
     by_session_map[(round_date, map_name)].append(round_num)
 
-print(f"\nSession structure:")
+print("\nSession structure:")
 for (date, map_name), rounds in sorted(by_session_map.items()):
     print(f"  {date} - {map_name}: Rounds {rounds}")
 
@@ -85,7 +85,7 @@ for (round_date, map_name), rounds in sorted(by_session_map.items()):
         if round_num == min(rounds):
             map_team_a = set(axis_players.keys())
             map_team_b = set(allies_players.keys())
-            print(f"\n📋 Established baseline:")
+            print("\n📋 Established baseline:")
             print(f"   Team A (R1 Axis): {len(map_team_a)} players")
             print(f"   Team B (R1 Allies): {len(map_team_b)} players")
         else:
@@ -93,7 +93,7 @@ for (round_date, map_name), rounds in sorted(by_session_map.items()):
             current_axis = set(axis_players.keys())
             current_allies = set(allies_players.keys())
             
-            print(f"\n🔍 Team tracking:")
+            print("\n🔍 Team tracking:")
             
             # Check if Team A and B swapped sides (stopwatch)
             team_a_on_axis = map_team_a & current_axis
@@ -105,7 +105,7 @@ for (round_date, map_name), rounds in sorted(by_session_map.items()):
             print(f"   Team B: {len(team_b_on_axis)} on Axis, {len(team_b_on_allies)} on Allies")
             
             if team_a_on_allies and team_b_on_axis and not team_a_on_axis and not team_b_on_allies:
-                print(f"   ✅ Perfect stopwatch swap!")
+                print("   ✅ Perfect stopwatch swap!")
             
             # Check for new players
             all_current = current_axis | current_allies
@@ -115,7 +115,7 @@ for (round_date, map_name), rounds in sorted(by_session_map.items()):
             left_players = all_baseline - all_current
             
             if new_players:
-                print(f"\n   ➕ New players joined this round:")
+                print("\n   ➕ New players joined this round:")
                 for guid in new_players:
                     if guid in axis_players:
                         name = axis_players[guid]['name']
@@ -125,7 +125,7 @@ for (round_date, map_name), rounds in sorted(by_session_map.items()):
                         print(f"      - {name} (joined Allies)")
             
             if left_players:
-                print(f"\n   ❌ Players left after R1:")
+                print("\n   ❌ Players left after R1:")
                 for guid in left_players:
                     # Get name from team baseline
                     cursor.execute("""

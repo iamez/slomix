@@ -22,7 +22,7 @@ PROBLEM_FILES = [
 print("=" * 80)
 print("IMPORT MONITOR - Real-time tracking")
 print("=" * 80)
-print(f"\nTarget files:")
+print("\nTarget files:")
 for f in PROBLEM_FILES:
     print(f"  - {f}")
 print(f"\nMonitoring database: {DB_PATH}")
@@ -116,7 +116,7 @@ try:
                 if record_count > 0:
                     print(f"  ✅ Database records: {record_count} players")
                 else:
-                    print(f"  ⚠️  WARNING: ZERO records in database despite success flag!")
+                    print("  ⚠️  WARNING: ZERO records in database despite success flag!")
                 
                 last_check[filename] = True
         

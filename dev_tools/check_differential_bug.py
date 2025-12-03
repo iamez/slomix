@@ -28,11 +28,11 @@ def check_differential():
     result = parser.parse_stats_file(str(test_file))
     
     print(f"\n{'='*70}")
-    print(f"📊 PARSER OUTPUT ANALYSIS")
+    print("📊 PARSER OUTPUT ANALYSIS")
     print(f"{'='*70}")
     
     # Check field names
-    print(f"\n🔍 Field Name Check:")
+    print("\n🔍 Field Name Check:")
     print(f"  ✓ Has 'round_num' field: {('round_num' in result)}")
     print(f"  ✓ Has 'round_number' field: {('round_number' in result)}")
     
@@ -42,7 +42,7 @@ def check_differential():
         print(f"  → round_number value: {result['round_number']}")
     
     # Check match summary
-    print(f"\n🎯 Match Summary Check:")
+    print("\n🎯 Match Summary Check:")
     has_match_summary = 'match_summary' in result
     print(f"  ✓ Has match_summary: {has_match_summary}")
     
@@ -60,7 +60,7 @@ def check_differential():
             print(f"     - XP: {ms_player.get('xp', 0)}")
     
     # Check differential (main result)
-    print(f"\n⚔️  Round 2 Differential Check:")
+    print("\n⚔️  Round 2 Differential Check:")
     print(f"  → Main result round_num: {result.get('round_num', 'MISSING!')}")
     
     if result.get('players'):
@@ -69,12 +69,12 @@ def check_differential():
         print(f"     - Kills: {diff_player.get('kills', 0)}")
         print(f"     - Deaths: {diff_player.get('deaths', 0)}")
         print(f"     - XP: {diff_player.get('xp', 0)}")
-        print(f"     → Should be LOWER than match summary (R2 only, not cumulative)")
+        print("     → Should be LOWER than match summary (R2 only, not cumulative)")
     
     # Comparison
     if has_match_summary and result.get('players') and ms.get('players'):
         print(f"\n{'='*70}")
-        print(f"🔬 DIFFERENTIAL VALIDATION")
+        print("🔬 DIFFERENTIAL VALIDATION")
         print(f"{'='*70}")
         
         # Find same player in both
@@ -91,14 +91,14 @@ def check_differential():
                 print(f"   Differential (R2 only): {diff_kills} kills")
                 
                 if diff_kills > ms_kills:
-                    print(f"   ❌ BUG! Differential > Cumulative")
+                    print("   ❌ BUG! Differential > Cumulative")
                 elif diff_kills == ms_kills:
-                    print(f"   ⚠️  WARNING: Equal values (might be R1=0 kills)")
+                    print("   ⚠️  WARNING: Equal values (might be R1=0 kills)")
                 else:
-                    print(f"   ✅ CORRECT: Differential < Cumulative")
+                    print("   ✅ CORRECT: Differential < Cumulative")
     
     print(f"\n{'='*70}")
-    print(f"✅ Analysis complete!")
+    print("✅ Analysis complete!")
     print(f"{'='*70}\n")
 
 if __name__ == "__main__":

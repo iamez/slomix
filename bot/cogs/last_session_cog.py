@@ -18,6 +18,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.utils import sanitize_error_message
 from tools.stopwatch_scoring import StopwatchScoring
 from bot.stats import StatsCalculator
 from bot.services.session_data_service import SessionDataService
@@ -99,8 +100,8 @@ class LastSessionCog(commands.Cog):
             # Setup database aliases
             try:
                 await self._ensure_player_name_alias()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Alias is optional, continue without it
 
             # Phase 1: Get session data
             latest_date = await self.data_service.get_latest_session_date()
@@ -141,6 +142,84 @@ class LastSessionCog(commands.Cog):
 
             if subcommand and subcommand.lower() in ("top", "top10"):
                 await self.view_handlers.show_top_view(ctx, latest_date, session_ids, session_ids_str, player_count, total_maps)
+                return
+
+            if subcommand and subcommand.lower() in ("graphs", "graph", "charts"):
+                # Generate performance graphs (returns 4 images)
+                result = await self.graph_generator.generate_performance_graphs(
+                    latest_date, session_ids, session_ids_str
+                )
+                combat_img, support_img, fp_img, timeline_img = result
+
+                if combat_img and support_img and fp_img:
+                    # Image 1: Combat Performance
+                    file1 = discord.File(
+                        combat_img,
+                        filename=f"session_{latest_date}_combat.png"
+                    )
+                    embed1 = discord.Embed(
+                        title=f"COMBAT PERFORMANCE  -  {latest_date}",
+                        description=f"Top 10 players across {total_maps} maps",
+                        color=0x5865F2,
+                        timestamp=datetime.now()
+                    )
+                    embed1.set_image(
+                        url=f"attachment://session_{latest_date}_combat.png"
+                    )
+                    await ctx.send(embed=embed1, file=file1)
+
+                    # Image 2: Survivability & Support
+                    file2 = discord.File(
+                        support_img,
+                        filename=f"session_{latest_date}_support.png"
+                    )
+                    embed2 = discord.Embed(
+                        title=f"SURVIVABILITY & SUPPORT  -  {latest_date}",
+                        description="Revives, gibs, headshots, and time stats",
+                        color=0x57F287,
+                        timestamp=datetime.now()
+                    )
+                    embed2.set_image(
+                        url=f"attachment://session_{latest_date}_support.png"
+                    )
+                    await ctx.send(embed=embed2, file=file2)
+
+                    # Image 3: FragPotential & Playstyle
+                    file3 = discord.File(
+                        fp_img,
+                        filename=f"session_{latest_date}_playstyle.png"
+                    )
+                    embed3 = discord.Embed(
+                        title=f"FRAGPOTENTIAL & PLAYSTYLE  -  {latest_date}",
+                        description="DPM while alive + playstyle analysis",
+                        color=0xE74C3C,
+                        timestamp=datetime.now()
+                    )
+                    embed3.set_image(
+                        url=f"attachment://session_{latest_date}_playstyle.png"
+                    )
+                    await ctx.send(embed=embed3, file=file3)
+
+                    # Image 4: Performance Timeline (if available)
+                    if timeline_img:
+                        file4 = discord.File(
+                            timeline_img,
+                            filename=f"session_{latest_date}_timeline.png"
+                        )
+                        embed4 = discord.Embed(
+                            title=f"PERFORMANCE TIMELINE  -  {latest_date}",
+                            description="DPM (Damage Per Minute) evolution across rounds",
+                            color=0xF39C12,
+                            timestamp=datetime.now()
+                        )
+                        embed4.set_image(
+                            url=f"attachment://session_{latest_date}_timeline.png"
+                        )
+                        await ctx.send(embed=embed4, file=file4)
+                else:
+                    await ctx.send(
+                        "Could not generate performance graphs for this session"
+                    )
                 return
 
             # Maps view routing
@@ -232,11 +311,32 @@ class LastSessionCog(commands.Cog):
                 team_1_name, team_2_name, team_1_score, team_2_score, hardcoded_teams is not None,
                 scoring_result, player_badges
             )
-            await ctx.send(embed=embed1)
+
+            # Try to send the embed, handle size limit errors
+            try:
+                await ctx.send(embed=embed1)
+            except discord.errors.HTTPException as e:
+                if "Embed size exceeds maximum size" in str(e) or "50035" in str(e):
+                    # Embed is too large, send truncated version
+                    await ctx.send(
+                        "⚠️ **Session is too large to display in one message!**\n\n"
+                        f"📅 **Session:** {latest_date}\n"
+                        f"🎮 **Players:** {player_count}\n"
+                        f"🗺️ **Rounds:** {rounds_played} ({unique_maps} unique maps)\n\n"
+                        "💡 **Try using specific views instead:**\n"
+                        "• `!last_session top` - Top players\n"
+                        "• `!last_session combat` - Combat stats\n"
+                        "• `!last_session maps` - Map breakdown\n"
+                        "• `!last_session graphs` - Performance graphs"
+                    )
+                else:
+                    raise
 
         except Exception as e:
             logger.error(f"Error in last_session command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error retrieving last session: {e}")
+            await ctx.send(
+                f"❌ Error retrieving last session: {sanitize_error_message(e)}"
+            )
 
     @is_public_channel()
     @commands.command(name="team_history")

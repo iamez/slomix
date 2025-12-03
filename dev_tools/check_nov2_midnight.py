@@ -28,7 +28,7 @@ result = cursor.fetchone()
 
 if result:
     round_id, date, time, map_name, player_count = result
-    print(f"🌙 MIDNIGHT-CROSSING ROUND:")
+    print("🌙 MIDNIGHT-CROSSING ROUND:")
     print(f"   Round ID: {round_id}")
     print(f"   Date: {date}")
     print(f"   Time: {time}")

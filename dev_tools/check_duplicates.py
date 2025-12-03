@@ -13,7 +13,7 @@ unique = cursor.fetchone()[0]
 
 duplicates = total - unique
 
-print(f'\n📊 Duplicate Check:')
+print('\n📊 Duplicate Check:')
 print(f'Total records: {total:,}')
 print(f'Unique (session + player): {unique:,}')
 print(f'Duplicates: {duplicates:,}')
@@ -30,10 +30,10 @@ if duplicates > 0:
         HAVING count > 1
         LIMIT 5
     ''')
-    print(f'\nExample duplicates:')
+    print('\nExample duplicates:')
     for row in cursor.fetchall():
         print(f'  Session {row[0]}, Player {row[2]}: {row[3]} copies')
 else:
-    print(f'\n✅ No duplicates - all records are unique!')
+    print('\n✅ No duplicates - all records are unique!')
 
 conn.close()

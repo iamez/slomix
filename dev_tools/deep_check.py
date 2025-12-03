@@ -32,7 +32,7 @@ async def deep_check():
         if pf:
             print(f"  processed_files: Success={pf['success']}, Error={pf['error_message']}")
         else:
-            print(f"  processed_files: NOT FOUND")
+            print("  processed_files: NOT FOUND")
             continue
         
         # Extract match_id from filename (everything except .txt)
@@ -62,7 +62,7 @@ async def deep_check():
             print(f"  weapon_comprehensive_stats: {weapon_count} records")
             
         else:
-            print(f"  rounds table: ❌ NOT FOUND - File processed but NO round created!")
+            print("  rounds table: ❌ NOT FOUND - File processed but NO round created!")
         
         print()
     

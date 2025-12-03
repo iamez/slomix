@@ -10,7 +10,7 @@ print("=" * 70)
 parser = C0RNP0RN3StatsParser()
 result = parser.parse_stats_file('local_stats/2025-10-12-225242-sw_goldrush_te-round-2.txt')
 
-print(f"\n✅ Parsing complete!")
+print("\n✅ Parsing complete!")
 print(f"Map: {result.get('map_name', 'unknown')}")
 print(f"Round: {result.get('round_num', '?')}")
 print(f"Players: {len(result.get('players', []))}")
@@ -18,10 +18,10 @@ print(f"Players: {len(result.get('players', []))}")
 if result.get('error'):
     print(f"❌ Error: {result['error']}")
 else:
-    print(f"✅ No errors")
+    print("✅ No errors")
 
 # Show some player stats
 if result.get('players'):
-    print(f"\nSample player stats:")
+    print("\nSample player stats:")
     for player in result['players'][:3]:
         print(f"  - {player['name']}: {player.get('kills', 0)} kills, {player.get('deaths', 0)} deaths")

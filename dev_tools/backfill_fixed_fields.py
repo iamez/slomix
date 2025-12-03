@@ -154,7 +154,7 @@ async def backfill_sessions():
     
     if row:
         player_name, tdg, tdr, hs, useful, double = row
-        print(f"\nSample verification (SuperBoyy from 2025-10-28-212120):")
+        print("\nSample verification (SuperBoyy from 2025-10-28-212120):")
         print(f"  Player: {player_name}")
         print(f"  team_damage_given: {tdg} (expected 85)")
         print(f"  team_damage_received: {tdr} (expected 18)")
@@ -197,7 +197,7 @@ async def backfill_sessions():
         print(f"  Players with double_kills > 0: {has_double} "
               f"({has_double/total*100:.1f}%)")
     else:
-        print(f"\n⚠️  No player records found after backfill!")
+        print("\n⚠️  No player records found after backfill!")
     
     conn.close()
     

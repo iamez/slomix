@@ -24,7 +24,7 @@ async def main():
         
         # STEP 1: Clear processed_files entry
         print(f"\n📄 {filename}")
-        print(f"   Clearing processed status...")
+        print("   Clearing processed status...")
         
         async with db.pool.acquire() as conn:
             await conn.execute(
@@ -32,10 +32,10 @@ async def main():
                 filename
             )
         
-        print(f"   ✅ Cleared from processed_files")
+        print("   ✅ Cleared from processed_files")
         
         # STEP 2: Attempt fresh import
-        print(f"   Attempting fresh import...")
+        print("   Attempting fresh import...")
         
         test_file = Path(filepath)
         if not test_file.exists():

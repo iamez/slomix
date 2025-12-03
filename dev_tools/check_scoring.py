@@ -27,8 +27,8 @@ for map_name, round_num, def_team, win_team in rounds:
 team1_wins = sum(1 for _, _, _, w in rounds if w == 1)
 team2_wins = sum(1 for _, _, _, w in rounds if w == 2)
 
-print(f"\n" + "=" * 80)
-print(f"Round Wins:")
+print("\n" + "=" * 80)
+print("Round Wins:")
 print(f"  Team 1: {team1_wins} rounds ({team1_wins/len(rounds)*100:.1f}%)")
 print(f"  Team 2: {team2_wins} rounds ({team2_wins/len(rounds)*100:.1f}%)")
 print("=" * 80)

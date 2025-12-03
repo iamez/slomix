@@ -31,7 +31,7 @@ def check_r2_ties():
     ties = c.fetchall()
     
     print(f"\n{'='*100}")
-    print(f"R2 ROUNDS WHERE TEAMS TIED (completion_time = time_to_beat)")
+    print("R2 ROUNDS WHERE TEAMS TIED (completion_time = time_to_beat)")
     print(f"{'='*100}\n")
     print(f"Found {len(ties)} R2 ties where defending team matched R1's time exactly\n")
     
@@ -45,7 +45,7 @@ def check_r2_ties():
     
     # Now let's get the paired R1 data for context
     print(f"\n{'='*100}")
-    print(f"FULL MAP CONTEXT (R1 + R2 pairs for ties)")
+    print("FULL MAP CONTEXT (R1 + R2 pairs for ties)")
     print(f"{'='*100}\n")
     
     for row in ties:

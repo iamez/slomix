@@ -60,7 +60,7 @@ cursor.execute("""
     AND round_number = 1
 """)
 frostbite_r1 = cursor.fetchone()
-print(f"\n  etl_frostbite Round 1:")
+print("\n  etl_frostbite Round 1:")
 print(f"    Records: {frostbite_r1[0]}")
 if frostbite_r1[0] > 0:
     print(f"    First imported: {frostbite_r1[1]}")
@@ -75,7 +75,7 @@ cursor.execute("""
     AND round_number = 2
 """)
 frostbite_r2 = cursor.fetchone()
-print(f"\n  etl_frostbite Round 2 (for comparison):")
+print("\n  etl_frostbite Round 2 (for comparison):")
 print(f"    Records: {frostbite_r2[0]}")
 if frostbite_r2[0] > 0:
     print(f"    First imported: {frostbite_r2[1]}")
@@ -90,7 +90,7 @@ cursor.execute("""
     AND round_number = 2
 """)
 escape_r2 = cursor.fetchone()
-print(f"\n  te_escape2 Round 2:")
+print("\n  te_escape2 Round 2:")
 print(f"    Records: {escape_r2[0]}")
 if escape_r2[0] > 0:
     print(f"    First imported: {escape_r2[1]}")
@@ -105,7 +105,7 @@ cursor.execute("""
     AND round_number = 1
 """)
 escape_r1 = cursor.fetchone()
-print(f"\n  te_escape2 Round 1 (for comparison):")
+print("\n  te_escape2 Round 1 (for comparison):")
 print(f"    Records: {escape_r1[0]}")
 if escape_r1[0] > 0:
     print(f"    First imported: {escape_r1[1]}")
@@ -116,13 +116,13 @@ print("\n[4] Checking for duplicate files in local_stats...")
 for prefix in ['2025-11-04', '2025-11-04']:
     # Look for all te_escape2 round 2 files
     import glob
-    files = glob.glob(f'local_stats/*te_escape2-round-2.txt')
+    files = glob.glob('local_stats/*te_escape2-round-2.txt')
     if files:
         print(f"\n  te_escape2 Round 2 files found: {len(files)}")
         for f in files:
             print(f"    {os.path.basename(f)}")
     
-    files = glob.glob(f'local_stats/*etl_frostbite-round-1.txt')
+    files = glob.glob('local_stats/*etl_frostbite-round-1.txt')
     if files:
         print(f"\n  etl_frostbite Round 1 files found: {len(files)}")
         for f in files:
@@ -142,7 +142,7 @@ for filename in missing_files:
             if len(lines) > 0:
                 print(f"    First line: {lines[0][:80]}")
             if len(content) < 100:
-                print(f"    ⚠️  File seems too small - might be empty/corrupt")
+                print("    ⚠️  File seems too small - might be empty/corrupt")
 
 conn.close()
 

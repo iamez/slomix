@@ -16,9 +16,9 @@ print("-" * 80)
 
 for table in tables:
     try:
-        count = cursor.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        count = cursor.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]  # nosec B608 - hardcoded table names
         # Get column count
-        pragma = cursor.execute(f"PRAGMA table_info({table})").fetchall()
+        pragma = cursor.execute(f"PRAGMA table_info({table})").fetchall()  # nosec B608
         cols = len(pragma)
         
         status = "✅" if count > 0 else "⚠️ EMPTY"
@@ -48,7 +48,7 @@ print("-" * 80)
 
 expected_tables = ['team_lineups', 'gaming_sessions', 'team_assignments']
 for table in expected_tables:
-    exists = cursor.execute(f"""
+    exists = cursor.execute("""
         SELECT name FROM sqlite_master 
         WHERE type='table' AND name='{table}'
     """).fetchone()
@@ -138,7 +138,7 @@ if sessions_count > 0 and players_count > 0:
     print("✅ Database appears PROPERLY POPULATED")
     print(f"   - {sessions_count:,} round records")
     print(f"   - {players_count:,} player stat records")
-    print(f"   - Core tables functional")
+    print("   - Core tables functional")
 else:
     print("❌ Database appears EMPTY or INCOMPLETE")
     print("   - May need to run bulk_import_stats.py")

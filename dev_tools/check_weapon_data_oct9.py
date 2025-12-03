@@ -11,7 +11,7 @@ print(f"Session IDs: {session_ids[:5]}... (showing first 5)")
 
 if session_ids:
     # Check weapon stats
-    cursor.execute(f"""
+    cursor.execute("""
         SELECT round_id, player_name, weapon_name, hits, shots, headshots
         FROM weapon_comprehensive_stats
         WHERE round_id IN ({','.join('?' * len(session_ids))})
@@ -24,7 +24,7 @@ if session_ids:
         print(f"  Session {row[0]}: {row[1]} - {row[2]}: {row[3]} hits / {row[4]} shots, {row[5]} HS")
     
     # Count total
-    cursor.execute(f"""
+    cursor.execute("""
         SELECT COUNT(*)
         FROM weapon_comprehensive_stats
         WHERE round_id IN ({','.join('?' * len(session_ids))})
@@ -33,7 +33,7 @@ if session_ids:
     print(f"\n📊 Total weapon records for 2025-10-09: {total}")
     
     # Check aggregated stats
-    cursor.execute(f"""
+    cursor.execute("""
         SELECT p.player_name,
             COALESCE(SUM(w.hits), 0) as total_hits,
             COALESCE(SUM(w.shots), 0) as total_shots,
@@ -54,7 +54,7 @@ if session_ids:
         LIMIT 5
     """, session_ids)
     
-    print(f"\n👥 Aggregated player weapon stats (top 5):")
+    print("\n👥 Aggregated player weapon stats (top 5):")
     for row in cursor.fetchall():
         name, hits, shots, hs = row
         acc = (hits / shots * 100) if shots > 0 else 0

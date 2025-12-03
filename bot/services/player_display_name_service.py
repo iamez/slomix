@@ -145,7 +145,24 @@ class PlayerDisplayNameService:
                             name = await self.get_display_name(guid)
                             display_names[guid] = name
 
-            # Ensure all GUIDs have a name
+            # Fallback to player_comprehensive_stats for any remaining unresolved GUIDs
+            still_remaining = [guid for guid in player_guids if guid not in display_names]
+            if still_remaining:
+                stats_placeholders = ",".join("?" * len(still_remaining))
+                stats_query = f"""
+                    SELECT DISTINCT player_guid, player_name
+                    FROM player_comprehensive_stats
+                    WHERE player_guid IN ({stats_placeholders})
+                """  # nosec B608
+                try:
+                    stats_results = await self.db_adapter.fetch_all(stats_query, tuple(still_remaining))
+                    for row in stats_results:
+                        if row[0] not in display_names and row[1]:
+                            display_names[row[0]] = row[1]
+                except Exception as e:
+                    logger.error(f"Error querying player_comprehensive_stats: {e}", exc_info=True)
+
+            # Ensure all GUIDs have a name (final fallback)
             for guid in player_guids:
                 if guid not in display_names:
                     display_names[guid] = "Unknown Player"

@@ -20,7 +20,7 @@ async def main():
         ORDER BY id
     """)
 
-    print(f"📊 Rounds in session 22:\n")
+    print("📊 Rounds in session 22:\n")
     total_round_time = 0
     for round_id, map_name, rnd, actual_time in rounds:
         print(f"  Round {round_id}: {map_name} R{rnd} - actual_time: {actual_time}")
@@ -49,15 +49,15 @@ async def main():
         ORDER BY total_time_played DESC
     """)
 
-    print(f"\n📊 Player time_played_seconds from database:\n")
+    print("\n📊 Player time_played_seconds from database:\n")
     for name, time_played, rounds_played in player_times:
         minutes = int(time_played // 60)
         seconds = int(time_played % 60)
         print(f"  {name}: {minutes}:{seconds:02d} ({rounds_played} rounds)")
 
-    print(f"\n❌ PROBLEM: time_played_seconds varies per player!")
-    print(f"   This suggests it's tracking 'alive time' not 'round duration'")
-    print(f"\n✅ SOLUTION: Calculate playtime from actual_time of rounds played")
+    print("\n❌ PROBLEM: time_played_seconds varies per player!")
+    print("   This suggests it's tracking 'alive time' not 'round duration'")
+    print("\n✅ SOLUTION: Calculate playtime from actual_time of rounds played")
     print(f"   Everyone who played all {len(rounds)} rounds = {total_round_time // 60}:{total_round_time % 60:02d}")
 
     await db.close()

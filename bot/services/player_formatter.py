@@ -27,94 +27,37 @@ logger = logging.getLogger("bot.services.player_formatter")
 class PlayerFormatter:
     """Global service for formatting player names with badges and custom names"""
 
-    def __init__(self, db_adapter):
+    def __init__(self, db_adapter, badge_service=None):
         """
         Initialize the player formatter
 
         Args:
             db_adapter: Database adapter for queries
+            badge_service: Optional PlayerBadgeService instance (created if not provided)
         """
         self.db_adapter = db_adapter
-        self._badge_cache = {}
         self._display_name_cache = {}
+
+        # Delegate badge logic to PlayerBadgeService
+        if badge_service is None:
+            from bot.services.player_badge_service import PlayerBadgeService
+            badge_service = PlayerBadgeService(db_adapter)
+        self.badge_service = badge_service
 
     async def get_player_badges(self, player_guid: str, session_stats: Optional[Dict] = None) -> str:
         """
-        Get achievement badges for a player
+        Get achievement badges for a player.
+
+        Delegates to PlayerBadgeService for consistent badge logic across the bot.
 
         Args:
             player_guid: Player GUID
-            session_stats: Optional pre-fetched stats dict (for performance)
+            session_stats: Optional pre-fetched stats dict (ignored, kept for API compatibility)
 
         Returns:
-            String of badge emojis (e.g., "🏥🔧") or empty string
+            String of badge emojis (e.g., "💀🏆📈") or empty string
         """
-        # Check cache first
-        if player_guid in self._badge_cache:
-            return self._badge_cache[player_guid]
-
-        try:
-            # If stats not provided, fetch them
-            if not session_stats:
-                stats = await self.db_adapter.fetch_one("""
-                    SELECT
-                        SUM(revives_given) as total_revives,
-                        SUM(constructions) as total_constructions,
-                        SUM(headshot_kills) as total_headshots,
-                        SUM(kills) as total_kills,
-                        SUM(dynamites_planted) as total_dynamites,
-                        SUM(mega_kills) as total_mg_kills
-                    FROM player_comprehensive_stats
-                    WHERE player_guid = $1
-                """, (player_guid,))
-
-                if not stats:
-                    return ""
-
-                session_stats = {
-                    'revives': stats[0] or 0,
-                    'constructions': stats[1] or 0,
-                    'headshots': stats[2] or 0,
-                    'kills': stats[3] or 0,
-                    'dynamites': stats[4] or 0,
-                    'mg_kills': stats[5] or 0
-                }
-
-            badges = []
-
-            # Medic Badge (🏥) - 50+ revives
-            if session_stats.get('revives', 0) >= 50:
-                badges.append('🏥')
-
-            # Engineer Badge (🔧) - 10+ constructions
-            if session_stats.get('constructions', 0) >= 10:
-                badges.append('🔧')
-
-            # Sharpshooter Badge (🎯) - 30%+ headshot rate with 100+ kills
-            kills = session_stats.get('kills', 0)
-            headshots = session_stats.get('headshots', 0)
-            if kills >= 100 and headshots >= kills * 0.3:
-                badges.append('🎯')
-
-            # Rambo Badge (💪) - 500+ kills
-            if kills >= 500:
-                badges.append('💪')
-
-            # Demolition Badge (💣) - 20+ dynamites planted
-            if session_stats.get('dynamites', 0) >= 20:
-                badges.append('💣')
-
-            # Machine Gunner Badge (🔫) - 100+ MG42 kills
-            if session_stats.get('mg_kills', 0) >= 100:
-                badges.append('🔫')
-
-            badge_str = ''.join(badges)
-            self._badge_cache[player_guid] = badge_str
-            return badge_str
-
-        except Exception as e:
-            logger.error(f"Error getting badges for {player_guid}: {e}")
-            return ""
+        return await self.badge_service.get_player_badges(player_guid)
 
     async def get_display_name(self, player_guid: str, fallback_name: str) -> str:
         """
@@ -136,7 +79,7 @@ class PlayerFormatter:
             result = await self.db_adapter.fetch_one("""
                 SELECT display_name
                 FROM player_links
-                WHERE player_guid = $1 AND display_name IS NOT NULL
+                WHERE player_guid = ? AND display_name IS NOT NULL
             """, (player_guid,))
 
             if result and result[0]:
@@ -203,7 +146,7 @@ class PlayerFormatter:
 
         # Batch fetch display names
         guids = [p[0] for p in players]
-        placeholders = ','.join([f'${i+1}' for i in range(len(guids))])
+        placeholders = ','.join(['?' for _ in guids])
 
         try:
             display_names = await self.db_adapter.fetch_all(f"""
@@ -211,7 +154,7 @@ class PlayerFormatter:
                 FROM player_links
                 WHERE player_guid IN ({placeholders})
                 AND display_name IS NOT NULL
-            """, tuple(guids))
+            """, tuple(guids))  # nosec B608
 
             display_name_map = {row[0]: row[1] for row in display_names}
         except Exception as e:
@@ -234,7 +177,7 @@ class PlayerFormatter:
                     FROM player_comprehensive_stats
                     WHERE player_guid IN ({placeholders})
                     GROUP BY player_guid
-                """, tuple(guids))
+                """, tuple(guids))  # nosec B608
 
                 for row in stats:
                     guid = row[0]

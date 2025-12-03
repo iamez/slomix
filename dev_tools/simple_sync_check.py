@@ -33,7 +33,7 @@ print("\n" + "=" * 80)
 print("3️⃣  VPS DATABASE")
 print("=" * 80)
 print("Run this command manually and paste the count:")
-print(f'   ssh samba@192.168.64.116 "psql -U etlegacy -d et_stats -t -c \\"SELECT COUNT(*) FROM processed_files WHERE filename LIKE \'{target_date}%\' AND success = true\\""')
+print('   ssh samba@192.168.64.116 "psql -U etlegacy -d et_stats -t -c \\"SELECT COUNT(*) FROM processed_files WHERE filename LIKE \'{target_date}%\' AND success = true\\""')
 db_count = input("\nHow many files in database? ")
 
 # Compare

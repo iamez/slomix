@@ -16,6 +16,9 @@ aiofiles>=23.2.0
 paramiko>=3.4.0
 scp>=0.14.0
 
+# WebSocket (push notifications from VPS)
+websockets>=12.0
+
 # Image Processing (for graphs/stats visualization)
 Pillow>=10.3.0
 matplotlib>=3.7.0

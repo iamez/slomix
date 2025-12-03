@@ -69,7 +69,7 @@ def analyze_session(date):
     
     # Analysis
     print(f"\n{'='*80}")
-    print(f"🗺️  MAP ANALYSIS:")
+    print("🗺️  MAP ANALYSIS:")
     print(f"{'='*80}\n")
     
     complete_maps = sum(1 for m in map_sequence if m.get('complete', False))
@@ -105,7 +105,7 @@ def analyze_session(date):
     total_rounds = sum(team_wins.values())
     
     print(f"\n{'='*80}")
-    print(f"📊 ROUND WIN PERCENTAGES (SuperBoyy's method):")
+    print("📊 ROUND WIN PERCENTAGES (SuperBoyy's method):")
     print(f"{'='*80}\n")
     
     for team in [1, 2]:

@@ -30,7 +30,7 @@ async def check():
         LIMIT 1
         """
     )
-    print(f"\nMost recent round:")
+    print("\nMost recent round:")
     print(f"  ID: {recent['id']}")
     print(f"  Date: {recent['round_date']}")
     print(f"  Time: {recent['round_time']}")
@@ -46,7 +46,7 @@ async def check():
         ORDER BY ordinal_position
         """
     )
-    print(f"\nRounds table columns:")
+    print("\nRounds table columns:")
     for col in cols:
         print(f"  {col['column_name']}: {col['data_type']}")
     

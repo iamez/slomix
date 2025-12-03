@@ -50,7 +50,7 @@ for (date, map_name, round_num), sessions in sorted_dupes[:10]:
 
 print("\n" + "=" * 100)
 print(f"⚠️  LOST DATA: {sum(len(v)-1 for v in duplicates.values())} sessions cannot be imported!")
-print(f"⚠️  Only the FIRST session per date/map/round gets imported")
-print(f"⚠️  This is because UNIQUE constraint is (round_date, map_name, round_number)")
-print(f"⚠️  It SHOULD be (round_date, round_time, map_name, round_number)")
+print("⚠️  Only the FIRST session per date/map/round gets imported")
+print("⚠️  This is because UNIQUE constraint is (round_date, map_name, round_number)")
+print("⚠️  It SHOULD be (round_date, round_time, map_name, round_number)")
 print("=" * 100)

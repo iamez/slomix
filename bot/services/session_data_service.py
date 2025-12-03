@@ -58,7 +58,9 @@ class SessionDataService:
         )
         return result[0] if result else None
 
-    async def fetch_session_data(self, latest_date: str) -> Tuple[Optional[List], Optional[List], Optional[str], int]:
+    async def fetch_session_data(
+        self, latest_date: str
+    ) -> Tuple[Optional[List], Optional[List], Optional[str], int]:
         """
         Fetch session data for the MOST RECENT gaming session.
 
@@ -105,7 +107,7 @@ class SessionDataService:
                 round_date,
                 CAST(REPLACE(round_time, ':', '') AS INTEGER)
             """,
-            (latest_gaming_session_id,)
+            (latest_gaming_session_id,),
         )
 
         if not sessions:
@@ -126,7 +128,9 @@ class SessionDataService:
 
         return sessions, session_ids, session_ids_str, player_count
 
-    async def fetch_session_data_by_date(self, target_date: str) -> Tuple[Optional[List], Optional[List], Optional[str], int]:
+    async def fetch_session_data_by_date(
+        self, target_date: str
+    ) -> Tuple[Optional[List], Optional[List], Optional[str], int]:
         """
         Fetch session data for a specific date.
 
@@ -155,7 +159,7 @@ class SessionDataService:
               AND gaming_session_id IS NOT NULL
             ORDER BY gaming_session_id DESC
             """,
-            (target_date,)
+            (target_date,),
         )
 
         if not result:
@@ -166,7 +170,7 @@ class SessionDataService:
 
         # Get all rounds from ALL these gaming sessions (R1 and R2 only)
         # This includes rounds that may be on adjacent dates due to midnight crossover
-        placeholders = ','.join('?' * len(gaming_session_ids))
+        placeholders = ",".join("?" * len(gaming_session_ids))
         sessions = await self.db_adapter.fetch_all(
             f"""
             SELECT id, map_name, round_number, actual_time
@@ -178,8 +182,8 @@ class SessionDataService:
                 gaming_session_id,
                 round_date,
                 CAST(REPLACE(round_time, ':', '') AS INTEGER)
-            """,
-            tuple(gaming_session_ids)
+            """,  # nosec B608 - parameterized
+            tuple(gaming_session_ids),
         )
 
         if not sessions:
@@ -214,14 +218,14 @@ class SessionDataService:
         """
         try:
             # Get the date range for these session_ids
-            placeholders = ','.join('?' * len(session_ids))
+            placeholders = ",".join("?" * len(session_ids))
             dates_result = await self.db_adapter.fetch_all(
                 f"""
                 SELECT DISTINCT SUBSTR(round_date, 1, 10) as date
                 FROM rounds
                 WHERE id IN ({placeholders})
-                """,
-                tuple(session_ids)
+                """,  # nosec B608 - parameterized
+                tuple(session_ids),
             )
             dates = [row[0] for row in dates_result]
 
@@ -229,15 +233,15 @@ class SessionDataService:
                 return None
 
             # Query session_teams for these dates
-            date_placeholders = ','.join('?' * len(dates))
+            date_placeholders = ",".join("?" * len(dates))
             rows = await self.db_adapter.fetch_all(
                 f"""
                 SELECT team_name, player_guids, player_names
                 FROM session_teams
                 WHERE session_start_date IN ({date_placeholders}) AND map_name = 'ALL'
                 ORDER BY team_name
-                """,
-                tuple(dates)
+                """,  # nosec B608 - parameterized
+                tuple(dates),
             )
 
             if not rows:
@@ -247,8 +251,12 @@ class SessionDataService:
             for team_name, player_guids_json, player_names_json in rows:
                 if team_name not in teams:
                     teams[team_name] = {
-                        "guids": json.loads(player_guids_json) if player_guids_json else [],
-                        "names": json.loads(player_names_json) if player_names_json else []
+                        "guids": (
+                            json.loads(player_guids_json) if player_guids_json else []
+                        ),
+                        "names": (
+                            json.loads(player_names_json) if player_names_json else []
+                        ),
                     }
 
             return teams if teams else None
@@ -257,7 +265,9 @@ class SessionDataService:
             logger.debug(f"No hardcoded teams found: {e}")
             return None
 
-    async def calculate_team_scores(self, session_ids: List[int]) -> Tuple[str, str, int, int, Optional[Dict]]:
+    async def calculate_team_scores(
+        self, session_ids: List[int]
+    ) -> Tuple[str, str, int, int, Optional[Dict]]:
         """
         Calculate Stopwatch team scores using StopwatchScoring
 
@@ -278,19 +288,26 @@ class SessionDataService:
         if scoring_result:
             # Get team names (exclude 'maps' and 'total_maps' keys)
             team_names = [
-                k for k in scoring_result.keys()
-                if k not in ["maps", "total_maps"]
+                k for k in scoring_result.keys() if k not in ["maps", "total_maps"]
             ]
             if len(team_names) >= 2:
                 team_1_name = team_names[0]
                 team_2_name = team_names[1]
                 team_1_score = scoring_result[team_1_name]
                 team_2_score = scoring_result[team_2_name]
-                return team_1_name, team_2_name, team_1_score, team_2_score, scoring_result
+                return (
+                    team_1_name,
+                    team_2_name,
+                    team_1_score,
+                    team_2_score,
+                    scoring_result,
+                )
 
         return "Team 1", "Team 2", 0, 0, None
 
-    async def build_team_mappings(self, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict]):
+    async def build_team_mappings(
+        self, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict]
+    ):
         """
         Build team mappings from hardcoded teams or auto-detect
 
@@ -332,10 +349,20 @@ class SessionDataService:
                     name_to_team[player_name] = guid_to_team[player_guid]
 
             # Organize players by team
-            team_1_players = [name for name, team in name_to_team.items() if team == team_1_name]
-            team_2_players = [name for name, team in name_to_team.items() if team == team_2_name]
+            team_1_players = [
+                name for name, team in name_to_team.items() if team == team_1_name
+            ]
+            team_2_players = [
+                name for name, team in name_to_team.items() if team == team_2_name
+            ]
 
-            return team_1_name, team_2_name, team_1_players, team_2_players, name_to_team
+            return (
+                team_1_name,
+                team_2_name,
+                team_1_players,
+                team_2_players,
+                name_to_team,
+            )
         else:
             # Auto-detect teams using co-occurrence analysis
             logger.info("⚠️ No hardcoded teams - attempting smart auto-detection")
@@ -386,7 +413,8 @@ class SessionDataService:
             for (guid1, guid2), cooccur_count in cooccurrence.items():
                 # Calculate total rounds these two played together
                 total_rounds_together = sum(
-                    1 for sides in round_sides.values()
+                    1
+                    for sides in round_sides.values()
                     if guid1 in sides and guid2 in sides
                 )
 
@@ -441,11 +469,20 @@ class SessionDataService:
                     name_to_team[name] = "Team B"
                     team_b_players.append(name)
 
-            logger.info(f"✅ Auto-detected Team A: {len(team_a_players)} players, Team B: {len(team_b_players)} players")
+            logger.info(
+                f"✅ Auto-detected Team A: {len(team_a_players)} players, Team B: {len(team_b_players)} players"
+            )
 
             return "Team A", "Team B", team_a_players, team_b_players, name_to_team
 
-    async def get_team_mvps(self, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict], team_1_name: str, team_2_name: str):
+    async def get_team_mvps(
+        self,
+        session_ids: List,
+        session_ids_str: str,
+        hardcoded_teams: Optional[Dict],
+        team_1_name: str,
+        team_2_name: str,
+    ):
         """
         Get MVP for each team with detailed stats
 
@@ -481,7 +518,11 @@ class SessionDataService:
                     player_name, kills, guid = result
 
                     # Get detailed stats for MVP
+                    # Using CTE to avoid duplicate placeholder references
                     detail_query = f"""
+                        WITH target_sessions AS (
+                            SELECT id FROM rounds WHERE id IN ({session_ids_str})
+                        )
                         SELECT
                             CASE
                                 WHEN session_total.total_seconds > 0
@@ -503,19 +544,28 @@ class SessionDataService:
                                 END
                             ) as total_seconds
                             FROM rounds r
-                            WHERE r.id IN ({session_ids_str})
+                            WHERE r.id IN (SELECT id FROM target_sessions)
                               AND r.round_number IN (1, 2)
                               AND (r.round_status = 'completed' OR r.round_status IS NULL)
                         ) session_total
-                        WHERE round_id IN ({session_ids_str})
+                        WHERE round_id IN (SELECT id FROM target_sessions)
                             AND player_name = ?
                             AND player_guid IN ({team_guids_placeholders})
                     """
                     detail_params = session_ids + [player_name] + team_guids
-                    detail_result = await self.db_adapter.fetch_one(detail_query, tuple(detail_params))
+                    detail_result = await self.db_adapter.fetch_one(
+                        detail_query, tuple(detail_params)
+                    )
 
                     if detail_result:
-                        mvp_stats = (player_name, kills, detail_result[0], detail_result[1], detail_result[2], detail_result[3])
+                        mvp_stats = (
+                            player_name,
+                            kills,
+                            detail_result[0],
+                            detail_result[1],
+                            detail_result[2],
+                            detail_result[3],
+                        )
                         if team_name == team_1_name:
                             team_1_mvp_stats = mvp_stats
                         else:

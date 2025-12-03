@@ -38,7 +38,7 @@ cursor.execute("""
 affected_sessions = cursor.fetchall()
 
 print(f"\nFound {len(affected_sessions)} affected sessions")
-print(f"Will attempt to re-import from raw files\n")
+print("Will attempt to re-import from raw files\n")
 
 parser = C0RNP0RN3StatsParser()
 success_count = 0

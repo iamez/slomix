@@ -30,7 +30,7 @@ def analyze_gaming_session(date):
     rounds = c.fetchall()
     
     print(f"Total rounds played: {len(rounds)}")
-    print(f"\nRound-by-round breakdown:")
+    print("\nRound-by-round breakdown:")
     print(f"{'#':<4} {'ID':<6} {'Map':<20} {'Round':<7} {'Winner':<10} {'Time'}")
     print("-" * 70)
     
@@ -42,14 +42,14 @@ def analyze_gaming_session(date):
     team2_wins = sum(1 for r in rounds if r[5] == 2)
     
     print(f"\n{'='*80}")
-    print(f"Round Win Summary:")
+    print("Round Win Summary:")
     print(f"{'='*80}")
     print(f"Team 1: {team1_wins} rounds won ({team1_wins/len(rounds)*100:.1f}%)")
     print(f"Team 2: {team2_wins} rounds won ({team2_wins/len(rounds)*100:.1f}%)")
     
     # Try to identify complete maps (consecutive R1+R2 pairs)
     print(f"\n{'='*80}")
-    print(f"Map Pairing Analysis:")
+    print("Map Pairing Analysis:")
     print(f"{'='*80}\n")
     
     maps_completed = []
@@ -83,7 +83,7 @@ def analyze_gaming_session(date):
             i += 1
     
     print(f"\n{'='*80}")
-    print(f"Map Score (only complete maps):")
+    print("Map Score (only complete maps):")
     print(f"{'='*80}")
     
     team1_map_wins = 0
@@ -111,7 +111,7 @@ def analyze_gaming_session(date):
     print(f"\nMap Wins: Team 1: {team1_map_wins}, Team 2: {team2_map_wins}")
     
     conn.close()
-    print(f"\n")
+    print("\n")
 
 
 if __name__ == "__main__":

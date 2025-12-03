@@ -30,7 +30,7 @@ to_fix = cursor.fetchall()
 print(f"Found {len(to_fix)} midnight-spanning R2 sessions:\n")
 
 for r2_id, r2_date, map_name, map_id, r1_id, r1_date in to_fix:
-    print(f"Session to fix:")
+    print("Session to fix:")
     print(f"  R1 (ID {r1_id}): {r1_date} - {map_name}")
     print(f"  R2 (ID {r2_id}): {r2_date} - {map_name}")
     
@@ -42,7 +42,7 @@ for r2_id, r2_date, map_name, map_id, r1_id, r1_date in to_fix:
     new_r2_date = r1_date_part + r2_time_part
     
     print(f"  New R2 date: {new_r2_date}")
-    print(f"  (Grouping R2 with R1's date for proper session grouping)")
+    print("  (Grouping R2 with R1's date for proper session grouping)")
     
     # Update the round_date
     cursor.execute("""
@@ -51,7 +51,7 @@ for r2_id, r2_date, map_name, map_id, r1_id, r1_date in to_fix:
         WHERE id = ?
     """, (new_r2_date, r2_id))
     
-    print(f"  ✅ Updated\n")
+    print("  ✅ Updated\n")
 
 conn.commit()
 conn.close()

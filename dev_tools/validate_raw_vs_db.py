@@ -43,7 +43,7 @@ def compare_file_to_db(file_path: Path, parser: C0RNP0RN3StatsParser):
     # Parse the file
     parsed = parser.parse_stats_file(str(file_path))
     if not parsed.get('success'):
-        print(f"❌ Failed to parse file")
+        print("❌ Failed to parse file")
         return None
     
     # Extract session info
@@ -71,7 +71,7 @@ def compare_file_to_db(file_path: Path, parser: C0RNP0RN3StatsParser):
     
     session_row = cursor.fetchone()
     if not session_row:
-        print(f"⚠️  Round not found in database")
+        print("⚠️  Round not found in database")
         conn.close()
         return None
     
@@ -172,7 +172,7 @@ def compare_file_to_db(file_path: Path, parser: C0RNP0RN3StatsParser):
             for mismatch in player_mismatch['mismatches']:
                 print(f"     ⚠️  {mismatch['field']}: File={mismatch['file_value']}, DB={mismatch['db_value']}, Diff={mismatch['diff']}")
     else:
-        print(f"\n✅ All player data matches between file and database!")
+        print("\n✅ All player data matches between file and database!")
     
     return mismatches
 
@@ -209,8 +209,8 @@ def main():
     print(f"Files with mismatches: {len(all_mismatches)}")
     
     if all_mismatches:
-        print(f"\n❌ CRITICAL: Found data integrity issues!")
-        print(f"\nMost common mismatched fields:")
+        print("\n❌ CRITICAL: Found data integrity issues!")
+        print("\nMost common mismatched fields:")
         
         # Count field mismatches
         field_counts = {}
@@ -229,7 +229,7 @@ def main():
             json.dump(all_mismatches, f, indent=2)
         print(f"\n💾 Detailed report saved to: {report_path}")
     else:
-        print(f"\n✅ All data matches perfectly!")
+        print("\n✅ All data matches perfectly!")
 
 if __name__ == "__main__":
     main()

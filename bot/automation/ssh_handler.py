@@ -9,6 +9,11 @@ Handles:
 All methods use paramiko for SSH/SFTP operations.
 """
 
+# SECURITY NOTE: This module uses paramiko.AutoAddPolicy() which accepts any SSH host key.
+# This is acceptable for connecting to our own VPS (puran.hehe.si) but should be
+# changed to RejectPolicy with a known_hosts file if connecting to untrusted servers.
+# See: https://docs.paramiko.org/en/stable/api/client.html#paramiko.client.AutoAddPolicy
+
 import asyncio
 import logging
 import os
@@ -96,6 +101,10 @@ class SSHHandler:
         )
 
         sftp = ssh.open_sftp()
+
+        # Set timeout for SFTP operations
+        sftp.get_channel().settimeout(15.0)
+
         files = sftp.listdir(ssh_config["remote_path"])
 
         # Filter: only .txt files, exclude obsolete _ws.txt files
@@ -146,7 +155,7 @@ class SSHHandler:
 
     @staticmethod
     def _download_file_sync(ssh_config: Dict, filename: str, local_dir: str) -> str:
-        """Synchronous SSH file download"""
+        """Synchronous SSH file download with timeout protection"""
         import paramiko
 
         ssh = paramiko.SSHClient()
@@ -154,23 +163,35 @@ class SSHHandler:
 
         key_path = os.path.expanduser(ssh_config["key_path"])
 
-        ssh.connect(
-            hostname=ssh_config["host"],
-            port=ssh_config["port"],
-            username=ssh_config["user"],
-            key_filename=key_path,
-            timeout=10,
-        )
+        try:
+            ssh.connect(
+                hostname=ssh_config["host"],
+                port=ssh_config["port"],
+                username=ssh_config["user"],
+                key_filename=key_path,
+                timeout=10,
+            )
 
-        sftp = ssh.open_sftp()
+            sftp = ssh.open_sftp()
 
-        remote_file = f"{ssh_config['remote_path']}/{filename}"
-        local_file = os.path.join(local_dir, filename)
+            # Set timeout for SFTP operations (30 seconds for file transfers)
+            sftp.get_channel().settimeout(30.0)
 
-        logger.info(f"📥 Downloading {filename}...")
-        sftp.get(remote_file, local_file)
+            remote_file = f"{ssh_config['remote_path']}/{filename}"
+            local_file = os.path.join(local_dir, filename)
 
-        sftp.close()
-        ssh.close()
+            logger.info(f"📥 Downloading {filename}...")
+            sftp.get(remote_file, local_file)
 
-        return local_file
+            return local_file
+
+        finally:
+            # Ensure connections are closed even on error
+            try:
+                sftp.close()
+            except Exception as e:  # nosec B110 - intentional cleanup suppression
+                logger.debug(f"SFTP close ignored: {e}")
+            try:
+                ssh.close()
+            except Exception as e:  # nosec B110 - intentional cleanup suppression
+                logger.debug(f"SSH close ignored: {e}")

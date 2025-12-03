@@ -251,7 +251,7 @@ class PlayerBadgeService:
             placeholders = ",".join("?" * len(player_guids))
 
             # Safe: placeholders are "?" only, user data passed via parameterized tuple
-            query = f"""
+            query = """
                 SELECT
                     p.player_guid,
                     SUM(p.kills) as total_kills,

@@ -105,11 +105,11 @@ def test_cooldown_logic():
     # First call should succeed
     can_use, remaining = check_cooldown(user_id, "restart", 300)
     if can_use and remaining == 0:
-        print(f"  ✅ PASS: First restart attempt allowed")
+        print("  ✅ PASS: First restart attempt allowed")
         passed = 1
         failed = 0
     else:
-        print(f"  ❌ FAIL: First restart attempt blocked")
+        print("  ❌ FAIL: First restart attempt blocked")
         passed = 0
         failed = 1
     
@@ -119,17 +119,17 @@ def test_cooldown_logic():
         print(f"  ✅ PASS: Immediate retry blocked ({remaining:.1f}s remaining)")
         passed += 1
     else:
-        print(f"  ❌ FAIL: Immediate retry allowed or wrong cooldown")
+        print("  ❌ FAIL: Immediate retry allowed or wrong cooldown")
         failed += 1
     
     # After cooldown expires
     time.sleep(1.1)  # Sleep 1.1 seconds
     can_use, remaining = check_cooldown(user_id, "restart", 1)
     if can_use and remaining == 0:
-        print(f"  ✅ PASS: Retry allowed after cooldown expired")
+        print("  ✅ PASS: Retry allowed after cooldown expired")
         passed += 1
     else:
-        print(f"  ❌ FAIL: Retry still blocked after cooldown")
+        print("  ❌ FAIL: Retry still blocked after cooldown")
         failed += 1
     
     print(f"\nCooldown Logic: {passed} passed, {failed} failed\n")

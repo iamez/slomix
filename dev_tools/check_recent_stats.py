@@ -87,14 +87,14 @@ for row in cursor.fetchall():
 conn.close()
 
 # Now check the raw file
-raw_file_path = f"bot/local_stats/2025-11-02-000624-etl_adlernest-round-2.txt"
+raw_file_path = "bot/local_stats/2025-11-02-000624-etl_adlernest-round-2.txt"
 if os.path.exists(raw_file_path):
     print(f"\n📄 Raw File: {raw_file_path}")
     print("=" * 80)
     with open(raw_file_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
         print(f"Total lines in file: {len(lines)}")
-        print(f"\nFirst player line (sample):")
+        print("\nFirst player line (sample):")
         # Find first player line (starts with GUID)
         for line in lines:
             if line.strip() and not line.startswith('*') and '\\' in line:

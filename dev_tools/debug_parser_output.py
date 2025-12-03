@@ -31,14 +31,14 @@ if result and result.get('success'):
         # Check if MP40 is present
         mp40 = carniee.get('weapon_stats', {}).get('WS_MP40')
         if mp40:
-            print(f"\n  WS_MP40 details:")
+            print("\n  WS_MP40 details:")
             print(f"    kills: {mp40.get('kills')}")
             print(f"    deaths: {mp40.get('deaths')}")
             print(f"    headshots: {mp40.get('headshots')}")
             print(f"    hits: {mp40.get('hits')}")
             print(f"    shots: {mp40.get('shots')}")
         else:
-            print(f"\n  WS_MP40: NOT IN PARSER OUTPUT")
+            print("\n  WS_MP40: NOT IN PARSER OUTPUT")
             
         # Total headshots from all weapons
         total_headshots = sum(w.get('headshots', 0) for w in carniee.get('weapon_stats', {}).values())

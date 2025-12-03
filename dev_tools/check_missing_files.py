@@ -58,6 +58,6 @@ for i in range(len(all_dates) - 1):
         date_gaps.append(f"{all_dates[i]} → {all_dates[i+1]} ({gap_days} days)")
 
 if date_gaps:
-    print(f"\n⚠️  Date gaps found:")
+    print("\n⚠️  Date gaps found:")
     for gap in date_gaps:
         print(f"  {gap}")

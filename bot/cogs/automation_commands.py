@@ -19,6 +19,7 @@ import logging
 from datetime import datetime
 
 from bot.core.checks import is_admin_channel
+from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger("AutomationCommands")
 
@@ -44,7 +45,7 @@ class AutomationCommands(commands.Cog):
             
         except Exception as e:
             logger.error(f"❌ Health command error: {e}")
-            await ctx.send(f"❌ Error getting health status: {e}")
+            await ctx.send(f"❌ Error getting health status: {sanitize_error_message(e)}")
     
     @is_admin_channel()
     @commands.command(name="ssh_stats")
@@ -137,7 +138,7 @@ class AutomationCommands(commands.Cog):
             
         except Exception as e:
             logger.error(f"❌ SSH stats command error: {e}")
-            await ctx.send(f"❌ Error getting SSH stats: {e}")
+            await ctx.send(f"❌ Error getting SSH stats: {sanitize_error_message(e)}")
     
     @commands.command(name="start_monitoring")
     @commands.has_permissions(administrator=True)
@@ -158,7 +159,7 @@ class AutomationCommands(commands.Cog):
             
         except Exception as e:
             logger.error(f"❌ Start monitoring error: {e}")
-            await ctx.send(f"❌ Error starting monitoring: {e}")
+            await ctx.send(f"❌ Error starting monitoring: {sanitize_error_message(e)}")
     
     @is_admin_channel()
     @commands.command(name="stop_monitoring")
@@ -180,7 +181,7 @@ class AutomationCommands(commands.Cog):
             
         except Exception as e:
             logger.error(f"❌ Stop monitoring error: {e}")
-            await ctx.send(f"❌ Error stopping monitoring: {e}")
+            await ctx.send(f"❌ Error stopping monitoring: {sanitize_error_message(e)}")
     
     @commands.command(name="metrics_report")
     @commands.has_permissions(administrator=True)
@@ -215,7 +216,7 @@ class AutomationCommands(commands.Cog):
                 color = 0xED4245  # Red
 
             embed = discord.Embed(
-                title=f"📊 Metrics Report",
+                title="📊 Metrics Report",
                 description=f"Performance analysis for last `{hours}` hours",
                 color=color,
                 timestamp=datetime.now()
@@ -292,7 +293,7 @@ class AutomationCommands(commands.Cog):
             
         except Exception as e:
             logger.error(f"❌ Metrics report error: {e}", exc_info=True)
-            await ctx.send(f"❌ Error generating report: {e}")
+            await ctx.send(f"❌ Error generating report: {sanitize_error_message(e)}")
     
     @commands.command(name="metrics_summary")
     async def metrics_summary_command(self, ctx):
@@ -360,7 +361,7 @@ class AutomationCommands(commands.Cog):
             
         except Exception as e:
             logger.error(f"❌ Metrics summary error: {e}")
-            await ctx.send(f"❌ Error getting summary: {e}")
+            await ctx.send(f"❌ Error getting summary: {sanitize_error_message(e)}")
     
     @commands.command(name="backup_db")
     @commands.has_permissions(administrator=True)
@@ -378,7 +379,7 @@ class AutomationCommands(commands.Cog):
             if success:
                 stats = self.bot.db_maintenance.get_stats()
                 await ctx.send(
-                    f"✅ Backup complete!\n"
+                    "✅ Backup complete!\n"
                     f"Total backups: {stats['backup_count']}\n"
                     f"Last backup: {stats.get('last_backup', 'N/A')}"
                 )
@@ -387,7 +388,7 @@ class AutomationCommands(commands.Cog):
                 
         except Exception as e:
             logger.error(f"❌ Backup command error: {e}")
-            await ctx.send(f"❌ Error creating backup: {e}")
+            await ctx.send(f"❌ Error creating backup: {sanitize_error_message(e)}")
     
     @commands.command(name="vacuum_db")
     @commands.has_permissions(administrator=True)
@@ -409,7 +410,7 @@ class AutomationCommands(commands.Cog):
                 
         except Exception as e:
             logger.error(f"❌ Vacuum command error: {e}")
-            await ctx.send(f"❌ Error optimizing database: {e}")
+            await ctx.send(f"❌ Error optimizing database: {sanitize_error_message(e)}")
     
     @commands.command(name="automation_status")
     async def automation_status_command(self, ctx):
@@ -511,7 +512,7 @@ class AutomationCommands(commands.Cog):
             
         except Exception as e:
             logger.error(f"❌ Status command error: {e}")
-            await ctx.send(f"❌ Error getting status: {e}")
+            await ctx.send(f"❌ Error getting status: {sanitize_error_message(e)}")
 
 
 async def setup(bot):
