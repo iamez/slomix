@@ -240,7 +240,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
             )
 
             # Get top players with badges and display names
-            top_players_query = """
+            top_players_query = f"""
                 SELECT
                     p.player_guid,
                     p.player_name,

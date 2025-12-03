@@ -71,14 +71,14 @@ class SessionStatsAggregator:
                     SUM(shots) as shots,
                     SUM(headshots) as headshots
                 FROM weapon_comprehensive_stats
-                WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
+            WHERE round_id NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE', 'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
                 GROUP BY round_id, player_guid
             ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
             WHERE p.round_id IN ({session_ids_str})
             GROUP BY p.player_guid, p.player_name
             ORDER BY kills DESC
         """
-        return await self.db_adapter.fetch_all(query, tuple(session_ids))
+        return await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
     async def aggregate_team_stats(self, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict] = None, name_to_team: Optional[Dict] = None):
         """
@@ -105,7 +105,7 @@ class SessionStatsAggregator:
                   AND (r.round_status = 'completed' OR r.round_status IS NULL)
                 GROUP BY p.team
             """
-            return await self.db_adapter.fetch_all(query, tuple(session_ids))
+            return await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
         # Get all player stats (with R0 and round_status filtering)
         query = """
@@ -120,7 +120,7 @@ class SessionStatsAggregator:
               AND (r.round_status = 'completed' OR r.round_status IS NULL)
             GROUP BY p.player_guid, p.player_name
         """
-        player_stats = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        player_stats = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
         # Aggregate by actual team
         team_aggregates = {}
@@ -164,7 +164,7 @@ class SessionStatsAggregator:
             ORDER BY player_name, total_kills DESC
         """
 
-        return await self.db_adapter.fetch_all(query, tuple(session_ids))
+        return await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
     async def get_dpm_leaderboard(self, session_ids: List, session_ids_str: str, limit: int = 10):
         """Get DPM leaderboard based on individual player playtime"""
@@ -183,4 +183,4 @@ class SessionStatsAggregator:
             ORDER BY weighted_dpm DESC
             LIMIT {limit}
         """
-        return await self.db_adapter.fetch_all(query, tuple(session_ids))
+        return await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str, limit=limit), tuple(session_ids))

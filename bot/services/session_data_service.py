@@ -118,7 +118,7 @@ class SessionDataService:
         session_ids_str = ",".join("?" * len(session_ids))
 
         # Get unique player count for this gaming session
-        query = """
+        query = f"""
             SELECT COUNT(DISTINCT player_guid)
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
@@ -194,7 +194,7 @@ class SessionDataService:
         session_ids_str = ",".join("?" * len(session_ids))
 
         # Get unique player count across all these sessions
-        query = """
+        query = f"""
             SELECT COUNT(DISTINCT player_guid)
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
@@ -335,7 +335,7 @@ class SessionDataService:
                     guid_to_team[guid] = team_name
 
             # Get player GUIDs to map names to teams
-            query = """
+            query = f"""
                 SELECT DISTINCT player_name, player_guid
                 FROM player_comprehensive_stats
                 WHERE round_id IN ({session_ids_str})
@@ -369,7 +369,7 @@ class SessionDataService:
 
             # Get all player-side pairings
             # IMPORTANT: Include round_id in the key to handle multiple plays of same map
-            query = """
+            query = f"""
                 SELECT player_guid, player_name, team, round_id, map_name, round_number
                 FROM player_comprehensive_stats
                 WHERE round_id IN ({session_ids_str})
@@ -502,7 +502,7 @@ class SessionDataService:
                 team_guids_placeholders = ",".join("?" * len(team_guids))
 
                 # Get MVP by kills
-                query = """
+                query = f"""
                     SELECT player_name, SUM(kills) as total_kills, player_guid
                     FROM player_comprehensive_stats
                     WHERE round_id IN ({session_ids_str})
@@ -519,7 +519,7 @@ class SessionDataService:
 
                     # Get detailed stats for MVP
                     # Using CTE to avoid duplicate placeholder references
-                    detail_query = """
+                    detail_query = f"""
                         WITH target_sessions AS (
                             SELECT id FROM rounds WHERE id IN ({session_ids_str})
                         )

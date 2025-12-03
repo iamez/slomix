@@ -49,7 +49,7 @@ class SessionViewHandlers:
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
         """
-        awards_rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        awards_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
         if not awards_rows:
             await ctx.send("❌ No objective/support data available for latest session")
@@ -62,7 +62,7 @@ class SessionViewHandlers:
             WHERE round_id IN ({session_ids_str})
             GROUP BY clean_name
         """
-        rev_rows = await self.db_adapter.fetch_all(rev_query, tuple(session_ids))
+        rev_rows = await self.db_adapter.fetch_all(rev_query.format(session_ids_str=session_ids_str), tuple(session_ids))
         revives_map = {r[0]: (r[1] or 0) for r in rev_rows}
 
         # Aggregate per-player across rounds
@@ -170,7 +170,7 @@ class SessionViewHandlers:
             GROUP BY p.player_name, session_total.total_seconds
             ORDER BY kills DESC
         """
-        combat_rows = await self.db_adapter.fetch_all(query, tuple(session_ids) + tuple(session_ids))
+        combat_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids) + tuple(session_ids))
 
         if not combat_rows:
             await ctx.send("❌ No combat data available for latest session")
@@ -220,7 +220,7 @@ class SessionViewHandlers:
             HAVING SUM(w.kills) > 0
             ORDER BY p.player_name, SUM(w.kills) DESC
         """
-        pw_rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        pw_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
         if not pw_rows:
             await ctx.send("❌ No weapon data available for latest session")
@@ -265,7 +265,7 @@ class SessionViewHandlers:
             GROUP BY p.player_name
             ORDER BY revives_given DESC
         """
-        sup_rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        sup_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
         if not sup_rows:
             await ctx.send("❌ No support data available for latest session")
@@ -302,7 +302,7 @@ class SessionViewHandlers:
             GROUP BY p.player_name
             ORDER BY best_spree DESC, megas DESC
         """
-        spree_rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
+        spree_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
         if not spree_rows:
             await ctx.send("❌ No spree data available for latest session")
@@ -360,7 +360,7 @@ class SessionViewHandlers:
             GROUP BY p.player_name, session_total.total_seconds
             ORDER BY kills DESC
         """
-        top_players = await self.db_adapter.fetch_all(query, tuple(session_ids) + tuple(session_ids))
+        top_players = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids) + tuple(session_ids))
 
         embed = discord.Embed(
             title=f"🏆 All Players - {latest_date}",
