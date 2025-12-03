@@ -219,7 +219,8 @@ class RoundPublisherService:
             chunk_size = 5
             for i in range(0, len(players_sorted), chunk_size):
                 chunk = players_sorted[i:i + chunk_size]
-                field_name = f'📊 Players {i+1}-{min(i+chunk_size, len(players_sorted))}'
+                # Use invisible character for field name (required but hidden)
+                field_name = '\u200b'
 
                 player_lines = []
                 for idx, player in enumerate(chunk):
