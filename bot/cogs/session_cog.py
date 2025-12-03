@@ -26,6 +26,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.utils import sanitize_error_message
 
 # Import service layer
 from bot.services.session_data_service import SessionDataService
@@ -134,8 +135,8 @@ class SessionCog(commands.Cog, name="Session Commands"):
             # Setup database aliases
             try:
                 await self._ensure_player_name_alias()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Alias is optional
             # Step 1: Parse and normalize the date
             target_date = None
 
@@ -213,7 +214,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
 
             # Graphs view - TODO: Implement show_graphs_view in SessionViewHandlers
             if subcommand and subcommand.lower() in ("graphs", "graph"):
-                await ctx.send(f"📊 Graphs view is not yet implemented for date-specific sessions.\n💡 Try `!last_session graphs` for the most recent session's graphs.")
+                await ctx.send("📊 Graphs view is not yet implemented for date-specific sessions.\n💡 Try `!last_session graphs` for the most recent session's graphs.")
                 return
 
             # Step 4: Default view - Overview (improved version of original)
@@ -290,7 +291,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
 
         except Exception as e:
             logger.error(f"Error in session command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error retrieving session: {e}")
+            await ctx.send(f"❌ Error retrieving session: {sanitize_error_message(e)}")
 
     # NOTE: !last_session command has been moved to Last Round Cog
     # See bot/cogs/last_session_cog.py for the full implementation
@@ -531,7 +532,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
 
         except Exception as e:
             logger.error(f"Error in list_sessions command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error listing sessions: {e}")
+            await ctx.send(f"❌ Error listing sessions: {sanitize_error_message(e)}")
 
 
 async def setup(bot):

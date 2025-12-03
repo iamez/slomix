@@ -136,7 +136,7 @@ async def main():
             print(f"   R1+R2 combined: {r1_stats['total_play'] + r2_stats['total_play']}s play, {r1_stats['total_damage'] + r2_stats['total_damage']} dmg")
             
             # Check relationships
-            print(f"\n   🔍 RELATIONSHIPS:")
+            print("\n   🔍 RELATIONSHIPS:")
             print(f"   R0 time == R1 time? {r0_stats['total_play'] == r1_stats['total_play']}")
             print(f"   R0 time == R2 time? {r0_stats['total_play'] == r2_stats['total_play']}")
             print(f"   R0 time == R1+R2? {r0_stats['total_play'] == r1_stats['total_play'] + r2_stats['total_play']}")

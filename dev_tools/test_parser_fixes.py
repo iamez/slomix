@@ -24,7 +24,7 @@ def test_reimport():
         print(f"❌ Parse failed: {result}")
         return
     
-    print(f"✅ Parsed successfully")
+    print("✅ Parsed successfully")
     print(f"Players: {len(result['players'])}")
     
     # Check SuperBoyy's stats
@@ -41,7 +41,7 @@ def test_reimport():
     obj_stats = superboyy.get('objective_stats', {})
     
     print(f"\n{'='*80}")
-    print(f"SuperBoyy's stats from parser:")
+    print("SuperBoyy's stats from parser:")
     print(f"{'='*80}")
     print(f"team_damage_given (from obj_stats): {obj_stats.get('team_damage_given', 'MISSING')}")
     print(f"team_damage_received (from obj_stats): {obj_stats.get('team_damage_received', 'MISSING')}")
@@ -51,7 +51,7 @@ def test_reimport():
     print(f"repairs_constructions (from obj_stats): {obj_stats.get('repairs_constructions', 'MISSING')}")
     
     print(f"\n{'='*80}")
-    print(f"Checking what OLD code would have done:")
+    print("Checking what OLD code would have done:")
     print(f"{'='*80}")
     print(f"team_damage_given (player.get): {superboyy.get('team_damage_given', 0)} ❌")
     print(f"team_damage_received (player.get): {superboyy.get('team_damage_received', 0)} ❌")
@@ -59,16 +59,16 @@ def test_reimport():
     print(f"headshot_kills (obj_stats.get): {obj_stats.get('headshot_kills', 0)} ✅")
     
     print(f"\n{'='*80}")
-    print(f"EXPECTED VALUES (from raw file check):")
+    print("EXPECTED VALUES (from raw file check):")
     print(f"{'='*80}")
-    print(f"team_damage_given: 85")
-    print(f"team_damage_received: 18")
-    print(f"headshot_kills: 4")
-    print(f"useful_kills: 2")
-    print(f"multikill_2x: 2")
+    print("team_damage_given: 85")
+    print("team_damage_received: 18")
+    print("headshot_kills: 4")
+    print("useful_kills: 2")
+    print("multikill_2x: 2")
     
     print(f"\n{'='*80}")
-    print(f"VERIFICATION:")
+    print("VERIFICATION:")
     print(f"{'='*80}")
     
     checks = [
@@ -87,9 +87,9 @@ def test_reimport():
             all_good = False
     
     if all_good:
-        print(f"\n🎉 ALL CHECKS PASSED! Parser is working correctly!")
+        print("\n🎉 ALL CHECKS PASSED! Parser is working correctly!")
     else:
-        print(f"\n⚠️  Some checks failed. Parser may need additional fixes.")
+        print("\n⚠️  Some checks failed. Parser may need additional fixes.")
 
 if __name__ == '__main__':
     test_reimport()

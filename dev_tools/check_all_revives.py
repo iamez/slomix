@@ -97,11 +97,11 @@ print("="*80)
 print("REVIVES VALIDATION - ALL NOV 2 ROUNDS")
 print("="*80)
 print(f"\nTotal players checked: {total_players}")
-print(f"\nrevives_given:")
+print("\nrevives_given:")
 print(f"  ✓ Matches: {revives_given_matches}/{total_players} ({100*revives_given_matches/total_players:.1f}%)")
 print(f"  ✗ Mismatches: {len(revives_given_mismatches)}")
 
-print(f"\ntimes_revived:")
+print("\ntimes_revived:")
 print(f"  ✓ Matches: {times_revived_matches}/{total_players} ({100*times_revived_matches/total_players:.1f}%)")
 print(f"  ✗ Mismatches: {len(times_revived_mismatches)}")
 

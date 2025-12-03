@@ -727,7 +727,7 @@ class PostgreSQLDatabaseManager:
                 # For round 2, we expect differential stats which might be lower
                 # This is EXPECTED and not an error
                 logger.debug(f"   Round 2 file detected: {filename}")
-                logger.debug(f"   Differential stats expected (cumulative from Round 1 removed)")
+                logger.debug("   Differential stats expected (cumulative from Round 1 removed)")
             
             if issues:
                 return False, "; ".join(issues)

@@ -1,17 +1,18 @@
 """
 Bot Configuration System
 Supports both SQLite and PostgreSQL with environment variables or config file.
+Consolidates all configuration from environment variables into a single object.
 """
 import os
 import json
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 # Load .env file if it exists
 try:
     from dotenv import load_dotenv
     load_dotenv()  # Load .env file into environment variables
-except ImportError:
+except ImportError:  # nosec B110
     pass  # python-dotenv not installed, skip
 
 logger = logging.getLogger('BotConfig')
@@ -20,28 +21,34 @@ logger = logging.getLogger('BotConfig')
 class BotConfig:
     """
     Centralized bot configuration supporting multiple database backends.
-    
+
     Configuration Priority:
     1. Environment variables
     2. bot_config.json file
     3. Default values (SQLite fallback)
+
+    This class consolidates ALL configuration attributes from ultimate_bot.py
+    and services, eliminating scattered os.getenv() calls throughout the codebase.
     """
-    
+
     def __init__(self, config_file: Optional[str] = None):
         """
         Initialize bot configuration.
-        
+
         Args:
             config_file: Optional path to JSON config file
         """
         self.config_file = config_file or "bot_config.json"
         self._config_data = {}
-        
+
         # Load config file if exists
         if os.path.exists(self.config_file):
             self._load_config_file()
-        
-        # Database configuration (default to PostgreSQL for production)
+
+        # ==================== LOGGING ====================
+        self.log_level: str = self._get_config('LOG_LEVEL', 'INFO').upper()
+
+        # ==================== DATABASE CONFIGURATION ====================
         self.database_type = self._get_config('DATABASE_TYPE', 'postgresql')
         
         # SQLite settings
@@ -62,16 +69,120 @@ class BotConfig:
         self.postgres_ssl_cert = self._get_config('POSTGRES_SSL_CERT', '')
         self.postgres_ssl_key = self._get_config('POSTGRES_SSL_KEY', '')
         self.postgres_ssl_root_cert = self._get_config('POSTGRES_SSL_ROOT_CERT', '')
-        
-        # Discord settings (maintain backward compatibility)
-        self.discord_token = self._get_config('DISCORD_BOT_TOKEN', '')
-        self.discord_guild_id = self._get_config('DISCORD_GUILD_ID', '')
-        self.discord_stats_channel_id = self._get_config('DISCORD_STATS_CHANNEL_ID', '')
-        
-        # Stats parsing settings
-        self.stats_directory = self._get_config('STATS_DIRECTORY', 'local_stats')
-        self.backup_directory = self._get_config('BACKUP_DIRECTORY', 'processed_stats')
-        
+
+        # ==================== DISCORD CONFIGURATION ====================
+        self.discord_token: str = self._get_config('DISCORD_BOT_TOKEN', '')
+        self.discord_guild_id: str = self._get_config('DISCORD_GUILD_ID', '')
+
+        # ==================== DISCORD CHANNEL IDS ====================
+        # Stats and monitoring channels
+        self.stats_channel_id: int = int(self._get_config('STATS_CHANNEL_ID', '0'))
+        self.discord_stats_channel_id: str = self._get_config('DISCORD_STATS_CHANNEL_ID', '')  # Backward compat
+
+        # Routing channels
+        self.production_channel_id: int = int(self._get_config('PRODUCTION_CHANNEL_ID', '0'))
+        self.gather_channel_id: int = int(self._get_config('GATHER_CHANNEL_ID', '0'))
+        self.general_channel_id: int = int(self._get_config('GENERAL_CHANNEL_ID', '0'))
+
+        # Admin channels (supports comma-separated list)
+        admin_channels_str = self._get_config('ADMIN_CHANNEL_ID', '0')
+        self.admin_channels: List[int] = [
+            int(ch.strip()) for ch in admin_channels_str.split(",") if ch.strip().isdigit()
+        ]
+        self.admin_channel_id: int = self.admin_channels[0] if self.admin_channels else 0
+
+        # Voice channels for monitoring (comma-separated)
+        gaming_channels_str = self._get_config('GAMING_VOICE_CHANNELS', '')
+        self.gaming_voice_channels: List[int] = (
+            [int(ch.strip()) for ch in gaming_channels_str.split(",") if ch.strip()]
+            if gaming_channels_str else []
+        )
+
+        # Bot command channels (comma-separated)
+        bot_channels_str = self._get_config('BOT_COMMAND_CHANNELS', '')
+        self.bot_command_channels: List[int] = (
+            [int(ch.strip()) for ch in bot_channels_str.split(",") if ch.strip()]
+            if bot_channels_str else []
+        )
+
+        # Derived channel lists (computed from above)
+        self.public_channels: List[int] = [
+            ch for ch in [self.production_channel_id, self.gather_channel_id, self.general_channel_id]
+            if ch != 0
+        ]
+        self.all_allowed_channels: List[int] = list(set(self.public_channels + self.admin_channels))
+
+        # ==================== SESSION DETECTION ====================
+        self.session_start_threshold: int = int(self._get_config('SESSION_START_THRESHOLD', '6'))
+        self.session_end_threshold: int = int(self._get_config('SESSION_END_THRESHOLD', '2'))
+        self.session_end_delay: int = int(self._get_config('SESSION_END_DELAY', '300'))  # seconds
+        self.session_gap_minutes: int = int(self._get_config('SESSION_GAP_MINUTES', '60'))  # minutes between gaming sessions
+
+        # ==================== AUTOMATION SYSTEM ====================
+        self.automation_enabled: bool = self._get_config('AUTOMATION_ENABLED', 'false').lower() == 'true'
+
+        # ==================== HEALTH MONITOR CONFIGURATION ====================
+        self.health_error_threshold: int = int(self._get_config('HEALTH_ERROR_THRESHOLD', '10'))
+        self.health_ssh_error_threshold: int = int(self._get_config('HEALTH_SSH_ERROR_THRESHOLD', '5'))
+        self.health_db_error_threshold: int = int(self._get_config('HEALTH_DB_ERROR_THRESHOLD', '5'))
+        self.health_alert_cooldown: int = int(self._get_config('HEALTH_ALERT_COOLDOWN', '300'))  # seconds
+
+        # ==================== SSH CONFIGURATION ====================
+        self.ssh_enabled: bool = self._get_config('SSH_ENABLED', 'false').lower() == 'true'
+        self.ssh_host: str = self._get_config('SSH_HOST', '')
+        self.ssh_port: int = int(self._get_config('SSH_PORT', '22'))
+        self.ssh_user: str = self._get_config('SSH_USER', '')
+        self.ssh_key_path: str = self._get_config('SSH_KEY_PATH', '')
+        self.ssh_remote_path: str = self._get_config('REMOTE_STATS_PATH', '')
+
+        # SSH monitoring behavior
+        self.ssh_check_interval: int = int(self._get_config('SSH_CHECK_INTERVAL', '60'))  # seconds
+        self.ssh_startup_lookback_hours: int = int(self._get_config('SSH_STARTUP_LOOKBACK_HOURS', '24'))
+        self.ssh_voice_conditional: bool = self._get_config('SSH_VOICE_CONDITIONAL', 'true').lower() == 'true'
+        self.ssh_grace_period_minutes: int = int(self._get_config('SSH_GRACE_PERIOD_MINUTES', '10'))
+
+        # ==================== FILE PATHS ====================
+        self.stats_directory: str = self._get_config('STATS_DIRECTORY', 'local_stats')
+        self.local_stats_path: str = self._get_config('LOCAL_STATS_PATH', './local_stats')
+        self.backup_directory: str = self._get_config('BACKUP_DIRECTORY', 'processed_stats')
+        self.metrics_db_path: str = self._get_config('METRICS_DB_PATH', 'bot/data/metrics.db')
+
+        # ==================== RCON (REMOTE CONSOLE) ====================
+        self.rcon_enabled: bool = self._get_config('RCON_ENABLED', 'false').lower() == 'true'
+        self.rcon_host: str = self._get_config('RCON_HOST', 'localhost')
+        self.rcon_port: int = int(self._get_config('RCON_PORT', '27960'))
+        self.rcon_password: str = self._get_config('RCON_PASSWORD', '')
+
+        # ==================== COMPETITIVE ANALYTICS FEATURE FLAGS ====================
+        # Phase 2: Team split detection
+        self.enable_team_split_detection: bool = self._get_config('ENABLE_TEAM_SPLIT_DETECTION', 'false').lower() == 'true'
+
+        # Phase 3: Match predictions
+        self.enable_match_predictions: bool = self._get_config('ENABLE_MATCH_PREDICTIONS', 'false').lower() == 'true'
+
+        # Phase 4: Live scoring
+        self.enable_live_scoring: bool = self._get_config('ENABLE_LIVE_SCORING', 'false').lower() == 'true'
+
+        # Logging and debugging
+        self.enable_prediction_logging: bool = self._get_config('ENABLE_PREDICTION_LOGGING', 'true').lower() == 'true'
+
+        # Thresholds and limits
+        self.prediction_cooldown_minutes: int = int(self._get_config('PREDICTION_COOLDOWN_MINUTES', '5'))
+        self.min_players_for_prediction: int = int(self._get_config('MIN_PLAYERS_FOR_PREDICTION', '6'))
+        self.min_guid_coverage: float = float(self._get_config('MIN_GUID_COVERAGE', '0.5'))  # 50% must have linked GUIDs
+
+        # ==================== WEBSOCKET PUSH NOTIFICATIONS ====================
+        # Bot connects OUT to VPS WebSocket server (no ports needed on bot machine)
+        self.ws_enabled: bool = self._get_config('WS_ENABLED', 'false').lower() == 'true'
+        self.ws_host: str = self._get_config('WS_HOST', '')  # VPS hostname/IP
+        self.ws_port: int = int(self._get_config('WS_PORT', '8765'))
+        self.ws_auth_token: str = self._get_config('WS_AUTH_TOKEN', '')  # Shared secret for authentication
+        self.ws_reconnect_delay: int = int(self._get_config('WS_RECONNECT_DELAY', '5'))  # seconds between reconnect attempts
+
+        # ==================== VOICE CHANNEL LOGGING ====================
+        # Log when players join/leave gaming voice channels
+        self.enable_voice_logging: bool = self._get_config('ENABLE_VOICE_LOGGING', 'false').lower() == 'true'
+
         logger.info(f"🔧 Configuration loaded: database_type={self.database_type}")
     
     def _load_config_file(self):
@@ -178,12 +289,72 @@ class BotConfig:
         
         logger.info(f"📝 Example config saved: {output_path}")
     
+    def validate(self) -> List[str]:
+        """
+        Validate configuration and return list of errors.
+
+        Returns:
+            List of error messages (empty if valid)
+        """
+        errors = []
+
+        # Discord token is required
+        if not self.discord_token:
+            errors.append("DISCORD_BOT_TOKEN is required")
+
+        # Database configuration
+        if self.database_type.lower() == 'postgresql':
+            if not self.postgres_host:
+                errors.append("POSTGRES_HOST is required for PostgreSQL")
+            if not self.postgres_user:
+                errors.append("POSTGRES_USER is required for PostgreSQL")
+            if not self.postgres_password:
+                errors.append("POSTGRES_PASSWORD is required for PostgreSQL")
+            if not self.postgres_database:
+                errors.append("POSTGRES_DATABASE is required for PostgreSQL")
+
+        # SSH configuration (if enabled)
+        if self.ssh_enabled:
+            if not self.ssh_host:
+                errors.append("SSH_HOST is required when SSH_ENABLED=true")
+            if not self.ssh_user:
+                errors.append("SSH_USER is required when SSH_ENABLED=true")
+            if not self.ssh_key_path:
+                errors.append("SSH_KEY_PATH is required when SSH_ENABLED=true")
+            if not self.ssh_remote_path:
+                errors.append("REMOTE_STATS_PATH is required when SSH_ENABLED=true")
+
+        # RCON configuration (if enabled)
+        if self.rcon_enabled:
+            if not self.rcon_host:
+                errors.append("RCON_HOST is required when RCON_ENABLED=true")
+            if not self.rcon_password:
+                errors.append("RCON_PASSWORD is required when RCON_ENABLED=true")
+
+        return errors
+
+    def log_configuration(self):
+        """Log the current configuration (for debugging)."""
+        logger.info("=" * 80)
+        logger.info("📋 CONFIGURATION SUMMARY")
+        logger.info("=" * 80)
+        logger.info(f"  Database: {self.database_type}")
+        if self.database_type.lower() == 'postgresql':
+            logger.info(f"  PostgreSQL: {self.postgres_host}:{self.postgres_port}/{self.postgres_database}")
+        logger.info(f"  Automation: {'ENABLED' if self.automation_enabled else 'DISABLED'}")
+        logger.info(f"  SSH Monitoring: {'ENABLED' if self.ssh_enabled else 'DISABLED'}")
+        if self.gaming_voice_channels:
+            logger.info(f"  Voice Channels: {len(self.gaming_voice_channels)} monitored")
+        logger.info(f"  Session Thresholds: {self.session_start_threshold}+ to start, <{self.session_end_threshold} to end")
+        logger.info("=" * 80)
+
     def __repr__(self):
-        """String representation (hides password)."""
+        """String representation (hides passwords)."""
         return (
             f"BotConfig(database_type={self.database_type}, "
-            f"sqlite_path={self.sqlite_db_path}, "
-            f"postgres_host={self.postgres_host}:{self.postgres_port})"
+            f"automation={self.automation_enabled}, "
+            f"ssh={self.ssh_enabled}, "
+            f"channels={len(self.gaming_voice_channels)} voice)"
         )
 
 

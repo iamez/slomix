@@ -9,7 +9,7 @@ import discord
 from discord.ext import commands, tasks
 import sys
 import os
-import traceback
+import logging
 from typing import Optional, List
 from datetime import datetime
 import asyncio
@@ -18,10 +18,21 @@ import asyncio
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from bot.core.checks import is_public_channel
+from bot.core.checks import is_public_channel, is_admin_channel
+from bot.core.utils import sanitize_error_message
 from analytics.synergy_detector import SynergyDetector, SynergyMetrics
 from analytics.config import config, is_enabled, is_command_enabled
 from bot.services.player_formatter import PlayerFormatter
+
+logger = logging.getLogger(__name__)
+
+# Prediction engine for team outcome predictions
+try:
+    from bot.services.prediction_engine import PredictionEngine
+    PREDICTION_AVAILABLE = True
+except ImportError:
+    logger.warning("⚠️ PredictionEngine not available for SynergyAnalytics")
+    PREDICTION_AVAILABLE = False
 
 
 class SynergyAnalytics(commands.Cog):
@@ -41,6 +52,20 @@ class SynergyAnalytics(commands.Cog):
         self.detector = SynergyDetector(self.db_path)
         self.cache = {}  # Simple in-memory cache
         self.player_formatter = PlayerFormatter(bot.db_adapter)
+        
+        # Initialize prediction engine if available
+        if PREDICTION_AVAILABLE:
+            self.prediction_engine = PredictionEngine(bot.db_adapter)
+            logger.info("✅ PredictionEngine enabled for SynergyAnalytics")
+        else:
+            self.prediction_engine = None
+        
+        # Voting system for team suggestions
+        # Format: {message_id: {'options': [...], 'votes': {user_id: option}, 
+        #                       'channel_id': id, 'expires': timestamp}}
+        self.active_suggestions = {}
+        self.VOTE_EMOJIS = ['1️⃣', '2️⃣', '3️⃣']
+        self.CONFIRM_EMOJI = '✅'
 
         # Start background tasks if enabled
         if config.get('synergy_analytics.auto_recalculate'):
@@ -63,8 +88,7 @@ class SynergyAnalytics(commands.Cog):
     
     async def cog_command_error(self, ctx, error):
         """Handle errors in this cog without crashing bot"""
-        print(f"❌ Error in SynergyAnalytics: {error}")
-        traceback.print_exc()
+        logger.error(f"Error in SynergyAnalytics: {error}", exc_info=True)
         
         if config.get('error_handling.fail_silently'):
             await ctx.send(
@@ -74,6 +98,117 @@ class SynergyAnalytics(commands.Cog):
         else:
             raise error
     
+    # =========================================================================
+    # VOTING SYSTEM FOR TEAM SUGGESTIONS
+    # =========================================================================
+    
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload):
+        """Handle votes on team suggestion messages"""
+        # Ignore bot reactions
+        if payload.user_id == self.bot.user.id:
+            return
+        
+        # Check if this is an active suggestion
+        if payload.message_id not in self.active_suggestions:
+            return
+        
+        suggestion = self.active_suggestions[payload.message_id]
+        emoji = str(payload.emoji)
+        
+        # Handle voting (1️⃣, 2️⃣, 3️⃣)
+        if emoji in self.VOTE_EMOJIS:
+            option_num = self.VOTE_EMOJIS.index(emoji)
+            if option_num < len(suggestion['options']):
+                # Record vote (one vote per user, can change)
+                suggestion['votes'][payload.user_id] = option_num
+                logger.debug(
+                    f"Vote recorded: User {payload.user_id} -> Option {option_num + 1}"
+                )
+        
+        # Handle confirm (✅) - show results
+        elif emoji == self.CONFIRM_EMOJI:
+            await self._show_vote_results(payload)
+    
+    async def _show_vote_results(self, payload):
+        """Display final vote tally and winning team split"""
+        if payload.message_id not in self.active_suggestions:
+            return
+        
+        suggestion = self.active_suggestions[payload.message_id]
+        votes = suggestion['votes']
+        options = suggestion['options']
+        
+        # Count votes per option
+        vote_counts = [0] * len(options)
+        for user_id, option in votes.items():
+            if option < len(vote_counts):
+                vote_counts[option] += 1
+        
+        # Find winner (highest votes, tie = first option wins)
+        max_votes = max(vote_counts) if vote_counts else 0
+        winner_idx = vote_counts.index(max_votes) if max_votes > 0 else 0
+        winner = options[winner_idx] if options else None
+        
+        # Build results embed
+        channel = self.bot.get_channel(payload.channel_id)
+        if not channel:
+            return
+        
+        embed = discord.Embed(
+            title="🏆 Team Suggestion Results",
+            description="Voting complete! Here are the results:",
+            color=0xFFD700  # Gold
+        )
+        
+        # Show vote breakdown
+        vote_summary = []
+        for i, count in enumerate(vote_counts):
+            emoji = self.VOTE_EMOJIS[i] if i < len(self.VOTE_EMOJIS) else f"{i+1}."
+            winner_mark = " 🏆" if i == winner_idx else ""
+            vote_summary.append(f"{emoji} Option {i+1}: **{count}** votes{winner_mark}")
+        
+        embed.add_field(
+            name="📊 Vote Breakdown",
+            value="\n".join(vote_summary) if vote_summary else "No votes",
+            inline=False
+        )
+        
+        # Show winning team
+        if winner:
+            team_a_names = winner.get('team_a_names', [])
+            team_b_names = winner.get('team_b_names', [])
+            
+            embed.add_field(
+                name="🔵 Winning Team 1",
+                value="\n".join(f"• {name}" for name in team_a_names) or "Empty",
+                inline=True
+            )
+            embed.add_field(
+                name="🔴 Winning Team 2",
+                value="\n".join(f"• {name}" for name in team_b_names) or "Empty",
+                inline=True
+            )
+            
+            # Show prediction for winner
+            pred = winner.get('prediction', {})
+            prob_a = pred.get('team_a_win_probability', 0.5)
+            prob_b = pred.get('team_b_win_probability', 0.5)
+            embed.add_field(
+                name="🎯 Match Prediction",
+                value=f"Team 1: **{prob_a:.0%}** vs Team 2: **{prob_b:.0%}**",
+                inline=False
+            )
+        
+        total_votes = sum(vote_counts)
+        embed.set_footer(text=f"Total votes: {total_votes}")
+        
+        await channel.send(embed=embed)
+        
+        # Clean up this suggestion
+        del self.active_suggestions[payload.message_id]
+        logger.info(f"Team suggestion {payload.message_id} resolved with {total_votes} votes")
+
     # =========================================================================
     # COMMAND: !synergy
     # =========================================================================
@@ -132,7 +267,7 @@ class SynergyAnalytics(commands.Cog):
                 await ctx.send(
                     f"📊 **Insufficient data for {player_a_name} + {player_b_name}**\n\n"
                     f"These players need at least {config.get('synergy_analytics.min_games_threshold')} "
-                    f"games together on the same team to calculate synergy."
+                    "games together on the same team to calculate synergy."
                 )
                 return
             
@@ -141,8 +276,7 @@ class SynergyAnalytics(commands.Cog):
             await ctx.send(embed=embed)
             
         except Exception as e:
-            print(f"Error in synergy_command: {e}")
-            traceback.print_exc()
+            logger.error(f"Error in synergy_command: {e}", exc_info=True)
             await ctx.send(
                 "⚠️ Could not calculate synergy. Please try again later."
             )
@@ -253,8 +387,7 @@ class SynergyAnalytics(commands.Cog):
             await ctx.send(embed=embed)
             
         except Exception as e:
-            print(f"Error in best_duos_command: {e}")
-            traceback.print_exc()
+            logger.error(f"Error in best_duos_command: {e}", exc_info=True)
             await ctx.send(
                 "⚠️ Could not fetch best duos. Please try again later."
             )
@@ -263,8 +396,7 @@ class SynergyAnalytics(commands.Cog):
     # COMMAND: !team_builder
     # =========================================================================
     
-    @is_public_channel()
-    @commands.command(name='team_builder', aliases=['balance_teams', 'suggest_teams'])
+    @commands.command(name='team_builder', aliases=['tb', 'build_teams'])
     @commands.cooldown(1, 15, commands.BucketType.channel)
     async def team_builder_command(self, ctx, *players):
         """
@@ -381,10 +513,213 @@ class SynergyAnalytics(commands.Cog):
             await ctx.send(embed=embed)
             
         except Exception as e:
-            print(f"Error in team_builder_command: {e}")
-            traceback.print_exc()
+            logger.error(f"Error in team_builder_command: {e}", exc_info=True)
             await ctx.send(
                 "⚠️ Could not build teams. Please try again later."
+            )
+
+    # =========================================================================
+    # COMMAND: !suggest_teams
+    # =========================================================================
+    
+    @commands.command(name='suggest_teams', aliases=['suggest', 'balance', 'st'])
+    @commands.cooldown(1, 30, commands.BucketType.channel)
+    async def suggest_teams_command(self, ctx):
+        """
+        Auto-suggest balanced teams based on players in voice channels.
+        Shows 3 options with predictions. Vote with 1️⃣2️⃣3️⃣, confirm with ✅.
+        
+        Usage:
+            !suggest_teams
+        
+        Detects players in monitored voice channels and suggests balanced teams.
+        """
+        if not is_command_enabled('team_builder'):
+            await ctx.send("🔒 Team suggestions are currently disabled.")
+            return
+        
+        try:
+            # Get monitored voice channels
+            monitored_channels = ['Fireteam Triglav', 'Fireteam Barje']
+            
+            # Collect all members in monitored voice channels
+            voice_members = []
+            channel_info = []
+            
+            for guild in self.bot.guilds:
+                for vc in guild.voice_channels:
+                    if vc.name in monitored_channels:
+                        for member in vc.members:
+                            if not member.bot:
+                                voice_members.append(member)
+                        if vc.members:
+                            non_bot = len([m for m in vc.members if not m.bot])
+                            channel_info.append(f"{vc.name}: {non_bot}")
+            
+            if len(voice_members) < 4:
+                await ctx.send(
+                    f"❌ Need at least 4 players in voice for team balancing.\n"
+                    f"**Current:** {', '.join(channel_info) or 'No players'}\n"
+                    f"**Tip:** Join: {', '.join(monitored_channels)}"
+                )
+                return
+            
+            async with ctx.typing():
+                # Resolve Discord IDs to GUIDs using player_links table
+                player_list = []
+                unlinked_players = []
+                
+                # Batch lookup all Discord IDs at once
+                discord_ids = [member.id for member in voice_members]
+                
+                # Query player_links for all Discord IDs
+                placeholders = ', '.join(['?' for _ in discord_ids])
+                rows = await self.bot.db_adapter.fetch_all(f"""
+                    SELECT discord_id, player_guid, player_name
+                    FROM player_links
+                    WHERE discord_id IN ({placeholders})
+                """, tuple(discord_ids))
+                
+                # Build mapping from results
+                linked_ids = set()
+                for discord_id, guid, player_name in rows:
+                    linked_ids.add(int(discord_id))
+                    player_list.append((guid, player_name))
+                
+                # Find unlinked players
+                for member in voice_members:
+                    if member.id not in linked_ids:
+                        unlinked_players.append(member.display_name)
+                
+                if len(player_list) < 4:
+                    await ctx.send(
+                        f"❌ Not enough linked players for team balancing.\n"
+                        f"**Linked:** {len(player_list)} • "
+                        f"**Unlinked:** {len(unlinked_players)}\n"
+                        f"**Unlinked:** {', '.join(unlinked_players)}\n"
+                        f"💡 Use `!link <player_name>` to link accounts."
+                    )
+                    return
+                
+                # Get top 3 diverse team splits
+                options = await self._optimize_teams_top_n(player_list, n=3)
+                
+                if not options:
+                    await ctx.send("⚠️ Could not find team splits.")
+                    return
+                
+                # Add predictions to each option
+                options = await self._add_predictions_to_options(options)
+                
+                # Format player names with badges
+                all_players = []
+                for opt in options:
+                    all_players.extend(opt['team_a'])
+                    all_players.extend(opt['team_b'])
+                
+                try:
+                    formatted = await self.player_formatter.format_players_batch(
+                        all_players, include_badges=True
+                    )
+                except Exception as e:
+                    logger.warning(f"Error formatting names: {e}")
+                    formatted = {guid: name for guid, name in all_players}
+            
+            # Create main embed with all 3 options
+            embed = discord.Embed(
+                title="🎮 Team Suggestions - Vote for your pick!",
+                description=(
+                    f"**{len(voice_members)}** players in voice • "
+                    f"**{len(player_list)}** linked\n"
+                    f"Vote with 1️⃣2️⃣3️⃣ then ✅ to confirm"
+                ),
+                color=0x00D166,
+                timestamp=datetime.now()
+            )
+            
+            # Add each option
+            for i, opt in enumerate(options):
+                emoji = self.VOTE_EMOJIS[i] if i < len(self.VOTE_EMOJIS) else f"{i+1}."
+                
+                # Team names
+                team_a_str = ", ".join([
+                    formatted.get(guid, name)[:15] 
+                    for guid, name in opt['team_a']
+                ])
+                team_b_str = ", ".join([
+                    formatted.get(guid, name)[:15] 
+                    for guid, name in opt['team_b']
+                ])
+                
+                # Prediction
+                pred = opt.get('prediction', {})
+                prob_a = pred.get('team_a_win_probability', 0.5)
+                prob_b = pred.get('team_b_win_probability', 0.5)
+                confidence = pred.get('confidence', 'unknown')
+                
+                # Balance info
+                balance = opt.get('balance_rating', 0)
+                if balance > 0.9:
+                    balance_emoji = "🟢"
+                elif balance > 0.7:
+                    balance_emoji = "🟡"
+                else:
+                    balance_emoji = "🟠"
+                
+                option_text = (
+                    f"🔵 **Team 1:** {team_a_str}\n"
+                    f"🔴 **Team 2:** {team_b_str}\n"
+                    f"📊 **Prediction:** {prob_a:.0%} vs {prob_b:.0%} "
+                    f"({confidence})\n"
+                    f"{balance_emoji} **Balance:** {balance:.0%}"
+                )
+                
+                embed.add_field(
+                    name=f"{emoji} Option {i + 1}",
+                    value=option_text,
+                    inline=False
+                )
+            
+            # Show unlinked players warning
+            if unlinked_players:
+                embed.add_field(
+                    name="⚠️ Unlinked (not included)",
+                    value=", ".join(unlinked_players[:5]) + (
+                        f"... +{len(unlinked_players)-5}" 
+                        if len(unlinked_players) > 5 else ""
+                    ),
+                    inline=False
+                )
+            
+            embed.set_footer(
+                text=f"Analyzed {options[0].get('combinations_checked', 0)} combinations"
+            )
+            
+            # Send and add reactions
+            message = await ctx.send(embed=embed)
+            
+            # Add voting reactions
+            for i in range(min(len(options), len(self.VOTE_EMOJIS))):
+                await message.add_reaction(self.VOTE_EMOJIS[i])
+            await message.add_reaction(self.CONFIRM_EMOJI)
+            
+            # Store for vote tracking
+            self.active_suggestions[message.id] = {
+                'options': options,
+                'votes': {},
+                'channel_id': ctx.channel.id,
+                'created_at': datetime.now(),
+                'author_id': ctx.author.id
+            }
+            
+            logger.info(
+                f"Team suggestion created: {message.id} with {len(options)} options"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in suggest_teams_command: {e}", exc_info=True)
+            await ctx.send(
+                "⚠️ Could not generate team suggestions. Please try again later."
             )
     
     # =========================================================================
@@ -464,7 +799,7 @@ class SynergyAnalytics(commands.Cog):
 
             # Create embed
             embed = discord.Embed(
-                title=f"🤝 Player Impact Analysis",
+                title="🤝 Player Impact Analysis",
                 description=f"{player_formatted}\n\nTeammate chemistry analysis • `{len(partners)}` partners analyzed",
                 color=0x9B59B6,  # Purple
                 timestamp=datetime.now()
@@ -546,8 +881,7 @@ class SynergyAnalytics(commands.Cog):
             await ctx.send(embed=embed)
             
         except Exception as e:
-            print(f"Error in player_impact_command: {e}")
-            traceback.print_exc()
+            logger.error(f"Error in player_impact_command: {e}", exc_info=True)
             await ctx.send(
                 "⚠️ Could not calculate player impact. Please try again later."
             )
@@ -584,7 +918,8 @@ class SynergyAnalytics(commands.Cog):
             self.cache.clear()  # Clear cache
             await ctx.send(f"✅ Recalculated {count} player synergies successfully!")
         except Exception as e:
-            await ctx.send(f"❌ Error during recalculation: {e}")
+            await ctx.send(
+                f"❌ Error during recalculation: {sanitize_error_message(e)}")
     
     # =========================================================================
     # BACKGROUND TASKS
@@ -706,6 +1041,169 @@ class SynergyAnalytics(commands.Cog):
         
         return best_split
     
+    async def _optimize_teams_top_n(self, player_list: List[tuple], n: int = 3) -> List[dict]:
+        """
+        Generate top N diverse balanced team splits.
+        Returns multiple options with different compositions.
+        
+        Args:
+            player_list: List of (guid, player_name) tuples
+            n: Number of options to return (default 3)
+            
+        Returns:
+            List of split dictionaries sorted by balance rating
+        """
+        from itertools import combinations
+        
+        num_players = len(player_list)
+        team_size = num_players // 2
+        
+        # For odd numbers, one team gets extra player
+        if num_players % 2 == 1:
+            team_size = (num_players + 1) // 2
+        
+        # Collect ALL splits with their scores
+        all_splits = []
+        combinations_checked = 0
+        
+        for team_a_indices in combinations(range(num_players), team_size):
+            team_b_indices = tuple(i for i in range(num_players) if i not in team_a_indices)
+            
+            team_a = [player_list[i] for i in team_a_indices]
+            team_b = [player_list[i] for i in team_b_indices]
+            
+            # Calculate team synergies
+            team_a_synergy = await self._calculate_team_synergy(team_a)
+            team_b_synergy = await self._calculate_team_synergy(team_b)
+            
+            # Balance = how similar the synergies are (1.0 = perfectly balanced)
+            if team_a_synergy > 0 and team_b_synergy > 0:
+                min_syn = min(team_a_synergy, team_b_synergy)
+                max_syn = max(team_a_synergy, team_b_synergy)
+                balance = min_syn / max_syn if max_syn > 0 else 0
+            else:
+                balance = 0.5
+            
+            combinations_checked += 1
+            
+            split = {
+                'team_a': team_a,
+                'team_b': team_b,
+                'team_a_synergy': team_a_synergy,
+                'team_b_synergy': team_b_synergy,
+                'balance_rating': balance,
+                'team_a_indices': frozenset(team_a_indices),
+                'team_b_indices': frozenset(team_b_indices),
+            }
+            all_splits.append(split)
+        
+        if not all_splits:
+            return []
+        
+        # Sort by balance (highest first)
+        all_splits.sort(key=lambda x: x['balance_rating'], reverse=True)
+        
+        # Pick diverse options - ensure team compositions differ significantly
+        selected = []
+        selected_indices = []  # Track indices separately for diversity check
+        used_compositions = set()
+        
+        for split in all_splits:
+            # Create a canonical representation (smaller set first for uniqueness)
+            comp_key = (split['team_a_indices'], split['team_b_indices'])
+            reverse_key = (split['team_b_indices'], split['team_a_indices'])
+            
+            # Check if this is too similar to already selected options
+            if comp_key in used_compositions or reverse_key in used_compositions:
+                continue
+            
+            # Check diversity: at least 2 players must be different from previous selections
+            is_diverse = True
+            for prev_indices in selected_indices:
+                overlap_a = len(split['team_a_indices'] & prev_indices)
+                # If more than half are the same, it's not diverse enough
+                if overlap_a > len(split['team_a_indices']) - 1:
+                    is_diverse = False
+                    break
+            
+            if is_diverse or len(selected) == 0:
+                # Remove internal tracking keys before adding
+                split_clean = {k: v for k, v in split.items() 
+                              if k not in ('team_a_indices', 'team_b_indices')}
+                split_clean['combinations_checked'] = combinations_checked
+                split_clean['team_a_names'] = [name for _, name in split['team_a']]
+                split_clean['team_b_names'] = [name for _, name in split['team_b']]
+                split_clean['option_number'] = len(selected) + 1
+                selected.append(split_clean)
+                selected_indices.append(split['team_a_indices'])  # Track for diversity
+                used_compositions.add(comp_key)
+                used_compositions.add(reverse_key)
+            
+            if len(selected) >= n:
+                break
+        
+        # If we couldn't find n diverse options, fill with remaining best
+        if len(selected) < n:
+            for split in all_splits:
+                comp_key = (split['team_a_indices'], split['team_b_indices'])
+                reverse_key = (split['team_b_indices'], split['team_a_indices'])
+                if comp_key not in used_compositions and reverse_key not in used_compositions:
+                    split_clean = {k: v for k, v in split.items() 
+                                  if k not in ('team_a_indices', 'team_b_indices')}
+                    split_clean['combinations_checked'] = combinations_checked
+                    split_clean['team_a_names'] = [name for _, name in split['team_a']]
+                    split_clean['team_b_names'] = [name for _, name in split['team_b']]
+                    split_clean['option_number'] = len(selected) + 1
+                    selected.append(split_clean)
+                    used_compositions.add(comp_key)
+                    if len(selected) >= n:
+                        break
+        
+        return selected
+
+    async def _add_predictions_to_options(
+        self, options: List[dict]
+    ) -> List[dict]:
+        """
+        Add match predictions to each team option.
+        
+        Args:
+            options: List of team split options from _optimize_teams_top_n
+            
+        Returns:
+            Options with 'prediction' field added to each
+        """
+        if not self.prediction_engine:
+            # No prediction engine - add placeholder predictions
+            for opt in options:
+                opt['prediction'] = {
+                    'team_a_win_probability': 0.50,
+                    'team_b_win_probability': 0.50,
+                    'confidence': 'unavailable',
+                    'key_insight': 'Prediction engine not available'
+                }
+            return options
+        
+        for opt in options:
+            try:
+                team_a_guids = [guid for guid, _ in opt['team_a']]
+                team_b_guids = [guid for guid, _ in opt['team_b']]
+                
+                prediction = await self.prediction_engine.predict_match(
+                    team_a_guids, team_b_guids
+                )
+                opt['prediction'] = prediction
+            except Exception as e:
+                logger.warning(f"Prediction failed for option {opt.get('option_number')}: {e}")
+                opt['prediction'] = {
+                    'team_a_win_probability': 0.50,
+                    'team_b_win_probability': 0.50,
+                    'confidence': 'error',
+                    'key_insight': 'Could not generate prediction'
+                }
+        
+        return options
+
     async def _calculate_team_synergy(self, team: List[tuple]) -> float:
         """Calculate average synergy within a team"""
         if len(team) < 2:
@@ -806,7 +1304,7 @@ class SynergyAnalytics(commands.Cog):
             player_b_formatted = synergy.player_b_name
 
         embed = discord.Embed(
-            title=f"⚔️ Player Synergy Analysis",
+            title="⚔️ Player Synergy Analysis",
             description=f"{player_a_formatted} **+** {player_b_formatted}\n\n**Overall Rating:** {rating}",
             color=color,
             timestamp=datetime.now()

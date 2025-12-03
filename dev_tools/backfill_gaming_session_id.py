@@ -103,7 +103,7 @@ async def backfill_gaming_sessions():
     result = await conn.fetchval(
         "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NOT NULL"
     )
-    print(f"\n✅ Backfill complete!")
+    print("\n✅ Backfill complete!")
     print(f"   Total rounds: {len(rounds)}")
     print(f"   Updated rounds: {result}")
     print(f"   Total gaming sessions: {current_gaming_session_id}")
@@ -122,7 +122,7 @@ async def backfill_gaming_sessions():
         """
     )
     
-    print(f"\nGaming Session Summary:")
+    print("\nGaming Session Summary:")
     for session in sessions:
         print(f"  Session #{session['gaming_session_id']}: {session['round_count']} rounds "
               f"({session['first_date']} to {session['last_date']})")

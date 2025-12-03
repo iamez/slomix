@@ -21,6 +21,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.utils import escape_like_pattern_for_query, sanitize_error_message
 from bot.stats import StatsCalculator
 
 logger = logging.getLogger(__name__)
@@ -45,8 +46,8 @@ class StatsCog(commands.Cog, name="Stats"):
                     "CREATE TEMP VIEW IF NOT EXISTS player_comprehensive_stats_alias AS "
                     "SELECT *, player_name AS name FROM player_comprehensive_stats"
                 )
-        except Exception:
-            pass
+        except Exception:  # nosec B110
+            pass  # Alias is optional
 
     @is_public_channel()
     @commands.command(name="ping")
@@ -105,7 +106,7 @@ class StatsCog(commands.Cog, name="Stats"):
 
         except Exception as e:
             logger.error(f"Error in ping command: {e}")
-            await ctx.send(f"❌ Bot error: {e}")
+            await ctx.send(f"❌ Bot error: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="check_achievements", aliases=["check_achivements", "check_achievement"])
@@ -124,8 +125,8 @@ class StatsCog(commands.Cog, name="Stats"):
             # Ensure connection has player_name alias if needed
             try:
                 await self._ensure_player_name_alias()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Alias is optional
             
             # Handle @mention
             if ctx.message.mentions:
@@ -166,9 +167,13 @@ class StatsCog(commands.Cog, name="Stats"):
 
             # Handle player name search
             else:
+                # Escape LIKE pattern special chars to prevent injection
+                safe_pattern = escape_like_pattern_for_query(player_name)
                 result = await self.bot.db_adapter.fetch_one(
-                    "SELECT guid, alias FROM player_aliases WHERE LOWER(alias) LIKE LOWER(?) ORDER BY last_seen DESC LIMIT 1",
-                    (f"%{player_name}%",),
+                    "SELECT guid, alias FROM player_aliases "
+                    "WHERE LOWER(alias) LIKE LOWER(?) ESCAPE '\\' "
+                    "ORDER BY last_seen DESC LIMIT 1",
+                    (safe_pattern,),
                 )
 
                 if not result:
@@ -299,7 +304,8 @@ class StatsCog(commands.Cog, name="Stats"):
             logger.error(
                 f"Error in check_achievements command: {e}", exc_info=True
             )
-            await ctx.send(f"❌ Error checking achievements: {e}")
+            await ctx.send(
+                f"❌ Error checking achievements: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="compare")
@@ -337,8 +343,8 @@ class StatsCog(commands.Cog, name="Stats"):
             # Ensure player_name alias for this command's DB connection
             try:
                 await self._ensure_player_name_alias()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Alias is optional
 
             # Helper: get stats when we already have a GUID
             async def get_player_stats_by_guid(player_guid, display_name):
@@ -429,9 +435,13 @@ class StatsCog(commands.Cog, name="Stats"):
                         return await get_player_stats_by_guid(link[0], link[1])
 
                 # Try player_aliases first (name search)
+                # Escape LIKE pattern special chars to prevent injection
+                safe_pattern = escape_like_pattern_for_query(player_name)
                 result = await self.bot.db_adapter.fetch_one(
-                    "SELECT guid, alias FROM player_aliases WHERE LOWER(alias) LIKE LOWER(?) ORDER BY last_seen DESC LIMIT 1",
-                    (f"%{player_name}%",),
+                    "SELECT guid, alias FROM player_aliases "
+                    "WHERE LOWER(alias) LIKE LOWER(?) ESCAPE '\\' "
+                    "ORDER BY last_seen DESC LIMIT 1",
+                    (safe_pattern,),
                 )
 
                 if not result:
@@ -703,8 +713,8 @@ class StatsCog(commands.Cog, name="Stats"):
             # Clean up
             try:
                 output_path.unlink()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Cleanup failure is non-critical
 
             logger.info(
                 f"📊 Comparison generated: {p1_stats['name']} vs {p2_stats['name']}"
@@ -712,7 +722,7 @@ class StatsCog(commands.Cog, name="Stats"):
 
         except Exception as e:
             logger.error(f"Error in compare command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error generating comparison: {e}")
+            await ctx.send(f"❌ Error generating comparison: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="season_info", aliases=["season", "seasons"])
@@ -759,12 +769,12 @@ class StatsCog(commands.Cog, name="Stats"):
             # Apply per-connection alias to handle legacy DB column names
             try:
                 await self._ensure_player_name_alias()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Alias is optional
             season_filter = self.season_manager.get_season_sql_filter()
 
             # Season kills leader
-            season_query = f"""
+            season_query = """
                 SELECT
                     (SELECT player_name FROM player_comprehensive_stats
                      WHERE player_guid = p.player_guid
@@ -842,7 +852,8 @@ class StatsCog(commands.Cog, name="Stats"):
 
         except Exception as e:
             logger.error(f"Error in season_info command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error retrieving season information: {e}")
+            await ctx.send(
+                f"❌ Error retrieving season information: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="help_command", aliases=["commands"])

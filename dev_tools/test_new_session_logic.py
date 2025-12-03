@@ -56,6 +56,6 @@ old_result = cursor.fetchone()
 old_date = old_result[0] if old_result else None
 
 print(f"\n❌ Old logic would have returned: {old_date}")
-print(f"\n💡 New logic correctly uses the START date of the gaming session!")
+print("\n💡 New logic correctly uses the START date of the gaming session!")
 
 conn.close()

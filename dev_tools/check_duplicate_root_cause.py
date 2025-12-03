@@ -29,7 +29,7 @@ print("="*70)
 # Check if there's a weapon or class breakdown
 cursor.execute("PRAGMA table_info(player_comprehensive_stats)")
 columns = [row[1] for row in cursor.fetchall()]
-print(f"\nChecking for breakdown columns...")
+print("\nChecking for breakdown columns...")
 if 'weapon' in columns or 'class' in columns or 'weapon_id' in columns or 'class_id' in columns:
     print("✅ Found weapon/class columns!")
 else:

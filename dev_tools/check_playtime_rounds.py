@@ -102,9 +102,9 @@ async def main():
         
         # Check if this matches the 127.4 or 128.4
         if abs(r12/60 - 127.4) < 1.0:
-            print(f"   ⚠️  Close to SuperBoyy's 127.4 min!")
+            print("   ⚠️  Close to SuperBoyy's 127.4 min!")
         if abs(r12/60 - 128.4) < 1.0:
-            print(f"   ⚠️  Close to our 128.4 min!")
+            print("   ⚠️  Close to our 128.4 min!")
     
     # Check the attachment data
     print("\n" + "=" * 80)

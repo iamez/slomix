@@ -269,8 +269,8 @@ def create_adapter(db_type: str = 'postgresql', **kwargs) -> DatabaseAdapter:
     if db_type.lower() not in ('postgresql', 'postgres'):
         raise ValueError(
             f"Unsupported database type: {db_type}. "
-            f"This bot now requires PostgreSQL. "
-            f"Set database_type='postgresql' in your config."
+            "This bot now requires PostgreSQL. "
+            "Set database_type='postgresql' in your config."
         )
 
     return PostgreSQLAdapter(

@@ -67,12 +67,12 @@ async def check_today():
     
     await pool.close()
     
-    print(f"\n🗄️  PostgreSQL Database:")
+    print("\n🗄️  PostgreSQL Database:")
     print(f"   Processed files: {len(processed)}")
     print(f"   Rounds created: {len(rounds)}")
     
     if rounds:
-        print(f"\n   Latest rounds:")
+        print("\n   Latest rounds:")
         for r in rounds[-5:]:
             print(f"   ✓ Round {r['round_number']}: {r['map_name']} @ {r['round_time']}")
     
@@ -90,12 +90,12 @@ async def check_today():
     print(f"   Missing:       {len(missing_from_db)}")
     
     if missing_from_db:
-        print(f"\n   ⚠️  These files need to be imported:")
+        print("\n   ⚠️  These files need to be imported:")
         for f in sorted(missing_from_db):
             print(f"      - {f}")
-        print(f"\n   💡 Run: !sync_today in Discord")
+        print("\n   💡 Run: !sync_today in Discord")
     else:
-        print(f"\n   ✅ All files are imported! Database is up to date.")
+        print("\n   ✅ All files are imported! Database is up to date.")
     
     # Calculate completion
     completion = (len(processed_names) / len(local_files) * 100) if local_files else 100

@@ -34,33 +34,34 @@ class HealthMonitor:
     - Database health
     """
     
-    def __init__(self, bot, admin_channel_id: int, metrics_logger):
+    def __init__(self, bot, admin_channel_id: int, metrics_logger, config=None):
         """
         Initialize health monitor.
-        
+
         Args:
             bot: Discord bot instance
             admin_channel_id: Channel for health alerts
             metrics_logger: MetricsLogger instance
+            config: BotConfig instance (optional, uses defaults if not provided)
         """
         self.bot = bot
         self.admin_channel_id = admin_channel_id
         self.metrics = metrics_logger
-        
+
         # Health state
         self.start_time = datetime.now()
         self.last_check_time: Optional[datetime] = None
         self.is_monitoring = False
-        
+
         # Alert management
         self.last_alert_time: Optional[datetime] = None
-        self.alert_cooldown = 300  # 5 minutes
-        
+        self.alert_cooldown = config.health_alert_cooldown if config else 300
+
         # Health thresholds
-        self.error_threshold = 10
-        self.ssh_error_threshold = 5
-        self.db_error_threshold = 5
-        
+        self.error_threshold = config.health_error_threshold if config else 10
+        self.ssh_error_threshold = config.health_ssh_error_threshold if config else 5
+        self.db_error_threshold = config.health_db_error_threshold if config else 5
+
         logger.info("🏥 Health Monitor initialized")
     
     async def start_monitoring(self, check_interval: int = 300):

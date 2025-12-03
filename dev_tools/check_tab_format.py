@@ -18,7 +18,7 @@ if len(parts) >= 5:
         weapon_section, extended_section = stats_section.split('\t', 1)
         tab_fields = extended_section.split('\t')
         print(f"\nExtended fields count: {len(tab_fields)}")
-        print(f"\nFirst 10 extended fields:")
+        print("\nFirst 10 extended fields:")
         for i, field in enumerate(tab_fields[:10]):
             print(f"  [{i}] = {field}")
         

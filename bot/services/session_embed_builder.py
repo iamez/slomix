@@ -75,7 +75,7 @@ class SessionEmbedBuilder:
         )
 
         # Build player summary - split into multiple fields to avoid 1024 char limit
-        medals = ["🥇", "🥈", "🥉", "❌"]
+        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "1️⃣0️⃣", "1️⃣1️⃣", "1️⃣2️⃣"]
         players_per_field = 3  # 3 players per field to stay under 1024 chars
         
         for field_idx in range(0, len(all_players), players_per_field):
@@ -142,7 +142,14 @@ class SessionEmbedBuilder:
                     dmg_recv_display = f"{total_damage_received}"
 
                 # Three-line format: Name, Combat stats, Support stats
-                medal = medals[global_idx] if global_idx < len(medals) else "🔹"
+                if global_idx < len(medals):
+                    medal = medals[global_idx]
+                else:
+                    # Generate number emoji for ranks beyond 12 (e.g., 13 → 1️⃣3️⃣)
+                    rank_num = str(global_idx + 1)
+                    emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+                                   '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
+                    medal = ''.join(emoji_digits[d] for d in rank_num)
 
                 # Build multikills string (abbreviated)
                 multikills_parts = []
@@ -284,7 +291,7 @@ class SessionEmbedBuilder:
             title="👥 Team Composition",
             description=(
                 f"Player roster for {team_1_name} vs {team_2_name}\n"
-                f"🔄 indicates players who swapped teams during session"
+                "🔄 indicates players who swapped teams during session"
             ),
             color=0x57F287,
             timestamp=datetime.now()
@@ -353,11 +360,11 @@ class SessionEmbedBuilder:
             leader_name = dpm_leaders[0][0] if dpm_leaders else "N/A"
 
             insights = (
-                f"📊 **Enhanced Session DPM Stats:**\n"
+                "📊 **Enhanced Session DPM Stats:**\n"
                 f"• Average DPM: `{avg_dpm:.1f}`\n"
                 f"• Highest DPM: `{highest_dpm:.0f}`\n"
                 f"• DPM Leader: **{leader_name}**\n"
-                f"• Formula: `(Total Damage × 60) / Time Played (seconds)`"
+                "• Formula: `(Total Damage × 60) / Time Played (seconds)`"
             )
             embed.add_field(name="💥 DPM Insights", value=insights, inline=False)
 

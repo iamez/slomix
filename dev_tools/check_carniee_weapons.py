@@ -24,6 +24,6 @@ result = cursor.fetchone()
 if result:
     print(f"  FOUND: {result}")
 else:
-    print(f"  NOT FOUND IN DATABASE")
+    print("  NOT FOUND IN DATABASE")
 
 conn.close()

@@ -67,14 +67,14 @@ async def check_4way_sync(target_date=None):
     remote_path = "/home/et/.etlegacy/legacy/gamestats"
     
     print(f"   Connecting to {ssh_user}@{ssh_host}:{ssh_port}...")
-    print(f"   (You may be prompted for password)")
+    print("   (You may be prompted for password)")
     # Don't capture output so password prompt shows
     ssh_cmd = f"ssh -p {ssh_port} {ssh_user}@{ssh_host} ls -1 {remote_path}/{target_date}*.txt 2>/dev/null"
     try:
-        result = subprocess.run(ssh_cmd, shell=True, capture_output=True, text=True, timeout=30, input=None)
+        result = subprocess.run(ssh_cmd, shell=True, capture_output=True, text=True, timeout=30, input=None)  # nosec B602 B603 - admin tool
         ls_output = result.stdout.strip()
         if not ls_output or result.returncode != 0:
-            print(f"   ⚠️  No files found or connection failed")
+            print("   ⚠️  No files found or connection failed")
             ls_output = "NO_FILES"
     except Exception as e:
         print(f"   ❌ SSH error: {e}")
@@ -248,16 +248,16 @@ async def check_4way_sync(target_date=None):
         print("   ✅ No sync needed!")
     elif len(missing_from_db) > 0:
         print(f"\n   ⚠️  Database is missing {len(missing_from_db)} files")
-        print(f"   📥 Recommend: Use !sync_today command in Discord")
-        print(f"   📥 Or: Run rebuild with option 2 (last 30 days)")
+        print("   📥 Recommend: Use !sync_today command in Discord")
+        print("   📥 Or: Run rebuild with option 2 (last 30 days)")
     
     if len(missing_from_vps) > 0:
         print(f"\n   ⚠️  VPS local_stats is missing {len(missing_from_vps)} files")
-        print(f"   📥 Recommend: Bot will auto-download on next check")
+        print("   📥 Recommend: Bot will auto-download on next check")
     
     if len(missing_from_local) > 0:
         print(f"\n   ⚠️  Local Windows is missing {len(missing_from_local)} files")
-        print(f"   📥 Recommend: scp from game server or VPS")
+        print("   📥 Recommend: scp from game server or VPS")
     
     # Summary table
     print("\n" + "=" * 80)

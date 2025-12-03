@@ -4,6 +4,7 @@ Creates beautiful stat cards and visualizations for Discord bot
 """
 
 import io
+import logging
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -12,6 +13,8 @@ from PIL import Image, ImageDraw, ImageFont
 from bot.stats import StatsCalculator
 
 matplotlib.use('Agg')
+
+logger = logging.getLogger('bot.image_generator')
 
 
 class StatsImageGenerator:
@@ -67,7 +70,8 @@ class StatsImageGenerator:
             header_font = ImageFont.truetype("arialbd.ttf", 32)
             stat_font = ImageFont.truetype("arial.ttf", 24)
             small_font = ImageFont.truetype("arial.ttf", 18)
-        except BaseException:
+        except Exception as e:
+            logger.warning(f"Could not load custom fonts, using defaults: {e}")
             title_font = ImageFont.load_default()
             header_font = ImageFont.load_default()
             stat_font = ImageFont.load_default()
@@ -577,7 +581,8 @@ class StatsImageGenerator:
             player_font = ImageFont.truetype("arialbd.ttf", 28)
             weapon_font = ImageFont.truetype("arial.ttf", 22)
             stat_font = ImageFont.truetype("arial.ttf", 18)
-        except BaseException:
+        except Exception as e:
+            logger.warning(f"Could not load custom fonts, using defaults: {e}")
             title_font = ImageFont.load_default()
             player_font = ImageFont.load_default()
             weapon_font = ImageFont.load_default()

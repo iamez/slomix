@@ -52,7 +52,7 @@ for db_path in dbs_to_check:
         print(f"   Processed Files: {processed_count:,}")
         
         if dates:
-            print(f"\n   Sample Dates:")
+            print("\n   Sample Dates:")
             for date in dates:
                 print(f"      - {date[0]}")
         
@@ -60,7 +60,7 @@ for db_path in dbs_to_check:
         if sessions_count > 100:
             print(f"\n   🎯 THIS DATABASE HAS REAL DATA! ({sessions_count} sessions)")
         elif sessions_count == 8:
-            print(f"\n   ⚠️  This has only test data (8 sessions from 2025-01-01)")
+            print("\n   ⚠️  This has only test data (8 sessions from 2025-01-01)")
         else:
             print(f"\n   ❓ Unknown state ({sessions_count} sessions)")
         

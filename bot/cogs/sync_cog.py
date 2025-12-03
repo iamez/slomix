@@ -22,6 +22,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_admin_channel
+from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger("UltimateBot.SyncCog")
 
@@ -326,7 +327,7 @@ class SyncCog(commands.Cog, name="Sync Commands"):
 
         except Exception as e:
             logger.error(f"Error in sync_stats: {e}")
-            await ctx.send(f"❌ Sync error: {e}")
+            await ctx.send(f"❌ Sync error: {sanitize_error_message(e)}")
 
     @is_admin_channel()
     @commands.command(name="sync_today", aliases=["sync1day"])

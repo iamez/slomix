@@ -14,7 +14,7 @@ def parse_filename(filename):
         print(f"  Parts ({len(parts)}): {parts}")
         
         if len(parts) < 8:
-            print(f"  ❌ Too few parts (need >= 8)")
+            print("  ❌ Too few parts (need >= 8)")
             return None
         
         date = f"{parts[0]}-{parts[1]}-{parts[2]}"

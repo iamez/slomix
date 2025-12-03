@@ -76,6 +76,7 @@ desktop.ini
 /publish_clean/
 /github/
 /performance_updates/
+/website/
 
 # ============================================
 # BOT DIRECTORY EXCLUSIONS
@@ -139,3 +140,7 @@ tools/*
 !postgresql_database_manager.py
 .prodenv
 .envcopy
+
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md

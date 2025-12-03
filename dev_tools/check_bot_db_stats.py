@@ -96,7 +96,7 @@ if target_file:
     with open(raw_file_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
         print(f"Total lines in file: {len(lines)}")
-        print(f"\n🔍 Checking first 3 player lines for comparison:")
+        print("\n🔍 Checking first 3 player lines for comparison:")
         print("=" * 80)
         
         player_count = 0

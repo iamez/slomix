@@ -23,19 +23,19 @@ if result.get('players'):
             for weapon_name, weapon_data in list(weapons.items())[:3]:
                 print(f"      - {weapon_name}: {weapon_data.get('kills', 0)} kills, {weapon_data.get('shots', 0)} shots")
         else:
-            print(f"   ❌ NO WEAPON DATA!")
+            print("   ❌ NO WEAPON DATA!")
     
     # Check total
     total_players_with_weapons = sum(1 for p in result['players'] if p.get('weapons'))
     total_weapons = sum(len(p.get('weapons', {})) for p in result['players'])
     
-    print(f"\n📊 Summary:")
+    print("\n📊 Summary:")
     print(f"   Players with weapons: {total_players_with_weapons}/{len(result['players'])}")
     print(f"   Total weapons: {total_weapons}")
     
     if total_weapons == 0:
-        print(f"\n❌ PROBLEM: No weapon data extracted from any player!")
+        print("\n❌ PROBLEM: No weapon data extracted from any player!")
     else:
-        print(f"\n✅ Weapon data looks good!")
+        print("\n✅ Weapon data looks good!")
 else:
     print("❌ No players found!")

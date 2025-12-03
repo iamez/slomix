@@ -139,9 +139,9 @@ def compare_cogs():
                     status = "✓" if uses_adapter and not has_sqlite else "⚠️" if uses_adapter else "❌"
                     print(f"  {status} {cog:25} - {description}")
                     if uses_adapter and has_pragma:
-                        print(f"      Note: Still has PRAGMA statements (SQLite legacy)")
+                        print("      Note: Still has PRAGMA statements (SQLite legacy)")
                     elif uses_adapter:
-                        print(f"      Fully migrated to database adapter")
+                        print("      Fully migrated to database adapter")
     else:
         print("❌ Cogs directory not found")
 

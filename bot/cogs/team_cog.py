@@ -1,21 +1,20 @@
 """
 Team Management Commands
 
-Discord commands for managing teams, viewing lineups, and tracking team statistics.
+Discord commands for managing teams, viewing lineups,
+and tracking team statistics. Fully async using PostgreSQL.
 """
 
 import discord
 from discord.ext import commands
-from discord import app_commands
 import logging
-import sqlite3
-from typing import Optional, List, Tuple
+from typing import Optional
 from datetime import datetime
 
 from bot.core.checks import is_public_channel
 from bot.core.team_manager import TeamManager
 from bot.services.player_formatter import PlayerFormatter
-from tools.stopwatch_scoring import StopwatchScoring
+from bot.services.stopwatch_scoring_service import StopwatchScoringService
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +24,18 @@ class TeamCog(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.db_path = "bot/etlegacy_production.db"
-        self.team_manager = TeamManager(self.db_path)
-        self.scorer = StopwatchScoring(self.db_path)
+        self.db_adapter = bot.db_adapter
+        self.team_manager = TeamManager(bot.db_adapter)
+        self.scorer = StopwatchScoringService(bot.db_adapter)
         self.player_formatter = PlayerFormatter(bot.db_adapter)
 
-    def get_db(self) -> sqlite3.Connection:
-        """Get database connection"""
-        db = sqlite3.connect(self.db_path)
-        db.row_factory = sqlite3.Row
-        return db
+    async def get_latest_session_date(self) -> Optional[str]:
+        """Get the most recent session date from database"""
+        result = await self.db_adapter.fetch_one(
+            "SELECT DISTINCT SUBSTR(round_date, 1, 10) as date "
+            "FROM rounds ORDER BY date DESC LIMIT 1"
+        )
+        return result[0] if result else None
 
     async def format_team_roster(self, team_name: str, team_data: dict) -> str:
         """Format team roster for display with badges"""
@@ -46,7 +47,9 @@ class TeamCog(commands.Cog):
 
         # If we have GUIDs, fetch badges for all players
         if guids and len(guids) == len(players):
-            player_tuples = [(guid, name) for guid, name in zip(guids, players)]
+            player_tuples = [
+                (guid, name) for guid, name in zip(guids, players)
+            ]
             formatted_names = await self.player_formatter.format_players_batch(
                 player_tuples, include_badges=True
             )
@@ -60,33 +63,25 @@ class TeamCog(commands.Cog):
                 roster_text += f"`{i:2d}.` {player}\n"
 
         return roster_text
-    
+
     @is_public_channel()
     @commands.command(name="teams")
     async def teams_command(self, ctx, date: Optional[str] = None):
         """Show team rosters for a session
-        
+
         Usage:
         !teams              → Show teams for latest session
         !teams 2025-11-02   → Show teams for specific date
         """
-        
+
         try:
-            db = self.get_db()
-            
             # Get round date
             if not date:
-                cursor = db.cursor()
-                cursor.execute(
-                    "SELECT DISTINCT SUBSTR(round_date, 1, 10) as date "
-                    "FROM rounds ORDER BY date DESC LIMIT 1"
-                )
-                row = cursor.fetchone()
-                if not row:
+                date = await self.get_latest_session_date()
+                if not date:
                     await ctx.send("❌ No rounds found in database.")
                     return
-                date = row[0]
-            
+
             # Validate date format
             try:
                 datetime.strptime(date, "%Y-%m-%d")
@@ -95,17 +90,19 @@ class TeamCog(commands.Cog):
                     "❌ Invalid date format. Use YYYY-MM-DD (e.g., 2025-10-28)"
                 )
                 return
-            
-            # Get teams
-            teams = self.team_manager.get_session_teams(db, date, auto_detect=True)
-            
+
+            # Get teams (async call)
+            teams = await self.team_manager.get_session_teams(
+                date, auto_detect=True
+            )
+
             if not teams:
                 await ctx.send(
                     f"❌ No team data found for {date}. "
                     "Make sure there's session data for this date."
                 )
                 return
-            
+
             # Build response
             embed = discord.Embed(
                 title=f"🎮 Team Rosters - {date}",
@@ -116,33 +113,41 @@ class TeamCog(commands.Cog):
 
             # Add team rosters with badges
             for team_name in sorted(teams.keys()):
-                roster = await self.format_team_roster(team_name, teams[team_name])
-                embed.add_field(name=f"═══ {team_name} ═══", value=roster, inline=False)
+                roster = await self.format_team_roster(
+                    team_name, teams[team_name]
+                )
+                embed.add_field(
+                    name=f"═══ {team_name} ═══",
+                    value=roster,
+                    inline=False
+                )
 
             # Add footer with detection info
-            total_players = sum(team.get('count', 0) for team in teams.values())
+            total_players = sum(
+                team.get('count', 0) for team in teams.values()
+            )
             embed.set_footer(
-                text=f"🔍 Auto-detected • {total_players} total players • Requested by {ctx.author.name}"
+                text=f"🔍 Auto-detected • {total_players} players • "
+                     f"Requested by {ctx.author.name}"
             )
 
             await ctx.send(embed=embed)
-            
+
         except Exception as e:
             logger.error(f"Error in teams command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error: {str(e)}")
-        finally:
-            if 'db' in locals():
-                db.close()
+            await ctx.send("❌ Error retrieving team data.")
 
     @is_public_channel()
     @commands.command(name="set_team_names")
-    async def set_team_names_command(self, ctx, date: str, team_a: str, team_b: str):
+    async def set_team_names_command(
+        self, ctx, date: str, team_a: str, team_b: str
+    ):
         """Set custom team names for a session
-        
+
         Usage:
         !set_team_names 2025-11-02 "Red Devils" "Blue Lightning"
         """
-        
+
         try:
             # Validate date format
             try:
@@ -152,26 +157,26 @@ class TeamCog(commands.Cog):
                     "❌ Invalid date format. Use YYYY-MM-DD (e.g., 2025-10-28)"
                 )
                 return
-            
-            db = self.get_db()
-            
+
             # Check if teams exist for this date
-            teams = self.team_manager.get_session_teams(db, date, auto_detect=True)
+            teams = await self.team_manager.get_session_teams(
+                date, auto_detect=True
+            )
             if not teams:
                 await ctx.send(
                     f"❌ No team data found for {date}. "
                     "Teams must be detected before setting custom names."
                 )
                 return
-            
+
             # Set custom names
-            success = self.team_manager.set_custom_team_names(
-                db, date, team_a, team_b
+            success = await self.team_manager.set_custom_team_names(
+                date, team_a, team_b
             )
 
             if success:
                 embed = discord.Embed(
-                    title=f"✅ Team Names Updated",
+                    title="✅ Team Names Updated",
                     description=f"**{team_a}** ⚔️ **{team_b}**",
                     color=0x57F287,  # Green
                     timestamp=datetime.now()
@@ -185,41 +190,35 @@ class TeamCog(commands.Cog):
                 await ctx.send(embed=embed)
             else:
                 await ctx.send("❌ Failed to update team names.")
-            
+
         except Exception as e:
-            logger.error(f"Error in set_team_names command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error: {str(e)}")
-        finally:
-            if 'db' in locals():
-                db.close()
+            logger.error(f"Error in set_team_names: {e}", exc_info=True)
+            await ctx.send("❌ Error updating team names.")
 
     @is_public_channel()
     @commands.command(name="lineup_changes")
-    async def lineup_changes_command(self, ctx, current_date: Optional[str] = None, previous_date: Optional[str] = None):
+    async def lineup_changes_command(
+        self,
+        ctx,
+        current_date: Optional[str] = None,
+        previous_date: Optional[str] = None
+    ):
         """Show lineup changes between two sessions
-        
+
         Usage:
-        !lineup_changes                      → Compare latest session with previous
-        !lineup_changes 2025-11-02           → Compare specified date with previous
+        !lineup_changes                      → Compare latest with previous
+        !lineup_changes 2025-11-02           → Compare date with previous
         !lineup_changes 2025-11-02 2025-11-01 → Compare two specific dates
         """
-        
+
         try:
-            db = self.get_db()
-            
             # Get current session date
             if not current_date:
-                cursor = db.cursor()
-                cursor.execute(
-                    "SELECT DISTINCT SUBSTR(round_date, 1, 10) as date "
-                    "FROM rounds ORDER BY date DESC LIMIT 1"
-                )
-                row = cursor.fetchone()
-                if not row:
+                current_date = await self.get_latest_session_date()
+                if not current_date:
                     await ctx.send("❌ No rounds found in database.")
                     return
-                current_date = row[0]
-            
+
             # Validate dates
             try:
                 datetime.strptime(current_date, "%Y-%m-%d")
@@ -230,28 +229,30 @@ class TeamCog(commands.Cog):
                     "❌ Invalid date format. Use YYYY-MM-DD (e.g., 2025-10-28)"
                 )
                 return
-            
-            # Detect lineup changes
-            changes = self.team_manager.detect_lineup_changes(
-                db, current_date, previous_date
+
+            # Detect lineup changes (async call)
+            changes = await self.team_manager.detect_lineup_changes(
+                current_date, previous_date
             )
-            
+
             if not changes.get('previous'):
                 await ctx.send(
-                    f"ℹ️ No previous session data found for comparison.\n"
+                    "ℹ️ No previous session data found for comparison.\n"
                     f"Current session: {current_date}"
                 )
                 return
-            
+
             # Build response
             embed = discord.Embed(
-                title=f"📊 Lineup Changes",
-                description=f"`{changes.get('previous_date')}` ➜ `{current_date}`",
+                title="📊 Lineup Changes",
+                description=(
+                    f"`{changes.get('previous_date')}` ➜ `{current_date}`"
+                ),
                 color=0xF26522,  # Orange
                 timestamp=datetime.now()
             )
 
-            # Add summary with better formatting
+            # Add summary
             summary = changes.get('summary', 'No changes')
             embed.add_field(
                 name="📈 Summary",
@@ -278,9 +279,14 @@ class TeamCog(commands.Cog):
                         change_text += f"  • `{player}`\n"
 
                 if not added and not removed:
-                    change_text = f"✅ **No changes** • `{len(unchanged)}` players unchanged"
+                    change_text = (
+                        "✅ **No changes** • "
+                        f"`{len(unchanged)}` players unchanged"
+                    )
                 else:
-                    change_text += f"\n🔄 **Unchanged:** `{len(unchanged)}` players"
+                    change_text += (
+                        f"\n🔄 **Unchanged:** `{len(unchanged)}` players"
+                    )
 
                 embed.add_field(
                     name=f"═══ {team_name} ═══",
@@ -288,42 +294,33 @@ class TeamCog(commands.Cog):
                     inline=False
                 )
 
-            embed.set_footer(text=f"Comparison requested by {ctx.author.name}")
+            embed.set_footer(
+                text=f"Comparison requested by {ctx.author.name}"
+            )
             await ctx.send(embed=embed)
-            
+
         except Exception as e:
-            logger.error(f"Error in lineup_changes command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error: {str(e)}")
-        finally:
-            if 'db' in locals():
-                db.close()
+            logger.error(f"Error in lineup_changes: {e}", exc_info=True)
+            await ctx.send("❌ Error comparing lineups.")
 
     @is_public_channel()
     @commands.command(name="session_score")
     async def session_score_command(self, ctx, date: Optional[str] = None):
         """Show final score for a session
-        
+
         Usage:
         !session_score              → Show score for latest session
         !session_score 2025-11-02   → Show score for specific date
         """
-        
+
         try:
-            db = self.get_db()
-            
             # Get round date
             if not date:
-                cursor = db.cursor()
-                cursor.execute(
-                    "SELECT DISTINCT SUBSTR(round_date, 1, 10) as date "
-                    "FROM rounds ORDER BY date DESC LIMIT 1"
-                )
-                row = cursor.fetchone()
-                if not row:
+                date = await self.get_latest_session_date()
+                if not date:
                     await ctx.send("❌ No rounds found in database.")
                     return
-                date = row[0]
-            
+
             # Validate date
             try:
                 datetime.strptime(date, "%Y-%m-%d")
@@ -332,30 +329,34 @@ class TeamCog(commands.Cog):
                     "❌ Invalid date format. Use YYYY-MM-DD (e.g., 2025-10-28)"
                 )
                 return
-            
-            # Get teams
-            teams = self.team_manager.get_session_teams(db, date, auto_detect=True)
+
+            # Get teams (async call)
+            teams = await self.team_manager.get_session_teams(
+                date, auto_detect=True
+            )
             if not teams:
                 await ctx.send(f"❌ No team data found for {date}.")
                 return
-            
-            # Calculate scores
-            scores = self.scorer.calculate_session_scores(date)
+
+            # Calculate scores (now fully async)
+            scores = await self.scorer.calculate_session_scores(
+                session_date=date
+            )
             if not scores:
                 await ctx.send(
                     f"❌ No scoring data found for {date}. "
                     "Ensure session has complete round data."
                 )
                 return
-            
+
             # Build response
             team_names = list(teams.keys())
             team_a = team_names[0] if len(team_names) > 0 else "Team A"
             team_b = team_names[1] if len(team_names) > 1 else "Team B"
-            
+
             score_a = scores.get(team_a, 0)
             score_b = scores.get(team_b, 0)
-            
+
             # Determine winner
             if score_a > score_b:
                 winner = team_a
@@ -377,13 +378,13 @@ class TeamCog(commands.Cog):
                 description = f"{winner_emoji} Evenly matched - it's a tie!"
 
             embed = discord.Embed(
-                title=f"🏆 Session Score",
+                title="🏆 Session Score",
                 description=description,
                 color=color,
                 timestamp=datetime.now()
             )
 
-            # Score display with better formatting
+            # Score display
             score_text = (
                 f"**{team_a}**\n"
                 f"```\n{score_a:>3d} points\n```\n"
@@ -396,21 +397,28 @@ class TeamCog(commands.Cog):
                 inline=True
             )
 
-            # Map breakdown
-            if 'maps' in scores and scores.get('maps'):
+            # Map breakdown - scores['maps'] is a list of dicts
+            maps_list = scores.get('maps', [])
+            if maps_list:
                 map_text = ""
-                for map_name, map_scores in scores.get('maps', {}).items():
-                    score_a_map = map_scores.get(team_a, 0)
-                    score_b_map = map_scores.get(team_b, 0)
+                for map_result in maps_list:
+                    map_name = map_result.get('map', 'Unknown')
+                    # Points are team1/team2, not named teams
+                    team1_pts = map_result.get('team1_points', 0)
+                    team2_pts = map_result.get('team2_points', 0)
+                    
                     # Determine map winner emoji
-                    if score_a_map > score_b_map:
+                    if team1_pts > team2_pts:
                         map_emoji = "🟢"
-                    elif score_b_map > score_a_map:
+                    elif team2_pts > team1_pts:
                         map_emoji = "🔴"
                     else:
                         map_emoji = "⚪"
 
-                    map_text += f"{map_emoji} **{map_name}**\n`{score_a_map}-{score_b_map}`\n\n"
+                    map_text += (
+                        f"{map_emoji} **{map_name}**\n"
+                        f"`{team1_pts}-{team2_pts}`\n\n"
+                    )
 
                 embed.add_field(
                     name="🗺️ Map Breakdown",
@@ -427,13 +435,10 @@ class TeamCog(commands.Cog):
 
             embed.set_footer(text=f"Score requested by {ctx.author.name}")
             await ctx.send(embed=embed)
-            
+
         except Exception as e:
-            logger.error(f"Error in session_score command: {e}", exc_info=True)
-            await ctx.send(f"❌ Error: {str(e)}")
-        finally:
-            if 'db' in locals():
-                db.close()
+            logger.error(f"Error in session_score: {e}", exc_info=True)
+            await ctx.send("❌ Error retrieving session score.")
 
 
 async def setup(bot):

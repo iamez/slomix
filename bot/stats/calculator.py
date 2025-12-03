@@ -242,3 +242,30 @@ class StatsCalculator:
         """
         result = StatsCalculator.safe_divide(part, total, default)
         return result * 100 if result != default else default
+
+    @staticmethod
+    def calculate_time_dead_ratio(time_dead_seconds: Optional[Union[int, float]],
+                                   total_time_seconds: Optional[Union[int, float]],
+                                   default: float = 0.0) -> float:
+        """
+        Calculate percentage of round spent dead.
+
+        Formula: (time_dead / total_time) * 100
+
+        Args:
+            time_dead_seconds: Time spent dead in seconds
+            total_time_seconds: Total round time in seconds
+            default: Value to return on error
+
+        Returns:
+            Time dead percentage (0-100)
+
+        Examples:
+            >>> StatsCalculator.calculate_time_dead_ratio(30, 300)
+            10.0  # Spent 10% of round dead
+            >>> StatsCalculator.calculate_time_dead_ratio(0, 300)
+            0.0
+            >>> StatsCalculator.calculate_time_dead_ratio(60, 0)
+            0.0
+        """
+        return StatsCalculator.safe_percentage(time_dead_seconds, total_time_seconds, default)

@@ -11,7 +11,7 @@ cursor.execute('''
 ''')
 
 rows = cursor.fetchall()
-print(f"Session 2134 (Round 1) - Weapon stats:")
+print("Session 2134 (Round 1) - Weapon stats:")
 print(f"Total rows: {len(rows)}\n")
 
 deaths_count = sum(1 for row in rows if row[3] > 0)

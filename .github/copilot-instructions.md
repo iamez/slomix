@@ -26,6 +26,16 @@ POSTGRES_DATABASE = "et_stats"  # Configured via bot_config.json or .env
 
 **Critical parsing detail:** Round 2 files contain CUMULATIVE stats - parser calculates differentials by subtracting Round 1 values. Never treat R2 stats as standalone.
 
+### SSH Monitoring Architecture (IMPORTANT - Dec 2025 Fix)
+**Single System Design:** Only `endstats_monitor` task loop handles SSH operations. SSHMonitor service is initialized but NOT auto-started.
+
+- **endstats_monitor** (in `ultimate_bot.py`): SSH check → File download → DB import → Discord posting
+- **SSHMonitor** (in `bot/services/automation/ssh_monitor.py`): DISABLED at startup (was causing race condition)
+
+**Why single system?** Previously both ran simultaneously, causing SSHMonitor to mark files as "processed" before endstats_monitor could post to Discord. Now endstats_monitor handles everything.
+
+**If live posting stops:** Check that SSHMonitor isn't being auto-started somewhere. The fix is at `ultimate_bot.py` lines 551-568.
+
 ### Discord Bot Architecture: Cog-Based Modular Design
 - **Entry point:** `bot/ultimate_bot.py` (4,990 lines but most logic in Cogs)
 - **14 Cogs in `bot/cogs/`:** Each handles specific command domain (admin, stats, leaderboards, sessions, teams, etc.)
