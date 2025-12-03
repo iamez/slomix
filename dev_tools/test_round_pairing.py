@@ -66,7 +66,7 @@ for file_date, map_name in test_cases:
         else:
             print(f"\n   Match ID: {match_id}")
             print(f"      ✅ R1: {r1_time} - {r1_file.name}")
-            print(f"      ❌ R2: NO MATCH FOUND")
+            print("      ❌ R2: NO MATCH FOUND")
     
     print(f"\n📊 Summary: {len(matches)} complete matches out of {len(r1_files)} R1 files")
 

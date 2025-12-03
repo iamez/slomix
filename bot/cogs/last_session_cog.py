@@ -100,8 +100,8 @@ class LastSessionCog(commands.Cog):
             # Setup database aliases
             try:
                 await self._ensure_player_name_alias()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Alias is optional, continue without it
 
             # Phase 1: Get session data
             latest_date = await self.data_service.get_latest_session_date()
@@ -319,15 +319,15 @@ class LastSessionCog(commands.Cog):
                 if "Embed size exceeds maximum size" in str(e) or "50035" in str(e):
                     # Embed is too large, send truncated version
                     await ctx.send(
-                        f"⚠️ **Session is too large to display in one message!**\n\n"
+                        "⚠️ **Session is too large to display in one message!**\n\n"
                         f"📅 **Session:** {latest_date}\n"
                         f"🎮 **Players:** {player_count}\n"
                         f"🗺️ **Rounds:** {rounds_played} ({unique_maps} unique maps)\n\n"
-                        f"💡 **Try using specific views instead:**\n"
-                        f"• `!last_session top` - Top players\n"
-                        f"• `!last_session combat` - Combat stats\n"
-                        f"• `!last_session maps` - Map breakdown\n"
-                        f"• `!last_session graphs` - Performance graphs"
+                        "💡 **Try using specific views instead:**\n"
+                        "• `!last_session top` - Top players\n"
+                        "• `!last_session combat` - Combat stats\n"
+                        "• `!last_session maps` - Map breakdown\n"
+                        "• `!last_session graphs` - Performance graphs"
                     )
                 else:
                     raise

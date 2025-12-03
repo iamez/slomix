@@ -95,7 +95,7 @@ async def check_missing_rounds():
                     date = f[:10]
                     by_date[date].append(f)
                 
-                print(f"\n📅 Missing files by date:")
+                print("\n📅 Missing files by date:")
                 for date in sorted(by_date.keys()):
                     print(f"   {date}: {len(by_date[date])} files missing")
             else:

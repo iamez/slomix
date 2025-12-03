@@ -113,7 +113,7 @@ async def main():
     if superboyy:
         r12_minutes = superboyy['r12_time'] / 60
         print(f"SuperBoyy's R1+R2 time: {superboyy['r12_time']:,}s = {r12_minutes:.2f} minutes")
-        print(f"SuperBoyy reported:     127.4 minutes (from attachment)")
+        print("SuperBoyy reported:     127.4 minutes (from attachment)")
         print(f"Difference:             {r12_minutes - 127.4:+.2f} minutes")
         
         if abs(r12_minutes - 127.4) < 2.0:

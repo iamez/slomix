@@ -158,10 +158,10 @@ def test_gaming_session_grouping():
         print(f"      Max gap between rounds: {max_gap:.1f} minutes")
         
         if max_gap > 60:
-            print(f"      ⚠️  WARNING: Gap exceeds 60 minutes!")
+            print("      ⚠️  WARNING: Gap exceeds 60 minutes!")
             all_pass = False
         else:
-            print(f"      ✅ All gaps within 60 minutes")
+            print("      ✅ All gaps within 60 minutes")
         
         print()
     
@@ -186,7 +186,7 @@ def test_new_import_gets_gaming_session_id():
     cursor.execute("PRAGMA table_info(sessions)")
     for row in cursor.fetchall():
         if row[1] == 'gaming_session_id':
-            print(f"   Column: gaming_session_id")
+            print("   Column: gaming_session_id")
             print(f"   Type: {row[2]}")
             print(f"   Allows NULL: {'NO' if row[3] else 'YES'}")
             print(f"   Default: {row[4] if row[4] else 'None'}")

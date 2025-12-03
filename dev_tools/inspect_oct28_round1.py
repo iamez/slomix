@@ -107,7 +107,7 @@ for guid, records in by_player.items():
             final_records[guid] = {}
         final_records[guid][team] = last
 
-print(f"\nAfter deduplication:\n")
+print("\nAfter deduplication:\n")
 
 # Show which teams each player appears on
 for guid, teams in sorted(final_records.items(), key=lambda x: list(x[1].values())[0]['name']):

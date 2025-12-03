@@ -58,7 +58,8 @@
       "Bash(setup_env.ps1 )",
       "Bash(setup_postgres_simple.ps1 )",
       "Bash(start_bot.ps1 )",
-      "Bash(validate.ps1)"
+      "Bash(validate.ps1)",
+      "Bash(xargs python3:*)"
     ],
     "deny": [],
     "ask": []

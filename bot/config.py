@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any, List
 try:
     from dotenv import load_dotenv
     load_dotenv()  # Load .env file into environment variables
-except ImportError:
+except ImportError:  # nosec B110
     pass  # python-dotenv not installed, skip
 
 logger = logging.getLogger('BotConfig')

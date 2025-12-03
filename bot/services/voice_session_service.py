@@ -379,7 +379,7 @@ class VoiceSessionService:
                     # TODO: Use last_session logic to generate embeds
                     await channel.send(
                         f"📊 **Session Summary for {round_date}**\n"
-                        f"Use `!last_session` for full details!"
+                        "Use `!last_session` for full details!"
                     )
 
                 logger.info("✅ Session auto-ended successfully")
@@ -455,7 +455,7 @@ class VoiceSessionService:
                 if recent_activity:
                     logger.info(
                         f"✅ Detected ongoing session (database activity within last {self.config.session_gap_minutes}min) - "
-                        f"skipping auto-start announcement"
+                        "skipping auto-start announcement"
                     )
 
             # Auto-start session if threshold met AND no recent activity
@@ -524,7 +524,7 @@ class VoiceSessionService:
                     cooldown = timedelta(minutes=self.prediction_cooldown_minutes)
                     if time_since_last < cooldown and not is_new_split:
                         logger.debug(
-                            f"⏳ Team split detected but in cooldown "
+                            "⏳ Team split detected but in cooldown "
                             f"({time_since_last.seconds}s / {cooldown.seconds}s)"
                         )
                         return
@@ -791,6 +791,7 @@ class VoiceSessionService:
         try:
             # Build query with correct number of placeholders
             placeholders = ', '.join([f'${i+1}' for i in range(len(guids))])
+            # nosec B608 - placeholders are parameterized integers, not user input
             query = f"""
                 SELECT DISTINCT player_guid, player_name
                 FROM player_comprehensive_stats

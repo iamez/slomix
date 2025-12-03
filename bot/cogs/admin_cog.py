@@ -51,9 +51,9 @@ class AdminCog(commands.Cog, name="Admin"):
                     stats = main_cog.stats_cache.stats()
                     main_cog.stats_cache.clear()
                     await ctx.send(
-                        f"✅ Query cache cleared!\n"
+                        "✅ Query cache cleared!\n"
                         f"**Removed:** {stats['total_keys']} cached entries\n"
-                        f"💡 Cache will rebuild automatically"
+                        "💡 Cache will rebuild automatically"
                     )
                     logger.info(f"🗑️ Cache cleared by {ctx.author}")
                 else:
@@ -96,7 +96,7 @@ class AdminCog(commands.Cog, name="Admin"):
             if failed_cogs:
                 result_msg += f"\n⚠️ **Failed ({len(failed_cogs)}):**\n" + "\n".join(f"• {cog}" for cog in failed_cogs)
             
-            result_msg += f"\n\n💡 Bot is now running updated code!"
+            result_msg += "\n\n💡 Bot is now running updated code!"
             await ctx.send(result_msg)
             logger.info("✅ Bot reload complete")
             

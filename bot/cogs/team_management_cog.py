@@ -89,7 +89,7 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
             embed.add_field(name="Team 2", value=f"**{team2_name}**", inline=True)
             embed.add_field(
                 name="Next Step",
-                value=f"Use `!assign_player <name> <team>` to add players to teams",
+                value="Use `!assign_player <name> <team>` to add players to teams",
                 inline=False,
             )
 

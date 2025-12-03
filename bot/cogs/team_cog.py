@@ -237,7 +237,7 @@ class TeamCog(commands.Cog):
 
             if not changes.get('previous'):
                 await ctx.send(
-                    f"ℹ️ No previous session data found for comparison.\n"
+                    "ℹ️ No previous session data found for comparison.\n"
                     f"Current session: {current_date}"
                 )
                 return
@@ -280,7 +280,7 @@ class TeamCog(commands.Cog):
 
                 if not added and not removed:
                     change_text = (
-                        f"✅ **No changes** • "
+                        "✅ **No changes** • "
                         f"`{len(unchanged)}` players unchanged"
                     )
                 else:

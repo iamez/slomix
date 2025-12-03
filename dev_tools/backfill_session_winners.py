@@ -85,7 +85,7 @@ def backfill_session_winners(db_path="bot/etlegacy_production.db"):
     conn.commit()
     
     print(f"\n{'='*60}")
-    print(f"✅ Backfill complete!")
+    print("✅ Backfill complete!")
     print(f"{'='*60}")
     print(f"  Updated: {updated}")
     print(f"  Skipped: {skipped}")
@@ -93,7 +93,7 @@ def backfill_session_winners(db_path="bot/etlegacy_production.db"):
     
     # Show sample results
     print(f"\n{'='*60}")
-    print(f"Sample results:")
+    print("Sample results:")
     print(f"{'='*60}")
     
     cursor.execute("""

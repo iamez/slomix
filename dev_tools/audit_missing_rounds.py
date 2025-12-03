@@ -318,7 +318,7 @@ class MissingRoundsAuditor:
                 ORDER BY round_number
             """, session_id)
             
-            print(f"\n   Round Distribution:")
+            print("\n   Round Distribution:")
             for r in session_rounds:
                 round_type = {0: 'Match Summaries', 1: 'Round 1', 2: 'Round 2'}.get(r['round_number'], f'Round {r["round_number"]}')
                 print(f"   - {round_type}: {r['count']}")
@@ -329,7 +329,7 @@ class MissingRoundsAuditor:
             if r0_count > 0:
                 print(f"\n✅ !last_session WILL use {r0_count} match summaries (optimized)")
             else:
-                print(f"\n⚠️  !last_session will fall back to aggregating all rounds (slower)")
+                print("\n⚠️  !last_session will fall back to aggregating all rounds (slower)")
             
             await conn.close()
             

@@ -40,7 +40,7 @@ class SessionViewHandlers:
 
     async def show_objectives_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show objectives & support stats only"""
-        query = f"""
+        query = """
             SELECT clean_name, xp, kill_assists, objectives_stolen, objectives_returned,
                 dynamites_planted, dynamites_defused, times_revived,
                 double_kills, triple_kills, quad_kills, multi_kills, mega_kills,
@@ -56,7 +56,7 @@ class SessionViewHandlers:
             return
 
         # Also fetch revives GIVEN per player
-        rev_query = f"""
+        rev_query = """
             SELECT clean_name, SUM(revives_given) as revives_given
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
@@ -137,7 +137,7 @@ class SessionViewHandlers:
 
     async def show_combat_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show combat-focused stats only"""
-        query = f"""
+        query = """
             SELECT p.player_name,
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
@@ -205,7 +205,7 @@ class SessionViewHandlers:
 
     async def show_weapons_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show weapon mastery stats only"""
-        query = f"""
+        query = """
             SELECT p.player_name, w.weapon_name,
                 SUM(w.kills) as weapon_kills,
                 SUM(w.hits) as hits,
@@ -254,7 +254,7 @@ class SessionViewHandlers:
 
     async def show_support_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show support activity stats only"""
-        query = f"""
+        query = """
             SELECT p.player_name,
                 SUM(p.revives_given) as revives_given,
                 SUM(p.times_revived) as times_revived,
@@ -288,7 +288,7 @@ class SessionViewHandlers:
 
     async def show_sprees_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show killing sprees & multikills only"""
-        query = f"""
+        query = """
             SELECT p.player_name,
                 SUM(p.killing_spree_best) as best_spree,
                 SUM(p.double_kills) as doubles,
@@ -327,7 +327,7 @@ class SessionViewHandlers:
 
     async def show_top_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int, total_maps: int):
         """Show all players ranked by kills"""
-        query = f"""
+        query = """
             SELECT p.player_name,
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
@@ -442,7 +442,7 @@ class SessionViewHandlers:
                 display_map_name = map_name
         
             # Query with time_played and denied_playtime
-            query = f"""
+            query = """
                 WITH target_rounds AS (
                     SELECT id FROM rounds WHERE id IN ({map_ids_str})
                 )
@@ -681,7 +681,7 @@ class SessionViewHandlers:
         round_ids_str = ','.join('?' * len(round_session_ids))
     
         # Using CTE to avoid duplicate placeholder references
-        query = f"""
+        query = """
             WITH target_rounds AS (
                 SELECT id FROM rounds WHERE id IN ({round_ids_str})
             )

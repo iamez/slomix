@@ -90,7 +90,7 @@ class TeamDetectorIntegration:
                 return result, False
             
             # Log detection results
-            logger.info(f"✅ Team detection successful:")
+            logger.info("✅ Team detection successful:")
             logger.info(f"   Quality: {quality}, Confidence: {confidence:.1%}")
             logger.info(f"   Team A: {team_a_size} players")
             logger.info(f"   Team B: {team_b_size} players")

@@ -180,7 +180,7 @@ class SSHMonitoringTest:
             logger.info(f"   ✅ Found {len(txt_files)} .txt files")
             
             if txt_files:
-                logger.info(f"   📄 Sample files:")
+                logger.info("   📄 Sample files:")
                 for f in txt_files[:5]:
                     logger.info(f"      - {f}")
                 if len(txt_files) > 5:

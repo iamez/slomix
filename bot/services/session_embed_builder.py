@@ -291,7 +291,7 @@ class SessionEmbedBuilder:
             title="👥 Team Composition",
             description=(
                 f"Player roster for {team_1_name} vs {team_2_name}\n"
-                f"🔄 indicates players who swapped teams during session"
+                "🔄 indicates players who swapped teams during session"
             ),
             color=0x57F287,
             timestamp=datetime.now()
@@ -360,11 +360,11 @@ class SessionEmbedBuilder:
             leader_name = dpm_leaders[0][0] if dpm_leaders else "N/A"
 
             insights = (
-                f"📊 **Enhanced Session DPM Stats:**\n"
+                "📊 **Enhanced Session DPM Stats:**\n"
                 f"• Average DPM: `{avg_dpm:.1f}`\n"
                 f"• Highest DPM: `{highest_dpm:.0f}`\n"
                 f"• DPM Leader: **{leader_name}**\n"
-                f"• Formula: `(Total Damage × 60) / Time Played (seconds)`"
+                "• Formula: `(Total Damage × 60) / Time Played (seconds)`"
             )
             embed.add_field(name="💥 DPM Insights", value=insights, inline=False)
 
@@ -467,7 +467,7 @@ class SessionEmbedBuilder:
                 awards["selfkill_master"] = {"player": name, "value": selfkills}
 
             # Kill Thief
-            if steals > awards["kill_thief"]["value"]:
+            if steals > awards["kill_thie"]["value"]:
                 awards["kill_thief"] = {"player": name, "value": steals}
 
             # Spray & Pray
@@ -546,9 +546,9 @@ class SessionEmbedBuilder:
             count = int(awards["selfkill_master"]["value"])
             awards_text.append(f"💣 **Self-Destruct Master:** `{player}` ({count} self-kills)")
 
-        if awards["kill_thief"]["value"] >= 5:
-            player = awards["kill_thief"]["player"]
-            count = int(awards["kill_thief"]["value"])
+        if awards["kill_thie"]["value"] >= 5:
+            player = awards["kill_thie"]["player"]
+            count = int(awards["kill_thie"]["value"])
             awards_text.append(f"🦹 **Kill Thief:** `{player}` ({count} stolen kills)")
 
         if awards["spray_pray"]["value"] >= 50:

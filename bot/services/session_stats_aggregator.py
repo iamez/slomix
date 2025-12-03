@@ -36,7 +36,7 @@ class SessionStatsAggregator:
 
         Returns: List of player stat tuples (includes NEW stats: gibs, revives, times revived, dmg received, useful kills)
         """
-        query = f"""
+        query = """
             SELECT p.player_name,
                 p.player_guid,
                 SUM(p.kills) as kills,
@@ -93,7 +93,7 @@ class SessionStatsAggregator:
         if not hardcoded_teams or not name_to_team or len(name_to_team) == 0:
             # WARNING: In stopwatch mode this groups by SIDE (attacker/defender) not actual team!
             logger.warning("⚠️ No team rosters available - stats will group by SIDE not team")
-            query = f"""
+            query = """
                 SELECT p.team,
                     SUM(p.kills) as total_kills,
                     SUM(p.deaths) as total_deaths,
@@ -108,7 +108,7 @@ class SessionStatsAggregator:
             return await self.db_adapter.fetch_all(query, tuple(session_ids))
 
         # Get all player stats (with R0 and round_status filtering)
-        query = f"""
+        query = """
             SELECT p.player_name, p.player_guid,
                 SUM(p.kills) as total_kills,
                 SUM(p.deaths) as total_deaths,
@@ -150,7 +150,7 @@ class SessionStatsAggregator:
 
         # weapon_comprehensive_stats schema: kills, deaths, shots, hits, headshots, accuracy
         # Returns: player_name, weapon_name, kills, hits, shots, headshots
-        query = f"""
+        query = """
             SELECT
                 player_name,
                 weapon_name,
@@ -168,7 +168,7 @@ class SessionStatsAggregator:
 
     async def get_dpm_leaderboard(self, session_ids: List, session_ids_str: str, limit: int = 10):
         """Get DPM leaderboard based on individual player playtime"""
-        query = f"""
+        query = """
             SELECT player_name,
                 CASE
                     WHEN SUM(time_played_seconds) > 0

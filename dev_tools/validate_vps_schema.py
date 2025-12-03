@@ -147,7 +147,7 @@ async def validate_schema():
             constraint_types = {
                 'p': 'PRIMARY KEY',
                 'u': 'UNIQUE',
-                'f': 'FOREIGN KEY',
+                '': 'FOREIGN KEY',
                 'c': 'CHECK'
             }
             for con in constraints:

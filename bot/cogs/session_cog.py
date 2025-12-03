@@ -135,8 +135,8 @@ class SessionCog(commands.Cog, name="Session Commands"):
             # Setup database aliases
             try:
                 await self._ensure_player_name_alias()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Alias is optional
             # Step 1: Parse and normalize the date
             target_date = None
 
@@ -214,7 +214,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
 
             # Graphs view - TODO: Implement show_graphs_view in SessionViewHandlers
             if subcommand and subcommand.lower() in ("graphs", "graph"):
-                await ctx.send(f"📊 Graphs view is not yet implemented for date-specific sessions.\n💡 Try `!last_session graphs` for the most recent session's graphs.")
+                await ctx.send("📊 Graphs view is not yet implemented for date-specific sessions.\n💡 Try `!last_session graphs` for the most recent session's graphs.")
                 return
 
             # Step 4: Default view - Overview (improved version of original)
@@ -240,7 +240,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
             )
 
             # Get top players with badges and display names
-            top_players_query = f"""
+            top_players_query = """
                 SELECT
                     p.player_guid,
                     p.player_name,

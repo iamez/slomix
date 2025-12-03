@@ -96,7 +96,7 @@ def analyze_session(round_id, round_date, map_name, round_num):
     
     # Query by round_id (which links to sessions.id)
     query_fields = ', '.join(FIELD_MAPPING.values())
-    cursor.execute(f"""
+    cursor.execute("""
         SELECT 
             player_guid,
             {query_fields}

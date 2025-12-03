@@ -247,7 +247,7 @@ def validate_results(cursor, gaming_session_info):
     """)
     oct19_round_count = cursor.fetchone()[0]
     
-    print(f"📅 October 19, 2025:")
+    print("📅 October 19, 2025:")
     print(f"   Rounds: {oct19_round_count}")
     print(f"   Gaming Sessions: {len(oct19_sessions)}")
     

@@ -216,7 +216,7 @@ class AutomationCommands(commands.Cog):
                 color = 0xED4245  # Red
 
             embed = discord.Embed(
-                title=f"📊 Metrics Report",
+                title="📊 Metrics Report",
                 description=f"Performance analysis for last `{hours}` hours",
                 color=color,
                 timestamp=datetime.now()
@@ -379,7 +379,7 @@ class AutomationCommands(commands.Cog):
             if success:
                 stats = self.bot.db_maintenance.get_stats()
                 await ctx.send(
-                    f"✅ Backup complete!\n"
+                    "✅ Backup complete!\n"
                     f"Total backups: {stats['backup_count']}\n"
                     f"Last backup: {stats.get('last_backup', 'N/A')}"
                 )

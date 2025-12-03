@@ -33,7 +33,7 @@ async def main():
     # Now check ALL rounds with these gaming_session_ids (regardless of date!)
     session_id_placeholders = ",".join("?" * len(session_id_list))
 
-    all_rounds_in_sessions = await db.fetch_all(f"""
+    all_rounds_in_sessions = await db.fetch_all("""
         SELECT round_date, round_time, map_name, round_number, gaming_session_id, id
         FROM rounds
         WHERE gaming_session_id IN ({session_id_placeholders})
@@ -59,7 +59,7 @@ async def main():
 
     # Count R1+R2 only
     r1_r2_only = [r for r in all_rounds_in_sessions if r[3] in (1, 2)]
-    print(f"\n" + "="*80)
+    print("\n" + "="*80)
     print(f"📊 R1+R2 rounds only (ALL sessions): {len(r1_r2_only)}")
     print("="*80)
 
@@ -67,10 +67,10 @@ async def main():
     print("\n🤖 OLD BEHAVIOR (before fix):")
     print(f"   - Gaming session IDs from 2025-11-11: {session_id_list}")
     print(f"   - Total rounds (R1+R2 only): {len(r1_r2_only)}")
-    print(f"   - This includes rounds from OTHER dates if they're in the same gaming session!")
+    print("   - This includes rounds from OTHER dates if they're in the same gaming session!")
 
     # Show what the FIXED query returns
-    filtered_rounds = await db.fetch_all(f"""
+    filtered_rounds = await db.fetch_all("""
         SELECT id, round_date, round_time, map_name, round_number
         FROM rounds
         WHERE gaming_session_id IN ({session_id_placeholders})
@@ -79,10 +79,10 @@ async def main():
         ORDER BY round_date, round_time
     """, tuple(session_id_list))
 
-    print(f"\n✅ NEW BEHAVIOR (after fix):")
+    print("\n✅ NEW BEHAVIOR (after fix):")
     print(f"   - Gaming session IDs from 2025-11-11: {session_id_list}")
     print(f"   - Filtered to ONLY 2025-11-11 rounds: {len(filtered_rounds)}")
-    print(f"\nFiltered rounds (what !last_session NOW uses):")
+    print("\nFiltered rounds (what !last_session NOW uses):")
     for round_id, date, time, map_name, rnd in filtered_rounds:
         print(f"  ID {round_id}: {date} {time} - {map_name} R{rnd}")
 

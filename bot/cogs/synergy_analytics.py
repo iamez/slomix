@@ -134,7 +134,7 @@ class SynergyAnalytics(commands.Cog):
                 await ctx.send(
                     f"📊 **Insufficient data for {player_a_name} + {player_b_name}**\n\n"
                     f"These players need at least {config.get('synergy_analytics.min_games_threshold')} "
-                    f"games together on the same team to calculate synergy."
+                    "games together on the same team to calculate synergy."
                 )
                 return
             
@@ -463,7 +463,7 @@ class SynergyAnalytics(commands.Cog):
 
             # Create embed
             embed = discord.Embed(
-                title=f"🤝 Player Impact Analysis",
+                title="🤝 Player Impact Analysis",
                 description=f"{player_formatted}\n\nTeammate chemistry analysis • `{len(partners)}` partners analyzed",
                 color=0x9B59B6,  # Purple
                 timestamp=datetime.now()
@@ -805,7 +805,7 @@ class SynergyAnalytics(commands.Cog):
             player_b_formatted = synergy.player_b_name
 
         embed = discord.Embed(
-            title=f"⚔️ Player Synergy Analysis",
+            title="⚔️ Player Synergy Analysis",
             description=f"{player_a_formatted} **+** {player_b_formatted}\n\n**Overall Rating:** {rating}",
             color=color,
             timestamp=datetime.now()

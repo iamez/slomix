@@ -15,7 +15,7 @@ for date in ['2025-10-28', '2025-10-30']:
     
     if session_ids:
         # Check weapon stats count
-        cursor.execute(f"""
+        cursor.execute("""
             SELECT COUNT(*)
             FROM weapon_comprehensive_stats
             WHERE round_id IN ({','.join('?' * len(session_ids))})
@@ -24,7 +24,7 @@ for date in ['2025-10-28', '2025-10-30']:
         print(f"Weapon records: {weapon_count}")
         
         # Sample weapon data
-        cursor.execute(f"""
+        cursor.execute("""
             SELECT round_id, player_name, weapon_name, hits, shots, headshots
             FROM weapon_comprehensive_stats
             WHERE round_id IN ({','.join('?' * len(session_ids))})
@@ -38,7 +38,7 @@ for date in ['2025-10-28', '2025-10-30']:
             print(f"  {name} - {weapon}: {hits}/{shots} ({acc:.1f}%), {hs} HS")
         
         # Check aggregated player stats
-        cursor.execute(f"""
+        cursor.execute("""
             SELECT p.player_name,
                 COALESCE(SUM(w.hits), 0) as total_hits,
                 COALESCE(SUM(w.shots), 0) as total_shots,

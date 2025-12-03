@@ -78,7 +78,7 @@ for file_field, db_field, file_val, db_val in matches_with_db:
 always_zero = zero_fields - non_zero_fields
 
 if always_zero:
-    print(f"\n❌ Fields where DB is ALWAYS 0 (but file has values):")
+    print("\n❌ Fields where DB is ALWAYS 0 (but file has values):")
     for field in sorted(always_zero):
         print(f"   • {field}")
 
@@ -89,7 +89,7 @@ for file_field, db_field, file_val, db_val in matches_with_db:
         calculated_fields.append((file_field, file_val, db_val))
 
 if calculated_fields:
-    print(f"\n⚠️  Calculated fields (DB recalculates, expected mismatch):")
+    print("\n⚠️  Calculated fields (DB recalculates, expected mismatch):")
     seen_calc = set()
     for field, file_val, db_val in calculated_fields:
         if field not in seen_calc:

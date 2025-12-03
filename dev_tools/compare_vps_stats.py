@@ -41,7 +41,7 @@ def get_vps_stats_files():
     """List stats files on VPS via SSH"""
     if not os.path.exists(VPS_KEY):
         print(f"❌ SSH key not found: {VPS_KEY}")
-        print(f"   Please set SSH_KEY_PATH environment variable or create key")
+        print("   Please set SSH_KEY_PATH environment variable or create key")
         return None
     
     try:
@@ -121,14 +121,14 @@ def main():
         print(f"    {map_name:20} Round {round_num} - {players} players")
     
     # Get VPS stats files
-    print(f"\n[2/2] Checking VPS stats directory...")
+    print("\n[2/2] Checking VPS stats directory...")
     vps_files = get_vps_stats_files()
     
     if vps_files is None:
         print("\n⚠️  Could not connect to VPS - showing local data only")
         return
     
-    print(f"\nVPS Stats Files (last 30):")
+    print("\nVPS Stats Files (last 30):")
     print(vps_files)
     
     # Parse VPS filenames

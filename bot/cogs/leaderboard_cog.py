@@ -47,8 +47,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     "CREATE TEMP VIEW IF NOT EXISTS player_comprehensive_stats_alias AS "
                     "SELECT *, player_name AS name FROM player_comprehensive_stats"
                 )
-        except Exception:
-            pass
+        except Exception:  # nosec B110
+            pass  # Alias creation is optional
 
     async def _enable_sql_diag(self):
         """Enable SQL diagnostics for troubleshooting (SQLite only)"""
@@ -56,8 +56,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
             # PRAGMA is SQLite-specific
             if self.bot.config.database_type == 'sqlite':
                 await self.bot.db_adapter.execute("PRAGMA case_sensitive_like = ON")
-        except Exception:
-            pass
+        except Exception:  # nosec B110
+            pass  # PRAGMA is optional optimization
 
     @is_public_channel()
     @commands.cooldown(1, 5, commands.BucketType.user)
@@ -78,13 +78,13 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
             # Set up database alias and diagnostics
             try:
                 await self._ensure_player_name_alias()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Alias is optional
             # Enable SQL diagnostics for troubleshooting
             try:
                 await self._enable_sql_diag()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Diagnostics are optional
             
             # === SCENARIO 1: @MENTION - Look up linked Discord user ===
             if ctx.message.mentions:
@@ -105,7 +105,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                         title="⚠️ Account Not Linked",
                         description=(
                             f"{mentioned_user.mention} hasn't linked their "
-                            f"ET:Legacy account yet!"
+                            "ET:Legacy account yet!"
                         ),
                         color=0xFFA500,
                     )
@@ -121,7 +121,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     embed.add_field(
                         name="Admin Help",
                         value=(
-                            f"Admins can help link with:\n"
+                            "Admins can help link with:\n"
                             f"`!link {mentioned_user.mention} <GUID>`"
                         ),
                         inline=False,
@@ -201,7 +201,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             == 'postgresql' else '?'
                         )
                         result = await self.bot.db_adapter.fetch_one(
-                            f"""
+                            """
                             SELECT player_guid, player_name
                             FROM player_comprehensive_stats
                             WHERE LOWER(player_name) LIKE LOWER({placeholder})
@@ -355,7 +355,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 # Build embed with enhanced title
                 embed = discord.Embed(
-                    title=f"📊 Player Statistics",
+                    title="📊 Player Statistics",
                     description=f"**{formatted_name}**",
                     color=0x5865F2,  # Discord Blurple
                     timestamp=datetime.now(),
@@ -503,7 +503,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     "revive": "revives", "medic": "revives",
                     "gibs": "gibs", "gib": "gibs",
                     "obj": "objectives", "objective": "objectives",
-                    "objectives": "objectives", "eff": "efficiency",
+                    "objectives": "objectives", "ef": "efficiency",
                     "efficiency": "efficiency", "teamwork": "teamwork",
                     "team": "teamwork", "multikill": "multikills",
                     "multikills": "multikills", "multi": "multikills",
@@ -519,7 +519,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 title = None
 
                 if stat == "kills":
-                    query = f"""
+                    query = """
                         SELECT
                             (SELECT player_name FROM player_comprehensive_stats
                              WHERE player_guid = p.player_guid
@@ -540,7 +540,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     title = f"🏆 Top Players by Kills (Page {page_num}/{total_pages})"
 
                 elif stat == "kd":
-                    query = f"""
+                    query = """
                             SELECT
                                 (SELECT player_name FROM player_comprehensive_stats
                                  WHERE player_guid = p.player_guid
@@ -561,7 +561,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     title = f"🏆 Top Players by K/D Ratio (Page {page_num}/{total_pages})"
 
                 elif stat == "dpm":
-                    query = f"""
+                    query = """
                             SELECT
                                 (SELECT player_name FROM player_comprehensive_stats
                                  WHERE player_guid = p.player_guid
@@ -602,7 +602,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     title = f"🏆 Top Players by DPM (Page {page_num}/{total_pages})"
 
                 elif stat == "accuracy":
-                    query = f"""
+                    query = """
                             SELECT
                                 (SELECT player_name FROM player_comprehensive_stats
                                  WHERE player_guid = p.player_guid
@@ -627,7 +627,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     title = f"🏆 Top Players by Accuracy (Page {page_num}/{total_pages})"
 
                 elif stat == "headshots":
-                    query = f"""
+                    query = """
                             SELECT
                                 (SELECT player_name FROM player_comprehensive_stats
                                  WHERE player_guid = p.player_guid
@@ -652,7 +652,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     title = f"🏆 Top Players by Headshot % (Page {page_num}/{total_pages})"
 
                 elif stat == "games":
-                    query = f"""
+                    query = """
                             SELECT 
                                 (SELECT player_name FROM player_comprehensive_stats 
                                  WHERE player_guid = p.player_guid 
@@ -672,7 +672,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     title = f"🏆 Most Active Players (Page {page_num}/{total_pages})"
 
                 elif stat == "revives":
-                    query = f"""
+                    query = """
                             SELECT 
                                 (SELECT player_name FROM player_comprehensive_stats 
                                  WHERE player_guid = p.player_guid 
@@ -693,7 +693,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     title = f"💉 Top Medics - Teammates Revived (Page {page_num}/{total_pages})"
 
                 elif stat == "gibs":
-                    query = f"""
+                    query = """
                             SELECT 
                                 (SELECT player_name FROM player_comprehensive_stats 
                                  WHERE player_guid = p.player_guid 
@@ -714,7 +714,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     title = f"💀 Top Gibbers (Page {page_num}/{total_pages})"
 
                 elif stat == "objectives":
-                    query = f"""
+                    query = """
                             SELECT 
                                 (SELECT player_name FROM player_comprehensive_stats 
                                  WHERE player_guid = p.player_guid 
@@ -735,7 +735,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     title = f"🎯 Top Objective Players (Page {page_num}/{total_pages})"
 
                 elif stat == "efficiency":
-                    query = f"""
+                    query = """
                             SELECT 
                                 (SELECT player_name FROM player_comprehensive_stats 
                                  WHERE player_guid = p.player_guid 
@@ -756,7 +756,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     title = f"⚡ Highest Efficiency (Page {page_num}/{total_pages})"
 
                 elif stat == "teamwork":
-                    query = f"""
+                    query = """
                             SELECT 
                                 (SELECT player_name FROM player_comprehensive_stats 
                                  WHERE player_guid = p.player_guid 
@@ -775,12 +775,12 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             LIMIT {players_per_page} OFFSET {offset}
                         """
                     title = (
-                        f"🤝 Best Teamwork (Lowest Team Damage %)"
+                        "🤝 Best Teamwork (Lowest Team Damage %)"
                         f" (Page {page_num}/{total_pages})"
                     )
 
                 elif stat == "multikills":
-                    query = f"""
+                    query = """
                             SELECT 
                                 (SELECT player_name FROM player_comprehensive_stats 
                                  WHERE player_guid = p.player_guid 
@@ -801,7 +801,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     title = f"🔥 Most Multikills (Page {page_num}/{total_pages})"
 
                 elif stat == "grenades":
-                    query = f"""
+                    query = """
                             SELECT
                                 (SELECT player_name FROM player_comprehensive_stats
                                  WHERE player_guid = w.player_guid

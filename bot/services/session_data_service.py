@@ -118,7 +118,7 @@ class SessionDataService:
         session_ids_str = ",".join("?" * len(session_ids))
 
         # Get unique player count for this gaming session
-        query = f"""
+        query = """
             SELECT COUNT(DISTINCT player_guid)
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
@@ -172,7 +172,7 @@ class SessionDataService:
         # This includes rounds that may be on adjacent dates due to midnight crossover
         placeholders = ",".join("?" * len(gaming_session_ids))
         sessions = await self.db_adapter.fetch_all(
-            f"""
+            """
             SELECT id, map_name, round_number, actual_time
             FROM rounds
             WHERE gaming_session_id IN ({placeholders})
@@ -194,7 +194,7 @@ class SessionDataService:
         session_ids_str = ",".join("?" * len(session_ids))
 
         # Get unique player count across all these sessions
-        query = f"""
+        query = """
             SELECT COUNT(DISTINCT player_guid)
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
@@ -220,7 +220,7 @@ class SessionDataService:
             # Get the date range for these session_ids
             placeholders = ",".join("?" * len(session_ids))
             dates_result = await self.db_adapter.fetch_all(
-                f"""
+                """
                 SELECT DISTINCT SUBSTR(round_date, 1, 10) as date
                 FROM rounds
                 WHERE id IN ({placeholders})
@@ -235,7 +235,7 @@ class SessionDataService:
             # Query session_teams for these dates
             date_placeholders = ",".join("?" * len(dates))
             rows = await self.db_adapter.fetch_all(
-                f"""
+                """
                 SELECT team_name, player_guids, player_names
                 FROM session_teams
                 WHERE session_start_date IN ({date_placeholders}) AND map_name = 'ALL'
@@ -335,7 +335,7 @@ class SessionDataService:
                     guid_to_team[guid] = team_name
 
             # Get player GUIDs to map names to teams
-            query = f"""
+            query = """
                 SELECT DISTINCT player_name, player_guid
                 FROM player_comprehensive_stats
                 WHERE round_id IN ({session_ids_str})
@@ -369,7 +369,7 @@ class SessionDataService:
 
             # Get all player-side pairings
             # IMPORTANT: Include round_id in the key to handle multiple plays of same map
-            query = f"""
+            query = """
                 SELECT player_guid, player_name, team, round_id, map_name, round_number
                 FROM player_comprehensive_stats
                 WHERE round_id IN ({session_ids_str})
@@ -502,7 +502,7 @@ class SessionDataService:
                 team_guids_placeholders = ",".join("?" * len(team_guids))
 
                 # Get MVP by kills
-                query = f"""
+                query = """
                     SELECT player_name, SUM(kills) as total_kills, player_guid
                     FROM player_comprehensive_stats
                     WHERE round_id IN ({session_ids_str})
@@ -519,7 +519,7 @@ class SessionDataService:
 
                     # Get detailed stats for MVP
                     # Using CTE to avoid duplicate placeholder references
-                    detail_query = f"""
+                    detail_query = """
                         WITH target_sessions AS (
                             SELECT id FROM rounds WHERE id IN ({session_ids_str})
                         )

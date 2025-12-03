@@ -46,8 +46,8 @@ class StatsCog(commands.Cog, name="Stats"):
                     "CREATE TEMP VIEW IF NOT EXISTS player_comprehensive_stats_alias AS "
                     "SELECT *, player_name AS name FROM player_comprehensive_stats"
                 )
-        except Exception:
-            pass
+        except Exception:  # nosec B110
+            pass  # Alias is optional
 
     @is_public_channel()
     @commands.command(name="ping")
@@ -125,8 +125,8 @@ class StatsCog(commands.Cog, name="Stats"):
             # Ensure connection has player_name alias if needed
             try:
                 await self._ensure_player_name_alias()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Alias is optional
             
             # Handle @mention
             if ctx.message.mentions:
@@ -343,8 +343,8 @@ class StatsCog(commands.Cog, name="Stats"):
             # Ensure player_name alias for this command's DB connection
             try:
                 await self._ensure_player_name_alias()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Alias is optional
 
             # Helper: get stats when we already have a GUID
             async def get_player_stats_by_guid(player_guid, display_name):
@@ -713,8 +713,8 @@ class StatsCog(commands.Cog, name="Stats"):
             # Clean up
             try:
                 output_path.unlink()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Cleanup failure is non-critical
 
             logger.info(
                 f"📊 Comparison generated: {p1_stats['name']} vs {p2_stats['name']}"
@@ -769,12 +769,12 @@ class StatsCog(commands.Cog, name="Stats"):
             # Apply per-connection alias to handle legacy DB column names
             try:
                 await self._ensure_player_name_alias()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Alias is optional
             season_filter = self.season_manager.get_season_sql_filter()
 
             # Season kills leader
-            season_query = f"""
+            season_query = """
                 SELECT
                     (SELECT player_name FROM player_comprehensive_stats
                      WHERE player_guid = p.player_guid

@@ -1,8 +1,9 @@
+-- PostgreSQL Migration Script
 -- Migration: Add session_results table for competitive analytics
 -- Created: 2025-11-28
 -- Purpose: Track actual match outcomes for prediction accuracy analysis
 -- Phase: 4 - Database Tables & Live Scoring
--- Note: PostgreSQL dialect - SET QUOTED_IDENTIFIER/ANSI_NULLS not applicable
+-- Note: This is PostgreSQL syntax. SET QUOTED_IDENTIFIER is SQL Server specific and not needed.
 
 -- ============================================================================
 -- TABLE: session_results

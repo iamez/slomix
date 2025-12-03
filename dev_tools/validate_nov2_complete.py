@@ -274,14 +274,14 @@ def main():
             print(f"\n[WARN] No round ID for file: {filepath.name}")
     
     print(f"\n{'='*80}")
-    print(f"FINAL SUMMARY")
+    print("FINAL SUMMARY")
     print(f"{'='*80}")
     print(f"Total player-round validations: {total_passed + total_failed}")
     print(f"[OK] Passed: {total_passed}")
     print(f"[FAIL] Failed: {total_failed}")
     
     if total_failed == 0:
-        print(f"\nPERFECT! All data matches between raw files and database!")
+        print("\nPERFECT! All data matches between raw files and database!")
     else:
         accuracy = (total_passed / (total_passed + total_failed) * 100) if (total_passed + total_failed) > 0 else 0
         print(f"\nAccuracy: {accuracy:.2f}%")

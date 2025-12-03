@@ -25,7 +25,7 @@ cursor.execute("""
 last_row = cursor.fetchone()
 last_id, last_map, last_round, last_date, last_time = last_row
 
-print(f"\n✅ LAST SESSION IN DATABASE:")
+print("\n✅ LAST SESSION IN DATABASE:")
 print(f"   ID: {last_id}")
 print(f"   Map: {last_map} R{last_round}")
 print(f"   Date: {last_date}")
@@ -62,12 +62,12 @@ for sess in previous_sessions:
         print(f"   Stopped at ID {sess_id} ({sess_map} R{sess_round})")
         break
 
-print(f"\n✅ GAMING SESSION IDS (using 30-min gap logic):")
+print("\n✅ GAMING SESSION IDS (using 30-min gap logic):")
 print(f"   Count: {len(gaming_session_ids)} rounds")
 print(f"   IDs: {gaming_session_ids[:5]}{'...' if len(gaming_session_ids) > 5 else ''}")
 
 # Step 3: Get the date range for display
-cursor.execute(f"""
+cursor.execute("""
     SELECT MIN(round_date), MAX(round_date), 
            MIN(round_time), MAX(round_time)
     FROM rounds
@@ -78,7 +78,7 @@ print(f"   Time Range: {min_date} {min_time} → {max_date} {max_time}")
 
 # Step 4: Compare with OLD date-based approach
 latest_date = last_date[:10]  # Just YYYY-MM-DD
-print(f"\n❌ OLD APPROACH (date-based query):")
+print("\n❌ OLD APPROACH (date-based query):")
 print(f"   Would query: round_date = '{latest_date}'")
 
 cursor.execute("""
@@ -98,7 +98,7 @@ if len(old_approach_sessions) > 3:
 
 # Step 5: Summary
 print(f"\n{'='*70}")
-print(f"📊 SUMMARY:")
+print("📊 SUMMARY:")
 print(f"{'='*70}")
 print(f"✅ NEW approach: {len(gaming_session_ids)} rounds (correct gaming session)")
 print(f"❌ OLD approach: {len(old_approach_sessions)} rounds (may include orphans/multiple sessions)")

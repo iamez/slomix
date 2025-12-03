@@ -26,7 +26,7 @@ def get_all_fields():
 
 def get_database_round_data(cursor, round_id):
     """Get ALL data for a round from database"""
-    cursor.execute(f'''
+    cursor.execute('''
         SELECT 
             id, player_name, team, guid,
             kills, deaths, headshot_kills, damage_given, damage_received,
@@ -207,7 +207,7 @@ for session_id in SESSIONS:
             print(f"  ⚠️  No stat file found: {filename}")
             validation_data['summary']['missing_files'] += 1
         else:
-            print(f"  ✅ Found stat file")
+            print("  ✅ Found stat file")
             print(f"  Database: {len(db_players)} players | Raw file: {len(raw_data['players'])} players")
             
             # Compare each database player with raw file

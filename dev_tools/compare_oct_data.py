@@ -136,7 +136,7 @@ def compare_all():
         try:
             file_data = parse_with_actual_logic(filepath)
         except FileNotFoundError:
-            print(f"⚠️  File not found, skipping")
+            print("⚠️  File not found, skipping")
             continue
         except Exception as e:
             print(f"❌ Parse error: {e}")
@@ -149,19 +149,19 @@ def compare_all():
         )
         
         if not db_data:
-            print(f"❌ Database round not found!")
+            print("❌ Database round not found!")
             continue
         
         # Compare header fields
         print("\n📄 HEADER COMPARISON:")
-        print(f"  File → DB")
+        print("  File → DB")
         print(f"  map_name:        {file_data['header']['map_name']:<20} → {db_data['session'][1]}")
         print(f"  round_number:    {file_data['header']['round_num']:<20} → {db_data['session'][2]}")
         print(f"  winner_team:     {file_data['header']['winner_team']:<20} → {db_data['session'][3]}")
         print(f"  map_time:        {file_data['header']['map_time']:<20} → time_limit={db_data['session'][4]}")
         print(f"  actual_time:     {file_data['header']['actual_time']:<20} → actual_time={db_data['session'][5]}")
         
-        print(f"\n⏱️  TIME FIELD BREAKDOWN:")
+        print("\n⏱️  TIME FIELD BREAKDOWN:")
         if file_data['header']['round_num'] == 1:
             print(f"  R1 Field 6:      {file_data['header']['map_time']:<20} → original_time_limit={db_data['session'][6]}")
             print(f"  R1 Field 7:      {file_data['header']['actual_time']:<20} → completion_time={db_data['session'][8]}")
@@ -173,14 +173,14 @@ def compare_all():
         
         # Compare player fields
         if db_data['player']:
-            print(f"\n👤 PLAYER COMPARISON (first player):")
-            print(f"  File → DB")
+            print("\n👤 PLAYER COMPARISON (first player):")
+            print("  File → DB")
             print(f"  guid:            {file_data['player']['guid']:<20} → {db_data['player'][0]}")
             print(f"  name:            {file_data['player']['raw_name'][:20]:<20} → {db_data['player'][1]}")
             print(f"  team:            {file_data['player']['team_end']:<20} → {db_data['player'][2]}")
             
-            print(f"\n📊 STATS COMPARISON:")
-            print(f"  File → DB")
+            print("\n📊 STATS COMPARISON:")
+            print("  File → DB")
             print(f"  damage_given:    {file_data['player']['damage_given']:<20} → {db_data['player'][5]}")
             print(f"  damage_received: {file_data['player']['damage_received']:<20} → {db_data['player'][6]}")
             
@@ -191,9 +191,9 @@ def compare_all():
             )
             
             if stats_match:
-                print(f"\n  ✅ Stats match perfectly!")
+                print("\n  ✅ Stats match perfectly!")
             else:
-                print(f"\n  ❌ Stats MISMATCH!")
+                print("\n  ❌ Stats MISMATCH!")
         
         print(f"\n🔢 TAB FIELDS FOUND: {len(file_data['tab_fields'])}")
         if len(file_data['tab_fields']) >= 10:

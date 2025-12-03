@@ -135,8 +135,8 @@ class StatsNotifyServer:
                         await websocket.send("PONG")
                     else:
                         logger.debug(f"📨 Message from {client_addr}: {message[:50]}")
-            except websockets.ConnectionClosed:
-                pass
+            except websockets.ConnectionClosed:  # nosec B110
+                pass  # Client disconnected, handled in finally
                 
         finally:
             # Remove from clients

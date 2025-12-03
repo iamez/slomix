@@ -46,7 +46,7 @@ for weapon_id in range(28):
             total_headshots_from_weapons += headshots
             stats_index += 5
 
-print(f"\nWeapons with headshots:")
+print("\nWeapons with headshots:")
 for wid, hs, k in weapons_with_headshots:
     print(f"  Weapon {wid}: {hs} headshots, {k} kills")
 
@@ -59,9 +59,9 @@ print(f"Headshot_kills from TAB field 14: {headshot_kills_from_tab}")
 
 print(f"\n{'='*60}")
 if total_headshots_from_weapons != headshot_kills_from_tab:
-    print(f"❌ INCONSISTENCY IN RAW FILE!")
+    print("❌ INCONSISTENCY IN RAW FILE!")
     print(f"   Weapon stats sum: {total_headshots_from_weapons}")
     print(f"   TAB field 14:     {headshot_kills_from_tab}")
     print(f"   Difference:       {total_headshots_from_weapons - headshot_kills_from_tab}")
 else:
-    print(f"✅ Raw file is consistent")
+    print("✅ Raw file is consistent")

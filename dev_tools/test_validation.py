@@ -27,13 +27,13 @@ async def test_validation():
         "DELETE FROM processed_files WHERE filename = $1",
         filename
     )
-    print(f"✅ Marked as unprocessed")
+    print("✅ Marked as unprocessed")
     
     # Process it with validation
-    print(f"\n🔄 Processing with validation checks...\n")
+    print("\n🔄 Processing with validation checks...\n")
     success, message = await manager.process_file(test_file)
     
-    print(f"\n📊 Result:")
+    print("\n📊 Result:")
     print(f"   Success: {success}")
     print(f"   Message: {message}")
     
@@ -45,12 +45,12 @@ async def test_validation():
     
     if error_msg:
         if "WARN" in error_msg:
-            print(f"\n⚠️  Validation warnings found:")
+            print("\n⚠️  Validation warnings found:")
             print(f"   {error_msg}")
         else:
-            print(f"\n✅ No validation warnings - data matches perfectly!")
+            print("\n✅ No validation warnings - data matches perfectly!")
     else:
-        print(f"\n✅ No validation warnings - data matches perfectly!")
+        print("\n✅ No validation warnings - data matches perfectly!")
     
     await manager.disconnect()
 

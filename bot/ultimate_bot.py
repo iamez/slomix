@@ -44,8 +44,8 @@ try:
     from dotenv import load_dotenv
 
     load_dotenv()
-except ImportError:
-    pass
+except ImportError:  # nosec B110
+    pass  # python-dotenv is optional
 
 # ==================== COMPREHENSIVE LOGGING SETUP ====================
 
@@ -762,8 +762,8 @@ class UltimateETLegacyBot(commands.Bot):
                 if ssh:
                     try:
                         ssh.close()
-                    except Exception:
-                        pass
+                    except Exception:  # nosec B110
+                        pass  # SSH cleanup is best-effort
 
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _list_files_sync)

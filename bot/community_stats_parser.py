@@ -364,8 +364,8 @@ class C0RNP0RN3StatsParser:
                         if found:
                             print(f"  → Found {len(found)} previous-day file(s) (midnight-crossing)")
                         potential_files.extend(found)
-            except ValueError:
-                pass  # Invalid date format
+            except ValueError:  # nosec B110
+                pass  # Invalid date format, skip this file
 
         if not potential_files:
             return None

@@ -112,11 +112,11 @@ class AdvancedTeamDetector:
 
         # Strategy 2: Multi-Round Consensus
         consensus_scores = await self._analyze_multi_round_consensus(session_date, players_data)
-        logger.info(f"Consensus analysis: Analyzed all rounds")
+        logger.info("Consensus analysis: Analyzed all rounds")
 
         # Strategy 3: Co-occurrence Matrix
         cooccurrence_scores = await self._analyze_cooccurrence(session_date, players_data)
-        logger.info(f"Co-occurrence analysis: Complete")
+        logger.info("Co-occurrence analysis: Complete")
 
         # Combine all strategies with weighted scoring
         player_scores = self._combine_strategies(

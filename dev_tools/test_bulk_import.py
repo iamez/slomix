@@ -155,7 +155,7 @@ def test_import():
     
     conn.close()
     
-    print(f"\n📊 Database verification:")
+    print("\n📊 Database verification:")
     print(f"   Sessions: {sessions}")
     print(f"   Players:  {players}")
     print(f"   Weapons:  {weapons}")

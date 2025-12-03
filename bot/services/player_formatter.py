@@ -149,7 +149,7 @@ class PlayerFormatter:
         placeholders = ','.join(['?' for _ in guids])
 
         try:
-            display_names = await self.db_adapter.fetch_all(f"""
+            display_names = await self.db_adapter.fetch_all("""
                 SELECT player_guid, display_name
                 FROM player_links
                 WHERE player_guid IN ({placeholders})
@@ -165,7 +165,7 @@ class PlayerFormatter:
         badge_map = {}
         if include_badges:
             try:
-                stats = await self.db_adapter.fetch_all(f"""
+                stats = await self.db_adapter.fetch_all("""
                     SELECT
                         player_guid,
                         SUM(revives_given) as total_revives,

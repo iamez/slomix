@@ -78,7 +78,7 @@ for r2_id, r2_date, r2_map, r2_round, r2_map_id in r2_midnight_sessions:
                 """, (r1_map_id, r2_id))
                 fixed_count += 1
             else:
-                print(f"    → map_ids already match, no update needed")
+                print("    → map_ids already match, no update needed")
         else:
             print(f"  ✗ Time difference too large: {time_diff:.1f} minutes")
     else:
