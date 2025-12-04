@@ -275,8 +275,12 @@ class PlayerBadgeService:
                 GROUP BY p.player_guid
             """  # nosec B608
 
+            # Format the query with placeholders before sending to adapter
+            formatted_query = query.format(placeholders=placeholders)
+            logger.debug(f"Badge batch query placeholders: {placeholders[:50]}...")
+            
             results = await self.db_adapter.fetch_all(
-                query.format(placeholders=placeholders), tuple(player_guids)
+                formatted_query, tuple(player_guids)
             )
 
             badge_map = {}

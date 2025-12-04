@@ -1,14 +1,17 @@
 """
 Session Graph Generator - Creates beautiful performance graphs
 
-This service generates 3 themed graph images:
-1. Combat Performance - Kills, Deaths, K/D, Damage Given, Damage Received, DPM
-2. Survivability & Support - Revives, Times Revived, Gibs, Headshots, Time Played, Time Dead  
-3. FragPotential & Playstyle - FragPotential, Denied Playtime, Efficiency + Legend
+This service generates 5 themed graph images:
+1. Combat Stats (Offense) - Kills/Deaths grouped, Damage grouped, K/D, DPM
+2. Combat Stats (Defense/Support) - Revives grouped, Time grouped, Gibs, Headshots
+3. Advanced Metrics - FragPotential, Damage Efficiency, Denied Playtime, Survival Rate
+4. Playstyle Analysis - Player Playstyles + Legend
+5. DPM Timeline - Performance evolution over rounds
 """
 
 import io
 import logging
+import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -54,7 +57,7 @@ class SessionGraphGenerator:
             ax.spines[spine].set_visible(False)
         ax.grid(True, alpha=0.15, color='white', axis='y', linestyle='--')
 
-    def _add_bar_labels(self, ax, bars, values, fmt="{:.0f}"):
+    def _add_bar_labels(self, ax, bars, values, fmt="{:.0f}", offset=0):
         """Add white value labels on top of bars"""
         for bar, value in zip(bars, values):
             height = bar.get_height()
@@ -63,49 +66,66 @@ class SessionGraphGenerator:
                     bar.get_x() + bar.get_width() / 2., height,
                     fmt.format(value),
                     ha='center', va='bottom', color='white',
-                    fontsize=9, fontweight='bold'
+                    fontsize=8, fontweight='bold'
                 )
 
-    def _add_hbar_labels(self, ax, bars, values, fmt="{:.0f}"):
-        """Add white value labels on horizontal bars"""
-        for bar, value in zip(bars, values):
-            width = bar.get_width()
-            if width > 0:
-                ax.text(
-                    width + (max(values) * 0.02), 
-                    bar.get_y() + bar.get_height() / 2.,
-                    fmt.format(value),
-                    ha='left', va='center', color='white',
-                    fontsize=9, fontweight='bold'
-                )
+    def _add_grouped_bar_labels(self, ax, bars1, bars2, values1, values2, 
+                                 fmt="{:.0f}"):
+        """Add labels for grouped bars"""
+        for bar, value in zip(bars1, values1):
+            height = bar.get_height()
+            if height > 0:
+                ax.text(bar.get_x() + bar.get_width() / 2., height,
+                        fmt.format(value), ha='center', va='bottom',
+                        color='white', fontsize=7, fontweight='bold')
+        for bar, value in zip(bars2, values2):
+            height = bar.get_height()
+            if height > 0:
+                ax.text(bar.get_x() + bar.get_width() / 2., height,
+                        fmt.format(value), ha='center', va='bottom',
+                        color='white', fontsize=7, fontweight='bold')
 
     async def generate_performance_graphs(
         self,
         latest_date: str,
         session_ids: List,
         session_ids_str: str
-    ) -> Tuple[Optional[io.BytesIO], Optional[io.BytesIO], 
-               Optional[io.BytesIO], Optional[io.BytesIO]]:
+    ) -> Tuple[Optional[io.BytesIO], Optional[io.BytesIO],
+               Optional[io.BytesIO], Optional[io.BytesIO],
+               Optional[io.BytesIO]]:
         """
-        Generate THREE beautiful graph images:
+        Generate FIVE beautiful graph images:
         
-        Image 1: COMBAT PERFORMANCE (2x3)
-            - Kills, Deaths, K/D Ratio
-            - Damage Given, Damage Received, DPM
+        Image 1: COMBAT STATS (OFFENSE) - 2x2
+            - Kills vs Deaths (grouped bars)
+            - Damage Given vs Received (grouped bars)
+            - K/D Ratio
+            - DPM
             
-        Image 2: SURVIVABILITY & SUPPORT (2x3)
-            - Revives Given, Times Revived, Gibs
-            - Headshot Kills, Time Played, Time Dead
+        Image 2: COMBAT STATS (DEFENSE/SUPPORT) - 2x2
+            - Revives Given vs Times Revived (grouped bars)
+            - Time Played vs Time Dead (grouped bars)
+            - Gibs
+            - Headshots
             
-        Image 3: FRAGPOTENTIAL & PLAYSTYLE (2x3)
-            - FragPotential, Denied Playtime, Damage Efficiency
-            - Player Playstyles (horizontal), Survival Rate, Legend
+        Image 3: ADVANCED METRICS - 2x2
+            - FragPotential
+            - Damage Efficiency
+            - Denied Playtime
+            - Survival Rate
+            
+        Image 4: PLAYSTYLE ANALYSIS
+            - Player Playstyles (horizontal bars - full width)
+            - Playstyle Legend
+            
+        Image 5: DPM TIMELINE
+            - DPM evolution line graph
+            - Session Form Analysis
         
-        Returns: Tuple of (combat_buf, support_buf, fragpotential_buf)
+        Returns: Tuple of 5 buffers
         """
         try:
             # Comprehensive query with all needed stats
-            # Generate placeholders for IN clause
             placeholders = ','.join(['?' for _ in session_ids])
             query = f"""
                 SELECT p.player_name,
@@ -131,17 +151,18 @@ class SessionGraphGenerator:
                 WHERE p.round_id IN ({placeholders})
                 GROUP BY p.player_guid, p.player_name
                 ORDER BY kills DESC
-                LIMIT 10
+                LIMIT 16
             """
             top_players = await self.db_adapter.fetch_all(
                 query, tuple(session_ids)
             )
 
             if not top_players:
-                return None, None, None
+                return None, None, None, None, None
 
-            # Extract all data arrays
-            names = [p[0][:12] for p in top_players]
+            # Extract all data arrays (keep full names for matching)
+            names = [p[0] for p in top_players]
+            display_names = [n[:12] for n in names]
             kills = [p[1] or 0 for p in top_players]
             deaths = [p[2] or 0 for p in top_players]
             damage_given = [p[3] or 0 for p in top_players]
@@ -164,12 +185,10 @@ class SessionGraphGenerator:
                 for tp, tdr in zip(time_played, time_dead_ratio)
             ]
             dmg_eff = [
-                dg / max(1, dr) 
+                dg / max(1, dr)
                 for dg, dr in zip(damage_given, damage_received)
             ]
-            survival_rate = [
-                100 - tdr for tdr in time_dead_ratio
-            ]
+            survival_rate = [100 - tdr for tdr in time_dead_ratio]
 
             # Calculate FragPotential and Playstyles
             frag_potentials = []
@@ -208,69 +227,72 @@ class SessionGraphGenerator:
                 )
                 playstyles.append(style)
 
-            x = range(len(names))
+            n_players = len(names)
+            x = np.arange(n_players)
+            bar_width = 0.35
 
             # ═══════════════════════════════════════════════════════════════
-            # IMAGE 1: COMBAT PERFORMANCE
+            # IMAGE 1: COMBAT STATS (OFFENSE) - 2x2 with grouped bars
             # ═══════════════════════════════════════════════════════════════
-            fig1, axes1 = plt.subplots(2, 3, figsize=(16, 10))
+            fig1, axes1 = plt.subplots(2, 2, figsize=(14, 10))
             fig1.patch.set_facecolor(self.COLORS['bg_dark'])
             fig1.suptitle(
-                f"COMBAT PERFORMANCE  -  {latest_date}",
+                f"COMBAT STATS (OFFENSE)  -  {latest_date}",
                 fontsize=18, fontweight="bold", color='white', y=0.98
             )
 
-            # Row 1: Kills, Deaths, K/D Ratio
-            bars = axes1[0, 0].bar(x, kills, color=self.COLORS['green'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes1[0, 0], "KILLS")
+            # Kills vs Deaths (grouped)
+            bars1 = axes1[0, 0].bar(x - bar_width/2, kills, bar_width,
+                                     color=self.COLORS['green'], label='Kills',
+                                     edgecolor='white', linewidth=0.5)
+            bars2 = axes1[0, 0].bar(x + bar_width/2, deaths, bar_width,
+                                     color=self.COLORS['red'], label='Deaths',
+                                     edgecolor='white', linewidth=0.5)
+            self._style_axis(axes1[0, 0], "KILLS vs DEATHS")
             axes1[0, 0].set_xticks(x)
-            axes1[0, 0].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes1[0, 0], bars, kills)
+            axes1[0, 0].set_xticklabels(display_names, rotation=45, ha="right")
+            axes1[0, 0].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                               edgecolor='white', labelcolor='white')
+            self._add_grouped_bar_labels(axes1[0, 0], bars1, bars2, kills, deaths)
 
-            bars = axes1[0, 1].bar(x, deaths, color=self.COLORS['red'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes1[0, 1], "DEATHS")
+            # Damage Given vs Received (grouped)
+            bars1 = axes1[0, 1].bar(x - bar_width/2, damage_given, bar_width,
+                                     color=self.COLORS['blue'], label='Given',
+                                     edgecolor='white', linewidth=0.5)
+            bars2 = axes1[0, 1].bar(x + bar_width/2, damage_received, bar_width,
+                                     color=self.COLORS['orange'], label='Received',
+                                     edgecolor='white', linewidth=0.5)
+            self._style_axis(axes1[0, 1], "DAMAGE GIVEN vs RECEIVED")
             axes1[0, 1].set_xticks(x)
-            axes1[0, 1].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes1[0, 1], bars, deaths)
+            axes1[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
+            axes1[0, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                               edgecolor='white', labelcolor='white')
+            self._add_grouped_bar_labels(axes1[0, 1], bars1, bars2,
+                                          damage_given, damage_received, "{:,.0f}")
 
+            # K/D Ratio
             kd_colors = [
-                self.COLORS['green'] if kd >= 1.5 
-                else self.COLORS['yellow'] if kd >= 1.0 
+                self.COLORS['green'] if kd >= 1.5
+                else self.COLORS['yellow'] if kd >= 1.0
                 else self.COLORS['red']
                 for kd in kd_ratios
             ]
-            bars = axes1[0, 2].bar(x, kd_ratios, color=kd_colors,
+            bars = axes1[1, 0].bar(x, kd_ratios, color=kd_colors,
                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes1[0, 2], "K/D RATIO")
-            axes1[0, 2].axhline(y=1.0, color="white", linestyle="--", 
+            self._style_axis(axes1[1, 0], "K/D RATIO")
+            axes1[1, 0].axhline(y=1.0, color="white", linestyle="--",
                                  alpha=0.5, linewidth=1)
-            axes1[0, 2].set_xticks(x)
-            axes1[0, 2].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes1[0, 2], bars, kd_ratios, fmt="{:.2f}")
-
-            # Row 2: Damage Given, Damage Received, DPM
-            bars = axes1[1, 0].bar(x, damage_given, color=self.COLORS['blue'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes1[1, 0], "DAMAGE GIVEN")
             axes1[1, 0].set_xticks(x)
-            axes1[1, 0].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes1[1, 0], bars, damage_given, fmt="{:,.0f}")
+            axes1[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
+            self._add_bar_labels(axes1[1, 0], bars, kd_ratios, fmt="{:.2f}")
 
-            bars = axes1[1, 1].bar(x, damage_received, color=self.COLORS['orange'],
+            # DPM
+            bars = axes1[1, 1].bar(x, dpm, color=self.COLORS['cyan'],
                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes1[1, 1], "DAMAGE RECEIVED")
+            self._style_axis(axes1[1, 1], "DPM (Damage Per Minute)")
             axes1[1, 1].set_xticks(x)
-            axes1[1, 1].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes1[1, 1], bars, damage_received, fmt="{:,.0f}")
-
-            bars = axes1[1, 2].bar(x, dpm, color=self.COLORS['cyan'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes1[1, 2], "DPM (Damage Per Minute)")
-            axes1[1, 2].set_xticks(x)
-            axes1[1, 2].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes1[1, 2], bars, dpm)
+            axes1[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
+            self._add_bar_labels(axes1[1, 1], bars, dpm)
 
             plt.tight_layout(rect=(0, 0, 1, 0.96))
             buf1 = io.BytesIO()
@@ -280,58 +302,60 @@ class SessionGraphGenerator:
             plt.close(fig1)
 
             # ═══════════════════════════════════════════════════════════════
-            # IMAGE 2: SURVIVABILITY & SUPPORT
+            # IMAGE 2: COMBAT STATS (DEFENSE/SUPPORT) - 2x2 with grouped bars
             # ═══════════════════════════════════════════════════════════════
-            fig2, axes2 = plt.subplots(2, 3, figsize=(16, 10))
+            fig2, axes2 = plt.subplots(2, 2, figsize=(14, 10))
             fig2.patch.set_facecolor(self.COLORS['bg_dark'])
             fig2.suptitle(
-                f"SURVIVABILITY & SUPPORT  -  {latest_date}",
+                f"COMBAT STATS (DEFENSE/SUPPORT)  -  {latest_date}",
                 fontsize=18, fontweight="bold", color='white', y=0.98
             )
 
-            # Row 1: Revives Given, Times Revived, Gibs
-            bars = axes2[0, 0].bar(x, revives_given, color=self.COLORS['green'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes2[0, 0], "REVIVES GIVEN")
+            # Revives Given vs Times Revived (grouped)
+            bars1 = axes2[0, 0].bar(x - bar_width/2, revives_given, bar_width,
+                                     color=self.COLORS['green'], label='Given',
+                                     edgecolor='white', linewidth=0.5)
+            bars2 = axes2[0, 0].bar(x + bar_width/2, times_revived, bar_width,
+                                     color=self.COLORS['teal'], label='Received',
+                                     edgecolor='white', linewidth=0.5)
+            self._style_axis(axes2[0, 0], "REVIVES GIVEN vs RECEIVED")
             axes2[0, 0].set_xticks(x)
-            axes2[0, 0].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes2[0, 0], bars, revives_given)
+            axes2[0, 0].set_xticklabels(display_names, rotation=45, ha="right")
+            axes2[0, 0].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                               edgecolor='white', labelcolor='white')
+            self._add_grouped_bar_labels(axes2[0, 0], bars1, bars2,
+                                          revives_given, times_revived)
 
-            bars = axes2[0, 1].bar(x, times_revived, color=self.COLORS['teal'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes2[0, 1], "TIMES REVIVED")
+            # Time Played vs Time Dead (grouped)
+            bars1 = axes2[0, 1].bar(x - bar_width/2, time_played, bar_width,
+                                     color=self.COLORS['cyan'], label='Alive',
+                                     edgecolor='white', linewidth=0.5)
+            bars2 = axes2[0, 1].bar(x + bar_width/2, time_dead, bar_width,
+                                     color=self.COLORS['pink'], label='Dead',
+                                     edgecolor='white', linewidth=0.5)
+            self._style_axis(axes2[0, 1], "TIME ALIVE vs DEAD (minutes)")
             axes2[0, 1].set_xticks(x)
-            axes2[0, 1].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes2[0, 1], bars, times_revived)
+            axes2[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
+            axes2[0, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                               edgecolor='white', labelcolor='white')
+            self._add_grouped_bar_labels(axes2[0, 1], bars1, bars2,
+                                          time_played, time_dead, "{:.1f}")
 
-            bars = axes2[0, 2].bar(x, gibs, color=self.COLORS['red'],
+            # Gibs
+            bars = axes2[1, 0].bar(x, gibs, color=self.COLORS['red'],
                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes2[0, 2], "GIBS")
-            axes2[0, 2].set_xticks(x)
-            axes2[0, 2].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes2[0, 2], bars, gibs)
-
-            # Row 2: Headshots, Time Played, Time Dead
-            bars = axes2[1, 0].bar(x, headshots, color=self.COLORS['purple'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes2[1, 0], "HEADSHOTS")
+            self._style_axis(axes2[1, 0], "GIBS")
             axes2[1, 0].set_xticks(x)
-            axes2[1, 0].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes2[1, 0], bars, headshots)
+            axes2[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
+            self._add_bar_labels(axes2[1, 0], bars, gibs)
 
-            bars = axes2[1, 1].bar(x, time_played, color=self.COLORS['cyan'],
+            # Headshots
+            bars = axes2[1, 1].bar(x, headshots, color=self.COLORS['purple'],
                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes2[1, 1], "TIME PLAYED (minutes)")
+            self._style_axis(axes2[1, 1], "HEADSHOTS")
             axes2[1, 1].set_xticks(x)
-            axes2[1, 1].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes2[1, 1], bars, time_played, fmt="{:.1f}")
-
-            bars = axes2[1, 2].bar(x, time_dead, color=self.COLORS['pink'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes2[1, 2], "TIME DEAD (minutes)")
-            axes2[1, 2].set_xticks(x)
-            axes2[1, 2].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes2[1, 2], bars, time_dead, fmt="{:.1f}")
+            axes2[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
+            self._add_bar_labels(axes2[1, 1], bars, headshots)
 
             plt.tight_layout(rect=(0, 0, 1, 0.96))
             buf2 = io.BytesIO()
@@ -341,64 +365,52 @@ class SessionGraphGenerator:
             plt.close(fig2)
 
             # ═══════════════════════════════════════════════════════════════
-            # IMAGE 3: FRAGPOTENTIAL & PLAYSTYLE
+            # IMAGE 3: ADVANCED METRICS - 2x2
             # ═══════════════════════════════════════════════════════════════
-            fig3, axes3 = plt.subplots(2, 3, figsize=(16, 10))
+            fig3, axes3 = plt.subplots(2, 2, figsize=(14, 10))
             fig3.patch.set_facecolor(self.COLORS['bg_dark'])
             fig3.suptitle(
-                f"FRAGPOTENTIAL & PLAYSTYLE  -  {latest_date}",
+                f"ADVANCED METRICS  -  {latest_date}",
                 fontsize=18, fontweight="bold", color='white', y=0.98
             )
 
-            # Row 1: FragPotential, Denied Playtime, Damage Efficiency
+            # FragPotential
             fp_colors = [style.color for style in playstyles]
             bars = axes3[0, 0].bar(x, frag_potentials, color=fp_colors,
                                     edgecolor='white', linewidth=0.5)
             self._style_axis(axes3[0, 0], "FRAGPOTENTIAL (DPM While Alive)")
             axes3[0, 0].set_xticks(x)
-            axes3[0, 0].set_xticklabels(names, rotation=45, ha="right")
+            axes3[0, 0].set_xticklabels(display_names, rotation=45, ha="right")
             self._add_bar_labels(axes3[0, 0], bars, frag_potentials)
 
-            bars = axes3[0, 1].bar(x, denied_playtime, color=self.COLORS['orange'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes3[0, 1], "DENIED PLAYTIME (seconds)")
-            axes3[0, 1].set_xticks(x)
-            axes3[0, 1].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes3[0, 1], bars, denied_playtime)
-
+            # Damage Efficiency
             eff_colors = [
-                self.COLORS['green'] if e >= 1.5 
-                else self.COLORS['yellow'] if e >= 1.0 
+                self.COLORS['green'] if e >= 1.5
+                else self.COLORS['yellow'] if e >= 1.0
                 else self.COLORS['red']
                 for e in dmg_eff
             ]
-            bars = axes3[0, 2].bar(x, dmg_eff, color=eff_colors,
+            bars = axes3[0, 1].bar(x, dmg_eff, color=eff_colors,
                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes3[0, 2], "DAMAGE EFFICIENCY")
-            axes3[0, 2].axhline(y=1.0, color="white", linestyle="--", 
+            self._style_axis(axes3[0, 1], "DAMAGE EFFICIENCY")
+            axes3[0, 1].axhline(y=1.0, color="white", linestyle="--",
                                  alpha=0.5, linewidth=1)
-            axes3[0, 2].set_xticks(x)
-            axes3[0, 2].set_xticklabels(names, rotation=45, ha="right")
-            self._add_bar_labels(axes3[0, 2], bars, dmg_eff, fmt="{:.2f}x")
+            axes3[0, 1].set_xticks(x)
+            axes3[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
+            self._add_bar_labels(axes3[0, 1], bars, dmg_eff, fmt="{:.2f}x")
 
-            # Row 2: Player Playstyles (horizontal), Survival Rate, Legend
-            style_colors = [s.color for s in playstyles]
-            bars = axes3[1, 0].barh(names, frag_potentials, color=style_colors,
-                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes3[1, 0], "PLAYER PLAYSTYLES")
-            axes3[1, 0].invert_yaxis()
-            for bar, style in zip(bars, playstyles):
-                width = bar.get_width()
-                axes3[1, 0].text(
-                    width + (max(frag_potentials) * 0.02),
-                    bar.get_y() + bar.get_height() / 2,
-                    style.name_display,
-                    va='center', color='white', fontsize=9, fontweight='bold'
-                )
+            # Denied Playtime
+            bars = axes3[1, 0].bar(x, denied_playtime, color=self.COLORS['orange'],
+                                    edgecolor='white', linewidth=0.5)
+            self._style_axis(axes3[1, 0], "DENIED PLAYTIME (seconds)")
+            axes3[1, 0].set_xticks(x)
+            axes3[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
+            self._add_bar_labels(axes3[1, 0], bars, denied_playtime)
 
+            # Survival Rate
             surv_colors = [
-                self.COLORS['green'] if s >= 70 
-                else self.COLORS['yellow'] if s >= 50 
+                self.COLORS['green'] if s >= 70
+                else self.COLORS['yellow'] if s >= 50
                 else self.COLORS['red']
                 for s in survival_rate
             ]
@@ -406,17 +418,62 @@ class SessionGraphGenerator:
                                     edgecolor='white', linewidth=0.5)
             self._style_axis(axes3[1, 1], "SURVIVAL RATE (%)")
             axes3[1, 1].set_ylim(0, 100)
-            axes3[1, 1].axhline(y=50, color="white", linestyle="--", 
+            axes3[1, 1].axhline(y=50, color="white", linestyle="--",
                                  alpha=0.5, linewidth=1)
             axes3[1, 1].set_xticks(x)
-            axes3[1, 1].set_xticklabels(names, rotation=45, ha="right")
+            axes3[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
             self._add_bar_labels(axes3[1, 1], bars, survival_rate, fmt="{:.0f}%")
 
-            # Legend Panel
-            axes3[1, 2].set_facecolor(self.COLORS['bg_panel'])
-            axes3[1, 2].axis('off')
-            axes3[1, 2].set_title("PLAYSTYLE LEGEND", fontweight="bold",
-                                   color='white', fontsize=13, pad=10)
+            plt.tight_layout(rect=(0, 0, 1, 0.96))
+            buf3 = io.BytesIO()
+            plt.savefig(buf3, format="png", facecolor=self.COLORS['bg_dark'],
+                        dpi=120, bbox_inches="tight")
+            buf3.seek(0)
+            plt.close(fig3)
+
+            # ═══════════════════════════════════════════════════════════════
+            # IMAGE 4: PLAYSTYLE ANALYSIS - Full width bars + Legend
+            # ═══════════════════════════════════════════════════════════════
+            fig4, (ax4a, ax4b) = plt.subplots(1, 2, figsize=(16, 8),
+                                               gridspec_kw={'width_ratios': [2, 1]})
+            fig4.patch.set_facecolor(self.COLORS['bg_dark'])
+            fig4.suptitle(
+                f"PLAYSTYLE ANALYSIS  -  {latest_date}",
+                fontsize=18, fontweight="bold", color='white', y=0.98
+            )
+
+            # Player Playstyles (horizontal bars)
+            style_colors = [s.color for s in playstyles]
+            y_pos = np.arange(n_players)
+            bars = ax4a.barh(y_pos, frag_potentials, color=style_colors,
+                              edgecolor='white', linewidth=0.5)
+            ax4a.set_yticks(y_pos)
+            ax4a.set_yticklabels(display_names, color='white', fontsize=10)
+            ax4a.invert_yaxis()
+            ax4a.set_facecolor(self.COLORS['bg_panel'])
+            ax4a.set_title("PLAYER PLAYSTYLES", fontweight="bold",
+                           color='white', fontsize=14, pad=10)
+            ax4a.set_xlabel("FragPotential", color='white', fontsize=11)
+            ax4a.tick_params(colors='white')
+            for spine in ['bottom', 'left']:
+                ax4a.spines[spine].set_color('#404249')
+            for spine in ['top', 'right']:
+                ax4a.spines[spine].set_visible(False)
+            ax4a.grid(True, alpha=0.15, color='white', axis='x', linestyle='--')
+
+            # Add playstyle labels
+            for bar, style, fp in zip(bars, playstyles, frag_potentials):
+                width = bar.get_width()
+                ax4a.text(width + (max(frag_potentials) * 0.02),
+                          bar.get_y() + bar.get_height() / 2,
+                          f"{style.name_display} ({int(fp)})",
+                          va='center', color='white', fontsize=9, fontweight='bold')
+
+            # Playstyle Legend
+            ax4b.set_facecolor(self.COLORS['bg_panel'])
+            ax4b.axis('off')
+            ax4b.set_title("PLAYSTYLE LEGEND", fontweight="bold",
+                           color='white', fontsize=14, pad=10)
 
             legend_items = [
                 ("FRAGGER", "#E74C3C", "High K/D + High FragPotential"),
@@ -429,48 +486,44 @@ class SessionGraphGenerator:
                 ("BALANCED", "#95A5A6", "All-around player"),
             ]
 
-            y_pos = 0.88
+            y_pos_legend = 0.92
             for name, color, desc in legend_items:
-                axes3[1, 2].add_patch(mpatches.FancyBboxPatch(
-                    (0.03, y_pos - 0.04), 0.06, 0.07,
+                ax4b.add_patch(mpatches.FancyBboxPatch(
+                    (0.05, y_pos_legend - 0.04), 0.08, 0.06,
                     boxstyle="round,pad=0.01",
                     facecolor=color, edgecolor='white', linewidth=0.5,
-                    transform=axes3[1, 2].transAxes
+                    transform=ax4b.transAxes
                 ))
-                axes3[1, 2].text(
-                    0.12, y_pos, f"{name}",
-                    transform=axes3[1, 2].transAxes,
-                    color=color, fontsize=11, fontweight='bold', va='center'
-                )
-                axes3[1, 2].text(
-                    0.12, y_pos - 0.045, desc,
-                    transform=axes3[1, 2].transAxes,
-                    color='#B0B0B0', fontsize=9, va='center'
-                )
-                y_pos -= 0.115
+                ax4b.text(0.16, y_pos_legend, f"{name}",
+                          transform=ax4b.transAxes,
+                          color=color, fontsize=12, fontweight='bold', va='center')
+                ax4b.text(0.16, y_pos_legend - 0.04, desc,
+                          transform=ax4b.transAxes,
+                          color='#B0B0B0', fontsize=9, va='center')
+                y_pos_legend -= 0.11
 
             plt.tight_layout(rect=(0, 0, 1, 0.96))
-            buf3 = io.BytesIO()
-            plt.savefig(buf3, format="png", facecolor=self.COLORS['bg_dark'],
+            buf4 = io.BytesIO()
+            plt.savefig(buf4, format="png", facecolor=self.COLORS['bg_dark'],
                         dpi=120, bbox_inches="tight")
-            buf3.seek(0)
-            plt.close(fig3)
+            buf4.seek(0)
+            plt.close(fig4)
 
             # ═══════════════════════════════════════════════════════════════
-            # IMAGE 4: PERFORMANCE TIMELINE
+            # IMAGE 5: DPM TIMELINE
             # ═══════════════════════════════════════════════════════════════
-            buf4 = await self._generate_timeline_graph(
-                latest_date, session_ids, session_ids_str, names[:8]
+            buf5 = await self._generate_timeline_graph(
+                latest_date, session_ids, session_ids_str, names[:16]
             )
 
-            return buf1, buf2, buf3, buf4
+            return buf1, buf2, buf3, buf4, buf5
 
         except ImportError as e:
             logger.warning(f"matplotlib not available: {e}")
-            return None, None, None, None
+            return None, None, None, None, None
         except Exception as e:
             logger.exception(f"Error generating performance graphs: {e}")
-            return None, None, None, None
+            return None, None, None, None, None
 
     async def _generate_timeline_graph(
         self,
@@ -482,16 +535,8 @@ class SessionGraphGenerator:
         """
         Generate Performance Timeline showing DPM evolution
         across all rounds (Map1-R1, Map1-R2, Map2-R1, Map2-R2, etc.)
-        
-        Shows:
-        - Line graph of FragPotential per round for top players
-        - Peak performance markers
-        - Form trend classification (Rising, Fading, Consistent, Volatile)
         """
         try:
-            # Get per-round data for timeline
-            # Order by round_date + round_time to get true chronological order
-            # Generate placeholders for IN clause
             placeholders = ','.join(['?' for _ in session_ids])
             query = f"""
                 SELECT
@@ -518,11 +563,11 @@ class SessionGraphGenerator:
             if not all_rounds:
                 return None
 
-            # Build round order (Map1-R1, Map1-R2, Map2-R1, ...)
+            # Build round order
             round_order = []
             round_labels = []
             seen_rounds = set()
-            
+
             for row in all_rounds:
                 round_id = row[9]
                 if round_id not in seen_rounds:
@@ -532,7 +577,7 @@ class SessionGraphGenerator:
                     round_order.append(round_id)
                     round_labels.append(f"{map_name}\nR{round_num}")
 
-            # Calculate DPM (Damage Per Minute) per player per round
+            # Calculate DPM per player per round
             player_timelines = {}
             for name in top_player_names:
                 player_timelines[name] = {rid: None for rid in round_order}
@@ -541,12 +586,11 @@ class SessionGraphGenerator:
                 name = row[0]
                 if name not in top_player_names:
                     continue
-                    
+
                 round_id = row[9]
                 dmg = row[4] or 0
                 time_sec = row[5] or 0
 
-                # Calculate DPM: damage per minute played
                 if time_sec > 0:
                     dpm = (dmg / time_sec) * 60
                 else:
@@ -554,7 +598,7 @@ class SessionGraphGenerator:
                 player_timelines[name][round_id] = dpm
 
             # Create figure
-            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12),
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 12),
                                             gridspec_kw={'height_ratios': [3, 1]})
             fig.patch.set_facecolor(self.COLORS['bg_dark'])
             fig.suptitle(
@@ -562,38 +606,34 @@ class SessionGraphGenerator:
                 fontsize=18, fontweight="bold", color='white', y=0.98
             )
 
-            # Color palette for players
+            # Color palette
             player_colors = [
                 '#E74C3C', '#3498DB', '#2ECC71', '#F39C12',
-                '#9B59B6', '#1ABC9C', '#E91E63', '#FEE75C'
+                '#9B59B6', '#1ABC9C', '#E91E63', '#FEE75C',
+                '#00BCD4', '#FF5722', '#8BC34A', '#607D8B',
+                '#FF6B6B', '#4ECDC4', '#C9B037', '#BA68C8'
             ]
 
             x_positions = range(len(round_order))
-            
-            # Plot each player's timeline
-            peak_data = {}  # Store peak info for each player
-            trend_data = {}  # Store trend classification
-            
+            peak_data = {}
+            trend_data = {}
+
             for idx, name in enumerate(top_player_names):
                 timeline = player_timelines.get(name, {})
                 y_values = [timeline.get(rid) for rid in round_order]
-                
-                # Filter out None values for plotting
+
                 valid_points = [(i, v) for i, v in enumerate(y_values) if v is not None]
                 if not valid_points:
                     continue
-                
+
                 x_valid = [p[0] for p in valid_points]
                 y_valid = [p[1] for p in valid_points]
-                
+
                 color = player_colors[idx % len(player_colors)]
-                
-                # Plot line
+
                 ax1.plot(x_valid, y_valid, color=color, linewidth=2.5,
-                         marker='o', markersize=6, label=name[:10],
-                         alpha=0.9)
-                
-                # Find and mark peak
+                         marker='o', markersize=6, label=name[:12], alpha=0.9)
+
                 if y_valid:
                     peak_idx = y_valid.index(max(y_valid))
                     peak_x = x_valid[peak_idx]
@@ -602,18 +642,16 @@ class SessionGraphGenerator:
                                 marker='*', zorder=5, edgecolors='white',
                                 linewidths=1)
                     peak_data[name] = (peak_x, peak_y, round_labels[peak_x])
-                    
-                    # Calculate trend (first half vs second half)
+
                     if len(y_valid) >= 4:
                         mid = len(y_valid) // 2
                         first_half_avg = sum(y_valid[:mid]) / mid
                         second_half_avg = sum(y_valid[mid:]) / (len(y_valid) - mid)
-                        
-                        # Calculate volatility
+
                         avg_all = sum(y_valid) / len(y_valid)
                         variance = sum((v - avg_all)**2 for v in y_valid) / len(y_valid)
                         volatility = (variance ** 0.5) / max(1, avg_all) * 100
-                        
+
                         if volatility > 40:
                             trend_data[name] = ("VOLATILE", "🎢", self.COLORS['orange'])
                         elif second_half_avg > first_half_avg * 1.15:
@@ -627,8 +665,8 @@ class SessionGraphGenerator:
 
             # Style main graph
             ax1.set_facecolor(self.COLORS['bg_panel'])
-            ax1.set_ylabel("DPM (Damage Per Minute)", color='white', fontsize=12,
-                           fontweight='bold')
+            ax1.set_ylabel("DPM (Damage Per Minute)", color='white',
+                           fontsize=12, fontweight='bold')
             ax1.tick_params(colors='white', labelsize=9)
             ax1.set_xticks(x_positions)
             ax1.set_xticklabels(round_labels, rotation=45, ha='right',
@@ -638,53 +676,45 @@ class SessionGraphGenerator:
                 ax1.spines[spine].set_color('#404249')
             for spine in ['top', 'right']:
                 ax1.spines[spine].set_visible(False)
-            
-            # Add legend
-            legend = ax1.legend(loc='upper left', facecolor=self.COLORS['bg_panel'],
-                                edgecolor='white', labelcolor='white',
-                                fontsize=9, ncol=2)
-            legend.get_frame().set_alpha(0.9)
 
-            # Bottom panel: Form/Trend Summary
+            ax1.legend(loc='upper left', bbox_to_anchor=(1.01, 1),
+                       facecolor=self.COLORS['bg_panel'],
+                       edgecolor='white', labelcolor='white',
+                       fontsize=9, ncol=1, framealpha=0.9)
+
+            # Bottom panel: Form Summary
             ax2.set_facecolor(self.COLORS['bg_panel'])
             ax2.axis('off')
             ax2.set_title("SESSION FORM ANALYSIS", fontweight="bold",
                           color='white', fontsize=13, pad=10)
 
-            # Create form summary table
-            for idx, name in enumerate(top_player_names[:8]):
+            for idx, name in enumerate(top_player_names[:16]):
                 col = idx % 4
                 row = idx // 4
-                
+
                 x_pos = 0.02 + col * 0.25
                 y_pos = 0.7 - row * 0.45
-                
-                # Player name
+
                 ax2.text(x_pos, y_pos, name[:12], transform=ax2.transAxes,
-                         color='white', fontsize=11, fontweight='bold',
-                         va='top')
-                
-                # Trend badge
+                         color='white', fontsize=11, fontweight='bold', va='top')
+
                 if name in trend_data:
                     trend_name, emoji, color = trend_data[name]
                     ax2.text(x_pos, y_pos - 0.12, f"{trend_name}",
                              transform=ax2.transAxes, color=color,
                              fontsize=10, fontweight='bold', va='top')
-                
-                # Peak info
+
                 if name in peak_data:
                     px, py, plabel = peak_data[name]
                     clean_label = plabel.replace('\n', ' ')
-                    ax2.text(x_pos, y_pos - 0.24,
-                             f"Peak: {int(py)} DPM",
+                    ax2.text(x_pos, y_pos - 0.24, f"Peak: {int(py)} DPM",
                              transform=ax2.transAxes, color='#B0B0B0',
                              fontsize=9, va='top')
-                    ax2.text(x_pos, y_pos - 0.34,
-                             f"@ {clean_label}",
+                    ax2.text(x_pos, y_pos - 0.34, f"@ {clean_label}",
                              transform=ax2.transAxes, color='#808080',
                              fontsize=8, va='top')
 
-            plt.tight_layout(rect=(0, 0, 1, 0.96))
+            plt.tight_layout(rect=(0, 0, 0.85, 0.96))
             buf = io.BytesIO()
             plt.savefig(buf, format="png", facecolor=self.COLORS['bg_dark'],
                         dpi=120, bbox_inches="tight")

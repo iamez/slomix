@@ -827,6 +827,12 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 if not query:
                     return None
 
+                # Format query with pagination values
+                query = query.format(
+                    players_per_page=players_per_page,
+                    offset=offset
+                )
+
                 try:
                     results = await self.bot.db_adapter.fetch_all(query)
                 except Exception:
