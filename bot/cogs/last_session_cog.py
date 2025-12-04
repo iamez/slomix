@@ -145,77 +145,93 @@ class LastSessionCog(commands.Cog):
                 return
 
             if subcommand and subcommand.lower() in ("graphs", "graph", "charts"):
-                # Generate performance graphs (returns 4 images)
+                # Generate performance graphs (returns 5 images)
                 result = await self.graph_generator.generate_performance_graphs(
                     latest_date, session_ids, session_ids_str
                 )
-                combat_img, support_img, fp_img, timeline_img = result
+                offense_img, defense_img, metrics_img, playstyle_img, timeline_img = result
 
-                if combat_img and support_img and fp_img:
-                    # Image 1: Combat Performance
+                if offense_img and defense_img and metrics_img and playstyle_img:
+                    # Image 1: Combat Stats (Offense)
                     file1 = discord.File(
-                        combat_img,
-                        filename=f"session_{latest_date}_combat.png"
+                        offense_img,
+                        filename=f"session_{latest_date}_offense.png"
                     )
                     embed1 = discord.Embed(
-                        title=f"COMBAT PERFORMANCE  -  {latest_date}",
-                        description=f"Top 10 players across {total_maps} maps",
+                        title=f"COMBAT STATS (OFFENSE)  -  {latest_date}",
+                        description=f"Kills/Deaths, Damage, K/D, DPM - Top players across {total_maps} maps",
                         color=0x5865F2,
                         timestamp=datetime.now()
                     )
                     embed1.set_image(
-                        url=f"attachment://session_{latest_date}_combat.png"
+                        url=f"attachment://session_{latest_date}_offense.png"
                     )
                     await ctx.send(embed=embed1, file=file1)
 
-                    # Image 2: Survivability & Support
+                    # Image 2: Combat Stats (Defense/Support)
                     file2 = discord.File(
-                        support_img,
-                        filename=f"session_{latest_date}_support.png"
+                        defense_img,
+                        filename=f"session_{latest_date}_defense.png"
                     )
                     embed2 = discord.Embed(
-                        title=f"SURVIVABILITY & SUPPORT  -  {latest_date}",
-                        description="Revives, gibs, headshots, and time stats",
+                        title=f"COMBAT STATS (DEFENSE/SUPPORT)  -  {latest_date}",
+                        description="Revives, Time Alive/Dead, Gibs, Headshots",
                         color=0x57F287,
                         timestamp=datetime.now()
                     )
                     embed2.set_image(
-                        url=f"attachment://session_{latest_date}_support.png"
+                        url=f"attachment://session_{latest_date}_defense.png"
                     )
                     await ctx.send(embed=embed2, file=file2)
 
-                    # Image 3: FragPotential & Playstyle
+                    # Image 3: Advanced Metrics
                     file3 = discord.File(
-                        fp_img,
-                        filename=f"session_{latest_date}_playstyle.png"
+                        metrics_img,
+                        filename=f"session_{latest_date}_metrics.png"
                     )
                     embed3 = discord.Embed(
-                        title=f"FRAGPOTENTIAL & PLAYSTYLE  -  {latest_date}",
-                        description="DPM while alive + playstyle analysis",
+                        title=f"ADVANCED METRICS  -  {latest_date}",
+                        description="FragPotential, Damage Efficiency, Denied Playtime, Survival Rate",
                         color=0xE74C3C,
                         timestamp=datetime.now()
                     )
                     embed3.set_image(
-                        url=f"attachment://session_{latest_date}_playstyle.png"
+                        url=f"attachment://session_{latest_date}_metrics.png"
                     )
                     await ctx.send(embed=embed3, file=file3)
 
-                    # Image 4: Performance Timeline (if available)
+                    # Image 4: Playstyle Analysis
+                    file4 = discord.File(
+                        playstyle_img,
+                        filename=f"session_{latest_date}_playstyle.png"
+                    )
+                    embed4 = discord.Embed(
+                        title=f"PLAYSTYLE ANALYSIS  -  {latest_date}",
+                        description="Player playstyles based on combat metrics",
+                        color=0x9B59B6,
+                        timestamp=datetime.now()
+                    )
+                    embed4.set_image(
+                        url=f"attachment://session_{latest_date}_playstyle.png"
+                    )
+                    await ctx.send(embed=embed4, file=file4)
+
+                    # Image 5: Performance Timeline (the favorite!)
                     if timeline_img:
-                        file4 = discord.File(
+                        file5 = discord.File(
                             timeline_img,
                             filename=f"session_{latest_date}_timeline.png"
                         )
-                        embed4 = discord.Embed(
-                            title=f"PERFORMANCE TIMELINE  -  {latest_date}",
-                            description="DPM (Damage Per Minute) evolution across rounds",
+                        embed5 = discord.Embed(
+                            title=f"DPM TIMELINE  -  {latest_date}",
+                            description="DPM evolution across rounds - Performance trends",
                             color=0xF39C12,
                             timestamp=datetime.now()
                         )
-                        embed4.set_image(
+                        embed5.set_image(
                             url=f"attachment://session_{latest_date}_timeline.png"
                         )
-                        await ctx.send(embed=embed4, file=file4)
+                        await ctx.send(embed=embed5, file=file5)
                 else:
                     await ctx.send(
                         "Could not generate performance graphs for this session"
