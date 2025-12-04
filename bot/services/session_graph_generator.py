@@ -175,8 +175,14 @@ class SessionGraphGenerator:
             times_revived = [p[9] or 0 for p in top_players]
             gibs = [p[10] or 0 for p in top_players]
             headshots = [p[11] or 0 for p in top_players]
-            denied_playtime = [p[12] or 0 for p in top_players]
+            denied_playtime_sec = [p[12] or 0 for p in top_players]
             rounds_played = [p[14] or 1 for p in top_players]
+            
+            # Calculate denied playtime as percentage of total time played
+            denied_playtime_pct = [
+                (dp / max(1, tp)) * 100 
+                for dp, tp in zip(denied_playtime_sec, time_played_sec)
+            ]
 
             # Calculate derived metrics
             kd_ratios = [k / max(1, d) for k, d in zip(kills, deaths)]
@@ -399,13 +405,21 @@ class SessionGraphGenerator:
             axes3[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
             self._add_bar_labels(axes3[0, 1], bars, dmg_eff, fmt="{:.2f}x")
 
-            # Denied Playtime
-            bars = axes3[1, 0].bar(x, denied_playtime, color=self.COLORS['orange'],
+            # Denied Playtime (as percentage)
+            denied_colors = [
+                self.COLORS['red'] if d >= 30
+                else self.COLORS['orange'] if d >= 15
+                else self.COLORS['green']
+                for d in denied_playtime_pct
+            ]
+            bars = axes3[1, 0].bar(x, denied_playtime_pct, color=denied_colors,
                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes3[1, 0], "DENIED PLAYTIME (seconds)")
+            self._style_axis(axes3[1, 0], "TIME DENIED (%)")
+            axes3[1, 0].set_ylim(0, max(50, max(denied_playtime_pct) * 1.2))
             axes3[1, 0].set_xticks(x)
             axes3[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
-            self._add_bar_labels(axes3[1, 0], bars, denied_playtime)
+            self._add_bar_labels(axes3[1, 0], bars, denied_playtime_pct, 
+                                 fmt="{:.1f}%")
 
             # Survival Rate
             surv_colors = [
