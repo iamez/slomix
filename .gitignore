@@ -1,9 +1,25 @@
-# Environment & Secrets
+# ============================================
+# ET:LEGACY DISCORD BOT - GITIGNORE
+# ============================================
+# This file controls what gets pushed to GitHub
+# Files already tracked need: git rm --cached <file>
+# ============================================
+
+# ============================================
+# ENVIRONMENT & SECRETS
+# ============================================
 .env
+.prodenv
+.envcopy
 *.pem
 *.key
+bot_config.json
+config.json
+fiveeyes_config.json
 
-# Python
+# ============================================
+# PYTHON
+# ============================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -13,8 +29,11 @@ __pycache__/
 venv/
 ENV/
 env/
+.pytest_cache/
 
-# Database Files
+# ============================================
+# DATABASE FILES (NEVER COMMIT)
+# ============================================
 *.db
 *.db-shm
 *.db-wal
@@ -23,15 +42,26 @@ env/
 *.bak
 *.backup
 *BACKUP*
+*.sql
+!migrations/*.sql
 
-# Logs
+# Root database backups
+etlegacy_production.db.*
+etlegacy_backup.sql
+
+# ============================================
+# LOGS
+# ============================================
 *.log
 logs/
 bot/logs/
 
+# ============================================
 # IDE & OS
+# ============================================
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
@@ -40,16 +70,100 @@ Thumbs.db
 desktop.ini
 
 # ============================================
-# EXCLUDE ALL ROOT TEST/ANALYSIS FILES
+# ARCHIVES & BINARIES (NEVER COMMIT)
 # ============================================
-/*.py
-/*.txt
-/*.json
-/*.html
-/*.sql
-/*.md.backup
+*.zip
+*.tar.gz
+*.rar
+*.7z
 
-# Exclude Test/Analysis/Backup Directories
+# ============================================
+# IMAGES (dev screenshots, not needed)
+# ============================================
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+
+# ============================================
+# ROOT-LEVEL DEV/TEST FILES
+# ============================================
+# Analysis & validation outputs
+analysis_*.txt
+*_analysis*.txt
+*_validation*.txt
+*_discrepancies*.json
+*_log*.txt
+*_log*.json
+overnight_*.txt
+nov2_*.txt
+
+# Development HTML reports
+*.html
+!docs/*.html
+
+# Field mapping dev files
+field_*.txt
+field_*.json
+field_*.html
+FIELD_MAPPING.json
+
+# Status/presentation files
+*_PRESENTATION.html
+*_EXPLAINED.html
+*_EXPLAINED.txt
+*_REPORT.html
+
+# Git/deployment notes (use docs/ instead)
+GIT_*.txt
+GITHUB_*.txt
+DEPLOYMENT_*.txt
+DOCS_STATUS*.txt
+CURRENT_DB_SCHEMA.txt
+FLOW_DIAGRAM.txt
+
+# Temp development files
+cmon.txt
+check.vps.*.txt
+rebuild_inputs.txt
+backup_table_schemas.txt
+debug_fp.py
+"field mappings.txt"
+team_check_output.txt
+test_out.txt
+validation_*.txt
+stats_validation_*.json
+req2.txt
+package.json
+package-lock.json
+
+# Migrations (DB-specific, not needed in repo)
+migrations/
+
+# Deprecated install docs
+INSTALL_*.md
+
+# ============================================
+# ROOT-LEVEL SCRIPTS (use install.sh only)
+# ============================================
+# Windows scripts (dev only)
+*.bat
+*.ps1
+
+# Redundant Linux scripts (consolidated into install.sh)
+setup_linux_bot.sh
+setup_linux_env.sh
+setup_local_db.ps1
+setup_postgres_simple.ps1
+vps_install.sh
+vps_setup.sh
+drop_tables.sh
+check_before_commit.sh
+
+# ============================================
+# DEV DIRECTORIES (NEVER COMMIT)
+# ============================================
 /analytics/
 /archive/
 /asdf/
@@ -61,7 +175,6 @@ desktop.ini
 /dev_tools/
 /fiveeyes/
 /local_stats/
-/migrations/
 /node_modules/
 /prompt_instructions/
 /scripts/
@@ -81,7 +194,6 @@ desktop.ini
 # ============================================
 # BOT DIRECTORY EXCLUSIONS
 # ============================================
-# Exclude bot database files
 bot/*.db
 bot/*.db.*
 bot/*.bak
@@ -91,56 +203,43 @@ bot/BACKUP_*
 bot/*.cleaned.py
 bot/ultimate_bot.py.backup*
 bot/ultimate_bot.py.bak
-
-# Exclude bot test data
 bot/local_stats/
 bot/tools/
 bot/backups/
 bot/diagnostics/
-
-# Exclude bot config (use .env instead)
 bot/config.json
 bot/fiveeyes_config.json
-
-# Exclude bot helper/test scripts
-bot/automation_architecture.py
-bot/automation_enhancements.py
-bot/BOT_CRITICAL_FIXES.py
-bot/check_db.py
-bot/helper_methods_to_insert.txt
-bot/hybrid_processing_helpers.py
-bot/insert_helpers.py
-bot/integrate_automation.py
-bot/last_session_helpers.py
-bot/last_session_redesigned_impl.py
-bot/remove_duplicates.py
-bot/retro_text_stats.py
-bot/retro_viz.py
-bot/setup_automation.py
-bot/test_automation.py
 bot/schema.json
 bot/schema.sql
 bot/README_AUTOMATION.md
 
 # ============================================
-# TOOLS DIRECTORY - Keep ONLY Essentials
+# TOOLS DIRECTORY - ONLY ESSENTIALS
 # ============================================
 tools/*
 !tools/__init__.py
 !tools/stopwatch_scoring.py
-!tools/postgresql_db_manager.py
 
 # ============================================
-# KEEP ESSENTIAL FILES (override exclusions)
+# DOCS ARCHIVE (historical, not needed)
+# ============================================
+docs/archive/
+
+# ============================================
+# KEEP ESSENTIAL FILES
 # ============================================
 !README.md
 !requirements.txt
 !.env.example
 !.gitignore
 !postgresql_database_manager.py
-.prodenv
-.envcopy
+!install.sh
+!start_bot.sh
+!update_bot.sh
+!postgres_setup.md
 
-
-#Ignore vscode AI rules
-.github\instructions\codacy.instructions.md
+# ============================================
+# COPILOT/AI INSTRUCTIONS (keep these)
+# ============================================
+!.github/copilot-instructions.md
+!.github/instructions/
