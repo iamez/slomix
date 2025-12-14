@@ -171,8 +171,20 @@ class BotConfig:
         self.min_players_for_prediction: int = int(self._get_config('MIN_PLAYERS_FOR_PREDICTION', '6'))
         self.min_guid_coverage: float = float(self._get_config('MIN_GUID_COVERAGE', '0.5'))  # 50% must have linked GUIDs
 
-        # ==================== WEBSOCKET PUSH NOTIFICATIONS ====================
+        # ==================== WEBHOOK TRIGGER NOTIFICATIONS ====================
+        # VPS sends webhook to Discord, bot listens and processes
+        self.webhook_trigger_channel_id: int = int(self._get_config('WEBHOOK_TRIGGER_CHANNEL_ID', '0'))
+        self.webhook_trigger_username: str = self._get_config('WEBHOOK_TRIGGER_USERNAME', 'ET:Legacy Stats')
+
+        # Webhook ID whitelist (REQUIRED for security)
+        webhook_whitelist_raw = self._get_config('WEBHOOK_TRIGGER_WHITELIST', '')
+        self.webhook_trigger_whitelist: list = [
+            id.strip() for id in webhook_whitelist_raw.split(',') if id.strip()
+        ]
+        
+        # ==================== WEBSOCKET PUSH NOTIFICATIONS (DEPRECATED) ====================
         # Bot connects OUT to VPS WebSocket server (no ports needed on bot machine)
+        # NOTE: Replaced by webhook trigger approach (Dec 2025)
         self.ws_enabled: bool = self._get_config('WS_ENABLED', 'false').lower() == 'true'
         self.ws_host: str = self._get_config('WS_HOST', '')  # VPS hostname/IP
         self.ws_port: int = int(self._get_config('WS_PORT', '8765'))

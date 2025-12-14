@@ -233,6 +233,13 @@ class UltimateETLegacyBot(commands.Bot):
         self.ssh_check_counter = 0  # Tracks cycles for interval-based checking
         self.last_file_download_time = None  # Track last file download for grace period logic
 
+        # Webhook rate limiting (prevent DoS)
+        from collections import defaultdict, deque
+
+        self._webhook_rate_limit = defaultdict(deque)
+        self._webhook_rate_limit_max = 5  # Max 5 triggers per minute
+        self._webhook_rate_limit_window = 60  # Seconds
+
         # Load channel configuration from config object
         self.gaming_voice_channels = self.config.gaming_voice_channels
         self.bot_command_channels = self.config.bot_command_channels
@@ -1436,11 +1443,28 @@ class UltimateETLegacyBot(commands.Bot):
         if not self.monitoring or not self.ssh_enabled:
             return
 
-        # ========== SKIP IF WEBSOCKET IS CONNECTED ==========
-        # When WebSocket push is active, no need for SSH polling
-        if (hasattr(self, 'ws_client') and self.ws_client 
-                and self.ws_client.is_connected):
-            logger.debug("⏭️ Skipping SSH check - WebSocket push is active")
+        # ========== WEBSOCKET STATUS CHECK ==========
+        # WebSocket support is DEPRECATED (Dec 2025) - Discord Webhook approach replaces it
+        # Keeping this check for backwards compatibility only
+        # VPS now uses stats_webhook_notify.py to POST directly to Discord
+        ws_active = False
+        if hasattr(self, 'ws_client') and self.ws_client and self.config.ws_enabled:
+            ws_active = getattr(self.ws_client, 'is_connected', False)
+            # Also check if we've received data recently (within 5 min)
+            if ws_active and hasattr(self.ws_client, 'last_notification'):
+                last_notif = self.ws_client.last_notification
+                if last_notif:
+                    time_since_notif = (datetime.now() - last_notif).total_seconds()
+                    # If no notification in 5 min, WebSocket might be stale
+                    if time_since_notif > 300:
+                        ws_active = False
+                        logger.info(
+                            f"⚠️ WebSocket connected but no data in {time_since_notif:.0f}s - using SSH fallback"
+                        )
+
+        if ws_active:
+            # WebSocket is working - skip SSH polling
+            logger.debug("🔌 WebSocket active - skipping SSH polling this cycle")
             return
 
         try:
@@ -1460,7 +1484,10 @@ class UltimateETLegacyBot(commands.Bot):
             
             # Skip SSH check during dead hours (02:00-11:00)
             if 2 <= hour < 11:
-                logger.debug(f"⏸️  Dead hours ({hour:02d}:00 CET) - skipping SSH check")
+                # Log once per hour instead of every 60s
+                if not hasattr(self, '_last_dead_hour_log') or self._last_dead_hour_log != hour:
+                    self._last_dead_hour_log = hour
+                    logger.info(f"⏸️ Dead hours ({hour:02d}:00 CET) - SSH checks paused until 11:00")
                 return
             
             # ========== VOICE DETECTION (Player Count Check) ==========
@@ -1705,6 +1732,12 @@ class UltimateETLegacyBot(commands.Bot):
 
     async def on_message(self, message):
         """Process messages and filter by allowed channels"""
+        # ========== WEBHOOK TRIGGER HANDLER ==========
+        # Check if this is a webhook notification from VPS to trigger stats processing
+        # Webhook posts to control channel, bot processes and posts to production channel
+        if await self._handle_webhook_trigger(message):
+            return  # Handled as webhook trigger, don't process as command
+        
         # Ignore bot's own messages
         if message.author.bot:
             return
@@ -1720,6 +1753,258 @@ class UltimateETLegacyBot(commands.Bot):
         # Process commands normally
         await self.process_commands(message)
 
+    def _check_webhook_rate_limit(self, webhook_id: int) -> bool:
+        """Rate limit: Max 5 triggers per 60 seconds per webhook."""
+        from datetime import timedelta
+
+        now = datetime.now()
+        window_start = now - timedelta(seconds=self._webhook_rate_limit_window)
+
+        timestamps = self._webhook_rate_limit[webhook_id]
+
+        # Remove old timestamps
+        while timestamps and timestamps[0] < window_start:
+            timestamps.popleft()
+
+        # Check limit
+        if len(timestamps) >= self._webhook_rate_limit_max:
+            wait_time = (timestamps[0] + timedelta(seconds=self._webhook_rate_limit_window) - now).total_seconds()
+            logger.warning(
+                f"🚨 Webhook {webhook_id} rate limited "
+                f"({len(timestamps)} triggers in {self._webhook_rate_limit_window}s). "
+                f"Retry in {wait_time:.1f}s"
+            )
+            return False
+
+        timestamps.append(now)
+        return True
+
+    def _validate_stats_filename(self, filename: str) -> bool:
+        """
+        Strict validation for stats filenames.
+
+        Valid format: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+        Example: 2025-12-09-221829-etl_sp_delivery-round-1.txt
+
+        Security: Prevents path traversal, injection, null bytes
+        """
+        import re
+
+        # Length check (prevent DoS)
+        if len(filename) > 255:
+            logger.warning(f"🚨 Filename too long: {len(filename)} chars")
+            return False
+
+        # Path traversal checks
+        if any(char in filename for char in ['/', '\\', '\0']):
+            logger.warning(f"🚨 Invalid characters in filename: {filename}")
+            return False
+
+        if '..' in filename:
+            logger.warning(f"🚨 Parent directory reference: {filename}")
+            return False
+
+        # Strict pattern: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+        pattern = r'^(\d{4})-(\d{2})-(\d{2})-(\d{6})-([a-zA-Z0-9_-]+)-round-(\d+)\.txt$'
+        match = re.match(pattern, filename)
+
+        if not match:
+            logger.warning(f"🚨 Invalid filename format: {filename}")
+            return False
+
+        # Validate components
+        year, month, day, timestamp, map_name, round_num = match.groups()
+
+        if not (2020 <= int(year) <= 2035):
+            return False
+        if not (1 <= int(month) <= 12):
+            return False
+        if not (1 <= int(day) <= 31):
+            return False
+        if not (1 <= int(round_num) <= 10):
+            return False
+        if len(map_name) > 50:
+            return False
+
+        # Validate timestamp (HHMMSS)
+        hour = int(timestamp[0:2])
+        minute = int(timestamp[2:4])
+        second = int(timestamp[4:6])
+        if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
+            return False
+
+        logger.debug(f"✅ Filename validated: {filename}")
+        return True
+
+    async def _handle_webhook_trigger(self, message) -> bool:
+        """
+        Handle webhook trigger messages from VPS.
+        
+        VPS webhook posts to control channel with filename.
+        Bot extracts filename, downloads via SSH, processes, and posts stats.
+        
+        Returns True if message was handled as webhook trigger.
+        """
+        # Check if webhook trigger is configured
+        trigger_channel_id = self.config.webhook_trigger_channel_id
+        if not trigger_channel_id:
+            return False
+        
+        # Check if message is in the trigger channel
+        if message.channel.id != trigger_channel_id:
+            return False
+
+        # Check if message is from a webhook (webhooks have webhook_id)
+        if not message.webhook_id:
+            return False
+
+        # CRITICAL: Webhook ID whitelist enforcement
+        webhook_whitelist = self.config.webhook_trigger_whitelist
+        if not webhook_whitelist:
+            logger.error("⚠️ Webhook trigger disabled: WEBHOOK_TRIGGER_WHITELIST not configured")
+            return False
+
+        if str(message.webhook_id) not in webhook_whitelist:
+            logger.warning(
+                f"🚨 SECURITY: Unauthorized webhook {message.webhook_id} "
+                f"attempted trigger in channel {message.channel.id}"
+            )
+            return False
+
+        # Check username (additional layer)
+        expected_username = self.config.webhook_trigger_username
+        if expected_username and message.author.name != expected_username:
+            logger.warning(f"🚨 Username mismatch: {message.author.name}")
+            return False
+
+        # HIGH: Rate limit check
+        if not self._check_webhook_rate_limit(message.webhook_id):
+            return False
+
+        # Extract filename from message content
+        # Format: 📊 `2025-12-09-221829-etl_sp_delivery-round-1.txt`
+        filename = None
+        if message.content:
+            import re
+            match = re.search(r'`([^`]+\.txt)`', message.content)
+            if match:
+                filename = match.group(1)
+        
+        if not filename:
+            logger.debug(f"No filename found in webhook message")
+            return False
+
+        # CRITICAL: Validate filename for security
+        if not self._validate_stats_filename(filename):
+            logger.error(f"🚨 SECURITY: Invalid filename from webhook: {filename}")
+            return False
+
+        logger.info(f"📥 Webhook trigger validated: {filename}")
+        
+        # Process the file in background to not block message handling
+        asyncio.create_task(self._process_webhook_triggered_file(filename, message))
+        
+        return True
+
+    async def _process_webhook_triggered_file(self, filename: str, trigger_message):
+        """
+        Process a file triggered by webhook notification.
+        
+        Downloads file via SSH, parses, imports to DB, and posts stats.
+        """
+        try:
+            logger.info(f"⚡ Processing webhook-triggered file: {filename}")
+            
+            # Check if already processed (prevent duplicates)
+            if not await self.file_tracker.should_process_file(filename):
+                logger.debug(f"⏭️ File already processed: {filename}")
+                # Optionally delete the trigger message
+                try:
+                    await trigger_message.delete()
+                except Exception:
+                    pass
+                return
+            
+            # Build SSH config
+            ssh_config = {
+                "host": self.config.ssh_host,
+                "port": self.config.ssh_port,
+                "user": self.config.ssh_user,
+                "key_path": self.config.ssh_key_path,
+                "remote_path": self.config.ssh_remote_path,
+            }
+            
+            # Download file via SSH
+            from bot.automation.ssh_handler import SSHHandler
+            local_path = await SSHHandler.download_file(
+                ssh_config, filename, self.config.stats_directory
+            )
+            
+            if not local_path:
+                logger.error(f"❌ Failed to download: {filename}")
+                return
+            
+            logger.info(f"✅ Downloaded: {local_path}")
+            
+            # Wait for file to fully write
+            await asyncio.sleep(2)
+            
+            # Process the file (parse and import to DB)
+            result = await self.process_gamestats_file(local_path, filename)
+            
+            if result and result.get('success'):
+                # Post to production stats channel
+                logger.info(f"📊 Posting stats: {result.get('player_count', 0)} players")
+                await self.round_publisher.publish_round_stats(filename, result)
+                logger.info(f"✅ Successfully processed and posted: {filename}")
+                
+                # Delete the trigger message (clean up control channel)
+                try:
+                    await trigger_message.delete()
+                    logger.debug(f"🗑️ Deleted trigger message")
+                except Exception as e:
+                    logger.debug(f"Could not delete trigger message: {e}")
+            else:
+                error_msg = result.get('error', 'Unknown error') if result else 'No result'
+                logger.warning(f"⚠️ Processing failed for {filename}: {error_msg}")
+                
+        except Exception as e:
+            logger.error(f"❌ Error processing webhook-triggered file: {e}", exc_info=True)
+
+    async def _validate_webhook_security_config(self):
+        """Validate webhook security configuration on startup."""
+
+        if not self.config.webhook_trigger_channel_id:
+            logger.info("ℹ️ Webhook trigger not configured (feature disabled)")
+            return
+
+        logger.info("🔒 Validating webhook security configuration...")
+
+        errors = []
+
+        # CRITICAL: Webhook whitelist required
+        if not self.config.webhook_trigger_whitelist:
+            errors.append(
+                "WEBHOOK_TRIGGER_WHITELIST is REQUIRED when webhook trigger enabled.\n"
+                "  Prevents unauthorized webhooks from triggering downloads.\n"
+                "  Set in .env: WEBHOOK_TRIGGER_WHITELIST=webhook_id_1,webhook_id_2"
+            )
+        else:
+            logger.info(f"✅ Webhook whitelist: {len(self.config.webhook_trigger_whitelist)} IDs")
+
+        # Validate SSH config
+        if not all([self.config.ssh_host, self.config.ssh_user,
+                    self.config.ssh_key_path, self.config.ssh_remote_path]):
+            errors.append("SSH configuration incomplete (required for webhook downloads)")
+
+        if errors:
+            error_msg = "\n\n❌ WEBHOOK SECURITY ERRORS:\n\n" + "\n\n".join(f"  • {e}" for e in errors)
+            logger.error(error_msg)
+            logger.error("\n🚨 Bot startup FAILED - fix errors and restart\n")
+            raise RuntimeError("Webhook security validation failed")
+
+        logger.info("✅ Webhook security validated")
+
     async def on_ready(self):
         """✅ Bot startup message"""
         logger.info("=" * 80)
@@ -1731,6 +2016,14 @@ class UltimateETLegacyBot(commands.Bot):
         logger.info(f"🔧 Cogs Loaded: {len(self.cogs)}")
         logger.info(f"🌐 Servers: {len(self.guilds)}")
         logger.info("=" * 80)
+
+        # Validate webhook security
+        try:
+            await self._validate_webhook_security_config()
+        except RuntimeError as e:
+            logger.critical(f"❌ Security validation failed: {e}")
+            await self.close()
+            return
 
         # Clear any old slash commands to avoid confusion
         try:
