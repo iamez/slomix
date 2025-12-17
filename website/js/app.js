@@ -332,6 +332,10 @@ async function loadPlayerProfile(playerName) {
 
         document.getElementById('profile-xp').textContent = stats.total_xp.toLocaleString();
         document.getElementById('profile-damage').textContent = (stats.damage / 1000).toFixed(1) + 'k';
+        document.getElementById('profile-losses').textContent = stats.losses;
+
+        // Load recent matches
+        loadPlayerRecentMatches(playerName);
 
     } catch (e) {
         console.error('Failed to load profile:', e);
@@ -390,7 +394,7 @@ async function loadLeaderboard() {
                         </div>
                     </td>
                     <td class="px-6 py-4 text-right font-mono ${valueClass}">${row.value}</td>
-                    <td class="px-6 py-4 text-right text-slate-400">${row.sessions}</td>
+                    <td class="px-6 py-4 text-right text-slate-400">${row.rounds}</td>
                     <td class="px-6 py-4 text-right text-slate-400">${row.kills}</td>
                     <td class="px-6 py-4 text-right font-mono text-slate-300">${row.kd}</td>
                 </tr>
@@ -961,7 +965,7 @@ async function loadMatchesView(filter = 'all') {
                             </div>
                         </div>
                     </div>
-                    <button class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-bold transition">
+                    <button onclick="loadMatchDetails('${match.date}')" class="px-4 py-2 rounded-lg bg-white/5 hover:bg-brand-blue hover:text-white text-slate-400 text-sm font-bold transition">
                         View Details
                     </button>
                 </div>
@@ -1332,5 +1336,353 @@ async function handleUpload(e) {
     } catch (err) {
         console.error(err);
         alert('Failed to submit content. Please try again.');
+    }
+}
+
+// ========================================
+// ENHANCED FEATURES - Match Details
+// ========================================
+
+/**
+ * Load and display detailed match information in a modal
+ * @param {string} matchId - The match/round date identifier
+ */
+async function loadMatchDetails(matchId) {
+    openModal('modal-match-details');
+    
+    const content = document.getElementById('match-modal-content');
+    content.innerHTML = '<div class="text-center py-12"><i data-lucide="loader" class="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4"></i><div class="text-slate-400">Loading match details...</div></div>';
+    lucide.createIcons();
+
+    try {
+        const data = await fetchJSON(`${API_BASE}/stats/matches/${encodeURIComponent(matchId)}`);
+        
+        // Update modal header
+        document.getElementById('match-modal-title').textContent = `${data.match.map_name} - Round ${data.match.round_number}`;
+        document.getElementById('match-modal-subtitle').textContent = `${data.player_count} players • ${new Date(data.match.round_date).toLocaleString()}`;
+
+        // Group players by team
+        const teams = { Allies: [], Axis: [], Spectator: [] };
+        data.players.forEach(player => {
+            const team = player.team || 'Spectator';
+            if (!teams[team]) teams[team] = [];
+            teams[team].push(player);
+        });
+
+        // Sort players by DPM within each team
+        Object.keys(teams).forEach(team => {
+            teams[team].sort((a, b) => b.dpm - a.dpm);
+        });
+
+        let html = '<div class="space-y-6">';
+
+        // Match Summary Cards
+        html += `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="glass-card p-4 rounded-xl text-center">
+                    <div class="text-xs text-slate-500 uppercase font-bold">Duration</div>
+                    <div class="text-2xl font-black text-white">${formatStopwatchTime(data.match.stopwatch_time)}</div>
+                </div>
+                <div class="glass-card p-4 rounded-xl text-center">
+                    <div class="text-xs text-slate-500 uppercase font-bold">Total Kills</div>
+                    <div class="text-2xl font-black text-brand-rose">${data.players.reduce((sum, p) => sum + p.kills, 0)}</div>
+                </div>
+                <div class="glass-card p-4 rounded-xl text-center">
+                    <div class="text-xs text-slate-500 uppercase font-bold">Total Damage</div>
+                    <div class="text-2xl font-black text-brand-purple">${(data.players.reduce((sum, p) => sum + p.damage_given, 0) / 1000).toFixed(1)}k</div>
+                </div>
+                <div class="glass-card p-4 rounded-xl text-center">
+                    <div class="text-xs text-slate-500 uppercase font-bold">Avg DPM</div>
+                    <div class="text-2xl font-black text-brand-emerald">${Math.round(data.players.reduce((sum, p) => sum + p.dpm, 0) / data.players.length)}</div>
+                </div>
+            </div>
+        `;
+
+        // Team Performance Tables
+        ['Allies', 'Axis'].forEach(teamName => {
+            const teamPlayers = teams[teamName] || [];
+            if (teamPlayers.length === 0) return;
+
+            const teamColor = teamName === 'Allies' ? 'brand-blue' : 'brand-rose';
+            const totalKills = teamPlayers.reduce((sum, p) => sum + p.kills, 0);
+            const totalDamage = teamPlayers.reduce((sum, p) => sum + p.damage_given, 0);
+
+            html += `
+                <div class="glass-panel p-6 rounded-xl">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-3">
+                            <div class="w-3 h-3 rounded-full bg-${teamColor}"></div>
+                            <h3 class="text-xl font-black text-white">${escapeHtml(teamName)}</h3>
+                            <span class="text-sm text-slate-400">(${teamPlayers.length} players)</span>
+                        </div>
+                        <div class="flex gap-4 text-sm">
+                            <span class="text-slate-400">Kills: <span class="font-bold text-white">${totalKills}</span></span>
+                            <span class="text-slate-400">Damage: <span class="font-bold text-white">${(totalDamage / 1000).toFixed(1)}k</span></span>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="text-xs text-slate-500 uppercase border-b border-white/10">
+                                    <th class="text-left py-3 px-2">Player</th>
+                                    <th class="text-right py-3 px-2">K</th>
+                                    <th class="text-right py-3 px-2">D</th>
+                                    <th class="text-right py-3 px-2">K/D</th>
+                                    <th class="text-right py-3 px-2">DMG</th>
+                                    <th class="text-right py-3 px-2">DPM</th>
+                                    <th class="text-right py-3 px-2">HS</th>
+                                    <th class="text-right py-3 px-2">ACC</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-sm">
+            `;
+
+            teamPlayers.forEach((player, index) => {
+                const rowClass = index === 0 ? 'bg-brand-gold/10' : '';
+                const nameClass = index === 0 ? 'text-brand-gold font-bold' : 'text-white';
+                const safeName = escapeHtml(player.name);
+
+                html += `
+                    <tr class="border-b border-white/5 hover:bg-white/5 transition ${rowClass}">
+                        <td class="py-3 px-2">
+                            <span class="cursor-pointer hover:text-${teamColor} transition ${nameClass}" onclick="loadPlayerProfile('${safeName}')">${safeName}</span>
+                            ${index === 0 ? '<span class="ml-2 text-xs">👑</span>' : ''}
+                        </td>
+                        <td class="text-right py-3 px-2 font-mono text-brand-rose font-bold">${player.kills}</td>
+                        <td class="text-right py-3 px-2 font-mono text-slate-400">${player.deaths}</td>
+                        <td class="text-right py-3 px-2 font-mono text-slate-300">${player.kd}</td>
+                        <td class="text-right py-3 px-2 font-mono text-brand-purple">${player.damage_given.toLocaleString()}</td>
+                        <td class="text-right py-3 px-2 font-mono text-brand-emerald font-bold">${player.dpm}</td>
+                        <td class="text-right py-3 px-2 font-mono text-brand-cyan">${player.headshots}</td>
+                        <td class="text-right py-3 px-2 font-mono text-slate-300">${player.accuracy}%</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        content.innerHTML = html;
+        lucide.createIcons();
+
+    } catch (e) {
+        console.error('Failed to load match details:', e);
+        content.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load match details</div>';
+    }
+}
+
+function formatStopwatchTime(seconds) {
+    if (!seconds) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// ========================================
+// ENHANCED FEATURES - Player Profile
+// ========================================
+
+/**
+ * Load recent matches for a player
+ */
+async function loadPlayerRecentMatches(playerName) {
+    const container = document.getElementById('profile-recent-matches');
+    if (!container) return;
+
+    container.innerHTML = '<div class="text-center py-4 text-slate-500"><i data-lucide="loader" class="w-6 h-6 animate-spin mx-auto"></i></div>';
+    lucide.createIcons();
+
+    try {
+        const matches = await fetchJSON(`${API_BASE}/player/${encodeURIComponent(playerName)}/matches?limit=10`);
+
+        if (matches.length === 0) {
+            container.innerHTML = '<div class="text-center py-4 text-slate-500">No recent matches found</div>';
+            return;
+        }
+
+        container.innerHTML = '';
+
+        matches.forEach(match => {
+            const kd = match.kd;
+            const kdColor = kd >= 2.0 ? 'text-brand-emerald' : kd >= 1.0 ? 'text-brand-blue' : 'text-brand-rose';
+            const safeMapName = escapeHtml(match.map_name);
+            const matchDate = new Date(match.round_date).toLocaleDateString();
+
+            const html = `
+                <div class="glass-card p-4 rounded-lg hover:bg-white/10 transition cursor-pointer" onclick="loadMatchDetails('${match.round_date}')">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center">
+                                <span class="text-xs font-bold text-slate-400 uppercase">${safeMapName.substring(0, 3)}</span>
+                            </div>
+                            <div>
+                                <div class="font-bold text-white">${safeMapName}</div>
+                                <div class="text-xs text-slate-400 font-mono">${matchDate} • Round ${match.round_number}</div>
+                            </div>
+                        </div>
+                        <div class="flex gap-6 text-right">
+                            <div>
+                                <div class="text-xs text-slate-500 uppercase">K/D</div>
+                                <div class="text-lg font-bold ${kdColor}">${kd}</div>
+                            </div>
+                            <div>
+                                <div class="text-xs text-slate-500 uppercase">DPM</div>
+                                <div class="text-lg font-bold text-brand-emerald">${match.dpm}</div>
+                            </div>
+                            <div>
+                                <div class="text-xs text-slate-500 uppercase">Kills</div>
+                                <div class="text-lg font-bold text-brand-rose">${match.kills}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+        });
+
+        lucide.createIcons();
+    } catch (e) {
+        console.error('Failed to load player matches:', e);
+        container.innerHTML = '<div class="text-center text-red-500 py-4">Failed to load recent matches</div>';
+    }
+}
+
+/**
+ * Load weapon breakdown chart for player profile
+ */
+async function loadPlayerWeaponChart(playerName) {
+    // This would require a new API endpoint: /api/player/{name}/weapons
+    // For now, showing placeholder
+    console.log('Weapon chart for', playerName, '- API endpoint pending');
+}
+
+// ========================================
+// ENHANCED FEATURES - Player Comparison
+// ========================================
+
+async function comparePlayers() {
+    const player1Name = document.getElementById('compare-player1').value.trim();
+    const player2Name = document.getElementById('compare-player2').value.trim();
+    const resultsDiv = document.getElementById('compare-results');
+
+    if (!player1Name || !player2Name) {
+        resultsDiv.innerHTML = '<div class="text-center text-red-500 py-4">Please enter both player names</div>';
+        return;
+    }
+
+    resultsDiv.innerHTML = '<div class="text-center py-12"><i data-lucide="loader" class="w-8 h-8 text-brand-purple animate-spin mx-auto mb-4"></i><div class="text-slate-400">Comparing players...</div></div>';
+    lucide.createIcons();
+
+    try {
+        const [player1, player2] = await Promise.all([
+            fetchJSON(`${API_BASE}/stats/player/${encodeURIComponent(player1Name)}`),
+            fetchJSON(`${API_BASE}/stats/player/${encodeURIComponent(player2Name)}`)
+        ]);
+
+        const stats1 = player1.stats;
+        const stats2 = player2.stats;
+
+        // Build comparison table
+        const comparisons = [
+            { label: 'K/D Ratio', val1: stats1.kd, val2: stats2.kd, higherIsBetter: true, format: (v) => v.toFixed(2) },
+            { label: 'DPM', val1: stats1.dpm, val2: stats2.dpm, higherIsBetter: true },
+            { label: 'Total Kills', val1: stats1.kills, val2: stats2.kills, higherIsBetter: true },
+            { label: 'Win Rate', val1: stats1.win_rate, val2: stats2.win_rate, higherIsBetter: true, format: (v) => v + '%' },
+            { label: 'Games Played', val1: stats1.games, val2: stats2.games, higherIsBetter: true },
+            { label: 'Playtime', val1: stats1.playtime_hours, val2: stats2.playtime_hours, higherIsBetter: false, format: (v) => v + 'h' },
+        ];
+
+        let html = `
+            <div class="glass-panel p-6 rounded-xl">
+                <div class="grid grid-cols-3 gap-4 mb-6 text-center">
+                    <div>
+                        <div class="w-16 h-16 rounded-full bg-brand-blue/20 flex items-center justify-center text-2xl font-black text-brand-blue mx-auto mb-2">
+                            ${escapeHtml(player1Name.substring(0, 2).toUpperCase())}
+                        </div>
+                        <div class="font-bold text-white">${escapeHtml(player1Name)}</div>
+                    </div>
+                    <div class="flex items-center justify-center">
+                        <div class="text-3xl font-black text-slate-600">VS</div>
+                    </div>
+                    <div>
+                        <div class="w-16 h-16 rounded-full bg-brand-rose/20 flex items-center justify-center text-2xl font-black text-brand-rose mx-auto mb-2">
+                            ${escapeHtml(player2Name.substring(0, 2).toUpperCase())}
+                        </div>
+                        <div class="font-bold text-white">${escapeHtml(player2Name)}</div>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+        `;
+
+        comparisons.forEach(comp => {
+            const formatFn = comp.format || ((v) => v);
+            const winner1 = comp.higherIsBetter ? comp.val1 > comp.val2 : comp.val1 < comp.val2;
+            const winner2 = comp.higherIsBetter ? comp.val2 > comp.val1 : comp.val2 < comp.val1;
+
+            html += `
+                <div class="glass-card p-4 rounded-lg">
+                    <div class="grid grid-cols-3 gap-4 items-center">
+                        <div class="text-right">
+                            <span class="text-xl font-bold ${winner1 ? 'text-brand-emerald' : 'text-slate-400'}">${formatFn(comp.val1)}</span>
+                            ${winner1 ? '<span class="ml-2">🏆</span>' : ''}
+                        </div>
+                        <div class="text-center text-sm text-slate-500 uppercase font-bold">${comp.label}</div>
+                        <div class="text-left">
+                            ${winner2 ? '<span class="mr-2">🏆</span>' : ''}
+                            <span class="text-xl font-bold ${winner2 ? 'text-brand-emerald' : 'text-slate-400'}">${formatFn(comp.val2)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `
+                </div>
+            </div>
+        `;
+
+        resultsDiv.innerHTML = html;
+        lucide.createIcons();
+
+    } catch (e) {
+        console.error('Failed to compare players:', e);
+        resultsDiv.innerHTML = '<div class="text-center text-red-500 py-4">Failed to compare players. Make sure both names are correct.</div>';
+    }
+}
+
+// ========================================
+// UTILITY FUNCTIONS
+// ========================================
+
+/**
+ * Show error toast (simple implementation)
+ */
+function showError(message) {
+    // Simple alert for now - could be replaced with toast library
+    console.error(message);
+    alert('Error: ' + message);
+}
+
+/**
+ * Retry fetch with exponential backoff
+ */
+async function fetchWithRetry(url, options = {}, maxRetries = 3) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const response = await fetch(url, options);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.json();
+        } catch (e) {
+            if (i === maxRetries - 1) throw e;
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+        }
     }
 }
