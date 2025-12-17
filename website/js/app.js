@@ -561,17 +561,20 @@ function renderSessionDetails(data) {
                 </div>
             </div>
             <div class="glass-panel p-6 rounded-xl flex items-center justify-center">
-                <div class="text-center">
+                <div id="session-mvp-widget" class="text-center w-full">
                     <h3 class="font-bold text-white mb-2">Session MVP</h3>
                     <div class="w-20 h-20 rounded-full bg-gradient-to-br from-brand-gold to-brand-amber mx-auto flex items-center justify-center text-2xl font-black text-white shadow-[0_0_30px_rgba(251,191,36,0.4)] mb-4">
                         ?
                     </div>
-                    <p class="text-slate-400 text-xs">MVP Data Coming Soon</p>
+                    <p class="text-slate-400 text-xs">Loading...</p>
                 </div>
             </div>
         </div>
     `;
     container.insertAdjacentHTML('beforeend', chartsHtml);
+
+    // Load MVP
+    loadSessionMVP(data.date);
 
     // Initialize Charts
     setTimeout(() => {
@@ -1684,5 +1687,63 @@ async function fetchWithRetry(url, options = {}, maxRetries = 3) {
             if (i === maxRetries - 1) throw e;
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
         }
+    }
+}
+
+// ========================================
+// ENHANCED FEATURES - Session MVP
+// ========================================
+
+/**
+ * Load and display Session MVP widget
+ */
+async function loadSessionMVP(sessionDate) {
+    const widget = document.getElementById('session-mvp-widget');
+    if (!widget) return;
+
+    try {
+        const leaderboard = await fetchJSON(`${API_BASE}/stats/session-leaderboard?limit=1`);
+        
+        if (leaderboard.length === 0) {
+            widget.innerHTML = `
+                <h3 class="font-bold text-white mb-2">Session MVP</h3>
+                <div class="w-20 h-20 rounded-full bg-slate-800 mx-auto flex items-center justify-center text-2xl font-black text-slate-600 mb-4">
+                    ?
+                </div>
+                <p class="text-slate-500 text-xs">No MVP data</p>
+            `;
+            return;
+        }
+
+        const mvp = leaderboard[0];
+        const safeName = escapeHtml(mvp.name);
+        const initials = escapeHtml(mvp.name.substring(0, 2).toUpperCase());
+
+        widget.innerHTML = `
+            <h3 class="font-bold text-white mb-2">Session MVP</h3>
+            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-brand-gold to-brand-amber mx-auto flex items-center justify-center text-2xl font-black text-white shadow-[0_0_30px_rgba(251,191,36,0.4)] mb-4 animate-pulse-slow cursor-pointer" onclick="loadPlayerProfile('${safeName}')">
+                ${initials}
+            </div>
+            <p class="font-bold text-white mb-1 cursor-pointer hover:text-brand-gold transition" onclick="loadPlayerProfile('${safeName}')">${safeName}</p>
+            <div class="flex items-center justify-center gap-3 text-xs">
+                <span class="text-slate-400">DPM: <span class="font-bold text-brand-emerald">${mvp.dpm}</span></span>
+                <span class="text-slate-600">•</span>
+                <span class="text-slate-400">K/D: <span class="font-bold text-white">${(mvp.kills / (mvp.deaths || 1)).toFixed(2)}</span></span>
+            </div>
+            <div class="mt-2 px-3 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-[10px] font-bold uppercase">
+                Top Performer
+            </div>
+        `;
+        lucide.createIcons();
+
+    } catch (e) {
+        console.error('Failed to load MVP:', e);
+        widget.innerHTML = `
+            <h3 class="font-bold text-white mb-2">Session MVP</h3>
+            <div class="w-20 h-20 rounded-full bg-slate-800 mx-auto flex items-center justify-center text-2xl font-black text-slate-600 mb-4">
+                ?
+            </div>
+            <p class="text-red-500 text-xs">Failed to load</p>
+        `;
     }
 }
