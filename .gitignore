@@ -44,6 +44,7 @@ env/
 *BACKUP*
 *.sql
 !migrations/*.sql
+!website/*.sql
 
 # Root database backups
 etlegacy_production.db.*
@@ -102,6 +103,8 @@ nov2_*.txt
 # Development HTML reports
 *.html
 !docs/*.html
+!website/*.html
+!website/index.html
 
 # Field mapping dev files
 field_*.txt
@@ -189,7 +192,15 @@ check_before_commit.sh
 /publish_clean/
 /github/
 /performance_updates/
-/website/
+# /website/ - Removed: Website is now tracked in website-prototype branch
+
+# Website specific ignores
+/website/venv/
+/website/.env
+/website/__pycache__/
+/website/backend/__pycache__/
+/website/backend/routers/__pycache__/
+/website/backend/services/__pycache__/
 
 # ============================================
 # BOT DIRECTORY EXCLUSIONS
