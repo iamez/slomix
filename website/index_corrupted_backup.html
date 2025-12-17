@@ -516,26 +516,39 @@
         <div id="view-maps" class="view-section">
             <div class="max-w-7xl mx-auto px-6 py-12">
                 <div class="text-center mb-12">
-                    <i data-lucide="map" class="w-6 h-6 text-brand-cyan"></i>
+                    <h1 class="text-4xl font-black text-white mb-4">Map Statistics</h1>
+                    <p class="text-slate-400">Explore performance across different battlefields</p>
                 </div>
-                <div class="space-y-2">
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-400">Total Matches</span>
-                        <span class="font-bold text-white">1,245</span>
+
+                <!-- Maps Grid -->
+                <div id="maps-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Sample Map Card -->
+                    <div class="glass-card p-6 rounded-xl border-l-4 border-brand-cyan">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <div class="text-xs font-bold text-slate-500 uppercase tracking-wider">Map</div>
+                                <div class="text-2xl font-black text-white mt-1">Supply Depot</div>
+                            </div>
+                            <i data-lucide="map" class="w-6 h-6 text-brand-cyan"></i>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-slate-400">Total Matches</span>
+                                <span class="font-bold text-white">1,245</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-slate-400">Win Rate</span>
+                                <span class="font-bold text-brand-emerald">55%</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-slate-400">Avg DPM</span>
+                                <span class="font-bold text-brand-blue">285</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-400">Win Rate</span>
-                        <span class="font-bold text-brand-emerald">55%</span>
-                    </div>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-400">Avg DPM</span>
-                        <span class="font-bold text-brand-blue">285</span>
-                    </div>
+                    <!-- More maps loaded by JS -->
                 </div>
             </div>
-            <!-- More maps loaded by JS -->
-        </div>
-        </div>
         </div>
 
         <!-- WEAPONS VIEW -->
@@ -692,119 +705,17 @@
                         </div>
                     </div>
 
-                    <div class="glass-panel p-6 rounded-xl">
-                        <h3 class="font-bold text-white mb-6 flex items-center gap-2">
-                            <i data-lucide="activity" class="w-5 h-5 text-brand-purple"></i> Performance Chart
-                        </h3>
-                        <div class="chart-container">
-                            <canvas id="eloChart"></canvas>
+                    <div class="glass-panel p-6 rounded-xl flex items-center justify-center">
+                        <div class="text-center">
                         </div>
-                    </div>
-                </div>
+                        </footer>
 
-                <!-- Recent Matches -->
-                <div class="glass-panel p-6 rounded-xl mt-8">
-                    <h3 class="font-bold text-white mb-6 flex items-center gap-2">
-                        <i data-lucide="list" class="w-5 h-5 text-brand-cyan"></i> Recent Matches
-                    </h3>
-                    <div id="profile-recent-matches" class="space-y-3">
-                        <div class="text-center py-4 text-slate-500">
-                            Loading recent matches...
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    </main>
-
-    <!-- ====================================== -->
-    <!-- MODALS -->
-    <!-- ====================================== -->
-
-    <!-- Match Details Modal -->
-    <div id="modal-match-details" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
-        <div class="glass-panel max-w-5xl w-full max-h-[90vh] overflow-y-auto rounded-2xl border-2 border-white/10 shadow-2xl">
-            <!-- Modal Header -->
-            <div class="sticky top-0 glass-panel border-b border-white/10 p-6 flex justify-between items-center z-10">
-                <div>
-                    <h2 class="text-2xl font-black text-white mb-1" id="match-modal-title">Match Details</h2>
-                    <p class="text-sm text-slate-400" id="match-modal-subtitle">Loading...</p>
-                </div>
-                <button onclick="closeModal('modal-match-details')" class="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition flex items-center justify-center">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-
-            <!-- Modal Body -->
-            <div class="p-6">
-                <div id="match-modal-content">
-                    <div class="text-center py-12">
-                        <i data-lucide="loader" class="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4"></i>
-                        <div class="text-slate-400">Loading match details...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Player Comparison Modal -->
-    <div id="modal-player-compare" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
-        <div class="glass-panel max-w-6xl w-full max-h-[90vh] overflow-y-auto rounded-2xl border-2 border-white/10 shadow-2xl">
-            <div class="sticky top-0 glass-panel border-b border-white/10 p-6 flex justify-between items-center z-10">
-                <div>
-                    <h2 class="text-2xl font-black text-white mb-1">Player Comparison</h2>
-                    <p class="text-sm text-slate-400">Head-to-head stats analysis</p>
-                </div>
-                <button onclick="closeModal('modal-player-compare')" class="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition flex items-center justify-center">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-            <div class="p-6">
-                <!-- Player Selection -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                    <div class="glass-card p-4 rounded-xl">
-                        <label class="text-xs text-slate-500 uppercase font-bold block mb-2">Player 1</label>
-                        <input type="text" id="compare-player1" class="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-slate-500" placeholder="Enter player name...">
-                    </div>
-                    <div class="glass-card p-4 rounded-xl">
-                        <label class="text-xs text-slate-500 uppercase font-bold block mb-2">Player 2</label>
-                        <input type="text" id="compare-player2" class="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-slate-500" placeholder="Enter player name...">
-                    </div>
-                </div>
-                <button onclick="comparePlayers()" class="w-full py-3 rounded-lg bg-brand-purple hover:bg-brand-purple/80 text-white font-bold transition mb-6">
-                    <i data-lucide="git-compare" class="w-4 h-4 inline mr-2"></i> Compare Players
-                </button>
-                <div id="compare-results"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Footer -->
-    <footer class="glass-panel border-t border-white/5 py-8 mt-auto">
-        <div class="max-w-7xl mx-auto px-6">
-            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 bg-gradient-to-br from-brand-blue to-brand-cyan rounded-lg flex items-center justify-center font-black text-white text-xs">
-                        LS
-                    </div>
-                    <span class="text-sm text-slate-400">© 2025 Slomix.gg - ET:Legacy Stats Platform</span>
-                </div>
-                <div class="flex items-center gap-6 text-sm text-slate-500">
-                    <a href="#" class="hover:text-white transition">Discord</a>
-                    <a href="#" class="hover:text-white transition">GitHub</a>
-                    <a href="#" class="hover:text-white transition">API Docs</a>
-                </div>
-            </div>
-        </div>
-    </footer>
-
-    <!-- JavaScript -->
-    <script src="js/app.js"></script>
-    <script>
-        // Initialize Lucide icons
-        lucide.createIcons();
-    </script>
+                        <!-- JavaScript -->
+                        <script src="js/app.js"></script>
+                        <script>
+                            // Initialize Lucide icons
+                            lucide.createIcons();
+                        </script>
 
 </body>
 
