@@ -28,12 +28,15 @@ logger = logging.getLogger(__name__)
 # Configuration from environment
 WEBSITE_PORT = int(os.getenv("WEBSITE_PORT", "8000"))
 WEBSITE_HOST = os.getenv("WEBSITE_HOST", "0.0.0.0")
-SESSION_SECRET = os.getenv("SESSION_SECRET", "super-secret-key-change-me")
+SESSION_SECRET = os.getenv("SESSION_SECRET")
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
 
-# Warn if using default secret in production
-if SESSION_SECRET == "super-secret-key-change-me":
-    logger.warning("⚠️  Using default SESSION_SECRET - change this in production!")
+# Validate SESSION_SECRET is properly configured
+if not SESSION_SECRET or SESSION_SECRET == "super-secret-key-change-me":
+    raise ValueError(
+        "SESSION_SECRET environment variable must be set to a secure random value. "
+        "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+    )
 
 app = FastAPI(
     title="Slomix Website Backend",
@@ -47,7 +50,13 @@ app.add_middleware(
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "Accept",
+        "Origin",
+    ],
 )
 
 # Session Middleware

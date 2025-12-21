@@ -108,11 +108,13 @@ async function initApp() {
     }
 
     // Load Data
+    loadOverviewStats(); // Homepage stats
     loadSeasonInfo();
     loadLastSession();
     loadPredictions();
     updateLiveSession(); // Live Updates
     loadQuickLeaders();  // Sidebar widget leaderboard
+    loadRecentMatches(); // Home page recent matches widget
     loadMatchesView();   // Matches view
     checkLoginStatus();
     initCharts();
@@ -121,6 +123,31 @@ async function initApp() {
     const hash = window.location.hash.replace('#/', '');
     if (hash && hash !== 'home') {
         navigateTo(hash, false);
+    }
+}
+
+// Format large numbers nicely (1234 -> 1.2k)
+function formatNumber(num) {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+    return num.toString();
+}
+
+async function loadOverviewStats() {
+    try {
+        const data = await fetchJSON(`${API_BASE}/stats/overview`);
+        
+        const statRounds = document.getElementById('stat-rounds');
+        const statPlayers = document.getElementById('stat-players');
+        const statSessions = document.getElementById('stat-sessions');
+        const statKills = document.getElementById('stat-kills');
+        
+        if (statRounds) statRounds.textContent = formatNumber(data.rounds);
+        if (statPlayers) statPlayers.textContent = formatNumber(data.players);
+        if (statSessions) statSessions.textContent = formatNumber(data.sessions);
+        if (statKills) statKills.textContent = formatNumber(data.total_kills);
+    } catch (e) {
+        console.error('Failed to load overview stats:', e);
     }
 }
 
@@ -281,6 +308,10 @@ async function loadPredictions() {
     }
 }
 
+// Live session polling with visibility-aware optimization
+let liveSessionInterval = null;
+const LIVE_POLL_INTERVAL = 10000; // 10 seconds
+
 async function updateLiveSession() {
     try {
         const data = await fetchJSON(`${API_BASE}/stats/live-session`);
@@ -301,8 +332,33 @@ async function updateLiveSession() {
     }
 }
 
-// Poll every 10 seconds
-setInterval(updateLiveSession, 10000);
+function startLivePolling() {
+    if (!liveSessionInterval) {
+        updateLiveSession(); // Immediate update when tab becomes visible
+        liveSessionInterval = setInterval(updateLiveSession, LIVE_POLL_INTERVAL);
+        console.log('🟢 Live session polling started');
+    }
+}
+
+function stopLivePolling() {
+    if (liveSessionInterval) {
+        clearInterval(liveSessionInterval);
+        liveSessionInterval = null;
+        console.log('🔴 Live session polling paused (tab hidden)');
+    }
+}
+
+// Start polling initially
+startLivePolling();
+
+// Pause polling when tab is hidden, resume when visible
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        stopLivePolling();
+    } else {
+        startLivePolling();
+    }
+});
 
 async function loadPlayerProfile(playerName) {
     navigateTo('profile');
@@ -725,33 +781,48 @@ async function loadRecentMatches() {
         }
 
         matches.forEach(match => {
-            const winnerColor = match.winner === 'Allies' ? 'text-brand-blue' : 'text-brand-rose';
-            const winnerBg = match.winner === 'Allies' ? 'bg-brand-blue/20 text-brand-blue' : 'bg-brand-rose/20 text-brand-rose';
+            const winnerTeam = match.winner;
+            const team1Win = winnerTeam === 'Allies';
+            const team2Win = winnerTeam === 'Axis';
 
-            // Calculate relative time
-            const date = new Date(match.date);
-            const now = new Date();
-            const diffMs = now - date;
-            const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
-            const timeAgo = diffHrs > 24 ? Math.floor(diffHrs / 24) + 'd ago' : diffHrs < 1 ? 'Just now' : diffHrs + 'h ago';
+            // Format badge colors
+            const formatColors = {
+                '1v1': 'bg-purple-500/20 text-purple-400',
+                '3v3': 'bg-brand-cyan/20 text-brand-cyan',
+                '6v6': 'bg-brand-gold/20 text-brand-gold',
+            };
+            const formatClass = formatColors[match.format] || 'bg-slate-700 text-slate-400';
+
+            // Team players (truncate if too many)
+            const team1Names = (match.team1_players || []).slice(0, 3).map(p => escapeHtml(p)).join(' - ');
+            const team2Names = (match.team2_players || []).slice(0, 3).map(p => escapeHtml(p)).join(' - ');
+            const team1Overflow = (match.team1_players || []).length > 3 ? '...' : '';
+            const team2Overflow = (match.team2_players || []).length > 3 ? '...' : '';
 
             const safeMapName = escapeHtml(match.map_name);
-            const safeMapAbbrev = escapeHtml(match.map_name.substring(0, 3));
-            const safeWinner = escapeHtml(match.winner);
+            const safeFormat = escapeHtml(match.format || '');
+            const safeTimeAgo = escapeHtml(match.time_ago || '');
+
             const html = `
-            <div class="glass-card p-3 rounded-lg hover:bg-white/5 transition cursor-pointer group" onclick="navigateTo('matches')">
-                <div class="flex items-center gap-3 mb-2">
-                    <div class="w-10 h-10 rounded bg-slate-800 border border-white/10 flex items-center justify-center flex-shrink-0">
-                        <span class="text-[10px] font-bold text-slate-500 uppercase">${safeMapAbbrev}</span>
+            <div class="glass-card rounded-lg hover:bg-white/5 transition cursor-pointer group border-l-2 ${team1Win ? 'border-l-brand-blue' : team2Win ? 'border-l-brand-rose' : 'border-l-slate-600'}"
+                 onclick="navigateTo('matches')">
+                <div class="p-3">
+                    <!-- Team 1 -->
+                    <div class="flex items-center gap-1 text-xs mb-0.5 ${team1Win ? '' : 'opacity-60'}">
+                        ${team1Win ? '<span class="text-brand-gold">🏆</span>' : ''}
+                        <span class="text-slate-300 truncate">${team1Names}${team1Overflow}</span>
                     </div>
-                    <div class="flex-1">
-                        <div class="text-sm font-bold text-white group-hover:text-brand-purple transition">${safeMapName}</div>
-                        <div class="text-[10px] text-slate-400 font-mono">${timeAgo}</div>
+                    <!-- Team 2 -->
+                    <div class="flex items-center gap-1 text-xs mb-2 ${team2Win ? '' : 'opacity-60'}">
+                        ${team2Win ? '<span class="text-brand-gold">🏆</span>' : ''}
+                        <span class="text-slate-300 truncate">${team2Names}${team2Overflow}</span>
                     </div>
-                </div>
-                <div class="flex items-center justify-between pl-13">
-                    <span class="px-2 py-0.5 rounded ${winnerBg} text-[10px] font-bold uppercase">${safeWinner}</span>
-                    <span class="text-xs text-slate-400">Round ${match.round_number}</span>
+                    <!-- Info row -->
+                    <div class="flex items-center gap-2 text-[10px]">
+                        <span class="text-slate-500 truncate">${safeMapName}</span>
+                        <span class="px-1.5 py-0.5 rounded ${formatClass} font-bold">${safeFormat}</span>
+                        <span class="text-slate-600">${safeTimeAgo}</span>
+                    </div>
                 </div>
             </div>
             `;
@@ -801,32 +872,36 @@ if (searchInput) {
 
 async function searchPlayer(query) {
     try {
-        const results = await fetchJSON(`${API_BASE}/player/search?query=${encodeURIComponent(query)}`);
+        const results = await fetchJSON(`${AUTH_BASE}/players/search?q=${encodeURIComponent(query)}`);
         const list = document.getElementById('player-search-results');
         if (!list) return;
         list.innerHTML = '';
 
-        results.forEach(name => {
+        results.forEach(player => {
             const div = document.createElement('div');
             div.className = 'p-3 rounded bg-white/5 hover:bg-white/10 cursor-pointer flex justify-between items-center transition';
-            const safeName = escapeHtml(name);
+            const safeName = escapeHtml(player.name);
             div.innerHTML = `<span class="font-bold text-white">${safeName}</span> <span class="text-xs text-brand-blue font-bold">CLAIM</span>`;
-            div.onclick = () => linkPlayer(name);
+            div.onclick = () => linkPlayer(player.guid, player.name);
             list.appendChild(div);
         });
+
+        if (results.length === 0) {
+            list.innerHTML = '<div class="p-3 text-slate-500 text-center">No players found</div>';
+        }
     } catch (e) {
         console.error(e);
     }
 }
 
-async function linkPlayer(name) {
-    if (!confirm(`Link your Discord account to "${name}"? This cannot be undone.`)) return;
+async function linkPlayer(guid, name) {
+    if (!confirm(`Link your Discord account to "${name}"?`)) return;
 
     try {
-        const res = await fetch(`${API_BASE}/player/link`, {
+        const res = await fetch(`${AUTH_BASE}/link`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ player_name: name })
+            body: JSON.stringify({ player_guid: guid, player_name: name })
         });
 
         if (!res.ok) {
@@ -871,17 +946,17 @@ if (heroSearchInput) {
 
 async function searchHeroPlayer(query) {
     try {
-        const results = await fetchJSON(`${API_BASE}/player/search?query=${encodeURIComponent(query)}`);
+        const results = await fetchJSON(`${AUTH_BASE}/players/search?q=${encodeURIComponent(query)}`);
 
         if (results.length === 0) {
             heroSearchResults.innerHTML = '<div class="p-4 text-slate-500 text-sm text-center">No players found</div>';
         } else {
             heroSearchResults.innerHTML = '';
-            results.forEach(name => {
+            results.forEach(player => {
                 const div = document.createElement('div');
                 div.className = 'p-4 hover:bg-white/5 cursor-pointer flex justify-between items-center transition border-b border-white/5 last:border-0';
-                const safeName = escapeHtml(name);
-                const safeInitials = escapeHtml(name.substring(0, 2).toUpperCase());
+                const safeName = escapeHtml(player.name);
+                const safeInitials = escapeHtml(player.name.replace(/\^./g, '').substring(0, 2).toUpperCase());
                 div.innerHTML = `
                 <div class="flex items-center gap-3">
                     <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">
@@ -894,7 +969,7 @@ async function searchHeroPlayer(query) {
                 div.onclick = () => {
                     heroSearchResults.classList.add('hidden');
                     heroSearchInput.value = '';
-                    loadPlayerProfile(name);
+                    loadPlayerProfile(player.name);
                 };
                 heroSearchResults.appendChild(div);
             });
@@ -927,50 +1002,55 @@ async function loadMatchesView(filter = 'all') {
         }
 
         matches.forEach(match => {
-            const winnerColor = match.winner === 'Allies' ? 'text-brand-emerald' : 'text-brand-rose';
-            const winnerBg = match.winner === 'Allies' ? 'bg-brand-emerald/10 border-brand-emerald/20' : 'bg-brand-rose/10 border-brand-rose/20';
+            const winnerTeam = match.winner; // "Allies" or "Axis"
+            const team1Win = winnerTeam === 'Allies';
+            const team2Win = winnerTeam === 'Axis';
 
-            // Calculate relative time
-            const date = new Date(match.date);
-            const now = new Date();
-            const diffMs = now - date;
-            const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
-            const timeAgo = diffHrs > 24 ? Math.floor(diffHrs / 24) + 'd ago' : diffHrs < 1 ? 'Just now' : diffHrs + 'h ago';
+            // Format badge colors
+            const formatColors = {
+                '1v1': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+                '3v3': 'bg-brand-cyan/20 text-brand-cyan border-brand-cyan/30',
+                '6v6': 'bg-brand-gold/20 text-brand-gold border-brand-gold/30',
+            };
+            const formatClass = formatColors[match.format] || 'bg-slate-700 text-slate-400 border-slate-600';
 
+            // Safe escape all user content
             const safeMapName = escapeHtml(match.map_name);
-            const safeMapAbbrev = escapeHtml(match.map_name.substring(0, 3));
-            const safeWinner = escapeHtml(match.winner);
+            const safeFormat = escapeHtml(match.format || '');
+            const safeTimeAgo = escapeHtml(match.time_ago || '');
+            
+            // Team 1 (Allies) players
+            const team1Html = (match.team1_players || [])
+                .map(p => `<span class="text-slate-300">${escapeHtml(p)}</span>`)
+                .join(' <span class="text-slate-600">-</span> ');
+            
+            // Team 2 (Axis) players
+            const team2Html = (match.team2_players || [])
+                .map(p => `<span class="text-slate-300">${escapeHtml(p)}</span>`)
+                .join(' <span class="text-slate-600">-</span> ');
+
             const html = `
-            <div class="glass-panel p-6 rounded-xl hover:bg-white/5 transition cursor-pointer group">
-                <div class="flex justify-between items-start">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-4 mb-4">
-                            <div class="w-16 h-16 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center">
-                                <span class="text-xs font-bold text-slate-500 uppercase">${safeMapAbbrev}</span>
-                            </div>
-                            <div>
-                                <div class="text-lg font-bold text-white group-hover:text-brand-cyan transition">${safeMapName}</div>
-                                <div class="text-sm text-slate-400 font-mono">${timeAgo}</div>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <div class="text-xs text-slate-500 uppercase mb-2">Winner</div>
-                                <div class="flex items-center gap-2">
-                                    <div class="px-3 py-1 rounded ${winnerBg} border">
-                                        <span class="text-sm font-bold ${winnerColor}">${safeWinner}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div>
-                                <div class="text-xs text-slate-500 uppercase mb-2">Round</div>
-                                <div class="text-xl font-black text-white">${match.round_number}</div>
-                            </div>
-                        </div>
+            <div class="glass-panel rounded-xl hover:bg-white/5 transition cursor-pointer group border-l-4 ${team1Win ? 'border-l-brand-blue' : team2Win ? 'border-l-brand-rose' : 'border-l-slate-600'}"
+                 onclick="loadMatchDetails(${match.id})">
+                <div class="p-4">
+                    <!-- Team 1 (Allies) -->
+                    <div class="flex items-center gap-2 mb-1 ${team1Win ? '' : 'opacity-70'}">
+                        ${team1Win ? '<span class="text-brand-gold text-sm">🏆</span>' : ''}
+                        <div class="text-sm">${team1Html || '<span class="text-slate-500 italic">No players</span>'}</div>
                     </div>
-                    <button onclick="loadMatchDetails('${match.date}')" class="px-4 py-2 rounded-lg bg-white/5 hover:bg-brand-blue hover:text-white text-slate-400 text-sm font-bold transition">
-                        View Details
-                    </button>
+                    
+                    <!-- Team 2 (Axis) -->
+                    <div class="flex items-center gap-2 mb-3 ${team2Win ? '' : 'opacity-70'}">
+                        ${team2Win ? '<span class="text-brand-gold text-sm">🏆</span>' : ''}
+                        <div class="text-sm">${team2Html || '<span class="text-slate-500 italic">No players</span>'}</div>
+                    </div>
+                    
+                    <!-- Match info row -->
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="text-slate-500">${safeMapName}</span>
+                        <span class="px-2 py-0.5 rounded border ${formatClass} font-bold">${safeFormat}</span>
+                        <span class="text-slate-500">${safeTimeAgo}</span>
+                    </div>
                 </div>
             </div>
             `;
@@ -1348,7 +1428,7 @@ async function handleUpload(e) {
 
 /**
  * Load and display detailed match information in a modal
- * @param {string} matchId - The match/round date identifier
+ * @param {string|number} matchId - The round ID
  */
 async function loadMatchDetails(matchId) {
     openModal('modal-match-details');
@@ -1360,114 +1440,143 @@ async function loadMatchDetails(matchId) {
     try {
         const data = await fetchJSON(`${API_BASE}/stats/matches/${encodeURIComponent(matchId)}`);
         
+        const m = data.match;
+        const team1 = data.team1;
+        const team2 = data.team2;
+        
         // Update modal header
-        document.getElementById('match-modal-title').textContent = `${data.match.map_name} - Round ${data.match.round_number}`;
-        document.getElementById('match-modal-subtitle').textContent = `${data.player_count} players • ${new Date(data.match.round_date).toLocaleString()}`;
+        document.getElementById('match-modal-title').textContent = m.map_name;
+        document.getElementById('match-modal-subtitle').textContent = `Round ${m.round_number} • ${m.round_date} • ${data.player_count} players`;
 
-        // Group players by team
-        const teams = { Allies: [], Axis: [], Spectator: [] };
-        data.players.forEach(player => {
-            const team = player.team || 'Spectator';
-            if (!teams[team]) teams[team] = [];
-            teams[team].push(player);
-        });
+        // Calculate totals
+        const totalKills = team1.totals.kills + team2.totals.kills;
+        const totalDamage = team1.totals.damage + team2.totals.damage;
+        const allPlayers = [...team1.players, ...team2.players];
+        const avgDpm = allPlayers.length > 0 
+            ? Math.round(allPlayers.reduce((sum, p) => sum + p.dpm, 0) / allPlayers.length) 
+            : 0;
 
-        // Sort players by DPM within each team
-        Object.keys(teams).forEach(team => {
-            teams[team].sort((a, b) => b.dpm - a.dpm);
-        });
+        // Build team header with score-like display
+        const team1Color = team1.is_winner ? 'text-brand-gold' : 'text-slate-400';
+        const team2Color = team2.is_winner ? 'text-brand-gold' : 'text-slate-400';
 
-        let html = '<div class="space-y-6">';
-
-        // Match Summary Cards
-        html += `
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="glass-card p-4 rounded-xl text-center">
-                    <div class="text-xs text-slate-500 uppercase font-bold">Duration</div>
-                    <div class="text-2xl font-black text-white">${formatStopwatchTime(data.match.stopwatch_time)}</div>
+        let html = `
+        <div class="space-y-6">
+            <!-- Team vs Team Header -->
+            <div class="flex items-center justify-center gap-8 py-4">
+                <div class="text-center">
+                    <div class="text-xs text-slate-500 uppercase mb-1">Allies</div>
+                    <div class="flex items-center gap-2">
+                        ${team1.is_winner ? '<span class="text-brand-gold">🏆</span>' : ''}
+                        <span class="text-3xl font-black ${team1Color}">${team1.totals.kills}</span>
+                    </div>
+                    <div class="text-xs text-slate-500">${(team1.totals.damage / 1000).toFixed(1)}k dmg</div>
                 </div>
-                <div class="glass-card p-4 rounded-xl text-center">
-                    <div class="text-xs text-slate-500 uppercase font-bold">Total Kills</div>
-                    <div class="text-2xl font-black text-brand-rose">${data.players.reduce((sum, p) => sum + p.kills, 0)}</div>
+                <div class="text-4xl font-black text-slate-600">:</div>
+                <div class="text-center">
+                    <div class="text-xs text-slate-500 uppercase mb-1">Axis</div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-3xl font-black ${team2Color}">${team2.totals.kills}</span>
+                        ${team2.is_winner ? '<span class="text-brand-gold">🏆</span>' : ''}
+                    </div>
+                    <div class="text-xs text-slate-500">${(team2.totals.damage / 1000).toFixed(1)}k dmg</div>
                 </div>
-                <div class="glass-card p-4 rounded-xl text-center">
-                    <div class="text-xs text-slate-500 uppercase font-bold">Total Damage</div>
-                    <div class="text-2xl font-black text-brand-purple">${(data.players.reduce((sum, p) => sum + p.damage_given, 0) / 1000).toFixed(1)}k</div>
+            </div>
+
+            <!-- Match Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="glass-card p-3 rounded-xl text-center">
+                    <div class="text-[10px] text-slate-500 uppercase font-bold">Duration</div>
+                    <div class="text-xl font-black text-white">${escapeHtml(m.duration || '0:00')}</div>
                 </div>
-                <div class="glass-card p-4 rounded-xl text-center">
-                    <div class="text-xs text-slate-500 uppercase font-bold">Avg DPM</div>
-                    <div class="text-2xl font-black text-brand-emerald">${Math.round(data.players.reduce((sum, p) => sum + p.dpm, 0) / data.players.length)}</div>
+                <div class="glass-card p-3 rounded-xl text-center">
+                    <div class="text-[10px] text-slate-500 uppercase font-bold">Total Kills</div>
+                    <div class="text-xl font-black text-brand-rose">${totalKills}</div>
+                </div>
+                <div class="glass-card p-3 rounded-xl text-center">
+                    <div class="text-[10px] text-slate-500 uppercase font-bold">Total Damage</div>
+                    <div class="text-xl font-black text-brand-purple">${(totalDamage / 1000).toFixed(1)}k</div>
+                </div>
+                <div class="glass-card p-3 rounded-xl text-center">
+                    <div class="text-[10px] text-slate-500 uppercase font-bold">Avg DPM</div>
+                    <div class="text-xl font-black text-brand-emerald">${avgDpm}</div>
                 </div>
             </div>
         `;
 
-        // Team Performance Tables
-        ['Allies', 'Axis'].forEach(teamName => {
-            const teamPlayers = teams[teamName] || [];
-            if (teamPlayers.length === 0) return;
-
-            const teamColor = teamName === 'Allies' ? 'brand-blue' : 'brand-rose';
-            const totalKills = teamPlayers.reduce((sum, p) => sum + p.kills, 0);
-            const totalDamage = teamPlayers.reduce((sum, p) => sum + p.damage_given, 0);
+        // Render team tables
+        [team1, team2].forEach((team, idx) => {
+            const teamName = idx === 0 ? 'Allies' : 'Axis';
+            const teamColor = idx === 0 ? 'brand-blue' : 'brand-rose';
+            const players = team.players.sort((a, b) => b.dpm - a.dpm);
 
             html += `
-                <div class="glass-panel p-6 rounded-xl">
-                    <div class="flex items-center justify-between mb-6">
-                        <div class="flex items-center gap-3">
-                            <div class="w-3 h-3 rounded-full bg-${teamColor}"></div>
-                            <h3 class="text-xl font-black text-white">${escapeHtml(teamName)}</h3>
-                            <span class="text-sm text-slate-400">(${teamPlayers.length} players)</span>
-                        </div>
-                        <div class="flex gap-4 text-sm">
-                            <span class="text-slate-400">Kills: <span class="font-bold text-white">${totalKills}</span></span>
-                            <span class="text-slate-400">Damage: <span class="font-bold text-white">${(totalDamage / 1000).toFixed(1)}k</span></span>
-                        </div>
+            <div class="glass-panel rounded-xl overflow-hidden">
+                <div class="p-4 border-b border-white/10 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-3 h-3 rounded-full bg-${teamColor}"></div>
+                        <h3 class="text-lg font-black text-white">${teamName}</h3>
+                        ${team.is_winner ? '<span class="text-brand-gold text-sm">🏆 Winner</span>' : ''}
                     </div>
+                    <div class="flex gap-4 text-xs">
+                        <span class="text-slate-400">K: <span class="font-bold text-white">${team.totals.kills}</span></span>
+                        <span class="text-slate-400">D: <span class="font-bold text-white">${team.totals.deaths}</span></span>
+                        <span class="text-slate-400">DMG: <span class="font-bold text-white">${(team.totals.damage / 1000).toFixed(1)}k</span></span>
+                    </div>
+                </div>
 
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
-                            <thead>
-                                <tr class="text-xs text-slate-500 uppercase border-b border-white/10">
-                                    <th class="text-left py-3 px-2">Player</th>
-                                    <th class="text-right py-3 px-2">K</th>
-                                    <th class="text-right py-3 px-2">D</th>
-                                    <th class="text-right py-3 px-2">K/D</th>
-                                    <th class="text-right py-3 px-2">DMG</th>
-                                    <th class="text-right py-3 px-2">DPM</th>
-                                    <th class="text-right py-3 px-2">HS</th>
-                                    <th class="text-right py-3 px-2">ACC</th>
-                                </tr>
-                            </thead>
-                            <tbody class="text-sm">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-[10px] text-slate-500 uppercase bg-slate-900/50">
+                                <th class="text-left py-2 px-3 font-bold">Name</th>
+                                <th class="text-right py-2 px-2 font-bold">KDR</th>
+                                <th class="text-right py-2 px-2 font-bold">K</th>
+                                <th class="text-right py-2 px-2 font-bold">D</th>
+                                <th class="text-right py-2 px-2 font-bold">DMG</th>
+                                <th class="text-right py-2 px-2 font-bold">DPM</th>
+                                <th class="text-right py-2 px-2 font-bold">HS</th>
+                                <th class="text-right py-2 px-2 font-bold">GIBS</th>
+                                <th class="text-right py-2 px-2 font-bold">REV</th>
+                                <th class="text-right py-2 px-2 font-bold">ACC</th>
+                            </tr>
+                        </thead>
+                        <tbody>
             `;
 
-            teamPlayers.forEach((player, index) => {
-                const rowClass = index === 0 ? 'bg-brand-gold/10' : '';
-                const nameClass = index === 0 ? 'text-brand-gold font-bold' : 'text-white';
+            players.forEach((player, index) => {
+                const isTop = index === 0;
+                const rowBg = isTop ? 'bg-brand-gold/5' : '';
                 const safeName = escapeHtml(player.name);
+                const kdColor = player.kd >= 2.0 ? 'text-brand-emerald' : player.kd >= 1.0 ? 'text-white' : 'text-brand-rose';
 
                 html += `
-                    <tr class="border-b border-white/5 hover:bg-white/5 transition ${rowClass}">
-                        <td class="py-3 px-2">
-                            <span class="cursor-pointer hover:text-${teamColor} transition ${nameClass}" onclick="loadPlayerProfile('${safeName}')">${safeName}</span>
-                            ${index === 0 ? '<span class="ml-2 text-xs">👑</span>' : ''}
+                    <tr class="border-b border-white/5 hover:bg-white/5 transition ${rowBg}">
+                        <td class="py-2 px-3">
+                            <div class="flex items-center gap-2">
+                                ${isTop ? '<span class="text-brand-gold">🏆</span>' : ''}
+                                <span class="cursor-pointer hover:text-${teamColor} transition font-medium ${isTop ? 'text-brand-gold' : 'text-white'}" 
+                                      onclick="closeModal('modal-match-details'); loadPlayerProfile('${safeName}')">${safeName}</span>
+                            </div>
                         </td>
-                        <td class="text-right py-3 px-2 font-mono text-brand-rose font-bold">${player.kills}</td>
-                        <td class="text-right py-3 px-2 font-mono text-slate-400">${player.deaths}</td>
-                        <td class="text-right py-3 px-2 font-mono text-slate-300">${player.kd}</td>
-                        <td class="text-right py-3 px-2 font-mono text-brand-purple">${player.damage_given.toLocaleString()}</td>
-                        <td class="text-right py-3 px-2 font-mono text-brand-emerald font-bold">${player.dpm}</td>
-                        <td class="text-right py-3 px-2 font-mono text-brand-cyan">${player.headshots}</td>
-                        <td class="text-right py-3 px-2 font-mono text-slate-300">${player.accuracy}%</td>
+                        <td class="text-right py-2 px-2 font-mono ${kdColor} font-bold">${player.kd.toFixed(2)}</td>
+                        <td class="text-right py-2 px-2 font-mono text-brand-emerald">${player.kills}</td>
+                        <td class="text-right py-2 px-2 font-mono text-slate-400">${player.deaths}</td>
+                        <td class="text-right py-2 px-2 font-mono text-brand-purple">${player.damage_given.toLocaleString()}</td>
+                        <td class="text-right py-2 px-2 font-mono text-brand-cyan font-bold">${player.dpm}</td>
+                        <td class="text-right py-2 px-2 font-mono text-slate-300">${player.headshots}</td>
+                        <td class="text-right py-2 px-2 font-mono text-slate-300">${player.gibs || 0}</td>
+                        <td class="text-right py-2 px-2 font-mono text-brand-emerald">${player.revives || 0}</td>
+                        <td class="text-right py-2 px-2 font-mono text-slate-300">${player.accuracy}%</td>
                     </tr>
                 `;
             });
 
             html += `
-                            </tbody>
-                        </table>
-                    </div>
+                        </tbody>
+                    </table>
                 </div>
+            </div>
             `;
         });
 

@@ -133,3 +133,135 @@ def is_allowed_channel(allowed_channel_ids: list):
         return True
 
     return commands.check(predicate)
+
+
+# ============================================================================
+# USER ID-BASED PERMISSION DECORATORS
+# ============================================================================
+# Security: User ID whitelist (immune to Discord role exploits)
+# Tiers: Root (1) → Admin (many) → Moderator (many)
+# Database: user_permissions table
+# ============================================================================
+
+
+def is_owner():
+    """
+    Decorator: Restrict command to bot root user only.
+    Root user is defined in OWNER_USER_ID environment variable.
+
+    Security: Highest permission tier - only for dangerous operations
+    Examples: !reload (reloads bot code), permission management
+
+    Note: Function named "is_owner" for compatibility, but tier is "root"
+
+    Usage:
+        @is_owner()
+        @commands.command()
+        async def reload(self, ctx):
+            # Only root can reload bot code
+            pass
+    """
+    async def predicate(ctx):
+        owner_id = getattr(ctx.bot, 'owner_user_id', 0)
+
+        if ctx.author.id != owner_id:
+            logger.warning(f"⚠️ Unauthorized root command attempt by {ctx.author} ({ctx.author.id})")
+            await ctx.send("❌ This command is restricted to the bot root user.")
+            return False
+
+        logger.info(f"✅ Root command authorized: {ctx.author}")
+        return True
+
+    return commands.check(predicate)
+
+
+def is_admin():
+    """
+    Decorator: Restrict command to admin tier or higher (admin + root).
+    Checks user_permissions table in database.
+
+    Security: Mid-level permissions for server control and bot management
+    Examples: !server_restart, !backup_db, !sync_stats
+
+    Usage:
+        @is_admin()
+        @commands.command()
+        async def server_restart(self, ctx):
+            # Admin or root can restart server
+            pass
+    """
+    async def predicate(ctx):
+        # Root always has admin access
+        owner_id = getattr(ctx.bot, 'owner_user_id', 0)
+        if ctx.author.id == owner_id:
+            logger.info(f"✅ Admin command authorized (root): {ctx.author}")
+            return True
+
+        # Check database for admin/moderator tier
+        try:
+            db = ctx.bot.db
+            result = await db.fetch_one(
+                "SELECT tier FROM user_permissions WHERE discord_id = $1",
+                ctx.author.id
+            )
+
+            if result and result['tier'] in ['admin', 'moderator']:
+                logger.info(f"✅ Admin command authorized ({result['tier']}): {ctx.author}")
+                return True
+
+            logger.warning(f"⚠️ Unauthorized admin command by {ctx.author} ({ctx.author.id})")
+            await ctx.send("❌ This command requires admin permissions.")
+            return False
+
+        except Exception as e:
+            logger.error(f"Error checking admin permissions: {e}")
+            await ctx.send("❌ Permission check failed.")
+            return False
+
+    return commands.check(predicate)
+
+
+def is_moderator():
+    """
+    Decorator: Restrict command to moderator tier or higher (moderator + admin + root).
+    Checks user_permissions table in database.
+
+    Security: Basic permissions for game metadata and analytics
+    Examples: !enable_analytics, !weapon_diag
+
+    Usage:
+        @is_moderator()
+        @commands.command()
+        async def enable_analytics(self, ctx):
+            # Moderator, admin, or root can enable analytics
+            pass
+    """
+    async def predicate(ctx):
+        # Root always has moderator access
+        owner_id = getattr(ctx.bot, 'owner_user_id', 0)
+        if ctx.author.id == owner_id:
+            logger.info(f"✅ Moderator command authorized (root): {ctx.author}")
+            return True
+
+        # Check database for any tier
+        try:
+            db = ctx.bot.db
+            result = await db.fetch_one(
+                "SELECT tier FROM user_permissions WHERE discord_id = $1",
+                ctx.author.id
+            )
+
+            if result and result['tier'] in ['admin', 'moderator']:
+                logger.info(f"✅ Moderator command authorized ({result['tier']}): {ctx.author}")
+                return True
+
+            logger.warning(f"⚠️ Unauthorized moderator command by {ctx.author} ({ctx.author.id})")
+            await ctx.send("❌ This command requires moderator permissions.")
+            return False
+
+        except Exception as e:
+            logger.error(f"Error checking moderator permissions: {e}")
+            await ctx.send("❌ Permission check failed.")
+            return False
+
+    return commands.check(predicate)

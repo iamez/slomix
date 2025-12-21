@@ -3,7 +3,9 @@ from pydantic import BaseModel
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from bot.core.season_manager import SeasonManager
-from bot.core.utils import escape_like_pattern  # SQL injection protection for LIKE queries
+from bot.core.utils import (
+    escape_like_pattern,
+)  # SQL injection protection for LIKE queries
 from bot.config import load_config
 from website.backend.services.website_session_data_service import (
     WebsiteSessionDataService as SessionDataService,
@@ -16,6 +18,39 @@ router = APIRouter()
 @router.get("/status")
 async def get_status():
     return {"status": "online", "service": "Slomix API"}
+
+
+@router.get("/stats/overview")
+async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
+    """Get homepage overview statistics"""
+    try:
+        # Total rounds tracked
+        rounds_count = await db.fetch_val("SELECT COUNT(*) FROM rounds")
+
+        # Unique players
+        players_count = await db.fetch_val(
+            "SELECT COUNT(DISTINCT player_guid) FROM player_comprehensive_stats"
+        )
+
+        # Total gaming sessions
+        sessions_count = await db.fetch_val(
+            "SELECT COUNT(DISTINCT gaming_session_id) FROM rounds WHERE gaming_session_id IS NOT NULL"
+        )
+
+        # Total kills
+        total_kills = await db.fetch_val(
+            "SELECT COALESCE(SUM(kills), 0) FROM player_comprehensive_stats"
+        )
+
+        return {
+            "rounds": rounds_count or 0,
+            "players": players_count or 0,
+            "sessions": sessions_count or 0,
+            "total_kills": total_kills or 0,
+        }
+    except Exception as e:
+        print(f"Error fetching overview stats: {e}")
+        return {"rounds": 0, "players": 0, "sessions": 0, "total_kills": 0}
 
 
 @router.get("/seasons/current")
@@ -493,7 +528,9 @@ async def get_weapon_stats(
     # else: all time, no date filter
 
     # Build dynamic SUM for each weapon
-    sums = ", ".join([f"COALESCE(SUM({col}), 0) as {name}" for name, col in weapon_columns.items()])
+    sums = ", ".join(
+        [f"COALESCE(SUM({col}), 0) as {name}" for name, col in weapon_columns.items()]
+    )
 
     query = f"""
         SELECT {sums}
@@ -515,10 +552,12 @@ async def get_weapon_stats(
     for i, (name, _) in enumerate(weapon_columns.items()):
         kills = row[i] or 0
         if kills > 0:  # Only include weapons with kills
-            weapons.append({
-                "name": name.replace("_", " ").title(),
-                "kills": int(kills),
-            })
+            weapons.append(
+                {
+                    "name": name.replace("_", " ").title(),
+                    "kills": int(kills),
+                }
+            )
 
     # Sort by kills descending
     weapons.sort(key=lambda x: x["kills"], reverse=True)
@@ -530,10 +569,45 @@ async def get_weapon_stats(
 async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)):
     """
     Get detailed stats for a specific match/round.
-    match_id format: YYYY-MM-DD_mapname_roundN or round_date string
+    match_id can be: round ID (numeric) or round_date string
     """
-    # Parse match_id - could be round_date or formatted identifier
-    # Try to find the match by various identifiers
+    # First, get the round info
+    if match_id.isdigit():
+        # It's a round ID
+        round_query = """
+            SELECT id, map_name, round_number, round_date, winner_team,
+                   actual_time, round_outcome, gaming_session_id
+            FROM rounds
+            WHERE id = $1
+        """
+        round_row = await db.fetch_one(round_query, (int(match_id),))
+    else:
+        # It's a date - get latest round for that date
+        round_query = """
+            SELECT id, map_name, round_number, round_date, winner_team,
+                   actual_time, round_outcome, gaming_session_id
+            FROM rounds
+            WHERE round_date = $1
+            ORDER BY CAST(REPLACE(round_time, ':', '') AS INTEGER) DESC
+            LIMIT 1
+        """
+        round_row = await db.fetch_one(round_query, (match_id,))
+
+    if not round_row:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    round_id = round_row[0]
+    map_name = round_row[1]
+    round_number = round_row[2]
+    round_date = round_row[3]
+    winner_team = round_row[4]
+    actual_time = round_row[5]
+    round_outcome = round_row[6]
+
+    # Convert winner_team int to string
+    winner = "Allies" if winner_team == 1 else "Axis" if winner_team == 2 else "Draw"
+
+    # Get player stats for this specific round
     query = """
         SELECT
             player_name,
@@ -547,60 +621,89 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
             headshots,
             revives_given,
             accuracy,
-            map_name,
-            round_date,
-            round_number,
-            stopwatch_time
+            gibs,
+            self_kills,
+            team_kills
         FROM player_comprehensive_stats
         WHERE round_date = $1
-        ORDER BY damage_given DESC
+          AND map_name = $2
+          AND round_number = $3
+        ORDER BY team, damage_given DESC
     """
 
     try:
-        rows = await db.fetch_all(query, (match_id,))
+        rows = await db.fetch_all(query, (round_date, map_name, round_number))
     except Exception as e:
         print(f"Error fetching match details: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if not rows:
-        raise HTTPException(status_code=404, detail="Match not found")
-
-    # Extract match info from first row
-    first = rows[0]
-    match_info = {
-        "map_name": first[11],
-        "round_date": first[12],
-        "round_number": first[13],
-        "stopwatch_time": first[14],
-    }
+        raise HTTPException(status_code=404, detail="No player stats found")
 
     # Group players by team
-    players = []
+    team1_players = []
+    team2_players = []
+
     for row in rows:
         time_played = row[5] or 0
         dpm = (row[3] / (time_played / 60)) if time_played > 0 else 0
-        kd = row[1] / row[2] if row[2] > 0 else row[1]
+        kd = row[1] / row[2] if row[2] > 0 else float(row[1])
 
-        players.append({
+        player = {
             "name": row[0],
-            "kills": row[1],
-            "deaths": row[2],
-            "damage_given": row[3],
-            "damage_received": row[4],
+            "kills": row[1] or 0,
+            "deaths": row[2] or 0,
+            "damage_given": row[3] or 0,
+            "damage_received": row[4] or 0,
             "time_played": time_played,
             "team": row[6],
-            "xp": row[7],
-            "headshots": row[8],
-            "revives": row[9],
-            "accuracy": row[10],
+            "xp": row[7] or 0,
+            "headshots": row[8] or 0,
+            "revives": row[9] or 0,
+            "accuracy": round(row[10] or 0, 1),
+            "gibs": row[11] or 0,
+            "selfkills": row[12] or 0,
+            "teamkills": row[13] or 0,
             "dpm": round(dpm, 1),
             "kd": round(kd, 2),
-        })
+        }
+
+        if row[6] == 1:
+            team1_players.append(player)
+        else:
+            team2_players.append(player)
+
+    # Calculate team totals
+    def team_totals(players):
+        return {
+            "kills": sum(p["kills"] for p in players),
+            "deaths": sum(p["deaths"] for p in players),
+            "damage": sum(p["damage_given"] for p in players),
+        }
 
     return {
-        "match": match_info,
-        "players": players,
-        "player_count": len(players),
+        "match": {
+            "id": round_id,
+            "map_name": map_name,
+            "round_number": round_number,
+            "round_date": str(round_date),
+            "winner": winner,
+            "duration": actual_time,
+            "outcome": round_outcome,
+        },
+        "team1": {
+            "name": "Allies",
+            "players": team1_players,
+            "totals": team_totals(team1_players),
+            "is_winner": winner_team == 1,
+        },
+        "team2": {
+            "name": "Axis",
+            "players": team2_players,
+            "totals": team_totals(team2_players),
+            "is_winner": winner_team == 2,
+        },
+        "player_count": len(rows),
     }
 
 
@@ -646,20 +749,22 @@ async def get_player_matches(
         dpm = (row[5] / (time_played / 60)) if time_played > 0 else 0
         kd = row[3] / row[4] if row[4] > 0 else row[3]
 
-        matches.append({
-            "round_date": row[0],
-            "map_name": row[1],
-            "round_number": row[2],
-            "kills": row[3],
-            "deaths": row[4],
-            "damage": row[5],
-            "time_played": time_played,
-            "team": row[7],
-            "xp": row[8],
-            "accuracy": row[9],
-            "dpm": round(dpm, 1),
-            "kd": round(kd, 2),
-        })
+        matches.append(
+            {
+                "round_date": row[0],
+                "map_name": row[1],
+                "round_number": row[2],
+                "kills": row[3],
+                "deaths": row[4],
+                "damage": row[5],
+                "time_played": time_played,
+                "team": row[7],
+                "xp": row[8],
+                "accuracy": row[9],
+                "dpm": round(dpm, 1),
+                "kd": round(kd, 2),
+            }
+        )
 
     return matches
 

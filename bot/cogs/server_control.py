@@ -28,7 +28,7 @@ import discord
 import paramiko
 from discord.ext import commands
 
-from bot.core.checks import is_admin_channel
+from bot.core.checks import is_admin
 from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger('ServerControl')
@@ -251,7 +251,7 @@ class ServerControl(commands.Cog):
     # SERVER PROCESS CONTROL
     # ========================================
     
-    @is_admin_channel()
+    @is_admin()
     @commands.command(name='server_status', aliases=['status', 'srv_status'])
     async def server_status(self, ctx):
         """💚 Check if ET:Legacy server is running"""
@@ -314,7 +314,7 @@ class ServerControl(commands.Cog):
             await ctx.send(f"❌ Error checking status: {sanitize_error_message(e)}")
     
     @commands.command(name='server_start', aliases=['start', 'srv_start'])
-    @is_admin_channel()
+    @is_admin()
     async def server_start(self, ctx):
         """🚀 Start the ET:Legacy server (Admin channel only)"""
         await self.log_action(ctx, "Server Start", "Attempting to start server...")
@@ -369,7 +369,7 @@ class ServerControl(commands.Cog):
             await self.log_action(ctx, "Server Start Failed", "❌ Exception")
     
     @commands.command(name='server_stop', aliases=['stop', 'srv_stop'])
-    @is_admin_channel()
+    @is_admin()
     async def server_stop(self, ctx):
         """🛑 Stop the ET:Legacy server (Admin channel only)"""
         if not await self.confirm_action(ctx, "STOP server"):
@@ -424,7 +424,7 @@ class ServerControl(commands.Cog):
             await self.log_action(ctx, "Server Stop Failed", "❌ Exception")
     
     @commands.command(name='server_restart', aliases=['restart', 'srv_restart'])
-    @is_admin_channel()
+    @is_admin()
     async def server_restart(self, ctx):
         """🔄 Restart the ET:Legacy server (Admin channel only)"""
         if not await self.confirm_action(ctx, "RESTART server"):
@@ -589,8 +589,13 @@ class ServerControl(commands.Cog):
         await ctx.send(f"🗺️ Changing map to `{map_name}`...")
         
         try:
+            # Sanitize map name to prevent RCON command injection
+            safe_map_name = sanitize_rcon_input(map_name)
+            if safe_map_name != map_name:
+                logger.warning(f"⚠️ Map name sanitized: '{map_name}' -> '{safe_map_name}'")
+
             rcon = ETLegacyRCON(self.rcon_host, self.rcon_port, self.rcon_password)
-            rcon.send_command(f'map {map_name}')
+            rcon.send_command(f'map {safe_map_name}')
             rcon.close()
             
             embed = discord.Embed(

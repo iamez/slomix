@@ -320,102 +320,102 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 )
                 logger.info(f"💾 Cached stats for {primary_name}")
 
-                # Calculate stats
-                (
-                    games,
-                    kills,
-                    deaths,
-                    dmg,
-                    dmg_recv,
-                    hs,
-                    avg_dpm,
-                    avg_kd,
-                ) = overall
-                hits, shots, hs_weapon = (
-                    weapon_overall if weapon_overall else (0, 0, 0)
+            # Calculate stats (runs for both cache HIT and MISS)
+            (
+                games,
+                kills,
+                deaths,
+                dmg,
+                dmg_recv,
+                hs,
+                avg_dpm,
+                avg_kd,
+            ) = overall
+            hits, shots, hs_weapon = (
+                weapon_overall if weapon_overall else (0, 0, 0)
+            )
+
+            # Handle None values from database
+            kills = kills or 0
+            deaths = deaths or 0
+            kd_ratio = StatsCalculator.calculate_kd(kills, deaths)
+            accuracy = StatsCalculator.calculate_accuracy(hits, shots)
+            hs_pct = StatsCalculator.calculate_headshot_percentage(hs, hits)
+
+            # Get formatted player name with badges and custom display name
+            formatted_name = await self.player_formatter.format_player(
+                player_guid,
+                primary_name,
+                include_badges=True
+            )
+
+            # Build embed with enhanced title
+            embed = discord.Embed(
+                title="📊 Player Statistics",
+                description=f"**{formatted_name}**",
+                color=0x5865F2,  # Discord Blurple
+                timestamp=datetime.now(),
+            )
+
+            # Enhanced stat display with better formatting
+            embed.add_field(
+                name="🎮 Career Overview",
+                value=(
+                    f"**Rounds Played:** `{games:,}`\n"
+                    f"**K/D Ratio:** `{kd_ratio:.2f}`\n"
+                    f"**Avg DPM:** `{avg_dpm:.1f}`" if avg_dpm else "`0.0`"
+                ),
+                inline=True,
+            )
+
+            embed.add_field(
+                name="⚔️ Combat Stats",
+                value=(
+                    f"**Kills:** `{kills:,}` 💀\n"
+                    f"**Deaths:** `{deaths:,}` ☠️\n"
+                    f"**Headshots:** `{hs:,}` ({hs_pct:.1f}%) 🎯"
+                ),
+                inline=True,
+            )
+
+            embed.add_field(
+                name="🎯 Performance",
+                value=(
+                    f"**Accuracy:** `{accuracy:.1f}%`\n"
+                    f"**Damage:** `{dmg:,}` ⬆️\n"
+                    f"**Taken:** `{dmg_recv:,}` ⬇️"
+                ),
+                inline=True,
+            )
+
+            # Enhanced weapons display
+            if fav_weapons:
+                medals = ["🥇", "🥈", "🥉"]
+                weapons_text = "\n".join(
+                    [
+                        f"{medals[i]} **{w[0].replace('WS_', '').replace('_', ' ').title()}** • `{w[1]:,} kills`"
+                        for i, w in enumerate(fav_weapons)
+                    ]
                 )
-
-                # Handle None values from database
-                kills = kills or 0
-                deaths = deaths or 0
-                kd_ratio = StatsCalculator.calculate_kd(kills, deaths)
-                accuracy = StatsCalculator.calculate_accuracy(hits, shots)
-                hs_pct = StatsCalculator.calculate_headshot_percentage(hs, hits)
-
-                # Get formatted player name with badges and custom display name
-                formatted_name = await self.player_formatter.format_player(
-                    player_guid,
-                    primary_name,
-                    include_badges=True
-                )
-
-                # Build embed with enhanced title
-                embed = discord.Embed(
-                    title="📊 Player Statistics",
-                    description=f"**{formatted_name}**",
-                    color=0x5865F2,  # Discord Blurple
-                    timestamp=datetime.now(),
-                )
-
-                # Enhanced stat display with better formatting
                 embed.add_field(
-                    name="🎮 Career Overview",
-                    value=(
-                        f"**Rounds Played:** `{games:,}`\n"
-                        f"**K/D Ratio:** `{kd_ratio:.2f}`\n"
-                        f"**Avg DPM:** `{avg_dpm:.1f}`" if avg_dpm else "`0.0`"
-                    ),
-                    inline=True,
+                    name="🔫 Top Weapons",
+                    value=weapons_text,
+                    inline=False,
                 )
 
+            # Enhanced recent matches display
+            if recent:
+                recent_text = "\n".join(
+                    [
+                        f"`{r[0][:10]}` • **{r[1][:20]}** • `{r[2]}K` / `{r[3]}D`"
+                        for r in recent
+                    ]
+                )
                 embed.add_field(
-                    name="⚔️ Combat Stats",
-                    value=(
-                        f"**Kills:** `{kills:,}` 💀\n"
-                        f"**Deaths:** `{deaths:,}` ☠️\n"
-                        f"**Headshots:** `{hs:,}` ({hs_pct:.1f}%) 🎯"
-                    ),
-                    inline=True,
+                    name="📅 Recent Activity",
+                    value=recent_text,
+                    inline=False,
                 )
-
-                embed.add_field(
-                    name="🎯 Performance",
-                    value=(
-                        f"**Accuracy:** `{accuracy:.1f}%`\n"
-                        f"**Damage:** `{dmg:,}` ⬆️\n"
-                        f"**Taken:** `{dmg_recv:,}` ⬇️"
-                    ),
-                    inline=True,
-                )
-
-                # Enhanced weapons display
-                if fav_weapons:
-                    medals = ["🥇", "🥈", "🥉"]
-                    weapons_text = "\n".join(
-                        [
-                            f"{medals[i]} **{w[0].replace('WS_', '').replace('_', ' ').title()}** • `{w[1]:,} kills`"
-                            for i, w in enumerate(fav_weapons)
-                        ]
-                    )
-                    embed.add_field(
-                        name="🔫 Top Weapons",
-                        value=weapons_text,
-                        inline=False,
-                    )
-
-                # Enhanced recent matches display
-                if recent:
-                    recent_text = "\n".join(
-                        [
-                            f"`{r[0][:10]}` • **{r[1][:20]}** • `{r[2]}K` / `{r[3]}D`"
-                            for r in recent
-                        ]
-                    )
-                    embed.add_field(
-                        name="📅 Recent Activity",
-                        value=recent_text,
-                        inline=False,
-                    )
 
             # Get aliases for footer (always fresh, not cached)
             aliases = await self.bot.db_adapter.fetch_all(
@@ -835,7 +835,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 try:
                     results = await self.bot.db_adapter.fetch_all(query)
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Failed to fetch leaderboard page {page}: {e}")
                     return None
 
                 if not results:

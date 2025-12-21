@@ -25,7 +25,7 @@ import discord
 # import aiosqlite  # Removed - using database adapter
 from discord.ext import commands
 
-from bot.core.checks import is_admin_channel
+from bot.core.checks import is_owner, is_admin, is_moderator
 from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ class AdminCog(commands.Cog, name="Admin"):
         self.bot = bot
         logger.info("🔧 AdminCog loaded (cache_clear, weapon_diag)")
 
-    @is_admin_channel()
+    @is_admin()
     @commands.command(name="cache_clear")
     async def cache_clear(self, ctx):
         """🗑️ Clear query cache (Admin only - use in admin channel)."""
@@ -64,15 +64,11 @@ class AdminCog(commands.Cog, name="Admin"):
             logger.error(f"Error in cache_clear: {e}", exc_info=True)
             await ctx.send(f"❌ Error clearing cache: {sanitize_error_message(e)}")
 
-    @is_admin_channel()
+    @is_owner()
     @commands.command(name="reload")
     async def reload_bot(self, ctx):
-        """🔄 Reload the bot (Admin only) - Reconnects to Discord with updated code."""
+        """🔄 Reload the bot (Root only) - Reconnects to Discord with updated code."""
         try:
-            if not ctx.author.guild_permissions.manage_guild:
-                await ctx.send("❌ You don't have permission to reload the bot. **Required:** Manage Server")
-                return
-            
             await ctx.send("🔄 Reloading bot... This will take a few seconds.")
             logger.info(f"🔄 Bot reload initiated by {ctx.author}")
             
@@ -104,7 +100,7 @@ class AdminCog(commands.Cog, name="Admin"):
             logger.error(f"Error in reload_bot: {e}", exc_info=True)
             await ctx.send(f"❌ Error reloading bot: {sanitize_error_message(e)}")
 
-    @is_admin_channel()
+    @is_moderator()
     @commands.command(name="weapon_diag")
     async def weapon_diag(self, ctx, round_id: Optional[int] = None):
         """🧪 Diagnostic: show weapon stats aggregates for a session."""

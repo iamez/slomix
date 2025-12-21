@@ -7,7 +7,7 @@
 -- DROP USER IF EXISTS website_readonly;
 
 -- Create the read-only user
-CREATE USER website_readonly WITH PASSWORD 'change_this_password';
+CREATE USER website_readonly WITH PASSWORD 'WebsiteReadOnly2024!';
 
 -- Grant connect permission to the database
 GRANT CONNECT ON DATABASE et_stats TO website_readonly;

@@ -65,6 +65,8 @@ setup_logging(getattr(logging, log_level))
 
 # Get bot logger
 logger = get_logger("bot.core")
+webhook_logger = get_logger("bot.webhook")  # Separate logger for webhook activity
+
 logger.info("🚀 ET:LEGACY DISCORD BOT - STARTING UP")
 logger.info(f"📝 Log Level: {log_level}")
 logger.info(f"🐍 Python: {sys.version}")
@@ -174,11 +176,11 @@ class UltimateETLegacyBot(commands.Bot):
 
         # 📊 Database Configuration - Load config and create adapter
         import os
-        
+
         # Load configuration (from env vars or bot_config.json)
         self.config = load_config()
         logger.info(f"✅ Configuration loaded: {self.config}")
-        
+
         # Create PostgreSQL database adapter
         adapter_kwargs = self.config.get_database_adapter_kwargs()
         self.db_adapter = create_adapter(**adapter_kwargs)
@@ -228,7 +230,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(
                 "⚠️ Automation system DISABLED (set AUTOMATION_ENABLED=true to enable)"
             )
-        
+
         # SSH monitoring optimization - counter-based intervals
         self.ssh_check_counter = 0  # Tracks cycles for interval-based checking
         self.last_file_download_time = None  # Track last file download for grace period logic
@@ -263,7 +265,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info(
                 f"📊 Thresholds: {self.session_start_threshold}+ to start, <{self.session_end_threshold} for {self.session_end_delay}s to end"
             )
-        
+
         if self.bot_command_channels:
             logger.info(
                 f"🔒 Bot commands restricted to channels: {self.bot_command_channels}"
@@ -294,6 +296,111 @@ class UltimateETLegacyBot(commands.Bot):
         self.command_stats = {}
         self.error_count = 0
 
+        # 🚨 Error tracking for admin notifications
+        self._consecutive_errors = {}
+
+    # =========================================================================
+    # 🚨 ADMIN NOTIFICATION SYSTEM
+    # =========================================================================
+
+    async def alert_admins(self, title: str, description: str, severity: str = "warning"):
+        """
+        Send critical error notifications to admin channel.
+
+        Args:
+            title: Short title for the alert
+            description: Detailed description of the issue
+            severity: One of "info", "warning", "error", "critical"
+
+        Returns:
+            True if notification was sent, False otherwise
+        """
+        if not self.admin_channel_id:
+            logger.warning(f"Cannot send admin alert (no admin_channel_id configured): {title}")
+            return False
+
+        try:
+            channel = self.get_channel(self.admin_channel_id)
+            if not channel:
+                logger.error(f"Admin channel {self.admin_channel_id} not found")
+                return False
+
+            # Color based on severity
+            colors = {
+                "info": 0x3498DB,      # Blue
+                "warning": 0xF39C12,   # Orange
+                "error": 0xE74C3C,     # Red
+                "critical": 0x8B0000,  # Dark Red
+            }
+            color = colors.get(severity, colors["warning"])
+
+            # Emoji based on severity
+            emojis = {
+                "info": "ℹ️",
+                "warning": "⚠️",
+                "error": "❌",
+                "critical": "🚨",
+            }
+            emoji = emojis.get(severity, "⚠️")
+
+            embed = discord.Embed(
+                title=f"{emoji} {title}",
+                description=description[:4000],  # Discord limit
+                color=color,
+                timestamp=datetime.now()
+            )
+            embed.set_footer(text=f"Severity: {severity.upper()}")
+
+            await channel.send(embed=embed)
+            logger.info(f"Admin alert sent: {title} ({severity})")
+            return True
+
+        except discord.Forbidden:
+            logger.error(f"Permission denied to send to admin channel {self.admin_channel_id}")
+            return False
+        except Exception as e:
+            logger.error(f"Failed to send admin alert: {e}")
+            return False
+
+    async def track_error(self, error_key: str, error_msg: str, max_consecutive: int = 3):
+        """
+        Track consecutive errors and alert admins when threshold is reached.
+
+        Args:
+            error_key: Unique identifier for this error type (e.g., "ssh_monitor")
+            error_msg: Human-readable error message
+            max_consecutive: Number of consecutive errors before alerting
+
+        Returns:
+            Current consecutive error count for this key
+        """
+        self._consecutive_errors[error_key] = self._consecutive_errors.get(error_key, 0) + 1
+        count = self._consecutive_errors[error_key]
+
+        if count == max_consecutive:
+            await self.alert_admins(
+                f"{error_key.replace('_', ' ').title()} Failing",
+                f"**{count} consecutive failures detected.**\n\n"
+                f"Latest error: {error_msg}\n\n"
+                f"This service may need attention.",
+                severity="error"
+            )
+        elif count > max_consecutive and count % 10 == 0:
+            # Reminder every 10 failures after threshold
+            await self.alert_admins(
+                f"{error_key.replace('_', ' ').title()} Still Failing",
+                f"**{count} total consecutive failures.**\n\n"
+                f"Latest error: {error_msg}",
+                severity="critical"
+            )
+
+        return count
+
+    def reset_error_tracking(self, error_key: str):
+        """Reset consecutive error count for a key (call on success)."""
+        if error_key in self._consecutive_errors:
+            self._consecutive_errors[error_key] = 0
+
     async def close(self):
         """
         🔌 Clean up database connections and close bot gracefully
@@ -304,7 +411,7 @@ class UltimateETLegacyBot(commands.Bot):
                 logger.info("✅ Database adapter closed successfully")
         except Exception as e:
             logger.error(f"⚠️ Error closing database adapter: {e}")
-        
+
         # Call parent close
         await super().close()
 
@@ -324,9 +431,9 @@ class UltimateETLegacyBot(commands.Bot):
             else:
                 # PostgreSQL: Query information_schema
                 query = """
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'player_comprehensive_stats' 
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'player_comprehensive_stats'
                     ORDER BY ordinal_position
                 """
                 columns = await self.db_adapter.fetch_all(query)
@@ -425,6 +532,14 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"❌ Failed to load Admin Cog: {e}", exc_info=True)
 
+        # 🔒 Load Permission Management Cog (user whitelist, permission tiers)
+        try:
+            from bot.cogs.permission_management_cog import PermissionManagement
+            await self.add_cog(PermissionManagement(self))
+            logger.info("✅ Permission Management Cog loaded (admin_add, admin_remove, admin_list, admin_audit)")
+        except Exception as e:
+            logger.error(f"❌ Failed to load Permission Management Cog: {e}", exc_info=True)
+
         # 🔗 Load Link Cog (player account linking and management)
         try:
             from bot.cogs.link_cog import LinkCog
@@ -497,7 +612,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info('Team Management Cog loaded (set_teams, assign_player)')
         except Exception as e:
             logger.error(f'Failed to load Team Management Cog: {e}', exc_info=True)
-        
+
         # Load Team System Cog (comprehensive team tracking)
         try:
             from bot.cogs.team_cog import TeamCog
@@ -567,7 +682,7 @@ class UltimateETLegacyBot(commands.Bot):
             # SSHMonitor only downloads + imports, but endstats_monitor also posts to Discord.
             # Having both running causes a race condition where SSHMonitor processes files first,
             # marking them as "already processed" before endstats_monitor can post to Discord.
-            # 
+            #
             # The endstats_monitor task loop (line ~1315) handles:
             # 1. SSH connection to game server
             # 2. File download
@@ -632,22 +747,22 @@ class UltimateETLegacyBot(commands.Bot):
     async def _handle_ws_file_notification(self, filename: str):
         """
         Handle file notification from WebSocket push.
-        
+
         Called by StatsWebSocketClient when VPS notifies of new file.
         Downloads file via SSH, processes, and posts to Discord.
-        
+
         Args:
             filename: Name of the new stats file on remote server
         """
         try:
             logger.info(f"📥 WebSocket notification: {filename}")
-            
+
             # Check if already processed (race condition prevention)
             # should_process_file returns True if file needs processing
             if not await self.file_tracker.should_process_file(filename):
                 logger.debug(f"⏭️ File already processed: {filename}")
                 return
-            
+
             # Build SSH config
             ssh_config = {
                 "host": self.config.ssh_host,
@@ -656,33 +771,33 @@ class UltimateETLegacyBot(commands.Bot):
                 "key_path": self.config.ssh_key_path,
                 "remote_path": self.config.ssh_remote_path,
             }
-            
+
             # Download file via SSH
             local_path = await self.ssh_download_file(
                 ssh_config, filename, self.config.stats_directory
             )
-            
+
             if not local_path:
                 logger.error(f"❌ Failed to download: {filename}")
                 return
-            
+
             # Track download time for grace period logic (fallback SSH uses this)
             self.last_file_download_time = datetime.now()
-            
+
             # Wait 3 seconds for file to fully write on remote
             logger.debug("⏳ Waiting 3s for file to fully write...")
             await asyncio.sleep(3)
-            
+
             # Process the file (parse + import + Discord post)
             result = await self.process_gamestats_file(local_path, filename)
-            
+
             if result and result.get('success'):
                 # Post to Discord via round publisher
                 await self.round_publisher.publish_round_stats(filename, result)
                 logger.info(f"✅ WebSocket-triggered import complete: {filename}")
             else:
                 logger.warning(f"⚠️ File processed but no stats: {filename}")
-                
+
         except Exception as e:
             logger.error(f"❌ WebSocket file handler error: {e}", exc_info=True)
 
@@ -746,7 +861,7 @@ class UltimateETLegacyBot(commands.Bot):
             ssh = None
             try:
                 from bot.automation.ssh_handler import configure_ssh_host_key_policy
-                
+
                 ssh = paramiko.SSHClient()
                 configure_ssh_host_key_policy(ssh)
 
@@ -805,7 +920,7 @@ class UltimateETLegacyBot(commands.Bot):
             if self.config.database_type == "postgres":
                 from postgresql_database_manager import PostgreSQLDatabase
                 from pathlib import Path
-                
+
                 # Create database manager instance (reuses existing pool)
                 db_config = {
                     'host': self.config.postgres_host,
@@ -814,30 +929,37 @@ class UltimateETLegacyBot(commands.Bot):
                     'user': self.config.postgres_user,
                     'password': self.config.postgres_password
                 }
-                
+
                 db_manager = PostgreSQLDatabase(db_config)
                 await db_manager.connect()
-                
+
                 # 🔧 FIX: Use process_file() not import_stats_file() (method doesn't exist!)
                 success, message = await db_manager.process_file(Path(local_path))
-                
+
                 await db_manager.disconnect()
-                
+
                 if not success:
                     raise Exception(f"Import failed: {message}")
-                
+
                 # Parse file to get player count for return value
                 from community_stats_parser import C0RNP0RN3StatsParser
-                parser = C0RNP0RN3StatsParser()
+                parser = C0RNP0RN3StatsParser(
+                    round_match_window_minutes=self.config.round_match_window_minutes
+                )
                 stats_data = parser.parse_stats_file(local_path)
-                
-                # Mark as processed
+
+                # Mark as processed (with SHA256 hash for integrity verification)
                 try:
-                    await self.file_tracker.mark_processed(filename, success=True)
+                    await self.file_tracker.mark_processed(
+                        filename, success=True, file_path=local_path
+                    )
                     self.processed_files.add(filename)
                 except Exception as e:
                     logger.debug(f"Failed to mark {filename} as processed: {e}")
-                
+
+                # Reset error tracking on success
+                self.reset_error_tracking("file_processing")
+
                 return {
                     "success": True,
                     "round_id": None,  # Database manager doesn't return round_id
@@ -850,7 +972,9 @@ class UltimateETLegacyBot(commands.Bot):
                 from community_stats_parser import C0RNP0RN3StatsParser
 
                 # Parse using existing parser (it reads the file itself)
-                parser = C0RNP0RN3StatsParser()
+                parser = C0RNP0RN3StatsParser(
+                    round_match_window_minutes=self.config.round_match_window_minutes
+                )
                 stats_data = parser.parse_stats_file(local_path)
 
                 if not stats_data or stats_data.get("error"):
@@ -861,12 +985,17 @@ class UltimateETLegacyBot(commands.Bot):
 
                 # Import to database using existing import logic
                 round_id = await self._import_stats_to_db(stats_data, filename)
-                # Mark file as processed only after successful import
+                # Mark file as processed only after successful import (with SHA256)
                 try:
-                    await self.file_tracker.mark_processed(filename, success=True)
+                    await self.file_tracker.mark_processed(
+                        filename, success=True, file_path=local_path
+                    )
                     self.processed_files.add(filename)
                 except Exception as e:
                     logger.debug(f"Failed to mark {filename} as processed: {e}")
+
+                # Reset error tracking on success
+                self.reset_error_tracking("file_processing")
 
                 return {
                     "success": True,
@@ -877,7 +1006,15 @@ class UltimateETLegacyBot(commands.Bot):
                 }
 
         except Exception as e:
-            logger.error(f"❌ Processing failed: {e}")
+            logger.error(f"❌ Processing failed for {filename}: {e}")
+
+            # Track consecutive processing failures
+            await self.track_error(
+                "file_processing",
+                f"Failed to process {filename}: {e}",
+                max_consecutive=5
+            )
+
             return {
                 "success": False,
                 "round_id": None,
@@ -978,7 +1115,7 @@ class UltimateETLegacyBot(commands.Bot):
             if stats_data.get('match_summary'):
                 logger.info("📋 Importing match summary (cumulative R1+R2 stats)...")
                 match_summary = stats_data['match_summary']
-                
+
                 # Check if match summary already exists
                 check_summary_query = """
                     SELECT id FROM rounds
@@ -988,7 +1125,7 @@ class UltimateETLegacyBot(commands.Bot):
                     check_summary_query,
                     (date_part, stats_data["map_name"]),
                 )
-                
+
                 if not existing_summary:
                     # Insert match summary as round_number = 0 (use same gaming_session_id as the rounds)
                     insert_summary_query = """
@@ -1014,13 +1151,13 @@ class UltimateETLegacyBot(commands.Bot):
                             gaming_session_id,  # Same session as R1/R2
                         ),
                     )
-                    
+
                     # Insert match summary player stats
                     for player in match_summary.get("players", []):
                         await self._insert_player_stats(
                             match_summary_id, date_part, match_summary, player
                         )
-                    
+
                     logger.info(
                         f"✅ Imported match summary (ID: {match_summary_id}) with "
                         f"{len(match_summary.get('players', []))} players"
@@ -1118,7 +1255,7 @@ class UltimateETLegacyBot(commands.Bot):
             else:
                 logger.debug(f"🎮 Continuing session #{prev_session_id} (gap: {gap_minutes:.1f} min from previous round)")
                 return prev_session_id
-                
+
         except Exception as e:
             logger.warning(f"⚠️ Error calculating gaming_session_id: {e}. Using NULL.")
             return None
@@ -1348,7 +1485,7 @@ class UltimateETLegacyBot(commands.Bot):
                 f"Failed to insert weapon stats for {player.get('name')} (session {round_id}): {e}",
                 exc_info=True,
             )
-        
+
         # 🔗 CRITICAL: Update player aliases for !stats and !link commands
         await self._update_player_alias(
             player.get("guid", "UNKNOWN"),
@@ -1359,7 +1496,7 @@ class UltimateETLegacyBot(commands.Bot):
     async def _update_player_alias(self, guid, alias, last_seen_date):
         """
         Track player aliases for !stats and !link commands
-        
+
         This is CRITICAL for !stats and !link to work properly!
         Updates the player_aliases table every time we see a player.
         """
@@ -1370,14 +1507,14 @@ class UltimateETLegacyBot(commands.Bot):
                 last_seen_datetime = datetime.strptime(last_seen_date, '%Y-%m-%d')
             else:
                 last_seen_datetime = last_seen_date
-            
+
             # Check if this GUID+alias combination exists
             check_query = 'SELECT times_seen FROM player_aliases WHERE guid = ? AND alias = ?'
             existing = await self.db_adapter.fetch_one(check_query, (guid, alias))
 
             if existing:
                 # Update existing alias: increment times_seen and update last_seen
-                update_query = '''UPDATE player_aliases 
+                update_query = '''UPDATE player_aliases
                        SET times_seen = times_seen + 1, last_seen = ?
                        WHERE guid = ? AND alias = ?'''
                 await self.db_adapter.execute(update_query, (last_seen_datetime, guid, alias))
@@ -1478,10 +1615,10 @@ class UltimateETLegacyBot(commands.Bot):
                     cet = ZoneInfo("Europe/Paris")
                 except ImportError:
                     cet = None
-            
+
             now = datetime.now(cet) if cet else datetime.now()
             hour = now.hour
-            
+
             # Skip SSH check during dead hours (02:00-11:00)
             if 2 <= hour < 11:
                 # Log once per hour instead of every 60s
@@ -1489,26 +1626,27 @@ class UltimateETLegacyBot(commands.Bot):
                     self._last_dead_hour_log = hour
                     logger.info(f"⏸️ Dead hours ({hour:02d}:00 CET) - SSH checks paused until 11:00")
                 return
-            
+
             # ========== VOICE DETECTION (Player Count Check) ==========
             total_players = 0
             for channel_id in self.gaming_voice_channels:
                 channel = self.get_channel(channel_id)
                 if channel and hasattr(channel, "members"):
                     total_players += sum(1 for m in channel.members if not m.bot)
-            
+
             # ========== INTERVAL-BASED CHECKING (Counter System with Grace Period) ==========
             self.ssh_check_counter += 1
 
             # Calculate time since last file was downloaded
             grace_period_active = False
+            grace_period_seconds = self.config.monitoring_grace_period_minutes * 60
             if hasattr(self, 'last_file_download_time') and self.last_file_download_time:
                 time_since_last_file = (datetime.now() - self.last_file_download_time).total_seconds()
-                grace_period_active = time_since_last_file < 1800  # 30 minutes grace period
+                grace_period_active = time_since_last_file < grace_period_seconds
 
             if total_players >= 6 or grace_period_active:
                 # ACTIVE MODE: Check every 60 seconds (every 1 cycle)
-                # Triggered by: 6+ players in voice OR within 30min of last file
+                # Triggered by: 6+ players in voice OR within grace period of last file
                 interval = 1
                 mode = "ACTIVE (players)" if total_players >= 6 else "ACTIVE (grace period)"
             else:
@@ -1532,7 +1670,7 @@ class UltimateETLegacyBot(commands.Bot):
                 f"🔍 SSH check triggered ({mode} mode, "
                 f"{total_players} players in voice)"
             )
-            
+
             # ========== SSH CHECK EXECUTION ==========
             # Build SSH config from config object
             ssh_config = {
@@ -1601,9 +1739,9 @@ class UltimateETLegacyBot(commands.Bot):
                         process_start = time.time()
                         result = await self.process_gamestats_file(local_path, filename)
                         process_time = time.time() - process_start
-                        
+
                         logger.info(f"⚙️ Processing completed in {process_time:.2f}s")
-                        
+
                         # 🆕 AUTO-POST to Discord after processing!
                         if result and result.get('success'):
                             logger.info(f"📊 Posting to Discord: {result.get('player_count', 0)} players")
@@ -1615,14 +1753,19 @@ class UltimateETLegacyBot(commands.Bot):
                             logger.warning(f"⚠️ Skipping Discord post")
                     else:
                         logger.error(f"❌ Download failed for {filename}")
-            
+
             if new_files_count == 0:
                 logger.debug(f"✅ All {len(remote_files)} files already processed")
             else:
                 logger.info(f"🎉 Processed {new_files_count} new file(s) this check")
 
+            # Reset error tracking on successful cycle
+            self.reset_error_tracking("ssh_monitor")
+
         except Exception as e:
             logger.error(f"❌ endstats_monitor error: {e}", exc_info=True)
+            # Track consecutive errors and alert admins if threshold reached
+            await self.track_error("ssh_monitor", str(e), max_consecutive=3)
 
     @endstats_monitor.before_loop
     async def before_endstats_monitor(self):
@@ -1737,11 +1880,11 @@ class UltimateETLegacyBot(commands.Bot):
         # Webhook posts to control channel, bot processes and posts to production channel
         if await self._handle_webhook_trigger(message):
             return  # Handled as webhook trigger, don't process as command
-        
+
         # Ignore bot's own messages
         if message.author.bot:
             return
-        
+
         # Only process commands in allowed channels
         # Use bot_command_channels if set, otherwise fall back to public_channels
         allowed_channels = self.bot_command_channels or self.public_channels
@@ -1749,7 +1892,7 @@ class UltimateETLegacyBot(commands.Bot):
             if message.channel.id not in allowed_channels:
                 # Silently ignore messages in non-whitelisted channels
                 return
-        
+
         # Process commands normally
         await self.process_commands(message)
 
@@ -1839,17 +1982,17 @@ class UltimateETLegacyBot(commands.Bot):
     async def _handle_webhook_trigger(self, message) -> bool:
         """
         Handle webhook trigger messages from VPS.
-        
+
         VPS webhook posts to control channel with filename.
         Bot extracts filename, downloads via SSH, processes, and posts stats.
-        
+
         Returns True if message was handled as webhook trigger.
         """
         # Check if webhook trigger is configured
         trigger_channel_id = self.config.webhook_trigger_channel_id
         if not trigger_channel_id:
             return False
-        
+
         # Check if message is in the trigger channel
         if message.channel.id != trigger_channel_id:
             return False
@@ -1861,11 +2004,11 @@ class UltimateETLegacyBot(commands.Bot):
         # CRITICAL: Webhook ID whitelist enforcement
         webhook_whitelist = self.config.webhook_trigger_whitelist
         if not webhook_whitelist:
-            logger.error("⚠️ Webhook trigger disabled: WEBHOOK_TRIGGER_WHITELIST not configured")
+            webhook_logger.error("⚠️ Webhook trigger disabled: WEBHOOK_TRIGGER_WHITELIST not configured")
             return False
 
         if str(message.webhook_id) not in webhook_whitelist:
-            logger.warning(
+            webhook_logger.warning(
                 f"🚨 SECURITY: Unauthorized webhook {message.webhook_id} "
                 f"attempted trigger in channel {message.channel.id}"
             )
@@ -1874,7 +2017,7 @@ class UltimateETLegacyBot(commands.Bot):
         # Check username (additional layer)
         expected_username = self.config.webhook_trigger_username
         if expected_username and message.author.name != expected_username:
-            logger.warning(f"🚨 Username mismatch: {message.author.name}")
+            webhook_logger.warning(f"🚨 Username mismatch: {message.author.name}")
             return False
 
         # HIGH: Rate limit check
@@ -1889,42 +2032,42 @@ class UltimateETLegacyBot(commands.Bot):
             match = re.search(r'`([^`]+\.txt)`', message.content)
             if match:
                 filename = match.group(1)
-        
+
         if not filename:
-            logger.debug(f"No filename found in webhook message")
+            webhook_logger.debug(f"No filename found in webhook message")
             return False
 
         # CRITICAL: Validate filename for security
         if not self._validate_stats_filename(filename):
-            logger.error(f"🚨 SECURITY: Invalid filename from webhook: {filename}")
+            webhook_logger.error(f"🚨 SECURITY: Invalid filename from webhook: {filename}")
             return False
 
-        logger.info(f"📥 Webhook trigger validated: {filename}")
-        
+        webhook_logger.info(f"📥 Webhook trigger validated: {filename}")
+
         # Process the file in background to not block message handling
         asyncio.create_task(self._process_webhook_triggered_file(filename, message))
-        
+
         return True
 
     async def _process_webhook_triggered_file(self, filename: str, trigger_message):
         """
         Process a file triggered by webhook notification.
-        
+
         Downloads file via SSH, parses, imports to DB, and posts stats.
         """
         try:
-            logger.info(f"⚡ Processing webhook-triggered file: {filename}")
-            
+            webhook_logger.info(f"⚡ Processing webhook-triggered file: {filename}")
+
             # Check if already processed (prevent duplicates)
             if not await self.file_tracker.should_process_file(filename):
-                logger.debug(f"⏭️ File already processed: {filename}")
+                webhook_logger.debug(f"⏭️ File already processed: {filename}")
                 # Optionally delete the trigger message
                 try:
                     await trigger_message.delete()
                 except Exception:
                     pass
                 return
-            
+
             # Build SSH config
             ssh_config = {
                 "host": self.config.ssh_host,
@@ -1933,43 +2076,68 @@ class UltimateETLegacyBot(commands.Bot):
                 "key_path": self.config.ssh_key_path,
                 "remote_path": self.config.ssh_remote_path,
             }
-            
+
             # Download file via SSH
             from bot.automation.ssh_handler import SSHHandler
             local_path = await SSHHandler.download_file(
                 ssh_config, filename, self.config.stats_directory
             )
-            
+
             if not local_path:
-                logger.error(f"❌ Failed to download: {filename}")
+                webhook_logger.error(f"❌ Failed to download: {filename}")
+                # React to trigger with failure indicator
+                try:
+                    await trigger_message.add_reaction('❌')
+                    await trigger_message.reply(f"⚠️ Failed to download `{filename}` from server.")
+                except Exception:
+                    pass
                 return
-            
-            logger.info(f"✅ Downloaded: {local_path}")
-            
+
+            webhook_logger.info(f"✅ Downloaded: {local_path}")
+
             # Wait for file to fully write
             await asyncio.sleep(2)
-            
+
             # Process the file (parse and import to DB)
             result = await self.process_gamestats_file(local_path, filename)
-            
+
             if result and result.get('success'):
                 # Post to production stats channel
-                logger.info(f"📊 Posting stats: {result.get('player_count', 0)} players")
+                webhook_logger.info(f"📊 Posting stats: {result.get('player_count', 0)} players")
                 await self.round_publisher.publish_round_stats(filename, result)
-                logger.info(f"✅ Successfully processed and posted: {filename}")
-                
+                webhook_logger.info(f"✅ Successfully processed and posted: {filename}")
+
                 # Delete the trigger message (clean up control channel)
                 try:
                     await trigger_message.delete()
-                    logger.debug(f"🗑️ Deleted trigger message")
+                    webhook_logger.debug(f"🗑️ Deleted trigger message")
                 except Exception as e:
-                    logger.debug(f"Could not delete trigger message: {e}")
+                    webhook_logger.debug(f"Could not delete trigger message: {e}")
             else:
                 error_msg = result.get('error', 'Unknown error') if result else 'No result'
-                logger.warning(f"⚠️ Processing failed for {filename}: {error_msg}")
-                
+                webhook_logger.warning(f"⚠️ Processing failed for {filename}: {error_msg}")
+                # Notify trigger channel of processing failure
+                try:
+                    await trigger_message.add_reaction('⚠️')
+                    # Sanitize error message for Discord (remove sensitive paths)
+                    safe_error = error_msg.replace(str(self.config.stats_directory), "[stats_dir]")
+                    await trigger_message.reply(
+                        f"⚠️ Failed to process `{filename}`\n"
+                        f"Error: {safe_error[:200]}"
+                    )
+                except Exception:
+                    pass
+
         except Exception as e:
-            logger.error(f"❌ Error processing webhook-triggered file: {e}", exc_info=True)
+            webhook_logger.error(f"❌ Error processing webhook-triggered file: {e}", exc_info=True)
+            # Notify trigger channel of critical error
+            try:
+                await trigger_message.add_reaction('🚨')
+                await trigger_message.reply(f"🚨 Critical error processing `{filename}`. Check logs.")
+            except Exception:
+                pass
+            # Track for admin alerts
+            await self.track_error("webhook_processing", str(e), max_consecutive=3)
 
     async def _validate_webhook_security_config(self):
         """Validate webhook security configuration on startup."""
@@ -2032,7 +2200,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info("🧹 Cleared old slash commands")
         except Exception as e:
             logger.warning(f"Could not clear slash commands: {e}")
-        
+
         # 🆕 AUTO-DETECT ACTIVE GAMING SESSION ON STARTUP
         await self.voice_session_service.check_startup_voice_state()
 
@@ -2040,12 +2208,12 @@ class UltimateETLegacyBot(commands.Bot):
         """Track command execution start"""
         import time
         ctx.command_start_time = time.time()
-        
+
         command_logger = get_logger('bot.commands')
         user = f"{ctx.author.name}#{ctx.author.discriminator} ({ctx.author.id})"
         guild = f"{ctx.guild.name} ({ctx.guild.id})" if ctx.guild else "DM"
         channel = f"#{ctx.channel.name}" if hasattr(ctx.channel, 'name') else "DM"
-        
+
         command_logger.info(
             f"▶ COMMAND: !{ctx.command.name} | "
             f"User: {user} | Guild: {guild} | Channel: {channel}"
@@ -2055,14 +2223,14 @@ class UltimateETLegacyBot(commands.Bot):
         """Track successful command completion"""
         import time
         duration = time.time() - getattr(ctx, 'command_start_time', time.time())
-        
+
         log_command_execution(
             ctx,
             f"!{ctx.command.name}",
             start_time=getattr(ctx, 'command_start_time', None),
             end_time=time.time()
         )
-        
+
         # Warn about slow commands
         if duration > 5.0:
             log_performance_warning(f"!{ctx.command.name}", duration, threshold=5.0)
@@ -2071,10 +2239,10 @@ class UltimateETLegacyBot(commands.Bot):
         """🚨 Handle command errors"""
         import time
         self.error_count += 1
-        
+
         # Log the error with full context
         duration = time.time() - getattr(ctx, 'command_start_time', time.time())
-        
+
         log_command_execution(
             ctx,
             f"!{ctx.command.name}" if ctx.command else "unknown",

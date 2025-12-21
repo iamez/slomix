@@ -115,6 +115,13 @@ class StopwatchScoringService:
         """
         Calculate total scores for a gaming session.
 
+        In Stopwatch mode, each MAP has TWO ROUNDS:
+        - Round 1: Team A attacks, Team B defends
+        - Round 2: Team B attacks, Team A defends (sides swap)
+
+        We must group rounds by (gaming_session_id, map_name) to pair R1+R2,
+        NOT by match_id (which is unique per file/round).
+
         Args:
             session_date: Session date (YYYY-MM-DD)
             session_ids: Optional list of round IDs to filter
@@ -123,29 +130,32 @@ class StopwatchScoringService:
             Dict with team names as keys and scores, or None if no data
         """
         try:
-            # Get rounds for this session
+            # Get rounds for this session - GROUP BY map_name within session
+            # Key change: We need gaming_session_id to properly pair R1+R2
             if session_ids:
                 placeholders = ','.join(
                     ['$' + str(i+1) for i in range(len(session_ids))]
                 )
                 # nosec B608 - safe: parameterized placeholders ($1, $2...)
                 rounds_query = f"""
-                    SELECT map_name, match_id, round_number, defender_team,
-                           winner_team, time_limit, actual_time
+                    SELECT map_name, gaming_session_id, round_number,
+                           defender_team, winner_team, time_limit, actual_time,
+                           round_date, round_time
                     FROM rounds
                     WHERE id IN ({placeholders})
-                    AND match_id IS NOT NULL
-                    ORDER BY match_id, round_number
+                    AND round_status = 'completed'
+                    ORDER BY gaming_session_id, map_name, round_number
                 """
                 rows = await self.db.fetch_all(rounds_query, tuple(session_ids))
             else:
                 rounds_query = """
-                    SELECT map_name, match_id, round_number, defender_team,
-                           winner_team, time_limit, actual_time
+                    SELECT map_name, gaming_session_id, round_number,
+                           defender_team, winner_team, time_limit, actual_time,
+                           round_date, round_time
                     FROM rounds
                     WHERE SUBSTRING(round_date, 1, 10) = $1
-                    AND match_id IS NOT NULL
-                    ORDER BY match_id, round_number
+                    AND round_status = 'completed'
+                    ORDER BY gaming_session_id, map_name, round_number
                 """
                 rows = await self.db.fetch_all(rounds_query, (session_date,))
 
@@ -153,31 +163,60 @@ class StopwatchScoringService:
                 logger.debug(f"No rounds found for {session_date}")
                 return None
 
-            # Group rounds by match_id (proper R1+R2 pairs)
+            # Group rounds by (gaming_session_id, map_name) for proper R1+R2
+            # Handle repeated maps: pair each R1 with its subsequent R2
+            # Rounds are ordered by gaming_session_id, map_name, round_number
             maps_dict: Dict[str, Dict] = {}
-            for row in rows:
-                map_name, match_id, round_num, defender, winner, \
-                    time_limit, actual_time = row
+            pending_r1: Dict[str, str] = {}  # base_key -> map_key waiting for R2
+            map_play_count: Dict[str, int] = {}  # Plays per map in session
 
-                if match_id not in maps_dict:
-                    maps_dict[match_id] = {
-                        'map_name': map_name,
-                        'match_id': match_id,
-                        'round1': None,
-                        'round2': None
-                    }
+            for row in rows:
+                (map_name, gaming_session_id, round_num, defender, winner,
+                 time_limit, actual_time, round_date, round_time) = row
+
+                # Base key for this map within the gaming session
+                base_key = f"{gaming_session_id}:{map_name}"
 
                 round_data = {
                     'defender': defender,
                     'winner': winner,
                     'time_limit': time_limit,
-                    'actual_time': actual_time
+                    'actual_time': actual_time,
+                    'round_date': round_date,
+                    'round_time': round_time
                 }
 
                 if round_num == 1:
-                    maps_dict[match_id]['round1'] = round_data
+                    # Track how many times this map has been played
+                    if base_key not in map_play_count:
+                        map_play_count[base_key] = 0
+                    map_play_count[base_key] += 1
+                    play_num = map_play_count[base_key]
+
+                    # Create unique key for this specific map play
+                    map_key = f"{base_key}:play{play_num}"
+                    maps_dict[map_key] = {
+                        'map_name': map_name,
+                        'gaming_session_id': gaming_session_id,
+                        'round1': round_data,
+                        'round2': None
+                    }
+                    # Mark this R1 as pending, waiting for its R2
+                    pending_r1[base_key] = map_key
+
                 elif round_num == 2:
-                    maps_dict[match_id]['round2'] = round_data
+                    # Find the pending R1 for this map
+                    if base_key in pending_r1:
+                        map_key = pending_r1[base_key]
+                        if map_key in maps_dict:
+                            maps_dict[map_key]['round2'] = round_data
+                        # R1 is no longer pending
+                        del pending_r1[base_key]
+                    else:
+                        # R2 without a matching R1 - create partial entry
+                        logger.debug(
+                            f"R2 without R1 for {map_name} in session {gaming_session_id}"
+                        )
 
             # Filter to complete maps only (both R1 and R2)
             maps = [
@@ -187,6 +226,13 @@ class StopwatchScoringService:
 
             if not maps:
                 logger.debug(f"No complete map pairs for {session_date}")
+                # Log what we found for debugging
+                for key, data in maps_dict.items():
+                    has_r1 = data['round1'] is not None
+                    has_r2 = data['round2'] is not None
+                    logger.debug(
+                        f"  {key}: R1={has_r1}, R2={has_r2}"
+                    )
                 return None
 
             # Get team assignments from session_teams
@@ -214,11 +260,13 @@ class StopwatchScoringService:
             sample_query = """
                 SELECT player_guid, team
                 FROM player_comprehensive_stats
-                WHERE SUBSTRING(session_date, 1, 10) = $1
+                WHERE SUBSTRING(round_date, 1, 10) = $1
                 AND round_number = 1
                 LIMIT 1
             """
-            sample_player = await self.db.fetch_one(sample_query, (session_date,))
+            sample_player = await self.db.fetch_one(
+                sample_query, (session_date,)
+            )
 
             if not sample_player:
                 logger.debug(f"No player stats for mapping teams: {session_date}")

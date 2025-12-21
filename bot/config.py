@@ -50,10 +50,10 @@ class BotConfig:
 
         # ==================== DATABASE CONFIGURATION ====================
         self.database_type = self._get_config('DATABASE_TYPE', 'postgresql')
-        
+
         # SQLite settings
         self.sqlite_db_path = self._get_config('SQLITE_DB_PATH', 'bot/etlegacy_production.db')
-        
+
         # PostgreSQL settings
         self.postgres_host = self._get_config('POSTGRES_HOST', 'localhost')
         self.postgres_port = int(self._get_config('POSTGRES_PORT', '5432'))
@@ -91,6 +91,13 @@ class BotConfig:
         ]
         self.admin_channel_id: int = self.admin_channels[0] if self.admin_channels else 0
 
+        # Root User ID (for highest permission tier - user ID whitelist)
+        self.owner_user_id: int = int(self._get_config('OWNER_USER_ID', '0'))
+        if self.owner_user_id == 0:
+            logger.warning("⚠️ OWNER_USER_ID not configured! Root-only commands will fail.")
+        else:
+            logger.info(f"✅ Bot root user: {self.owner_user_id}")
+
         # Voice channels for monitoring (comma-separated)
         gaming_channels_str = self._get_config('GAMING_VOICE_CHANNELS', '')
         self.gaming_voice_channels: List[int] = (
@@ -118,8 +125,24 @@ class BotConfig:
         self.session_end_delay: int = int(self._get_config('SESSION_END_DELAY', '300'))  # seconds
         self.session_gap_minutes: int = int(self._get_config('SESSION_GAP_MINUTES', '60'))  # minutes between gaming sessions
 
+        # ==================== ROUND MATCHING & MONITORING ====================
+        # R1-R2 matching window: How long after R1 can R2 be matched
+        # Default 45 min - rounds typically 5-15 min, but allow for longer games
+        # MUST be less than session_gap_minutes to avoid cross-session matching
+        self.round_match_window_minutes: int = int(self._get_config('ROUND_MATCH_WINDOW_MINUTES', '45'))
+
+        # Monitoring grace period: Keep checking for files after voice channel empties
+        # Default matches round_match_window_minutes for consistency
+        self.monitoring_grace_period_minutes: int = int(self._get_config('MONITORING_GRACE_PERIOD_MINUTES', '45'))
+
         # ==================== AUTOMATION SYSTEM ====================
         self.automation_enabled: bool = self._get_config('AUTOMATION_ENABLED', 'false').lower() == 'true'
+
+        # File processing startup lookback window (hours)
+        # When bot restarts, only process files within this window before startup time
+        # Default: 168 hours (7 days) - prevents re-importing ancient history while
+        # allowing recovery of recent files created while bot was offline
+        self.STARTUP_LOOKBACK_HOURS: int = int(self._get_config('STARTUP_LOOKBACK_HOURS', '168'))
 
         # ==================== HEALTH MONITOR CONFIGURATION ====================
         self.health_error_threshold: int = int(self._get_config('HEALTH_ERROR_THRESHOLD', '10'))
@@ -181,7 +204,7 @@ class BotConfig:
         self.webhook_trigger_whitelist: list = [
             id.strip() for id in webhook_whitelist_raw.split(',') if id.strip()
         ]
-        
+
         # ==================== WEBSOCKET PUSH NOTIFICATIONS (DEPRECATED) ====================
         # Bot connects OUT to VPS WebSocket server (no ports needed on bot machine)
         # NOTE: Replaced by webhook trigger approach (Dec 2025)
@@ -196,7 +219,7 @@ class BotConfig:
         self.enable_voice_logging: bool = self._get_config('ENABLE_VOICE_LOGGING', 'false').lower() == 'true'
 
         logger.info(f"🔧 Configuration loaded: database_type={self.database_type}")
-    
+
     def _load_config_file(self):
         """Load configuration from JSON file."""
         try:
@@ -206,15 +229,15 @@ class BotConfig:
         except Exception as e:
             logger.warning(f"⚠️ Failed to load config file {self.config_file}: {e}")
             self._config_data = {}
-    
+
     def _get_config(self, key: str, default: Any = None) -> Any:
         """
         Get configuration value with priority: ENV > config file > default.
-        
+
         Args:
             key: Configuration key
             default: Default value if not found
-            
+
         Returns:
             Configuration value
         """
@@ -222,18 +245,18 @@ class BotConfig:
         env_value = os.getenv(key)
         if env_value is not None:
             return env_value
-        
+
         # 2. Check config file
         if key in self._config_data:
             return self._config_data[key]
-        
+
         # 3. Return default
         return default
-    
+
     def get_database_adapter_kwargs(self) -> Dict[str, Any]:
         """
         Get kwargs for creating database adapter.
-        
+
         Returns:
             Dictionary of parameters for create_adapter()
         """
@@ -259,11 +282,11 @@ class BotConfig:
             }
         else:
             raise ValueError(f"Unsupported database type: {self.database_type}")
-    
+
     def get_postgres_connection_url(self) -> str:
         """
         Build PostgreSQL connection URL.
-        
+
         Returns:
             PostgreSQL connection string
         """
@@ -271,11 +294,11 @@ class BotConfig:
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_database}"
         )
-    
+
     def save_example_config(self, output_path: str = "bot_config.example.json"):
         """
         Save example configuration file with all available options.
-        
+
         Args:
             output_path: Path to save example config
         """
@@ -295,12 +318,12 @@ class BotConfig:
             "STATS_DIRECTORY": "local_stats",
             "BACKUP_DIRECTORY": "processed_stats"
         }
-        
+
         with open(output_path, 'w') as f:
             json.dump(example, f, indent=2)
-        
+
         logger.info(f"📝 Example config saved: {output_path}")
-    
+
     def validate(self) -> List[str]:
         """
         Validate configuration and return list of errors.
@@ -374,10 +397,10 @@ class BotConfig:
 def load_config(config_file: Optional[str] = None) -> BotConfig:
     """
     Load bot configuration.
-    
+
     Args:
         config_file: Optional path to config file
-        
+
     Returns:
         BotConfig instance
     """
