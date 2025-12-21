@@ -3,6 +3,16 @@
 ## Project Identity
 **Enemy Territory: Legacy Discord Stats Bot** - Comprehensive stats tracking for Wolfenstein: ET with PostgreSQL/SQLite hybrid backend. This is a mature, production-ready system (4,990 lines main bot) currently in VPS migration phase.
 
+## Ecosystem Overview
+This is the **main bot** workspace. See `PROJECT_OVERVIEW.md` for the full ecosystem vision.
+
+**Three Projects:**
+- **Bot** (this workspace) - Discord bot, main stats tracking, PRODUCTION
+- **Website** (`website/`) - FastAPI web interface, PROTOTYPE
+- **Proximity** (`proximity/`) - Advanced combat analytics, PROTOTYPE
+
+Each sub-project has its own `.code-workspace` file and copilot instructions. Open those for focused development.
+
 ## Critical Architecture Patterns
 
 ### Database: Hybrid SQLite/PostgreSQL with Adapter Pattern
@@ -180,3 +190,37 @@ Currently migrating to VPS with PostgreSQL (branch: `vps-network-migration`). Ke
 - `.env.example` - Production config template
 
 **Deployment blockers resolved:** Parser file was excluded by `.gitignore` (fixed), requirements.txt had merge conflicts (fixed).
+
+## Security Patterns (Dec 2025 Audit)
+
+### SSH Host Key Verification
+- **Config:** `SSH_STRICT_HOST_KEY` env var in `bot/automation/ssh_handler.py`
+- **Default:** `false` (auto-accept for dev convenience)
+- **Production:** Set `SSH_STRICT_HOST_KEY=true` and pre-populate `~/.ssh/known_hosts`
+- **Add host key:** `ssh-keyscan -H your.server.com >> ~/.ssh/known_hosts`
+
+### SQL Injection Prevention
+All database queries use **parameterized queries** with placeholders:
+- PostgreSQL: `$1, $2, $3` placeholders
+- SQLite: `?` placeholders  
+- **Never** concatenate user input into SQL strings
+- See `bot/core/database_adapter.py` for the unified async interface
+
+### Command Injection Prevention
+SSH commands in `bot/cogs/server_control.py` use:
+- `shlex.quote()` for all shell parameters
+- `sanitize_filename()` for path traversal prevention
+- `sanitize_rcon_input()` for RCON command safety
+
+### Rate Limiting
+All public commands have `@commands.cooldown()` decorators:
+- Quick commands (ping, help): 5 second cooldowns
+- Stats/lookup commands: 10-15 second cooldowns  
+- Heavy commands (compare, trends): 15-20 second cooldowns
+- Admin commands: Protected by `@is_admin_channel()` decorator
+
+### Credential Storage
+All secrets loaded from environment variables (never hardcoded):
+- `DISCORD_BOT_TOKEN`, `POSTGRES_PASSWORD`, `RCON_PASSWORD`, etc.
+- Priority: ENV vars > `bot_config.json` > defaults
+- See `bot/config.py` lines 70-90 for loading logic

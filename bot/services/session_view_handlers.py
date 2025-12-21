@@ -138,7 +138,7 @@ class SessionViewHandlers:
     async def show_combat_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show combat-focused stats only"""
         query = """
-            SELECT p.player_name,
+            SELECT MAX(p.player_name) as player_name,
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
                 SUM(p.damage_given) as damage_given,
@@ -167,7 +167,7 @@ class SessionViewHandlers:
                   AND (r.round_status = 'completed' OR r.round_status IS NULL)
             ) session_total
             WHERE p.round_id IN ({session_ids_str})
-            GROUP BY p.player_name, session_total.total_seconds
+            GROUP BY p.player_guid, session_total.total_seconds
             ORDER BY kills DESC
         """
         combat_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids) + tuple(session_ids))
@@ -206,7 +206,7 @@ class SessionViewHandlers:
     async def show_weapons_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show weapon mastery stats only"""
         query = """
-            SELECT p.player_name, w.weapon_name,
+            SELECT MAX(p.player_name) as player_name, w.weapon_name,
                 SUM(w.kills) as weapon_kills,
                 SUM(w.hits) as hits,
                 SUM(w.shots) as shots,
@@ -216,9 +216,9 @@ class SessionViewHandlers:
                 ON w.round_id = p.round_id
                 AND w.player_guid = p.player_guid
             WHERE w.round_id IN ({session_ids_str})
-            GROUP BY p.player_name, w.weapon_name
+            GROUP BY p.player_guid, w.weapon_name
             HAVING SUM(w.kills) > 0
-            ORDER BY p.player_name, SUM(w.kills) DESC
+            ORDER BY player_name, SUM(w.kills) DESC
         """
         pw_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
@@ -255,14 +255,14 @@ class SessionViewHandlers:
     async def show_support_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show support activity stats only"""
         query = """
-            SELECT p.player_name,
+            SELECT MAX(p.player_name) as player_name,
                 SUM(p.revives_given) as revives_given,
                 SUM(p.times_revived) as times_revived,
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths
             FROM player_comprehensive_stats p
             WHERE p.round_id IN ({session_ids_str})
-            GROUP BY p.player_name
+            GROUP BY p.player_guid
             ORDER BY revives_given DESC
         """
         sup_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
@@ -289,7 +289,7 @@ class SessionViewHandlers:
     async def show_sprees_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show killing sprees & multikills only"""
         query = """
-            SELECT p.player_name,
+            SELECT MAX(p.player_name) as player_name,
                 SUM(p.killing_spree_best) as best_spree,
                 SUM(p.double_kills) as doubles,
                 SUM(p.triple_kills) as triples,
@@ -299,7 +299,7 @@ class SessionViewHandlers:
                 SUM(p.kills) as total_kills
             FROM player_comprehensive_stats p
             WHERE p.round_id IN ({session_ids_str})
-            GROUP BY p.player_name
+            GROUP BY p.player_guid
             ORDER BY best_spree DESC, megas DESC
         """
         spree_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
@@ -328,7 +328,7 @@ class SessionViewHandlers:
     async def show_top_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int, total_maps: int):
         """Show all players ranked by kills"""
         query = """
-            SELECT p.player_name,
+            SELECT MAX(p.player_name) as player_name,
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
                 CASE
@@ -357,7 +357,7 @@ class SessionViewHandlers:
                   AND (r.round_status = 'completed' OR r.round_status IS NULL)
             ) session_total
             WHERE p.round_id IN ({session_ids_str})
-            GROUP BY p.player_name, session_total.total_seconds
+            GROUP BY p.player_guid, session_total.total_seconds
             ORDER BY kills DESC
         """
         top_players = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids) + tuple(session_ids))
@@ -446,7 +446,7 @@ class SessionViewHandlers:
                 WITH target_rounds AS (
                     SELECT id FROM rounds WHERE id IN ({map_ids_str})
                 )
-                SELECT p.player_name,
+                SELECT MAX(p.player_name) as player_name,
                     SUM(p.kills) as kills,
                     SUM(p.deaths) as deaths,
                     SUM(p.damage_given) as dmg_given,
@@ -481,7 +481,7 @@ class SessionViewHandlers:
                       AND (r.round_status = 'completed' OR r.round_status IS NULL)
                 ) map_total
                 WHERE p.round_id IN (SELECT id FROM target_rounds)
-                GROUP BY p.player_name, map_total.total_seconds
+                GROUP BY p.player_guid, map_total.total_seconds
                 ORDER BY kills DESC
             """
         
@@ -685,7 +685,7 @@ class SessionViewHandlers:
             WITH target_rounds AS (
                 SELECT id FROM rounds WHERE id IN ({round_ids_str})
             )
-            SELECT p.player_name,
+            SELECT MAX(p.player_name) as player_name,
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
                 SUM(p.damage_given) as dmg_given,
@@ -720,7 +720,7 @@ class SessionViewHandlers:
                   AND (r.round_status = 'completed' OR r.round_status IS NULL)
             ) round_total
             WHERE p.round_id IN (SELECT id FROM target_rounds)
-            GROUP BY p.player_name, round_total.total_seconds
+            GROUP BY p.player_guid, round_total.total_seconds
             ORDER BY kills DESC
         """
     

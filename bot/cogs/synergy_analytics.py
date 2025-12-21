@@ -18,7 +18,7 @@ import asyncio
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from bot.core.checks import is_public_channel, is_admin_channel
+from bot.core.checks import is_public_channel, is_moderator
 from bot.core.utils import sanitize_error_message
 from analytics.synergy_detector import SynergyDetector, SynergyMetrics
 from analytics.config import config, is_enabled, is_command_enabled
@@ -335,7 +335,7 @@ class SynergyAnalytics(commands.Cog):
                     unique_players, include_badges=True
                 )
             except Exception as e:
-                print(f"Error formatting player names: {e}")
+                logger.warning(f"Error formatting player names: {e}")
                 formatted_names = {guid: name for guid, name in unique_players}
 
             # Create embed
@@ -456,7 +456,7 @@ class SynergyAnalytics(commands.Cog):
                     all_players, include_badges=True
                 )
             except Exception as e:
-                print(f"Error formatting player names: {e}")
+                logger.warning(f"Error formatting player names: {e}")
                 formatted_names = {guid: name for guid, name in all_players}
 
             # Create embed
@@ -785,7 +785,7 @@ class SynergyAnalytics(commands.Cog):
                     all_partner_guids, include_badges=True
                 )
             except Exception as e:
-                print(f"Error formatting partner names: {e}")
+                logger.warning(f"Error formatting partner names: {e}")
                 formatted_partner_names = {guid: name for guid, name in all_partner_guids}
 
             # Format the main player's name with badges
@@ -794,7 +794,7 @@ class SynergyAnalytics(commands.Cog):
                     player_guid, player_name, include_badges=True
                 )
             except Exception as e:
-                print(f"Error formatting player name: {e}")
+                logger.warning(f"Error formatting player name: {e}")
                 player_formatted = player_name
 
             # Create embed
@@ -890,25 +890,25 @@ class SynergyAnalytics(commands.Cog):
     # ADMIN COMMANDS
     # =========================================================================
     
-    @is_admin_channel()
+    @is_moderator()
     @commands.command(name='fiveeyes_enable')
-    @commands.has_permissions(administrator=True)
+    
     async def enable_command(self, ctx):
         """Enable FIVEEYES synergy analytics (Admin only)"""
         config.enable()
         await ctx.send("✅ **FIVEEYES synergy analytics enabled!**")
 
-    @is_admin_channel()
+    @is_moderator()
     @commands.command(name='fiveeyes_disable')
-    @commands.has_permissions(administrator=True)
+    
     async def disable_command(self, ctx):
         """Disable FIVEEYES synergy analytics (Admin only)"""
         config.disable()
         await ctx.send("⚠️ **FIVEEYES synergy analytics disabled.**")
 
-    @is_admin_channel()
+    @is_moderator()
     @commands.command(name='recalculate_synergies')
-    @commands.has_permissions(administrator=True)
+    
     async def recalculate_command(self, ctx):
         """Manually trigger synergy recalculation (Admin only)"""
         await ctx.send("🔄 Starting synergy recalculation... This may take a few minutes.")
@@ -928,13 +928,13 @@ class SynergyAnalytics(commands.Cog):
     @tasks.loop(hours=24)
     async def recalculate_synergies_task(self):
         """Recalculate synergies once per day"""
-        print("🔄 Starting daily synergy recalculation...")
+        logger.info("🔄 Starting daily synergy recalculation...")
         try:
             count = await self.detector.calculate_all_synergies()
             self.cache.clear()
-            print(f"✅ Recalculated {count} synergies")
+            logger.info(f"✅ Recalculated {count} synergies")
         except Exception as e:
-            print(f"❌ Error in daily recalculation: {e}")
+            logger.error(f"❌ Error in daily recalculation: {e}")
     
     @recalculate_synergies_task.before_loop
     async def before_recalculate(self):
@@ -982,7 +982,7 @@ class SynergyAnalytics(commands.Cog):
             
             return row[0] if row else None
         except Exception as e:
-            print(f"Error getting player GUID: {e}")
+            logger.warning(f"Error getting player GUID: {e}")
             return None
     
     async def _optimize_teams(self, player_list: List[tuple]) -> dict:
@@ -1230,7 +1230,7 @@ class SynergyAnalytics(commands.Cog):
                     if row:
                         synergies.append(row[0])
                 except Exception as e:
-                    print(f"Error getting synergy: {e}")
+                    logger.warning(f"Error getting synergy: {e}")
         
         # Return average synergy (or 0 if no synergies found)
         return sum(synergies) / len(synergies) if synergies else 0.0
@@ -1267,7 +1267,7 @@ class SynergyAnalytics(commands.Cog):
                 })
         
         except Exception as e:
-            print(f"Error getting partners: {e}")
+            logger.warning(f"Error getting partners: {e}")
         
         return partners
     
@@ -1299,7 +1299,7 @@ class SynergyAnalytics(commands.Cog):
                 synergy.player_b_guid, synergy.player_b_name, include_badges=True
             )
         except Exception as e:
-            print(f"Error formatting player names: {e}")
+            logger.warning(f"Error formatting player names: {e}")
             player_a_formatted = synergy.player_a_name
             player_b_formatted = synergy.player_b_name
 
@@ -1356,4 +1356,4 @@ class SynergyAnalytics(commands.Cog):
 async def setup(bot):
     """Add SynergyAnalytics cog to bot"""
     await bot.add_cog(SynergyAnalytics(bot))
-    print("✅ SynergyAnalytics cog loaded (disabled by default)")
+    logger.info("✅ SynergyAnalytics cog loaded (disabled by default)")

@@ -16,9 +16,9 @@ Usage:
     async def page_fetcher(page_num: int) -> discord.Embed:
         # Fetch and return embed for this page number
         return embed
-    
+
     view = LazyPaginationView(
-        ctx, 
+        ctx,
         page_fetcher,
         total_pages=50,
         timeout=180
@@ -42,7 +42,7 @@ logger = logging.getLogger("bot.core.lazy_pagination_view")
 
 class LazyPaginationView(View):
     """Lazy-loading pagination - loads pages on demand"""
-    
+
     def __init__(self,
                  ctx,
                  page_fetcher: Callable,
@@ -88,7 +88,7 @@ class LazyPaginationView(View):
         """
         # Bounds check to prevent index errors
         page_num = max(0, min(page_num, self.total_pages - 1))
-        
+
         if page_num in self.page_cache:
             return self.page_cache[page_num]
 

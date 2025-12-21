@@ -331,7 +331,7 @@ class LinkCog(commands.Cog, name="Link"):
                 """
                 SELECT DISTINCT pa.guid, MAX(pa.last_seen) as last_seen
                 FROM player_aliases pa
-                WHERE LOWER(pa.alias) LIKE LOWER({ph}) ESCAPE '\\'
+                WHERE LOWER(pa.alias) LIKE LOWER(?) ESCAPE '\\'
                 GROUP BY pa.guid
                 ORDER BY last_seen DESC
                 LIMIT 10
@@ -345,7 +345,7 @@ class LinkCog(commands.Cog, name="Link"):
                 """
                 SELECT DISTINCT player_guid, MAX(round_date) as max_date
                 FROM player_comprehensive_stats
-                WHERE LOWER(player_name) LIKE LOWER({ph}) ESCAPE '\\'
+                WHERE LOWER(player_name) LIKE LOWER(?) ESCAPE '\\'
                 GROUP BY player_guid
                 ORDER BY max_date DESC
                 LIMIT 10
@@ -555,11 +555,10 @@ class LinkCog(commands.Cog, name="Link"):
             discord_id = int(ctx.author.id)  # BIGINT in PostgreSQL
 
             # Check if already linked
-            placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
             existing = await self.bot.db_adapter.fetch_one(
                 """
                 SELECT player_name, player_guid FROM player_links
-                WHERE discord_id = {placeholder}
+                WHERE discord_id = ?
             """,
                 (discord_id,),
             )

@@ -1,0 +1,24 @@
+# Website-specific ignores (inherits from root .gitignore)
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+*.code-workspace
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+*.bak
+
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md

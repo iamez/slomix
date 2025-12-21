@@ -37,7 +37,7 @@ class SessionStatsAggregator:
         Returns: List of player stat tuples (includes NEW stats: gibs, revives, times revived, dmg received, useful kills)
         """
         query = """
-            SELECT p.player_name,
+            SELECT MAX(p.player_name) as player_name,
                 p.player_guid,
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
@@ -51,7 +51,12 @@ class SessionStatsAggregator:
                 COALESCE(SUM(w.headshots), 0) as total_headshots,
                 SUM(p.headshot_kills) as headshot_kills,
                 SUM(p.time_played_seconds) as total_seconds,
-                CAST(SUM(p.time_played_seconds * p.time_dead_ratio / 100.0) AS INTEGER) as total_time_dead,
+                CAST(SUM(
+                    LEAST(
+                        p.time_played_minutes * p.time_dead_ratio / 100.0 * 60,
+                        p.time_played_seconds
+                    )
+                ) AS INTEGER) as total_time_dead,
                 SUM(p.denied_playtime) as total_denied,
                 SUM(p.gibs) as total_gibs,
                 SUM(p.revives_given) as total_revives_given,
@@ -75,7 +80,7 @@ class SessionStatsAggregator:
                 GROUP BY round_id, player_guid
             ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
             WHERE p.round_id IN ({session_ids_str})
-            GROUP BY p.player_guid, p.player_name
+            GROUP BY p.player_guid
             ORDER BY kills DESC
         """
         return await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
@@ -109,7 +114,7 @@ class SessionStatsAggregator:
 
         # Get all player stats (with R0 and round_status filtering)
         query = """
-            SELECT p.player_name, p.player_guid,
+            SELECT MAX(p.player_name) as player_name, p.player_guid,
                 SUM(p.kills) as total_kills,
                 SUM(p.deaths) as total_deaths,
                 SUM(p.damage_given) as total_damage
@@ -118,7 +123,7 @@ class SessionStatsAggregator:
             WHERE p.round_id IN ({session_ids_str})
               AND r.round_number IN (1, 2)
               AND (r.round_status = 'completed' OR r.round_status IS NULL)
-            GROUP BY p.player_guid, p.player_name
+            GROUP BY p.player_guid
         """
         player_stats = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
@@ -152,7 +157,7 @@ class SessionStatsAggregator:
         # Returns: player_name, weapon_name, kills, hits, shots, headshots
         query = """
             SELECT
-                player_name,
+                MAX(player_name) as player_name,
                 weapon_name,
                 SUM(kills) AS total_kills,
                 SUM(hits) AS total_hits,
@@ -160,7 +165,7 @@ class SessionStatsAggregator:
                 SUM(headshots) AS total_headshots
             FROM weapon_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
-            GROUP BY player_guid, player_name, weapon_name
+            GROUP BY player_guid, weapon_name
             ORDER BY player_name, total_kills DESC
         """
 
@@ -169,7 +174,7 @@ class SessionStatsAggregator:
     async def get_dpm_leaderboard(self, session_ids: List, session_ids_str: str, limit: int = 10):
         """Get DPM leaderboard based on individual player playtime"""
         query = """
-            SELECT player_name,
+            SELECT MAX(player_name) as player_name,
                 CASE
                     WHEN SUM(time_played_seconds) > 0
                     THEN (SUM(damage_given) * 60.0) / SUM(time_played_seconds)
@@ -179,7 +184,7 @@ class SessionStatsAggregator:
                 SUM(deaths) as total_deaths
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
-            GROUP BY player_guid, player_name
+            GROUP BY player_guid
             ORDER BY weighted_dpm DESC
             LIMIT {limit}
         """
