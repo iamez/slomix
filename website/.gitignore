@@ -12,8 +12,10 @@ __pycache__/
 .vscode/
 *.code-workspace
 
-# Logs
+# Logs - ignore all log files and logs directory
 *.log
+logs/
+*.log.*
 
 # Temp files
 *.tmp
