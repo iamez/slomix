@@ -193,8 +193,8 @@
             <div class="hidden md:flex items-center gap-1">
                 <button id="link-home" onclick="navigateTo('home')"
                     class="nav-link active px-4 py-2 rounded-lg text-sm font-bold">Home</button>
-                <button id="link-matches" onclick="navigateTo('matches')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Matches</button>
+                <button id="link-sessions" onclick="navigateTo('sessions')"
+                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Sessions</button>
                 <button id="link-leaderboards" onclick="navigateTo('leaderboards')"
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Leaderboards</button>
                 <button id="link-maps" onclick="navigateTo('maps')"
@@ -231,15 +231,20 @@
                     <div class="flex items-center gap-3 pl-3 border-l border-white/10 cursor-pointer group"
                         onclick="navigateTo('profile')">
                         <div class="text-right hidden sm:block">
-                            <div class="text-xs font-bold text-white group-hover:text-brand-cyan transition">BAMBAM
+                            <div id="nav-username" class="text-xs font-bold text-white group-hover:text-brand-cyan transition">User
                             </div>
-                            <div class="text-[10px] text-brand-emerald font-mono">Lv. 42 Medic</div>
+                            <div class="text-[10px] text-brand-emerald font-mono">Connected</div>
                         </div>
-                        <div
+                        <div id="nav-avatar"
                             class="w-8 h-8 rounded bg-gradient-to-br from-brand-purple to-brand-rose flex items-center justify-center font-bold text-white text-xs">
-                            BM
+                            ?
                         </div>
                     </div>
+                    <button onclick="logout()"
+                        class="text-slate-400 hover:text-brand-rose transition ml-2 p-1"
+                        aria-label="Logout" title="Logout">
+                        <i data-lucide="log-out" class="w-5 h-5 pointer-events-none"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -401,56 +406,29 @@
             </div>
         </div>
 
-        <!-- MATCHES VIEW -->
-        <div id="view-matches" class="view-section">
+        <!-- SESSIONS VIEW -->
+        <div id="view-sessions" class="view-section">
             <div class="max-w-7xl mx-auto px-6 py-12">
                 <div class="text-center mb-12">
-                    <h1 class="text-4xl font-black text-white mb-4">Match History</h1>
-                    <p class="text-slate-400">Browse recent games and detailed statistics</p>
+                    <h1 class="text-4xl font-black text-white mb-4">Gaming Sessions</h1>
+                    <p class="text-slate-400">Browse all gaming sessions with detailed match breakdowns</p>
                 </div>
 
-                <!-- Filters -->
-                <div class="flex flex-wrap justify-center gap-3 mb-8">
-                    <button
-                        class="px-4 py-2 rounded-md text-sm font-bold bg-brand-blue text-white shadow-lg transition">All
-                        Matches</button>
-                    <button
-                        class="px-4 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Today</button>
-                    <button
-                        class="px-4 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">This
-                        Week</button>
-                    <button
-                        class="px-4 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">This
-                        Month</button>
-                </div>
-
-                <!-- Match Cards Grid -->
-                <div id="matches-grid" class="grid grid-cols-1 gap-4">
-                    <!-- Sample Match Card -->
-                    <div class="glass-panel p-6 rounded-xl">
-                        <div class="flex justify-between items-start">
-                            <div class="flex-1">
-                                <div class="flex items-center gap-4 mb-4">
-                                    <div class="text-sm font-bold text-brand-cyan">Supply Depot</div>
-                                    <div class="text-xs text-slate-500">2 hours ago</div>
-                                </div>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <div class="text-xs text-slate-500 uppercase mb-2">Allied</div>
-                                        <div class="text-2xl font-black text-brand-emerald">Victory</div>
-                                    </div>
-                                    <div>
-                                        <div class="text-xs text-slate-500 uppercase mb-2">Axis</div>
-                                        <div class="text-2xl font-black text-brand-rose">Defeat</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <button
-                                class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-bold transition">View
-                                Details</button>
-                        </div>
+                <!-- Sessions List -->
+                <div id="sessions-list" class="space-y-4">
+                    <!-- Loading state -->
+                    <div class="text-center py-12">
+                        <i data-lucide="loader" class="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4"></i>
+                        <div class="text-slate-400">Loading sessions...</div>
                     </div>
-                    <!-- More matches loaded by JS -->
+                </div>
+
+                <!-- Load More Button -->
+                <div id="sessions-load-more" class="text-center mt-8 hidden">
+                    <button onclick="loadMoreSessions()"
+                        class="px-6 py-3 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-bold text-slate-300 transition">
+                        Load More Sessions
+                    </button>
                 </div>
             </div>
         </div>

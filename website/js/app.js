@@ -63,10 +63,16 @@ const navigateTo = window.navigateTo = function (viewId, updateHistory = true) {
     window.scrollTo(0, 0);
 
     // Load view-specific data
-    if (viewId === 'matches') {
+    if (viewId === 'sessions') {
+        loadSessionsView();
+    } else if (viewId === 'matches') {
         loadMatchesView();
     } else if (viewId === 'community') {
         loadCommunityView();
+    } else if (viewId === 'maps') {
+        loadMapsView();
+    } else if (viewId === 'weapons') {
+        loadWeaponsView();
     }
 };
 
@@ -514,9 +520,15 @@ async function checkLoginStatus() {
         userEl.classList.remove('hidden');
         userEl.classList.add('flex');
 
-        // Update Nav Username
+        // Update Nav Username & Avatar
         const navName = document.getElementById('nav-username');
         if (navName) navName.textContent = user.linked_player || user.username;
+
+        const navAvatar = document.getElementById('nav-avatar');
+        if (navAvatar) {
+            const displayName = user.linked_player || user.username || '?';
+            navAvatar.textContent = displayName.substring(0, 2).toUpperCase();
+        }
 
         // Check Link
         if (!user.linked_player) {
@@ -837,6 +849,10 @@ async function loadRecentMatches() {
 
 function loginWithDiscord() {
     window.location.href = `${AUTH_BASE}/login`;
+}
+
+function logout() {
+    window.location.href = `${AUTH_BASE}/logout`;
 }
 
 // Modal Logic
@@ -1221,19 +1237,7 @@ async function loadWeaponsView() {
     }
 }
 
-// Update navigateTo to load all views
-const originalNavigateTo = window.navigateTo;
-window.navigateTo = function (viewId) {
-    originalNavigateTo.call(this, viewId);
-
-    // Remove old view-specific loading (already in navigateTo)
-    // Add new view loaders
-    if (viewId === 'maps') {
-        loadMapsView();
-    } else if (viewId === 'weapons') {
-        loadWeaponsView();
-    }
-};
+// View loaders are now in the main navigateTo function above
 
 // Community Logic
 let currentCommunityTab = 'clips';
@@ -1853,6 +1857,303 @@ async function loadSessionMVP(sessionDate) {
                 ?
             </div>
             <p class="text-red-500 text-xs">Failed to load</p>
+        `;
+    }
+}
+
+// ============================================================================
+// SESSIONS VIEW - Gaming Session Browser
+// ============================================================================
+
+let sessionsData = [];
+let sessionsOffset = 0;
+const SESSIONS_LIMIT = 15;
+let expandedSessions = new Set();
+
+async function loadSessionsView() {
+    console.log('🎮 loadSessionsView called');
+    sessionsData = [];
+    sessionsOffset = 0;
+    expandedSessions.clear();
+    await loadSessions(true);
+}
+
+async function loadSessions(reset = false) {
+    console.log('📦 loadSessions called, reset:', reset);
+    const container = document.getElementById('sessions-list');
+    if (!container) {
+        console.error('❌ sessions-list container not found!');
+        return;
+    }
+    console.log('✅ sessions-list container found');
+
+    if (reset) {
+        container.innerHTML = `
+            <div class="text-center py-12">
+                <i data-lucide="loader" class="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4"></i>
+                <div class="text-slate-400">Loading sessions...</div>
+            </div>
+        `;
+        lucide.createIcons();
+    }
+
+    try {
+        console.log('🌐 Fetching sessions from:', `${API_BASE}/sessions?limit=${SESSIONS_LIMIT}&offset=${sessionsOffset}`);
+        const data = await fetchJSON(`${API_BASE}/sessions?limit=${SESSIONS_LIMIT}&offset=${sessionsOffset}`);
+        console.log('📊 Sessions data received:', data.length, 'sessions');
+        console.log('📊 First session:', data[0]);
+
+        if (reset) {
+            container.innerHTML = '';
+            sessionsData = data;
+        } else {
+            sessionsData = [...sessionsData, ...data];
+        }
+
+        // Render sessions
+        console.log('🎨 Rendering', data.length, 'session cards...');
+        data.forEach((session, idx) => {
+            try {
+                const html = renderSessionCard(session);
+                console.log(`🎨 Card ${idx} HTML length:`, html.length);
+                container.insertAdjacentHTML('beforeend', html);
+            } catch (err) {
+                console.error(`❌ Error rendering session ${idx}:`, err);
+            }
+        });
+
+        console.log('✅ Sessions rendered, initializing icons...');
+        lucide.createIcons();
+        console.log('✅ Done!');
+
+        // Show/hide load more button
+        const loadMoreBtn = document.getElementById('sessions-load-more');
+        if (loadMoreBtn) {
+            loadMoreBtn.classList.toggle('hidden', data.length < SESSIONS_LIMIT);
+        }
+
+        sessionsOffset += data.length;
+
+    } catch (e) {
+        console.error('Failed to load sessions:', e);
+        container.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load sessions</div>';
+    }
+}
+
+function loadMoreSessions() {
+    loadSessions(false);
+}
+
+function renderSessionCard(session) {
+    const safeDate = escapeHtml(session.date);
+    const safeTimeAgo = escapeHtml(session.time_ago);
+    const safeFormattedDate = escapeHtml(session.formatted_date);
+    const isExpanded = expandedSessions.has(session.date);
+
+    // Map badges
+    const mapBadges = session.maps_played.slice(0, 5).map(map => {
+        const safeMap = escapeHtml(map.replace('etl_', '').replace('sw_', '').replace('_te', ''));
+        return `<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-xs">${safeMap}</span>`;
+    }).join('');
+    const moreMapsBadge = session.maps_played.length > 5
+        ? `<span class="text-slate-500 text-xs">+${session.maps_played.length - 5} more</span>`
+        : '';
+
+    return `
+        <div class="glass-panel rounded-xl overflow-hidden session-card" data-date="${safeDate}">
+            <!-- Session Header (clickable) -->
+            <div class="p-6 cursor-pointer hover:bg-white/5 transition" onclick="toggleSession('${safeDate}')">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <!-- Left: Date & Time Ago -->
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-brand-purple to-brand-blue flex items-center justify-center">
+                            <i data-lucide="calendar" class="w-6 h-6 text-white"></i>
+                        </div>
+                        <div>
+                            <div class="text-lg font-black text-white">${safeFormattedDate}</div>
+                            <div class="text-sm text-slate-400">${safeTimeAgo}</div>
+                        </div>
+                    </div>
+
+                    <!-- Center: Stats -->
+                    <div class="flex items-center gap-6">
+                        <div class="text-center">
+                            <div class="text-2xl font-black text-brand-cyan">${session.players}</div>
+                            <div class="text-xs text-slate-500 uppercase">Players</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-black text-brand-purple">${session.maps}</div>
+                            <div class="text-xs text-slate-500 uppercase">Maps</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-black text-brand-amber">${session.rounds}</div>
+                            <div class="text-xs text-slate-500 uppercase">Rounds</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-black text-brand-rose">${session.total_kills.toLocaleString()}</div>
+                            <div class="text-xs text-slate-500 uppercase">Kills</div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Expand Icon -->
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="${isExpanded ? 'chevron-up' : 'chevron-down'}"
+                           class="w-5 h-5 text-slate-400 session-chevron transition-transform"></i>
+                    </div>
+                </div>
+
+                <!-- Maps Played -->
+                <div class="flex flex-wrap items-center gap-2 mt-4">
+                    ${mapBadges}
+                    ${moreMapsBadge}
+                </div>
+            </div>
+
+            <!-- Session Details (expandable) -->
+            <div class="session-details ${isExpanded ? '' : 'hidden'}" id="session-details-${safeDate}">
+                <div class="border-t border-white/5 p-6 bg-black/20">
+                    <div class="text-center py-8 text-slate-500">
+                        <i data-lucide="loader" class="w-6 h-6 animate-spin mx-auto mb-2"></i>
+                        Loading session details...
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function toggleSession(date) {
+    const detailsEl = document.getElementById(`session-details-${date}`);
+    const cardEl = document.querySelector(`.session-card[data-date="${date}"]`);
+    const chevron = cardEl?.querySelector('.session-chevron');
+
+    if (!detailsEl) return;
+
+    const isHidden = detailsEl.classList.contains('hidden');
+
+    if (isHidden) {
+        // Expand
+        detailsEl.classList.remove('hidden');
+        expandedSessions.add(date);
+        if (chevron) {
+            chevron.setAttribute('data-lucide', 'chevron-up');
+            lucide.createIcons();
+        }
+        // Load details if not already loaded
+        if (detailsEl.querySelector('.session-leaderboard') === null) {
+            await loadSessionDetails(date);
+        }
+    } else {
+        // Collapse
+        detailsEl.classList.add('hidden');
+        expandedSessions.delete(date);
+        if (chevron) {
+            chevron.setAttribute('data-lucide', 'chevron-down');
+            lucide.createIcons();
+        }
+    }
+}
+
+async function loadSessionDetails(date) {
+    const detailsEl = document.getElementById(`session-details-${date}`);
+    if (!detailsEl) return;
+
+    try {
+        const data = await fetchJSON(`${API_BASE}/sessions/${date}`);
+
+        // Build leaderboard HTML
+        const leaderboardHtml = data.leaderboard.map((player, idx) => {
+            const safeName = escapeHtml(player.name);
+            const rankColors = ['text-brand-gold', 'text-slate-300', 'text-amber-600'];
+            const rankColor = rankColors[idx] || 'text-slate-400';
+            return `
+                <div class="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition cursor-pointer"
+                     onclick="loadPlayerProfile('${safeName}')">
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 text-center font-black ${rankColor}">#${player.rank}</span>
+                        <span class="font-bold text-white">${safeName}</span>
+                    </div>
+                    <div class="flex items-center gap-4 text-sm">
+                        <span class="text-brand-cyan font-mono">${player.dpm} DPM</span>
+                        <span class="text-slate-400">${player.kills}/${player.deaths}</span>
+                        <span class="text-slate-500">${player.kd} K/D</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Build matches HTML
+        const matchesHtml = data.matches.map(mapMatch => {
+            const safeMapName = escapeHtml(mapMatch.map_name.replace('etl_', '').replace('sw_', ''));
+            const roundsHtml = mapMatch.rounds.map(round => {
+                const safeWinner = escapeHtml(round.winner);
+                const winnerColor = round.winner === 'Allies' ? 'text-brand-blue' :
+                                   round.winner === 'Axis' ? 'text-brand-rose' : 'text-slate-400';
+                return `
+                    <div class="flex items-center justify-between p-2 rounded bg-black/30 cursor-pointer hover:bg-black/50 transition"
+                         onclick="openMatchModal(${round.id})">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-slate-500">R${round.round_number}</span>
+                            <span class="text-sm ${winnerColor} font-bold">${safeWinner} Win</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-slate-500">
+                            <span>${escapeHtml(round.duration || 'N/A')}</span>
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="glass-card rounded-lg p-4">
+                    <div class="flex items-center gap-3 mb-3">
+                        <i data-lucide="map" class="w-5 h-5 text-brand-cyan"></i>
+                        <span class="font-bold text-white">${safeMapName}</span>
+                        <span class="text-xs text-slate-500">${mapMatch.rounds.length} rounds</span>
+                    </div>
+                    <div class="space-y-2">
+                        ${roundsHtml}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        detailsEl.innerHTML = `
+            <div class="border-t border-white/5 p-6 bg-black/20">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Leaderboard -->
+                    <div class="session-leaderboard">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                            <i data-lucide="trophy" class="w-5 h-5 text-brand-gold"></i>
+                            Top Performers
+                        </h3>
+                        <div class="space-y-1">
+                            ${leaderboardHtml || '<div class="text-slate-500 text-center py-4">No data</div>'}
+                        </div>
+                    </div>
+
+                    <!-- Matches -->
+                    <div>
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                            <i data-lucide="swords" class="w-5 h-5 text-brand-purple"></i>
+                            Maps Played
+                        </h3>
+                        <div class="space-y-3">
+                            ${matchesHtml || '<div class="text-slate-500 text-center py-4">No matches</div>'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        lucide.createIcons();
+
+    } catch (e) {
+        console.error('Failed to load session details:', e);
+        detailsEl.innerHTML = `
+            <div class="border-t border-white/5 p-6 bg-black/20">
+                <div class="text-center text-red-500 py-8">Failed to load session details</div>
+            </div>
         `;
     }
 }

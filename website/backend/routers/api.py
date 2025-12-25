@@ -140,6 +140,154 @@ async def get_matches(limit: int = 5, db: DatabaseAdapter = Depends(get_db)):
     return await data_service.get_recent_matches(limit)
 
 
+@router.get("/sessions")
+async def get_sessions_list(
+    limit: int = 20,
+    offset: int = 0,
+    db: DatabaseAdapter = Depends(get_db)
+):
+    """
+    Get list of all gaming sessions (like !sessions command).
+    Returns sessions grouped by date with summary stats.
+    """
+    query = """
+        WITH session_summary AS (
+            SELECT
+                r.round_date,
+                r.gaming_session_id,
+                COUNT(DISTINCT r.id) as round_count,
+                COUNT(DISTINCT r.map_name) as map_count,
+                COUNT(DISTINCT p.player_guid) as player_count,
+                COALESCE(SUM(p.kills), 0) as total_kills,
+                STRING_AGG(DISTINCT r.map_name, ', ' ORDER BY r.map_name) as maps_played
+            FROM rounds r
+            LEFT JOIN player_comprehensive_stats p
+                ON r.round_date = p.round_date
+                AND r.map_name = p.map_name
+                AND r.round_number = p.round_number
+            WHERE r.gaming_session_id IS NOT NULL
+            GROUP BY r.round_date, r.gaming_session_id
+        )
+        SELECT
+            round_date,
+            gaming_session_id,
+            round_count,
+            map_count,
+            player_count,
+            total_kills,
+            maps_played
+        FROM session_summary
+        ORDER BY round_date DESC
+        LIMIT $1 OFFSET $2
+    """
+
+    try:
+        rows = await db.fetch_all(query, (limit, offset))
+    except Exception as e:
+        print(f"Error fetching sessions list: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+    sessions = []
+    for row in rows:
+        round_date = row[0]
+        # Format time_ago
+        from datetime import datetime
+        if isinstance(round_date, str):
+            dt = datetime.strptime(round_date, "%Y-%m-%d")
+        else:
+            dt = datetime.combine(round_date, datetime.min.time())
+
+        now = datetime.now()
+        diff = now - dt
+        days = diff.days
+
+        if days == 0:
+            time_ago = "Today"
+        elif days == 1:
+            time_ago = "Yesterday"
+        elif days < 7:
+            time_ago = f"{days} days ago"
+        elif days < 30:
+            weeks = days // 7
+            time_ago = f"{weeks} week{'s' if weeks > 1 else ''} ago"
+        else:
+            time_ago = dt.strftime("%b %d, %Y")
+
+        sessions.append({
+            "date": str(round_date),
+            "session_id": row[1],
+            "rounds": row[2],
+            "maps": row[3],
+            "players": row[4],
+            "total_kills": row[5],
+            "maps_played": row[6].split(", ") if row[6] else [],
+            "time_ago": time_ago,
+            "formatted_date": dt.strftime("%A, %B %d, %Y"),
+        })
+
+    return sessions
+
+
+@router.get("/sessions/{date}")
+async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
+    """
+    Get detailed info for a specific session by date.
+    Returns matches/rounds within the session and top players.
+    """
+    data_service = SessionDataService(db, None)
+    stats_service = SessionStatsAggregator(db)
+
+    # Get session data
+    sessions, session_ids, session_ids_str, player_count = await data_service.fetch_session_data(date)
+
+    if not sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Get matches for this session
+    matches = await data_service.get_session_matches(date)
+
+    # Get leaderboard (top players by DPM)
+    leaderboard = []
+    if session_ids:
+        try:
+            lb_data = await stats_service.get_dpm_leaderboard(session_ids, session_ids_str, 10)
+            for i, (name, dpm, kills, deaths) in enumerate(lb_data, 1):
+                kd = kills / deaths if deaths > 0 else kills
+                leaderboard.append({
+                    "rank": i,
+                    "name": name,
+                    "dpm": int(dpm),
+                    "kills": kills,
+                    "deaths": deaths,
+                    "kd": round(kd, 2),
+                })
+        except Exception as e:
+            print(f"Error fetching session leaderboard: {e}")
+
+    # Calculate map summary
+    map_counts = {}
+    for _, map_name, _, _ in sessions:
+        map_counts[map_name] = map_counts.get(map_name, 0) + 1
+
+    # Group matches by map (R1 + R2 = 1 map match)
+    map_matches = {}
+    for match in matches:
+        map_name = match["map_name"]
+        if map_name not in map_matches:
+            map_matches[map_name] = {"rounds": [], "map_name": map_name}
+        map_matches[map_name]["rounds"].append(match)
+
+    return {
+        "date": date,
+        "player_count": player_count,
+        "total_rounds": len(sessions),
+        "maps_played": list(map_counts.keys()),
+        "map_counts": map_counts,
+        "matches": list(map_matches.values()),
+        "leaderboard": leaderboard,
+    }
+
+
 class LinkPlayerRequest(BaseModel):
     player_name: str
 

@@ -1,6 +1,5 @@
 import sys
 import os
-import logging
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,19 +10,31 @@ from dotenv import load_dotenv
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(project_root)
 
-from website.backend.routers import api, auth, predictions
-from website.backend.dependencies import init_db_pool, close_db_pool
-
-# Load environment variables - check website folder first, then project root
+# Load environment variables BEFORE importing logging (for LOG_LEVEL env var)
 website_env = os.path.join(os.path.dirname(__file__), "../.env")
 if os.path.exists(website_env):
     load_dotenv(website_env)
 else:
     load_dotenv(os.path.join(project_root, ".env"))
 
-# Setup Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Setup logging (must happen before other imports that use logging)
+from website.backend.logging_config import setup_logging, get_app_logger
+from website.backend.middleware import RequestLoggingMiddleware
+
+# Configure logging from environment
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+LOG_FORMAT_JSON = os.getenv("LOG_FORMAT_JSON", "false").lower() == "true"
+
+setup_logging(
+    log_level=LOG_LEVEL,
+    json_logs=LOG_FORMAT_JSON,
+    console_output=True,
+)
+
+logger = get_app_logger(__name__)
+
+from website.backend.routers import api, auth, predictions
+from website.backend.dependencies import init_db_pool, close_db_pool
 
 # Configuration from environment
 WEBSITE_PORT = int(os.getenv("WEBSITE_PORT", "8000"))
@@ -61,6 +72,9 @@ app.add_middleware(
 
 # Session Middleware
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+
+# Request Logging Middleware (added after session so it can access session data)
+app.add_middleware(RequestLoggingMiddleware)
 
 # Include Routers
 app.include_router(api.router, prefix="/api", tags=["API"])
