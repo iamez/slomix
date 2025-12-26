@@ -630,36 +630,37 @@ class ProximityParserV3:
 # ===== CLI TESTING =====
 if __name__ == "__main__":
     import sys
-    logging.basicConfig(level=logging.INFO)
-    
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    logger = logging.getLogger(__name__)
+
     parser = ProximityParserV3(output_dir="gamestats")
-    
+
     if len(sys.argv) > 1:
         filepath = sys.argv[1]
     else:
         files = parser.find_files()
         if not files:
-            print("No engagement files found")
+            logger.warning("No engagement files found")
             sys.exit(1)
         filepath = files[-1]
-    
-    print(f"Parsing: {filepath}")
+
+    logger.info(f"Parsing: {filepath}")
     parser.parse_file(filepath)
-    
+
     stats = parser.get_stats()
-    print(f"\n=== STATS ===")
-    print(f"Map: {stats['map']}, Round: {stats['round']}")
-    print(f"Engagements: {stats['total_engagements']}")
-    print(f"  Crossfire: {stats['crossfire_engagements']}")
-    print(f"  Kills: {stats['kills']}")
-    print(f"  Escapes: {stats['escapes']}")
-    print(f"Heatmap cells: {stats['heatmap_cells']}")
-    
+    logger.info("=== STATS ===")
+    logger.info(f"Map: {stats['map']}, Round: {stats['round']}")
+    logger.info(f"Engagements: {stats['total_engagements']}")
+    logger.info(f"  Crossfire: {stats['crossfire_engagements']}")
+    logger.info(f"  Kills: {stats['kills']}")
+    logger.info(f"  Escapes: {stats['escapes']}")
+    logger.info(f"Heatmap cells: {stats['heatmap_cells']}")
+
     if parser.engagements:
-        print(f"\n=== SAMPLE ENGAGEMENT ===")
+        logger.info("=== SAMPLE ENGAGEMENT ===")
         e = parser.engagements[0]
-        print(f"ID: {e.id}, Target: {e.target_name}")
-        print(f"Outcome: {e.outcome}, Duration: {e.duration}ms")
-        print(f"Attackers: {[a.name for a in e.attackers.values()]}")
-        print(f"Crossfire: {e.is_crossfire}, Delay: {e.crossfire_delay}ms")
-        print(f"Position path: {len(e.position_path)} points")
+        logger.info(f"ID: {e.id}, Target: {e.target_name}")
+        logger.info(f"Outcome: {e.outcome}, Duration: {e.duration}ms")
+        logger.info(f"Attackers: {[a.name for a in e.attackers.values()]}")
+        logger.info(f"Crossfire: {e.is_crossfire}, Delay: {e.crossfire_delay}ms")
+        logger.info(f"Position path: {len(e.position_path)} points")

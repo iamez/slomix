@@ -406,27 +406,28 @@ class ProximityParserV2:
 # ===== STANDALONE TESTING =====
 if __name__ == "__main__":
     import sys
-    
-    logging.basicConfig(level=logging.INFO)
-    
+
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    logger = logging.getLogger(__name__)
+
     parser = ProximityParserV2(output_dir="gamestats")
-    
+
     if len(sys.argv) > 1:
         filepath = sys.argv[1]
     else:
         files = parser.find_proximity_files()
         if not files:
-            print("No proximity files found in gamestats/")
+            logger.warning("No proximity files found in gamestats/")
             sys.exit(1)
         filepath = files[-1]  # Most recent
-    
-    print(f"Parsing: {filepath}")
+
+    logger.info(f"Parsing: {filepath}")
     kills, heatmap, meta = parser.parse_file(filepath)
-    
+
     stats = parser.get_stats()
-    print(f"\n=== STATS ===")
-    print(f"Map: {stats['map']}, Round: {stats['round']}")
-    print(f"Kills: {stats['total_kills']}")
-    print(f"Heatmap cells: {stats['heatmap_cells']}")
-    print(f"Engagement breakdown: {stats['engagement_breakdown']}")
-    print(f"Kill distance: avg={stats['avg_kill_distance']:.1f}, min={stats['min_distance']:.1f}, max={stats['max_distance']:.1f}")
+    logger.info("=== STATS ===")
+    logger.info(f"Map: {stats['map']}, Round: {stats['round']}")
+    logger.info(f"Kills: {stats['total_kills']}")
+    logger.info(f"Heatmap cells: {stats['heatmap_cells']}")
+    logger.info(f"Engagement breakdown: {stats['engagement_breakdown']}")
+    logger.info(f"Kill distance: avg={stats['avg_kill_distance']:.1f}, min={stats['min_distance']:.1f}, max={stats['max_distance']:.1f}")

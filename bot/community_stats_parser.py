@@ -1029,17 +1029,17 @@ def test_c0rnporn3_parser():
     test_file = "2025-09-30-220944-etl_sp_delivery-round-2.txt"
     result = parser.parse_stats_file(test_file)
 
-    print("=== C0RNP0RN3.LUA Parser Test ===")
-    print(f"Success: {result['success']}")
-    print(f"Map: {result['map_name']} Round {result['round_num']}")
-    print(f"Players: {result['total_players']}")
-    print(f"MVP: {result['mvp']}")
-    print(f"Outcome: {result['round_outcome']}")
+    logger.info("=== C0RNP0RN3.LUA Parser Test ===")
+    logger.info(f"Success: {result['success']}")
+    logger.info(f"Map: {result['map_name']} Round {result['round_num']}")
+    logger.info(f"Players: {result['total_players']}")
+    logger.info(f"MVP: {result['mvp']}")
+    logger.info(f"Outcome: {result['round_outcome']}")
 
-    print("\nTop 3 Players:")
+    logger.info("Top 3 Players:")
     sorted_players = sorted(result['players'], key=lambda x: x['kd_ratio'], reverse=True)
     for i, player in enumerate(sorted_players[:3], 1):
-        print(
+        logger.info(
             f"  {i}. {player['name']}: {player['kills']}K/{player['deaths']}D (K/D: {player['kd_ratio']:.2f})"
         )
 
@@ -1050,13 +1050,12 @@ def test_c0rnporn3_parser():
                 w = player['weapon_stats'][weapon]
                 if w['shots'] > 0:
                     weapon_name = weapon.replace('WS_', '')
-                    print(
-                        (
-                            f"     {weapon_name}: {w['accuracy']:.1f}% acc "
-                            f"({w['hits']}/{w['shots']}) | {w['kills']}K/{w['deaths']}D | {w['headshots']} HS"
-                        )
+                    logger.info(
+                        f"     {weapon_name}: {w['accuracy']:.1f}% acc "
+                        f"({w['hits']}/{w['shots']}) | {w['kills']}K/{w['deaths']}D | {w['headshots']} HS"
                     )
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
     test_c0rnporn3_parser()
