@@ -21,6 +21,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.database_adapter import ensure_player_name_alias
 from bot.core.lazy_pagination_view import LazyPaginationView
 from bot.core.utils import escape_like_pattern_for_query, sanitize_error_message
 from bot.stats import StatsCalculator
@@ -37,18 +38,6 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
         self.stats_cache = bot.stats_cache
         self.player_formatter = PlayerFormatter(bot.db_adapter)
         logger.info("🏆 LeaderboardCog initializing...")
-
-    async def _ensure_player_name_alias(self):
-        """Create temp view/alias for player_name column compatibility"""
-        try:
-            # Only create alias for SQLite (PostgreSQL will have proper schema)
-            if self.bot.config.database_type == 'sqlite':
-                await self.bot.db_adapter.execute(
-                    "CREATE TEMP VIEW IF NOT EXISTS player_comprehensive_stats_alias AS "
-                    "SELECT *, player_name AS name FROM player_comprehensive_stats"
-                )
-        except Exception:  # nosec B110
-            pass  # Alias creation is optional
 
     async def _enable_sql_diag(self):
         """Enable SQL diagnostics for troubleshooting (SQLite only)"""
@@ -77,7 +66,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
             # Set up database alias and diagnostics
             try:
-                await self._ensure_player_name_alias()
+                await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
                 pass  # Alias is optional
             # Enable SQL diagnostics for troubleshooting
