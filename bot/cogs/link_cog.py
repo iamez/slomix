@@ -39,6 +39,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.database_adapter import ensure_player_name_alias
 from bot.core.utils import escape_like_pattern_for_query, sanitize_error_message
 
 # Import pagination view for interactive button navigation
@@ -64,25 +65,6 @@ class LinkCog(commands.Cog, name="Link"):
         self.display_name_service = PlayerDisplayNameService(bot.db_adapter)
         self.player_formatter = PlayerFormatter(bot.db_adapter)
         logger.info("🔗 LinkCog loaded")
-
-    async def _ensure_player_name_alias(self, db_adapter) -> None:
-        """Create TEMP VIEW aliasing for player_name column compatibility."""
-        try:
-            # Check if player_name column exists using adapter
-            result = await db_adapter.fetch_all("SELECT * FROM player_comprehensive_stats LIMIT 1")
-            if result and hasattr(result[0], 'player_name'):
-                # Column exists, no alias needed
-                return
-            elif result and hasattr(result[0], 'name'):
-                # Create alias view if needed (SQLite only)
-                if self.bot.config.database_type == 'sqlite':
-                    await db_adapter.execute("""
-                        CREATE TEMP VIEW IF NOT EXISTS player_comprehensive_stats_view AS
-                        SELECT *, name AS player_name FROM player_comprehensive_stats
-                    """)
-                    logger.debug("Created temporary player_name alias view")
-        except Exception as e:
-            logger.warning(f"Could not create player_name alias: {e}")
 
     @is_public_channel()
     @commands.command(name="list_players", aliases=["players", "lp"])
@@ -114,7 +96,7 @@ class LinkCog(commands.Cog, name="Link"):
         """
         try:
             # Ensure player_name alias compatibility
-            await self._ensure_player_name_alias(self.bot.db_adapter)
+            await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             
             # Base query to get all players with their link status
             base_query = """
