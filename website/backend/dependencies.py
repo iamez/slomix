@@ -62,3 +62,8 @@ async def get_db() -> AsyncGenerator[DatabaseAdapter, None]:
 
     yield _db_pool
     # Don't close here - pool stays open for reuse!
+
+
+def get_db_pool() -> DatabaseAdapter:
+    """Get the database pool directly (for background tasks)"""
+    return _db_pool

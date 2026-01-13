@@ -186,7 +186,7 @@
                     class="w-8 h-8 bg-gradient-to-br from-brand-blue to-brand-cyan rounded-lg flex items-center justify-center font-black text-white text-xs shadow-[0_0_15px_rgba(59,130,246,0.6)]">
                     LS
                 </div>
-                <div class="font-black text-white text-lg">Slomix<span class="text-brand-blue">.gg</span></div>
+                <div class="font-black text-white text-lg">slomix<span class="text-brand-blue">.gg</span></div>
             </div>
 
             <!-- Navigation Links -->
@@ -201,6 +201,8 @@
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Maps</button>
                 <button id="link-weapons" onclick="navigateTo('weapons')"
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Weapons</button>
+                <button id="link-records" onclick="navigateTo('records')"
+                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Records</button>
                 <button id="link-profile" onclick="navigateTo('profile')"
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Profile</button>
             </div>
@@ -328,8 +330,137 @@
                 </div>
             </div>
 
+            <!-- LIVE STATUS BAR -->
+            <div class="max-w-7xl mx-auto px-6 -mt-24 relative z-20 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Game Server Status (Expandable) -->
+                    <div id="live-server-status" class="glass-card rounded-xl border border-white/10 overflow-hidden">
+                        <!-- Collapsed view (always visible) -->
+                        <div class="p-4 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition" onclick="toggleServerDetails()">
+                            <div class="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center">
+                                <i data-lucide="server" class="w-6 h-6 text-slate-400"></i>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-xs font-bold text-slate-500 uppercase">Game Server</span>
+                                    <span id="server-status-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-700 text-slate-400">
+                                        CHECKING...
+                                    </span>
+                                </div>
+                                <div id="server-status-details" class="text-sm text-slate-400">
+                                    Loading server status...
+                                </div>
+                            </div>
+                            <div id="server-player-count" class="text-right hidden">
+                                <div class="text-2xl font-black text-white">0</div>
+                                <div class="text-[10px] text-slate-500 uppercase">Players</div>
+                            </div>
+                            <i data-lucide="chevron-down" id="server-expand-icon" class="w-5 h-5 text-slate-500 transition-transform duration-200"></i>
+                        </div>
+
+                        <!-- Expanded view (hidden by default) -->
+                        <div id="server-expanded-content" class="hidden border-t border-white/10 p-4 bg-slate-900/50">
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="text-sm font-bold text-slate-400">Server Activity</span>
+                                <div class="flex gap-1" id="time-range-buttons">
+                                    <button onclick="loadServerActivity(24)" class="time-range-btn px-2 py-1 text-xs rounded bg-slate-700 text-slate-400 hover:bg-slate-600">24h</button>
+                                    <button onclick="loadServerActivity(72)" class="time-range-btn px-2 py-1 text-xs rounded bg-slate-700 text-slate-400 hover:bg-slate-600">3d</button>
+                                    <button onclick="loadServerActivity(168)" class="time-range-btn px-2 py-1 text-xs rounded bg-slate-700 text-slate-400 hover:bg-slate-600">7d</button>
+                                    <button onclick="loadServerActivity(720)" class="time-range-btn px-2 py-1 text-xs rounded bg-brand-emerald/20 text-brand-emerald active">30d</button>
+                                </div>
+                            </div>
+                            <div class="h-32 mb-3">
+                                <canvas id="server-activity-chart"></canvas>
+                            </div>
+                            <div id="server-stats-summary" class="grid grid-cols-3 gap-2 text-center text-xs text-slate-500">
+                                <div>
+                                    <span class="text-white font-bold block" id="stat-peak-players">--</span>
+                                    Peak Players
+                                </div>
+                                <div>
+                                    <span class="text-white font-bold block" id="stat-avg-players">--</span>
+                                    Avg Players
+                                </div>
+                                <div>
+                                    <span class="text-white font-bold block" id="stat-uptime">--</span>
+                                    Uptime
+                                </div>
+                            </div>
+                            <div id="server-no-data" class="hidden text-center text-slate-500 text-sm py-4">
+                                <i data-lucide="bar-chart-2" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                                Collecting activity data...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Voice Channel Status (Expandable) -->
+                    <div id="live-voice-status" class="glass-card rounded-xl border border-white/10 overflow-hidden">
+                        <!-- Collapsed view (always visible) -->
+                        <div class="p-4 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition" onclick="toggleVoiceDetails()">
+                            <div class="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center">
+                                <i data-lucide="mic" class="w-6 h-6 text-slate-400"></i>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-xs font-bold text-slate-500 uppercase">Voice Channel</span>
+                                    <span id="voice-status-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-700 text-slate-400">
+                                        EMPTY
+                                    </span>
+                                </div>
+                                <div id="voice-members-list" class="text-sm text-slate-400">
+                                    No one in voice
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div id="voice-member-count" class="text-right">
+                                    <div class="text-2xl font-black text-white">0</div>
+                                    <div class="text-[10px] text-slate-500 uppercase">Online</div>
+                                </div>
+                                <i id="voice-expand-icon" data-lucide="chevron-down" class="w-5 h-5 text-slate-400 transition-transform"></i>
+                            </div>
+                        </div>
+
+                        <!-- Expanded view (hidden by default) -->
+                        <div id="voice-expanded-content" class="hidden border-t border-white/10 p-4 bg-black/20">
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="text-sm font-bold text-white">Voice Activity</span>
+                                <div class="flex gap-2">
+                                    <button onclick="loadVoiceActivity(24)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">24h</button>
+                                    <button onclick="loadVoiceActivity(72)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">3d</button>
+                                    <button onclick="loadVoiceActivity(168)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">7d</button>
+                                    <button onclick="loadVoiceActivity(720)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-brand-purple/20 text-brand-purple transition active">30d</button>
+                                </div>
+                            </div>
+                            <div class="relative">
+                                <canvas id="voice-activity-chart" class="w-full" height="128"></canvas>
+                                <div id="voice-no-data" class="hidden absolute inset-0 flex items-center justify-center">
+                                    <div class="text-center text-slate-500">
+                                        <i data-lucide="bar-chart-2" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                                        Collecting activity data...
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="voice-stats-summary" class="grid grid-cols-3 gap-4 mt-4">
+                                <div class="text-center">
+                                    <div id="stat-peak-members" class="text-xl font-black text-brand-purple">-</div>
+                                    <div class="text-[10px] text-slate-500 uppercase">Peak Members</div>
+                                </div>
+                                <div class="text-center">
+                                    <div id="stat-avg-members" class="text-xl font-black text-brand-purple">-</div>
+                                    <div class="text-[10px] text-slate-500 uppercase">Avg Members</div>
+                                </div>
+                                <div class="text-center">
+                                    <div id="stat-total-sessions" class="text-xl font-black text-brand-purple">-</div>
+                                    <div class="text-[10px] text-slate-500 uppercase">Sessions</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Live Stats Section - 3 WIDGETS -->
-            <div class="max-w-7xl mx-auto px-6 -mt-20 relative z-20 pb-20">
+            <div class="max-w-7xl mx-auto px-6 -mt-2 relative z-20 pb-20">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
                     <!-- Widget 1: Current Season -->
@@ -442,28 +573,38 @@
                 </div>
 
                 <!-- Filters -->
-                <div
-                    class="flex flex-col md:flex-row justify-between items-center gap-6 glass-panel p-4 rounded-xl mb-8">
-                    <div class="flex gap-2">
+                <div class="glass-panel p-4 rounded-xl mb-8 space-y-4">
+                    <!-- Stat Categories -->
+                    <div class="flex flex-wrap gap-2 justify-center">
                         <button id="btn-stat-dpm" onclick="updateLeaderboardFilter('stat', 'dpm')"
-                            class="px-4 py-2 rounded-md text-sm font-bold bg-brand-blue text-white shadow-lg transition">DPM</button>
+                            class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">DPM</button>
                         <button id="btn-stat-kills" onclick="updateLeaderboardFilter('stat', 'kills')"
-                            class="px-4 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Kills</button>
+                            class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Kills</button>
                         <button id="btn-stat-kd" onclick="updateLeaderboardFilter('stat', 'kd')"
-                            class="px-4 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">K/D</button>
+                            class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">K/D</button>
+                        <button id="btn-stat-damage" onclick="updateLeaderboardFilter('stat', 'damage')"
+                            class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Damage</button>
+                        <button id="btn-stat-headshots" onclick="updateLeaderboardFilter('stat', 'headshots')"
+                            class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Headshots</button>
+                        <button id="btn-stat-accuracy" onclick="updateLeaderboardFilter('stat', 'accuracy')"
+                            class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Accuracy</button>
+                        <button id="btn-stat-revives" onclick="updateLeaderboardFilter('stat', 'revives')"
+                            class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Revives</button>
+                        <button id="btn-stat-gibs" onclick="updateLeaderboardFilter('stat', 'gibs')"
+                            class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Gibs</button>
+                        <button id="btn-stat-games" onclick="updateLeaderboardFilter('stat', 'games')"
+                            class="px-3 py-1.5 rounded-md text-sm font-bold bg-brand-blue text-white shadow-lg transition">Games</button>
                     </div>
-                    <div class="flex gap-2">
+                    <!-- Time Period -->
+                    <div class="flex flex-wrap gap-2 justify-center border-t border-white/5 pt-4">
                         <button id="btn-period-7d" onclick="updateLeaderboardFilter('period', '7d')"
-                            class="px-4 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">7
-                            Days</button>
+                            class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">7 Days</button>
                         <button id="btn-period-30d" onclick="updateLeaderboardFilter('period', '30d')"
-                            class="px-4 py-2 rounded-md text-sm font-bold bg-brand-purple text-white shadow-lg transition">30
-                            Days</button>
+                            class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">30 Days</button>
                         <button id="btn-period-season" onclick="updateLeaderboardFilter('period', 'season')"
-                            class="px-4 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Season</button>
+                            class="px-3 py-1.5 rounded-md text-sm font-bold bg-brand-purple text-white shadow-lg transition">Season</button>
                         <button id="btn-period-all" onclick="updateLeaderboardFilter('period', 'all')"
-                            class="px-4 py-2 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">All
-                            Time</button>
+                            class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">All Time</button>
                     </div>
                 </div>
 
@@ -475,7 +616,7 @@
                                 <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Rank</th>
                                 <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Player</th>
                                 <th id="lb-col-value"
-                                    class="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">DPM</th>
+                                    class="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Games</th>
                                 <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Sessions
                                 </th>
                                 <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Kills</th>
@@ -494,26 +635,19 @@
         <div id="view-maps" class="view-section">
             <div class="max-w-7xl mx-auto px-6 py-12">
                 <div class="text-center mb-12">
-                    <i data-lucide="map" class="w-6 h-6 text-brand-cyan"></i>
+                    <h1 class="text-4xl font-black text-white mb-4">Map Statistics</h1>
+                    <p class="text-slate-400">Win rates and statistics for all maps (Stopwatch: 2 rounds = 1 match)</p>
                 </div>
-                <div class="space-y-2">
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-400">Total Matches</span>
-                        <span class="font-bold text-white">1,245</span>
-                    </div>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-400">Win Rate</span>
-                        <span class="font-bold text-brand-emerald">55%</span>
-                    </div>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-400">Avg DPM</span>
-                        <span class="font-bold text-brand-blue">285</span>
+
+                <!-- Maps Grid -->
+                <div id="maps-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Loaded dynamically by JS -->
+                    <div class="col-span-full text-center py-12">
+                        <i data-lucide="loader" class="w-8 h-8 text-brand-cyan animate-spin mx-auto mb-4"></i>
+                        <div class="text-slate-400">Loading map statistics...</div>
                     </div>
                 </div>
             </div>
-            <!-- More maps loaded by JS -->
-        </div>
-        </div>
         </div>
 
         <!-- WEAPONS VIEW -->
@@ -541,31 +675,35 @@
 
                 <!-- Weapons Grid -->
                 <div id="weapons-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- Sample Weapon Card -->
-                    <div class="glass-card p-6 rounded-xl border-l-4 border-brand-rose">
-                        <div class="flex justify-between items-start mb-4">
-                            <div>
-                                <div class="text-xs font-bold text-slate-500 uppercase tracking-wider">Rifle</div>
-                                <div class="text-2xl font-black text-white mt-1">Thompson</div>
-                            </div>
-                            <i data-lucide="crosshair" class="w-6 h-6 text-brand-rose"></i>
-                        </div>
-                        <div class="space-y-2">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-400">Total Kills</span>
-                                <span class="font-bold text-white">8,562</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-400">Accuracy</span>
-                                <span class="font-bold text-brand-emerald">42%</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-400">Headshots</span>
-                                <span class="font-bold text-brand-gold">18%</span>
-                            </div>
-                        </div>
+                    <!-- Loaded dynamically by JS -->
+                    <div class="col-span-full text-center py-12">
+                        <i data-lucide="loader" class="w-8 h-8 text-brand-rose animate-spin mx-auto mb-4"></i>
+                        <div class="text-slate-400">Loading weapon statistics...</div>
                     </div>
-                    <!-- More weapons loaded by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- RECORDS VIEW -->
+        <div id="view-records" class="view-section">
+            <div class="max-w-7xl mx-auto px-6 py-12">
+                <div class="text-center mb-12">
+                    <h1 class="text-4xl font-black text-white mb-4">Server Records</h1>
+                    <p class="text-slate-400">All-time highest stats recorded on the server</p>
+                </div>
+
+                <!-- Filter -->
+                <div class="flex justify-end mb-6">
+                    <div class="relative">
+                        <select id="records-map-filter" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg focus:ring-brand-blue focus:border-brand-blue block w-full p-2.5">
+                            <option value="">All Maps</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Grid -->
+                <div id="records-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Populated by JS -->
                 </div>
             </div>
         </div>
@@ -594,7 +732,14 @@
 
                         <!-- Info -->
                         <div class="text-center md:text-left flex-1">
-                            <h1 id="profile-name" class="text-4xl font-black text-white mb-2">--</h1>
+                            <div class="flex items-center justify-center md:justify-start gap-3 mb-2">
+                                <h1 id="profile-name" class="text-4xl font-black text-white">--</h1>
+                                <button id="profile-compare-btn" onclick="openCompareModal(document.getElementById('profile-name').textContent)"
+                                        class="px-3 py-1.5 rounded-lg text-sm font-bold bg-brand-purple/20 hover:bg-brand-purple/40 text-brand-purple border border-brand-purple/30 transition flex items-center gap-1.5">
+                                    <i data-lucide="git-compare" class="w-4 h-4"></i>
+                                    Compare
+                                </button>
+                            </div>
                             <div class="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-slate-400">
                                 <div class="flex items-center gap-2">
                                     <i data-lucide="clock" class="w-4 h-4 text-brand-blue"></i>
@@ -640,6 +785,81 @@
                     </div>
                 </div>
 
+                <!-- Player Info Section -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div class="glass-card p-5 rounded-xl">
+                        <div class="flex items-center gap-3 mb-3">
+                            <i data-lucide="crosshair" class="w-5 h-5 text-brand-rose"></i>
+                            <div class="text-xs text-slate-500 uppercase font-bold">Favorite Weapon</div>
+                        </div>
+                        <div id="profile-fav-weapon" class="text-xl font-black text-white">--</div>
+                    </div>
+                    <div class="glass-card p-5 rounded-xl">
+                        <div class="flex items-center gap-3 mb-3">
+                            <i data-lucide="map" class="w-5 h-5 text-brand-cyan"></i>
+                            <div class="text-xs text-slate-500 uppercase font-bold">Favorite Map</div>
+                        </div>
+                        <div id="profile-fav-map" class="text-xl font-black text-white">--</div>
+                    </div>
+                    <div class="glass-card p-5 rounded-xl">
+                        <div class="flex items-center gap-3 mb-3">
+                            <i data-lucide="link" class="w-5 h-5 text-brand-purple"></i>
+                            <div class="text-xs text-slate-500 uppercase font-bold">Discord Status</div>
+                        </div>
+                        <div id="profile-discord-status" class="text-xl font-black text-slate-400">Not Linked</div>
+                    </div>
+                </div>
+
+                <!-- DPM Records & Aliases -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    <div class="glass-card p-5 rounded-xl">
+                        <div class="flex items-center gap-3 mb-4">
+                            <i data-lucide="trending-up" class="w-5 h-5 text-brand-emerald"></i>
+                            <div class="text-xs text-slate-500 uppercase font-bold">DPM Records</div>
+                        </div>
+                        <div class="flex justify-between">
+                            <div>
+                                <div class="text-xs text-slate-500">Highest</div>
+                                <div id="profile-highest-dpm" class="text-2xl font-black text-brand-emerald">--</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-slate-500">Lowest</div>
+                                <div id="profile-lowest-dpm" class="text-2xl font-black text-brand-rose">--</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="glass-card p-5 rounded-xl">
+                        <div class="flex items-center gap-3 mb-4">
+                            <i data-lucide="users" class="w-5 h-5 text-brand-amber"></i>
+                            <div class="text-xs text-slate-500 uppercase font-bold">Known Aliases</div>
+                        </div>
+                        <div id="profile-aliases" class="flex flex-wrap gap-2">
+                            <span class="text-slate-500 text-sm">No other aliases</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Achievements Section -->
+                <div class="glass-panel p-6 rounded-xl mb-8">
+                    <h3 class="font-bold text-white mb-4 flex items-center gap-2">
+                        <i data-lucide="trophy" class="w-5 h-5 text-brand-gold"></i> Achievements
+                        <span id="profile-achievement-count" class="text-sm text-slate-400 font-normal ml-auto">-- / --</span>
+                    </h3>
+                    <!-- Progress Bar -->
+                    <div class="h-2 bg-slate-800 rounded-full mb-4 overflow-hidden">
+                        <div id="profile-achievement-bar" class="h-full bg-gradient-to-r from-brand-gold to-brand-amber transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <!-- Unlocked Badges -->
+                    <div id="profile-achievements-unlocked" class="flex flex-wrap gap-2 mb-4">
+                        <span class="text-slate-500 text-sm">Loading achievements...</span>
+                    </div>
+                    <!-- Next Achievements -->
+                    <div id="profile-achievements-next" class="border-t border-white/5 pt-4 hidden">
+                        <div class="text-xs text-slate-500 uppercase font-bold mb-2">Next Milestones</div>
+                        <div class="space-y-2"></div>
+                    </div>
+                </div>
+
                 <!-- Detailed Stats -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="glass-panel p-6 rounded-xl">
@@ -671,11 +891,22 @@
                     </div>
 
                     <div class="glass-panel p-6 rounded-xl">
-                        <h3 class="font-bold text-white mb-6 flex items-center gap-2">
-                            <i data-lucide="activity" class="w-5 h-5 text-brand-purple"></i> Performance Chart
+                        <h3 id="session-chart-title" class="font-bold text-white mb-4 flex items-center gap-2">
+                            <i data-lucide="trending-up" class="w-5 h-5 text-brand-emerald"></i> Session Form
                         </h3>
-                        <div class="chart-container">
-                            <canvas id="eloChart"></canvas>
+                        <p class="text-xs text-slate-500 -mt-2 mb-3">DPM per gaming session</p>
+                        <div class="chart-container" style="height: 180px;">
+                            <canvas id="sessionChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-xl">
+                        <h3 class="font-bold text-white mb-4 flex items-center gap-2">
+                            <i data-lucide="activity" class="w-5 h-5 text-brand-blue"></i> Round DPM
+                        </h3>
+                        <p class="text-xs text-slate-500 -mt-2 mb-3">DPM per individual map</p>
+                        <div class="chart-container" style="height: 180px;">
+                            <canvas id="roundChart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -758,6 +989,23 @@
         </div>
     </div>
 
+    <!-- Record Details Modal -->
+    <div id="record-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
+        <div class="glass-panel max-w-md w-full rounded-2xl border-2 border-white/10 shadow-2xl">
+            <div class="p-6 border-b border-white/10 flex justify-between items-center">
+                <h3 id="modal-title" class="text-xl font-black text-white flex items-center">
+                    <!-- Title set by JS -->
+                </h3>
+                <button onclick="closeRecordModal()" class="text-slate-400 hover:text-white transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="modal-content" class="p-4 space-y-2">
+                <!-- Content set by JS -->
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="glass-panel border-t border-white/5 py-8 mt-auto">
         <div class="max-w-7xl mx-auto px-6">
@@ -777,8 +1025,10 @@
         </div>
     </footer>
 
-    <!-- JavaScript -->
-    <script src="js/app.js"></script>
+    <!-- JavaScript (ES6 Modules) -->
+    <script type="module" src="js/app.js"></script>
+    <script type="module" src="js/records.js"></script>
+    <script src="js/diagnostics.js"></script>
     <script>
         // Initialize Lucide icons
         lucide.createIcons();
