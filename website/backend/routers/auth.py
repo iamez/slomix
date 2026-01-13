@@ -77,9 +77,11 @@ async def callback(request: Request, code: str, db: DatabaseAdapter = Depends(ge
             raise HTTPException(status_code=400, detail="Failed to get user info")
 
         user_data = user_resp.json()
-        
+
         # Debug: Log who actually logged in
-        print(f"[AUTH] Discord user logged in: {user_data.get('username')} (ID: {user_data.get('id')})")
+        print(
+            f"[AUTH] Discord user logged in: {user_data.get('username')} (ID: {user_data.get('id')})"
+        )
 
         # Check for existing player link
         try:
@@ -118,6 +120,7 @@ async def logout(request: Request):
     response.delete_cookie("session")
     return response
 
+
 @router.get("/me")
 async def get_current_user(request: Request):
     user = request.session.get("user")
@@ -131,7 +134,7 @@ async def search_players(q: str, db: DatabaseAdapter = Depends(get_db)):
     """Search for players by name to link to Discord account"""
     if not q or len(q) < 2:
         return []
-    
+
     # Search for players matching the query (case-insensitive)
     results = await db.fetch_all(
         """
@@ -141,9 +144,9 @@ async def search_players(q: str, db: DatabaseAdapter = Depends(get_db)):
         ORDER BY player_name
         LIMIT 20
         """,
-        (f"%{q}%",)
+        (f"%{q}%",),
     )
-    
+
     return [{"guid": r[0], "name": r[1], "clean_name": r[2]} for r in results]
 
 
@@ -153,23 +156,22 @@ async def link_player(request: Request, db: DatabaseAdapter = Depends(get_db)):
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     body = await request.json()
     player_guid = body.get("player_guid")
     player_name = body.get("player_name")
-    
+
     if not player_guid:
         raise HTTPException(status_code=400, detail="player_guid is required")
-    
+
     discord_id = int(user["id"])
     discord_username = user.get("username", "")
-    
+
     # Check if user already has a link
     existing = await db.fetch_one(
-        "SELECT id FROM player_links WHERE discord_id = $1",
-        (discord_id,)
+        "SELECT id FROM player_links WHERE discord_id = $1", (discord_id,)
     )
-    
+
     if existing:
         # Update existing link
         await db.execute(
@@ -178,7 +180,7 @@ async def link_player(request: Request, db: DatabaseAdapter = Depends(get_db)):
             SET player_guid = $1, player_name = $2, linked_at = NOW()
             WHERE discord_id = $3
             """,
-            (player_guid, player_name, discord_id)
+            (player_guid, player_name, discord_id),
         )
     else:
         # Insert new link
@@ -187,13 +189,13 @@ async def link_player(request: Request, db: DatabaseAdapter = Depends(get_db)):
             INSERT INTO player_links (player_guid, discord_id, discord_username, player_name, linked_at)
             VALUES ($1, $2, $3, $4, NOW())
             """,
-            (player_guid, discord_id, discord_username, player_name)
+            (player_guid, discord_id, discord_username, player_name),
         )
-    
+
     # Update session with linked player
     user["linked_player"] = player_name
     request.session["user"] = user
-    
+
     return {"success": True, "linked_player": player_name}
 
 
@@ -203,16 +205,13 @@ async def unlink_player(request: Request, db: DatabaseAdapter = Depends(get_db))
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     discord_id = int(user["id"])
-    
-    await db.execute(
-        "DELETE FROM player_links WHERE discord_id = $1",
-        (discord_id,)
-    )
-    
+
+    await db.execute("DELETE FROM player_links WHERE discord_id = $1", (discord_id,))
+
     # Update session
     user["linked_player"] = None
     request.session["user"] = user
-    
+
     return {"success": True}

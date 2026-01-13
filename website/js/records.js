@@ -1,34 +1,17 @@
-/* global API_BASE, fetchJSON, lucide */
-
 /**
- * Escape HTML special characters to prevent XSS attacks.
- * Use this for any user-controlled data inserted into HTML.
- * @param {string} str - The string to escape
- * @returns {string} - HTML-safe string
+ * Records module - Hall of Fame / Records view
+ * @module records
  */
-function escapeHtmlRecords(str) {
-    if (str == null) return '';
-    const div = document.createElement('div');
-    div.textContent = String(str);
-    return div.innerHTML;
-}
 
-/**
- * Safely insert HTML that contains escaped user content.
- * Only use this when ALL user-controlled content has been escaped with escapeHtmlRecords().
- * @param {Element} element - The target element
- * @param {string} position - Position to insert ('beforeend', 'afterbegin', etc.)
- * @param {string} html - HTML string with escaped user content
- */
-function safeInsertHTMLRecords(element, position, html) {
-    // This wrapper documents that the HTML has been sanitized before insertion
-    element.insertAdjacentHTML(position, html);  // nosemgrep: javascript.browser.security.insecure-document-method.insecure-document-method
-}
+import { API_BASE, fetchJSON, escapeHtml } from './utils.js';
 
 let currentRecordsData = {};
 let currentMapFilter = '';
 
-async function loadRecordsView() {
+/**
+ * Load the records view
+ */
+export async function loadRecordsView() {
     const container = document.getElementById('records-grid');
     const filterSelect = document.getElementById('records-map-filter');
 
@@ -49,14 +32,16 @@ async function loadRecordsView() {
     await fetchAndRenderRecords();
 }
 
+/**
+ * Load maps for filter dropdown
+ */
 async function loadMapFilter(selectElement) {
     try {
         const maps = await fetchJSON(`${API_BASE}/stats/maps`);
         if (maps && Array.isArray(maps)) {
             const currentVal = selectElement.value;
-            // nosemgrep: javascript.browser.security.innerHTML-property-set - all map data is escaped with escapeHtmlRecords()
             selectElement.innerHTML = '<option value="">All Maps</option>' +
-                maps.map(map => `<option value="${escapeHtmlRecords(map)}">${escapeHtmlRecords(map)}</option>`).join('');
+                maps.map(map => `<option value="${escapeHtml(map)}">${escapeHtml(map)}</option>`).join('');
             selectElement.value = currentVal;
         }
     } catch (e) {
@@ -64,6 +49,9 @@ async function loadMapFilter(selectElement) {
     }
 }
 
+/**
+ * Fetch and render records grid
+ */
 async function fetchAndRenderRecords() {
     const container = document.getElementById('records-grid');
 
@@ -74,7 +62,7 @@ async function fetchAndRenderRecords() {
             <p class="text-slate-400">Loading Hall of Fame...</p>
         </div>
     `;
-    lucide.createIcons();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 
     try {
         // Fetch records (limit 5 for modal data)
@@ -111,9 +99,9 @@ async function fetchAndRenderRecords() {
 
             const topRecord = recordList[0];
             const value = formatRecordValue(topRecord.value);
-            const safePlayer = escapeHtmlRecords(topRecord.player);
-            const safePlayerInitials = escapeHtmlRecords(topRecord.player.substring(0, 2).toUpperCase());
-            const safeMap = escapeHtmlRecords(topRecord.map);
+            const safePlayer = escapeHtml(topRecord.player);
+            const safePlayerInitials = escapeHtml(topRecord.player.substring(0, 2).toUpperCase());
+            const safeMap = escapeHtml(topRecord.map);
 
             const html = `
                 <div class="glass-card p-6 rounded-xl hover:bg-white/5 transition group relative overflow-hidden cursor-pointer border border-white/5 hover:border-white/10"
@@ -121,7 +109,7 @@ async function fetchAndRenderRecords() {
                     <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition transform group-hover:scale-110 duration-500">
                         <i data-lucide="${cat.icon}" class="w-16 h-16 ${cat.color}"></i>
                     </div>
-                    
+
                     <div class="flex items-center gap-3 mb-4">
                         <div class="w-10 h-10 rounded-lg ${cat.bg} ${cat.border} border flex items-center justify-center">
                             <i data-lucide="${cat.icon}" class="w-5 h-5 ${cat.color}"></i>
@@ -138,7 +126,7 @@ async function fetchAndRenderRecords() {
                     </div>
 
                     <div class="flex items-center justify-between pt-4 border-t border-white/5">
-                        <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-4">
                             <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">
                                 ${safePlayerInitials}
                             </div>
@@ -155,7 +143,7 @@ async function fetchAndRenderRecords() {
             container.insertAdjacentHTML('beforeend', html);
         });
 
-        lucide.createIcons();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
 
     } catch (e) {
         console.error('Failed to load records:', e);
@@ -163,13 +151,19 @@ async function fetchAndRenderRecords() {
     }
 }
 
+/**
+ * Format record value for display
+ */
 function formatRecordValue(val) {
     return typeof val === 'number' && !Number.isInteger(val)
         ? val.toFixed(2)
         : Math.round(val);
 }
 
-function openRecordModal(categoryKey) {
+/**
+ * Open record details modal
+ */
+export function openRecordModal(categoryKey) {
     const modal = document.getElementById('record-modal');
     const titleEl = document.getElementById('modal-title');
     const contentEl = document.getElementById('modal-content');
@@ -177,19 +171,18 @@ function openRecordModal(categoryKey) {
     if (!modal || !currentRecordsData[categoryKey]) return;
 
     const records = currentRecordsData[categoryKey];
-    const catName = escapeHtmlRecords(categoryKey.replace('_', ' ').toUpperCase());
+    const catName = escapeHtml(categoryKey.replace('_', ' ').toUpperCase());
 
-    // Set Title - catName is sanitized, so safe to use innerHTML for formatting
+    // Set Title
     titleEl.innerHTML = `<span>${catName}</span> <span class="text-slate-500 text-sm font-normal ml-2">Top 5 All-Time</span>`;
 
-    // Build Content - all user data (player, map) is escaped with escapeHtmlRecords()
-    // nosemgrep: javascript.browser.security.innerHTML-property-set
+    // Build Content
     contentEl.innerHTML = records.map((rec, index) => {
         const isFirst = index === 0;
         const rankColor = isFirst ? 'text-brand-gold' : 'text-slate-400';
         const bgClass = isFirst ? 'bg-brand-gold/10 border-brand-gold/20' : 'bg-slate-800/50 border-white/5';
-        const safePlayer = escapeHtmlRecords(rec.player);
-        const safeMap = escapeHtmlRecords(rec.map);
+        const safePlayer = escapeHtml(rec.player);
+        const safeMap = escapeHtml(rec.map);
 
         return `
             <div class="flex items-center justify-between p-3 rounded-lg border ${bgClass} hover:bg-white/5 transition">
@@ -210,7 +203,15 @@ function openRecordModal(categoryKey) {
     modal.classList.remove('hidden');
 }
 
-function closeRecordModal() {
+/**
+ * Close record modal
+ */
+export function closeRecordModal() {
     const modal = document.getElementById('record-modal');
     if (modal) modal.classList.add('hidden');
 }
+
+// Expose to window for onclick handlers in HTML
+window.loadRecordsView = loadRecordsView;
+window.openRecordModal = openRecordModal;
+window.closeRecordModal = closeRecordModal;

@@ -1,5 +1,7 @@
 import sys
 import os
+import asyncio
+import json
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,7 +42,9 @@ from website.backend.dependencies import init_db_pool, close_db_pool
 WEBSITE_PORT = int(os.getenv("WEBSITE_PORT", "8000"))
 WEBSITE_HOST = os.getenv("WEBSITE_HOST", "0.0.0.0")
 SESSION_SECRET = os.getenv("SESSION_SECRET")
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
+CORS_ORIGINS = os.getenv(
+    "CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000"
+).split(",")
 
 # Validate SESSION_SECRET is properly configured
 if not SESSION_SECRET or SESSION_SECRET == "super-secret-key-change-me":
@@ -91,7 +95,7 @@ app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 async def startup_event():
     logger.info("🚀 Slomix Website Backend Starting...")
     await init_db_pool()  # Initialize shared DB pool once
-    logger.info("✅ Slomix Website Backend Ready")
+    logger.info("✅ Slomix Website Backend Ready (Read-Only Mode)")
 
 
 @app.on_event("shutdown")
@@ -99,6 +103,3 @@ async def shutdown_event():
     logger.info("🛑 Slomix Website Backend Stopping...")
     await close_db_pool()  # Clean up DB pool
     logger.info("✅ Slomix Website Backend Stopped")
-
-
-# Trigger reload

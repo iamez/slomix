@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from website.backend.dependencies import get_db
@@ -10,14 +11,380 @@ from bot.config import load_config
 from website.backend.services.website_session_data_service import (
     WebsiteSessionDataService as SessionDataService,
 )
+from website.backend.services.game_server_query import query_game_server
 from bot.services.session_stats_aggregator import SessionStatsAggregator
 
 router = APIRouter()
+
+# Game server configuration (for direct UDP query)
+GAME_SERVER_HOST = os.getenv("SERVER_HOST", "puran.hehe.si")
+GAME_SERVER_PORT = int(os.getenv("SERVER_PORT", "27960"))
+
+
+# ========================================
+# ACHIEVEMENT SYSTEM
+# ========================================
+
+# Achievement definitions matching the Discord bot
+KILL_MILESTONES = {
+    100: {"emoji": "🎯", "title": "First Blood Century", "color": "#95A5A6"},
+    500: {"emoji": "💥", "title": "Killing Machine", "color": "#3498DB"},
+    1000: {"emoji": "💀", "title": "Thousand Killer", "color": "#9B59B6"},
+    2500: {"emoji": "⚔️", "title": "Elite Warrior", "color": "#E74C3C"},
+    5000: {"emoji": "☠️", "title": "Death Incarnate", "color": "#C0392B"},
+    10000: {"emoji": "👑", "title": "Legendary Slayer", "color": "#F39C12"},
+}
+
+GAME_MILESTONES = {
+    10: {"emoji": "🎮", "title": "Getting Started", "color": "#95A5A6"},
+    50: {"emoji": "🎯", "title": "Regular Player", "color": "#3498DB"},
+    100: {"emoji": "🏆", "title": "Dedicated Gamer", "color": "#9B59B6"},
+    250: {"emoji": "⭐", "title": "Community Veteran", "color": "#E74C3C"},
+    500: {"emoji": "💎", "title": "Hardcore Legend", "color": "#F39C12"},
+    1000: {"emoji": "👑", "title": "Ultimate Champion", "color": "#F1C40F"},
+}
+
+KD_MILESTONES = {
+    1.0: {"emoji": "⚖️", "title": "Balanced Fighter", "color": "#95A5A6"},
+    1.5: {"emoji": "📈", "title": "Above Average", "color": "#3498DB"},
+    2.0: {"emoji": "🔥", "title": "Elite Killer", "color": "#E74C3C"},
+    3.0: {"emoji": "💯", "title": "Unstoppable", "color": "#F39C12"},
+}
+
+
+def calculate_player_achievements(kills: int, games: int, kd: float) -> dict:
+    """
+    Calculate which achievements a player has earned based on their stats.
+
+    Returns a dict with:
+    - unlocked: list of earned achievements
+    - next: the next achievement they're working toward (if any)
+    - progress: overall achievement progress percentage
+    """
+    unlocked = []
+    next_achievements = []
+
+    # Check kill milestones
+    for threshold, achievement in sorted(KILL_MILESTONES.items()):
+        if kills >= threshold:
+            unlocked.append({
+                "type": "kills",
+                "threshold": threshold,
+                "emoji": achievement["emoji"],
+                "title": achievement["title"],
+                "color": achievement["color"],
+            })
+        else:
+            next_achievements.append({
+                "type": "kills",
+                "threshold": threshold,
+                "emoji": achievement["emoji"],
+                "title": achievement["title"],
+                "current": kills,
+                "progress": round(kills / threshold * 100, 1),
+            })
+            break
+
+    # Check game milestones
+    for threshold, achievement in sorted(GAME_MILESTONES.items()):
+        if games >= threshold:
+            unlocked.append({
+                "type": "games",
+                "threshold": threshold,
+                "emoji": achievement["emoji"],
+                "title": achievement["title"],
+                "color": achievement["color"],
+            })
+        else:
+            next_achievements.append({
+                "type": "games",
+                "threshold": threshold,
+                "emoji": achievement["emoji"],
+                "title": achievement["title"],
+                "current": games,
+                "progress": round(games / threshold * 100, 1),
+            })
+            break
+
+    # Check K/D milestones (only if player has 20+ games)
+    if games >= 20:
+        for threshold, achievement in sorted(KD_MILESTONES.items()):
+            if kd >= threshold:
+                unlocked.append({
+                    "type": "kd",
+                    "threshold": threshold,
+                    "emoji": achievement["emoji"],
+                    "title": achievement["title"],
+                    "color": achievement["color"],
+                })
+            else:
+                next_achievements.append({
+                    "type": "kd",
+                    "threshold": threshold,
+                    "emoji": achievement["emoji"],
+                    "title": achievement["title"],
+                    "current": round(kd, 2),
+                    "progress": round(kd / threshold * 100, 1),
+                })
+                break
+
+    # Calculate overall progress
+    total_possible = len(KILL_MILESTONES) + len(GAME_MILESTONES) + len(KD_MILESTONES)
+    overall_progress = round(len(unlocked) / total_possible * 100, 1)
+
+    return {
+        "unlocked": unlocked,
+        "next": next_achievements[:2],  # Show up to 2 next achievements
+        "total_unlocked": len(unlocked),
+        "total_possible": total_possible,
+        "progress": overall_progress,
+    }
 
 
 @router.get("/status")
 async def get_status():
     return {"status": "online", "service": "Slomix API"}
+
+
+@router.get("/diagnostics")
+async def get_diagnostics(db: DatabaseAdapter = Depends(get_db)):
+    """
+    Run comprehensive diagnostics on the website backend.
+    Checks database connectivity, table permissions, and data availability.
+    """
+    results = {
+        "status": "ok",
+        "timestamp": None,
+        "database": {"status": "unknown", "tests": []},
+        "tables": [],
+        "issues": [],
+        "warnings": [],
+    }
+
+    from datetime import datetime
+    results["timestamp"] = datetime.utcnow().isoformat()
+
+    # Tables to check
+    tables_to_check = [
+        ("rounds", "SELECT COUNT(*) FROM rounds", True),
+        ("player_comprehensive_stats", "SELECT COUNT(*) FROM player_comprehensive_stats", True),
+        ("sessions", "SELECT COUNT(*) FROM sessions", True),
+        ("players", "SELECT COUNT(*) FROM players", False),
+        ("server_status_history", "SELECT COUNT(*) FROM server_status_history", False),
+        ("voice_status_history", "SELECT COUNT(*) FROM voice_status_history", False),
+        ("discord_users", "SELECT COUNT(*) FROM discord_users", False),
+    ]
+
+    # Test database connectivity and tables
+    try:
+        for table_name, query, required in tables_to_check:
+            try:
+                count = await db.fetch_val(query)
+                results["tables"].append({
+                    "name": table_name,
+                    "status": "ok",
+                    "row_count": count,
+                    "required": required
+                })
+            except Exception as e:
+                error_msg = str(e)
+                status = "error"
+                if "permission denied" in error_msg.lower():
+                    status = "permission_denied"
+                    results["warnings"].append(f"No permission to read {table_name}")
+                elif "does not exist" in error_msg.lower():
+                    status = "not_found"
+                    if required:
+                        results["issues"].append(f"Required table {table_name} not found")
+                    else:
+                        results["warnings"].append(f"Optional table {table_name} not found")
+                else:
+                    results["issues"].append(f"Error checking {table_name}: {error_msg}")
+
+                results["tables"].append({
+                    "name": table_name,
+                    "status": status,
+                    "error": error_msg,
+                    "required": required
+                })
+
+        results["database"]["status"] = "connected"
+
+        # Check for critical data
+        rounds_count = next((t["row_count"] for t in results["tables"] if t["name"] == "rounds" and t.get("row_count")), 0)
+        if rounds_count == 0:
+            results["warnings"].append("No rounds data in database")
+
+        players_count = next((t["row_count"] for t in results["tables"] if t["name"] == "player_comprehensive_stats" and t.get("row_count")), 0)
+        if players_count == 0:
+            results["warnings"].append("No player stats in database")
+
+    except Exception as e:
+        results["database"]["status"] = "error"
+        results["database"]["error"] = str(e)
+        results["issues"].append(f"Database connection error: {str(e)}")
+
+    # Set overall status
+    if results["issues"]:
+        results["status"] = "error"
+    elif results["warnings"]:
+        results["status"] = "warning"
+
+    return results
+
+
+@router.get("/live-status")
+async def get_live_status(db: DatabaseAdapter = Depends(get_db)):
+    """
+    Get real-time status of voice channels and game server.
+
+    - Voice channel data: from database (updated by Discord bot)
+    - Game server data: direct UDP query (real-time)
+    """
+    import json
+    from datetime import datetime
+
+    # ========== VOICE CHANNEL STATUS (from database) ==========
+    voice_result = {
+        "members": [],
+        "count": 0,
+        "channel_name": "Gaming",
+        "updated_at": None
+    }
+
+    try:
+        query = """
+            SELECT status_data, updated_at
+            FROM live_status
+            WHERE status_type = 'voice_channel'
+        """
+        row = await db.fetch_one(query)
+
+        if row:
+            status_data = row[0]
+            updated_at = row[1]
+
+            if isinstance(status_data, str):
+                status_data = json.loads(status_data)
+
+            voice_result = {
+                **status_data,
+                "updated_at": str(updated_at) if updated_at else None
+            }
+    except Exception as e:
+        print(f"Error fetching voice channel status: {e}")
+        voice_result["error"] = True
+
+    # ========== GAME SERVER STATUS (direct UDP query) ==========
+    server_status = query_game_server(GAME_SERVER_HOST, GAME_SERVER_PORT)
+
+    game_result = {
+        "online": server_status.online,
+        "hostname": server_status.clean_hostname,
+        "map": server_status.map_name,
+        "players": [{"name": p.name, "score": p.score, "ping": p.ping} for p in server_status.players],
+        "player_count": server_status.player_count,
+        "max_players": server_status.max_players,
+        "ping_ms": server_status.ping_ms,
+        "updated_at": datetime.now().isoformat(),
+    }
+
+    if server_status.error:
+        game_result["error"] = server_status.error
+
+    return {
+        "voice_channel": voice_result,
+        "game_server": game_result
+    }
+
+
+@router.get("/server-activity/history")
+async def get_server_activity_history(
+    hours: int = 72,
+    db: DatabaseAdapter = Depends(get_db)
+):
+    """
+    Get historical server activity data for charting.
+
+    Args:
+        hours: Number of hours of history to fetch (default 72 = 3 days)
+
+    Returns:
+        data_points: Array of status records
+        summary: Peak, average, uptime stats
+    """
+    from datetime import datetime, timedelta
+
+    try:
+        # Calculate time range
+        since = datetime.utcnow() - timedelta(hours=hours)
+
+        # Fetch data points
+        query = """
+            SELECT
+                recorded_at,
+                player_count,
+                max_players,
+                map_name,
+                online
+            FROM server_status_history
+            WHERE recorded_at >= $1
+            ORDER BY recorded_at ASC
+        """
+        rows = await db.fetch_all(query, (since,))
+
+        data_points = []
+        total_players = 0
+        peak_players = 0
+        peak_time = None
+        online_count = 0
+
+        for row in rows:
+            recorded_at, player_count, max_players, map_name, online = row
+
+            data_points.append({
+                "timestamp": recorded_at.isoformat() if recorded_at else None,
+                "player_count": player_count,
+                "max_players": max_players,
+                "map": map_name,
+                "online": online,
+            })
+
+            if online:
+                online_count += 1
+                total_players += player_count
+                if player_count > peak_players:
+                    peak_players = player_count
+                    peak_time = recorded_at
+
+        total_records = len(rows)
+        avg_players = round(total_players / online_count, 1) if online_count > 0 else 0
+        uptime_percent = round((online_count / total_records) * 100, 1) if total_records > 0 else 0
+
+        return {
+            "data_points": data_points,
+            "summary": {
+                "peak_players": peak_players,
+                "peak_time": peak_time.isoformat() if peak_time else None,
+                "avg_players": avg_players,
+                "uptime_percent": uptime_percent,
+                "total_records": total_records,
+            }
+        }
+
+    except Exception as e:
+        print(f"Error fetching server activity: {e}")
+        return {
+            "data_points": [],
+            "summary": {
+                "peak_players": 0,
+                "peak_time": None,
+                "avg_players": 0,
+                "uptime_percent": 0,
+                "total_records": 0,
+            },
+            "error": str(e)
+        }
 
 
 @router.get("/stats/overview")
@@ -148,13 +515,13 @@ async def get_sessions_list(
 ):
     """
     Get list of all gaming sessions (like !sessions command).
-    Returns sessions grouped by date with summary stats.
+    Returns sessions grouped by gaming_session_id to handle midnight-spanning sessions.
     """
     query = """
         WITH session_summary AS (
             SELECT
-                r.round_date,
                 r.gaming_session_id,
+                MIN(r.round_date) as session_date,
                 COUNT(DISTINCT r.id) as round_count,
                 COUNT(DISTINCT r.map_name) as map_count,
                 COUNT(DISTINCT p.player_guid) as player_count,
@@ -166,10 +533,10 @@ async def get_sessions_list(
                 AND r.map_name = p.map_name
                 AND r.round_number = p.round_number
             WHERE r.gaming_session_id IS NOT NULL
-            GROUP BY r.round_date, r.gaming_session_id
+            GROUP BY r.gaming_session_id
         )
         SELECT
-            round_date,
+            session_date,
             gaming_session_id,
             round_count,
             map_count,
@@ -177,7 +544,7 @@ async def get_sessions_list(
             total_kills,
             maps_played
         FROM session_summary
-        ORDER BY round_date DESC
+        ORDER BY session_date DESC
         LIMIT $1 OFFSET $2
     """
 
@@ -473,6 +840,93 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
     dpm = (damage / (time / 60)) if time > 0 else 0
     win_rate = (wins / games * 100) if games > 0 else 0
 
+    # Calculate achievements based on stats
+    achievements = calculate_player_achievements(int(kills), int(games), kd)
+
+    # Get favorite weapon (most kills) from weapon_comprehensive_stats
+    weapon_query = """
+        SELECT weapon_name, SUM(kills) as total_kills
+        FROM weapon_comprehensive_stats
+        WHERE player_name ILIKE $1
+        GROUP BY weapon_name
+        ORDER BY total_kills DESC
+        LIMIT 1
+    """
+    try:
+        weapon_row = await db.fetch_one(weapon_query, (player_name,))
+        if weapon_row and weapon_row[0]:
+            clean_name = weapon_row[0]
+            if clean_name.lower().startswith("ws ") or clean_name.lower().startswith("ws_"):
+                clean_name = clean_name[3:]
+            favorite_weapon = clean_name.replace("_", " ").title()
+        else:
+            favorite_weapon = None
+    except Exception as e:
+        print(f"Error fetching favorite weapon for {player_name}: {e}")
+        favorite_weapon = None
+
+    # Get favorite map (most played)
+    map_query = """
+        SELECT map_name, COUNT(*) as play_count
+        FROM player_comprehensive_stats
+        WHERE player_name ILIKE $1
+        GROUP BY map_name
+        ORDER BY play_count DESC
+        LIMIT 1
+    """
+    try:
+        map_row = await db.fetch_one(map_query, (player_name,))
+        favorite_map = map_row[0] if map_row else None
+    except Exception as e:
+        print(f"Error fetching favorite map for {player_name}: {e}")
+        favorite_map = None
+
+    # Get highest and lowest DPM (single round)
+    dpm_query = """
+        SELECT
+            MAX(CASE WHEN time_played_seconds > 60 THEN damage_given * 60.0 / time_played_seconds END) as max_dpm,
+            MIN(CASE WHEN time_played_seconds > 60 THEN damage_given * 60.0 / time_played_seconds END) as min_dpm
+        FROM player_comprehensive_stats
+        WHERE player_name ILIKE $1 AND time_played_seconds > 60
+    """
+    try:
+        dpm_row = await db.fetch_one(dpm_query, (player_name,))
+        highest_dpm = int(dpm_row[0]) if dpm_row and dpm_row[0] else None
+        lowest_dpm = int(dpm_row[1]) if dpm_row and dpm_row[1] else None
+    except Exception as e:
+        print(f"Error fetching DPM records for {player_name}: {e}")
+        highest_dpm = None
+        lowest_dpm = None
+
+    # Get player aliases (other names used by same GUID)
+    alias_query = """
+        SELECT DISTINCT player_name
+        FROM player_comprehensive_stats
+        WHERE player_guid = (
+            SELECT player_guid FROM player_comprehensive_stats WHERE player_name ILIKE $1 LIMIT 1
+        )
+        AND player_name NOT ILIKE $1
+        ORDER BY player_name
+        LIMIT 5
+    """
+    try:
+        alias_rows = await db.fetch_all(alias_query, (player_name,))
+        aliases = [row[0] for row in alias_rows] if alias_rows else []
+    except Exception as e:
+        print(f"Error fetching aliases for {player_name}: {e}")
+        aliases = []
+
+    # Check Discord link status
+    discord_query = """
+        SELECT discord_id FROM player_links WHERE player_name ILIKE $1 LIMIT 1
+    """
+    try:
+        discord_row = await db.fetch_one(discord_query, (player_name,))
+        discord_linked = discord_row is not None
+    except Exception as e:
+        print(f"Error checking Discord link for {player_name}: {e}")
+        discord_linked = False
+
     return {
         "name": player_name,  # Return the queried name, or ideally the canonical name from DB
         "stats": {
@@ -488,7 +942,120 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
             "total_xp": int(xp),
             "playtime_hours": round(time / 3600, 1),
             "last_seen": last_seen,
+            "favorite_weapon": favorite_weapon,
+            "favorite_map": favorite_map,
+            "highest_dpm": highest_dpm,
+            "lowest_dpm": lowest_dpm,
         },
+        "aliases": aliases,
+        "discord_linked": discord_linked,
+        "achievements": achievements,
+    }
+
+
+@router.get("/stats/compare")
+async def compare_players(
+    player1: str,
+    player2: str,
+    db: DatabaseAdapter = Depends(get_db)
+):
+    """
+    Compare two players side-by-side with radar chart data.
+    Returns normalized stats (0-100 scale) for fair comparison.
+    """
+    # Query for both players
+    query = """
+        SELECT
+            player_name,
+            SUM(kills) as total_kills,
+            SUM(deaths) as total_deaths,
+            SUM(damage_given) as total_damage,
+            SUM(time_played_seconds) as total_time,
+            COUNT(*) as total_games,
+            SUM(revives_given) as total_revives,
+            SUM(headshots) as total_headshots,
+            AVG(accuracy) as avg_accuracy,
+            SUM(gibs) as total_gibs,
+            SUM(xp) as total_xp
+        FROM player_comprehensive_stats
+        WHERE player_name ILIKE $1 OR player_name ILIKE $2
+        GROUP BY player_name
+    """
+
+    try:
+        rows = await db.fetch_all(query, (player1, player2))
+    except Exception as e:
+        print(f"Error comparing players: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+    if len(rows) < 2:
+        raise HTTPException(status_code=404, detail="One or both players not found")
+
+    # Process both players
+    players = []
+    for row in rows:
+        name = row[0]
+        kills = row[1] or 0
+        deaths = row[2] or 0
+        damage = row[3] or 0
+        time_played = row[4] or 0
+        games = row[5] or 0
+        revives = row[6] or 0
+        headshots = row[7] or 0
+        accuracy = row[8] or 0
+        gibs = row[9] or 0
+        xp = row[10] or 0
+
+        time_minutes = time_played / 60 if time_played > 0 else 1
+        kd = kills / deaths if deaths > 0 else kills
+        dpm = damage / time_minutes
+
+        players.append({
+            "name": name,
+            "raw": {
+                "kills": int(kills),
+                "deaths": int(deaths),
+                "damage": int(damage),
+                "games": int(games),
+                "kd": round(kd, 2),
+                "dpm": round(dpm, 1),
+                "revives": int(revives),
+                "headshots": int(headshots),
+                "accuracy": round(accuracy, 1),
+                "gibs": int(gibs),
+                "xp": int(xp),
+            }
+        })
+
+    # Calculate normalized stats for radar chart (0-100 scale)
+    # Compare each stat relative to the max between the two players
+    radar_labels = ["K/D", "DPM", "Accuracy", "Revives", "Headshots", "Gibs"]
+    p1, p2 = players[0], players[1]
+
+    def normalize(val1, val2):
+        """Normalize two values to 0-100 scale based on max."""
+        max_val = max(val1, val2)
+        if max_val == 0:
+            return 50, 50
+        return round(val1 / max_val * 100, 1), round(val2 / max_val * 100, 1)
+
+    p1_kd, p2_kd = normalize(p1["raw"]["kd"], p2["raw"]["kd"])
+    p1_dpm, p2_dpm = normalize(p1["raw"]["dpm"], p2["raw"]["dpm"])
+    p1_acc, p2_acc = normalize(p1["raw"]["accuracy"], p2["raw"]["accuracy"])
+    p1_rev, p2_rev = normalize(p1["raw"]["revives"], p2["raw"]["revives"])
+    p1_hs, p2_hs = normalize(p1["raw"]["headshots"], p2["raw"]["headshots"])
+    p1_gibs, p2_gibs = normalize(p1["raw"]["gibs"], p2["raw"]["gibs"])
+
+    return {
+        "player1": {
+            **p1,
+            "radar": [p1_kd, p1_dpm, p1_acc, p1_rev, p1_hs, p1_gibs]
+        },
+        "player2": {
+            **p2,
+            "radar": [p2_kd, p2_dpm, p2_acc, p2_rev, p2_hs, p2_gibs]
+        },
+        "radar_labels": radar_labels
     }
 
 
@@ -508,8 +1075,8 @@ async def get_leaderboard(
     elif period == "30d":
         start_date = (datetime.now() - timedelta(days=30)).date()
     elif period == "season":
-        # TODO: Get actual season start date from config/db
-        start_date = datetime(2024, 1, 1).date()
+        sm = SeasonManager()
+        start_date = sm.get_season_dates()[0].date()
     else:
         start_date = datetime(2020, 1, 1).date()
 
@@ -581,6 +1148,103 @@ async def get_leaderboard(
             ORDER BY value DESC
             LIMIT $2
         """
+    elif stat == "headshots":
+        query = f"""
+            SELECT
+                player_name,
+                SUM(headshots) as value,
+                COUNT(*) as rounds_played,
+                SUM(kills) as total_kills,
+                SUM(deaths) as total_deaths,
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+            FROM player_comprehensive_stats
+            {where_clause}
+            {group_by}
+            {having}
+            ORDER BY value DESC
+            LIMIT $2
+        """
+    elif stat == "revives":
+        query = f"""
+            SELECT
+                player_name,
+                SUM(revives_given) as value,
+                COUNT(*) as rounds_played,
+                SUM(kills) as total_kills,
+                SUM(deaths) as total_deaths,
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+            FROM player_comprehensive_stats
+            {where_clause}
+            {group_by}
+            {having}
+            ORDER BY value DESC
+            LIMIT $2
+        """
+    elif stat == "accuracy":
+        # Accuracy requires minimum bullets fired to be meaningful
+        query = f"""
+            SELECT
+                player_name,
+                ROUND(AVG(accuracy)::numeric, 1) as value,
+                COUNT(*) as rounds_played,
+                SUM(kills) as total_kills,
+                SUM(deaths) as total_deaths,
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+            FROM player_comprehensive_stats
+            {where_clause} AND bullets_fired > 100
+            {group_by}
+            HAVING COUNT(*) >= 3
+            ORDER BY value DESC
+            LIMIT $2
+        """
+    elif stat == "gibs":
+        query = f"""
+            SELECT
+                player_name,
+                SUM(gibs) as value,
+                COUNT(*) as rounds_played,
+                SUM(kills) as total_kills,
+                SUM(deaths) as total_deaths,
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+            FROM player_comprehensive_stats
+            {where_clause}
+            {group_by}
+            {having}
+            ORDER BY value DESC
+            LIMIT $2
+        """
+    elif stat == "games":
+        query = f"""
+            SELECT
+                player_name,
+                COUNT(*) as value,
+                COUNT(*) as rounds_played,
+                SUM(kills) as total_kills,
+                SUM(deaths) as total_deaths,
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+            FROM player_comprehensive_stats
+            {where_clause}
+            {group_by}
+            {having}
+            ORDER BY value DESC
+            LIMIT $2
+        """
+    elif stat == "damage":
+        query = f"""
+            SELECT
+                player_name,
+                SUM(damage_given) as value,
+                COUNT(*) as rounds_played,
+                SUM(kills) as total_kills,
+                SUM(deaths) as total_deaths,
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+            FROM player_comprehensive_stats
+            {where_clause}
+            {group_by}
+            {having}
+            ORDER BY value DESC
+            LIMIT $2
+        """
     else:
         return []
 
@@ -609,14 +1273,88 @@ async def get_leaderboard(
 @router.get("/stats/maps")
 async def get_maps(db: DatabaseAdapter = Depends(get_db)):
     """
-    Get list of all maps available in the stats.
+    Get comprehensive statistics for all maps.
+    Returns times played, win rates, kill stats, etc.
+    Note: In stopwatch mode, 2 rounds = 1 match.
     """
-    query = "SELECT DISTINCT map_name FROM player_comprehensive_stats ORDER BY map_name"
+    query = """
+        WITH map_stats AS (
+            SELECT
+                r.map_name,
+                COUNT(*) as total_rounds,
+                COUNT(*) / 2 as matches_played,
+                SUM(CASE WHEN r.winner_team = 1 THEN 1 ELSE 0 END) as allies_wins,
+                SUM(CASE WHEN r.winner_team = 2 THEN 1 ELSE 0 END) as axis_wins,
+                -- Parse M:SS format to seconds, then average
+                AVG(
+                    CASE
+                        WHEN r.actual_time ~ '^[0-9]+:[0-9]+$' THEN
+                            SPLIT_PART(r.actual_time, ':', 1)::int * 60 +
+                            SPLIT_PART(r.actual_time, ':', 2)::int
+                        ELSE NULL
+                    END
+                ) as avg_duration
+            FROM rounds r
+            WHERE r.map_name IS NOT NULL
+            GROUP BY r.map_name
+        ),
+        player_stats AS (
+            SELECT
+                p.map_name,
+                SUM(p.kills) as total_kills,
+                SUM(p.deaths) as total_deaths,
+                AVG(p.dpm) as avg_dpm,
+                COUNT(DISTINCT p.player_guid) as unique_players
+            FROM player_comprehensive_stats p
+            WHERE p.map_name IS NOT NULL AND p.time_played_seconds > 0
+            GROUP BY p.map_name
+        )
+        SELECT
+            m.map_name,
+            m.total_rounds,
+            m.matches_played,
+            m.allies_wins,
+            m.axis_wins,
+            m.avg_duration,
+            p.total_kills,
+            p.total_deaths,
+            p.avg_dpm,
+            p.unique_players
+        FROM map_stats m
+        LEFT JOIN player_stats p ON m.map_name = p.map_name
+        ORDER BY m.matches_played DESC
+    """
     try:
         rows = await db.fetch_all(query)
-        return [row[0] for row in rows if row[0]]
+
+        maps = []
+        for row in rows:
+            total_rounds = row[1] or 0
+            allies_wins = row[3] or 0
+            axis_wins = row[4] or 0
+            total_games = allies_wins + axis_wins
+
+            allies_win_rate = round((allies_wins / total_games * 100), 1) if total_games > 0 else 50
+            axis_win_rate = round((axis_wins / total_games * 100), 1) if total_games > 0 else 50
+
+            maps.append({
+                "name": row[0],
+                "total_rounds": total_rounds,
+                "matches_played": row[2] or total_rounds // 2,
+                "allies_wins": allies_wins,
+                "axis_wins": axis_wins,
+                "allies_win_rate": allies_win_rate,
+                "axis_win_rate": axis_win_rate,
+                "avg_duration": int(row[5]) if row[5] else 0,
+                "total_kills": row[6] or 0,
+                "total_deaths": row[7] or 0,
+                "avg_dpm": round(row[8], 1) if row[8] else 0,
+                "unique_players": row[9] or 0,
+            })
+
+        return maps
     except Exception as e:
-        print(f"Error fetching maps: {e}")
+        print(f"Error fetching map stats: {e}")
         return []
 
 
@@ -628,89 +1366,89 @@ async def get_weapon_stats(
 ):
     """
     Get aggregated weapon statistics across all players.
-    Returns weapon usage, kills, and accuracy data.
+    Returns weapon usage, kills, and accuracy data from weapon_comprehensive_stats table.
     """
     from datetime import datetime, timedelta
 
-    # Weapon columns in player_comprehensive_stats (based on C0RNP0RN3 lua)
-    weapon_columns = {
-        "knife": "knife_kills",
-        "luger": "luger_kills",
-        "colt": "colt_kills",
-        "mp40": "mp40_kills",
-        "thompson": "thompson_kills",
-        "sten": "sten_kills",
-        "fg42": "fg42_kills",
-        "panzerfaust": "pf_kills",
-        "flamethrower": "flamethrower_kills",
-        "grenade": "grenade_kills",
-        "mortar": "mortar_kills",
-        "dynamite": "dynamite_kills",
-        "airstrike": "airstrike_kills",
-        "artillery": "artillery_kills",
-        "syringe": "syringe_kills",
-        "smokegrenade": "smokegrenade_kills",
-        "landmine": "landmine_kills",
-        "mg42": "mg42_kills",
-        "garand": "garand_kills",
-        "k43": "k43_kills",
-        "kar98": "kar98_kills",
-    }
-
     # Calculate start date based on period
-    where_clause = "WHERE time_played_seconds > 0"
+    where_clause = "WHERE 1=1"
     params = []
+    param_idx = 1
 
     if period == "7d":
-        start_date = (datetime.now() - timedelta(days=7)).date()
-        where_clause += " AND DATE(round_date) >= $1"
+        start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        where_clause += f" AND round_date >= ${param_idx}"
         params.append(start_date)
+        param_idx += 1
     elif period == "30d":
-        start_date = (datetime.now() - timedelta(days=30)).date()
-        where_clause += " AND DATE(round_date) >= $1"
+        start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        where_clause += f" AND round_date >= ${param_idx}"
         params.append(start_date)
+        param_idx += 1
     elif period == "season":
-        start_date = datetime(2024, 1, 1).date()
-        where_clause += " AND DATE(round_date) >= $1"
+        sm = SeasonManager()
+        start_date = sm.get_season_dates()[0].strftime("%Y-%m-%d")
+        where_clause += f" AND round_date >= ${param_idx}"
         params.append(start_date)
+        param_idx += 1
     # else: all time, no date filter
 
-    # Build dynamic SUM for each weapon
-    sums = ", ".join(
-        [f"COALESCE(SUM({col}), 0) as {name}" for name, col in weapon_columns.items()]
-    )
-
     query = f"""
-        SELECT {sums}
-        FROM player_comprehensive_stats
+        SELECT
+            weapon_name,
+            SUM(kills) as total_kills,
+            SUM(headshots) as total_headshots,
+            SUM(shots) as total_shots,
+            SUM(hits) as total_hits,
+            AVG(accuracy) as avg_accuracy
+        FROM weapon_comprehensive_stats
         {where_clause}
+        GROUP BY weapon_name
+        ORDER BY total_kills DESC
+        LIMIT ${param_idx}
     """
+    params.append(limit)
 
     try:
-        row = await db.fetch_one(query, tuple(params) if params else None)
+        rows = await db.fetch_all(query, tuple(params))
     except Exception as e:
         print(f"Error fetching weapon stats: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
-    if not row:
+    if not rows:
         return []
 
-    # Convert to list format sorted by kills
     weapons = []
-    for i, (name, _) in enumerate(weapon_columns.items()):
-        kills = row[i] or 0
-        if kills > 0:  # Only include weapons with kills
-            weapons.append(
-                {
-                    "name": name.replace("_", " ").title(),
-                    "kills": int(kills),
-                }
-            )
+    for row in rows:
+        weapon_name = row[0] or "Unknown"
+        total_kills = row[1] or 0
+        total_headshots = row[2] or 0
+        total_shots = row[3] or 0
+        total_hits = row[4] or 0
+        avg_accuracy = row[5] or 0
 
-    # Sort by kills descending
-    weapons.sort(key=lambda x: x["kills"], reverse=True)
+        if total_kills > 0:
+            # Note: In ET:Legacy, headshots can exceed kills (tracking all headshots, not just killing shots)
+            # We cap hs_rate at 100% for display purposes
+            hs_rate = min(100, round((total_headshots / total_kills * 100), 1)) if total_kills > 0 else 0
 
-    return weapons[:limit]
+            # Clean up weapon name (remove "Ws " prefix, "WS_" prefix, underscores)
+            clean_name = weapon_name
+            if clean_name.lower().startswith("ws "):
+                clean_name = clean_name[3:]
+            if clean_name.lower().startswith("ws_"):
+                clean_name = clean_name[3:]
+            clean_name = clean_name.replace("_", " ").title()
+
+            weapons.append({
+                "name": clean_name,
+                "kills": int(total_kills),
+                "headshots": int(total_headshots),
+                "hs_rate": hs_rate,
+                "accuracy": round(avg_accuracy, 1),
+            })
+
+    return weapons
 
 
 @router.get("/stats/matches/{match_id}")
@@ -756,26 +1494,31 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
     winner = "Allies" if winner_team == 1 else "Axis" if winner_team == 2 else "Draw"
 
     # Get player stats for this specific round
+    # Use DISTINCT ON to deduplicate players (in case of multiple entries per player)
+    # Picks the row with highest damage_given per player, then orders by team
     query = """
-        SELECT
-            player_name,
-            kills,
-            deaths,
-            damage_given,
-            damage_received,
-            time_played_seconds,
-            team,
-            xp,
-            headshots,
-            revives_given,
-            accuracy,
-            gibs,
-            self_kills,
-            team_kills
-        FROM player_comprehensive_stats
-        WHERE round_date = $1
-          AND map_name = $2
-          AND round_number = $3
+        SELECT * FROM (
+            SELECT DISTINCT ON (player_name)
+                player_name,
+                kills,
+                deaths,
+                damage_given,
+                damage_received,
+                time_played_seconds,
+                team,
+                xp,
+                headshots,
+                revives_given,
+                accuracy,
+                gibs,
+                self_kills,
+                team_kills
+            FROM player_comprehensive_stats
+            WHERE round_date = $1
+              AND map_name = $2
+              AND round_number = $3
+            ORDER BY player_name, damage_given DESC
+        ) AS deduplicated
         ORDER BY team, damage_given DESC
     """
 
@@ -915,6 +1658,345 @@ async def get_player_matches(
         )
 
     return matches
+
+
+@router.get("/stats/player/{player_name}/form")
+async def get_player_form(
+    player_name: str,
+    limit: int = 20,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Get player's recent form - session DPM (aggregated per gaming session).
+    """
+    from datetime import datetime
+
+    query = """
+        SELECT
+            r.gaming_session_id,
+            MIN(p.round_date) as session_date,
+            SUM(p.damage_given) as total_damage,
+            SUM(p.time_played_seconds) as total_time,
+            COUNT(*) as rounds_played,
+            SUM(p.kills) as total_kills,
+            SUM(p.deaths) as total_deaths
+        FROM player_comprehensive_stats p
+        JOIN rounds r ON p.round_id = r.id
+        WHERE p.player_name ILIKE $1
+        AND p.time_played_seconds > 0
+        AND r.gaming_session_id IS NOT NULL
+        GROUP BY r.gaming_session_id
+        HAVING SUM(p.time_played_seconds) > 120
+        ORDER BY MIN(p.round_date) DESC
+        LIMIT $2
+    """
+
+    try:
+        rows = await db.fetch_all(query, (player_name, limit))
+    except Exception as e:
+        print(f"Error fetching player form: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+    if not rows:
+        return {"sessions": [], "avg_dpm": 0, "trend": "insufficient_data"}
+
+    sessions = []
+    for row in reversed(rows):
+        total_time = row[3] or 0
+        time_min = total_time / 60 if total_time > 0 else 1
+        dpm = round((row[2] or 0) / time_min, 1)
+        kills = row[5] or 0
+        deaths = row[6] or 0
+        kd = round(kills / deaths, 2) if deaths > 0 else kills
+
+        date_obj = row[1]
+        if isinstance(date_obj, str):
+            date_obj = datetime.strptime(date_obj, "%Y-%m-%d")
+        label = date_obj.strftime("%b %d")
+
+        sessions.append({
+            "label": label,
+            "date": str(row[1]),
+            "dpm": dpm,
+            "rounds": row[4],
+            "kd": kd,
+        })
+
+    dpms = [s["dpm"] for s in sessions]
+    avg_dpm = round(sum(dpms) / len(dpms), 1)
+
+    if len(dpms) >= 6:
+        early_avg = sum(dpms[:3]) / 3
+        recent_avg = sum(dpms[-3:]) / 3
+        if recent_avg > early_avg * 1.1:
+            trend = "improving"
+        elif recent_avg < early_avg * 0.9:
+            trend = "declining"
+        else:
+            trend = "stable"
+    else:
+        trend = "insufficient_data"
+
+    return {"sessions": sessions, "avg_dpm": avg_dpm, "trend": trend}
+
+
+@router.get("/stats/player/{player_name}/rounds")
+async def get_player_rounds(
+    player_name: str,
+    limit: int = 30,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Get player's recent per-round DPM (individual maps).
+    """
+    from datetime import datetime
+
+    query = """
+        SELECT
+            p.round_date,
+            p.map_name,
+            p.damage_given,
+            p.time_played_seconds
+        FROM player_comprehensive_stats p
+        WHERE p.player_name ILIKE $1
+        AND p.time_played_seconds > 60
+        ORDER BY p.round_date DESC, p.round_id DESC
+        LIMIT $2
+    """
+
+    try:
+        rows = await db.fetch_all(query, (player_name, limit))
+    except Exception as e:
+        print(f"Error fetching player rounds: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+    if not rows:
+        return {"rounds": [], "avg_dpm": 0}
+
+    rounds = []
+    for row in reversed(rows):
+        time_min = row[3] / 60 if row[3] > 0 else 1
+        dpm = round(row[2] / time_min, 1)
+        short_map = row[1].replace("etl_", "").replace("te_", "").replace("sw_", "")[:8]
+
+        date_obj = row[0]
+        if isinstance(date_obj, str):
+            date_obj = datetime.strptime(date_obj, "%Y-%m-%d")
+
+        rounds.append({
+            "label": short_map,
+            "date": str(row[0]),
+            "dpm": dpm,
+        })
+
+    dpms = [r["dpm"] for r in rounds]
+    avg_dpm = round(sum(dpms) / len(dpms), 1)
+
+    return {"rounds": rounds, "avg_dpm": avg_dpm}
+
+
+@router.get("/sessions/{date}/graphs")
+async def get_session_graph_stats(date: str, db: DatabaseAdapter = Depends(get_db)):
+    """
+    Get aggregated session stats formatted for graph rendering.
+    Returns data for:
+    - Combat Stats (Offense): kills, deaths, damage, K/D, DPM
+    - Combat Stats (Defense/Support): revives, gibs, headshots, time alive/dead
+    - Advanced Metrics: FragPotential, Damage Efficiency, Time Denied, Survival Rate
+    - Playstyle Analysis: Classification based on stats patterns
+    - DPM Timeline: Per-round DPM values for each player
+    """
+    # Get all player stats for this session date
+    # Use DISTINCT to avoid duplicates from the rounds join
+    query = """
+        SELECT DISTINCT
+            p.player_name,
+            p.round_number,
+            p.kills,
+            p.deaths,
+            p.damage_given,
+            p.damage_received,
+            p.time_played_seconds,
+            p.revives_given,
+            p.gibs,
+            p.headshots,
+            p.accuracy,
+            p.team_kills,
+            p.self_kills,
+            p.times_revived,
+            p.map_name,
+            r.id as round_id
+        FROM player_comprehensive_stats p
+        JOIN rounds r ON p.round_date = r.round_date
+            AND p.map_name = r.map_name
+            AND p.round_number = r.round_number
+        WHERE p.round_date = $1
+        ORDER BY p.player_name, r.id
+    """
+
+    try:
+        rows = await db.fetch_all(query, (date,))
+    except Exception as e:
+        print(f"Error fetching session graph stats: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No stats found for this session")
+
+    # Aggregate stats per player
+    player_stats = {}
+    dpm_timeline = {}  # player -> list of (map_round, dpm)
+
+    for row in rows:
+        name = row[0]
+        round_num = row[1]
+        kills = row[2] or 0
+        deaths = row[3] or 0
+        damage_given = row[4] or 0
+        damage_received = row[5] or 0
+        time_played = row[6] or 0
+        revives = row[7] or 0
+        gibs = row[8] or 0
+        headshots = row[9] or 0
+        accuracy = row[10] or 0
+        team_kills = row[11] or 0
+        self_kills = row[12] or 0
+        times_revived = row[13] or 0
+        map_name = row[14]
+        round_id = row[15]  # unique identifier for deduplication
+
+        if name not in player_stats:
+            player_stats[name] = {
+                "kills": 0, "deaths": 0, "damage_given": 0, "damage_received": 0,
+                "time_played": 0, "revives": 0, "gibs": 0, "headshots": 0,
+                "accuracy_sum": 0, "accuracy_count": 0, "team_kills": 0,
+                "self_kills": 0, "times_revived": 0, "rounds_played": 0,
+                "seen_rounds": set()  # Track unique round_ids
+            }
+            dpm_timeline[name] = []
+
+        # Skip if we've already processed this round for this player
+        if round_id in player_stats[name]["seen_rounds"]:
+            continue
+        player_stats[name]["seen_rounds"].add(round_id)
+
+        ps = player_stats[name]
+        ps["kills"] += kills
+        ps["deaths"] += deaths
+        ps["damage_given"] += damage_given
+        ps["damage_received"] += damage_received
+        ps["time_played"] += time_played
+        ps["revives"] += revives
+        ps["gibs"] += gibs
+        ps["headshots"] += headshots
+        ps["accuracy_sum"] += accuracy
+        ps["accuracy_count"] += 1
+        ps["team_kills"] += team_kills
+        ps["self_kills"] += self_kills
+        ps["times_revived"] += times_revived
+        ps["rounds_played"] += 1
+
+        # DPM for this round
+        round_dpm = (damage_given / (time_played / 60)) if time_played > 0 else 0
+        # Use shorter map name format for timeline
+        short_map = map_name.split("_")[-1][:8] if "_" in map_name else map_name[:8]
+        dpm_timeline[name].append({
+            "label": f"{short_map} R{round_num}",
+            "dpm": round(round_dpm, 1)
+        })
+
+    # Calculate derived metrics and build response
+    players_data = []
+    for name, stats in player_stats.items():
+        time_minutes = stats["time_played"] / 60 if stats["time_played"] > 0 else 1
+
+        # Basic ratios
+        kd = stats["kills"] / stats["deaths"] if stats["deaths"] > 0 else stats["kills"]
+        dpm = stats["damage_given"] / time_minutes
+
+        # Advanced metrics (similar to Discord bot's SessionGraphGenerator)
+        # FragPotential: (kills + assists_proxy) / time * scaling
+        frag_potential = (stats["kills"] + stats["revives"] * 0.5) / time_minutes * 10
+
+        # Damage Efficiency: damage_given / (damage_given + damage_received)
+        total_damage = stats["damage_given"] + stats["damage_received"]
+        damage_efficiency = (stats["damage_given"] / total_damage * 100) if total_damage > 0 else 50
+
+        # Survival Rate: time_alive / total_time (approximated by deaths)
+        # Lower deaths = higher survival
+        avg_death_time = stats["time_played"] / (stats["deaths"] + 1)
+        survival_rate = min(100, avg_death_time / 60 * 10)  # Scale to 0-100
+
+        # Time Denied: (enemy deaths caused * avg_respawn_time) / total_time
+        time_denied = (stats["kills"] * 20) / time_minutes  # 20s avg respawn
+
+        # Avg accuracy
+        avg_accuracy = stats["accuracy_sum"] / stats["accuracy_count"] if stats["accuracy_count"] > 0 else 0
+
+        # Playstyle classification (8 categories like Discord bot)
+        playstyle = classify_playstyle(stats, dpm, kd, avg_accuracy)
+
+        players_data.append({
+            "name": name,
+            "combat_offense": {
+                "kills": stats["kills"],
+                "deaths": stats["deaths"],
+                "damage_given": stats["damage_given"],
+                "kd": round(kd, 2),
+                "dpm": round(dpm, 1)
+            },
+            "combat_defense": {
+                "revives": stats["revives"],
+                "gibs": stats["gibs"],
+                "headshots": stats["headshots"],
+                "times_revived": stats["times_revived"],
+                "team_kills": stats["team_kills"]
+            },
+            "advanced_metrics": {
+                "frag_potential": round(frag_potential, 1),
+                "damage_efficiency": round(damage_efficiency, 1),
+                "survival_rate": round(survival_rate, 1),
+                "time_denied": round(time_denied, 1)
+            },
+            "playstyle": playstyle,
+            "dpm_timeline": dpm_timeline[name]
+        })
+
+    # Sort by DPM for consistent ordering
+    players_data.sort(key=lambda x: x["combat_offense"]["dpm"], reverse=True)
+
+    return {
+        "date": date,
+        "player_count": len(players_data),
+        "players": players_data
+    }
+
+
+def classify_playstyle(stats: dict, dpm: float, kd: float, accuracy: float) -> dict:
+    """
+    Classify player playstyle into 8 categories (0-100 scale).
+    Based on Discord bot's SessionGraphGenerator logic.
+    """
+    time_minutes = stats["time_played"] / 60 if stats["time_played"] > 0 else 1
+    rounds = stats["rounds_played"] or 1
+
+    # Normalize stats per round for fair comparison
+    kills_pr = stats["kills"] / rounds
+    deaths_pr = stats["deaths"] / rounds
+    revives_pr = stats["revives"] / rounds
+    gibs_pr = stats["gibs"] / rounds
+
+    # Calculate each playstyle dimension (0-100)
+    return {
+        "aggression": min(100, (dpm / 5) * 10),  # High DPM = aggressive
+        "precision": min(100, accuracy * 2),  # Accuracy-based
+        "survivability": min(100, max(0, 100 - deaths_pr * 20)),  # Low deaths = high survival
+        "support": min(100, revives_pr * 50),  # Revives indicate support play
+        "lethality": min(100, kd * 30),  # K/D ratio
+        "brutality": min(100, gibs_pr * 25),  # Gibs show aggression
+        "consistency": min(100, rounds * 10),  # More rounds = consistent player
+        "efficiency": min(100, (stats["damage_given"] / max(1, stats["damage_received"])) * 25)
+    }
 
 
 @router.get("/stats/records")
