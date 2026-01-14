@@ -604,10 +604,15 @@ slomix/
 │   ├── VPS_SETUP.md                     # VPS setup instructions
 │   └── AI_AGENT_INSTRUCTIONS.md         # For AI assistants
 │
-├── 🌐 Website (Separate Project - In Development)
+├── 🌐 Website (Prototype - In Development)
 │   ├── website/backend/                 # FastAPI backend
 │   ├── website/index.html               # Tailwind CSS frontend
 │   └── website/js/app.js                # SPA logic
+│
+├── 🎯 Proximity Tracker (Prototype - Lua Combat Analytics)
+│   ├── proximity/lua/                   # Lua server mod (V3 stable, V4 dev)
+│   ├── proximity/parser/                # Python parsers for proximity data
+│   └── proximity/schema/                # Database schema definitions
 │
 └── 🔧 Development Tools
     ├── check_last_session_data.py       # Diagnostic scripts
@@ -1070,16 +1075,16 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 - [docs/AI_AGENT_INSTRUCTIONS.md](docs/AI_AGENT_INSTRUCTIONS.md) - For AI assistants
 
 ### **🆕 Competitive Analytics (Prediction System)**
-- [COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md](COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md) - Complete implementation guide
-- [IMPLEMENTATION_PROGRESS_TRACKER.md](IMPLEMENTATION_PROGRESS_TRACKER.md) - Project progress (64% complete, 39/61 hours)
-- [WEEK_HANDOFF_MEMORY.md](WEEK_HANDOFF_MEMORY.md) - Week handoff documentation
+- [docs/COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md](docs/COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md) - Complete implementation guide
+- [docs/IMPLEMENTATION_PROGRESS_TRACKER.md](docs/IMPLEMENTATION_PROGRESS_TRACKER.md) - Project progress (64% complete, 39/61 hours)
+- [docs/WEEK_HANDOFF_MEMORY.md](docs/WEEK_HANDOFF_MEMORY.md) - Week handoff documentation
 - [docs/COMPETITIVE_ANALYTICS_MASTER_PLAN.md](docs/COMPETITIVE_ANALYTICS_MASTER_PLAN.md) - System design and architecture
-- [GEMINI_IMPLEMENTATION_GUIDE.md](GEMINI_IMPLEMENTATION_GUIDE.md) - Website integration guide
+- [docs/GEMINI_IMPLEMENTATION_GUIDE.md](docs/GEMINI_IMPLEMENTATION_GUIDE.md) - Website integration guide
 
 ### **🆕 Website Project (In Development)**
-- [WEBSITE_PROJECT_REVIEW.md](WEBSITE_PROJECT_REVIEW.md) - Technical review (8/10 rating)
-- [WEBSITE_VISION_REVIEW_2025-11-28.md](WEBSITE_VISION_REVIEW_2025-11-28.md) - Strategic vision (9.5/10 rating)
-- [WEBSITE_APPJS_CHANGES_2025-11-28.md](WEBSITE_APPJS_CHANGES_2025-11-28.md) - Recent changes analysis
+- [docs/WEBSITE_PROJECT_REVIEW.md](docs/WEBSITE_PROJECT_REVIEW.md) - Technical review (8/10 rating)
+- [docs/WEBSITE_VISION_REVIEW_2025-11-28.md](docs/WEBSITE_VISION_REVIEW_2025-11-28.md) - Strategic vision (9.5/10 rating)
+- [docs/WEBSITE_APPJS_CHANGES_2025-11-28.md](docs/WEBSITE_APPJS_CHANGES_2025-11-28.md) - Recent changes analysis
 
 ### **System Architecture**
 - [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md) - Complete data pipeline
