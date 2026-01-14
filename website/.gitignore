@@ -1,0 +1,42 @@
+# Website-specific ignores (inherits from root .gitignore)
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+.venv/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.claude/
+.codacy/
+*.code-workspace
+
+# Logs - ignore all log files and logs directory
+*.log
+logs/
+*.log.*
+
+# Temp/backup files
+*.tmp
+*.bak
+index_before_*.html
+index_BEFORE_*.html
+index_temp_*.html
+
+# Session notes (local dev notes)
+SESSION_NOTES_*.md
+REVIEW_NOTES.md
+
+# Screenshots
+*.png
+*.jpg
+
+# AI rules (local)
+.github/instructions/
