@@ -139,25 +139,30 @@ def mark_file_processed(state: dict, filename: str):
 def is_valid_stats_file(filepath: str) -> bool:
     """
     Validate that file is a valid ET:Legacy stats file.
-    
-    Valid format: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
-    Example: 2025-12-07-201530-supply-round-1.txt
+
+    Valid formats:
+    - YYYY-MM-DD-HHMMSS-mapname-round-N.txt (main stats)
+    - YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt (awards)
+
+    Examples:
+    - 2025-12-07-201530-supply-round-1.txt
+    - 2025-12-07-201530-supply-round-1-endstats.txt
     """
     filename = os.path.basename(filepath)
-    
+
     # Must be .txt
     if not filename.endswith('.txt'):
         return False
-    
+
     # Must contain 'round'
     if 'round' not in filename.lower():
         return False
-    
+
     # Must start with date pattern
     parts = filename.split('-')
     if len(parts) < 6:
         return False
-    
+
     # Validate date parts
     try:
         year = int(parts[0])
@@ -167,8 +172,14 @@ def is_valid_stats_file(filepath: str) -> bool:
             return False
     except (ValueError, IndexError):
         return False
-    
+
     return True
+
+
+def is_endstats_file(filepath: str) -> bool:
+    """Check if file is an endstats file (awards/VS stats)."""
+    filename = os.path.basename(filepath)
+    return filename.endswith('-endstats.txt')
 
 
 def get_file_hash(filepath: str) -> str:
@@ -184,24 +195,32 @@ def get_file_hash(filepath: str) -> str:
 def send_discord_notification(filename: str, filepath: str):
     """
     Send trigger notification to Discord control channel.
-    
+
     Bot will see this message and:
     1. Download the file via SSH
     2. Parse and import to database
     3. Post rich stats embed to production channel
     4. Delete this trigger message
-    
-    We keep the embed minimal - bot does the heavy formatting.
+
+    File types:
+    - 📊 Main stats file (round-N.txt) → Player statistics
+    - 🏆 Endstats file (round-N-endstats.txt) → Awards & VS stats
     """
     if not DISCORD_WEBHOOK_URL:
         logger.error("DISCORD_WEBHOOK_URL not configured!")
         return False
-    
+
     try:
+        # Determine file type
+        is_endstats = is_endstats_file(filepath)
+
         # Parse filename for details
-        # Format: 2025-12-07-201530-supply-round-1.txt
-        parts = os.path.basename(filename).replace('.txt', '').split('-')
-        
+        # Format: 2025-12-07-201530-supply-round-1.txt or ...-round-1-endstats.txt
+        basename = os.path.basename(filename)
+        # Remove -endstats.txt or .txt suffix for parsing
+        clean_name = basename.replace('-endstats.txt', '').replace('.txt', '')
+        parts = clean_name.split('-')
+
         map_name = "Unknown"
         round_num = "?"
         if len(parts) >= 7:
@@ -212,37 +231,50 @@ def send_discord_notification(filename: str, filepath: str):
                 if p.lower() == 'round':
                     round_idx = i
                     break
-            
+
             if round_idx:
                 map_name = '-'.join(parts[timestamp_end:round_idx])
                 if round_idx + 1 < len(parts):
                     round_num = parts[round_idx + 1]
-        
+
         # Get file size for logging
         file_size = os.path.getsize(filepath)
-        
+
+        # Different emoji and title based on file type
+        if is_endstats:
+            emoji = "🏆"
+            title = "🏆 Awards Ready"
+            color = 0xf1c40f  # Gold for awards
+            description = f"**{map_name}** - Round {round_num} Awards"
+        else:
+            emoji = "📊"
+            title = "⚡ Round Complete"
+            color = 0x3498db  # Blue for stats
+            description = f"**{map_name}** - Round {round_num}"
+
         # Minimal trigger payload - bot will do the rich formatting
         # The important part is the filename in backticks for bot to parse
         payload = {
             "username": "ET:Legacy Stats",
-            "content": f"📊 `{filename}`",
+            "content": f"{emoji} `{filename}`",
             "embeds": [{
-                "title": "⚡ Round Complete",
-                "description": f"**{map_name}** - Round {round_num}",
-                "color": 0x3498db,  # Blue (processing)
+                "title": title,
+                "description": description,
+                "color": color,
                 "footer": {"text": f"{file_size:,} bytes | Triggering bot..."}
             }]
         }
-        
+
         # Send webhook
         response = requests.post(
             DISCORD_WEBHOOK_URL,
             json=payload,
             timeout=10
         )
-        
+
         if response.status_code in (200, 204):
-            logger.info(f"✅ Trigger sent: {filename}")
+            file_type = "endstats" if is_endstats else "stats"
+            logger.info(f"✅ Trigger sent ({file_type}): {filename}")
             return True
         else:
             logger.error(
@@ -250,7 +282,7 @@ def send_discord_notification(filename: str, filepath: str):
                 f"{response.text[:200]}"
             )
             return False
-            
+
     except requests.Timeout:
         logger.error(f"❌ Discord webhook timeout for {filename}")
         return False
@@ -317,26 +349,42 @@ class StatsFileHandler(FileSystemEventHandler):
 # ==================== MAIN ====================
 
 
-def scan_existing_files(state: dict, stats_path: str):
+def scan_existing_files(state: dict, stats_path: str, max_age_hours: int = 48):
     """
     Scan for any unprocessed files on startup.
     Catches files created while the service was down.
+
+    Only processes files from the last max_age_hours (default 48h)
+    to avoid spamming old files on fresh deployments.
     """
-    logger.info(f"🔍 Scanning for existing files in {stats_path}...")
-    
+    logger.info(f"🔍 Scanning for existing files in {stats_path} (last {max_age_hours}h)...")
+
     try:
+        from datetime import timedelta
+        cutoff_time = datetime.now() - timedelta(hours=max_age_hours)
+
         files = sorted(Path(stats_path).glob("*.txt"))
         new_count = 0
-        
+        skipped_old = 0
+
         for filepath in files:
             filename = filepath.name
-            
+
             if not is_valid_stats_file(str(filepath)):
                 continue
-            
+
+            # Check file age - skip files older than cutoff
+            try:
+                file_mtime = datetime.fromtimestamp(filepath.stat().st_mtime)
+                if file_mtime < cutoff_time:
+                    skipped_old += 1
+                    continue
+            except OSError:
+                continue
+
             if is_file_processed(state, filename):
                 continue
-            
+
             # Process unprocessed file
             logger.info(f"📤 Found unprocessed file: {filename}")
             if send_discord_notification(filename, str(filepath)):
@@ -344,9 +392,9 @@ def scan_existing_files(state: dict, stats_path: str):
                 new_count += 1
                 # Small delay between notifications to avoid rate limiting
                 time.sleep(1)
-        
-        logger.info(f"✅ Startup scan complete: {new_count} new files processed")
-        
+
+        logger.info(f"✅ Startup scan complete: {new_count} new files processed, {skipped_old} old files skipped")
+
     except Exception as e:
         logger.error(f"❌ Error scanning existing files: {e}")
 

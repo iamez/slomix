@@ -1,36 +1,48 @@
 # ET:Legacy Stats Bot - AI Agent Instructions
 
 ## Project Identity
-**Enemy Territory: Legacy Discord Stats Bot** - Comprehensive stats tracking for Wolfenstein: ET with PostgreSQL/SQLite hybrid backend. This is a mature, production-ready system (4,990 lines main bot) currently in VPS migration phase.
+**Enemy Territory: Legacy Discord Stats Bot** - Comprehensive stats tracking for Wolfenstein: ET with PostgreSQL/SQLite hybrid backend. This is a mature, production-ready system (4,990 lines main bot).
+
+**Version:** 1.0.3+ (Updated January 2026)
+**Status:** Production-ready, deployed on VPS with PostgreSQL
 
 ## Ecosystem Overview
 This is the **main bot** workspace. See `PROJECT_OVERVIEW.md` for the full ecosystem vision.
 
 **Three Projects:**
 - **Bot** (this workspace) - Discord bot, main stats tracking, PRODUCTION
-- **Website** (`website/`) - FastAPI web interface, PROTOTYPE
-- **Proximity** (`proximity/`) - Advanced combat analytics, PROTOTYPE
+- **Website** (`website/`) - FastAPI web interface, PROTOTYPE (separate workspace)
+- **Proximity** (`proximity/`) - Advanced combat analytics, PROTOTYPE (separate workspace)
 
-Each sub-project has its own `.code-workspace` file and copilot instructions. Open those for focused development.
+Each sub-project has its own `.code-workspace` file. Open those for focused development.
+
+## Recent Changes (Jan 2026)
+- **EndStats Feature:** Bot now processes `-endstats.txt` files with awards & VS stats
+- **Webhook Notifications:** VPS pushes to Discord webhook, bot pulls files via SSH
+- **Database:** PostgreSQL fully migrated, `etlegacy` database on localhost:5432
+- **local_stats sync:** 7-day lookback window + `!sync_historical` command
 
 ## Critical Architecture Patterns
 
-### Database: Hybrid SQLite/PostgreSQL with Adapter Pattern
-- **Active abstraction layer:** `bot/core/database_adapter.py` provides unified async interface for both backends
+### Database: PostgreSQL Primary (NOT SQLite!)
+- **Active abstraction layer:** `bot/core/database_adapter.py` provides unified async interface
 - **PostgreSQL is primary:** Use `postgresql_database_manager.py` for all DB operations (NOT `database_manager.py`)
 - **Schema validation is critical:** Bot validates 53-column unified schema on startup - wrong schema = silent failures
-- **Current branch:** `vps-network-migration` - PostgreSQL migration in progress, SQLite fallback maintained
+- **Database:** `etlegacy` on localhost:5432 with user `etlegacy_user`
 
-**Database location conventions:**
+**Database credentials:**
 ```python
-# Production DB (DO NOT CHANGE):
-SQLITE_DB_PATH = "bot/etlegacy_production.db"  # NOT etlegacy_production.db in root
-POSTGRES_DATABASE = "et_stats"  # Configured via bot_config.json or .env
+# Configured via .env or bot_config.json
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=etlegacy
+DB_USER=etlegacy_user
+DB_PASSWORD=etlegacy_secure_2025
 ```
 
 ### Stats Import Pipeline: Four-Stage Process
-**1. File Generation** → ET:Legacy game server writes `YYYY-MM-DD-HHMMSS-mapname-round-N.txt` to `local_stats/`  
-**2. Parsing** → `bot/community_stats_parser.py` (C0RNP0RN3StatsParser) extracts 50+ fields per player  
+**1. File Generation** → ET:Legacy game server writes `YYYY-MM-DD-HHMMSS-mapname-round-N.txt` to gamestats/  
+**2. Parsing** → `bot/community_stats_parser.py` (C0RNP0RN3StatsParser) extracts 53+ fields per player  
 **3. Database Import** → `postgresql_database_manager.py` with SHA256 duplicate detection + transaction safety  
 **4. Bot Access** → Cogs query via `database_adapter.py` with 5-min cache (`bot/core/stats_cache.py`)
 
@@ -45,6 +57,13 @@ POSTGRES_DATABASE = "et_stats"  # Configured via bot_config.json or .env
 **Why single system?** Previously both ran simultaneously, causing SSHMonitor to mark files as "processed" before endstats_monitor could post to Discord. Now endstats_monitor handles everything.
 
 **If live posting stops:** Check that SSHMonitor isn't being auto-started somewhere. The fix is at `ultimate_bot.py` lines 551-568.
+
+### Timing Configuration (Critical Values)
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `SESSION_GAP_MINUTES` | 60 | Minutes of inactivity before new session |
+| `ROUND_MATCH_WINDOW_MINUTES` | 45 | Max gap for R1-R2 matching |
+| `STARTUP_LOOKBACK_HOURS` | 168 | Hours to look back on startup (7 days) |
 
 ### Discord Bot Architecture: Cog-Based Modular Design
 - **Entry point:** `bot/ultimate_bot.py` (4,990 lines but most logic in Cogs)
@@ -91,6 +110,7 @@ python tools/phase2_final_validation.py  # Comprehensive checks
 
 ### File Naming Patterns
 - Stats files: `2025-11-06-213045-supply-round-1.txt` (YYYY-MM-DD-HHMMSS-mapname-round-N)
+- EndStats files: `2025-11-06-213045-supply-round-1-endstats.txt` (same + `-endstats`)
 - Backups: `{db_name}_backup_{timestamp}.db` (e.g., `etlegacy_production_backup_20251106_121512.db`)
 - Validation scripts: `validate_*.py` or `check_*.py` in root (not organized, historical artifacts)
 
@@ -99,6 +119,7 @@ python tools/phase2_final_validation.py  # Comprehensive checks
 2. **Never bulk-import without duplicate check** - All imports use SHA256 hash in `processed_files` table
 3. **Never assume team assignments are accurate** - Team detection is probabilistic (see `bot/core/team_manager.py` confidence scores)
 4. **Never use synchronous DB calls in Cogs** - Always use `async with db.acquire()` pattern via adapter
+5. **NEVER provide destructive commands (delete/remove) unprompted** - Report findings, let user decide. No `Remove-Item`, `rm`, `del`, or `DROP TABLE` without explicit user request
 
 ### Team Detection System (Complex Multi-Algorithm)
 Located in `bot/core/` - 5 separate modules work together:
@@ -149,7 +170,7 @@ SSH_KEY_PATH=~/.ssh/id_rsa
 
 ### Last Session Command Returns Old Data
 **Symptom:** `!last_session` shows stats from weeks ago  
-**Cause:** "Gaming sessions" group rounds by 12-hour gaps - if no play for >12h, new session created  
+**Cause:** "Gaming sessions" group rounds by 60-minute gaps - if no play for >60min, new session created  
 **Fix:** Expected behavior. Use `!sessions` to see all grouped sessions, `!session <N>` for specific one
 
 ### Parser Weapon Stats All Zeros

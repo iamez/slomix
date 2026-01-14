@@ -1,27 +1,35 @@
 -- ============================================================
--- PROXIMITY TRACKER v3.0 - ENGAGEMENT-CENTRIC
+-- PROXIMITY TRACKER v4.0 - FULL PLAYER TRACKING
 -- ET:Legacy Lua Module for Combat Analytics
 --
--- KEY FEATURES:
---   • Track combat engagements (not every bullet)
---   • Escape detection (5s no damage + 300 units moved)
+-- KEY FEATURES (v4):
+--   • FULL PLAYER TRACKING - All players, spawn to death
+--   • Position + velocity + health + weapon every 1 second
+--   • Stance tracking (standing/crouching/prone)
+--   • Sprint detection
+--   • First movement time after spawn
+--   • Combat engagement tracking (damage, kills, escapes)
 --   • Crossfire detection (2+ attackers within 1 second)
---   • Position sampling during engagement (every 2s + events)
+--   • Per-map heatmaps (kills, movement, combat, escapes)
 --   • GUID tracking for forever stats
---   • Per-map heatmaps
 --
--- OUTPUT: Single file per round with engagement data
+-- OUTPUT: Single file per round with:
+--   - PLAYER_TRACKS: Full movement history for each player
+--   - ENGAGEMENTS: Combat interactions
+--   - KILL_HEATMAP: Where kills happen
+--   - MOVEMENT_HEATMAP: Where players move
+--
 -- LOAD ORDER: lua_modules "c0rnp0rn.lua proximity_tracker.lua"
 -- ============================================================
 
 local modname = "proximity_tracker"
-local version = "3.0"
+local version = "4.0"
 
 -- ===== CONFIGURATION =====
 local config = {
     enabled = true,
     debug = false,
-    output_dir = "gamestats/",
+    output_dir = "proximity/",  -- Separate from gamestats/ to avoid mixing data
     
     -- Crossfire detection
     crossfire_window_ms = 1000,     -- 1 second for crossfire detection
@@ -30,8 +38,8 @@ local config = {
     escape_time_ms = 5000,          -- 5 seconds no damage
     escape_distance = 300,          -- 300 units minimum travel
     
-    -- Position sampling
-    position_sample_interval = 2000, -- sample every 2 seconds during engagement
+    -- Position sampling (v4: 500ms for better movement capture)
+    position_sample_interval = 500,  -- 2 samples per second - captures strafe/dodge patterns 
     
     -- Heatmap
     grid_size = 512,
@@ -40,30 +48,40 @@ local config = {
     min_damage = 1
 }
 
+-- ===== MOVEMENT STATE BIT FLAGS =====
+local PMF_DUCKED = 1        -- Crouching
+local PMF_PRONE = 512       -- Prone
+local PMF_SPRINT = 16384    -- Sprinting
+
 -- ===== MODULE DATA =====
 local tracker = {
     -- Active engagements (target_slot -> engagement data)
     engagements = {},
-    
+
     -- Completed engagements for output
     completed = {},
-    
+
     -- Heatmaps (aggregated during round)
     kill_heatmap = {},      -- grid_key -> {axis, allies}
     movement_heatmap = {},  -- grid_key -> {traversal, combat}
-    
+
     -- Round info
     round = {
         map_name = "",
         round_num = 0,
         start_time = 0
     },
-    
+
     -- Counter for unique engagement IDs
     engagement_counter = 0,
-    
+
     -- Player position cache (for movement tracking)
-    last_positions = {}
+    last_positions = {},
+
+    -- NEW: Full player tracking (all players, spawn to death)
+    player_tracks = {},         -- clientnum -> track data
+    completed_tracks = {},      -- Finished tracks for output
+    last_sample_time = 0        -- Last global sample timestamp
 }
 
 -- ===== UTILITY FUNCTIONS =====
@@ -79,15 +97,33 @@ local function getPlayerPos(clientnum)
 end
 
 local function getPlayerGUID(clientnum)
-    local guid = et.Info_ValueForKey(et.trap_GetUserinfo(clientnum), "cl_guid")
-    if not guid or guid == "" then
-        guid = et.gentity_get(clientnum, "sess.guid")
+    -- Primary method: get from userinfo (most reliable)
+    local userinfo = et.trap_GetUserinfo(clientnum)
+    if userinfo then
+        local guid = et.Info_ValueForKey(userinfo, "cl_guid")
+        if guid and guid ~= "" then
+            return guid
+        end
     end
-    return guid or "UNKNOWN"
+    -- Fallback: generate a session-unique ID from slot number
+    -- This ensures we can still track players even without GUID
+    return string.format("SLOT%d", clientnum)
+end
+
+local function sanitizeName(name)
+    -- Remove characters that would break CSV/output parsing
+    if not name then return "Unknown" end
+    name = string.gsub(name, ";", "_")  -- semicolon breaks field separator
+    name = string.gsub(name, "|", "_")  -- pipe breaks attacker separator
+    name = string.gsub(name, ",", "_")  -- comma breaks sub-field separator
+    name = string.gsub(name, "\n", "")  -- newline breaks line parsing
+    name = string.gsub(name, "\r", "")  -- carriage return
+    return name
 end
 
 local function getPlayerName(clientnum)
-    return et.gentity_get(clientnum, "pers.netname") or "Unknown"
+    local name = et.gentity_get(clientnum, "pers.netname") or "Unknown"
+    return sanitizeName(name)
 end
 
 local function getPlayerTeam(clientnum)
@@ -126,6 +162,194 @@ end
 
 local function gameTime()
     return et.trap_Milliseconds() - tracker.round.start_time
+end
+
+-- ===== PLAYER STATE FUNCTIONS =====
+
+local function getPlayerVelocity(clientnum)
+    local vel = et.gentity_get(clientnum, "ps.velocity")
+    if not vel then return 0, 0, 0 end
+    return tonumber(vel[1]) or 0, tonumber(vel[2]) or 0, tonumber(vel[3]) or 0
+end
+
+local function getPlayerSpeed(clientnum)
+    local vx, vy, vz = getPlayerVelocity(clientnum)
+    -- Horizontal speed only (ignore vertical for movement analysis)
+    return math.sqrt(vx*vx + vy*vy)
+end
+
+local function getPlayerMovementState(clientnum)
+    local pm_flags = et.gentity_get(clientnum, "ps.pm_flags") or 0
+
+    -- Decode stance: 0=standing, 1=crouching, 2=prone
+    -- Lua 5.4 uses native & operator for bitwise AND
+    local stance = 0
+    if (pm_flags & PMF_PRONE) ~= 0 then
+        stance = 2
+    elseif (pm_flags & PMF_DUCKED) ~= 0 then
+        stance = 1
+    end
+
+    -- Check sprint
+    local sprinting = 0
+    if (pm_flags & PMF_SPRINT) ~= 0 then
+        sprinting = 1
+    end
+
+    return stance, sprinting
+end
+
+local function getPlayerClass(clientnum)
+    local ptype = et.gentity_get(clientnum, "sess.playerType") or 0
+    local classes = { [0] = "SOLDIER", [1] = "MEDIC", [2] = "ENGINEER", [3] = "FIELDOPS", [4] = "COVERTOPS" }
+    return classes[ptype] or "UNKNOWN"
+end
+
+-- ===== FULL PLAYER TRACKING =====
+
+local function createPlayerTrack(clientnum)
+    local now = gameTime()
+    local pos = getPlayerPos(clientnum)
+
+    local track = {
+        clientnum = clientnum,
+        guid = getPlayerGUID(clientnum),
+        name = getPlayerName(clientnum),
+        team = getPlayerTeam(clientnum),
+        class = getPlayerClass(clientnum),
+
+        spawn_time = now,
+        spawn_pos = pos,
+        death_time = nil,
+        death_pos = nil,
+
+        -- Path: array of samples
+        -- Each sample: {time, x, y, z, health, speed, weapon, stance, sprint}
+        path = {},
+
+        -- Track first movement (time to start moving after spawn)
+        first_move_time = nil,
+        had_input = false
+    }
+
+    -- Record spawn position as first sample
+    if pos then
+        local health = et.gentity_get(clientnum, "health") or 100
+        local weapon = et.gentity_get(clientnum, "ps.weapon") or 0
+        local stance, sprint = getPlayerMovementState(clientnum)
+        local speed = getPlayerSpeed(clientnum)
+
+        table.insert(track.path, {
+            time = now,
+            x = round(pos.x, 1),
+            y = round(pos.y, 1),
+            z = round(pos.z, 1),
+            health = health,
+            speed = round(speed, 1),
+            weapon = weapon,
+            stance = stance,
+            sprint = sprint,
+            event = "spawn"
+        })
+    end
+
+    tracker.player_tracks[clientnum] = track
+
+    if config.debug then
+        et.G_Printf("[PROX] Track started: %s (%s) at %.0f,%.0f\n",
+            track.name, track.class, pos and pos.x or 0, pos and pos.y or 0)
+    end
+
+    return track
+end
+
+local function samplePlayer(clientnum, track, event_type)
+    local now = gameTime()
+    local pos = getPlayerPos(clientnum)
+    if not pos then return end
+
+    local health = et.gentity_get(clientnum, "health") or 0
+    local weapon = et.gentity_get(clientnum, "ps.weapon") or 0
+    local stance, sprint = getPlayerMovementState(clientnum)
+    local speed = getPlayerSpeed(clientnum)
+
+    -- Detect first movement
+    if not track.first_move_time and speed > 10 then
+        track.first_move_time = now
+        track.had_input = true
+    end
+
+    table.insert(track.path, {
+        time = now,
+        x = round(pos.x, 1),
+        y = round(pos.y, 1),
+        z = round(pos.z, 1),
+        health = health,
+        speed = round(speed, 1),
+        weapon = weapon,
+        stance = stance,
+        sprint = sprint,
+        event = event_type or "sample"
+    })
+
+    -- Update movement heatmap
+    local key = getGridKey(pos.x, pos.y)
+    if not tracker.movement_heatmap[key] then
+        tracker.movement_heatmap[key] = { traversal = 0, combat = 0, escape = 0 }
+    end
+    tracker.movement_heatmap[key].traversal = tracker.movement_heatmap[key].traversal + 1
+end
+
+local function endPlayerTrack(clientnum, death_pos)
+    local track = tracker.player_tracks[clientnum]
+    if not track then return end
+
+    track.death_time = gameTime()
+    track.death_pos = death_pos
+
+    -- Add final sample
+    if death_pos then
+        local health = 0
+        local weapon = et.gentity_get(clientnum, "ps.weapon") or 0
+        table.insert(track.path, {
+            time = track.death_time,
+            x = round(death_pos.x, 1),
+            y = round(death_pos.y, 1),
+            z = round(death_pos.z, 1),
+            health = health,
+            speed = 0,
+            weapon = weapon,
+            stance = 0,
+            sprint = 0,
+            event = "death"
+        })
+    end
+
+    -- Move to completed
+    table.insert(tracker.completed_tracks, track)
+    tracker.player_tracks[clientnum] = nil
+
+    if config.debug then
+        et.G_Printf("[PROX] Track ended: %s - %d samples, lived %dms\n",
+            track.name, #track.path, track.death_time - track.spawn_time)
+    end
+end
+
+local function sampleAllPlayers()
+    local now = gameTime()
+
+    -- Only sample every position_sample_interval ms
+    if now - tracker.last_sample_time < config.position_sample_interval then
+        return
+    end
+    tracker.last_sample_time = now
+
+    -- Sample all tracked players
+    for clientnum, track in pairs(tracker.player_tracks) do
+        if isPlayerActive(clientnum) then
+            samplePlayer(clientnum, track, "sample")
+        end
+    end
 end
 
 -- ===== ENGAGEMENT MANAGEMENT =====
@@ -425,38 +649,54 @@ local function serializePositions(path)
     return table.concat(parts, "|")
 end
 
+local function serializeTrackPath(path)
+    -- Format: time,x,y,z,health,speed,weapon,stance,sprint,event
+    local parts = {}
+    for _, p in ipairs(path) do
+        table.insert(parts, string.format("%d,%.1f,%.1f,%.1f,%d,%.1f,%d,%d,%d,%s",
+            p.time, p.x, p.y, p.z, p.health, p.speed, p.weapon, p.stance, p.sprint, p.event))
+    end
+    return table.concat(parts, "|")
+end
+
 local function outputData()
-    if #tracker.completed == 0 then
-        et.G_Print("[PROX] No engagements to output\n")
+    if #tracker.completed == 0 and #tracker.completed_tracks == 0 then
+        et.G_Print("[PROX] No data to output\n")
         return
     end
-    
-    -- Filename
+
+    -- Filename: gamestats/YYYY-MM-DD-HHMMSS-mapname-round-N_engagements.txt
     local filename = string.format("%s%s-%s-round-%d_engagements.txt",
         config.output_dir,
         os.date('%Y-%m-%d-%H%M%S'),
         tracker.round.map_name,
         tracker.round.round_num)
-    
-    local fd = et.trap_FS_FOpenFile(filename, et.FS_WRITE)
-    if fd == -1 then
-        et.G_Print("[PROX] ERROR: Could not open file\n")
+
+    et.G_Print("[PROX] Attempting to write: " .. filename .. "\n")
+
+    -- et.FS_WRITE = 1 (write mode)
+    local fd, len = et.trap_FS_FOpenFile(filename, 1)
+    if not fd or fd == -1 or fd == 0 then
+        et.G_Print("[PROX] ERROR: Could not open file for writing: " .. filename .. "\n")
+        et.G_Print("[PROX] Check that " .. config.output_dir .. " directory exists!\n")
         return
     end
     
     -- Header
     local header = string.format(
-        "# PROXIMITY_TRACKER_V3\n" ..
+        "# PROXIMITY_TRACKER_V4\n" ..
         "# map=%s\n" ..
         "# round=%d\n" ..
         "# crossfire_window=%d\n" ..
         "# escape_time=%d\n" ..
-        "# escape_distance=%d\n",
+        "# escape_distance=%d\n" ..
+        "# position_sample_interval=%d\n",
         tracker.round.map_name,
         tracker.round.round_num,
         config.crossfire_window_ms,
         config.escape_time_ms,
-        config.escape_distance
+        config.escape_distance,
+        config.position_sample_interval
     )
     et.trap_FS_Write(header, string.len(header), fd)
     
@@ -504,7 +744,29 @@ local function outputData()
         )
         et.trap_FS_Write(line, string.len(line), fd)
     end
-    
+
+    -- PLAYER TRACKS (full movement history)
+    local track_header = "\n# PLAYER_TRACKS\n" ..
+        "# guid;name;team;class;spawn_time;death_time;first_move_time;samples;path\n" ..
+        "# path format: time,x,y,z,health,speed,weapon,stance,sprint,event separated by |\n" ..
+        "# stance: 0=standing, 1=crouching, 2=prone | sprint: 0=no, 1=yes\n"
+    et.trap_FS_Write(track_header, string.len(track_header), fd)
+
+    for _, track in ipairs(tracker.completed_tracks) do
+        local line = string.format("%s;%s;%s;%s;%d;%d;%s;%d;%s\n",
+            track.guid,
+            track.name,
+            track.team,
+            track.class,
+            track.spawn_time,
+            track.death_time or 0,
+            track.first_move_time or "",
+            #track.path,
+            serializeTrackPath(track.path)
+        )
+        et.trap_FS_Write(line, string.len(line), fd)
+    end
+
     -- Kill heatmap
     local hm_header = "\n# KILL_HEATMAP\n# grid_x;grid_y;axis_kills;allies_kills\n"
     et.trap_FS_Write(hm_header, string.len(hm_header), fd)
@@ -527,58 +789,107 @@ local function outputData()
     end
     
     et.trap_FS_FCloseFile(fd)
-    
+
     local crossfire_count = 0
     for _, eng in ipairs(tracker.completed) do
         if eng.is_crossfire then crossfire_count = crossfire_count + 1 end
     end
-    
-    et.G_Print(string.format("[PROX] Saved %d engagements (%d crossfire) to %s\n",
-        #tracker.completed, crossfire_count, filename))
+
+    local total_samples = 0
+    for _, track in ipairs(tracker.completed_tracks) do
+        total_samples = total_samples + #track.path
+    end
+
+    et.G_Print(string.format("[PROX] Saved: %d tracks (%d samples), %d engagements (%d crossfire)\n",
+        #tracker.completed_tracks, total_samples, #tracker.completed, crossfire_count))
+    et.G_Print(string.format("[PROX] Output: %s\n", filename))
 end
 
 -- ===== ENGINE CALLBACKS =====
 
 function et_InitGame(levelTime, randomSeed, restart)
     et.RegisterModname(modname .. " " .. version)
-    
-    local serverinfo = et.trap_GetConfigstring(et.CS_SERVERINFO)
-    tracker.round.map_name = et.Info_ValueForKey(serverinfo, "mapname") or "unknown"
-    tracker.round.round_num = tonumber(et.trap_Cvar_Get("g_currentRound")) or 1
+
+    -- Get map info safely
+    local serverinfo = et.trap_GetConfigstring(0)  -- CS_SERVERINFO = 0
+    if serverinfo then
+        tracker.round.map_name = et.Info_ValueForKey(serverinfo, "mapname") or "unknown"
+    else
+        tracker.round.map_name = "unknown"
+    end
+
+    -- Get round number (may not exist on all servers)
+    local round_str = et.trap_Cvar_Get("g_currentRound")
+    tracker.round.round_num = tonumber(round_str) or 1
     tracker.round.start_time = levelTime
-    
-    -- Reset
+
+    -- Reset all tracking data
     tracker.engagements = {}
     tracker.completed = {}
     tracker.kill_heatmap = {}
     tracker.movement_heatmap = {}
     tracker.engagement_counter = 0
     tracker.last_positions = {}
-    
+
+    -- Reset player tracking
+    tracker.player_tracks = {}
+    tracker.completed_tracks = {}
+    tracker.last_sample_time = 0
+
     et.G_Print(">>> Proximity Tracker v" .. version .. " initialized\n")
     et.G_Print(">>> Map: " .. tracker.round.map_name .. ", Round: " .. tracker.round.round_num .. "\n")
+    et.G_Print(">>> Position sample interval: " .. config.position_sample_interval .. "ms\n")
+    et.G_Print(">>> Output directory: " .. config.output_dir .. "\n")
 end
 
 local last_gamestate = -1
 
 function et_RunFrame(levelTime)
     if not config.enabled then return end
-    
+
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
-    
+
     -- Check for round end
     if last_gamestate == 0 and gamestate == 3 then
+        -- End all active player tracks (round ended)
+        for clientnum, track in pairs(tracker.player_tracks) do
+            local pos = getPlayerPos(clientnum)
+            track.death_time = gameTime()
+            track.death_pos = pos
+            if pos then
+                table.insert(track.path, {
+                    time = track.death_time,
+                    x = round(pos.x, 1),
+                    y = round(pos.y, 1),
+                    z = round(pos.z, 1),
+                    health = et.gentity_get(clientnum, "health") or 0,
+                    speed = 0,
+                    weapon = et.gentity_get(clientnum, "ps.weapon") or 0,
+                    stance = 0,
+                    sprint = 0,
+                    event = "round_end"
+                })
+            end
+            table.insert(tracker.completed_tracks, track)
+        end
+        tracker.player_tracks = {}
+
         -- Close all active engagements as round_end
         for target_slot, engagement in pairs(tracker.engagements) do
             closeEngagement(engagement, "round_end", nil)
         end
+
         outputData()
     end
-    
+
     last_gamestate = gamestate
-    
-    -- During play: check for escapes
+
+    -- During play
     if gamestate == 0 then
+        -- Sample all player positions every interval
+        sampleAllPlayers()
+
+        -- Check for escapes (engagement tracking)
         checkEscapes(levelTime)
     end
 end
@@ -611,13 +922,17 @@ end
 
 function et_Obituary(victim, killer, meansOfDeath)
     if not config.enabled then return end
-    
+
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
     if gamestate ~= 0 then return end
-    
+
+    -- End player track on death
+    local death_pos = getPlayerPos(victim)
+    endPlayerTrack(victim, death_pos)
+
     -- Check if we have an engagement for this victim
     local engagement = tracker.engagements[victim]
-    
+
     if engagement then
         -- Close with kill
         closeEngagement(engagement, "killed", killer)
@@ -625,14 +940,45 @@ function et_Obituary(victim, killer, meansOfDeath)
         -- No engagement exists - create a minimal one for the kill
         -- (can happen if killed instantly without prior damage, e.g., headshot)
         engagement = createEngagement(victim)
-        
+
         -- Add killer as attacker if valid
         if killer and killer ~= 1022 and killer ~= 1023 and killer ~= victim then
             local weapon = et.gentity_get(killer, "ps.weapon") or 0
             recordHit(engagement, killer, 100, weapon)  -- assume lethal damage
         end
-        
+
         closeEngagement(engagement, "killed", killer)
+    end
+end
+
+function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
+    if not config.enabled then return end
+
+    -- Only track fresh spawns, not revives
+    if revived == 1 then
+        if config.debug then
+            et.G_Printf("[PROX] %s was revived (continuing existing track)\n", getPlayerName(clientNum))
+        end
+        return
+    end
+
+    -- Check if player is on a team
+    if not isPlayerActive(clientNum) then return end
+
+    -- End any existing track for this slot (shouldn't happen, but safety)
+    if tracker.player_tracks[clientNum] then
+        endPlayerTrack(clientNum, nil)
+    end
+
+    -- Start new track
+    createPlayerTrack(clientNum)
+end
+
+function et_ClientDisconnect(clientNum)
+    -- End track if player disconnects mid-round
+    if tracker.player_tracks[clientNum] then
+        local pos = getPlayerPos(clientNum)
+        endPlayerTrack(clientNum, pos)
     end
 end
 

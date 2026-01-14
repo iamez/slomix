@@ -1,18 +1,35 @@
 # 🎮 ET:Legacy Stats Bot - Production-Grade Gaming Analytics Platform
 
-> **Enterprise-level data pipeline transforming ET:Legacy gaming sessions into comprehensive, real-time statistics**
+> **PostgreSQL-powered real-time analytics for competitive ET:Legacy — 6-layer validation, differential stat calculation, and full automation**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
+[![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-336791)](https://www.postgresql.org/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/)
 [![Data Integrity](https://img.shields.io/badge/data%20integrity-6%20layers-blue)](docs/SAFETY_VALIDATION_SYSTEMS.md)
 [![Automation](https://img.shields.io/badge/automation-fully%20implemented-orange)](bot/services/automation/INTEGRATION_GUIDE.md)
 
 A **production-grade Discord bot** with **zero-downtime automation**, **6-layer data validation**, and **intelligent differential stat calculation** for ET:Legacy game servers.
 
-## 🔥 Recent Updates (December 2025)
+## 🔥 Recent Updates (January 2026)
 
-### **🚀 v1.0.2: Real-Time Push & Voice Logging (December 3, 2025)** 🆕
+### **🏆 v1.0.3: EndStats & Awards System (January 14, 2026)** 🆕
 
-**Instant stats updates and enhanced Discord posting!**
+**Post-round awards and VS stats from ET:Legacy's endstats system!**
+
+- 🏅 **EndStats Processing** - Parses `-endstats.txt` files for round awards and player VS stats
+- 🎖️ **7 Award Categories** - Combat, Deaths & Mayhem, Skills, Weapons, Teamwork, Objectives, Timing
+- 📊 **VS Stats Tracking** - Player-vs-player kill/death records per round
+- 💬 **Discord Follow-Up Embeds** - Awards posted automatically after round stats
+- 🔔 **Webhook Notifications** - VPS pushes to Discord webhook, bot pulls via SSH
+- 🗄️ **3 New Tables** - `round_awards`, `round_vs_stats`, `processed_endstats_files`
+
+**Technical:** New `endstats_parser.py` (320 lines), webhook notification pipeline, 48-hour lookback filter.
+
+---
+
+### **🚀 v1.0.2: Real-Time Push & Voice Logging (December 3, 2025)**
+
+**Instant stats updates and enhanced Discord posting.**
 
 - 🔌 **WebSocket Real-Time Push** - VPS notifies bot instantly when new stats files are written (replaces 60s SSH polling)
 - 🎙️ **Voice Session Logging** - Track player voice channel activity for gaming sessions
@@ -63,14 +80,50 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 
 ## ✨ What Makes This Special
 
-- � **6-Layer Data Integrity** - Transaction safety, ACID guarantees, per-insert verification
+- 🔒 **6-Layer Data Integrity** - Transaction safety, ACID guarantees, per-insert verification
 - 🤖 **Full Automation** - SSH monitoring, auto-download, auto-import, auto-post (60s cycle)
 - 🧮 **Differential Calculation** - Smart Round 2 stats (subtracts Round 1 for accurate team-swap metrics)
 - 📊 **53+ Statistics** - K/D, DPM, accuracy, efficiency, weapon breakdowns, objective stats
 - ⚡ **Real-Time Processing** - VPS → Local → Database → Discord in <3 seconds per file
 - 🎯 **Zero Data Loss** - PostgreSQL transactions, rollback on error, 4,193 verified inserts
+- 🏆 **EndStats Awards** - Post-round awards with 7 categories (Combat, Skills, Teamwork, etc.)
 
 **[📊 View Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation Systems](docs/SAFETY_VALIDATION_SYSTEMS.md)** | **[🔄 Round 2 Pipeline Explained](docs/ROUND_2_PIPELINE_EXPLAINED.txt)** | **[📝 Changelog](docs/CHANGELOG.md)**
+
+---
+
+## 🔮 Ecosystem & Future
+
+This bot is part of a larger **SLOMIX ecosystem** for competitive ET:Legacy analytics:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     SLOMIX ECOSYSTEM                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐        │
+│  │  DISCORD    │    │   WEB       │    │  PROXIMITY  │        │
+│  │  BOT        │    │   DASHBOARD │    │  TRACKER    │        │
+│  │  (Python)   │    │  (FastAPI)  │    │  (Lua)      │        │
+│  │  ✅ PROD    │    │  🔶 PROTO   │    │  🔶 PROTO   │        │
+│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘        │
+│         │                  │                  │                │
+│         └──────────────────┼──────────────────┘                │
+│                            │                                   │
+│                    ┌───────▼───────┐                           │
+│                    │  PostgreSQL   │                           │
+│                    │  DATABASE     │                           │
+│                    └───────────────┘                           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+| Project | Status | Description |
+|---------|--------|-------------|
+| **Bot** (this repo) | ✅ Production | Discord stats, automation, predictions |
+| **Website** (`/website/`) | 🔶 Prototype | FastAPI + Tailwind CSS dashboard |
+| **Proximity** (`/proximity/`) | 🔶 Prototype | Lua combat engagement & heatmap tracking |
+
+**Coming Soon:** Team chemistry analytics, crossfire pair detection, and full movement heatmaps.
 
 ---
 
@@ -491,6 +544,7 @@ slomix/
 │   ├── bot/
 │   │   ├── ultimate_bot.py              # Main bot (enhanced with predictions)
 │   │   ├── community_stats_parser.py    # Round 1/2 differential parser (1,036 lines)
+│   │   ├── endstats_parser.py           # 🆕 EndStats awards parser (320 lines)
 │   │   ├── cogs/
 │   │   │   ├── last_session_cog.py      # Session stats & summaries
 │   │   │   ├── predictions_cog.py       # 🆕 Prediction user commands (862 lines)
@@ -597,6 +651,11 @@ processed_files (filename, processed_at, success, error_message)
 player_links (discord_user_id, player_guid, linked_at)
 player_aliases (guid, alias, times_seen, last_seen)
 session_teams (session_id, player_guid, team)
+
+-- 🆕 EndStats Tables (v1.0.3)
+round_awards (round_id, player_guid, award_category, award_name, award_value)
+round_vs_stats (round_id, player_guid, opponent_guid, kills, deaths)
+processed_endstats_files (filename, processed_at, round_id)
 
 -- 🆕 Competitive Analytics Tables (Weeks 11-12)
 match_predictions (35 columns, 6 indexes)

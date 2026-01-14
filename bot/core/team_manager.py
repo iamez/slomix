@@ -14,9 +14,9 @@ across the entire session regardless of which side they play on.
 
 import json
 import logging
-from typing import Dict, List, Tuple, Optional, Set
+from typing import Dict, List, Tuple, Optional, Set, Any
 from datetime import datetime
-from collections import defaultdict, Counter
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,8 @@ class TeamManager:
     async def store_session_teams(
         self,
         session_date: str,
-        teams: Dict[str, Dict]
+        teams: Dict[str, Dict],
+        auto_assign_names: bool = True
     ) -> bool:
         """
         Store detected teams in the session_teams table.
@@ -154,6 +155,7 @@ class TeamManager:
         Args:
             session_date: Session date (YYYY-MM-DD)
             teams: Team data from detect_session_teams()
+            auto_assign_names: If True, assign random team names from pool
 
         Returns:
             True if successful
@@ -181,6 +183,16 @@ class TeamManager:
             )
 
         logger.info(f"✅ Stored teams for session {session_date}")
+
+        # Auto-assign random team names from pool
+        if auto_assign_names:
+            try:
+                team_a, team_b = await self.assign_random_team_names(session_date, force=True)
+                logger.info(f"✅ Auto-assigned team names: {team_a} vs {team_b}")
+            except Exception as e:
+                logger.warning(f"Failed to auto-assign team names: {e}")
+                # Continue anyway - teams are stored with default names
+
         return True
     
     async def get_session_teams(
@@ -225,7 +237,8 @@ class TeamManager:
             logger.info(f"No stored teams found for {session_date}, auto-detecting...")
             teams = await self.detect_session_teams(session_date)
             if teams:
-                await self.store_session_teams(session_date, teams)
+                # Don't auto-assign names here - let caller decide
+                await self.store_session_teams(session_date, teams, auto_assign_names=False)
             return teams
 
         return {}
@@ -234,7 +247,7 @@ class TeamManager:
         self,
         session_date: str,
         previous_session_date: Optional[str] = None
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Detect lineup changes between sessions.
 
@@ -342,39 +355,6 @@ class TeamManager:
             'previous_date': previous_session_date
         }
     
-    async def get_team_record(
-        self,
-        team_roster_guids: List[str],
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None
-    ) -> Dict[str, any]:
-        """
-        Get win/loss record for a specific team lineup.
-
-        Args:
-            team_roster_guids: List of player GUIDs in the lineup
-            start_date: Optional start date filter
-            end_date: Optional end date filter
-
-        Returns:
-            {
-                'sessions_played': 5,
-                'wins': 3,
-                'losses': 2,
-                'ties': 0,
-                'win_rate': 0.60,
-                'maps_won': 12,
-                'maps_lost': 8,
-                'sessions': [
-                    {'date': '2025-10-28', 'result': 'WIN', 'score': '10-8'},
-                    ...
-                ]
-            }
-        """
-        # TODO: Implement once we have session results stored
-        # This will query the stopwatch scores and match them to team rosters
-        pass
-    
     async def set_custom_team_names(
         self,
         session_date: str,
@@ -436,3 +416,365 @@ class TeamManager:
         # This will integrate with StopwatchScoring
         # TODO: Implement
         pass
+
+    # =========================================================================
+    # TEAM POOL & RANDOM ASSIGNMENT
+    # =========================================================================
+
+    async def get_team_pool(self, active_only: bool = True) -> List[Dict]:
+        """
+        Get available team names from the pool.
+
+        Args:
+            active_only: If True, only return active teams
+
+        Returns:
+            List of team dicts: [{'name': 'sWat', 'display_name': 'sWat', 'color': 3447003}, ...]
+        """
+        if active_only:
+            query = "SELECT name, display_name, color FROM team_pool WHERE active = TRUE ORDER BY name"
+            rows = await self.db.fetch_all(query, ())
+        else:
+            query = "SELECT name, display_name, color FROM team_pool ORDER BY name"
+            rows = await self.db.fetch_all(query, ())
+
+        return [
+            {'name': name, 'display_name': display_name or name, 'color': color}
+            for name, display_name, color in rows
+        ]
+
+    async def get_team_color(self, team_name: str) -> Optional[int]:
+        """
+        Get Discord embed color for a team name.
+
+        Args:
+            team_name: Team name (e.g., 'sWat')
+
+        Returns:
+            Integer color value or None if not found
+        """
+        row = await self.db.fetch_one(
+            "SELECT color FROM team_pool WHERE name = $1",
+            (team_name,)
+        )
+        return row[0] if row else None
+
+    async def assign_random_team_names(
+        self,
+        session_date: str,
+        force: bool = False
+    ) -> Tuple[str, str]:
+        """
+        Randomly assign team names from the pool to a session.
+
+        This picks 2 random team names and stores them in session_teams.
+        If teams are already named (not 'Team A'/'Team B'), returns existing names
+        unless force=True.
+
+        Args:
+            session_date: Session date (YYYY-MM-DD)
+            force: If True, override existing custom names
+
+        Returns:
+            (team_a_name, team_b_name)
+        """
+        import random
+
+        # Check if session already has custom team names
+        if not force:
+            existing = await self.get_session_teams(session_date, auto_detect=False)
+            if existing:
+                team_names = list(existing.keys())
+                # If already has custom names (not 'Team A'/'Team B'), return them
+                if team_names and team_names[0] not in ('Team A', 'Team B'):
+                    logger.info(f"Session {session_date} already has team names: {team_names}")
+                    return (team_names[0], team_names[1] if len(team_names) > 1 else 'Team B')
+
+        # Get available teams from pool
+        pool = await self.get_team_pool(active_only=True)
+
+        if len(pool) < 2:
+            logger.warning("Not enough teams in pool, using defaults")
+            return ("Team A", "Team B")
+
+        # Pick 2 random teams
+        chosen = random.sample(pool, 2)
+        team_a_name = chosen[0]['name']
+        team_b_name = chosen[1]['name']
+        team_a_color = chosen[0]['color']
+        team_b_color = chosen[1]['color']
+
+        logger.info(f"Randomly assigned teams for {session_date}: {team_a_name} vs {team_b_name}")
+
+        # Ensure teams exist in session_teams table first
+        teams = await self.get_session_teams(session_date, auto_detect=True)
+        if not teams:
+            logger.warning(f"Could not detect teams for {session_date}")
+            return (team_a_name, team_b_name)
+
+        # Update the team names and colors
+        await self.db.execute(
+            """
+            UPDATE session_teams
+            SET team_name = $1, color = $2
+            WHERE session_start_date LIKE $3 AND map_name = 'ALL' AND team_name = 'Team A'
+            """,
+            (team_a_name, team_a_color, f"{session_date}%")
+        )
+
+        await self.db.execute(
+            """
+            UPDATE session_teams
+            SET team_name = $1, color = $2
+            WHERE session_start_date LIKE $3 AND map_name = 'ALL' AND team_name = 'Team B'
+            """,
+            (team_b_name, team_b_color, f"{session_date}%")
+        )
+
+        logger.info(f"✅ Assigned random teams: {team_a_name} vs {team_b_name}")
+        return (team_a_name, team_b_name)
+
+    async def add_team_to_pool(
+        self,
+        name: str,
+        display_name: Optional[str] = None,
+        color: Optional[int] = None
+    ) -> bool:
+        """
+        Add a new team to the pool.
+
+        Args:
+            name: Team name (must be unique)
+            display_name: Optional display name
+            color: Optional Discord embed color (int)
+
+        Returns:
+            True if added successfully
+        """
+        try:
+            await self.db.execute(
+                """
+                INSERT INTO team_pool (name, display_name, color)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (name) DO UPDATE SET
+                    display_name = COALESCE(EXCLUDED.display_name, team_pool.display_name),
+                    color = COALESCE(EXCLUDED.color, team_pool.color)
+                """,
+                (name, display_name, color)
+            )
+            logger.info(f"✅ Added team to pool: {name}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add team {name}: {e}")
+            return False
+
+    # =========================================================================
+    # TEAM RECORDS & HISTORY (REQUIRES session_results TABLE)
+    # =========================================================================
+
+    async def get_team_record(
+        self,
+        team_name: str,
+        days_back: int = 90
+    ) -> Dict:
+        """
+        Get win/loss record for a team by name.
+
+        Args:
+            team_name: Team name from pool (e.g., 'sWat')
+            days_back: How far back to look (default 90 days)
+
+        Returns:
+            {
+                'team_name': 'sWat',
+                'wins': 5,
+                'losses': 3,
+                'ties': 1,
+                'total': 9,
+                'win_rate': 0.556,
+                'recent_matches': [...]
+            }
+        """
+        try:
+            query = """
+                SELECT
+                    session_date,
+                    team_1_name,
+                    team_2_name,
+                    team_1_score,
+                    team_2_score,
+                    winning_team
+                FROM session_results
+                WHERE (team_1_name = $1 OR team_2_name = $1)
+                  AND session_date >= (CURRENT_DATE - $2 * INTERVAL '1 day')::text
+                ORDER BY session_date DESC
+            """
+
+            rows = await self.db.fetch_all(query, (team_name, days_back))
+
+            wins = 0
+            losses = 0
+            ties = 0
+            matches = []
+
+            for row in rows:
+                date, t1_name, t2_name, t1_score, t2_score, winner = row
+
+                # Determine if this team was team 1 or team 2
+                is_team_1 = (t1_name == team_name)
+                our_score = t1_score if is_team_1 else t2_score
+                their_score = t2_score if is_team_1 else t1_score
+                opponent = t2_name if is_team_1 else t1_name
+                expected_winner = 1 if is_team_1 else 2
+
+                if winner == 0:
+                    ties += 1
+                    result = 'T'
+                elif winner == expected_winner:
+                    wins += 1
+                    result = 'W'
+                else:
+                    losses += 1
+                    result = 'L'
+
+                matches.append({
+                    'date': date,
+                    'opponent': opponent,
+                    'our_score': our_score,
+                    'their_score': their_score,
+                    'result': result
+                })
+
+            total = wins + losses + ties
+            win_rate = wins / total if total > 0 else 0.0
+
+            return {
+                'team_name': team_name,
+                'wins': wins,
+                'losses': losses,
+                'ties': ties,
+                'total': total,
+                'win_rate': win_rate,
+                'recent_matches': matches[:10]  # Last 10
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting team record for {team_name}: {e}", exc_info=True)
+            return {
+                'team_name': team_name,
+                'wins': 0,
+                'losses': 0,
+                'ties': 0,
+                'total': 0,
+                'win_rate': 0.0,
+                'recent_matches': []
+            }
+
+    async def get_head_to_head(
+        self,
+        team_a: str,
+        team_b: str,
+        days_back: int = 365
+    ) -> Dict:
+        """
+        Get head-to-head record between two teams.
+
+        Args:
+            team_a: First team name
+            team_b: Second team name
+            days_back: How far back to look (default 1 year)
+
+        Returns:
+            {
+                'team_a': 'sWat',
+                'team_b': 'madDogz',
+                'team_a_wins': 5,
+                'team_b_wins': 3,
+                'ties': 1,
+                'total_matches': 9,
+                'team_a_maps_won': 15,
+                'team_b_maps_won': 12,
+                'recent_matches': [...]
+            }
+        """
+        try:
+            query = """
+                SELECT
+                    session_date,
+                    team_1_name,
+                    team_2_name,
+                    team_1_score,
+                    team_2_score,
+                    winning_team
+                FROM session_results
+                WHERE ((team_1_name = $1 AND team_2_name = $2)
+                    OR (team_1_name = $2 AND team_2_name = $1))
+                  AND session_date >= (CURRENT_DATE - $3 * INTERVAL '1 day')::text
+                ORDER BY session_date DESC
+            """
+
+            rows = await self.db.fetch_all(query, (team_a, team_b, days_back))
+
+            team_a_wins = 0
+            team_b_wins = 0
+            ties = 0
+            team_a_maps = 0
+            team_b_maps = 0
+            matches = []
+
+            for row in rows:
+                date, t1_name, t2_name, t1_score, t2_score, winner = row
+
+                # Normalize: team_a is always "our" perspective
+                if t1_name == team_a:
+                    a_score, b_score = t1_score, t2_score
+                    a_expected_winner = 1
+                else:
+                    a_score, b_score = t2_score, t1_score
+                    a_expected_winner = 2
+
+                team_a_maps += a_score
+                team_b_maps += b_score
+
+                if winner == 0:
+                    ties += 1
+                    result = 'TIE'
+                elif winner == a_expected_winner:
+                    team_a_wins += 1
+                    result = f'{team_a} WIN'
+                else:
+                    team_b_wins += 1
+                    result = f'{team_b} WIN'
+
+                matches.append({
+                    'date': date,
+                    f'{team_a}_score': a_score,
+                    f'{team_b}_score': b_score,
+                    'result': result
+                })
+
+            return {
+                'team_a': team_a,
+                'team_b': team_b,
+                'team_a_wins': team_a_wins,
+                'team_b_wins': team_b_wins,
+                'ties': ties,
+                'total_matches': team_a_wins + team_b_wins + ties,
+                'team_a_maps_won': team_a_maps,
+                'team_b_maps_won': team_b_maps,
+                'recent_matches': matches[:10]
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting head-to-head {team_a} vs {team_b}: {e}", exc_info=True)
+            return {
+                'team_a': team_a,
+                'team_b': team_b,
+                'team_a_wins': 0,
+                'team_b_wins': 0,
+                'ties': 0,
+                'total_matches': 0,
+                'team_a_maps_won': 0,
+                'team_b_maps_won': 0,
+                'recent_matches': []
+            }

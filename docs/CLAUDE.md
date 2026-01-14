@@ -334,6 +334,7 @@ docs/
 4. Try to recalculate R2 differential (parser output is correct)
 5. Use 30-minute gap threshold (use configurable values in config.py)
 6. Modify processed_files manually (SHA256 hash stored for integrity verification)
+7. **NEVER provide destructive commands unprompted** - No `rm`, `del`, `Remove-Item`, `DROP TABLE`, etc. Report findings, let user decide what to delete
 
 ### ✅ DO:
 1. Use `gaming_session_id` for session queries

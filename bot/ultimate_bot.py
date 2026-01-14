@@ -4,8 +4,10 @@ ULTIMATE ET:LEGACY DISCORD BOT - COG-BASED VERSION
 """
 
 import asyncio
+import json
 import logging
 import os
+import re
 import sys
 import time
 from datetime import datetime, timedelta
@@ -15,7 +17,7 @@ import discord
 from discord.ext import commands, tasks
 
 # Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools.stopwatch_scoring import StopwatchScoring
 
 # Import extracted core classes
@@ -632,6 +634,15 @@ class UltimateETLegacyBot(commands.Bot):
                 "Bot will continue without synergy analytics features"
             )
 
+        # 🎯 PROXIMITY TRACKER: Load combat engagement analytics (SAFE - disabled by default)
+        try:
+            await self.load_extension("cogs.proximity_cog")
+            status = "ENABLED" if self.config.proximity_enabled else "disabled"
+            logger.info(f"✅ Proximity Tracker cog loaded ({status})")
+        except Exception as e:
+            logger.warning(f"⚠️  Could not load Proximity Tracker cog: {e}")
+            logger.warning("Bot will continue without proximity tracking features")
+
         # 🎮 SERVER CONTROL: Load server control cog (optional)
         try:
             await self.load_extension("cogs.server_control")
@@ -712,6 +723,8 @@ class UltimateETLegacyBot(commands.Bot):
             self.endstats_monitor.start()
         if not self.cache_refresher.is_running():
             self.cache_refresher.start()
+        if not self.live_status_updater.is_running():
+            self.live_status_updater.start()
         # scheduled_monitoring_check task removed - see performance optimization
         # voice_session_monitor disabled - using on_voice_state_update event instead (more efficient)
         # if not self.voice_session_monitor.is_running():
@@ -1871,6 +1884,168 @@ class UltimateETLegacyBot(commands.Bot):
         """Wait for bot to be ready"""
         await self.wait_until_ready()
 
+    # ==================== WEBSITE LIVE STATUS UPDATER ====================
+
+    @tasks.loop(seconds=30)
+    async def live_status_updater(self):
+        """
+        🌐 Website Live Status Updater - Runs every 30 seconds
+
+        Updates the live_status database table with:
+        - Voice channel members (who's in gaming voice)
+        - Game server status (online/offline, map, player count)
+
+        This data is consumed by the website's /api/live-status endpoint.
+        """
+        rcon = None  # Track RCON connection for cleanup
+        try:
+            # Skip if database not ready or bot is closing
+            if not hasattr(self, 'db_adapter') or not self.db_adapter:
+                return
+            if self.is_closed():
+                return
+
+            # ========== VOICE CHANNEL STATUS ==========
+            voice_members = []
+            voice_count = 0
+
+            if hasattr(self, 'gaming_voice_channels') and self.gaming_voice_channels:
+                for channel_id in self.gaming_voice_channels:
+                    channel = self.get_channel(channel_id)
+                    if channel and hasattr(channel, 'members'):
+                        for member in channel.members:
+                            if not member.bot:
+                                voice_members.append({
+                                    'id': member.id,
+                                    'name': member.display_name,
+                                    'avatar': str(member.display_avatar.url) if member.display_avatar else None
+                                })
+                                voice_count += 1
+
+            voice_data = {
+                'count': voice_count,
+                'members': voice_members,
+                'channel_name': 'Gaming',
+            }
+
+            # ========== GAME SERVER STATUS ==========
+            server_data = {
+                'online': False,
+                'map': None,
+                'player_count': 0,
+                'max_players': 20,
+                'players': [],
+            }
+
+            # Try to get server status via RCON (from ServerControl cog)
+            try:
+                server_cog = self.get_cog('ServerControl')
+                if server_cog and server_cog.rcon_enabled and server_cog.rcon_password:
+                    from bot.cogs.server_control import ETLegacyRCON
+                    rcon = ETLegacyRCON(
+                        server_cog.rcon_host,
+                        server_cog.rcon_port,
+                        server_cog.rcon_password
+                    )
+                    # Set socket timeout to prevent blocking on shutdown
+                    if hasattr(rcon, 'socket') and rcon.socket:
+                        rcon.socket.settimeout(5.0)
+                    try:
+                        status_response = rcon.send_command('status')
+                        rcon.close()
+                        rcon = None
+
+                        if status_response and 'Error' not in status_response:
+                            server_data['online'] = True
+
+                            # Parse map name
+                            for line in status_response.split('\n'):
+                                if line.startswith('map:'):
+                                    server_data['map'] = line.split(':', 1)[1].strip()
+                                    break
+
+                            # Parse players (each line after header has: num score ping name)
+                            player_lines = []
+                            in_player_section = False
+                            for line in status_response.split('\n'):
+                                if 'num score ping' in line.lower():
+                                    in_player_section = True
+                                    continue
+                                if in_player_section and line.strip():
+                                    parts = line.split()
+                                    if len(parts) >= 4:
+                                        # Extract player name (may contain spaces)
+                                        name = ' '.join(parts[3:])
+                                        # Remove color codes ^1, ^2, etc.
+                                        clean_name = re.sub(r'\^[0-9]', '', name)
+                                        player_lines.append({'name': clean_name.strip()})
+
+                            server_data['players'] = player_lines
+                            server_data['player_count'] = len(player_lines)
+                    except Exception:
+                        if rcon:
+                            rcon.close()
+                            rcon = None
+            except Exception as e:
+                logger.debug(f"RCON status check failed: {e}")
+                if rcon:
+                    rcon.close()
+                    rcon = None
+
+            # ========== UPDATE DATABASE ==========
+            # Update voice channel status
+            await self.db_adapter.execute(
+                """
+                INSERT INTO live_status (status_type, status_data, updated_at)
+                VALUES ($1, $2, NOW())
+                ON CONFLICT (status_type) DO UPDATE SET
+                    status_data = $2,
+                    updated_at = NOW()
+                """,
+                ('voice_channel', json.dumps(voice_data))
+            )
+
+            # Update game server status
+            await self.db_adapter.execute(
+                """
+                INSERT INTO live_status (status_type, status_data, updated_at)
+                VALUES ($1, $2, NOW())
+                ON CONFLICT (status_type) DO UPDATE SET
+                    status_data = $2,
+                    updated_at = NOW()
+                """,
+                ('game_server', json.dumps(server_data))
+            )
+
+            logger.debug(
+                f"🌐 Live status updated: {voice_count} in voice, "
+                f"server {'online' if server_data['online'] else 'offline'}"
+            )
+
+        except asyncio.CancelledError:
+            # Graceful shutdown - clean up RCON if needed
+            if rcon:
+                try:
+                    rcon.close()
+                except Exception:
+                    pass
+            logger.info("Live status updater stopped (shutdown)")
+            raise  # Re-raise to properly cancel the task
+
+        except Exception as e:
+            # Clean up RCON on any error
+            if rcon:
+                try:
+                    rcon.close()
+                except Exception:
+                    pass
+            logger.error(f"Live status update error: {e}", exc_info=True)
+
+    @live_status_updater.before_loop
+    async def before_live_status_updater(self):
+        """Wait for bot to be ready"""
+        await self.wait_until_ready()
+
     # ==================== BOT EVENTS ====================
 
     async def on_message(self, message):
@@ -1979,6 +2154,63 @@ class UltimateETLegacyBot(commands.Bot):
         logger.debug(f"✅ Filename validated: {filename}")
         return True
 
+    def _validate_endstats_filename(self, filename: str) -> bool:
+        """
+        Strict validation for endstats filenames.
+
+        Valid format: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
+        Example: 2026-01-12-224606-te_escape2-round-2-endstats.txt
+
+        Security: Prevents path traversal, injection, null bytes
+        """
+        import re
+
+        # Length check (prevent DoS)
+        if len(filename) > 255:
+            logger.warning(f"🚨 Endstats filename too long: {len(filename)} chars")
+            return False
+
+        # Path traversal checks
+        if any(char in filename for char in ['/', '\\', '\0']):
+            logger.warning(f"🚨 Invalid characters in endstats filename: {filename}")
+            return False
+
+        if '..' in filename:
+            logger.warning(f"🚨 Parent directory reference in endstats: {filename}")
+            return False
+
+        # Strict pattern: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
+        pattern = r'^(\d{4})-(\d{2})-(\d{2})-(\d{6})-([a-zA-Z0-9_-]+)-round-(\d+)-endstats\.txt$'
+        match = re.match(pattern, filename)
+
+        if not match:
+            logger.debug(f"Filename doesn't match endstats pattern: {filename}")
+            return False
+
+        # Validate components
+        year, month, day, timestamp, map_name, round_num = match.groups()
+
+        if not (2020 <= int(year) <= 2035):
+            return False
+        if not (1 <= int(month) <= 12):
+            return False
+        if not (1 <= int(day) <= 31):
+            return False
+        if not (1 <= int(round_num) <= 10):
+            return False
+        if len(map_name) > 50:
+            return False
+
+        # Validate timestamp (HHMMSS)
+        hour = int(timestamp[0:2])
+        minute = int(timestamp[2:4])
+        second = int(timestamp[4:6])
+        if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
+            return False
+
+        logger.debug(f"✅ Endstats filename validated: {filename}")
+        return True
+
     async def _handle_webhook_trigger(self, message) -> bool:
         """
         Handle webhook trigger messages from VPS.
@@ -2038,14 +2270,23 @@ class UltimateETLegacyBot(commands.Bot):
             return False
 
         # CRITICAL: Validate filename for security
-        if not self._validate_stats_filename(filename):
-            webhook_logger.error(f"🚨 SECURITY: Invalid filename from webhook: {filename}")
-            return False
+        # Check for both regular stats files and endstats files
+        is_endstats = filename.endswith('-endstats.txt')
 
-        webhook_logger.info(f"📥 Webhook trigger validated: {filename}")
-
-        # Process the file in background to not block message handling
-        asyncio.create_task(self._process_webhook_triggered_file(filename, message))
+        if is_endstats:
+            if not self._validate_endstats_filename(filename):
+                webhook_logger.error(f"🚨 SECURITY: Invalid endstats filename from webhook: {filename}")
+                return False
+            webhook_logger.info(f"📥 Endstats webhook trigger validated: {filename}")
+            # Process endstats file in background
+            asyncio.create_task(self._process_webhook_triggered_endstats(filename, message))
+        else:
+            if not self._validate_stats_filename(filename):
+                webhook_logger.error(f"🚨 SECURITY: Invalid filename from webhook: {filename}")
+                return False
+            webhook_logger.info(f"📥 Webhook trigger validated: {filename}")
+            # Process regular stats file in background
+            asyncio.create_task(self._process_webhook_triggered_file(filename, message))
 
         return True
 
@@ -2139,6 +2380,193 @@ class UltimateETLegacyBot(commands.Bot):
             # Track for admin alerts
             await self.track_error("webhook_processing", str(e), max_consecutive=3)
 
+    async def _process_webhook_triggered_endstats(self, filename: str, trigger_message):
+        """
+        Process an endstats file triggered by webhook notification.
+
+        Downloads file via SSH, parses awards/VS stats, stores in DB, posts embed.
+        Endstats file: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
+        """
+        try:
+            webhook_logger.info(f"🏆 Processing webhook-triggered endstats: {filename}")
+
+            # Import parser
+            from bot.endstats_parser import parse_endstats_file, EndStatsParser
+
+            # Check if already processed (prevent duplicates)
+            # Use a separate check for endstats files
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            result = await self.db_adapter.fetch_one(check_query, (filename,))
+            if result:
+                webhook_logger.debug(f"⏭️ Endstats already processed: {filename}")
+                try:
+                    await trigger_message.delete()
+                except Exception:
+                    pass
+                return
+
+            # Build SSH config
+            ssh_config = {
+                "host": self.config.ssh_host,
+                "port": self.config.ssh_port,
+                "user": self.config.ssh_user,
+                "key_path": self.config.ssh_key_path,
+                "remote_path": self.config.ssh_remote_path,
+            }
+
+            # Download file via SSH
+            from bot.automation.ssh_handler import SSHHandler
+            local_path = await SSHHandler.download_file(
+                ssh_config, filename, self.config.stats_directory
+            )
+
+            if not local_path:
+                webhook_logger.error(f"❌ Failed to download endstats: {filename}")
+                try:
+                    await trigger_message.add_reaction('❌')
+                    await trigger_message.reply(f"⚠️ Failed to download `{filename}` from server.")
+                except Exception:
+                    pass
+                return
+
+            webhook_logger.info(f"✅ Downloaded endstats: {local_path}")
+
+            # Wait for file to fully write
+            await asyncio.sleep(1)
+
+            # Parse the endstats file
+            endstats_data = parse_endstats_file(local_path)
+
+            if not endstats_data:
+                webhook_logger.error(f"❌ Failed to parse endstats: {filename}")
+                try:
+                    await trigger_message.add_reaction('⚠️')
+                except Exception:
+                    pass
+                return
+
+            metadata = endstats_data['metadata']
+            awards = endstats_data['awards']
+            vs_stats = endstats_data['vs_stats']
+
+            webhook_logger.info(
+                f"📊 Parsed endstats: {len(awards)} awards, {len(vs_stats)} VS stats"
+            )
+
+            # Find the matching round in the database
+            # The main stats file should have already created the round
+            match_id_prefix = metadata['match_id']  # e.g., "2026-01-12-224606-te_escape2"
+            round_number = metadata['round_number']
+
+            round_query = """
+                SELECT id, round_date, map_name FROM rounds
+                WHERE match_id LIKE $1 AND round_number = $2
+                ORDER BY created_at DESC LIMIT 1
+            """
+            round_result = await self.db_adapter.fetch_one(
+                round_query, (f"{match_id_prefix}%", round_number)
+            )
+
+            if not round_result:
+                webhook_logger.warning(
+                    f"⏳ Round not found yet for endstats {filename}. "
+                    f"Main stats file may not be processed yet."
+                )
+                # Re-queue for later processing (could implement retry logic)
+                try:
+                    await trigger_message.add_reaction('⏳')
+                except Exception:
+                    pass
+                return
+
+            round_id = round_result[0]
+            round_date = round_result[1]
+            map_name = round_result[2]
+
+            webhook_logger.info(f"✅ Linked to round_id={round_id}")
+
+            # Store awards in database
+            for award in awards:
+                # Try to find player GUID from aliases
+                player_guid = None
+                alias_query = """
+                    SELECT guid FROM player_aliases
+                    WHERE alias = $1
+                    ORDER BY last_seen DESC LIMIT 1
+                """
+                alias_result = await self.db_adapter.fetch_one(alias_query, (award['player'],))
+                if alias_result:
+                    player_guid = alias_result[0]
+
+                insert_query = """
+                    INSERT INTO round_awards
+                    (round_id, round_date, map_name, round_number, award_name,
+                     player_name, player_guid, award_value, award_value_numeric)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                """
+                await self.db_adapter.execute(insert_query, (
+                    round_id, round_date, map_name, round_number,
+                    award['name'], award['player'], player_guid,
+                    award['value'], award.get('numeric')
+                ))
+
+            webhook_logger.info(f"✅ Stored {len(awards)} awards")
+
+            # Store VS stats in database
+            for vs in vs_stats:
+                player_guid = None
+                alias_query = """
+                    SELECT guid FROM player_aliases
+                    WHERE alias = $1
+                    ORDER BY last_seen DESC LIMIT 1
+                """
+                alias_result = await self.db_adapter.fetch_one(alias_query, (vs['player'],))
+                if alias_result:
+                    player_guid = alias_result[0]
+
+                insert_query = """
+                    INSERT INTO round_vs_stats
+                    (round_id, round_date, map_name, round_number,
+                     player_name, player_guid, kills, deaths)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                """
+                await self.db_adapter.execute(insert_query, (
+                    round_id, round_date, map_name, round_number,
+                    vs['player'], player_guid, vs['kills'], vs['deaths']
+                ))
+
+            webhook_logger.info(f"✅ Stored {len(vs_stats)} VS stats")
+
+            # Mark file as processed
+            processed_query = """
+                INSERT INTO processed_endstats_files (filename, round_id, success)
+                VALUES ($1, $2, TRUE)
+            """
+            await self.db_adapter.execute(processed_query, (filename, round_id))
+
+            # Post endstats embed to production channel
+            await self.round_publisher.publish_endstats(
+                filename, endstats_data, round_id, map_name, round_number
+            )
+
+            webhook_logger.info(f"✅ Successfully processed endstats: {filename}")
+
+            # Delete the trigger message
+            try:
+                await trigger_message.delete()
+                webhook_logger.debug(f"🗑️ Deleted endstats trigger message")
+            except Exception as e:
+                webhook_logger.debug(f"Could not delete trigger message: {e}")
+
+        except Exception as e:
+            webhook_logger.error(f"❌ Error processing endstats file: {e}", exc_info=True)
+            try:
+                await trigger_message.add_reaction('🚨')
+                await trigger_message.reply(f"🚨 Error processing endstats `{filename}`. Check logs.")
+            except Exception:
+                pass
+            await self.track_error("endstats_processing", str(e), max_consecutive=3)
+
     async def _validate_webhook_security_config(self):
         """Validate webhook security configuration on startup."""
 
@@ -2179,7 +2607,10 @@ class UltimateETLegacyBot(commands.Bot):
         logger.info(f"🚀 Ultimate ET:Legacy Bot logged in as {self.user}")
         logger.info(f"🆔 Bot ID: {self.user.id}")
         logger.info(f"📊 Database Type: {self.config.database_type.upper()}")
-        logger.info(f"📍 Database: {self.db_path}")
+        if self.config.database_type == 'postgresql':
+            logger.info(f"📍 Database: {self.config.postgres_database}@{self.config.postgres_host}")
+        else:
+            logger.info(f"📍 Database: {self.db_path}")
         logger.info(f"🎮 Commands Loaded: {len(list(self.commands))}")
         logger.info(f"🔧 Cogs Loaded: {len(self.cogs)}")
         logger.info(f"🌐 Servers: {len(self.guilds)}")
