@@ -14,7 +14,7 @@ import logging
 import sys
 import os
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import List, Dict
 
 # Add project root to path for imports
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))

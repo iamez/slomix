@@ -192,15 +192,17 @@ check_before_commit.sh
 /publish_clean/
 /github/
 /performance_updates/
-# /website/ - Removed: Website is now tracked in website-prototype branch
 
-# Website specific ignores
-/website/venv/
-/website/.env
-/website/__pycache__/
-/website/backend/__pycache__/
-/website/backend/routers/__pycache__/
-/website/backend/services/__pycache__/
+# Prototype projects (have their own branches)
+/website/
+/proximity/
+/opusreview/
+/vps_scripts/
+
+# Root junk files
+nohup.out
+=*
+coverage.xml
 
 # ============================================
 # BOT DIRECTORY EXCLUSIONS

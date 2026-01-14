@@ -10,7 +10,6 @@ Tests for parsing ET:Legacy stats files, including:
 """
 
 import pytest
-import os
 from pathlib import Path
 from bot.community_stats_parser import C0RNP0RN3StatsParser
 

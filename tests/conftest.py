@@ -119,7 +119,7 @@ async def _truncate_test_tables(adapter: DatabaseAdapter):
     try:
         for table in tables:
             await adapter.execute(f"TRUNCATE TABLE {table} CASCADE")
-    except Exception as e:
+    except Exception:
         # Ignore errors if tables don't exist (for initial setup)
         pass
 
