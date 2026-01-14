@@ -492,7 +492,7 @@ class TeamCog(commands.Cog):
                 inline=False
             )
 
-            embed.set_footer(text=f"Use !assign_teams <date> to randomly assign")
+            embed.set_footer(text="Use !assign_teams <date> to randomly assign")
             await ctx.send(embed=embed)
 
         except Exception as e:
@@ -528,9 +528,8 @@ class TeamCog(commands.Cog):
                 date, force=False
             )
 
-            # Get colors for the embed
+            # Get color for the embed
             color_a = await self.team_manager.get_team_color(team_a)
-            color_b = await self.team_manager.get_team_color(team_b)
 
             embed = discord.Embed(
                 title="🎲 Teams Assigned",

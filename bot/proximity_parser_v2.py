@@ -10,9 +10,7 @@ Parses single output file from proximity_tracker_v2.lua:
 
 import os
 import logging
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
-from pathlib import Path
+from typing import Dict, List, Tuple
 
 
 class ProximityParserV2:

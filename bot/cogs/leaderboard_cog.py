@@ -825,7 +825,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 try:
                     results = await self.bot.db_adapter.fetch_all(query)
                 except Exception as e:
-                    logger.warning(f"Failed to fetch leaderboard page {page}: {e}")
+                    logger.warning(f"Failed to fetch leaderboard page {page_num}: {e}")
                     return None
 
                 if not results:

@@ -340,6 +340,7 @@ async def ensure_player_name_alias(db_adapter: DatabaseAdapter, config=None) -> 
 
         # Create temporary view (SQLite only - PostgreSQL schema should have player_name)
         if db_type == 'sqlite':
+            # nosec B608 - source_column is hardcoded ('name' or 'player_name'), not user input
             await db_adapter.execute(f"""
                 CREATE TEMP VIEW IF NOT EXISTS player_comprehensive_stats_alias AS
                 SELECT *, {source_column} AS player_name

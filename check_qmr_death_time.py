@@ -126,7 +126,7 @@ for stat_id, date, map_name, round_num in corrupted_rounds[:1]:  # Just check fi
                 for p in r2_only['players']:
                     if 'qmr' in p.get('name', '').lower():
                         obj = p.get('objective_stats', {})
-                        print(f"Round 2 ONLY (differential):")
+                        print("Round 2 ONLY (differential):")
                         print(f"  time_played_minutes: {obj.get('time_played_minutes', 0):.1f}")
                         print(f"  time_dead_minutes:   {obj.get('time_dead_minutes', 0):.1f}  ✅ FIXED")
                         print(f"  time_dead_ratio:     {obj.get('time_dead_ratio', 0):.1f}%   ✅ FIXED")
@@ -151,8 +151,8 @@ for stat_id, date, map_name, round_num in corrupted_rounds[:1]:  # Just check fi
             for p in data['players']:
                 if 'qmr' in p.get('name', '').lower():
                     obj = p.get('objective_stats', {})
-                    print(f"\nqmr stats from file:")
-                    print(f"  time_played_minutes: {obj.get('time_played_minutes', 0):.1f}")
+                    print("\nqmr stats from file:")
+                    print(f"  time_played_minutes: {obj.get('time_played_minutes', 0):.1f}"))
                     print(f"  time_dead_minutes:   {obj.get('time_dead_minutes', 0):.1f}")
                     print(f"  time_dead_ratio:     {obj.get('time_dead_ratio', 0):.1f}%")
                     break

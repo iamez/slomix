@@ -127,7 +127,6 @@ class PostgreSQLDatabaseManager:
         obj_stats = player.get('objective_stats', {})
 
         kills = player.get('kills', 0)
-        deaths = player.get('deaths', 0)
         time_seconds = player.get('time_played_seconds', 0)
         time_minutes = time_seconds / 60.0 if time_seconds > 0 else 0.0
 

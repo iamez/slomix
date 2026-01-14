@@ -11,7 +11,6 @@ File format (tab-separated):
 import logging
 import os
 import re
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -305,7 +304,7 @@ class EndStatsParser:
                     })
                     logger.debug(f"VS Stats: {player_name} -> {kills}K/{deaths}D")
 
-                except (ValueError, IndexError) as e:
+                except (ValueError, IndexError):
                     logger.debug(f"Line {line_num}: Could not parse as award or VS stats: {line[:50]}")
                     continue
 

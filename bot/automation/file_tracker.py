@@ -334,7 +334,7 @@ class FileTracker:
                     f"FILE INTEGRITY MISMATCH for {filename}! "
                     f"Stored: {stored_hash[:16]}..., Current: {current_hash[:16]}..."
                 )
-                return False, f"Hash mismatch! File may have been corrupted or modified."
+                return False, "Hash mismatch! File may have been corrupted or modified."
 
         except Exception as e:
             logger.error(f"Error verifying file integrity: {e}")

@@ -519,14 +519,14 @@ class RoundPublisherService:
 
             channel = self.bot.get_channel(self.config.production_channel_id)
             if not channel:
-                logger.error(f"❌ Production channel not found")
+                logger.error("❌ Production channel not found")
                 return
 
             awards = endstats_data.get('awards', [])
             vs_stats = endstats_data.get('vs_stats', [])
 
             # Import categorization helper
-            from bot.endstats_parser import EndStatsParser, AWARD_CATEGORIES
+            from bot.endstats_parser import EndStatsParser
 
             parser = EndStatsParser()
             categorized = parser.categorize_awards(awards)

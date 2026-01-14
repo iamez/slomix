@@ -17,7 +17,7 @@ import os
 import sys
 import logging
 from datetime import datetime
-from typing import Optional, List
+from typing import List
 from pathlib import Path
 
 # Add parent directory to path for imports

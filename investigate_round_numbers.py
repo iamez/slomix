@@ -109,7 +109,7 @@ async def main():
         print(f"  R2 (id={r2_id}, time={r2_time}): avg_dead={r2_avg_dead}")
 
         if r1_avg_dead is not None and r2_avg_dead == 0:
-            print(f"  ⚠️ Issue: R1 has deaths but R2 differential is 0!")
+            print("  ⚠️ Issue: R1 has deaths but R2 differential is 0!")
 
     await db.close()
 
