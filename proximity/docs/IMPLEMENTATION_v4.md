@@ -11,7 +11,7 @@ Focus: Systematic, merge-safe, no duplicate functions.
 
 | Category | What Changes | v3 Value | v4 Value |
 |----------|--------------|----------|----------|
-| Position Sampling | Interval | 2000ms | **1000ms** |
+| Position Sampling | Interval | 2000ms | **500ms** |
 | Position Sampling | Scope | During combat only | **All active players** |
 | Spawn Tracking | Hook | None | **et_ClientSpawn** |
 | Spawn Exit | Detection | None | **Distance from spawn pos** |
@@ -66,8 +66,8 @@ proximity_tracker.lua (641 lines)
 position_sample_interval = 2000, -- sample every 2 seconds during engagement
 
 -- NEW (v4)
-position_sample_interval = 1000,      -- sample every 1 second (all players)
-precombat_sample_interval = 1000,     -- pre-combat sampling rate
+position_sample_interval = 500,       -- 2 samples per second (all players)
+precombat_sample_interval = 500,      -- pre-combat sampling rate
 spawn_exit_distance = 400,            -- units from spawn to count as "exited"
 ```
 
@@ -86,8 +86,8 @@ local config = {
     escape_distance = 300,          -- 300 units minimum travel
 
     -- Position sampling (CHANGED in v4)
-    position_sample_interval = 1000, -- every 1 second (was 2000)
-    precombat_sample_interval = 1000, -- NEW: pre-combat sampling
+    position_sample_interval = 500,  -- 2 samples per second (was 2000ms)
+    precombat_sample_interval = 500, -- NEW: pre-combat sampling
 
     -- Spawn tracking (NEW in v4)
     spawn_exit_distance = 400,       -- distance from spawn_pos to count as "exited"
