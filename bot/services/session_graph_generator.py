@@ -128,7 +128,7 @@ class SessionGraphGenerator:
             # Comprehensive query with all needed stats
             placeholders = ','.join(['?' for _ in session_ids])
             query = f"""
-                SELECT p.player_name,
+                SELECT MAX(p.player_name) as player_name,
                        SUM(p.kills) as kills,
                        SUM(p.deaths) as deaths,
                        SUM(p.damage_given) as damage_given,
@@ -139,7 +139,12 @@ class SessionGraphGenerator:
                            ELSE 0
                        END as dpm,
                        SUM(p.time_played_seconds) as time_played,
-                       AVG(p.time_dead_ratio) as time_dead_ratio,
+                       SUM(
+                           LEAST(
+                               p.time_played_minutes * p.time_dead_ratio / 100.0,
+                               p.time_played_seconds / 60.0
+                           )
+                       ) as time_dead_minutes,
                        SUM(p.revives_given) as revives_given,
                        SUM(p.times_revived) as times_revived,
                        SUM(p.gibs) as gibs,
@@ -149,7 +154,7 @@ class SessionGraphGenerator:
                        COUNT(DISTINCT p.round_id) as rounds_played
                 FROM player_comprehensive_stats p
                 WHERE p.round_id IN ({placeholders})
-                GROUP BY p.player_guid, p.player_name
+                GROUP BY p.player_guid
                 ORDER BY kills DESC
                 LIMIT 16
             """
@@ -170,7 +175,7 @@ class SessionGraphGenerator:
             dpm = [p[5] or 0 for p in top_players]
             time_played_sec = [p[6] or 0 for p in top_players]
             time_played = [t / 60 for t in time_played_sec]
-            time_dead_ratio = [p[7] or 0 for p in top_players]
+            time_dead_minutes = [p[7] or 0 for p in top_players]
             revives_given = [p[8] or 0 for p in top_players]
             times_revived = [p[9] or 0 for p in top_players]
             gibs = [p[10] or 0 for p in top_players]
@@ -186,15 +191,16 @@ class SessionGraphGenerator:
 
             # Calculate derived metrics
             kd_ratios = [k / max(1, d) for k, d in zip(kills, deaths)]
-            time_dead = [
-                tp * (tdr / 100.0)
-                for tp, tdr in zip(time_played, time_dead_ratio)
-            ]
+            time_dead = time_dead_minutes  # Already calculated correctly from time_dead_ratio
             dmg_eff = [
                 dg / max(1, dr)
                 for dg, dr in zip(damage_given, damage_received)
             ]
-            survival_rate = [100 - tdr for tdr in time_dead_ratio]
+            # Calculate survival rate from time_dead
+            survival_rate = [
+                100 - (td / max(0.01, tp) * 100) if tp > 0 else 0
+                for td, tp in zip(time_dead_minutes, time_played)
+            ]
 
             # Calculate FragPotential and Playstyles
             frag_potentials = []
@@ -204,10 +210,13 @@ class SessionGraphGenerator:
 
             from bot.core.frag_potential import PlayerMetrics
             for i, p in enumerate(top_players):
+                # Calculate time_dead_ratio from time_dead_minutes and time_played
+                time_dead_ratio_calc = (time_dead_minutes[i] / max(0.01, time_played[i]) * 100) if time_played[i] > 0 else 0
+
                 fp = FragPotentialCalculator.calculate_frag_potential(
                     damage_given=damage_given[i],
                     time_played_seconds=time_played_sec[i],
-                    time_dead_ratio=time_dead_ratio[i]
+                    time_dead_ratio=time_dead_ratio_calc
                 )
                 frag_potentials.append(fp)
 
@@ -219,7 +228,7 @@ class SessionGraphGenerator:
                     damage_given=damage_given[i],
                     damage_received=damage_received[i],
                     time_played_seconds=time_played_sec[i],
-                    time_dead_ratio=time_dead_ratio[i],
+                    time_dead_ratio=time_dead_ratio_calc,
                     revives_given=revives_given[i],
                     headshot_kills=headshots[i],
                     objectives_completed=0,

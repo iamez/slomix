@@ -27,7 +27,7 @@ logger = logging.getLogger("MetricsLogger")
 class MetricsLogger:
     """
     Comprehensive metrics logging and analysis system.
-    
+
     Tracks:
     - File processing events
     - Performance metrics (timing, resources)
@@ -35,11 +35,11 @@ class MetricsLogger:
     - System health checks
     - Bot uptime and availability
     """
-    
+
     def __init__(self, db_path: str, log_dir: str = "bot/logs/metrics"):
         """
         Initialize metrics logger.
-        
+
         Args:
             db_path: Path to main database
             log_dir: Directory for metrics logs
@@ -47,24 +47,24 @@ class MetricsLogger:
         self.db_path = db_path
         self.log_dir = log_dir
         os.makedirs(log_dir, exist_ok=True)
-        
+
         # In-memory metrics (for fast access)
         self.events: List[Dict[str, Any]] = []
         self.errors: List[Dict[str, Any]] = []
         self.performance: List[Dict[str, Any]] = []
-        
+
         # Counters
         self.event_counts = defaultdict(int)
         self.error_counts = defaultdict(int)
-        
+
         # Start time
         self.start_time = datetime.now()
-        
+
         # Create metrics database
         self.metrics_db_path = os.path.join(log_dir, "metrics.db")
-        
+
         logger.info(f"📊 Metrics Logger initialized: {self.log_dir}")
-    
+
     async def initialize_metrics_db(self):
         """Create metrics database tables"""
         try:
@@ -80,7 +80,7 @@ class MetricsLogger:
                         success INTEGER DEFAULT 1
                     )
                 """)
-                
+
                 # Errors table
                 await db.execute("""
                     CREATE TABLE IF NOT EXISTS errors (
@@ -92,7 +92,7 @@ class MetricsLogger:
                         context TEXT
                     )
                 """)
-                
+
                 # Performance metrics table
                 await db.execute("""
                     CREATE TABLE IF NOT EXISTS performance (
@@ -103,7 +103,7 @@ class MetricsLogger:
                         unit TEXT
                     )
                 """)
-                
+
                 # Health checks table
                 await db.execute("""
                     CREATE TABLE IF NOT EXISTS health_checks (
@@ -118,18 +118,18 @@ class MetricsLogger:
                         cpu_percent REAL
                     )
                 """)
-                
+
                 await db.commit()
                 logger.info("✅ Metrics database initialized")
-                
+
         except Exception as e:
             logger.error(f"❌ Failed to initialize metrics DB: {e}")
-    
-    async def log_event(self, event_type: str, event_data: Optional[Dict] = None, 
+
+    async def log_event(self, event_type: str, event_data: Optional[Dict] = None,
                        duration_ms: Optional[float] = None, success: bool = True):
         """
         Log an automation event.
-        
+
         Args:
             event_type: Type of event (e.g., 'file_processed', 'ssh_check', 'round_posted')
             event_data: Additional data about the event
@@ -138,7 +138,7 @@ class MetricsLogger:
         """
         try:
             timestamp = datetime.now().isoformat()
-            
+
             # Store in memory
             event = {
                 'timestamp': timestamp,
@@ -149,11 +149,11 @@ class MetricsLogger:
             }
             self.events.append(event)
             self.event_counts[event_type] += 1
-            
+
             # Keep only last 1000 events in memory
             if len(self.events) > 1000:
                 self.events.pop(0)
-            
+
             # Store in database
             async with aiosqlite.connect(self.metrics_db_path) as db:
                 await db.execute("""
@@ -167,17 +167,17 @@ class MetricsLogger:
                     1 if success else 0
                 ))
                 await db.commit()
-            
+
             logger.debug(f"📝 Event logged: {event_type} (success={success})")
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to log event: {e}")
-    
-    async def log_error(self, error_type: str, error_message: str, 
+
+    async def log_error(self, error_type: str, error_message: str,
                        stack_trace: Optional[str] = None, context: Optional[Dict] = None):
         """
         Log an error with full context.
-        
+
         Args:
             error_type: Type of error (e.g., 'ssh_connection', 'database', 'parsing')
             error_message: Error message
@@ -186,7 +186,7 @@ class MetricsLogger:
         """
         try:
             timestamp = datetime.now().isoformat()
-            
+
             # Store in memory
             error = {
                 'timestamp': timestamp,
@@ -197,11 +197,11 @@ class MetricsLogger:
             }
             self.errors.append(error)
             self.error_counts[error_type] += 1
-            
+
             # Keep only last 500 errors in memory
             if len(self.errors) > 500:
                 self.errors.pop(0)
-            
+
             # Store in database
             async with aiosqlite.connect(self.metrics_db_path) as db:
                 await db.execute("""
@@ -215,16 +215,16 @@ class MetricsLogger:
                     json.dumps(context) if context else None
                 ))
                 await db.commit()
-            
+
             logger.warning(f"⚠️ Error logged: {error_type} - {error_message}")
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to log error: {e}")
-    
+
     async def log_performance(self, metric_name: str, value: float, unit: str = "ms"):
         """
         Log a performance metric.
-        
+
         Args:
             metric_name: Name of metric (e.g., 'ssh_check_time', 'file_download_time')
             value: Metric value
@@ -232,7 +232,7 @@ class MetricsLogger:
         """
         try:
             timestamp = datetime.now().isoformat()
-            
+
             # Store in memory
             metric = {
                 'timestamp': timestamp,
@@ -241,11 +241,11 @@ class MetricsLogger:
                 'unit': unit
             }
             self.performance.append(metric)
-            
+
             # Keep only last 1000 metrics in memory
             if len(self.performance) > 1000:
                 self.performance.pop(0)
-            
+
             # Store in database
             async with aiosqlite.connect(self.metrics_db_path) as db:
                 await db.execute("""
@@ -253,17 +253,17 @@ class MetricsLogger:
                     VALUES (?, ?, ?, ?)
                 """, (timestamp, metric_name, value, unit))
                 await db.commit()
-            
+
             logger.debug(f"📊 Performance logged: {metric_name} = {value} {unit}")
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to log performance: {e}")
-    
+
     async def log_health_check(self, status: str, uptime_seconds: int, error_count: int,
                                ssh_status: str, db_size_mb: float, memory_mb: float, cpu_percent: float):
         """
         Log a health check result.
-        
+
         Args:
             status: Overall status ('healthy', 'degraded', 'error')
             uptime_seconds: Bot uptime in seconds
@@ -275,34 +275,34 @@ class MetricsLogger:
         """
         try:
             timestamp = datetime.now().isoformat()
-            
+
             async with aiosqlite.connect(self.metrics_db_path) as db:
                 await db.execute("""
-                    INSERT INTO health_checks 
+                    INSERT INTO health_checks
                     (timestamp, status, uptime_seconds, error_count, ssh_status, db_size_mb, memory_mb, cpu_percent)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, (timestamp, status, uptime_seconds, error_count, ssh_status, db_size_mb, memory_mb, cpu_percent))
                 await db.commit()
-            
+
             logger.debug(f"💚 Health check logged: {status}")
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to log health check: {e}")
-    
+
     async def generate_report(self, hours: int = 24) -> Dict[str, Any]:
         """
         Generate comprehensive metrics report.
-        
+
         Args:
             hours: Number of hours to include in report
-            
+
         Returns:
             Dictionary with analysis results
         """
         try:
             cutoff_time = datetime.now() - timedelta(hours=hours)
             cutoff_str = cutoff_time.isoformat()
-            
+
             report = {
                 'generated_at': datetime.now().isoformat(),
                 'time_range_hours': hours,
@@ -312,7 +312,7 @@ class MetricsLogger:
                 'performance': {},
                 'health': {}
             }
-            
+
             async with aiosqlite.connect(self.metrics_db_path) as db:
                 # Event summary
                 cursor = await db.execute("""
@@ -321,7 +321,7 @@ class MetricsLogger:
                     WHERE timestamp > ?
                     GROUP BY event_type
                 """, (cutoff_str,))
-                
+
                 events = await cursor.fetchall()
                 report['events'] = {
                     row[0]: {
@@ -332,7 +332,7 @@ class MetricsLogger:
                     }
                     for row in events
                 }
-                
+
                 # Error summary
                 cursor = await db.execute("""
                     SELECT error_type, COUNT(*), MAX(timestamp)
@@ -340,7 +340,7 @@ class MetricsLogger:
                     WHERE timestamp > ?
                     GROUP BY error_type
                 """, (cutoff_str,))
-                
+
                 errors = await cursor.fetchall()
                 report['errors'] = {
                     row[0]: {
@@ -349,7 +349,7 @@ class MetricsLogger:
                     }
                     for row in errors
                 }
-                
+
                 # Performance metrics
                 cursor = await db.execute("""
                     SELECT metric_name, AVG(metric_value), MIN(metric_value), MAX(metric_value), unit
@@ -357,7 +357,7 @@ class MetricsLogger:
                     WHERE timestamp > ?
                     GROUP BY metric_name, unit
                 """, (cutoff_str,))
-                
+
                 perf = await cursor.fetchall()
                 report['performance'] = {
                     row[0]: {
@@ -368,10 +368,10 @@ class MetricsLogger:
                     }
                     for row in perf
                 }
-                
+
                 # Health checks
                 cursor = await db.execute("""
-                    SELECT 
+                    SELECT
                         COUNT(*) as check_count,
                         SUM(CASE WHEN status = 'healthy' THEN 1 ELSE 0 END) as healthy_count,
                         AVG(memory_mb) as avg_memory,
@@ -380,7 +380,7 @@ class MetricsLogger:
                     FROM health_checks
                     WHERE timestamp > ?
                 """, (cutoff_str,))
-                
+
                 health_row = await cursor.fetchone()
                 if health_row:
                     report['health'] = {
@@ -391,11 +391,11 @@ class MetricsLogger:
                         'avg_cpu_percent': health_row[3],
                         'max_db_size_mb': health_row[4]
                     }
-                
+
                 # Overall summary
                 total_events = sum(e['count'] for e in report['events'].values())
                 total_errors = sum(e['count'] for e in report['errors'].values())
-                
+
                 report['summary'] = {
                     'total_events': total_events,
                     'total_errors': total_errors,
@@ -403,21 +403,21 @@ class MetricsLogger:
                     'uptime_hours': hours,
                     'events_per_hour': total_events / hours if hours > 0 else 0
                 }
-            
+
             logger.info(f"📊 Report generated for last {hours} hours")
             return report
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to generate report: {e}")
             return {}
-    
+
     async def export_to_json(self, filepath: Optional[str] = None) -> str:
         """
         Export all metrics to JSON file.
-        
+
         Args:
             filepath: Optional path for JSON file
-            
+
         Returns:
             Path to exported file
         """
@@ -425,29 +425,29 @@ class MetricsLogger:
             if not filepath:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 filepath = os.path.join(self.log_dir, f"metrics_export_{timestamp}.json")
-            
+
             # Generate comprehensive report
             report = await self.generate_report(hours=24*7)  # Last week
-            
+
             # Add raw event counts
             report['event_counts'] = dict(self.event_counts)
             report['error_counts'] = dict(self.error_counts)
-            
+
             # Write to file
             with open(filepath, 'w') as f:
                 json.dump(report, f, indent=2)
-            
+
             logger.info(f"📄 Metrics exported to: {filepath}")
             return filepath
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to export metrics: {e}")
             return ""
-    
+
     def get_summary(self) -> Dict[str, Any]:
         """Get quick summary of current metrics"""
         uptime = datetime.now() - self.start_time
-        
+
         return {
             'uptime_seconds': int(uptime.total_seconds()),
             'uptime_formatted': str(uptime).split('.')[0],

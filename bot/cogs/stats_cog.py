@@ -21,6 +21,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.database_adapter import ensure_player_name_alias
 from bot.core.utils import escape_like_pattern_for_query, sanitize_error_message
 from bot.stats import StatsCalculator
 
@@ -37,19 +38,8 @@ class StatsCog(commands.Cog, name="Stats"):
         self.achievements = bot.achievements
         logger.info("📊 StatsCog initializing...")
 
-    async def _ensure_player_name_alias(self):
-        """Create temp view/alias for player_name column compatibility"""
-        try:
-            # Only create alias for SQLite (PostgreSQL will have proper schema)
-            if self.bot.config.database_type == 'sqlite':
-                await self.bot.db_adapter.execute(
-                    "CREATE TEMP VIEW IF NOT EXISTS player_comprehensive_stats_alias AS "
-                    "SELECT *, player_name AS name FROM player_comprehensive_stats"
-                )
-        except Exception:  # nosec B110
-            pass  # Alias is optional
-
     @is_public_channel()
+    @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.command(name="ping")
     async def ping(self, ctx):
         """🏓 Check bot status and performance"""
@@ -60,9 +50,9 @@ class StatsCog(commands.Cog, name="Stats"):
             # Test database connection
             # Apply runtime alias to avoid schema mismatch errors
             try:
-                await self._ensure_player_name_alias()
-            except Exception:
-                pass
+                await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
+            except Exception:  # nosec B110
+                pass  # Alias is optional
             await self.bot.db_adapter.execute("SELECT 1")
 
             db_latency = (time.time() - start_time) * 1000
@@ -109,6 +99,7 @@ class StatsCog(commands.Cog, name="Stats"):
             await ctx.send(f"❌ Bot error: {sanitize_error_message(e)}")
 
     @is_public_channel()
+    @commands.cooldown(1, 10, commands.BucketType.user)
     @commands.command(name="check_achievements", aliases=["check_achivements", "check_achievement"])
     async def check_achievements_cmd(self, ctx, *, player_name: Optional[str] = None):
         """🏆 Check your achievement progress
@@ -124,7 +115,7 @@ class StatsCog(commands.Cog, name="Stats"):
 
             # Ensure connection has player_name alias if needed
             try:
-                await self._ensure_player_name_alias()
+                await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
                 pass  # Alias is optional
             
@@ -308,6 +299,7 @@ class StatsCog(commands.Cog, name="Stats"):
                 f"❌ Error checking achievements: {sanitize_error_message(e)}")
 
     @is_public_channel()
+    @commands.cooldown(1, 15, commands.BucketType.user)
     @commands.command(name="compare")
     async def compare(self, ctx, player1_name: str, player2_name: str):
         """📊 Compare two players with a visual radar chart
@@ -342,7 +334,7 @@ class StatsCog(commands.Cog, name="Stats"):
 
             # Ensure player_name alias for this command's DB connection
             try:
-                await self._ensure_player_name_alias()
+                await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
                 pass  # Alias is optional
 
@@ -725,6 +717,7 @@ class StatsCog(commands.Cog, name="Stats"):
             await ctx.send(f"❌ Error generating comparison: {sanitize_error_message(e)}")
 
     @is_public_channel()
+    @commands.cooldown(1, 10, commands.BucketType.user)
     @commands.command(name="season_info", aliases=["season", "seasons"])
     async def season_info(self, ctx):
         """📅 Show current season information and champions
@@ -768,7 +761,7 @@ class StatsCog(commands.Cog, name="Stats"):
             # Get current season champion
             # Apply per-connection alias to handle legacy DB column names
             try:
-                await self._ensure_player_name_alias()
+                await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
                 pass  # Alias is optional
             season_filter = self.season_manager.get_season_sql_filter()
@@ -856,6 +849,7 @@ class StatsCog(commands.Cog, name="Stats"):
                 f"❌ Error retrieving season information: {sanitize_error_message(e)}")
 
     @is_public_channel()
+    @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.command(name="help_command", aliases=["commands", "cmds", "bothelp"])
     async def help_command(self, ctx, category: str = None):
         """📚 Show all available commands with examples
@@ -1457,6 +1451,7 @@ class StatsCog(commands.Cog, name="Stats"):
         return embed
 
     @is_public_channel()
+    @commands.cooldown(1, 10, commands.BucketType.user)
     @commands.command(name="badges", aliases=["badge_legend", "achievements_legend"])
     async def badges_legend(self, ctx):
         """🏅 Show achievement badge legend

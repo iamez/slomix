@@ -25,6 +25,7 @@ Version: 1.0 - PostgreSQL Production Ready
 import asyncio
 import asyncpg
 import logging
+import os
 import time
 import sys
 from pathlib import Path
@@ -99,7 +100,90 @@ class PostgreSQLDatabaseManager:
         
         self.start_time = None
         self.last_progress_time = None
-    
+
+    # =========================================================================
+    # DATA VALIDATION (Dec 2025 - Cross-field integrity checks)
+    # =========================================================================
+
+    def validate_player_stats(self, player: Dict, filename: str = "") -> Tuple[Dict, list]:
+        """
+        Validate player stats and fix obvious errors.
+
+        Checks:
+        1. headshot_kills <= kills
+        2. time_dead <= time_played
+        3. team_kills <= kills
+        4. accuracy in range 0-100
+        5. DPM is reasonable (< 1000)
+
+        Args:
+            player: Player stats dictionary
+            filename: Source filename for logging
+
+        Returns:
+            Tuple of (corrected_player_dict, list_of_issues_found)
+        """
+        issues = []
+        obj_stats = player.get('objective_stats', {})
+
+        kills = player.get('kills', 0)
+        time_seconds = player.get('time_played_seconds', 0)
+        time_minutes = time_seconds / 60.0 if time_seconds > 0 else 0.0
+
+        # 1. Headshot kills cannot exceed total kills
+        headshot_kills = obj_stats.get('headshot_kills', 0)
+        if headshot_kills > kills:
+            issues.append(f"headshot_kills ({headshot_kills}) > kills ({kills})")
+            obj_stats['headshot_kills'] = kills
+
+        # 2. Team kills cannot exceed total kills
+        team_kills = obj_stats.get('team_kills', 0)
+        if team_kills > kills:
+            issues.append(f"team_kills ({team_kills}) > kills ({kills})")
+            obj_stats['team_kills'] = min(team_kills, kills)
+
+        # 3. Time dead cannot exceed time played
+        time_dead_minutes = float(obj_stats.get('time_dead_minutes', 0) or 0)
+        time_dead_ratio = float(obj_stats.get('time_dead_ratio', 0) or 0)
+        if time_dead_minutes > time_minutes:
+            issues.append(f"time_dead ({time_dead_minutes:.1f}m) > time_played ({time_minutes:.1f}m)")
+            obj_stats['time_dead_minutes'] = time_minutes
+            obj_stats['time_dead_ratio'] = min(100.0, time_dead_ratio)
+        if time_dead_ratio > 100.0:
+            issues.append(f"time_dead_ratio ({time_dead_ratio:.1f}%) > 100%")
+            obj_stats['time_dead_ratio'] = 100.0
+
+        # 4. Accuracy must be 0-100
+        accuracy = player.get('accuracy', 0.0)
+        if accuracy < 0 or accuracy > 100:
+            issues.append(f"accuracy ({accuracy:.1f}%) out of range")
+            player['accuracy'] = max(0.0, min(100.0, accuracy))
+
+        # 5. DPM sanity check (extreme values indicate bug)
+        dpm = player.get('dpm', 0.0)
+        if dpm > 1000:
+            issues.append(f"dpm ({dpm:.1f}) suspiciously high")
+            # Don't fix, just log - might be legitimate in short rounds
+
+        # 6. Negative values check
+        for field in ['kills', 'deaths', 'damage_given', 'damage_received']:
+            val = player.get(field, 0)
+            if val < 0:
+                issues.append(f"{field} ({val}) is negative")
+                player[field] = 0
+
+        # Log issues if any found
+        if issues:
+            guid = player.get('guid', 'UNKNOWN')[:8]
+            name = player.get('name', 'Unknown')
+            logger.warning(
+                f"⚠️  Data validation issues for {name} ({guid}) in {filename}: "
+                f"{', '.join(issues)}"
+            )
+
+        player['objective_stats'] = obj_stats
+        return player, issues
+
     # =========================================================================
     # CONNECTION MANAGEMENT
     # =========================================================================
@@ -183,28 +267,34 @@ class PostgreSQLDatabaseManager:
             return False
     
     async def _backup_database(self):
-        """Backup existing database to SQL dump"""
+        """
+        Backup existing database to SQL dump
+
+        Raises:
+            RuntimeError: If backup fails or produces invalid backup file
+            FileNotFoundError: If pg_dump is not installed
+        """
         logger.info("📦 Creating backup...")
-        
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_file = f"postgresql_backup_{timestamp}.sql"
-        
+
         # Use pg_dump for backup
         import subprocess
         import re
-        
+
+        # Validate hostname (defense in depth - config is already trusted)
+        host = self.config.postgres_host.split(':')[0]
+        if not re.match(r'^[a-zA-Z0-9.-]+$', host):
+            raise ValueError(f"Invalid hostname format: {host}")
+
+        # Validate port range
+        port_str = str(self.config.postgres_host.split(':')[1]) if ':' in self.config.postgres_host else '5432'
+        port = int(port_str)  # Will raise ValueError if not numeric
+        if not (1 <= port <= 65535):
+            raise ValueError(f"Port out of valid range (1-65535): {port}")
+
         try:
-            # Validate hostname (defense in depth - config is already trusted)
-            host = self.config.postgres_host.split(':')[0]
-            if not re.match(r'^[a-zA-Z0-9.-]+$', host):
-                raise ValueError(f"Invalid hostname format: {host}")
-            
-            # Validate port range
-            port_str = str(self.config.postgres_host.split(':')[1]) if ':' in self.config.postgres_host else '5432'
-            port = int(port_str)  # Will raise ValueError if not numeric
-            if not (1 <= port <= 65535):
-                raise ValueError(f"Port out of valid range (1-65535): {port}")
-            
             result = subprocess.run([
                 'pg_dump',
                 '-h', host,
@@ -212,16 +302,32 @@ class PostgreSQLDatabaseManager:
                 '-U', self.config.postgres_user,
                 '-d', self.config.postgres_database,
                 '-f', backup_file
-            ], capture_output=True, text=True, env={'PGPASSWORD': self.config.postgres_password})
-            
-            if result.returncode == 0:
-                logger.info(f"   ✅ Backup created: {backup_file}")
-            else:
-                logger.warning(f"   ⚠️  Backup failed: {result.stderr}")
-        except ValueError as e:
-            logger.error(f"   ❌ Invalid database configuration: {e}")
+            ], capture_output=True, text=True, env={'PGPASSWORD': self.config.postgres_password}, timeout=300)
+
+            if result.returncode != 0:
+                error_msg = f"pg_dump failed with exit code {result.returncode}: {result.stderr}"
+                logger.error(f"   ❌ {error_msg}")
+                raise RuntimeError(error_msg)
+
+            # Verify backup file exists and is non-empty
+            if not os.path.exists(backup_file):
+                raise RuntimeError(f"Backup file was not created: {backup_file}")
+
+            file_size = os.path.getsize(backup_file)
+            if file_size == 0:
+                raise RuntimeError(f"Backup file is empty: {backup_file}")
+
+            logger.info(f"   ✅ Backup created: {backup_file} ({file_size:,} bytes)")
+            return backup_file
+
         except FileNotFoundError:
-            logger.warning("   ⚠️  pg_dump not found - skipping backup")
+            error_msg = "pg_dump not found - ensure PostgreSQL client tools are installed"
+            logger.error(f"   ❌ {error_msg}")
+            raise FileNotFoundError(error_msg)
+        except subprocess.TimeoutExpired:
+            error_msg = "Backup timed out after 5 minutes"
+            logger.error(f"   ❌ {error_msg}")
+            raise RuntimeError(error_msg)
     
     async def _create_schema_if_missing(self):
         """Create database schema if it doesn't exist"""
@@ -471,7 +577,12 @@ class PostgreSQLDatabaseManager:
             logger.info("   ✅ Schema migrations complete!")
     
     async def _wipe_all_tables(self):
-        """Wipe all data from tables (keeps schema)"""
+        """
+        Wipe all data from tables (keeps schema)
+
+        Raises:
+            RuntimeError: If any tables fail to wipe, indicating database is in inconsistent state
+        """
         tables = [
             'weapon_comprehensive_stats',
             'player_comprehensive_stats',
@@ -481,14 +592,25 @@ class PostgreSQLDatabaseManager:
             'player_aliases',
             'rounds'
         ]
-        
+
+        failed_tables = []
+
         async with self.pool.acquire() as conn:
             for table in tables:
                 try:
                     await conn.execute(f"DELETE FROM {table}")
                     logger.info(f"   ✅ Wiped {table}")
                 except Exception as e:
-                    logger.warning(f"   ⚠️  Failed to wipe {table}: {e}")
+                    error_msg = f"Failed to wipe {table}: {e}"
+                    logger.error(f"   ❌ {error_msg}")
+                    failed_tables.append((table, str(e)))
+
+            if failed_tables:
+                error_details = ", ".join([f"{table} ({error})" for table, error in failed_tables])
+                raise RuntimeError(
+                    f"Failed to wipe {len(failed_tables)} table(s): {error_details}. "
+                    f"Database may be in inconsistent state. Run validation before proceeding."
+                )
     
     # =========================================================================
     # FILE PROCESSING
@@ -977,6 +1099,9 @@ class PostgreSQLDatabaseManager:
         
         for player in players:
             try:
+                # Validate and fix player stats before insertion
+                player, validation_issues = self.validate_player_stats(player, f"round_{round_id}")
+
                 # Extract data (same logic as original)
                 guid = player.get('guid', 'UNKNOWN')
                 name = player.get('name', 'Unknown')
@@ -994,9 +1119,15 @@ class PostgreSQLDatabaseManager:
                 efficiency = StatsCalculator.calculate_efficiency(kills, deaths)
                 accuracy = player.get('accuracy', 0.0)
                 
-                raw_td = obj_stats.get('time_dead_ratio', 0) or 0
-                time_dead_ratio = raw_td * 100.0 if raw_td <= 1 else float(raw_td)
-                time_dead_minutes = time_minutes * (time_dead_ratio / 100.0)
+                # Use parsed values directly from Lua output - DO NOT recalculate!
+                # The parser already handles R2 differential calculation correctly
+                time_dead_ratio = float(obj_stats.get('time_dead_ratio', 0) or 0)
+                time_dead_minutes = float(obj_stats.get('time_dead_minutes', 0) or 0)
+                
+                # Sanity check: cap ratio at 100% (can't be dead longer than played)
+                if time_dead_ratio > 100.0:
+                    time_dead_ratio = min(100.0, time_dead_ratio)
+                    time_dead_minutes = min(time_dead_minutes, time_minutes)
                 
                 # ✅ INSERT with RETURNING clause for verification
                 player_stat_id = await conn.fetchval(

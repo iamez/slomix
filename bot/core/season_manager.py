@@ -69,7 +69,7 @@ class SeasonManager:
         Get friendly season name.
 
         Args:
-            season_id: Season identifier (e.g., "2025-Q4"). 
+            season_id: Season identifier (e.g., "2025-Q4").
                       If None, uses current season.
 
         Returns:

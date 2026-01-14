@@ -1,0 +1,8 @@
+INVALID STATS FILE FORMAT
+This file has no proper headers or structure
+It should cause the parser to fail gracefully
+
+Some random text here
+No player stats
+No weapon stats
+Missing all required fields

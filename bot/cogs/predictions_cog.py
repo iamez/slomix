@@ -41,6 +41,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
 
         logger.info("✅ PredictionsCog loaded")
 
+    @commands.cooldown(1, 10, commands.BucketType.user)
     @commands.command(name='predictions')
     async def predictions(self, ctx, limit: int = 5):
         """
@@ -135,6 +136,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
             logger.error(f"❌ Error in !predictions: {e}", exc_info=True)
             await ctx.send("❌ Failed to fetch predictions. Check logs for details.")
 
+    @commands.cooldown(1, 15, commands.BucketType.user)
     @commands.command(name='prediction_stats')
     async def prediction_stats(self, ctx, days: int = 30):
         """
@@ -282,6 +284,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
             logger.error(f"❌ Error in !prediction_stats: {e}", exc_info=True)
             await ctx.send("❌ Failed to fetch statistics. Check logs for details.")
 
+    @commands.cooldown(1, 15, commands.BucketType.user)
     @commands.command(name='my_predictions')
     async def my_predictions(self, ctx):
         """
@@ -437,6 +440,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
         else:
             return "just now"
 
+    @commands.cooldown(1, 20, commands.BucketType.user)
     @commands.command(name='prediction_trends')
     async def prediction_trends(self, ctx, days: int = 30):
         """
@@ -572,6 +576,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
             logger.error(f"❌ Error in !prediction_trends: {e}", exc_info=True)
             await ctx.send("❌ Failed to generate trends. Check logs for details.")
 
+    @commands.cooldown(1, 15, commands.BucketType.user)
     @commands.command(name='prediction_leaderboard')
     async def prediction_leaderboard(self, ctx, category: str = "predictable"):
         """
@@ -706,6 +711,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
             logger.error(f"❌ Error in !prediction_leaderboard: {e}", exc_info=True)
             await ctx.send(f"❌ Failed to generate leaderboard: {str(e)}")
 
+    @commands.cooldown(1, 15, commands.BucketType.user)
     @commands.command(name='map_predictions')
     async def map_predictions(self, ctx, map_name: str = None):
         """
@@ -797,6 +803,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
             logger.error(f"❌ Error in !map_predictions: {e}", exc_info=True)
             await ctx.send("❌ Failed to fetch map statistics. Check logs for details.")
 
+    @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.command(name='prediction_help')
     async def prediction_help(self, ctx):
         """Show help for prediction commands."""

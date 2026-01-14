@@ -384,72 +384,72 @@ class SubstitutionDetector:
 def demonstrate_substitution_detection(session_date: str, db_path: str = "bot/etlegacy_production.db"):
     """Demo function to show substitution detection in action"""
     import sqlite3
-    
+
     db = sqlite3.connect(db_path)
     detector = SubstitutionDetector()
-    
-    print("=" * 80)
-    print("🔄 SUBSTITUTION DETECTION ANALYSIS")
-    print("=" * 80)
-    print(f"Session: {session_date}")
-    print()
-    
+
+    logger.info("=" * 80)
+    logger.info("SUBSTITUTION DETECTION ANALYSIS")
+    logger.info("=" * 80)
+    logger.info(f"Session: {session_date}")
+    logger.info("")
+
     result = detector.analyze_session_roster_changes(db, session_date)
-    
+
     if not result:
-        print("❌ No data found")
+        logger.warning("No data found")
         db.close()
         return
-    
-    print("📊 SESSION OVERVIEW")
-    print("-" * 80)
-    print(result['summary'])
-    print()
-    
+
+    logger.info("SESSION OVERVIEW")
+    logger.info("-" * 80)
+    logger.info(result['summary'])
+    logger.info("")
+
     # Show round-by-round rosters
-    print("🔍 ROUND-BY-ROUND ROSTERS")
-    print("-" * 80)
+    logger.info("ROUND-BY-ROUND ROSTERS")
+    logger.info("-" * 80)
     round_rosters = result['round_rosters']
-    
+
     for round_num in sorted(round_rosters.keys())[:5]:  # Show first 5 rounds
         roster = round_rosters[round_num]
-        print(f"\nRound {round_num}:")
-        print(f"  Team 1 ({len(roster['team1'])} players): {', '.join(p['name'] for p in roster['team1'][:5])}")
+        logger.info(f"Round {round_num}:")
+        logger.info(f"  Team 1 ({len(roster['team1'])} players): {', '.join(p['name'] for p in roster['team1'][:5])}")
         if len(roster['team1']) > 5:
-            print(f"         ...and {len(roster['team1']) - 5} more")
-        print(f"  Team 2 ({len(roster['team2'])} players): {', '.join(p['name'] for p in roster['team2'][:5])}")
+            logger.info(f"         ...and {len(roster['team1']) - 5} more")
+        logger.info(f"  Team 2 ({len(roster['team2'])} players): {', '.join(p['name'] for p in roster['team2'][:5])}")
         if len(roster['team2']) > 5:
-            print(f"         ...and {len(roster['team2']) - 5} more")
-    
+            logger.info(f"         ...and {len(roster['team2']) - 5} more")
+
     if len(round_rosters) > 5:
-        print(f"\n  ...and {len(round_rosters) - 5} more rounds")
-    
-    print()
-    
+        logger.info(f"  ...and {len(round_rosters) - 5} more rounds")
+
+    logger.info("")
+
     # Show roster changes
     if result['roster_changes']:
-        print("📝 ROSTER CHANGES")
-        print("-" * 80)
+        logger.info("ROSTER CHANGES")
+        logger.info("-" * 80)
         for change in result['roster_changes'][:10]:  # Show first 10
-            print(f"  {change}")
-        
+            logger.info(f"  {change}")
+
         if len(result['roster_changes']) > 10:
-            print(f"  ...and {len(result['roster_changes']) - 10} more changes")
-        print()
-    
+            logger.info(f"  ...and {len(result['roster_changes']) - 10} more changes")
+        logger.info("")
+
     # Show substitutions
     if result['substitutions']:
-        print("🔄 DETECTED SUBSTITUTIONS")
-        print("-" * 80)
+        logger.info("DETECTED SUBSTITUTIONS")
+        logger.info("-" * 80)
         player_activity = result['player_activity']
         for guid_out, guid_in, round_num in result['substitutions']:
             name_out = player_activity[guid_out].player_name
             name_in = player_activity[guid_in].player_name
-            print(f"  Round {round_num}: {name_out} → {name_in}")
-        print()
-    
-    print("=" * 80)
-    
+            logger.info(f"  Round {round_num}: {name_out} -> {name_in}")
+        logger.info("")
+
+    logger.info("=" * 80)
+
     db.close()
 
 

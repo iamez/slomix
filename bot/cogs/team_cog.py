@@ -436,9 +436,322 @@ class TeamCog(commands.Cog):
             embed.set_footer(text=f"Score requested by {ctx.author.name}")
             await ctx.send(embed=embed)
 
+            # Save results to session_results table (if not already saved)
+            saved = await self.scorer.save_session_results(
+                scores,
+                team1_names=teams.get(team_a, {}).get('names', []),
+                team2_names=teams.get(team_b, {}).get('names', [])
+            )
+            if saved:
+                logger.info(f"Saved session results for {date}")
+
         except Exception as e:
             logger.error(f"Error in session_score: {e}", exc_info=True)
             await ctx.send("❌ Error retrieving session score.")
+
+    # =========================================================================
+    # TEAM POOL COMMANDS
+    # =========================================================================
+
+    @is_public_channel()
+    @commands.command(name="team_pool")
+    async def team_pool_command(self, ctx):
+        """Show available team names in the pool
+
+        Usage:
+        !team_pool
+        """
+        try:
+            pool = await self.team_manager.get_team_pool(active_only=True)
+
+            if not pool:
+                await ctx.send("❌ No teams in pool. Add some with `!add_team`.")
+                return
+
+            embed = discord.Embed(
+                title="🏆 Team Pool",
+                description="Available team names for random assignment",
+                color=0x5865F2,
+                timestamp=datetime.now()
+            )
+
+            team_list = ""
+            for team in pool:
+                name = team['name']
+                color = team.get('color')
+                # Show color swatch if available
+                if color:
+                    hex_color = f"#{color:06x}"
+                    team_list += f"• **{name}** `{hex_color}`\n"
+                else:
+                    team_list += f"• **{name}**\n"
+
+            embed.add_field(
+                name=f"Teams ({len(pool)} available)",
+                value=team_list,
+                inline=False
+            )
+
+            embed.set_footer(text="Use !assign_teams <date> to randomly assign")
+            await ctx.send(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error in team_pool: {e}", exc_info=True)
+            await ctx.send("❌ Error retrieving team pool.")
+
+    @is_public_channel()
+    @commands.command(name="assign_teams")
+    async def assign_teams_command(self, ctx, date: Optional[str] = None):
+        """Randomly assign team names from pool to a session
+
+        Usage:
+        !assign_teams              → Assign to latest session
+        !assign_teams 2026-01-09   → Assign to specific date
+        """
+        try:
+            # Get date
+            if not date:
+                date = await self.get_latest_session_date()
+                if not date:
+                    await ctx.send("❌ No rounds found in database.")
+                    return
+
+            # Validate date
+            try:
+                datetime.strptime(date, "%Y-%m-%d")
+            except ValueError:
+                await ctx.send("❌ Invalid date format. Use YYYY-MM-DD")
+                return
+
+            # Assign random team names
+            team_a, team_b = await self.team_manager.assign_random_team_names(
+                date, force=False
+            )
+
+            # Get color for the embed
+            color_a = await self.team_manager.get_team_color(team_a)
+
+            embed = discord.Embed(
+                title="🎲 Teams Assigned",
+                description=f"Session: `{date}`",
+                color=color_a or 0x5865F2,
+                timestamp=datetime.now()
+            )
+
+            embed.add_field(
+                name="Team Assignment",
+                value=f"**{team_a}** ⚔️ **{team_b}**",
+                inline=False
+            )
+
+            embed.set_footer(text=f"Assigned by {ctx.author.name}")
+            await ctx.send(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error in assign_teams: {e}", exc_info=True)
+            await ctx.send("❌ Error assigning team names.")
+
+    @is_public_channel()
+    @commands.command(name="team_record")
+    async def team_record_command(self, ctx, team_name: str, days: int = 90):
+        """Show win/loss record for a team
+
+        Usage:
+        !team_record sWat         → Record for last 90 days
+        !team_record madDogz 365  → Record for last year
+        """
+        try:
+            record = await self.team_manager.get_team_record(team_name, days)
+
+            if record['total'] == 0:
+                await ctx.send(
+                    f"❌ No match history found for **{team_name}** in the last {days} days.\n"
+                    "Results are saved when `!session_score` is run."
+                )
+                return
+
+            # Get team color
+            color = await self.team_manager.get_team_color(team_name) or 0x5865F2
+
+            embed = discord.Embed(
+                title=f"📊 {team_name} Record",
+                description=f"Last {days} days",
+                color=color,
+                timestamp=datetime.now()
+            )
+
+            # Overall record
+            record_text = (
+                f"**{record['wins']}** W - "
+                f"**{record['losses']}** L - "
+                f"**{record['ties']}** T"
+            )
+            embed.add_field(
+                name="🏆 Win/Loss Record",
+                value=record_text,
+                inline=True
+            )
+
+            # Win rate
+            win_rate = record['win_rate'] * 100
+            embed.add_field(
+                name="📈 Win Rate",
+                value=f"**{win_rate:.1f}%**",
+                inline=True
+            )
+
+            # Recent matches
+            matches = record.get('recent_matches', [])
+            if matches:
+                match_list = ""
+                for match in matches[:5]:
+                    result = match['result']
+                    emoji = "🟢" if result == 'W' else ("🔴" if result == 'L' else "⚪")
+                    match_list += (
+                        f"{emoji} `{match['date']}` vs **{match['opponent']}** "
+                        f"({match['our_score']}-{match['their_score']})\n"
+                    )
+                embed.add_field(
+                    name="📅 Recent Matches",
+                    value=match_list,
+                    inline=False
+                )
+
+            embed.set_footer(text=f"Requested by {ctx.author.name}")
+            await ctx.send(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error in team_record: {e}", exc_info=True)
+            await ctx.send("❌ Error retrieving team record.")
+
+    @is_public_channel()
+    @commands.command(name="head_to_head", aliases=["h2h"])
+    async def head_to_head_command(self, ctx, team_a: str, team_b: str):
+        """Show head-to-head record between two teams
+
+        Usage:
+        !head_to_head sWat madDogz
+        !h2h S*F insAne
+        """
+        try:
+            h2h = await self.team_manager.get_head_to_head(team_a, team_b)
+
+            if h2h['total_matches'] == 0:
+                await ctx.send(
+                    f"❌ No head-to-head history between **{team_a}** and **{team_b}**.\n"
+                    "Results are saved when `!session_score` is run."
+                )
+                return
+
+            # Determine dominant team for embed color
+            if h2h['team_a_wins'] > h2h['team_b_wins']:
+                color = await self.team_manager.get_team_color(team_a) or 0x57F287
+            elif h2h['team_b_wins'] > h2h['team_a_wins']:
+                color = await self.team_manager.get_team_color(team_b) or 0xED4245
+            else:
+                color = 0xFFD700  # Gold for tie
+
+            embed = discord.Embed(
+                title=f"⚔️ {team_a} vs {team_b}",
+                description="Head-to-Head Record",
+                color=color,
+                timestamp=datetime.now()
+            )
+
+            # Session record
+            embed.add_field(
+                name="🏆 Sessions",
+                value=(
+                    f"**{team_a}**: {h2h['team_a_wins']} wins\n"
+                    f"**{team_b}**: {h2h['team_b_wins']} wins\n"
+                    f"Ties: {h2h['ties']}"
+                ),
+                inline=True
+            )
+
+            # Map record
+            embed.add_field(
+                name="🗺️ Maps Won",
+                value=(
+                    f"**{team_a}**: {h2h['team_a_maps_won']}\n"
+                    f"**{team_b}**: {h2h['team_b_maps_won']}"
+                ),
+                inline=True
+            )
+
+            # Recent matchups
+            matches = h2h.get('recent_matches', [])
+            if matches:
+                match_list = ""
+                for match in matches[:5]:
+                    result = match.get('result', '')
+                    if team_a in result:
+                        emoji = "🟢"
+                    elif team_b in result:
+                        emoji = "🔴"
+                    else:
+                        emoji = "⚪"
+
+                    a_score = match.get(f'{team_a}_score', 0)
+                    b_score = match.get(f'{team_b}_score', 0)
+                    match_list += f"{emoji} `{match['date']}` {a_score}-{b_score}\n"
+
+                embed.add_field(
+                    name="📅 Recent Matchups",
+                    value=match_list,
+                    inline=False
+                )
+
+            embed.set_footer(
+                text=f"Total: {h2h['total_matches']} matches • Requested by {ctx.author.name}"
+            )
+            await ctx.send(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error in head_to_head: {e}", exc_info=True)
+            await ctx.send("❌ Error retrieving head-to-head record.")
+
+    @is_public_channel()
+    @commands.command(name="add_team")
+    async def add_team_command(self, ctx, name: str, color_hex: Optional[str] = None):
+        """Add a new team to the pool (requires permissions)
+
+        Usage:
+        !add_team "New Team"
+        !add_team "New Team" #FF5500
+        """
+        try:
+            # Parse color if provided
+            color = None
+            if color_hex:
+                color_hex = color_hex.lstrip('#')
+                try:
+                    color = int(color_hex, 16)
+                except ValueError:
+                    await ctx.send("❌ Invalid color format. Use hex like #FF5500")
+                    return
+
+            success = await self.team_manager.add_team_to_pool(
+                name=name,
+                display_name=name,
+                color=color
+            )
+
+            if success:
+                embed = discord.Embed(
+                    title="✅ Team Added",
+                    description=f"**{name}** added to the pool",
+                    color=color or 0x57F287,
+                    timestamp=datetime.now()
+                )
+                embed.set_footer(text=f"Added by {ctx.author.name}")
+                await ctx.send(embed=embed)
+            else:
+                await ctx.send("❌ Failed to add team.")
+
+        except Exception as e:
+            logger.error(f"Error in add_team: {e}", exc_info=True)
+            await ctx.send("❌ Error adding team.")
 
 
 async def setup(bot):
