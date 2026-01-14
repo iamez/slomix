@@ -12,7 +12,7 @@ Tests for security controls including:
 import pytest
 import re
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, patch
 
 
 class TestWebhookSecurity:
@@ -115,11 +115,9 @@ class TestFilenameValidation:
             "....//....//etc/passwd",
         ]
 
-        # Safe filename pattern (no path separators, no parent directory references)
-        safe_filename_pattern = re.compile(r'^[a-zA-Z0-9\-_\.]+$')
-
         for malicious in malicious_filenames:
-            basename = Path(malicious).name
+            # Check basename for path traversal attempts
+            _ = Path(malicious).name  # Extract basename for validation
             # Even basename should be rejected if it contains suspicious chars
             assert ".." not in malicious or "/" in malicious or "\\" in malicious, \
                 f"Path traversal not detected: {malicious}"
@@ -241,7 +239,7 @@ class TestRateLimiting:
     def test_rate_limit_max_requests(self):
         """Test rate limit enforces max requests per window"""
         max_requests = 5
-        window_seconds = 60
+        # window_seconds = 60 (not needed for this test)
 
         requests = []
         current_time = 1000.0

@@ -1,4 +1,4 @@
-import asyncio, sqlite3, os, tempfile, sys
+import asyncio, sqlite3, tempfile, sys
 from types import SimpleNamespace
 from pathlib import Path
 # Add project root to sys.path (portable)

@@ -18,7 +18,7 @@ from discord.ext import commands
 import logging
 from datetime import datetime
 
-from bot.core.checks import is_admin, is_moderator
+from bot.core.checks import is_admin
 from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger("AutomationCommands")
