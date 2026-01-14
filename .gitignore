@@ -45,6 +45,7 @@ env/
 *.sql
 !migrations/*.sql
 !website/*.sql
+!proximity/**/*.sql
 
 # Root database backups
 etlegacy_production.db.*
@@ -194,8 +195,8 @@ check_before_commit.sh
 /performance_updates/
 
 # Prototype projects
-# /website/    # ENABLED - Added in v1.1.0
-/proximity/
+# /website/      # ENABLED - Added in v1.1.0
+# /proximity/    # ENABLED - Added in v1.1.0
 /opusreview/
 /vps_scripts/
 
@@ -215,7 +216,8 @@ test_*.py
 !tests/test_*.py
 
 # Root Lua files (game server files, not bot code)
-*.lua
+/*.lua
+!proximity/lua/*.lua
 
 # Root dev markdown files (keep only README.md)
 *_IMPLEMENTATION*.md
@@ -226,6 +228,7 @@ test_*.py
 *_DEPLOYMENT*.md
 *_README*.md
 !README.md
+!proximity/**/*.md
 
 # Planning/prompt files
 plan-*.md
