@@ -38,8 +38,8 @@ escape_distance = 300
 
 ### Position Sampling
 ```lua
--- Every 2 seconds during active engagement
-position_sample_interval = 2000
+-- v4: 500ms for better movement capture (2 samples per second)
+position_sample_interval = 500
 ```
 
 ## Database Tables
@@ -101,7 +101,7 @@ config = {
     crossfire_window_ms = 1000,  -- 1 second
     escape_time_ms = 5000,       -- 5 seconds
     escape_distance = 300,       -- 300 units
-    position_sample_interval = 2000,  -- 2 seconds
+    position_sample_interval = 500,  -- v4: 500ms = 2 samples per second
     grid_size = 512,             -- heatmap cell size
     min_damage = 1               -- any damage counts
 }
