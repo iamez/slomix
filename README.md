@@ -88,7 +88,7 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 - 🎯 **Zero Data Loss** - PostgreSQL transactions, rollback on error, 4,193 verified inserts
 - 🏆 **EndStats Awards** - Post-round awards with 7 categories (Combat, Skills, Teamwork, etc.)
 
-**[📊 View Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation Systems](docs/SAFETY_VALIDATION_SYSTEMS.md)** | **[🔄 Round 2 Pipeline Explained](docs/ROUND_2_PIPELINE_EXPLAINED.txt)** | **[📝 Changelog](docs/CHANGELOG.md)**
+**[📊 View Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation Systems](docs/SAFETY_VALIDATION_SYSTEMS.md)** | **[ Changelog](docs/CHANGELOG.md)**
 
 ---
 
@@ -292,7 +292,7 @@ Automatically groups rounds into gaming sessions:
 - 📊 **Trend Analysis** - Week-over-week comparison, best/worst days, improving/declining detection
 - 🏅 **Leaderboards** - Player predictability rankings with minimum 3 matches filter
 
-**[📖 Implementation Guide](COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md)** | **[📊 Progress Tracker](IMPLEMENTATION_PROGRESS_TRACKER.md)**
+**[📖 Implementation Guide](docs/COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md)** | **[📊 Progress Tracker](docs/IMPLEMENTATION_PROGRESS_TRACKER.md)**
 
 ---
 

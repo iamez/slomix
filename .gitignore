@@ -203,6 +203,40 @@ check_before_commit.sh
 nohup.out
 =*
 coverage.xml
+.coverage
+
+# Root diagnostic/dev scripts (removed from repo)
+check_*.py
+compare_*.py
+investigate_*.py
+show_*.py
+pentest_*.py
+test_*.py
+!tests/test_*.py
+
+# Root Lua files (game server files, not bot code)
+*.lua
+
+# Root dev markdown files (keep only README.md)
+*_IMPLEMENTATION*.md
+*_VERIFICATION*.md
+*_REFERENCE*.md
+*_OVERVIEW*.md
+*_SUMMARY*.md
+*_DEPLOYMENT*.md
+*_README*.md
+!README.md
+
+# Planning/prompt files
+plan-*.md
+*.prompt.md
+
+# VS Code workspace files
+*.code-workspace
+
+# Other root dev artifacts
+corrupt_records_before_fix.txt
+postgres_setup.md
 
 # ============================================
 # BOT DIRECTORY EXCLUSIONS
