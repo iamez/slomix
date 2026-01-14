@@ -219,6 +219,9 @@ class VoiceSessionService:
 
         except Exception as e:
             logger.error(f"Voice state update error: {e}", exc_info=True)
+            # Track consecutive errors - don't crash but alert if persistent
+            if hasattr(self.bot, 'track_error'):
+                await self.bot.track_error("voice_session", str(e), max_consecutive=5)
 
     async def start_session(self, participants: Set[int]):
         """
@@ -258,6 +261,13 @@ class VoiceSessionService:
 
         except Exception as e:
             logger.error(f"Error starting gaming session: {e}", exc_info=True)
+            # Session start failure is critical - alert admins
+            if hasattr(self.bot, 'alert_admins'):
+                await self.bot.alert_admins(
+                    "Session Start Failed",
+                    f"Failed to start gaming session with {len(participants)} players.\n\nError: {str(e)[:500]}",
+                    severity="error"
+                )
 
     async def delayed_end(self, last_participants: Set[int]):
         """

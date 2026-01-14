@@ -6,17 +6,41 @@ Handles:
 - Tracking processed files in database
 - Syncing local files with database records
 - Age-based filtering (ignore old files on bot restart)
+- File integrity verification via SHA256 hashing (Dec 2025)
 """
 
 import asyncio
+import hashlib
 import logging
 import os
-from datetime import datetime
-from typing import Optional, Set
+from datetime import datetime, timedelta
+from typing import Optional, Set, Tuple
 
 from bot.automation.ssh_handler import SSHHandler
 
 logger = logging.getLogger("bot.automation.file_tracker")
+
+
+def calculate_file_hash(file_path: str) -> str:
+    """
+    Calculate SHA256 hash of a file.
+
+    Args:
+        file_path: Path to the file
+
+    Returns:
+        SHA256 hex digest (64 characters)
+    """
+    sha256 = hashlib.sha256()
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+
+def get_file_size(file_path: str) -> int:
+    """Get file size in bytes."""
+    return os.path.getsize(file_path)
 
 
 class FileTracker:
@@ -67,8 +91,9 @@ class FileTracker:
     ) -> bool:
         """Internal implementation of should_process_file (called under lock)"""
         try:
-            # 1. Check file age - only import files created AFTER bot startup
-            # This prevents importing old files on bot restart while allowing live updates
+            # 1. Check file age - use lookback window from bot startup
+            # This prevents importing very old files on bot restart while allowing
+            # files from recent history (default: 7 days before startup)
             # SKIP this check if ignore_startup_time=True (manual sync commands)
             if not ignore_startup_time:
                 try:
@@ -76,24 +101,34 @@ class FileTracker:
                     datetime_str = filename[:17]  # Get YYYY-MM-DD-HHMMSS
                     file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d-%H%M%S")
 
-                    # Skip files created before bot started
-                    if file_datetime < self.bot_startup_time:
-                        time_diff = (
-                            self.bot_startup_time - file_datetime
-                        ).total_seconds() / 3600
+                    # Get lookback window (default: 7 days = 168 hours)
+                    lookback_hours = getattr(self.config, 'STARTUP_LOOKBACK_HOURS', 168)
+                    cutoff_time = self.bot_startup_time - timedelta(hours=lookback_hours)
+
+                    # Skip files older than the lookback window
+                    if file_datetime < cutoff_time:
+                        time_diff_hours = (cutoff_time - file_datetime).total_seconds() / 3600
+                        time_diff_days = time_diff_hours / 24
                         logger.debug(
-                            f"⏭️ {filename} created {time_diff:.1f}h before bot startup (skip old files)"
+                            f"⏭️ {filename} created {time_diff_days:.1f} days before lookback window "
+                            f"(cutoff: {lookback_hours}h before startup, skip very old files)"
                         )
                         self.processed_files.add(filename)
                         await self.mark_processed(filename, success=True)
                         return False
                     else:
-                        time_diff = (
-                            file_datetime - self.bot_startup_time
-                        ).total_seconds() / 60
-                        logger.debug(
-                            f"✅ {filename} created {time_diff:.1f}m after bot startup (process as new file)"
-                        )
+                        # File is within lookback window or after bot startup
+                        if file_datetime < self.bot_startup_time:
+                            time_diff = (self.bot_startup_time - file_datetime).total_seconds() / 3600
+                            logger.debug(
+                                f"✅ {filename} within {lookback_hours}h lookback window "
+                                f"({time_diff:.1f}h before startup, will process)"
+                            )
+                        else:
+                            time_diff = (file_datetime - self.bot_startup_time).total_seconds() / 60
+                            logger.debug(
+                                f"✅ {filename} created {time_diff:.1f}m after bot startup (process as new file)"
+                            )
                 except ValueError:
                     # If datetime parsing fails, continue with other checks
                     logger.warning(f"⚠️ Could not parse datetime from filename: {filename}")
@@ -194,7 +229,8 @@ class FileTracker:
             return False
 
     async def mark_processed(
-        self, filename: str, success: bool = True, error_msg: Optional[str] = None
+        self, filename: str, success: bool = True, error_msg: Optional[str] = None,
+        file_path: Optional[str] = None
     ) -> None:
         """
         Mark a file as processed in the processed_files table
@@ -203,19 +239,29 @@ class FileTracker:
             filename: Name of the processed file
             success: Whether processing was successful
             error_msg: Error message if processing failed
+            file_path: Optional path to file for calculating SHA256 hash
         """
         try:
+            # Calculate file hash if path provided
+            file_hash = None
+            if file_path and os.path.exists(file_path):
+                try:
+                    file_hash = calculate_file_hash(file_path)
+                except Exception as e:
+                    logger.warning(f"Could not calculate hash for {filename}: {e}")
+
             # Database-specific syntax for INSERT OR REPLACE
             if self.config.database_type == "sqlite":
                 query = """
                     INSERT OR REPLACE INTO processed_files
-                    (filename, success, error_message, processed_at)
-                    VALUES (?, ?, ?, ?)
+                    (filename, file_hash, success, error_message, processed_at)
+                    VALUES (?, ?, ?, ?, ?)
                 """
                 await self.db_adapter.execute(
                     query,
                     (
                         filename,
+                        file_hash,
                         1 if success else 0,
                         error_msg,
                         datetime.now().isoformat(),
@@ -224,9 +270,10 @@ class FileTracker:
             else:  # PostgreSQL
                 query = """
                     INSERT INTO processed_files
-                    (filename, success, error_message, processed_at)
-                    VALUES ($1, $2, $3, $4)
+                    (filename, file_hash, success, error_message, processed_at)
+                    VALUES ($1, $2, $3, $4, $5)
                     ON CONFLICT (filename) DO UPDATE SET
+                        file_hash = COALESCE(EXCLUDED.file_hash, processed_files.file_hash),
                         success = EXCLUDED.success,
                         error_message = EXCLUDED.error_message,
                         processed_at = EXCLUDED.processed_at
@@ -235,14 +282,63 @@ class FileTracker:
                     query,
                     (
                         filename,
+                        file_hash,
                         success,  # PostgreSQL uses boolean directly
                         error_msg,
                         datetime.now(),
                     ),
                 )
 
+            if file_hash:
+                logger.debug(f"Stored hash for {filename}: {file_hash[:16]}...")
+
         except Exception as e:
             logger.debug(f"Error marking file as processed: {e}")
+
+    async def verify_file_integrity(self, filename: str, file_path: str) -> Tuple[bool, str]:
+        """
+        Verify file integrity by comparing current hash to stored hash.
+
+        Args:
+            filename: Name of the file
+            file_path: Path to the local file
+
+        Returns:
+            Tuple of (is_valid, message)
+            - is_valid: True if hash matches or no stored hash exists
+            - message: Description of the result
+        """
+        try:
+            if not os.path.exists(file_path):
+                return False, f"File not found: {file_path}"
+
+            # Get stored hash from database
+            if self.config.database_type == "sqlite":
+                query = "SELECT file_hash FROM processed_files WHERE filename = ?"
+            else:
+                query = "SELECT file_hash FROM processed_files WHERE filename = $1"
+
+            result = await self.db_adapter.fetch_one(query, (filename,))
+
+            if not result or not result.get('file_hash'):
+                # No stored hash - can't verify, but not an error
+                return True, "No stored hash for comparison (new file or legacy import)"
+
+            stored_hash = result['file_hash']
+            current_hash = calculate_file_hash(file_path)
+
+            if stored_hash == current_hash:
+                return True, f"Hash verified: {current_hash[:16]}..."
+            else:
+                logger.warning(
+                    f"FILE INTEGRITY MISMATCH for {filename}! "
+                    f"Stored: {stored_hash[:16]}..., Current: {current_hash[:16]}..."
+                )
+                return False, "Hash mismatch! File may have been corrupted or modified."
+
+        except Exception as e:
+            logger.error(f"Error verifying file integrity: {e}")
+            return False, f"Verification error: {e}"
 
     async def sync_local_files_to_processed_table(self) -> None:
         """

@@ -18,7 +18,7 @@ from discord.ext import commands
 import logging
 from datetime import datetime
 
-from bot.core.checks import is_admin_channel
+from bot.core.checks import is_admin
 from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger("AutomationCommands")
@@ -31,7 +31,7 @@ class AutomationCommands(commands.Cog):
         self.bot = bot
         logger.info("✅ Automation Commands Cog loaded")
     
-    @is_admin_channel()
+    @is_admin()
     @commands.command(name="health")
     async def health_command(self, ctx):
         """📊 Show comprehensive bot health status"""
@@ -47,7 +47,7 @@ class AutomationCommands(commands.Cog):
             logger.error(f"❌ Health command error: {e}")
             await ctx.send(f"❌ Error getting health status: {sanitize_error_message(e)}")
     
-    @is_admin_channel()
+    @is_admin()
     @commands.command(name="ssh_stats")
     async def ssh_stats_command(self, ctx):
         """🔄 Show SSH monitor statistics and status"""
@@ -141,7 +141,7 @@ class AutomationCommands(commands.Cog):
             await ctx.send(f"❌ Error getting SSH stats: {sanitize_error_message(e)}")
     
     @commands.command(name="start_monitoring")
-    @commands.has_permissions(administrator=True)
+    
     async def start_monitoring_command(self, ctx):
         """🟢 Start SSH monitoring"""
         try:
@@ -161,9 +161,9 @@ class AutomationCommands(commands.Cog):
             logger.error(f"❌ Start monitoring error: {e}")
             await ctx.send(f"❌ Error starting monitoring: {sanitize_error_message(e)}")
     
-    @is_admin_channel()
+    @is_admin()
     @commands.command(name="stop_monitoring")
-    @commands.has_permissions(administrator=True)
+    
     async def stop_monitoring_command(self, ctx):
         """🔴 Stop SSH monitoring"""
         try:
@@ -184,7 +184,7 @@ class AutomationCommands(commands.Cog):
             await ctx.send(f"❌ Error stopping monitoring: {sanitize_error_message(e)}")
     
     @commands.command(name="metrics_report")
-    @commands.has_permissions(administrator=True)
+    
     async def metrics_report_command(self, ctx, hours: int = 24):
         """📊 Generate comprehensive metrics report"""
         try:
@@ -364,7 +364,7 @@ class AutomationCommands(commands.Cog):
             await ctx.send(f"❌ Error getting summary: {sanitize_error_message(e)}")
     
     @commands.command(name="backup_db")
-    @commands.has_permissions(administrator=True)
+    
     async def backup_command(self, ctx):
         """💾 Manually trigger database backup"""
         try:
@@ -391,7 +391,7 @@ class AutomationCommands(commands.Cog):
             await ctx.send(f"❌ Error creating backup: {sanitize_error_message(e)}")
     
     @commands.command(name="vacuum_db")
-    @commands.has_permissions(administrator=True)
+    
     async def vacuum_command(self, ctx):
         """🧹 Optimize database (VACUUM)"""
         try:

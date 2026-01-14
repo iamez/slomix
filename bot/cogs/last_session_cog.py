@@ -18,6 +18,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.database_adapter import ensure_player_name_alias
 from bot.core.utils import sanitize_error_message
 from tools.stopwatch_scoring import StopwatchScoring
 from bot.stats import StatsCalculator
@@ -50,31 +51,6 @@ class LastSessionCog(commands.Cog):
 
         logger.info("✅ All services initialized successfully")
 
-    async def _ensure_player_name_alias(self):
-        """Create TEMP VIEW alias for player_name if needed"""
-        try:
-            # Check if clean_name exists but player_name doesn't
-            if self.bot.config.database_type == 'sqlite':
-                columns = await self.bot.db_adapter.fetch_all("PRAGMA table_info(player_comprehensive_stats)")
-                col_names = [col[1] for col in columns]
-            else:  # PostgreSQL
-                columns = await self.bot.db_adapter.fetch_all("""
-                    SELECT column_name
-                    FROM information_schema.columns
-                    WHERE table_name = 'player_comprehensive_stats'
-                """)
-                col_names = [col[0] for col in columns]
-
-            if "clean_name" in col_names and "player_name" not in col_names:
-                await self.bot.db_adapter.execute("""
-                    CREATE TEMP VIEW IF NOT EXISTS player_name_alias AS
-                    SELECT *, clean_name as player_name
-                    FROM player_comprehensive_stats
-                """)
-                logger.debug("✅ Created player_name alias for clean_name")
-        except Exception as e:
-            logger.debug(f"player_name alias setup: {e}")
-
     @is_public_channel()
     @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.command(name="last_session", aliases=["last", "latest", "recent", "last_round"])
@@ -99,7 +75,7 @@ class LastSessionCog(commands.Cog):
         try:
             # Setup database aliases
             try:
-                await self._ensure_player_name_alias()
+                await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
                 pass  # Alias is optional, continue without it
 

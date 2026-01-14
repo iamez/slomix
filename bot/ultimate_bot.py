@@ -4,28 +4,27 @@ ULTIMATE ET:LEGACY DISCORD BOT - COG-BASED VERSION
 """
 
 import asyncio
+import json
 import logging
 import os
+import re
 import sys
 import time
 from datetime import datetime, timedelta
 
-import io
 import discord
 from discord.ext import commands, tasks
 
 # Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools.stopwatch_scoring import StopwatchScoring
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import extracted core classes
 from bot.core import StatsCache, SeasonManager, AchievementSystem
 from bot.core.utils import sanitize_error_message
 
 # Import database adapter and config for PostgreSQL migration
-from bot.core.database_adapter import create_adapter, DatabaseAdapter
+from bot.core.database_adapter import create_adapter
 from bot.config import load_config
-from bot.stats import StatsCalculator
 from bot.automation import SSHHandler, FileTracker
 from bot.services.voice_session_service import VoiceSessionService
 from bot.services.round_publisher_service import RoundPublisherService
@@ -53,8 +52,6 @@ except ImportError:  # nosec B110
 from bot.logging_config import (
     setup_logging,
     log_command_execution,
-    log_database_operation,
-    log_stats_import,
     log_performance_warning,
     get_logger
 )
@@ -65,6 +62,8 @@ setup_logging(getattr(logging, log_level))
 
 # Get bot logger
 logger = get_logger("bot.core")
+webhook_logger = get_logger("bot.webhook")  # Separate logger for webhook activity
+
 logger.info("🚀 ET:LEGACY DISCORD BOT - STARTING UP")
 logger.info(f"📝 Log Level: {log_level}")
 logger.info(f"🐍 Python: {sys.version}")
@@ -174,11 +173,11 @@ class UltimateETLegacyBot(commands.Bot):
 
         # 📊 Database Configuration - Load config and create adapter
         import os
-        
+
         # Load configuration (from env vars or bot_config.json)
         self.config = load_config()
         logger.info(f"✅ Configuration loaded: {self.config}")
-        
+
         # Create PostgreSQL database adapter
         adapter_kwargs = self.config.get_database_adapter_kwargs()
         self.db_adapter = create_adapter(**adapter_kwargs)
@@ -228,10 +227,18 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(
                 "⚠️ Automation system DISABLED (set AUTOMATION_ENABLED=true to enable)"
             )
-        
+
         # SSH monitoring optimization - counter-based intervals
         self.ssh_check_counter = 0  # Tracks cycles for interval-based checking
         self.last_file_download_time = None  # Track last file download for grace period logic
+        self._last_dead_hour_log = None  # Track dead hour logging to reduce log spam
+
+        # Webhook rate limiting (prevent DoS)
+        from collections import defaultdict, deque
+
+        self._webhook_rate_limit = defaultdict(deque)
+        self._webhook_rate_limit_max = 5  # Max 5 triggers per minute
+        self._webhook_rate_limit_window = 60  # Seconds
 
         # Load channel configuration from config object
         self.gaming_voice_channels = self.config.gaming_voice_channels
@@ -256,7 +263,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info(
                 f"📊 Thresholds: {self.session_start_threshold}+ to start, <{self.session_end_threshold} for {self.session_end_delay}s to end"
             )
-        
+
         if self.bot_command_channels:
             logger.info(
                 f"🔒 Bot commands restricted to channels: {self.bot_command_channels}"
@@ -287,6 +294,111 @@ class UltimateETLegacyBot(commands.Bot):
         self.command_stats = {}
         self.error_count = 0
 
+        # 🚨 Error tracking for admin notifications
+        self._consecutive_errors = {}
+
+    # =========================================================================
+    # 🚨 ADMIN NOTIFICATION SYSTEM
+    # =========================================================================
+
+    async def alert_admins(self, title: str, description: str, severity: str = "warning"):
+        """
+        Send critical error notifications to admin channel.
+
+        Args:
+            title: Short title for the alert
+            description: Detailed description of the issue
+            severity: One of "info", "warning", "error", "critical"
+
+        Returns:
+            True if notification was sent, False otherwise
+        """
+        if not self.admin_channel_id:
+            logger.warning(f"Cannot send admin alert (no admin_channel_id configured): {title}")
+            return False
+
+        try:
+            channel = self.get_channel(self.admin_channel_id)
+            if not channel:
+                logger.error(f"Admin channel {self.admin_channel_id} not found")
+                return False
+
+            # Color based on severity
+            colors = {
+                "info": 0x3498DB,      # Blue
+                "warning": 0xF39C12,   # Orange
+                "error": 0xE74C3C,     # Red
+                "critical": 0x8B0000,  # Dark Red
+            }
+            color = colors.get(severity, colors["warning"])
+
+            # Emoji based on severity
+            emojis = {
+                "info": "ℹ️",
+                "warning": "⚠️",
+                "error": "❌",
+                "critical": "🚨",
+            }
+            emoji = emojis.get(severity, "⚠️")
+
+            embed = discord.Embed(
+                title=f"{emoji} {title}",
+                description=description[:4000],  # Discord limit
+                color=color,
+                timestamp=datetime.now()
+            )
+            embed.set_footer(text=f"Severity: {severity.upper()}")
+
+            await channel.send(embed=embed)
+            logger.info(f"Admin alert sent: {title} ({severity})")
+            return True
+
+        except discord.Forbidden:
+            logger.error(f"Permission denied to send to admin channel {self.admin_channel_id}")
+            return False
+        except Exception as e:
+            logger.error(f"Failed to send admin alert: {e}")
+            return False
+
+    async def track_error(self, error_key: str, error_msg: str, max_consecutive: int = 3):
+        """
+        Track consecutive errors and alert admins when threshold is reached.
+
+        Args:
+            error_key: Unique identifier for this error type (e.g., "ssh_monitor")
+            error_msg: Human-readable error message
+            max_consecutive: Number of consecutive errors before alerting
+
+        Returns:
+            Current consecutive error count for this key
+        """
+        self._consecutive_errors[error_key] = self._consecutive_errors.get(error_key, 0) + 1
+        count = self._consecutive_errors[error_key]
+
+        if count == max_consecutive:
+            await self.alert_admins(
+                f"{error_key.replace('_', ' ').title()} Failing",
+                f"**{count} consecutive failures detected.**\n\n"
+                f"Latest error: {error_msg}\n\n"
+                f"This service may need attention.",
+                severity="error"
+            )
+        elif count > max_consecutive and count % 10 == 0:
+            # Reminder every 10 failures after threshold
+            await self.alert_admins(
+                f"{error_key.replace('_', ' ').title()} Still Failing",
+                f"**{count} total consecutive failures.**\n\n"
+                f"Latest error: {error_msg}",
+                severity="critical"
+            )
+
+        return count
+
+    def reset_error_tracking(self, error_key: str):
+        """Reset consecutive error count for a key (call on success)."""
+        if error_key in self._consecutive_errors:
+            self._consecutive_errors[error_key] = 0
+
     async def close(self):
         """
         🔌 Clean up database connections and close bot gracefully
@@ -297,7 +409,7 @@ class UltimateETLegacyBot(commands.Bot):
                 logger.info("✅ Database adapter closed successfully")
         except Exception as e:
             logger.error(f"⚠️ Error closing database adapter: {e}")
-        
+
         # Call parent close
         await super().close()
 
@@ -317,9 +429,9 @@ class UltimateETLegacyBot(commands.Bot):
             else:
                 # PostgreSQL: Query information_schema
                 query = """
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'player_comprehensive_stats' 
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'player_comprehensive_stats'
                     ORDER BY ordinal_position
                 """
                 columns = await self.db_adapter.fetch_all(query)
@@ -418,6 +530,14 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"❌ Failed to load Admin Cog: {e}", exc_info=True)
 
+        # 🔒 Load Permission Management Cog (user whitelist, permission tiers)
+        try:
+            from bot.cogs.permission_management_cog import PermissionManagement
+            await self.add_cog(PermissionManagement(self))
+            logger.info("✅ Permission Management Cog loaded (admin_add, admin_remove, admin_list, admin_audit)")
+        except Exception as e:
+            logger.error(f"❌ Failed to load Permission Management Cog: {e}", exc_info=True)
+
         # 🔗 Load Link Cog (player account linking and management)
         try:
             from bot.cogs.link_cog import LinkCog
@@ -490,7 +610,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info('Team Management Cog loaded (set_teams, assign_player)')
         except Exception as e:
             logger.error(f'Failed to load Team Management Cog: {e}', exc_info=True)
-        
+
         # Load Team System Cog (comprehensive team tracking)
         try:
             from bot.cogs.team_cog import TeamCog
@@ -509,6 +629,15 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(
                 "Bot will continue without synergy analytics features"
             )
+
+        # 🎯 PROXIMITY TRACKER: Load combat engagement analytics (SAFE - disabled by default)
+        try:
+            await self.load_extension("cogs.proximity_cog")
+            status = "ENABLED" if self.config.proximity_enabled else "disabled"
+            logger.info(f"✅ Proximity Tracker cog loaded ({status})")
+        except Exception as e:
+            logger.warning(f"⚠️  Could not load Proximity Tracker cog: {e}")
+            logger.warning("Bot will continue without proximity tracking features")
 
         # 🎮 SERVER CONTROL: Load server control cog (optional)
         try:
@@ -560,7 +689,7 @@ class UltimateETLegacyBot(commands.Bot):
             # SSHMonitor only downloads + imports, but endstats_monitor also posts to Discord.
             # Having both running causes a race condition where SSHMonitor processes files first,
             # marking them as "already processed" before endstats_monitor can post to Discord.
-            # 
+            #
             # The endstats_monitor task loop (line ~1315) handles:
             # 1. SSH connection to game server
             # 2. File download
@@ -590,6 +719,8 @@ class UltimateETLegacyBot(commands.Bot):
             self.endstats_monitor.start()
         if not self.cache_refresher.is_running():
             self.cache_refresher.start()
+        if not self.live_status_updater.is_running():
+            self.live_status_updater.start()
         # scheduled_monitoring_check task removed - see performance optimization
         # voice_session_monitor disabled - using on_voice_state_update event instead (more efficient)
         # if not self.voice_session_monitor.is_running():
@@ -625,22 +756,22 @@ class UltimateETLegacyBot(commands.Bot):
     async def _handle_ws_file_notification(self, filename: str):
         """
         Handle file notification from WebSocket push.
-        
+
         Called by StatsWebSocketClient when VPS notifies of new file.
         Downloads file via SSH, processes, and posts to Discord.
-        
+
         Args:
             filename: Name of the new stats file on remote server
         """
         try:
             logger.info(f"📥 WebSocket notification: {filename}")
-            
+
             # Check if already processed (race condition prevention)
             # should_process_file returns True if file needs processing
             if not await self.file_tracker.should_process_file(filename):
                 logger.debug(f"⏭️ File already processed: {filename}")
                 return
-            
+
             # Build SSH config
             ssh_config = {
                 "host": self.config.ssh_host,
@@ -649,33 +780,33 @@ class UltimateETLegacyBot(commands.Bot):
                 "key_path": self.config.ssh_key_path,
                 "remote_path": self.config.ssh_remote_path,
             }
-            
+
             # Download file via SSH
             local_path = await self.ssh_download_file(
                 ssh_config, filename, self.config.stats_directory
             )
-            
+
             if not local_path:
                 logger.error(f"❌ Failed to download: {filename}")
                 return
-            
+
             # Track download time for grace period logic (fallback SSH uses this)
             self.last_file_download_time = datetime.now()
-            
+
             # Wait 3 seconds for file to fully write on remote
             logger.debug("⏳ Waiting 3s for file to fully write...")
             await asyncio.sleep(3)
-            
+
             # Process the file (parse + import + Discord post)
             result = await self.process_gamestats_file(local_path, filename)
-            
+
             if result and result.get('success'):
                 # Post to Discord via round publisher
                 await self.round_publisher.publish_round_stats(filename, result)
                 logger.info(f"✅ WebSocket-triggered import complete: {filename}")
             else:
                 logger.warning(f"⚠️ File processed but no stats: {filename}")
-                
+
         except Exception as e:
             logger.error(f"❌ WebSocket file handler error: {e}", exc_info=True)
 
@@ -739,7 +870,7 @@ class UltimateETLegacyBot(commands.Bot):
             ssh = None
             try:
                 from bot.automation.ssh_handler import configure_ssh_host_key_policy
-                
+
                 ssh = paramiko.SSHClient()
                 configure_ssh_host_key_policy(ssh)
 
@@ -798,7 +929,7 @@ class UltimateETLegacyBot(commands.Bot):
             if self.config.database_type == "postgres":
                 from postgresql_database_manager import PostgreSQLDatabase
                 from pathlib import Path
-                
+
                 # Create database manager instance (reuses existing pool)
                 db_config = {
                     'host': self.config.postgres_host,
@@ -807,30 +938,37 @@ class UltimateETLegacyBot(commands.Bot):
                     'user': self.config.postgres_user,
                     'password': self.config.postgres_password
                 }
-                
+
                 db_manager = PostgreSQLDatabase(db_config)
                 await db_manager.connect()
-                
+
                 # 🔧 FIX: Use process_file() not import_stats_file() (method doesn't exist!)
                 success, message = await db_manager.process_file(Path(local_path))
-                
+
                 await db_manager.disconnect()
-                
+
                 if not success:
                     raise Exception(f"Import failed: {message}")
-                
+
                 # Parse file to get player count for return value
                 from community_stats_parser import C0RNP0RN3StatsParser
-                parser = C0RNP0RN3StatsParser()
+                parser = C0RNP0RN3StatsParser(
+                    round_match_window_minutes=self.config.round_match_window_minutes
+                )
                 stats_data = parser.parse_stats_file(local_path)
-                
-                # Mark as processed
+
+                # Mark as processed (with SHA256 hash for integrity verification)
                 try:
-                    await self.file_tracker.mark_processed(filename, success=True)
+                    await self.file_tracker.mark_processed(
+                        filename, success=True, file_path=local_path
+                    )
                     self.processed_files.add(filename)
                 except Exception as e:
                     logger.debug(f"Failed to mark {filename} as processed: {e}")
-                
+
+                # Reset error tracking on success
+                self.reset_error_tracking("file_processing")
+
                 return {
                     "success": True,
                     "round_id": None,  # Database manager doesn't return round_id
@@ -843,7 +981,9 @@ class UltimateETLegacyBot(commands.Bot):
                 from community_stats_parser import C0RNP0RN3StatsParser
 
                 # Parse using existing parser (it reads the file itself)
-                parser = C0RNP0RN3StatsParser()
+                parser = C0RNP0RN3StatsParser(
+                    round_match_window_minutes=self.config.round_match_window_minutes
+                )
                 stats_data = parser.parse_stats_file(local_path)
 
                 if not stats_data or stats_data.get("error"):
@@ -854,12 +994,17 @@ class UltimateETLegacyBot(commands.Bot):
 
                 # Import to database using existing import logic
                 round_id = await self._import_stats_to_db(stats_data, filename)
-                # Mark file as processed only after successful import
+                # Mark file as processed only after successful import (with SHA256)
                 try:
-                    await self.file_tracker.mark_processed(filename, success=True)
+                    await self.file_tracker.mark_processed(
+                        filename, success=True, file_path=local_path
+                    )
                     self.processed_files.add(filename)
                 except Exception as e:
                     logger.debug(f"Failed to mark {filename} as processed: {e}")
+
+                # Reset error tracking on success
+                self.reset_error_tracking("file_processing")
 
                 return {
                     "success": True,
@@ -870,7 +1015,15 @@ class UltimateETLegacyBot(commands.Bot):
                 }
 
         except Exception as e:
-            logger.error(f"❌ Processing failed: {e}")
+            logger.error(f"❌ Processing failed for {filename}: {e}")
+
+            # Track consecutive processing failures
+            await self.track_error(
+                "file_processing",
+                f"Failed to process {filename}: {e}",
+                max_consecutive=5
+            )
+
             return {
                 "success": False,
                 "round_id": None,
@@ -971,7 +1124,7 @@ class UltimateETLegacyBot(commands.Bot):
             if stats_data.get('match_summary'):
                 logger.info("📋 Importing match summary (cumulative R1+R2 stats)...")
                 match_summary = stats_data['match_summary']
-                
+
                 # Check if match summary already exists
                 check_summary_query = """
                     SELECT id FROM rounds
@@ -981,7 +1134,7 @@ class UltimateETLegacyBot(commands.Bot):
                     check_summary_query,
                     (date_part, stats_data["map_name"]),
                 )
-                
+
                 if not existing_summary:
                     # Insert match summary as round_number = 0 (use same gaming_session_id as the rounds)
                     insert_summary_query = """
@@ -1007,13 +1160,13 @@ class UltimateETLegacyBot(commands.Bot):
                             gaming_session_id,  # Same session as R1/R2
                         ),
                     )
-                    
+
                     # Insert match summary player stats
                     for player in match_summary.get("players", []):
                         await self._insert_player_stats(
                             match_summary_id, date_part, match_summary, player
                         )
-                    
+
                     logger.info(
                         f"✅ Imported match summary (ID: {match_summary_id}) with "
                         f"{len(match_summary.get('players', []))} players"
@@ -1111,7 +1264,7 @@ class UltimateETLegacyBot(commands.Bot):
             else:
                 logger.debug(f"🎮 Continuing session #{prev_session_id} (gap: {gap_minutes:.1f} min from previous round)")
                 return prev_session_id
-                
+
         except Exception as e:
             logger.warning(f"⚠️ Error calculating gaming_session_id: {e}. Using NULL.")
             return None
@@ -1341,7 +1494,7 @@ class UltimateETLegacyBot(commands.Bot):
                 f"Failed to insert weapon stats for {player.get('name')} (session {round_id}): {e}",
                 exc_info=True,
             )
-        
+
         # 🔗 CRITICAL: Update player aliases for !stats and !link commands
         await self._update_player_alias(
             player.get("guid", "UNKNOWN"),
@@ -1352,7 +1505,7 @@ class UltimateETLegacyBot(commands.Bot):
     async def _update_player_alias(self, guid, alias, last_seen_date):
         """
         Track player aliases for !stats and !link commands
-        
+
         This is CRITICAL for !stats and !link to work properly!
         Updates the player_aliases table every time we see a player.
         """
@@ -1363,14 +1516,14 @@ class UltimateETLegacyBot(commands.Bot):
                 last_seen_datetime = datetime.strptime(last_seen_date, '%Y-%m-%d')
             else:
                 last_seen_datetime = last_seen_date
-            
+
             # Check if this GUID+alias combination exists
             check_query = 'SELECT times_seen FROM player_aliases WHERE guid = ? AND alias = ?'
             existing = await self.db_adapter.fetch_one(check_query, (guid, alias))
 
             if existing:
                 # Update existing alias: increment times_seen and update last_seen
-                update_query = '''UPDATE player_aliases 
+                update_query = '''UPDATE player_aliases
                        SET times_seen = times_seen + 1, last_seen = ?
                        WHERE guid = ? AND alias = ?'''
                 await self.db_adapter.execute(update_query, (last_seen_datetime, guid, alias))
@@ -1436,11 +1589,28 @@ class UltimateETLegacyBot(commands.Bot):
         if not self.monitoring or not self.ssh_enabled:
             return
 
-        # ========== SKIP IF WEBSOCKET IS CONNECTED ==========
-        # When WebSocket push is active, no need for SSH polling
-        if (hasattr(self, 'ws_client') and self.ws_client 
-                and self.ws_client.is_connected):
-            logger.debug("⏭️ Skipping SSH check - WebSocket push is active")
+        # ========== WEBSOCKET STATUS CHECK ==========
+        # WebSocket support is DEPRECATED (Dec 2025) - Discord Webhook approach replaces it
+        # Keeping this check for backwards compatibility only
+        # VPS now uses stats_webhook_notify.py to POST directly to Discord
+        ws_active = False
+        if hasattr(self, 'ws_client') and self.ws_client and self.config.ws_enabled:
+            ws_active = getattr(self.ws_client, 'is_connected', False)
+            # Also check if we've received data recently (within 5 min)
+            if ws_active and hasattr(self.ws_client, 'last_notification'):
+                last_notif = self.ws_client.last_notification
+                if last_notif:
+                    time_since_notif = (datetime.now() - last_notif).total_seconds()
+                    # If no notification in 5 min, WebSocket might be stale
+                    if time_since_notif > 300:
+                        ws_active = False
+                        logger.info(
+                            f"⚠️ WebSocket connected but no data in {time_since_notif:.0f}s - using SSH fallback"
+                        )
+
+        if ws_active:
+            # WebSocket is working - skip SSH polling
+            logger.debug("🔌 WebSocket active - skipping SSH polling this cycle")
             return
 
         try:
@@ -1454,34 +1624,38 @@ class UltimateETLegacyBot(commands.Bot):
                     cet = ZoneInfo("Europe/Paris")
                 except ImportError:
                     cet = None
-            
+
             now = datetime.now(cet) if cet else datetime.now()
             hour = now.hour
-            
+
             # Skip SSH check during dead hours (02:00-11:00)
             if 2 <= hour < 11:
-                logger.debug(f"⏸️  Dead hours ({hour:02d}:00 CET) - skipping SSH check")
+                # Log once per hour instead of every 60s
+                if not hasattr(self, '_last_dead_hour_log') or self._last_dead_hour_log != hour:
+                    self._last_dead_hour_log = hour
+                    logger.info(f"⏸️ Dead hours ({hour:02d}:00 CET) - SSH checks paused until 11:00")
                 return
-            
+
             # ========== VOICE DETECTION (Player Count Check) ==========
             total_players = 0
             for channel_id in self.gaming_voice_channels:
                 channel = self.get_channel(channel_id)
                 if channel and hasattr(channel, "members"):
                     total_players += sum(1 for m in channel.members if not m.bot)
-            
+
             # ========== INTERVAL-BASED CHECKING (Counter System with Grace Period) ==========
             self.ssh_check_counter += 1
 
             # Calculate time since last file was downloaded
             grace_period_active = False
+            grace_period_seconds = self.config.monitoring_grace_period_minutes * 60
             if hasattr(self, 'last_file_download_time') and self.last_file_download_time:
                 time_since_last_file = (datetime.now() - self.last_file_download_time).total_seconds()
-                grace_period_active = time_since_last_file < 1800  # 30 minutes grace period
+                grace_period_active = time_since_last_file < grace_period_seconds
 
             if total_players >= 6 or grace_period_active:
                 # ACTIVE MODE: Check every 60 seconds (every 1 cycle)
-                # Triggered by: 6+ players in voice OR within 30min of last file
+                # Triggered by: 6+ players in voice OR within grace period of last file
                 interval = 1
                 mode = "ACTIVE (players)" if total_players >= 6 else "ACTIVE (grace period)"
             else:
@@ -1505,7 +1679,7 @@ class UltimateETLegacyBot(commands.Bot):
                 f"🔍 SSH check triggered ({mode} mode, "
                 f"{total_players} players in voice)"
             )
-            
+
             # ========== SSH CHECK EXECUTION ==========
             # Build SSH config from config object
             ssh_config = {
@@ -1574,9 +1748,9 @@ class UltimateETLegacyBot(commands.Bot):
                         process_start = time.time()
                         result = await self.process_gamestats_file(local_path, filename)
                         process_time = time.time() - process_start
-                        
+
                         logger.info(f"⚙️ Processing completed in {process_time:.2f}s")
-                        
+
                         # 🆕 AUTO-POST to Discord after processing!
                         if result and result.get('success'):
                             logger.info(f"📊 Posting to Discord: {result.get('player_count', 0)} players")
@@ -1588,14 +1762,19 @@ class UltimateETLegacyBot(commands.Bot):
                             logger.warning(f"⚠️ Skipping Discord post")
                     else:
                         logger.error(f"❌ Download failed for {filename}")
-            
+
             if new_files_count == 0:
                 logger.debug(f"✅ All {len(remote_files)} files already processed")
             else:
                 logger.info(f"🎉 Processed {new_files_count} new file(s) this check")
 
+            # Reset error tracking on successful cycle
+            self.reset_error_tracking("ssh_monitor")
+
         except Exception as e:
             logger.error(f"❌ endstats_monitor error: {e}", exc_info=True)
+            # Track consecutive errors and alert admins if threshold reached
+            await self.track_error("ssh_monitor", str(e), max_consecutive=3)
 
     @endstats_monitor.before_loop
     async def before_endstats_monitor(self):
@@ -1701,14 +1880,182 @@ class UltimateETLegacyBot(commands.Bot):
         """Wait for bot to be ready"""
         await self.wait_until_ready()
 
+    # ==================== WEBSITE LIVE STATUS UPDATER ====================
+
+    @tasks.loop(seconds=30)
+    async def live_status_updater(self):
+        """
+        🌐 Website Live Status Updater - Runs every 30 seconds
+
+        Updates the live_status database table with:
+        - Voice channel members (who's in gaming voice)
+        - Game server status (online/offline, map, player count)
+
+        This data is consumed by the website's /api/live-status endpoint.
+        """
+        rcon = None  # Track RCON connection for cleanup
+        try:
+            # Skip if database not ready or bot is closing
+            if not hasattr(self, 'db_adapter') or not self.db_adapter:
+                return
+            if self.is_closed():
+                return
+
+            # ========== VOICE CHANNEL STATUS ==========
+            voice_members = []
+            voice_count = 0
+
+            if hasattr(self, 'gaming_voice_channels') and self.gaming_voice_channels:
+                for channel_id in self.gaming_voice_channels:
+                    channel = self.get_channel(channel_id)
+                    if channel and hasattr(channel, 'members'):
+                        for member in channel.members:
+                            if not member.bot:
+                                voice_members.append({
+                                    'id': member.id,
+                                    'name': member.display_name,
+                                    'avatar': str(member.display_avatar.url) if member.display_avatar else None
+                                })
+                                voice_count += 1
+
+            voice_data = {
+                'count': voice_count,
+                'members': voice_members,
+                'channel_name': 'Gaming',
+            }
+
+            # ========== GAME SERVER STATUS ==========
+            server_data = {
+                'online': False,
+                'map': None,
+                'player_count': 0,
+                'max_players': 20,
+                'players': [],
+            }
+
+            # Try to get server status via RCON (from ServerControl cog)
+            try:
+                server_cog = self.get_cog('ServerControl')
+                if server_cog and server_cog.rcon_enabled and server_cog.rcon_password:
+                    from bot.cogs.server_control import ETLegacyRCON
+                    rcon = ETLegacyRCON(
+                        server_cog.rcon_host,
+                        server_cog.rcon_port,
+                        server_cog.rcon_password
+                    )
+                    # Set socket timeout to prevent blocking on shutdown
+                    if hasattr(rcon, 'socket') and rcon.socket:
+                        rcon.socket.settimeout(5.0)
+                    try:
+                        status_response = rcon.send_command('status')
+                        rcon.close()
+                        rcon = None
+
+                        if status_response and 'Error' not in status_response:
+                            server_data['online'] = True
+
+                            # Parse map name
+                            for line in status_response.split('\n'):
+                                if line.startswith('map:'):
+                                    server_data['map'] = line.split(':', 1)[1].strip()
+                                    break
+
+                            # Parse players (each line after header has: num score ping name)
+                            player_lines = []
+                            in_player_section = False
+                            for line in status_response.split('\n'):
+                                if 'num score ping' in line.lower():
+                                    in_player_section = True
+                                    continue
+                                if in_player_section and line.strip():
+                                    parts = line.split()
+                                    if len(parts) >= 4:
+                                        # Extract player name (may contain spaces)
+                                        name = ' '.join(parts[3:])
+                                        # Remove color codes ^1, ^2, etc.
+                                        clean_name = re.sub(r'\^[0-9]', '', name)
+                                        player_lines.append({'name': clean_name.strip()})
+
+                            server_data['players'] = player_lines
+                            server_data['player_count'] = len(player_lines)
+                    except Exception:
+                        if rcon:
+                            rcon.close()
+                            rcon = None
+            except Exception as e:
+                logger.debug(f"RCON status check failed: {e}")
+                if rcon:
+                    rcon.close()
+                    rcon = None
+
+            # ========== UPDATE DATABASE ==========
+            # Update voice channel status
+            await self.db_adapter.execute(
+                """
+                INSERT INTO live_status (status_type, status_data, updated_at)
+                VALUES ($1, $2, NOW())
+                ON CONFLICT (status_type) DO UPDATE SET
+                    status_data = $2,
+                    updated_at = NOW()
+                """,
+                ('voice_channel', json.dumps(voice_data))
+            )
+
+            # Update game server status
+            await self.db_adapter.execute(
+                """
+                INSERT INTO live_status (status_type, status_data, updated_at)
+                VALUES ($1, $2, NOW())
+                ON CONFLICT (status_type) DO UPDATE SET
+                    status_data = $2,
+                    updated_at = NOW()
+                """,
+                ('game_server', json.dumps(server_data))
+            )
+
+            logger.debug(
+                f"🌐 Live status updated: {voice_count} in voice, "
+                f"server {'online' if server_data['online'] else 'offline'}"
+            )
+
+        except asyncio.CancelledError:
+            # Graceful shutdown - clean up RCON if needed
+            if rcon:
+                try:
+                    rcon.close()
+                except Exception:
+                    pass
+            logger.info("Live status updater stopped (shutdown)")
+            raise  # Re-raise to properly cancel the task
+
+        except Exception as e:
+            # Clean up RCON on any error
+            if rcon:
+                try:
+                    rcon.close()
+                except Exception:
+                    pass
+            logger.error(f"Live status update error: {e}", exc_info=True)
+
+    @live_status_updater.before_loop
+    async def before_live_status_updater(self):
+        """Wait for bot to be ready"""
+        await self.wait_until_ready()
+
     # ==================== BOT EVENTS ====================
 
     async def on_message(self, message):
         """Process messages and filter by allowed channels"""
+        # ========== WEBHOOK TRIGGER HANDLER ==========
+        # Check if this is a webhook notification from VPS to trigger stats processing
+        # Webhook posts to control channel, bot processes and posts to production channel
+        if await self._handle_webhook_trigger(message):
+            return  # Handled as webhook trigger, don't process as command
+
         # Ignore bot's own messages
         if message.author.bot:
             return
-        
+
         # Only process commands in allowed channels
         # Use bot_command_channels if set, otherwise fall back to public_channels
         allowed_channels = self.bot_command_channels or self.public_channels
@@ -1716,9 +2063,539 @@ class UltimateETLegacyBot(commands.Bot):
             if message.channel.id not in allowed_channels:
                 # Silently ignore messages in non-whitelisted channels
                 return
-        
+
         # Process commands normally
         await self.process_commands(message)
+
+    def _check_webhook_rate_limit(self, webhook_id: int) -> bool:
+        """Rate limit: Max 5 triggers per 60 seconds per webhook."""
+        # timedelta already imported at top of file
+
+        now = datetime.now()
+        window_start = now - timedelta(seconds=self._webhook_rate_limit_window)
+
+        timestamps = self._webhook_rate_limit[webhook_id]
+
+        # Remove old timestamps
+        while timestamps and timestamps[0] < window_start:
+            timestamps.popleft()
+
+        # Check limit
+        if len(timestamps) >= self._webhook_rate_limit_max:
+            wait_time = (timestamps[0] + timedelta(seconds=self._webhook_rate_limit_window) - now).total_seconds()
+            logger.warning(
+                f"🚨 Webhook {webhook_id} rate limited "
+                f"({len(timestamps)} triggers in {self._webhook_rate_limit_window}s). "
+                f"Retry in {wait_time:.1f}s"
+            )
+            return False
+
+        timestamps.append(now)
+        return True
+
+    def _validate_stats_filename(self, filename: str) -> bool:
+        """
+        Strict validation for stats filenames.
+
+        Valid format: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+        Example: 2025-12-09-221829-etl_sp_delivery-round-1.txt
+
+        Security: Prevents path traversal, injection, null bytes
+        """
+        import re
+
+        # Length check (prevent DoS)
+        if len(filename) > 255:
+            logger.warning(f"🚨 Filename too long: {len(filename)} chars")
+            return False
+
+        # Path traversal checks
+        if any(char in filename for char in ['/', '\\', '\0']):
+            logger.warning(f"🚨 Invalid characters in filename: {filename}")
+            return False
+
+        if '..' in filename:
+            logger.warning(f"🚨 Parent directory reference: {filename}")
+            return False
+
+        # Strict pattern: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+        pattern = r'^(\d{4})-(\d{2})-(\d{2})-(\d{6})-([a-zA-Z0-9_-]+)-round-(\d+)\.txt$'
+        match = re.match(pattern, filename)
+
+        if not match:
+            logger.warning(f"🚨 Invalid filename format: {filename}")
+            return False
+
+        # Validate components
+        year, month, day, timestamp, map_name, round_num = match.groups()
+
+        if not (2020 <= int(year) <= 2035):
+            return False
+        if not (1 <= int(month) <= 12):
+            return False
+        if not (1 <= int(day) <= 31):
+            return False
+        if not (1 <= int(round_num) <= 10):
+            return False
+        if len(map_name) > 50:
+            return False
+
+        # Validate timestamp (HHMMSS)
+        hour = int(timestamp[0:2])
+        minute = int(timestamp[2:4])
+        second = int(timestamp[4:6])
+        if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
+            return False
+
+        logger.debug(f"✅ Filename validated: {filename}")
+        return True
+
+    def _validate_endstats_filename(self, filename: str) -> bool:
+        """
+        Strict validation for endstats filenames.
+
+        Valid format: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
+        Example: 2026-01-12-224606-te_escape2-round-2-endstats.txt
+
+        Security: Prevents path traversal, injection, null bytes
+        """
+        import re
+
+        # Length check (prevent DoS)
+        if len(filename) > 255:
+            logger.warning(f"🚨 Endstats filename too long: {len(filename)} chars")
+            return False
+
+        # Path traversal checks
+        if any(char in filename for char in ['/', '\\', '\0']):
+            logger.warning(f"🚨 Invalid characters in endstats filename: {filename}")
+            return False
+
+        if '..' in filename:
+            logger.warning(f"🚨 Parent directory reference in endstats: {filename}")
+            return False
+
+        # Strict pattern: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
+        pattern = r'^(\d{4})-(\d{2})-(\d{2})-(\d{6})-([a-zA-Z0-9_-]+)-round-(\d+)-endstats\.txt$'
+        match = re.match(pattern, filename)
+
+        if not match:
+            logger.debug(f"Filename doesn't match endstats pattern: {filename}")
+            return False
+
+        # Validate components
+        year, month, day, timestamp, map_name, round_num = match.groups()
+
+        if not (2020 <= int(year) <= 2035):
+            return False
+        if not (1 <= int(month) <= 12):
+            return False
+        if not (1 <= int(day) <= 31):
+            return False
+        if not (1 <= int(round_num) <= 10):
+            return False
+        if len(map_name) > 50:
+            return False
+
+        # Validate timestamp (HHMMSS)
+        hour = int(timestamp[0:2])
+        minute = int(timestamp[2:4])
+        second = int(timestamp[4:6])
+        if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
+            return False
+
+        logger.debug(f"✅ Endstats filename validated: {filename}")
+        return True
+
+    async def _handle_webhook_trigger(self, message) -> bool:
+        """
+        Handle webhook trigger messages from VPS.
+
+        VPS webhook posts to control channel with filename.
+        Bot extracts filename, downloads via SSH, processes, and posts stats.
+
+        Returns True if message was handled as webhook trigger.
+        """
+        # Check if webhook trigger is configured
+        trigger_channel_id = self.config.webhook_trigger_channel_id
+        if not trigger_channel_id:
+            return False
+
+        # Check if message is in the trigger channel
+        if message.channel.id != trigger_channel_id:
+            return False
+
+        # Check if message is from a webhook (webhooks have webhook_id)
+        if not message.webhook_id:
+            return False
+
+        # CRITICAL: Webhook ID whitelist enforcement
+        webhook_whitelist = self.config.webhook_trigger_whitelist
+        if not webhook_whitelist:
+            webhook_logger.error("⚠️ Webhook trigger disabled: WEBHOOK_TRIGGER_WHITELIST not configured")
+            return False
+
+        if str(message.webhook_id) not in webhook_whitelist:
+            webhook_logger.warning(
+                f"🚨 SECURITY: Unauthorized webhook {message.webhook_id} "
+                f"attempted trigger in channel {message.channel.id}"
+            )
+            return False
+
+        # Check username (additional layer)
+        expected_username = self.config.webhook_trigger_username
+        if expected_username and message.author.name != expected_username:
+            webhook_logger.warning(f"🚨 Username mismatch: {message.author.name}")
+            return False
+
+        # HIGH: Rate limit check
+        if not self._check_webhook_rate_limit(message.webhook_id):
+            return False
+
+        # Extract filename from message content
+        # Format: 📊 `2025-12-09-221829-etl_sp_delivery-round-1.txt`
+        filename = None
+        if message.content:
+            import re
+            match = re.search(r'`([^`]+\.txt)`', message.content)
+            if match:
+                filename = match.group(1)
+
+        if not filename:
+            webhook_logger.debug("No filename found in webhook message")
+            return False
+
+        # CRITICAL: Validate filename for security
+        # Check for both regular stats files and endstats files
+        is_endstats = filename.endswith('-endstats.txt')
+
+        if is_endstats:
+            if not self._validate_endstats_filename(filename):
+                webhook_logger.error(f"🚨 SECURITY: Invalid endstats filename from webhook: {filename}")
+                return False
+            webhook_logger.info(f"📥 Endstats webhook trigger validated: {filename}")
+            # Process endstats file in background
+            asyncio.create_task(self._process_webhook_triggered_endstats(filename, message))
+        else:
+            if not self._validate_stats_filename(filename):
+                webhook_logger.error(f"🚨 SECURITY: Invalid filename from webhook: {filename}")
+                return False
+            webhook_logger.info(f"📥 Webhook trigger validated: {filename}")
+            # Process regular stats file in background
+            asyncio.create_task(self._process_webhook_triggered_file(filename, message))
+
+        return True
+
+    async def _process_webhook_triggered_file(self, filename: str, trigger_message):
+        """
+        Process a file triggered by webhook notification.
+
+        Downloads file via SSH, parses, imports to DB, and posts stats.
+        """
+        try:
+            webhook_logger.info(f"⚡ Processing webhook-triggered file: {filename}")
+
+            # Check if already processed (prevent duplicates)
+            if not await self.file_tracker.should_process_file(filename):
+                webhook_logger.debug(f"⏭️ File already processed: {filename}")
+                # Optionally delete the trigger message
+                try:
+                    await trigger_message.delete()
+                except Exception:
+                    pass
+                return
+
+            # Build SSH config
+            ssh_config = {
+                "host": self.config.ssh_host,
+                "port": self.config.ssh_port,
+                "user": self.config.ssh_user,
+                "key_path": self.config.ssh_key_path,
+                "remote_path": self.config.ssh_remote_path,
+            }
+
+            # Download file via SSH
+            from bot.automation.ssh_handler import SSHHandler
+            local_path = await SSHHandler.download_file(
+                ssh_config, filename, self.config.stats_directory
+            )
+
+            if not local_path:
+                webhook_logger.error(f"❌ Failed to download: {filename}")
+                # React to trigger with failure indicator
+                try:
+                    await trigger_message.add_reaction('❌')
+                    await trigger_message.reply(f"⚠️ Failed to download `{filename}` from server.")
+                except Exception:
+                    pass
+                return
+
+            webhook_logger.info(f"✅ Downloaded: {local_path}")
+
+            # Wait for file to fully write
+            await asyncio.sleep(2)
+
+            # Process the file (parse and import to DB)
+            result = await self.process_gamestats_file(local_path, filename)
+
+            if result and result.get('success'):
+                # Post to production stats channel
+                webhook_logger.info(f"📊 Posting stats: {result.get('player_count', 0)} players")
+                await self.round_publisher.publish_round_stats(filename, result)
+                webhook_logger.info(f"✅ Successfully processed and posted: {filename}")
+
+                # Delete the trigger message (clean up control channel)
+                try:
+                    await trigger_message.delete()
+                    webhook_logger.debug("🗑️ Deleted trigger message")
+                except Exception as e:
+                    webhook_logger.debug(f"Could not delete trigger message: {e}")
+            else:
+                error_msg = result.get('error', 'Unknown error') if result else 'No result'
+                webhook_logger.warning(f"⚠️ Processing failed for {filename}: {error_msg}")
+                # Notify trigger channel of processing failure
+                try:
+                    await trigger_message.add_reaction('⚠️')
+                    # Sanitize error message for Discord (remove sensitive paths)
+                    safe_error = error_msg.replace(str(self.config.stats_directory), "[stats_dir]")
+                    await trigger_message.reply(
+                        f"⚠️ Failed to process `{filename}`\n"
+                        f"Error: {safe_error[:200]}"
+                    )
+                except Exception:
+                    pass
+
+        except Exception as e:
+            webhook_logger.error(f"❌ Error processing webhook-triggered file: {e}", exc_info=True)
+            # Notify trigger channel of critical error
+            try:
+                await trigger_message.add_reaction('🚨')
+                await trigger_message.reply(f"🚨 Critical error processing `{filename}`. Check logs.")
+            except Exception:
+                pass
+            # Track for admin alerts
+            await self.track_error("webhook_processing", str(e), max_consecutive=3)
+
+    async def _process_webhook_triggered_endstats(self, filename: str, trigger_message):
+        """
+        Process an endstats file triggered by webhook notification.
+
+        Downloads file via SSH, parses awards/VS stats, stores in DB, posts embed.
+        Endstats file: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
+        """
+        try:
+            webhook_logger.info(f"🏆 Processing webhook-triggered endstats: {filename}")
+
+            # Import parser
+            from bot.endstats_parser import parse_endstats_file
+
+            # Check if already processed (prevent duplicates)
+            # Use a separate check for endstats files
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            result = await self.db_adapter.fetch_one(check_query, (filename,))
+            if result:
+                webhook_logger.debug(f"⏭️ Endstats already processed: {filename}")
+                try:
+                    await trigger_message.delete()
+                except Exception:
+                    pass
+                return
+
+            # Build SSH config
+            ssh_config = {
+                "host": self.config.ssh_host,
+                "port": self.config.ssh_port,
+                "user": self.config.ssh_user,
+                "key_path": self.config.ssh_key_path,
+                "remote_path": self.config.ssh_remote_path,
+            }
+
+            # Download file via SSH
+            from bot.automation.ssh_handler import SSHHandler
+            local_path = await SSHHandler.download_file(
+                ssh_config, filename, self.config.stats_directory
+            )
+
+            if not local_path:
+                webhook_logger.error(f"❌ Failed to download endstats: {filename}")
+                try:
+                    await trigger_message.add_reaction('❌')
+                    await trigger_message.reply(f"⚠️ Failed to download `{filename}` from server.")
+                except Exception:
+                    pass
+                return
+
+            webhook_logger.info(f"✅ Downloaded endstats: {local_path}")
+
+            # Wait for file to fully write
+            await asyncio.sleep(1)
+
+            # Parse the endstats file
+            endstats_data = parse_endstats_file(local_path)
+
+            if not endstats_data:
+                webhook_logger.error(f"❌ Failed to parse endstats: {filename}")
+                try:
+                    await trigger_message.add_reaction('⚠️')
+                except Exception:
+                    pass
+                return
+
+            metadata = endstats_data['metadata']
+            awards = endstats_data['awards']
+            vs_stats = endstats_data['vs_stats']
+
+            webhook_logger.info(
+                f"📊 Parsed endstats: {len(awards)} awards, {len(vs_stats)} VS stats"
+            )
+
+            # Find the matching round in the database
+            # The main stats file should have already created the round
+            match_id_prefix = metadata['match_id']  # e.g., "2026-01-12-224606-te_escape2"
+            round_number = metadata['round_number']
+
+            round_query = """
+                SELECT id, round_date, map_name FROM rounds
+                WHERE match_id LIKE $1 AND round_number = $2
+                ORDER BY created_at DESC LIMIT 1
+            """
+            round_result = await self.db_adapter.fetch_one(
+                round_query, (f"{match_id_prefix}%", round_number)
+            )
+
+            if not round_result:
+                webhook_logger.warning(
+                    f"⏳ Round not found yet for endstats {filename}. "
+                    f"Main stats file may not be processed yet."
+                )
+                # Re-queue for later processing (could implement retry logic)
+                try:
+                    await trigger_message.add_reaction('⏳')
+                except Exception:
+                    pass
+                return
+
+            round_id = round_result[0]
+            round_date = round_result[1]
+            map_name = round_result[2]
+
+            webhook_logger.info(f"✅ Linked to round_id={round_id}")
+
+            # Store awards in database
+            for award in awards:
+                # Try to find player GUID from aliases
+                player_guid = None
+                alias_query = """
+                    SELECT guid FROM player_aliases
+                    WHERE alias = $1
+                    ORDER BY last_seen DESC LIMIT 1
+                """
+                alias_result = await self.db_adapter.fetch_one(alias_query, (award['player'],))
+                if alias_result:
+                    player_guid = alias_result[0]
+
+                insert_query = """
+                    INSERT INTO round_awards
+                    (round_id, round_date, map_name, round_number, award_name,
+                     player_name, player_guid, award_value, award_value_numeric)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                """
+                await self.db_adapter.execute(insert_query, (
+                    round_id, round_date, map_name, round_number,
+                    award['name'], award['player'], player_guid,
+                    award['value'], award.get('numeric')
+                ))
+
+            webhook_logger.info(f"✅ Stored {len(awards)} awards")
+
+            # Store VS stats in database
+            for vs in vs_stats:
+                player_guid = None
+                alias_query = """
+                    SELECT guid FROM player_aliases
+                    WHERE alias = $1
+                    ORDER BY last_seen DESC LIMIT 1
+                """
+                alias_result = await self.db_adapter.fetch_one(alias_query, (vs['player'],))
+                if alias_result:
+                    player_guid = alias_result[0]
+
+                insert_query = """
+                    INSERT INTO round_vs_stats
+                    (round_id, round_date, map_name, round_number,
+                     player_name, player_guid, kills, deaths)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                """
+                await self.db_adapter.execute(insert_query, (
+                    round_id, round_date, map_name, round_number,
+                    vs['player'], player_guid, vs['kills'], vs['deaths']
+                ))
+
+            webhook_logger.info(f"✅ Stored {len(vs_stats)} VS stats")
+
+            # Mark file as processed
+            processed_query = """
+                INSERT INTO processed_endstats_files (filename, round_id, success)
+                VALUES ($1, $2, TRUE)
+            """
+            await self.db_adapter.execute(processed_query, (filename, round_id))
+
+            # Post endstats embed to production channel
+            await self.round_publisher.publish_endstats(
+                filename, endstats_data, round_id, map_name, round_number
+            )
+
+            webhook_logger.info(f"✅ Successfully processed endstats: {filename}")
+
+            # Delete the trigger message
+            try:
+                await trigger_message.delete()
+                webhook_logger.debug("🗑️ Deleted endstats trigger message")
+            except Exception as e:
+                webhook_logger.debug(f"Could not delete trigger message: {e}")
+
+        except Exception as e:
+            webhook_logger.error(f"❌ Error processing endstats file: {e}", exc_info=True)
+            try:
+                await trigger_message.add_reaction('🚨')
+                await trigger_message.reply(f"🚨 Error processing endstats `{filename}`. Check logs.")
+            except Exception:
+                pass
+            await self.track_error("endstats_processing", str(e), max_consecutive=3)
+
+    async def _validate_webhook_security_config(self):
+        """Validate webhook security configuration on startup."""
+
+        if not self.config.webhook_trigger_channel_id:
+            logger.info("ℹ️ Webhook trigger not configured (feature disabled)")
+            return
+
+        logger.info("🔒 Validating webhook security configuration...")
+
+        errors = []
+
+        # CRITICAL: Webhook whitelist required
+        if not self.config.webhook_trigger_whitelist:
+            errors.append(
+                "WEBHOOK_TRIGGER_WHITELIST is REQUIRED when webhook trigger enabled.\n"
+                "  Prevents unauthorized webhooks from triggering downloads.\n"
+                "  Set in .env: WEBHOOK_TRIGGER_WHITELIST=webhook_id_1,webhook_id_2"
+            )
+        else:
+            logger.info(f"✅ Webhook whitelist: {len(self.config.webhook_trigger_whitelist)} IDs")
+
+        # Validate SSH config
+        if not all([self.config.ssh_host, self.config.ssh_user,
+                    self.config.ssh_key_path, self.config.ssh_remote_path]):
+            errors.append("SSH configuration incomplete (required for webhook downloads)")
+
+        if errors:
+            error_msg = "\n\n❌ WEBHOOK SECURITY ERRORS:\n\n" + "\n\n".join(f"  • {e}" for e in errors)
+            logger.error(error_msg)
+            logger.error("\n🚨 Bot startup FAILED - fix errors and restart\n")
+            raise RuntimeError("Webhook security validation failed")
+
+        logger.info("✅ Webhook security validated")
 
     async def on_ready(self):
         """✅ Bot startup message"""
@@ -1726,11 +2603,22 @@ class UltimateETLegacyBot(commands.Bot):
         logger.info(f"🚀 Ultimate ET:Legacy Bot logged in as {self.user}")
         logger.info(f"🆔 Bot ID: {self.user.id}")
         logger.info(f"📊 Database Type: {self.config.database_type.upper()}")
-        logger.info(f"📍 Database: {self.db_path}")
+        if self.config.database_type == 'postgresql':
+            logger.info(f"📍 Database: {self.config.postgres_database}@{self.config.postgres_host}")
+        else:
+            logger.info(f"📍 Database: {self.db_path}")
         logger.info(f"🎮 Commands Loaded: {len(list(self.commands))}")
         logger.info(f"🔧 Cogs Loaded: {len(self.cogs)}")
         logger.info(f"🌐 Servers: {len(self.guilds)}")
         logger.info("=" * 80)
+
+        # Validate webhook security
+        try:
+            await self._validate_webhook_security_config()
+        except RuntimeError as e:
+            logger.critical(f"❌ Security validation failed: {e}")
+            await self.close()
+            return
 
         # Clear any old slash commands to avoid confusion
         try:
@@ -1739,7 +2627,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info("🧹 Cleared old slash commands")
         except Exception as e:
             logger.warning(f"Could not clear slash commands: {e}")
-        
+
         # 🆕 AUTO-DETECT ACTIVE GAMING SESSION ON STARTUP
         await self.voice_session_service.check_startup_voice_state()
 
@@ -1747,12 +2635,12 @@ class UltimateETLegacyBot(commands.Bot):
         """Track command execution start"""
         import time
         ctx.command_start_time = time.time()
-        
+
         command_logger = get_logger('bot.commands')
         user = f"{ctx.author.name}#{ctx.author.discriminator} ({ctx.author.id})"
         guild = f"{ctx.guild.name} ({ctx.guild.id})" if ctx.guild else "DM"
         channel = f"#{ctx.channel.name}" if hasattr(ctx.channel, 'name') else "DM"
-        
+
         command_logger.info(
             f"▶ COMMAND: !{ctx.command.name} | "
             f"User: {user} | Guild: {guild} | Channel: {channel}"
@@ -1762,14 +2650,14 @@ class UltimateETLegacyBot(commands.Bot):
         """Track successful command completion"""
         import time
         duration = time.time() - getattr(ctx, 'command_start_time', time.time())
-        
+
         log_command_execution(
             ctx,
             f"!{ctx.command.name}",
             start_time=getattr(ctx, 'command_start_time', None),
             end_time=time.time()
         )
-        
+
         # Warn about slow commands
         if duration > 5.0:
             log_performance_warning(f"!{ctx.command.name}", duration, threshold=5.0)
@@ -1778,10 +2666,10 @@ class UltimateETLegacyBot(commands.Bot):
         """🚨 Handle command errors"""
         import time
         self.error_count += 1
-        
+
         # Log the error with full context
         duration = time.time() - getattr(ctx, 'command_start_time', time.time())
-        
+
         log_command_execution(
             ctx,
             f"!{ctx.command.name}" if ctx.command else "unknown",

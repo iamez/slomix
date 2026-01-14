@@ -11,7 +11,7 @@ All methods use paramiko for SSH/SFTP operations.
 
 # SECURITY NOTE: SSH host key verification
 # By default, this module uses paramiko.AutoAddPolicy() which accepts any SSH host key.
-# This is acceptable for connecting to our own trusted VPS but can be changed to 
+# This is acceptable for connecting to our own trusted VPS but can be changed to
 # strict mode (RejectPolicy with known_hosts) via SSH_STRICT_HOST_KEY=true env var.
 # See: https://docs.paramiko.org/en/stable/api/client.html#paramiko.client.AutoAddPolicy
 
@@ -31,20 +31,20 @@ SSH_STRICT_HOST_KEY = os.getenv('SSH_STRICT_HOST_KEY', 'false').lower() == 'true
 def configure_ssh_host_key_policy(ssh_client):
     """
     Configure SSH host key verification policy.
-    
+
     If SSH_STRICT_HOST_KEY=true:
         Uses RejectPolicy - only connects to hosts in ~/.ssh/known_hosts
         More secure but requires manual host key setup
-    
+
     If SSH_STRICT_HOST_KEY=false (default):
         Uses AutoAddPolicy - accepts any host key on first connect
         Less secure but works out of the box for trusted VPS
-    
+
     Args:
         ssh_client: paramiko.SSHClient instance to configure
     """
     import paramiko
-    
+
     if SSH_STRICT_HOST_KEY:
         # Strict mode: only connect to known hosts
         ssh_client.set_missing_host_key_policy(paramiko.RejectPolicy())

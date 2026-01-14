@@ -17,7 +17,7 @@ import logging
 import discord
 from discord.ext import commands
 
-from bot.core.checks import is_admin_channel
+from bot.core.checks import is_admin
 from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger("UltimateBot.TeamManagementCog")
@@ -45,7 +45,7 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
         """
         )
 
-    @is_admin_channel()
+    @is_admin()
     @commands.command(name="set_teams")
     async def set_teams(self, ctx, team1_name: str, team2_name: str):
         """👥 Manually set persistent team names for the latest session date
@@ -100,7 +100,7 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
             logger.error(f"Error in set_teams: {e}", exc_info=True)
             await ctx.send(f"❌ Error setting teams: {sanitize_error_message(e)}")
 
-    @is_admin_channel()
+    @is_admin()
     @commands.command(name="assign_player")
     async def assign_player(self, ctx, player_name: str, team_name: str):
         """👤 Assign a player to a persistent team for the latest session date

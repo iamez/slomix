@@ -487,3 +487,131 @@ class RoundPublisherService:
 
         except Exception as e:
             logger.error(f"❌ Error posting map summary: {e}", exc_info=True)
+
+    async def publish_endstats(
+        self,
+        filename: str,
+        endstats_data: dict,
+        round_id: int,
+        map_name: str,
+        round_number: int
+    ):
+        """
+        Post endstats (awards and VS stats) embed to Discord.
+
+        Called after processing endstats file. Posts a follow-up embed
+        with categorized awards and top VS performers.
+
+        Args:
+            filename: Endstats filename (for footer)
+            endstats_data: Parsed endstats dict with 'awards' and 'vs_stats'
+            round_id: Database round ID
+            map_name: Map name
+            round_number: Round number (1 or 2)
+        """
+        try:
+            logger.info(f"🏆 Publishing endstats for {filename}")
+
+            # Get production channel
+            if not self.config.production_channel_id:
+                logger.warning("⚠️ PRODUCTION_CHANNEL_ID not configured")
+                return
+
+            channel = self.bot.get_channel(self.config.production_channel_id)
+            if not channel:
+                logger.error("❌ Production channel not found")
+                return
+
+            awards = endstats_data.get('awards', [])
+            vs_stats = endstats_data.get('vs_stats', [])
+
+            # Import categorization helper
+            from bot.endstats_parser import EndStatsParser
+
+            parser = EndStatsParser()
+            categorized = parser.categorize_awards(awards)
+
+            # Create embed
+            embed = discord.Embed(
+                title=f"🏆 Round {round_number} Awards - {map_name}",
+                color=discord.Color.gold(),
+                timestamp=datetime.now()
+            )
+
+            # Category display info
+            category_info = {
+                'combat': ('⚔️ Combat', ''),
+                'deaths': ('💀 Deaths & Mayhem', ''),
+                'skills': ('🎯 Skills', ''),
+                'weapons': ('🔫 Weapons', ''),
+                'teamwork': ('🤝 Teamwork', ''),
+                'objectives': ('🎯 Objectives', ''),
+                'timing': ('⏱️ Timing', ''),
+                'other': ('📋 Other', ''),
+            }
+
+            # Add categorized awards as fields
+            for category, cat_awards in categorized.items():
+                if not cat_awards:
+                    continue
+
+                cat_name, _ = category_info.get(category, (category.title(), ''))
+
+                # Build award lines
+                award_lines = []
+                for award in cat_awards[:6]:  # Limit per category for embed size
+                    name = award['name']
+                    player = award['player']
+                    value = award['value']
+
+                    # Shorten long award names
+                    if len(name) > 30:
+                        name = name[:27] + "..."
+
+                    award_lines.append(f"**{name}:** {player} ({value})")
+
+                if award_lines:
+                    embed.add_field(
+                        name=cat_name,
+                        value="\n".join(award_lines),
+                        inline=True
+                    )
+
+            # Add VS stats summary if present
+            if vs_stats:
+                # Aggregate VS stats per player
+                player_totals = {}
+                for vs in vs_stats:
+                    player = vs['player']
+                    if player not in player_totals:
+                        player_totals[player] = {'kills': 0, 'deaths': 0}
+                    player_totals[player]['kills'] += vs['kills']
+                    player_totals[player]['deaths'] += vs['deaths']
+
+                # Sort by kills
+                sorted_players = sorted(
+                    player_totals.items(),
+                    key=lambda x: x[1]['kills'],
+                    reverse=True
+                )[:5]  # Top 5
+
+                if sorted_players:
+                    vs_lines = []
+                    for player, stats in sorted_players:
+                        vs_lines.append(f"**{player}:** {stats['kills']}K/{stats['deaths']}D")
+
+                    embed.add_field(
+                        name="📊 VS Stats (Top 5)",
+                        value="\n".join(vs_lines),
+                        inline=False
+                    )
+
+            # Footer
+            embed.set_footer(text=f"Round {round_number} | {filename}")
+
+            # Post embed
+            await channel.send(embed=embed)
+            logger.info(f"✅ Endstats embed posted for {filename}")
+
+        except Exception as e:
+            logger.error(f"❌ Error publishing endstats: {e}", exc_info=True)

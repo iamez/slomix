@@ -503,11 +503,11 @@ class SessionDataService:
 
                 # Get MVP by kills
                 query = f"""
-                    SELECT player_name, SUM(kills) as total_kills, player_guid
+                    SELECT MAX(player_name) as player_name, SUM(kills) as total_kills, player_guid
                     FROM player_comprehensive_stats
                     WHERE round_id IN ({session_ids_str})
                         AND player_guid IN ({team_guids_placeholders})
-                    GROUP BY player_name, player_guid
+                    GROUP BY player_guid
                     ORDER BY total_kills DESC
                     LIMIT 1
                 """

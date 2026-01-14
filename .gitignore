@@ -44,6 +44,7 @@ env/
 *BACKUP*
 *.sql
 !migrations/*.sql
+!website/*.sql
 
 # Root database backups
 etlegacy_production.db.*
@@ -102,6 +103,8 @@ nov2_*.txt
 # Development HTML reports
 *.html
 !docs/*.html
+!website/*.html
+!website/index.html
 
 # Field mapping dev files
 field_*.txt
@@ -180,7 +183,7 @@ check_before_commit.sh
 /scripts/
 /server/
 /temp/
-/tests/
+# /tests/ - Removed: Tests need to be tracked for CI
 /test_files/
 /test_suite/
 /tmp/
@@ -189,7 +192,17 @@ check_before_commit.sh
 /publish_clean/
 /github/
 /performance_updates/
+
+# Prototype projects (have their own branches)
 /website/
+/proximity/
+/opusreview/
+/vps_scripts/
+
+# Root junk files
+nohup.out
+=*
+coverage.xml
 
 # ============================================
 # BOT DIRECTORY EXCLUSIONS

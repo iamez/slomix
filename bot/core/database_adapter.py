@@ -282,3 +282,77 @@ def create_adapter(db_type: str = 'postgresql', **kwargs) -> DatabaseAdapter:
         min_pool_size=kwargs.get('min_pool_size', 2),  # Reduced from 5 (small scale)
         max_pool_size=kwargs.get('max_pool_size', 10)  # Reduced from 20 (small scale)
     )
+
+
+async def ensure_player_name_alias(db_adapter: DatabaseAdapter, config=None) -> bool:
+    """
+    Create TEMP VIEW alias for player_name column compatibility.
+
+    Handles schema differences where tables use 'name' or 'clean_name'
+    instead of 'player_name'. This is a compatibility shim for legacy
+    schema variations.
+
+    Args:
+        db_adapter: DatabaseAdapter instance (PostgreSQLAdapter)
+        config: Optional config object with database_type attribute.
+                Falls back to 'postgresql' if not provided.
+
+    Returns:
+        bool: True if alias was created, False if not needed or failed.
+
+    Note:
+        Errors are logged but not raised to avoid breaking callers.
+        This function is designed to be called before queries that
+        expect a 'player_name' column.
+    """
+    try:
+        # Determine database type
+        db_type = getattr(config, 'database_type', 'postgresql').lower()
+
+        # Get column names for player_comprehensive_stats table
+        if db_type == 'sqlite':
+            columns = await db_adapter.fetch_all(
+                "PRAGMA table_info(player_comprehensive_stats)"
+            )
+            col_names = [col[1] for col in columns]
+        else:  # PostgreSQL
+            columns = await db_adapter.fetch_all("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'player_comprehensive_stats'
+            """)
+            col_names = [col[0] for col in columns]
+
+        # Check if player_name already exists - no alias needed
+        if 'player_name' in col_names:
+            return False
+
+        # Determine source column for alias
+        source_column = None
+        if 'clean_name' in col_names:
+            source_column = 'clean_name'
+        elif 'name' in col_names:
+            source_column = 'name'
+
+        if not source_column:
+            logger.debug("No suitable source column for player_name alias")
+            return False
+
+        # Create temporary view (SQLite only - PostgreSQL schema should have player_name)
+        if db_type == 'sqlite':
+            # nosec B608 - source_column is hardcoded ('name' or 'player_name'), not user input
+            await db_adapter.execute(f"""
+                CREATE TEMP VIEW IF NOT EXISTS player_comprehensive_stats_alias AS
+                SELECT *, {source_column} AS player_name
+                FROM player_comprehensive_stats
+            """)
+            logger.debug(f"Created player_name alias from {source_column}")
+            return True
+        else:
+            # PostgreSQL: Schema should already have player_name column
+            logger.debug("PostgreSQL alias handling - schema should have player_name")
+            return False
+
+    except Exception as e:
+        logger.debug(f"Player name alias setup: {e}")
+        return False

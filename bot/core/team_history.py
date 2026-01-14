@@ -7,9 +7,12 @@ These can be imported and used by bot commands or analysis scripts.
 """
 
 import json
+import logging
 import sqlite3
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 
 class TeamHistoryManager:
@@ -241,18 +244,21 @@ class TeamHistoryManager:
 
 
 if __name__ == "__main__":
+    # Setup logging for standalone execution
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+
     # Example usage
     manager = TeamHistoryManager()
-    
-    print("🏆 Best Performing Lineups (min 1 session):")
-    print("="*60)
-    
+
+    logger.info("Best Performing Lineups (min 1 session):")
+    logger.info("=" * 60)
+
     best = manager.get_best_lineups(min_sessions=1, limit=5)
     for i, lineup in enumerate(best, 1):
-        print(f"\n{i}. Lineup #{lineup['id']} ({lineup['player_count']} players)")
-        print(f"   Sessions: {lineup['total_sessions']}")
-        print(f"   Record: {lineup['total_wins']}W - {lineup['total_losses']}L - {lineup['total_ties']}T")
-        print(f"   Win Rate: {lineup['win_rate']:.1f}%")
-        print(f"   Active: {lineup['first_seen']} to {lineup['last_seen']}")
-    
-    print("\n" + "="*60)
+        logger.info(f"{i}. Lineup #{lineup['id']} ({lineup['player_count']} players)")
+        logger.info(f"   Sessions: {lineup['total_sessions']}")
+        logger.info(f"   Record: {lineup['total_wins']}W - {lineup['total_losses']}L - {lineup['total_ties']}T")
+        logger.info(f"   Win Rate: {lineup['win_rate']:.1f}%")
+        logger.info(f"   Active: {lineup['first_seen']} to {lineup['last_seen']}")
+
+    logger.info("=" * 60)
