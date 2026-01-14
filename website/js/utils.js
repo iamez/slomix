@@ -21,6 +21,25 @@ export function escapeHtml(str) {
 }
 
 /**
+ * Escape a string for safe use in JavaScript inline handlers (onclick, etc.).
+ * This prevents breaking out of quoted attribute values.
+ * Use this when inserting user data into onclick="func('${value}')" patterns.
+ * @param {string} str - The string to escape
+ * @returns {string} - JavaScript-safe string for use in quoted attributes
+ */
+export function escapeJsString(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/</g, '\\x3c')
+        .replace(/>/g, '\\x3e');
+}
+
+/**
  * Safely insert HTML that contains escaped user content.
  * Only use this when ALL user-controlled content has been escaped with escapeHtml().
  * @param {Element} element - The target element

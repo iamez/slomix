@@ -3,7 +3,7 @@
  * @module leaderboard
  */
 
-import { API_BASE, fetchJSON, escapeHtml } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js';
 
 // Leaderboard state
 let currentLbStat = 'dpm';
@@ -55,6 +55,7 @@ export async function loadLeaderboard() {
             if (currentLbStat === 'kd') valueClass = 'text-brand-blue font-bold';
 
             const safeName = escapeHtml(row.name);
+            const jsName = escapeJsString(row.name);
             const safeInitials = escapeHtml(row.name.substring(0, 2).toUpperCase());
             const html = `
                 <tr class="hover:bg-white/5 transition group">
@@ -64,7 +65,7 @@ export async function loadLeaderboard() {
                             <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400 group-hover:text-white group-hover:bg-brand-blue transition">
                                 ${safeInitials}
                             </div>
-                            <span class="font-bold text-white cursor-pointer hover:underline" onclick="loadPlayerProfile('${safeName}')">${safeName}</span>
+                            <span class="font-bold text-white cursor-pointer hover:underline" onclick="loadPlayerProfile('${jsName}')">${safeName}</span>
                         </div>
                     </td>
                     <td class="px-6 py-4 text-right font-mono ${valueClass}">${row.value}</td>
@@ -137,9 +138,10 @@ export async function loadQuickLeaders() {
             const rankColor = index === 0 ? 'text-brand-gold' : index === 1 ? 'text-slate-400' : 'text-brand-rose';
             const safeInitials = escapeHtml(player.name.substring(0, 2).toUpperCase());
             const safeName = escapeHtml(player.name);
+            const jsName = escapeJsString(player.name);
 
             const html = `
-                <div class="flex items-center justify-between group cursor-pointer" onclick="loadPlayerProfile('${safeName}')">
+                <div class="flex items-center justify-between group cursor-pointer" onclick="loadPlayerProfile('${jsName}')">
                     <div class="flex items-center gap-3">
                         <div class="font-mono font-bold ${rankColor} text-sm">${player.rank}</div>
                         <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">${safeInitials}</div>

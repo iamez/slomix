@@ -3,7 +3,7 @@
  * @module matches
  */
 
-import { API_BASE, fetchJSON, escapeHtml, formatStopwatchTime } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, escapeJsString, formatStopwatchTime } from './utils.js';
 import { openModal } from './auth.js';
 
 /**
@@ -350,6 +350,7 @@ export async function loadMatchDetails(matchId) {
                 const isTop = index === 0;
                 const rowBg = isTop ? 'bg-brand-gold/5' : '';
                 const safeName = escapeHtml(player.name);
+                const jsName = escapeJsString(player.name);
                 const kdColor = player.kd >= 2.0 ? 'text-brand-emerald' : player.kd >= 1.0 ? 'text-white' : 'text-brand-rose';
 
                 html += `
@@ -358,7 +359,7 @@ export async function loadMatchDetails(matchId) {
                             <div class="flex items-center gap-2">
                                 ${isTop ? '<span class="text-brand-gold">🏆</span>' : ''}
                                 <span class="cursor-pointer hover:text-${teamColor} transition font-medium ${isTop ? 'text-brand-gold' : 'text-white'}"
-                                      onclick="closeModal('modal-match-details'); loadPlayerProfile('${safeName}')">${safeName}</span>
+                                      onclick="closeModal('modal-match-details'); loadPlayerProfile('${jsName}')">${safeName}</span>
                             </div>
                         </td>
                         <td class="text-right py-2 px-2 font-mono ${kdColor} font-bold">${player.kd.toFixed(2)}</td>
