@@ -160,7 +160,7 @@ class HealthMonitor:
             process = psutil.Process()
             health['memory_mb'] = round(process.memory_info().rss / (1024 * 1024), 2)
             health['cpu_percent'] = process.cpu_percent(interval=1)
-        except:
+        except Exception:
             health['memory_mb'] = 0
             health['cpu_percent'] = 0
         
