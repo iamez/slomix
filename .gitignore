@@ -193,8 +193,8 @@ check_before_commit.sh
 /github/
 /performance_updates/
 
-# Prototype projects (have their own branches)
-/website/
+# Prototype projects
+# /website/    # ENABLED - Added in v1.1.0
 /proximity/
 /opusreview/
 /vps_scripts/
