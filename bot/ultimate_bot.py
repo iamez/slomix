@@ -12,22 +12,19 @@ import sys
 import time
 from datetime import datetime, timedelta
 
-import io
 import discord
 from discord.ext import commands, tasks
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools.stopwatch_scoring import StopwatchScoring
 
 # Import extracted core classes
 from bot.core import StatsCache, SeasonManager, AchievementSystem
 from bot.core.utils import sanitize_error_message
 
 # Import database adapter and config for PostgreSQL migration
-from bot.core.database_adapter import create_adapter, DatabaseAdapter
+from bot.core.database_adapter import create_adapter
 from bot.config import load_config
-from bot.stats import StatsCalculator
 from bot.automation import SSHHandler, FileTracker
 from bot.services.voice_session_service import VoiceSessionService
 from bot.services.round_publisher_service import RoundPublisherService
@@ -55,8 +52,6 @@ except ImportError:  # nosec B110
 from bot.logging_config import (
     setup_logging,
     log_command_execution,
-    log_database_operation,
-    log_stats_import,
     log_performance_warning,
     get_logger
 )
