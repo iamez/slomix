@@ -218,6 +218,13 @@ class BotConfig:
         # Log when players join/leave gaming voice channels
         self.enable_voice_logging: bool = self._get_config('ENABLE_VOICE_LOGGING', 'false').lower() == 'true'
 
+        # ==================== PROXIMITY TRACKER ====================
+        # Combat engagement analytics (crossfire detection, teamplay stats)
+        self.proximity_enabled: bool = self._get_config('PROXIMITY_ENABLED', 'false').lower() == 'true'
+        self.proximity_auto_import: bool = self._get_config('PROXIMITY_AUTO_IMPORT', 'true').lower() == 'true'
+        self.proximity_debug_log: bool = self._get_config('PROXIMITY_DEBUG_LOG', 'false').lower() == 'true'
+        self.proximity_discord_commands: bool = self._get_config('PROXIMITY_DISCORD_COMMANDS', 'false').lower() == 'true'
+
         logger.info(f"🔧 Configuration loaded: database_type={self.database_type}")
 
     def _load_config_file(self):

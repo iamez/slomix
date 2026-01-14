@@ -56,7 +56,14 @@ class StopwatchScoringService:
         round2_actual_time: str
     ) -> Tuple[int, int, str]:
         """
-        Calculate map score using independent round scoring.
+        Calculate map score using proper competitive stopwatch logic.
+
+        Stopwatch scoring rules:
+        - Each map awards 1 point to the winner (not per-round)
+        - R1 attackers set the benchmark time
+        - R2 attackers must beat the benchmark to win
+        - Full hold = attackers fail to complete before time limit
+        - Double full hold = 0-0, no one wins the map
 
         Args:
             round1_time_limit: Max map time (MM:SS)
@@ -72,39 +79,57 @@ class StopwatchScoringService:
         r1_sec = self.parse_time_to_seconds(round1_actual_time)
         r2_sec = self.parse_time_to_seconds(round2_actual_time)
 
-        # Determine round outcomes
-        r1_attackers_succeed = (r1_sec > 0) and (r1_sec < limit_sec)
-        r2_attackers_succeed = (r2_sec > 0) and (r2_sec < limit_sec)
+        # Determine if each team completed objectives
+        # Full hold = actual_time equals or exceeds time_limit
+        r1_completed = (r1_sec > 0) and (r1_sec < limit_sec)
+        r2_completed = (r2_sec > 0) and (r2_sec < limit_sec)
 
-        # Award points independently per round
         team1_points = 0
         team2_points = 0
 
-        # Round 1: Team1 attacks
-        if r1_attackers_succeed:
-            team1_points += 1
-            r1_desc = f"R1: completed {round1_actual_time} (Team1 +1)"
-        else:
-            team2_points += 1
-            r1_desc = (
-                f"R1: fullhold {round1_time_limit} (Team2 +1)"
-                if limit_sec > 0
-                else "R1: fullhold (Team2 +1)"
+        # Apply stopwatch logic
+        if r1_completed and r2_completed:
+            # Both teams completed - faster team wins
+            if r2_sec < r1_sec:
+                # R2 attackers were faster - Team 2 wins map
+                team2_points = 1
+                description = (
+                    f"R1: {round1_actual_time}, R2: {round2_actual_time} "
+                    f"(Team2 faster by {r1_sec - r2_sec}s)"
+                )
+            elif r1_sec < r2_sec:
+                # R1 attackers were faster - Team 1 wins map
+                team1_points = 1
+                description = (
+                    f"R1: {round1_actual_time}, R2: {round2_actual_time} "
+                    f"(Team1 faster by {r2_sec - r1_sec}s)"
+                )
+            else:
+                # Exact same time - tie (rare)
+                description = f"R1: {round1_actual_time}, R2: {round2_actual_time} (exact tie!)"
+
+        elif r1_completed and not r2_completed:
+            # R1 completed, R2 full hold - Team 1 wins
+            team1_points = 1
+            description = (
+                f"R1: {round1_actual_time}, R2: fullhold "
+                f"(Team1 wins - Team2 failed to beat benchmark)"
             )
 
-        # Round 2: Team2 attacks
-        if r2_attackers_succeed:
-            team2_points += 1
-            r2_desc = f"R2: completed {round2_actual_time} (Team2 +1)"
-        else:
-            team1_points += 1
-            r2_desc = (
-                f"R2: fullhold {round1_time_limit} (Team1 +1)"
-                if limit_sec > 0
-                else "R2: fullhold (Team1 +1)"
+        elif not r1_completed and r2_completed:
+            # R1 full hold, R2 completed - Team 2 wins
+            team2_points = 1
+            description = (
+                f"R1: fullhold, R2: {round2_actual_time} "
+                f"(Team2 wins - completed after Team1 fullhold)"
             )
 
-        description = f"{r1_desc}; {r2_desc}"
+        else:
+            # Double full hold - both teams defended successfully = 1-1
+            team1_points = 1  # Team 1 defended in R2 (fullhold)
+            team2_points = 1  # Team 2 defended in R1 (fullhold)
+            description = "Double fullhold (1-1, both teams defended)"
+
         return (team1_points, team2_points, description)
 
     async def calculate_session_scores(
@@ -312,14 +337,138 @@ class StopwatchScoringService:
                     'description': desc
                 })
 
-            # Return team scores with names
-            return {
+            # Build result object
+            result = {
                 teams[1]['name']: teams[1]['score'],
                 teams[2]['name']: teams[2]['score'],
                 'maps': map_results,
-                'total_maps': len(map_results)
+                'total_maps': len(map_results),
+                # Include internal data for save_session_results
+                '_team1_name': teams[1]['name'],
+                '_team2_name': teams[2]['name'],
+                '_team1_score': teams[1]['score'],
+                '_team2_score': teams[2]['score'],
+                '_team1_guids': list(team_guids_list[team_mapping[1]]),
+                '_team2_guids': list(team_guids_list[team_mapping[2]]),
+                '_gaming_session_id': maps[0]['gaming_session_id'] if maps else None,
+                '_session_date': session_date
             }
+
+            return result
 
         except Exception as e:
             logger.error(f"Error calculating session scores: {e}", exc_info=True)
             return None
+
+    async def save_session_results(
+        self,
+        scores: Dict[str, Any],
+        team1_names: Optional[List[str]] = None,
+        team2_names: Optional[List[str]] = None
+    ) -> bool:
+        """
+        Save session results to database.
+
+        This is the critical piece that enables team win/loss record queries.
+        Call this after calculate_session_scores() to persist results.
+
+        Args:
+            scores: Result from calculate_session_scores() (includes _internal fields)
+            team1_names: Optional list of player names for team 1
+            team2_names: Optional list of player names for team 2
+
+        Returns:
+            True if saved successfully
+        """
+        try:
+            # Extract internal data
+            session_date = scores.get('_session_date')
+            team_1_name = scores.get('_team1_name')
+            team_2_name = scores.get('_team2_name')
+            team_1_score = scores.get('_team1_score', 0)
+            team_2_score = scores.get('_team2_score', 0)
+            team_1_guids = scores.get('_team1_guids', [])
+            team_2_guids = scores.get('_team2_guids', [])
+            gaming_session_id = scores.get('_gaming_session_id')
+            map_results = scores.get('maps', [])
+
+            if not session_date or not team_1_name or not team_2_name:
+                logger.warning("Missing required data for save_session_results")
+                return False
+
+            # Determine winner (0 = tie, 1 = team_1, 2 = team_2)
+            if team_1_score > team_2_score:
+                winning_team = 1
+            elif team_2_score > team_1_score:
+                winning_team = 2
+            else:
+                winning_team = 0
+
+            # Format for storage
+            format_str = f"{len(team_1_guids)}v{len(team_2_guids)}"
+            round_details = json.dumps(map_results)
+            # Each map has 2 rounds
+            round_numbers = json.dumps([1, 2] * len(map_results))
+
+            # Use player names if provided, otherwise empty arrays
+            team_1_names_json = json.dumps(team1_names or [])
+            team_2_names_json = json.dumps(team2_names or [])
+
+            query = """
+                INSERT INTO session_results (
+                    session_date,
+                    map_name,
+                    gaming_session_id,
+                    team_1_guids,
+                    team_2_guids,
+                    team_1_names,
+                    team_2_names,
+                    team_1_name,
+                    team_2_name,
+                    format,
+                    total_rounds,
+                    team_1_score,
+                    team_2_score,
+                    winning_team,
+                    round_details,
+                    round_numbers,
+                    session_start
+                ) VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW()
+                )
+                ON CONFLICT (session_date, map_name, gaming_session_id) DO UPDATE SET
+                    team_1_score = EXCLUDED.team_1_score,
+                    team_2_score = EXCLUDED.team_2_score,
+                    team_1_name = EXCLUDED.team_1_name,
+                    team_2_name = EXCLUDED.team_2_name,
+                    winning_team = EXCLUDED.winning_team,
+                    round_details = EXCLUDED.round_details,
+                    updated_at = NOW()
+            """
+
+            await self.db.execute(query, (
+                session_date,
+                'ALL',  # Overall session result
+                gaming_session_id,
+                json.dumps(team_1_guids),
+                json.dumps(team_2_guids),
+                team_1_names_json,
+                team_2_names_json,
+                team_1_name,
+                team_2_name,
+                format_str,
+                len(map_results) * 2,
+                team_1_score,
+                team_2_score,
+                winning_team,
+                round_details,
+                round_numbers
+            ))
+
+            logger.info(f"Saved session results: {session_date} - "
+                       f"{team_1_name} {team_1_score} vs {team_2_score} {team_2_name}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to save session results: {e}", exc_info=True)
+            return False

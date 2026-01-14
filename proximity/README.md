@@ -1,79 +1,61 @@
-# Proximity Tracker v3 - Engagement-Centric Combat Analytics
+# Proximity Tracker
 
-ET:Legacy module for tracking combat engagements, crossfire coordination, and escape detection.
+ET:Legacy Lua module for tracking player movement, combat engagements, and team coordination.
 
-## Design Philosophy
+**Part of the SLOMIX Team Chemistry Analytics Platform.**
 
-**NOT tracking:** Every bullet, every position, every frame  
-**Tracking:** Combat engagements (start→outcome), crossfire windows, escape events
+---
 
-## Data Volume
+## Documentation
 
-| Metric | Per Round | Per Year |
-|--------|-----------|----------|
-| Engagements | ~100 | ~365K |
-| Player stats | aggregated | ~200 rows |
-| Heatmap cells | per-map | ~3K rows |
+Full documentation is in the [docs/](docs/) folder:
 
-**Total: ~370K rows/year = ~50MB = Forever storable**
+- [docs/README.md](docs/README.md) - Documentation index
+- [docs/TRACKER_REFERENCE.md](docs/TRACKER_REFERENCE.md) - What the tracker captures
+- [docs/OUTPUT_FORMAT.md](docs/OUTPUT_FORMAT.md) - File format specification
+- [docs/INTEGRATION_STATUS.md](docs/INTEGRATION_STATUS.md) - System integration
+- [docs/GAPS_AND_ROADMAP.md](docs/GAPS_AND_ROADMAP.md) - Known gaps and roadmap
 
-## Key Algorithms
+---
 
-### Crossfire Detection
-- 2+ attackers hit same target within **1 second** window
-- Tracks delay between attackers (lower = better coordination)
+## Project Vision
 
-### Escape Detection  
-- **5 seconds** no damage received AND
-- **300 units** distance from last hit position
+See [SLOMIX_PROJECT_BRIEF.md](SLOMIX_PROJECT_BRIEF.md) for the full vision.
 
-### Position Sampling
-- Every **2 seconds** during active engagement
-- Plus events: start, hit, death, escape
+---
+
+## Quick Start
+
+```bash
+# 1. Copy Lua module to game server
+cp lua/proximity_tracker.lua /path/to/etlegacy/lua_modules/
+
+# 2. Add to server config
+# lua_modules "c0rnp0rn.lua proximity_tracker.lua"
+
+# 3. Run database schema
+psql -d your_db -f schema/schema.sql
+```
+
+---
 
 ## Project Structure
 
 ```
 proximity/
 ├── lua/
-│   └── proximity_tracker.lua    # Game server module
+│   └── proximity_tracker.lua    # Game server module (v4)
 ├── parser/
-│   └── parser.py                # Parse engagement files
+│   └── parser.py                # Parse output files → database
 ├── schema/
-│   └── schema.sql               # PostgreSQL tables
-└── README.md
+│   └── schema.sql               # PostgreSQL table definitions
+├── docs/                        # Full documentation
+│   ├── README.md
+│   ├── TRACKER_REFERENCE.md
+│   ├── OUTPUT_FORMAT.md
+│   ├── INTEGRATION_STATUS.md
+│   ├── GAPS_AND_ROADMAP.md
+│   └── session-notes/
+├── SLOMIX_PROJECT_BRIEF.md      # Project vision
+└── README.md                    # This file
 ```
-
-## Installation
-
-1. Copy `lua/proximity_tracker.lua` to game server's lua_modules
-2. Add to server config: `lua_modules "c0rnp0rn.lua proximity_tracker.lua"`
-3. Run `schema/schema.sql` on PostgreSQL database
-4. Import parser in bot code:
-
-```python
-from proximity.parser import ProximityParserV3
-
-# Or full path:
-from proximity.parser.parser import ProximityParserV3
-
-parser = ProximityParserV3(db_adapter=self.db, output_dir="gamestats")
-await parser.import_file(filepath, session_date)
-```
-
-## Output Files
-
-Format: `YYYY-MM-DD-HHMMSS-mapname-round-N_engagements.txt`
-
-Contains:
-- Combat engagements with attackers, positions, outcomes
-- Kill heatmap (grid-based)
-- Movement heatmap (traversal/combat/escape counts)
-
-## Database Tables
-
-- `combat_engagement` - One row per engagement, JSONB for attackers/positions
-- `player_teamplay_stats` - Aggregated forever stats per player
-- `crossfire_pairs` - Duo coordination tracking
-- `map_kill_heatmap` - Per-map kill/death density
-- `map_movement_heatmap` - Per-map traffic patterns

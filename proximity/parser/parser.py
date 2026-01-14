@@ -1,13 +1,18 @@
 """
-PROXIMITY TRACKER v3 - ENGAGEMENT PARSER
-Parse engagement-centric data and update aggregated stats
+PROXIMITY TRACKER v4 - FULL PLAYER TRACKING PARSER
+Parse engagement-centric data AND full player tracks
 
 Features:
+- Parse PLAYER_TRACKS: Full spawn-to-death movement for all players
 - Parse combat engagements with position paths
 - Detect and track crossfire coordination
 - Update player teamplay stats (aggregated forever)
 - Update crossfire pair stats
 - Update per-map heatmaps
+
+v4 Output Format:
+- PLAYER_TRACKS: guid;name;team;class;spawn_time;death_time;first_move_time;samples;path
+- path format: time,x,y,z,health,speed,weapon,stance,sprint,event separated by |
 """
 
 import os
@@ -60,16 +65,90 @@ class Engagement:
     attackers: Dict[str, Attacker]
 
 
-class ProximityParserV3:
-    """Parser for proximity_tracker_v3.lua output files"""
-    
+@dataclass
+class PathPoint:
+    """Single point in a player's movement path"""
+    time: int           # Timestamp in ms
+    x: float
+    y: float
+    z: float
+    health: int
+    speed: float
+    weapon: int
+    stance: int         # 0=standing, 1=crouching, 2=prone
+    sprint: int         # 0=not sprinting, 1=sprinting
+    event: str          # spawn, sample, death, round_end
+
+
+@dataclass
+class PlayerTrack:
+    """Full player track from spawn to death"""
+    guid: str
+    name: str
+    team: str
+    player_class: str   # SOLDIER, MEDIC, ENGINEER, FIELDOPS, COVERTOPS
+    spawn_time: int
+    death_time: Optional[int]
+    first_move_time: Optional[int]  # When player first moved after spawn
+    sample_count: int
+    path: List[PathPoint] = field(default_factory=list)
+
+    @property
+    def duration_ms(self) -> int:
+        """How long player was alive"""
+        if self.death_time and self.spawn_time:
+            return self.death_time - self.spawn_time
+        return 0
+
+    @property
+    def time_to_first_move_ms(self) -> Optional[int]:
+        """Time from spawn until first movement"""
+        if self.first_move_time and self.spawn_time:
+            return self.first_move_time - self.spawn_time
+        return None
+
+    @property
+    def total_distance(self) -> float:
+        """Calculate total distance traveled"""
+        if len(self.path) < 2:
+            return 0.0
+        total = 0.0
+        for i in range(1, len(self.path)):
+            p1, p2 = self.path[i-1], self.path[i]
+            dx = p2.x - p1.x
+            dy = p2.y - p1.y
+            dz = p2.z - p1.z
+            total += (dx*dx + dy*dy + dz*dz) ** 0.5
+        return total
+
+    @property
+    def avg_speed(self) -> float:
+        """Average speed across all samples"""
+        if not self.path:
+            return 0.0
+        speeds = [p.speed for p in self.path if p.speed > 0]
+        return sum(speeds) / len(speeds) if speeds else 0.0
+
+    @property
+    def sprint_percentage(self) -> float:
+        """Percentage of time sprinting"""
+        if not self.path:
+            return 0.0
+        sprinting = sum(1 for p in self.path if p.sprint == 1)
+        return (sprinting / len(self.path)) * 100
+
+
+class ProximityParserV4:
+    """Parser for proximity_tracker v4 output files with full player tracking"""
+
     def __init__(self, db_adapter=None, output_dir: str = "gamestats"):
         self.db_adapter = db_adapter
         self.output_dir = output_dir
         self.logger = logging.getLogger(__name__)
-        
+
         # Parsed data
         self.engagements: List[Engagement] = []
+        self.player_tracks: List[PlayerTrack] = []  # v4: Full player tracks
         self.kill_heatmap: List[Dict] = []
         self.movement_heatmap: List[Dict] = []
         self.metadata = {
@@ -77,7 +156,8 @@ class ProximityParserV3:
             'round_num': 0,
             'crossfire_window': 1000,
             'escape_time': 5000,
-            'escape_distance': 300
+            'escape_distance': 300,
+            'position_sample_interval': 1000  # v4: track sample rate
         }
     
     def find_files(self, session_date: str = None) -> List[str]:
@@ -95,20 +175,21 @@ class ProximityParserV3:
         return sorted(files)
     
     def parse_file(self, filepath: str) -> bool:
-        """Parse an engagement file"""
+        """Parse an engagement file (v3 or v4 format)"""
         self.engagements = []
+        self.player_tracks = []
         self.kill_heatmap = []
         self.movement_heatmap = []
-        
+
         section = 'header'
-        
+
         try:
             with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
                 for line in f:
                     line = line.strip()
                     if not line:
                         continue
-                    
+
                     # Metadata
                     if line.startswith('# map='):
                         self.metadata['map_name'] = line.split('=')[1]
@@ -125,10 +206,16 @@ class ProximityParserV3:
                     if line.startswith('# escape_distance='):
                         self.metadata['escape_distance'] = int(line.split('=')[1])
                         continue
-                    
+                    if line.startswith('# position_sample_interval='):
+                        self.metadata['position_sample_interval'] = int(line.split('=')[1])
+                        continue
+
                     # Section detection
                     if line.startswith('# ENGAGEMENTS'):
                         section = 'engagements'
+                        continue
+                    if line.startswith('# PLAYER_TRACKS'):
+                        section = 'player_tracks'
                         continue
                     if line.startswith('# KILL_HEATMAP'):
                         section = 'kill_heatmap'
@@ -136,22 +223,24 @@ class ProximityParserV3:
                     if line.startswith('# MOVEMENT_HEATMAP'):
                         section = 'movement_heatmap'
                         continue
-                    
+
                     # Skip other comments
                     if line.startswith('#'):
                         continue
-                    
+
                     # Parse data
                     if section == 'engagements':
                         self._parse_engagement_line(line)
+                    elif section == 'player_tracks':
+                        self._parse_player_track_line(line)
                     elif section == 'kill_heatmap':
                         self._parse_kill_heatmap_line(line)
                     elif section == 'movement_heatmap':
                         self._parse_movement_heatmap_line(line)
-            
-            self.logger.info(f"Parsed {len(self.engagements)} engagements from {filepath}")
+
+            self.logger.info(f"Parsed {len(self.engagements)} engagements, {len(self.player_tracks)} tracks from {filepath}")
             return True
-            
+
         except Exception as e:
             self.logger.error(f"Error parsing {filepath}: {e}")
             return False
@@ -242,7 +331,64 @@ class ProximityParserV3:
             
         except (ValueError, IndexError) as e:
             self.logger.warning(f"Error parsing engagement: {e}")
-    
+
+    def _parse_player_track_line(self, line: str):
+        """Parse player track line (v4 format)
+
+        Format: guid;name;team;class;spawn_time;death_time;first_move_time;samples;path
+        Path format: time,x,y,z,health,speed,weapon,stance,sprint,event separated by |
+        """
+        parts = line.split(';')
+        if len(parts) < 9:
+            self.logger.warning(f"Invalid track line: {line[:50]}...")
+            return
+
+        try:
+            guid = parts[0]
+            name = parts[1]
+            team = parts[2]
+            player_class = parts[3]
+            spawn_time = int(parts[4])
+            death_time = int(parts[5]) if parts[5] and parts[5] != '0' else None
+            first_move_time = int(parts[6]) if parts[6] else None
+            sample_count = int(parts[7])
+
+            # Parse path
+            path = []
+            if parts[8]:
+                for point_str in parts[8].split('|'):
+                    point_parts = point_str.split(',')
+                    if len(point_parts) >= 10:
+                        path.append(PathPoint(
+                            time=int(point_parts[0]),
+                            x=float(point_parts[1]),
+                            y=float(point_parts[2]),
+                            z=float(point_parts[3]),
+                            health=int(point_parts[4]),
+                            speed=float(point_parts[5]),
+                            weapon=int(point_parts[6]),
+                            stance=int(point_parts[7]),
+                            sprint=int(point_parts[8]),
+                            event=point_parts[9]
+                        ))
+
+            track = PlayerTrack(
+                guid=guid,
+                name=name,
+                team=team,
+                player_class=player_class,
+                spawn_time=spawn_time,
+                death_time=death_time,
+                first_move_time=first_move_time,
+                sample_count=sample_count,
+                path=path
+            )
+
+            self.player_tracks.append(track)
+
+        except (ValueError, IndexError) as e:
+            self.logger.warning(f"Error parsing track: {e}")
+
     def _parse_kill_heatmap_line(self, line: str):
         """Parse kill heatmap line"""
         parts = line.split(';')
@@ -272,31 +418,45 @@ class ProximityParserV3:
             except ValueError:
                 pass
     
-    async def import_file(self, filepath: str, session_date: str) -> bool:
-        """Parse and import to database"""
+    async def import_file(self, filepath: str, session_date) -> bool:
+        """Parse and import to database
+
+        Args:
+            filepath: Path to engagement file
+            session_date: Date as string (YYYY-MM-DD) or datetime.date object
+        """
         if not self.db_adapter:
             self.logger.error("No database adapter")
             return False
-        
+
         if not self.parse_file(filepath):
             return False
-        
+
+        # Convert string date to date object if needed
+        if isinstance(session_date, str):
+            from datetime import datetime
+            session_date = datetime.strptime(session_date, '%Y-%m-%d').date()
+
         try:
             # Import engagements
             await self._import_engagements(session_date)
-            
+
+            # Import player tracks (v4)
+            if self.player_tracks:
+                await self._import_player_tracks(session_date)
+
             # Update player stats
             await self._update_player_stats()
-            
+
             # Update crossfire pairs
             await self._update_crossfire_pairs()
-            
+
             # Import heatmaps
             await self._import_heatmaps()
-            
+
             self.logger.info(f"Successfully imported {filepath}")
             return True
-            
+
         except Exception as e:
             self.logger.error(f"Import error: {e}")
             return False
@@ -363,7 +523,70 @@ class ProximityParserV3:
                 eng.crossfire_delay,
                 cf_participants_json
             ))
-    
+
+    async def _import_player_tracks(self, session_date: str):
+        """Import player tracks to player_track table (v4)"""
+        for track in self.player_tracks:
+            # Serialize path as JSONB
+            path_json = json.dumps([
+                {
+                    'time': p.time,
+                    'x': p.x,
+                    'y': p.y,
+                    'z': p.z,
+                    'health': p.health,
+                    'speed': p.speed,
+                    'weapon': p.weapon,
+                    'stance': p.stance,
+                    'sprint': p.sprint,
+                    'event': p.event
+                }
+                for p in track.path
+            ])
+
+            # Calculate derived stats
+            duration_ms = track.duration_ms
+            time_to_first_move = track.time_to_first_move_ms
+            total_distance = track.total_distance
+            avg_speed = track.avg_speed
+            sprint_pct = track.sprint_percentage
+
+            query = """
+                INSERT INTO player_track (
+                    session_date, round_number, map_name,
+                    player_guid, player_name, team, player_class,
+                    spawn_time_ms, death_time_ms, duration_ms,
+                    first_move_time_ms, time_to_first_move_ms,
+                    sample_count, path,
+                    total_distance, avg_speed, sprint_percentage
+                ) VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                    $11, $12, $13, $14, $15, $16, $17
+                )
+                ON CONFLICT (session_date, round_number, player_guid, spawn_time_ms)
+                DO NOTHING
+            """
+
+            await self.db_adapter.execute(query, (
+                session_date,
+                self.metadata['round_num'],
+                self.metadata['map_name'],
+                track.guid,
+                track.name,
+                track.team,
+                track.player_class,
+                track.spawn_time,
+                track.death_time,
+                duration_ms,
+                track.first_move_time,
+                time_to_first_move,
+                track.sample_count,
+                path_json,
+                total_distance,
+                avg_speed,
+                sprint_pct
+            ))
+
     async def _update_player_stats(self):
         """Update player_teamplay_stats from engagements"""
         
@@ -615,7 +838,16 @@ class ProximityParserV3:
         crossfire_count = sum(1 for e in self.engagements if e.is_crossfire)
         kills = sum(1 for e in self.engagements if e.outcome == 'killed')
         escapes = sum(1 for e in self.engagements if e.outcome == 'escaped')
-        
+
+        # Track stats (v4)
+        total_samples = sum(t.sample_count for t in self.player_tracks)
+        total_distance = sum(t.total_distance for t in self.player_tracks)
+        avg_life = (
+            sum(t.duration_ms for t in self.player_tracks if t.duration_ms > 0) /
+            len([t for t in self.player_tracks if t.duration_ms > 0])
+            if self.player_tracks else 0
+        )
+
         return {
             'map': self.metadata['map_name'],
             'round': self.metadata['round_num'],
@@ -623,17 +855,26 @@ class ProximityParserV3:
             'crossfire_engagements': crossfire_count,
             'kills': kills,
             'escapes': escapes,
-            'heatmap_cells': len(self.kill_heatmap)
+            'heatmap_cells': len(self.kill_heatmap),
+            # v4 track stats
+            'total_tracks': len(self.player_tracks),
+            'total_samples': total_samples,
+            'total_distance': total_distance,
+            'avg_life_ms': avg_life
         }
+
+
+# Backwards compatibility alias
+ProximityParserV3 = ProximityParserV4
 
 
 # ===== CLI TESTING =====
 if __name__ == "__main__":
     import sys
     logging.basicConfig(level=logging.INFO)
-    
-    parser = ProximityParserV3(output_dir="gamestats")
-    
+
+    parser = ProximityParserV4(output_dir="gamestats")
+
     if len(sys.argv) > 1:
         filepath = sys.argv[1]
     else:
@@ -642,10 +883,10 @@ if __name__ == "__main__":
             print("No engagement files found")
             sys.exit(1)
         filepath = files[-1]
-    
+
     print(f"Parsing: {filepath}")
     parser.parse_file(filepath)
-    
+
     stats = parser.get_stats()
     print(f"\n=== STATS ===")
     print(f"Map: {stats['map']}, Round: {stats['round']}")
@@ -654,7 +895,15 @@ if __name__ == "__main__":
     print(f"  Kills: {stats['kills']}")
     print(f"  Escapes: {stats['escapes']}")
     print(f"Heatmap cells: {stats['heatmap_cells']}")
-    
+
+    # v4 track stats
+    if stats['total_tracks'] > 0:
+        print(f"\n=== PLAYER TRACKS (v4) ===")
+        print(f"Total tracks: {stats['total_tracks']}")
+        print(f"Total samples: {stats['total_samples']}")
+        print(f"Total distance: {stats['total_distance']:.1f} units")
+        print(f"Avg life time: {stats['avg_life_ms']:.0f}ms")
+
     if parser.engagements:
         print(f"\n=== SAMPLE ENGAGEMENT ===")
         e = parser.engagements[0]
@@ -663,3 +912,15 @@ if __name__ == "__main__":
         print(f"Attackers: {[a.name for a in e.attackers.values()]}")
         print(f"Crossfire: {e.is_crossfire}, Delay: {e.crossfire_delay}ms")
         print(f"Position path: {len(e.position_path)} points")
+
+    if parser.player_tracks:
+        print(f"\n=== SAMPLE TRACK ===")
+        t = parser.player_tracks[0]
+        print(f"Player: {t.name} ({t.player_class})")
+        print(f"Team: {t.team}")
+        print(f"Lived: {t.duration_ms}ms")
+        print(f"Distance: {t.total_distance:.1f} units")
+        print(f"Avg speed: {t.avg_speed:.1f}")
+        print(f"Sprint %: {t.sprint_percentage:.1f}%")
+        print(f"Time to first move: {t.time_to_first_move_ms}ms")
+        print(f"Path samples: {len(t.path)}")
