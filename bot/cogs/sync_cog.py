@@ -393,7 +393,7 @@ class SyncCog(commands.Cog, name="Sync Commands"):
             )
 
             # List remote files
-            logger.info(f"📋 Listing remote files from game server...")
+            logger.info("📋 Listing remote files from game server...")
             remote_files = await self.bot.ssh_list_remote_files(ssh_config)
 
             if not remote_files:

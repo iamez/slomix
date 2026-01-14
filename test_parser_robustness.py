@@ -57,18 +57,18 @@ def test_parser_with_malformed_data():
 
             # For now, we just verify the file was created
             if os.path.exists(filepath):
-                print(f"  ✅ File created successfully")
+                print("  ✅ File created successfully")
                 if should_crash:
-                    print(f"  ⚠️ NOTE: Huge file created - parser SHOULD timeout on this")
+                    print("  ⚠️ NOTE: Huge file created - parser SHOULD timeout on this")
                 passed += 1
             else:
-                print(f"  ❌ Failed to create test file")
+                print("  ❌ Failed to create test file")
                 failed += 1
 
             # Clean up
             try:
                 os.remove(filepath)
-            except:
+            except Exception:
                 pass
 
         except Exception as e:

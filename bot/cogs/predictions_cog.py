@@ -438,7 +438,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
             minutes = delta.seconds // 60
             return f"{minutes}m ago"
         else:
-            return f"just now"
+            return "just now"
 
     @commands.cooldown(1, 20, commands.BucketType.user)
     @commands.command(name='prediction_trends')

@@ -236,6 +236,7 @@ class UltimateETLegacyBot(commands.Bot):
         # SSH monitoring optimization - counter-based intervals
         self.ssh_check_counter = 0  # Tracks cycles for interval-based checking
         self.last_file_download_time = None  # Track last file download for grace period logic
+        self._last_dead_hour_log = None  # Track dead hour logging to reduce log spam
 
         # Webhook rate limiting (prevent DoS)
         from collections import defaultdict, deque
@@ -2073,7 +2074,7 @@ class UltimateETLegacyBot(commands.Bot):
 
     def _check_webhook_rate_limit(self, webhook_id: int) -> bool:
         """Rate limit: Max 5 triggers per 60 seconds per webhook."""
-        from datetime import timedelta
+        # timedelta already imported at top of file
 
         now = datetime.now()
         window_start = now - timedelta(seconds=self._webhook_rate_limit_window)
@@ -2266,7 +2267,7 @@ class UltimateETLegacyBot(commands.Bot):
                 filename = match.group(1)
 
         if not filename:
-            webhook_logger.debug(f"No filename found in webhook message")
+            webhook_logger.debug("No filename found in webhook message")
             return False
 
         # CRITICAL: Validate filename for security
@@ -2351,7 +2352,7 @@ class UltimateETLegacyBot(commands.Bot):
                 # Delete the trigger message (clean up control channel)
                 try:
                     await trigger_message.delete()
-                    webhook_logger.debug(f"🗑️ Deleted trigger message")
+                    webhook_logger.debug("🗑️ Deleted trigger message")
                 except Exception as e:
                     webhook_logger.debug(f"Could not delete trigger message: {e}")
             else:
@@ -2391,7 +2392,7 @@ class UltimateETLegacyBot(commands.Bot):
             webhook_logger.info(f"🏆 Processing webhook-triggered endstats: {filename}")
 
             # Import parser
-            from bot.endstats_parser import parse_endstats_file, EndStatsParser
+            from bot.endstats_parser import parse_endstats_file
 
             # Check if already processed (prevent duplicates)
             # Use a separate check for endstats files
@@ -2554,7 +2555,7 @@ class UltimateETLegacyBot(commands.Bot):
             # Delete the trigger message
             try:
                 await trigger_message.delete()
-                webhook_logger.debug(f"🗑️ Deleted endstats trigger message")
+                webhook_logger.debug("🗑️ Deleted endstats trigger message")
             except Exception as e:
                 webhook_logger.debug(f"Could not delete trigger message: {e}")
 

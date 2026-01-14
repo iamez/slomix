@@ -62,12 +62,12 @@ for r1 in r1_files:
                 
                 print("RAW VALUES FROM LUA:")
                 print("-" * 50)
-                print(f"Round 1:")
+                print("Round 1:")
                 print(f"  time_played: {r1_played:.1f} min")
                 print(f"  time_dead:   {r1_dead:.1f} min")
                 print(f"  ratio:       {r1_ratio:.1f}%")
                 print()
-                print(f"Round 2 (CUMULATIVE - both rounds):")
+                print("Round 2 (CUMULATIVE - both rounds):")
                 print(f"  time_played: {r2_played:.1f} min")
                 print(f"  time_dead:   {r2_dead:.1f} min")
                 print(f"  ratio:       {r2_ratio:.1f}%")
@@ -90,7 +90,7 @@ for r1 in r1_files:
                 old_dead = expected_played * (r2_ratio / 100)  # Used R2 cumulative ratio!
                 print(f"  Used R2 cumulative ratio ({r2_ratio:.1f}%) on R2-only time ({expected_played:.1f} min)")
                 print(f"  time_dead = {expected_played:.1f} * {r2_ratio:.1f}/100 = {old_dead:.1f} min")
-                print(f"  This is WRONG because ratio is cumulative, not R2-only!")
+                print("  This is WRONG because ratio is cumulative, not R2-only!")
                 print()
                 
                 # Now show what the fix produces

@@ -13,11 +13,8 @@ Stores in PostgreSQL tables for visualization and analytics.
 """
 
 import os
-import json
 import logging
-from datetime import datetime
-from typing import Dict, List, Tuple, Optional
-from pathlib import Path
+from typing import Dict, List, Optional
 
 
 class ProximityDataParser:
@@ -133,7 +130,7 @@ class ProximityDataParser:
                         }
                         positions.append(snapshot)
                     
-                    except (ValueError, IndexError) as e:
+                    except (ValueError, IndexError):
                         self.logger.warning(f"Skipped invalid position line: {line}")
                         continue
         

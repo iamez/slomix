@@ -6,7 +6,6 @@ This tests the bot's rate limiting mechanism that prevents DoS attacks
 by limiting webhook triggers to 5 per 60 seconds per webhook ID.
 """
 
-import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 
@@ -69,7 +68,7 @@ def test_rate_limiting():
         print(f"  Request 6: ✅ Rate limited (wait {wait:.1f}s)")
         passed += 1
     else:
-        print(f"  Request 6: ❌ SHOULD BE BLOCKED")
+        print("  Request 6: ❌ SHOULD BE BLOCKED")
         failed += 1
 
     print("\nTest 3: Wait and retry (simulate 60s passing)")
