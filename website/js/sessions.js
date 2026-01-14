@@ -3,7 +3,7 @@
  * @module sessions
  */
 
-import { API_BASE, fetchJSON, escapeHtml } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js';
 
 // Sessions state
 let sessionsData = [];
@@ -216,14 +216,15 @@ export async function loadSessionMVP(sessionDate) {
 
         const mvp = leaderboard[0];
         const safeName = escapeHtml(mvp.name);
+        const jsName = escapeJsString(mvp.name);
         const initials = escapeHtml(mvp.name.substring(0, 2).toUpperCase());
 
         widget.innerHTML = `
             <h3 class="font-bold text-white mb-2">Session MVP</h3>
-            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-brand-gold to-brand-amber mx-auto flex items-center justify-center text-2xl font-black text-white shadow-[0_0_30px_rgba(251,191,36,0.4)] mb-4 animate-pulse-slow cursor-pointer" onclick="loadPlayerProfile('${safeName}')">
+            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-brand-gold to-brand-amber mx-auto flex items-center justify-center text-2xl font-black text-white shadow-[0_0_30px_rgba(251,191,36,0.4)] mb-4 animate-pulse-slow cursor-pointer" onclick="loadPlayerProfile('${jsName}')">
                 ${initials}
             </div>
-            <p class="font-bold text-white mb-1 cursor-pointer hover:text-brand-gold transition" onclick="loadPlayerProfile('${safeName}')">${safeName}</p>
+            <p class="font-bold text-white mb-1 cursor-pointer hover:text-brand-gold transition" onclick="loadPlayerProfile('${jsName}')">${safeName}</p>
             <div class="flex items-center justify-center gap-3 text-xs">
                 <span class="text-slate-400">DPM: <span class="font-bold text-brand-emerald">${mvp.dpm}</span></span>
                 <span class="text-slate-600">•</span>
@@ -457,11 +458,12 @@ async function loadSessionDetailsExpanded(date) {
         // Build leaderboard HTML
         const leaderboardHtml = data.leaderboard.map((player, idx) => {
             const safeName = escapeHtml(player.name);
+            const jsName = escapeJsString(player.name);
             const rankColors = ['text-brand-gold', 'text-slate-300', 'text-amber-600'];
             const rankColor = rankColors[idx] || 'text-slate-400';
             return `
                 <div class="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition cursor-pointer"
-                     onclick="loadPlayerProfile('${safeName}')">
+                     onclick="loadPlayerProfile('${jsName}')">>
                     <div class="flex items-center gap-3">
                         <span class="w-6 text-center font-black ${rankColor}">#${player.rank}</span>
                         <span class="font-bold text-white">${safeName}</span>

@@ -183,7 +183,7 @@ check_before_commit.sh
 /scripts/
 /server/
 /temp/
-/tests/
+# /tests/ - Removed: Tests need to be tracked for CI
 /test_files/
 /test_suite/
 /tmp/
