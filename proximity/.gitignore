@@ -1,0 +1,31 @@
+# Proximity-specific ignores (inherits from root .gitignore)
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Test output files
+*_engagements.txt
+gamestats/
+
+# Virtual environment
+venv/
+.venv/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.claude/
+*.code-workspace
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+*.bak
+
+# AI rules (local)
+.github/instructions/
