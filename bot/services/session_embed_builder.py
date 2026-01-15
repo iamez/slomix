@@ -13,7 +13,7 @@ This service manages:
 import discord
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("bot.services.session_embed_builder")
 
@@ -130,6 +130,13 @@ class SessionEmbedBuilder:
                 denied_seconds = int(total_denied % 60)
                 time_denied_display = f"{denied_minutes}:{denied_seconds:02d}"
 
+                # Calculate time percentages (all values in seconds)
+                if total_seconds > 0:
+                    dead_pct = (total_time_dead / total_seconds) * 100
+                    denied_pct = (total_denied / total_seconds) * 100
+                else:
+                    dead_pct = denied_pct = 0
+
                 # Format damage (show in K if over 1000)
                 if total_damage_given >= 1000:
                     dmg_given_display = f"{total_damage_given/1000:.1f}K"
@@ -185,7 +192,7 @@ class SessionEmbedBuilder:
                 # Line 3: Support/meta stats (UK, revives, times, multikills)
                 field_text += (
                     f"   {total_useful_kills} UK • {total_revives_given}↑/{total_times_revived}↓ • "
-                    f"⏱{time_display} 💀{time_dead_display} ⏳{time_denied_display}{multikills_display}\n\n"
+                    f"⏱{time_display} 💀{time_dead_display}({dead_pct:.0f}%) ⏳{time_denied_display}({denied_pct:.0f}%){multikills_display}\n\n"
                 )
             
             # Add field with appropriate name
@@ -195,7 +202,205 @@ class SessionEmbedBuilder:
                 field_name = "\u200b"  # Invisible character for continuation fields
             
             embed.add_field(name=field_name, value=field_text.rstrip(), inline=False)
+
         embed.set_footer(text=f"Round: {latest_date}")
+        return embed
+
+    def _build_endstats_section(
+        self, endstats_data: Dict[str, Any]
+    ) -> Tuple[str, str]:
+        """Build compact endstats summary for embed.
+
+        Args:
+            endstats_data: Aggregated endstats from EndstatsAggregator
+
+        Returns:
+            Tuple of (awards_text, vs_stats_text)
+        """
+        awards_text = ""
+        vs_text = ""
+
+        # Category display config
+        category_display = {
+            "combat": ("Combat", 1),
+            "skills": ("Skills", 2),
+            "weapons": ("Weapons", 3),
+            "timing": ("Timing", 4),
+            "teamwork": ("Teamwork", 5),
+            "objectives": ("Objectives", 6),
+            "deaths": ("Deaths", 7),
+        }
+
+        awards_by_category = endstats_data.get("awards_by_category", {})
+        vs_stats = endstats_data.get("vs_stats", [])
+
+        # Build awards text
+        if awards_by_category:
+            lines = []
+            rounds_info = ""
+            if endstats_data.get("rounds_with_endstats", 0) < endstats_data.get("total_rounds", 0):
+                rounds_info = f" ({endstats_data['rounds_with_endstats']}/{endstats_data['total_rounds']} rounds)"
+
+            # Sort categories by priority
+            sorted_categories = sorted(
+                [c for c in awards_by_category.keys() if c in category_display],
+                key=lambda c: category_display[c][1]
+            )
+
+            for category in sorted_categories[:4]:  # Max 4 categories
+                display_name, _ = category_display[category]
+                awards = awards_by_category[category]
+
+                # Get top 2 awards for this category
+                top_awards = []
+                for award_name, players in list(awards.items())[:2]:
+                    if players:
+                        top_player = players[0]  # Already sorted by value DESC
+                        player_name = top_player[1]
+                        total_value = top_player[2]
+                        win_count = top_player[3]
+
+                        formatted_value = self._format_endstats_value(total_value, award_name)
+                        top_awards.append(f"{player_name} ({formatted_value}, {win_count}x)")
+
+                if top_awards:
+                    lines.append(f"**{display_name}:** {', '.join(top_awards)}")
+
+            if lines:
+                awards_text = "\n".join(lines) + rounds_info
+
+        # Build VS stats text
+        if vs_stats:
+            parts = []
+            for _, player_name, kills, deaths in vs_stats[:5]:
+                parts.append(f"{player_name} {kills}K/{deaths}D")
+            vs_text = " | ".join(parts)
+
+        return awards_text, vs_text
+
+    def _format_endstats_value(self, value: float, award_name: str) -> str:
+        """Format award value for display.
+
+        Args:
+            value: Numeric value
+            award_name: Award name for context
+
+        Returns:
+            Formatted string (e.g., "3.2K", "52%", "2:30")
+        """
+        if value is None:
+            return "0"
+
+        # Damage-related awards: show in K format
+        if "damage" in award_name.lower():
+            if value >= 1000:
+                return f"{value/1000:.1f}K"
+            return f"{int(value)}"
+
+        # Accuracy awards: show as percentage
+        if "accuracy" in award_name.lower():
+            return f"{value:.0f}%"
+
+        # Time-related awards: show as m:ss
+        if "time" in award_name.lower() or "spawn" in award_name.lower():
+            minutes = int(value // 60)
+            seconds = int(value % 60)
+            return f"{minutes}:{seconds:02d}"
+
+        # Ratio awards
+        if "ratio" in award_name.lower():
+            return f"{value:.2f}"
+
+        # Default: integer or float based on value
+        if value >= 1000:
+            return f"{value/1000:.1f}K"
+        if value == int(value):
+            return str(int(value))
+        return f"{value:.1f}"
+
+    async def build_session_endstats_embed(
+        self, latest_date: str, endstats_data: Dict[str, Any]
+    ) -> Optional[discord.Embed]:
+        """Build a separate embed for cumulative session endstats.
+
+        Args:
+            latest_date: Session date string
+            endstats_data: Aggregated endstats from EndstatsAggregator
+
+        Returns:
+            Discord embed with cumulative awards and VS stats, or None if no data
+        """
+        if not endstats_data or not endstats_data.get('has_data'):
+            return None
+
+        awards_by_category = endstats_data.get("awards_by_category", {})
+        vs_stats = endstats_data.get("vs_stats", [])
+        rounds_with = endstats_data.get("rounds_with_endstats", 0)
+        total_rounds = endstats_data.get("total_rounds", 0)
+
+        # Create embed
+        embed = discord.Embed(
+            title=f"Session Awards - {latest_date}",
+            description=f"Cumulative awards from {rounds_with}/{total_rounds} rounds",
+            color=0xFFD700,  # Gold
+            timestamp=datetime.now()
+        )
+
+        # Category config with emojis
+        category_config = {
+            "combat": ("Combat", "1"),
+            "skills": ("Skills", "2"),
+            "weapons": ("Weapons", "3"),
+            "timing": ("Timing", "4"),
+            "teamwork": ("Teamwork", "5"),
+            "objectives": ("Objectives", "6"),
+            "deaths": ("Deaths", "7"),
+        }
+
+        # Build each category as a field
+        for category, (display_name, priority) in sorted(category_config.items(), key=lambda x: x[1][1]):
+            if category not in awards_by_category:
+                continue
+
+            awards = awards_by_category[category]
+            if not awards:
+                continue
+
+            # Build field content - show top award per type
+            lines = []
+            for award_name, players in list(awards.items())[:4]:  # Max 4 awards per category
+                if not players:
+                    continue
+
+                # Get top player for this award
+                top = players[0]
+                player_name = top[1]
+                total_value = top[2]
+                win_count = top[3]
+
+                # Format the award name (shorten it)
+                short_name = award_name.replace("Most ", "").replace("Highest ", "").replace("Best ", "")
+
+                # Skip summed value for ratio/percentage awards (summing them is meaningless)
+                award_lower = award_name.lower()
+                if any(x in award_lower for x in ['ratio', 'accuracy', 'percent']):
+                    # For ratios/percentages, just show win count
+                    lines.append(f"**{short_name}**: {player_name} ({win_count}x)")
+                else:
+                    formatted_value = self._format_endstats_value(total_value, award_name)
+                    lines.append(f"**{short_name}**: {player_name} ({formatted_value}, {win_count}x)")
+
+            if lines:
+                embed.add_field(
+                    name=f"{display_name}",
+                    value="\n".join(lines),
+                    inline=True
+                )
+
+        # NOTE: VS Stats removed from cumulative view - they are per-opponent matchups
+        # and don't aggregate meaningfully across rounds. See per-round endstats for VS data.
+
+        embed.set_footer(text="Aggregated from endstats.lua")
         return embed
 
     async def build_team_analytics_embed(

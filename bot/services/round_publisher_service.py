@@ -275,6 +275,14 @@ class RoundPublisherService:
                     played_sec = int((time_played % 1) * 60)
                     time_played_str = f"{played_min}:{played_sec:02d}"
 
+                    # Calculate time percentages for debugging/analysis
+                    # time_dead and time_played are in minutes, time_denied is in seconds
+                    if time_played > 0:
+                        dead_pct = (time_dead / time_played) * 100
+                        denied_pct = ((time_denied / 60) / time_played) * 100
+                    else:
+                        dead_pct = denied_pct = 0
+
                     # Build multikills string (only if any)
                     multikills_parts = []
                     if double_kills > 0:
@@ -302,7 +310,7 @@ class RoundPublisherService:
                     )
                     line3 = (
                         f"TmDmg:{int(team_dmg)} "
-                        f"⏱{time_played_str} 💀{time_dead_str} ⏳{time_denied_str}"
+                        f"⏱{time_played_str} 💀{time_dead_str}({dead_pct:.0f}%) ⏳{time_denied_str}({denied_pct:.0f}%)"
                     )
                     if multikills_str:
                         line3 += f" 🔥{multikills_str}"
@@ -600,9 +608,13 @@ class RoundPublisherService:
                     for player, stats in sorted_players:
                         vs_lines.append(f"**{player}:** {stats['kills']}K/{stats['deaths']}D")
 
+                    # Add explanation for readers
+                    vs_header = "*Sum of all 1v1 matchup results this round*"
+                    vs_text = vs_header + "\n" + "\n".join(vs_lines)
+
                     embed.add_field(
                         name="📊 VS Stats (Top 5)",
-                        value="\n".join(vs_lines),
+                        value=vs_text,
                         inline=False
                     )
 
