@@ -29,6 +29,7 @@ from bot.services.session_graph_generator import SessionGraphGenerator
 from bot.services.session_view_handlers import SessionViewHandlers
 from bot.services.player_badge_service import PlayerBadgeService
 from bot.services.player_display_name_service import PlayerDisplayNameService
+from bot.services.endstats_aggregator import EndstatsAggregator
 
 logger = logging.getLogger("bot.cogs.last_session")
 
@@ -48,6 +49,7 @@ class LastSessionCog(commands.Cog):
         self.view_handlers = SessionViewHandlers(bot.db_adapter, StatsCalculator)
         self.badge_service = PlayerBadgeService(bot.db_adapter)
         self.display_name_service = PlayerDisplayNameService(bot.db_adapter)
+        self.endstats_aggregator = EndstatsAggregator(bot.db_adapter)
 
         logger.info("✅ All services initialized successfully")
 
@@ -246,6 +248,16 @@ class LastSessionCog(commands.Cog):
             all_players = await self.stats_aggregator.aggregate_all_player_stats(session_ids, session_ids_str)
             team_stats = await self.stats_aggregator.aggregate_team_stats(session_ids, session_ids_str, hardcoded_teams, name_to_team)
 
+            # Phase 3.5: Aggregate endstats (awards and VS stats)
+            endstats_data = {'has_data': False}
+            try:
+                endstats_data = await self.endstats_aggregator.aggregate_session_endstats(
+                    session_ids, session_ids_str
+                )
+            except Exception as e:
+                logger.warning(f"Could not fetch endstats: {e}")
+                # Continue without endstats - non-critical
+
             team_1_mvp_stats, team_2_mvp_stats = await self.data_service.get_team_mvps(
                 session_ids, session_ids_str, hardcoded_teams, team_1_name, team_2_name
             )
@@ -323,6 +335,14 @@ class LastSessionCog(commands.Cog):
                     )
                 else:
                     raise
+
+            # Send cumulative endstats as separate message
+            if endstats_data and endstats_data.get('has_data'):
+                endstats_embed = await self.embed_builder.build_session_endstats_embed(
+                    latest_date, endstats_data
+                )
+                if endstats_embed:
+                    await ctx.send(embed=endstats_embed)
 
         except Exception as e:
             logger.error(f"Error in last_session command: {e}", exc_info=True)

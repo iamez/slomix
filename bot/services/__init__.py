@@ -44,6 +44,7 @@ from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.session_embed_builder import SessionEmbedBuilder
 from bot.services.session_graph_generator import SessionGraphGenerator
 from bot.services.session_view_handlers import SessionViewHandlers
+from bot.services.endstats_aggregator import EndstatsAggregator
 
 # Player services
 from bot.services.player_badge_service import PlayerBadgeService
@@ -66,6 +67,7 @@ __all__ = [
     'SessionEmbedBuilder',
     'SessionGraphGenerator',
     'SessionViewHandlers',
+    'EndstatsAggregator',
     # Player services
     'PlayerBadgeService',
     'PlayerDisplayNameService',

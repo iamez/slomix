@@ -313,13 +313,21 @@ class VoiceSessionService:
                 return
 
             end_time = discord.utils.utcnow()
-            duration = end_time - self.session_start_time
+
+            # Handle case where session_start_time is None (e.g., bot restarted mid-session)
+            if self.session_start_time is None:
+                logger.warning("⚠️ Session end called but session_start_time was None (likely bot restart)")
+                duration = None
+                duration_str = "Unknown (bot restarted)"
+            else:
+                duration = end_time - self.session_start_time
+                duration_str = str(duration)
 
             # Disable monitoring
             self.bot.monitoring = False
 
             logger.info("🏁 GAMING SESSION ENDED!")
-            logger.info(f"⏱️ Duration: {duration}")
+            logger.info(f"⏱️ Duration: {duration_str}")
             logger.info(f"👥 Participants: {len(self.session_participants)}")
             logger.info("🔄 Monitoring disabled")
 
@@ -327,9 +335,11 @@ class VoiceSessionService:
             if self.config.production_channel_id:
                 channel = self.bot.get_channel(self.config.production_channel_id)
                 if channel:
+                    # Format duration for display (handle None case from bot restart)
+                    display_duration = self._format_duration(duration) if duration else "Unknown (bot restarted)"
                     embed = discord.Embed(
                         title="🏁 Gaming Session Complete!",
-                        description=f"Duration: {self._format_duration(duration)}",
+                        description=f"Duration: {display_duration}",
                         color=0xFFD700,
                         timestamp=datetime.now(),
                     )

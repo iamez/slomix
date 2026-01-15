@@ -190,6 +190,7 @@ class UltimateETLegacyBot(commands.Bot):
         self.bot_startup_time = datetime.now()  # Track when bot started (for auto-import filtering)
         self.current_session = None
         self.processed_files = set()
+        self.processed_endstats_files = set()  # In-memory set to prevent race conditions
         self.auto_link_enabled = True
         self.gather_queue = {"3v3": [], "6v6": []}
 
@@ -1746,20 +1747,29 @@ class UltimateETLegacyBot(commands.Bot):
                         # Process the file (imports to DB)
                         logger.info(f"⚙️ Processing file: {filename}")
                         process_start = time.time()
-                        result = await self.process_gamestats_file(local_path, filename)
-                        process_time = time.time() - process_start
 
-                        logger.info(f"⚙️ Processing completed in {process_time:.2f}s")
-
-                        # 🆕 AUTO-POST to Discord after processing!
-                        if result and result.get('success'):
-                            logger.info(f"📊 Posting to Discord: {result.get('player_count', 0)} players")
-                            await self.round_publisher.publish_round_stats(filename, result)
-                            logger.info(f"✅ Successfully processed and posted: {filename}")
+                        # Route endstats files to dedicated processor
+                        if filename.endswith('-endstats.txt'):
+                            logger.info(f"🏆 Detected endstats file, using endstats processor")
+                            await self._process_endstats_file(local_path, filename)
+                            process_time = time.time() - process_start
+                            logger.info(f"⚙️ Processing completed in {process_time:.2f}s")
                         else:
-                            error_msg = result.get('error', 'Unknown error') if result else 'No result'
-                            logger.warning(f"⚠️ Processing failed for {filename}: {error_msg}")
-                            logger.warning(f"⚠️ Skipping Discord post")
+                            # Regular stats file processing
+                            result = await self.process_gamestats_file(local_path, filename)
+                            process_time = time.time() - process_start
+
+                            logger.info(f"⚙️ Processing completed in {process_time:.2f}s")
+
+                            # 🆕 AUTO-POST to Discord after processing!
+                            if result and result.get('success'):
+                                logger.info(f"📊 Posting to Discord: {result.get('player_count', 0)} players")
+                                await self.round_publisher.publish_round_stats(filename, result)
+                                logger.info(f"✅ Successfully processed and posted: {filename}")
+                            else:
+                                error_msg = result.get('error', 'Unknown error') if result else 'No result'
+                                logger.warning(f"⚠️ Processing failed for {filename}: {error_msg}")
+                                logger.warning(f"⚠️ Skipping Discord post")
                     else:
                         logger.error(f"❌ Download failed for {filename}")
 
@@ -2305,6 +2315,9 @@ class UltimateETLegacyBot(commands.Bot):
                     pass
                 return
 
+            # IMMEDIATELY mark as being processed to prevent race with polling
+            self.file_tracker.processed_files.add(filename)
+
             # Build SSH config
             ssh_config = {
                 "host": self.config.ssh_host,
@@ -2376,6 +2389,156 @@ class UltimateETLegacyBot(commands.Bot):
             # Track for admin alerts
             await self.track_error("webhook_processing", str(e), max_consecutive=3)
 
+    async def _process_endstats_file(self, local_path: str, filename: str):
+        """
+        Process an endstats file downloaded via SSH monitoring.
+
+        This is the non-webhook version - file is already downloaded.
+        Parses awards/VS stats, stores in DB, posts embed.
+        Endstats file: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
+        """
+        try:
+            logger.info(f"🏆 Processing endstats file: {filename}")
+
+            # Import parser
+            from bot.endstats_parser import parse_endstats_file
+
+            # Check if already processed (prevent duplicates)
+            # First check in-memory set (fast, prevents race with webhook)
+            if filename in self.processed_endstats_files:
+                logger.debug(f"⏭️ Endstats already in progress: {filename}")
+                return
+
+            # Then check database table
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            result = await self.db_adapter.fetch_one(check_query, (filename,))
+            if result:
+                logger.debug(f"⏭️ Endstats already processed: {filename}")
+                self.processed_endstats_files.add(filename)  # Sync to memory
+                return
+
+            # IMMEDIATELY mark as being processed to prevent race with webhook
+            self.processed_endstats_files.add(filename)
+
+            # Parse the endstats file
+            endstats_data = parse_endstats_file(local_path)
+
+            if not endstats_data:
+                logger.error(f"❌ Failed to parse endstats: {filename}")
+                return
+
+            metadata = endstats_data['metadata']
+            awards = endstats_data['awards']
+            vs_stats = endstats_data['vs_stats']
+
+            logger.info(
+                f"📊 Parsed endstats: {len(awards)} awards, {len(vs_stats)} VS stats"
+            )
+
+            # Find the matching round in the database
+            # Use flexible lookup by date + map + round_number to handle timestamp mismatches
+            # (endstats file timestamp can differ by 1-2 seconds from main stats file)
+            # Also constrain to rounds created in last 10 minutes to avoid matching
+            # a previous play of the same map (e.g., playing supply twice in a row)
+            round_date = metadata['date']
+            map_name = metadata['map_name']
+            round_number = metadata['round_number']
+
+            round_query = """
+                SELECT id, round_date, map_name FROM rounds
+                WHERE round_date = $1
+                  AND map_name = $2
+                  AND round_number = $3
+                  AND created_at > NOW() - INTERVAL '10 minutes'
+                ORDER BY created_at DESC LIMIT 1
+            """
+            round_result = await self.db_adapter.fetch_one(
+                round_query, (round_date, map_name, round_number)
+            )
+
+            if not round_result:
+                logger.warning(
+                    f"⏳ Round not found yet for endstats {filename}. "
+                    f"Main stats file may not be processed yet."
+                )
+                return
+
+            round_id = round_result[0]
+            # round_date already set from metadata
+            # map_name already set from metadata
+
+            logger.info(f"✅ Linked to round_id={round_id}")
+
+            # Store awards in database
+            for award in awards:
+                # Try to find player GUID from aliases
+                player_guid = None
+                alias_query = """
+                    SELECT guid FROM player_aliases
+                    WHERE alias = $1
+                    ORDER BY last_seen DESC LIMIT 1
+                """
+                alias_result = await self.db_adapter.fetch_one(alias_query, (award['player'],))
+                if alias_result:
+                    player_guid = alias_result[0]
+
+                insert_query = """
+                    INSERT INTO round_awards
+                    (round_id, round_date, map_name, round_number, award_name,
+                     player_name, player_guid, award_value, award_value_numeric)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                """
+                await self.db_adapter.execute(insert_query, (
+                    round_id, round_date, map_name, round_number,
+                    award['name'], award['player'], player_guid,
+                    award['value'], award.get('numeric')
+                ))
+
+            logger.info(f"✅ Stored {len(awards)} awards")
+
+            # Store VS stats in database
+            for vs in vs_stats:
+                player_guid = None
+                alias_query = """
+                    SELECT guid FROM player_aliases
+                    WHERE alias = $1
+                    ORDER BY last_seen DESC LIMIT 1
+                """
+                alias_result = await self.db_adapter.fetch_one(alias_query, (vs['player'],))
+                if alias_result:
+                    player_guid = alias_result[0]
+
+                insert_query = """
+                    INSERT INTO round_vs_stats
+                    (round_id, round_date, map_name, round_number,
+                     player_name, player_guid, kills, deaths)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                """
+                await self.db_adapter.execute(insert_query, (
+                    round_id, round_date, map_name, round_number,
+                    vs['player'], player_guid, vs['kills'], vs['deaths']
+                ))
+
+            logger.info(f"✅ Stored {len(vs_stats)} VS stats")
+
+            # Mark file as processed
+            processed_query = """
+                INSERT INTO processed_endstats_files (filename, round_id, success)
+                VALUES ($1, $2, TRUE)
+            """
+            await self.db_adapter.execute(processed_query, (filename, round_id))
+
+            # Post endstats embed to production channel
+            await self.round_publisher.publish_endstats(
+                filename, endstats_data, round_id, map_name, round_number
+            )
+
+            logger.info(f"✅ Successfully processed endstats: {filename}")
+
+        except Exception as e:
+            logger.error(f"❌ Error processing endstats file: {e}", exc_info=True)
+            await self.track_error("endstats_processing", str(e), max_consecutive=3)
+
     async def _process_webhook_triggered_endstats(self, filename: str, trigger_message):
         """
         Process an endstats file triggered by webhook notification.
@@ -2390,16 +2553,29 @@ class UltimateETLegacyBot(commands.Bot):
             from bot.endstats_parser import parse_endstats_file
 
             # Check if already processed (prevent duplicates)
-            # Use a separate check for endstats files
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
-            result = await self.db_adapter.fetch_one(check_query, (filename,))
-            if result:
-                webhook_logger.debug(f"⏭️ Endstats already processed: {filename}")
+            # First check in-memory set (fast, prevents race with polling)
+            if filename in self.processed_endstats_files:
+                webhook_logger.debug(f"⏭️ Endstats already in progress: {filename}")
                 try:
                     await trigger_message.delete()
                 except Exception:
                     pass
                 return
+
+            # Then check database table
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            result = await self.db_adapter.fetch_one(check_query, (filename,))
+            if result:
+                webhook_logger.debug(f"⏭️ Endstats already processed: {filename}")
+                self.processed_endstats_files.add(filename)  # Sync to memory
+                try:
+                    await trigger_message.delete()
+                except Exception:
+                    pass
+                return
+
+            # IMMEDIATELY mark as being processed to prevent race with polling
+            self.processed_endstats_files.add(filename)
 
             # Build SSH config
             ssh_config = {
@@ -2450,17 +2626,24 @@ class UltimateETLegacyBot(commands.Bot):
             )
 
             # Find the matching round in the database
-            # The main stats file should have already created the round
-            match_id_prefix = metadata['match_id']  # e.g., "2026-01-12-224606-te_escape2"
+            # Use flexible lookup by date + map + round_number to handle timestamp mismatches
+            # (endstats file timestamp can differ by 1-2 seconds from main stats file)
+            # Also constrain to rounds created in last 10 minutes to avoid matching
+            # a previous play of the same map (e.g., playing supply twice in a row)
+            round_date = metadata['date']
+            map_name = metadata['map_name']
             round_number = metadata['round_number']
 
             round_query = """
                 SELECT id, round_date, map_name FROM rounds
-                WHERE match_id LIKE $1 AND round_number = $2
+                WHERE round_date = $1
+                  AND map_name = $2
+                  AND round_number = $3
+                  AND created_at > NOW() - INTERVAL '10 minutes'
                 ORDER BY created_at DESC LIMIT 1
             """
             round_result = await self.db_adapter.fetch_one(
-                round_query, (f"{match_id_prefix}%", round_number)
+                round_query, (round_date, map_name, round_number)
             )
 
             if not round_result:
@@ -2476,8 +2659,8 @@ class UltimateETLegacyBot(commands.Bot):
                 return
 
             round_id = round_result[0]
-            round_date = round_result[1]
-            map_name = round_result[2]
+            # round_date already set from metadata
+            # map_name already set from metadata
 
             webhook_logger.info(f"✅ Linked to round_id={round_id}")
 
