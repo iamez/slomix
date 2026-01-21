@@ -540,7 +540,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(p.deaths) > 0
-                            ORDER BY (CAST(total_kills AS FLOAT) / total_deaths) DESC
+                            ORDER BY (CAST(SUM(p.kills) AS FLOAT) / SUM(p.deaths)) DESC
                             LIMIT {players_per_page} OFFSET {offset}
                         """
                     title = f"🏆 Top Players by K/D Ratio (Page {page_num}/{total_pages})"
@@ -742,10 +742,10 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 elif stat == "teamwork":
                     query = """
-                            SELECT 
-                                (SELECT player_name FROM player_comprehensive_stats 
-                                 WHERE player_guid = p.player_guid 
-                                 GROUP BY player_name 
+                            SELECT
+                                (SELECT player_name FROM player_comprehensive_stats
+                                 WHERE player_guid = p.player_guid
+                                 GROUP BY player_name
                                  ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                                 SUM(p.team_damage_given) as total_team_dmg,
                                 SUM(p.damage_given) as total_dmg,
@@ -756,7 +756,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(p.damage_given) > 0
-                            ORDER BY (CAST(total_team_dmg AS FLOAT) / total_dmg) ASC
+                            ORDER BY (CAST(SUM(p.team_damage_given) AS FLOAT) / SUM(p.damage_given)) ASC
                             LIMIT {players_per_page} OFFSET {offset}
                         """
                     title = (

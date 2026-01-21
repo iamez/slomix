@@ -58,49 +58,76 @@ class TeamManager:
                 'Team B': { ... }
             }
         """
-        # Get all players from session grouped by round and game-team
-        # Use LIKE for date matching (handles both SQLite and PostgreSQL)
+        # Get all players from session grouped by round_id and game-team
+        # IMPORTANT: Use round_id (unique per map+round), NOT round_number (1 or 2)
+        # because in stopwatch mode, teams swap between maps!
         query = """
-            SELECT round_number, team, player_guid, player_name
-            FROM player_comprehensive_stats
-            WHERE round_date LIKE $1
-            ORDER BY round_number, team
+            SELECT p.round_id, p.team, p.player_guid, p.player_name
+            FROM player_comprehensive_stats p
+            JOIN rounds r ON p.round_id = r.id
+            WHERE p.round_date LIKE $1
+              AND p.round_number IN (1, 2)
+            ORDER BY p.round_id, p.team
         """
         rows = await self.db.fetch_all(query, (f"{session_date}%",))
-        
+
         if not rows:
             logger.warning(f"No player data found for session {session_date}")
             return {}
-        
-        # Organize by round
+
+        # Organize by round_id (each map's R1/R2 is a unique round_id)
         rounds = defaultdict(lambda: {'team1': set(), 'team2': set()})
         player_names = {}  # guid -> most recent name
-        
-        for round_num, game_team, guid, name in rows:
+
+        # Check what team values we're getting
+        team_values = set()
+        for round_id, game_team, guid, name in rows:
+            team_values.add(game_team)
             player_names[guid] = name
-            team_key = 'team1' if game_team == 1 else 'team2'
-            rounds[round_num][team_key].add(guid)
+            # Handle both integer (1/2) and possible string ('1'/'2') team values
+            # Also handle Axis=1, Allies=2 convention
+            if game_team in (1, '1', 'Axis', 'axis'):
+                team_key = 'team1'
+            elif game_team in (2, '2', 'Allies', 'allies'):
+                team_key = 'team2'
+            else:
+                # Unknown team value - log and skip
+                logger.debug(f"Unknown team value {game_team} for {name} in round_id {round_id}")
+                continue
+            rounds[round_id][team_key].add(guid)
+
+        logger.info(f"Team values found in data: {team_values}, {len(rounds)} unique rounds")
         
-        # Seed from earliest round (usually Round 1)
-        earliest_round = min(rounds.keys())
-        persistent_team1 = set(rounds[earliest_round]['team1'])
-        persistent_team2 = set(rounds[earliest_round]['team2'])
-        
-        logger.info(f"Seeded teams from Round {earliest_round}: "
+        # Seed from earliest round_id (first map's R1)
+        # This gives us the initial team composition before any stopwatch swaps
+        earliest_round_id = min(rounds.keys())
+        persistent_team1 = set(rounds[earliest_round_id]['team1'])
+        persistent_team2 = set(rounds[earliest_round_id]['team2'])
+
+        logger.info(f"Seeded teams from round_id {earliest_round_id}: "
                    f"Team1={len(persistent_team1)}, Team2={len(persistent_team2)}")
+
+        # Validate: If one team is empty but we have players, something is wrong
+        all_players = set(player_names.keys())
+        if len(persistent_team1) == 0 and len(persistent_team2) > 0:
+            logger.warning(f"⚠️ Team detection issue: All {len(persistent_team2)} players in team2, none in team1")
+            logger.warning(f"Team values in data: {team_values} - check if 'team' column is populated correctly")
+        elif len(persistent_team2) == 0 and len(persistent_team1) > 0:
+            logger.warning(f"⚠️ Team detection issue: All {len(persistent_team1)} players in team1, none in team2")
+            logger.warning(f"Team values in data: {team_values} - check if 'team' column is populated correctly")
         
         # Handle late joiners using co-membership voting
         all_players = set(player_names.keys())
         unassigned = all_players - persistent_team1 - persistent_team2
-        
+
         if unassigned:
             logger.info(f"Assigning {len(unassigned)} late joiners...")
             for guid in unassigned:
                 # Count which team they co-appeared with more often
                 team1_votes = 0
                 team2_votes = 0
-                
-                for round_num, teams in rounds.items():
+
+                for round_id, teams in rounds.items():
                     if guid in teams['team1']:
                         # Check overlap with persistent teams
                         team1_overlap = len(teams['team1'] & persistent_team1)
@@ -112,7 +139,7 @@ class TeamManager:
                         team2_overlap = len(teams['team2'] & persistent_team2)
                         team1_votes += team1_overlap
                         team2_votes += team2_overlap
-                
+
                 # Assign to team with most votes
                 if team1_votes > team2_votes:
                     persistent_team1.add(guid)
@@ -229,6 +256,27 @@ class TeamManager:
                     'names': json.loads(names_json),
                     'count': len(json.loads(guids_json))
                 }
+
+            # Validate: Check for corrupted data (both teams have identical players)
+            team_keys = list(teams.keys())
+            if len(team_keys) >= 2:
+                guids_a = set(teams[team_keys[0]].get('guids', []))
+                guids_b = set(teams[team_keys[1]].get('guids', []))
+                if guids_a == guids_b and len(guids_a) > 0:
+                    logger.warning(f"⚠️ Corrupted team data for {session_date}: "
+                                 f"both teams have identical {len(guids_a)} players. Re-detecting...")
+                    # Delete corrupted data and re-detect
+                    await self.db.execute(
+                        "DELETE FROM session_teams WHERE session_start_date LIKE $1",
+                        (f"{session_date}%",)
+                    )
+                    if auto_detect:
+                        teams = await self.detect_session_teams(session_date)
+                        if teams:
+                            await self.store_session_teams(session_date, teams, auto_assign_names=False)
+                        return teams
+                    return {}
+
             logger.info(f"✅ Found stored teams for {session_date}")
             return teams
 

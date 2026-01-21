@@ -251,6 +251,7 @@ class UltimateETLegacyBot(commands.Bot):
         self.admin_channel_id = self.config.admin_channel_id
         self.public_channels = self.config.public_channels
         self.all_allowed_channels = self.config.all_allowed_channels
+        self.owner_user_id = self.config.owner_user_id
 
         # Session thresholds
         self.session_start_threshold = self.config.session_start_threshold
@@ -1310,6 +1311,33 @@ class UltimateETLegacyBot(commands.Bot):
         time_dead_minutes = time_minutes * (td_percent / 100.0)
         time_dead_mins = time_dead_minutes
         time_dead_ratio = td_percent
+
+        # ═══════════════════════════════════════════════════════════════════
+        # TIME DEBUG: Validate time values before DB insert
+        # ═══════════════════════════════════════════════════════════════════
+        time_alive_calc = time_minutes - time_dead_minutes
+        player_name = player.get("name", "Unknown")
+        round_num = result.get("round_num", 0)
+
+        # Validation checks
+        if time_dead_minutes > time_minutes and time_minutes > 0:
+            logger.warning(
+                f"[TIME VALIDATION] ⚠️ {player_name} R{round_num}: "
+                f"time_dead ({time_dead_minutes:.2f}) > time_played ({time_minutes:.2f})! "
+                f"Ratio was {td_percent:.1f}%"
+            )
+
+        if time_dead_minutes < 0:
+            logger.warning(
+                f"[TIME VALIDATION] ⚠️ {player_name} R{round_num}: "
+                f"Negative time_dead ({time_dead_minutes:.2f})!"
+            )
+
+        logger.debug(
+            f"[TIME DB INSERT] {player_name} R{round_num}: "
+            f"played={time_minutes:.2f}min, dead={time_dead_minutes:.2f}min, "
+            f"alive={time_alive_calc:.2f}min, ratio={td_percent:.1f}%"
+        )
 
         values = (
             round_id,
@@ -2438,7 +2466,7 @@ class UltimateETLegacyBot(commands.Bot):
             # Find the matching round in the database
             # Use flexible lookup by date + map + round_number to handle timestamp mismatches
             # (endstats file timestamp can differ by 1-2 seconds from main stats file)
-            # Also constrain to rounds created in last 10 minutes to avoid matching
+            # Also constrain to rounds created in last 30 minutes to avoid matching
             # a previous play of the same map (e.g., playing supply twice in a row)
             round_date = metadata['date']
             map_name = metadata['map_name']
@@ -2449,7 +2477,7 @@ class UltimateETLegacyBot(commands.Bot):
                 WHERE round_date = $1
                   AND map_name = $2
                   AND round_number = $3
-                  AND created_at > NOW() - INTERVAL '10 minutes'
+                  AND created_at > NOW() - INTERVAL '30 minutes'
                 ORDER BY created_at DESC LIMIT 1
             """
             round_result = await self.db_adapter.fetch_one(
@@ -2459,8 +2487,10 @@ class UltimateETLegacyBot(commands.Bot):
             if not round_result:
                 logger.warning(
                     f"⏳ Round not found yet for endstats {filename}. "
-                    f"Main stats file may not be processed yet."
+                    f"Main stats file may not be processed yet. Will retry next poll."
                 )
+                # Remove from in-memory set to allow retry on next polling cycle
+                self.processed_endstats_files.discard(filename)
                 return
 
             round_id = round_result[0]
@@ -2628,7 +2658,7 @@ class UltimateETLegacyBot(commands.Bot):
             # Find the matching round in the database
             # Use flexible lookup by date + map + round_number to handle timestamp mismatches
             # (endstats file timestamp can differ by 1-2 seconds from main stats file)
-            # Also constrain to rounds created in last 10 minutes to avoid matching
+            # Also constrain to rounds created in last 30 minutes to avoid matching
             # a previous play of the same map (e.g., playing supply twice in a row)
             round_date = metadata['date']
             map_name = metadata['map_name']
@@ -2639,7 +2669,7 @@ class UltimateETLegacyBot(commands.Bot):
                 WHERE round_date = $1
                   AND map_name = $2
                   AND round_number = $3
-                  AND created_at > NOW() - INTERVAL '10 minutes'
+                  AND created_at > NOW() - INTERVAL '30 minutes'
                 ORDER BY created_at DESC LIMIT 1
             """
             round_result = await self.db_adapter.fetch_one(
@@ -2649,9 +2679,10 @@ class UltimateETLegacyBot(commands.Bot):
             if not round_result:
                 webhook_logger.warning(
                     f"⏳ Round not found yet for endstats {filename}. "
-                    f"Main stats file may not be processed yet."
+                    f"Main stats file may not be processed yet. Will retry via polling."
                 )
-                # Re-queue for later processing (could implement retry logic)
+                # Remove from in-memory set to allow retry via polling fallback
+                self.processed_endstats_files.discard(filename)
                 try:
                     await trigger_message.add_reaction('⏳')
                 except Exception:
