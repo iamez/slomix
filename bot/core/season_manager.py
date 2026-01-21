@@ -169,7 +169,8 @@ class SeasonManager:
             return ""  # No filter for all-time stats
 
         start_date, end_date = self.get_season_dates(season_id)
-        return f"AND s.session_date >= '{start_date.strftime('%Y-%m-%d')}' AND s.session_date <= '{end_date.strftime('%Y-%m-%d')}'"
+        # Note: rounds table uses round_date column, not session_date
+        return f"AND s.round_date >= '{start_date.strftime('%Y-%m-%d')}' AND s.round_date <= '{end_date.strftime('%Y-%m-%d')}'"
 
     def is_new_season(self, last_known_season: str) -> bool:
         """

@@ -301,7 +301,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
 
             # Check if user has linked account
             link_query = """
-                SELECT et_guid
+                SELECT player_guid
                 FROM player_links
                 WHERE discord_id = $1
             """
@@ -612,8 +612,8 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                     SELECT
                         unnest(
                             CASE
-                                WHEN team_a_guids::text LIKE '%' || pl.et_guid || '%' THEN ARRAY[pl.et_guid]
-                                WHEN team_b_guids::text LIKE '%' || pl.et_guid || '%' THEN ARRAY[pl.et_guid]
+                                WHEN team_a_guids::text LIKE '%' || pl.player_guid || '%' THEN ARRAY[pl.player_guid]
+                                WHEN team_b_guids::text LIKE '%' || pl.player_guid || '%' THEN ARRAY[pl.player_guid]
                                 ELSE ARRAY[]::text[]
                             END
                         ) as player_guid,
