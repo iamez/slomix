@@ -916,9 +916,20 @@ class UltimateETLegacyBot(commands.Bot):
     # - SSHHandler.list_remote_files()
     # - SSHHandler.download_file()
 
-    async def process_gamestats_file(self, local_path, filename):
+    async def process_gamestats_file(self, local_path, filename, override_metadata=None):
         """
         Process a gamestats file: parse and import to database
+
+        Args:
+            local_path: Path to the downloaded stats file
+            filename: Original filename for tracking
+            override_metadata: Optional dict from Lua webhook with accurate timing:
+                - actual_duration_seconds: Real played time (correct on surrender)
+                - winner_team: Which team won
+                - total_pause_seconds: Time spent paused
+                - pause_count: Number of pauses
+                - round_start_unix, round_end_unix: Unix timestamps
+                - end_reason: "objective", "surrender", "time_expired"
 
         Returns:
             dict with keys: success, round_id, player_count, error
@@ -971,12 +982,18 @@ class UltimateETLegacyBot(commands.Bot):
                 # Reset error tracking on success
                 self.reset_error_tracking("file_processing")
 
+                # Apply override metadata from Lua webhook if provided
+                # This gives us accurate timing even on surrenders
+                if override_metadata:
+                    await self._apply_round_metadata_override(filename, override_metadata)
+
                 return {
                     "success": True,
                     "round_id": None,  # Database manager doesn't return round_id
                     "player_count": len(stats_data.get("players", [])) if stats_data else 0,
                     "error": None,
                     "stats_data": stats_data if stats_data else {},
+                    "override_metadata": override_metadata,  # Pass through for publisher
                 }
             else:
                 # SQLite fallback - use old import logic
@@ -1034,8 +1051,161 @@ class UltimateETLegacyBot(commands.Bot):
                 "stats_data": None,
             }
 
+    async def _apply_round_metadata_override(self, filename: str, metadata: dict):
+        """
+        Update a round's timing data with accurate values from Lua webhook.
 
+        This fixes the surrender timing bug where stats files show full map duration
+        instead of actual played time. The Lua script captures the real round_end_unix
+        when the gamestate transitions to INTERMISSION.
 
+        Args:
+            filename: Stats filename to identify the round
+            metadata: Dict with accurate timing from Lua:
+                - actual_duration_seconds
+                - winner_team
+                - total_pause_seconds
+                - pause_count
+                - round_start_unix
+                - round_end_unix
+                - end_reason
+        """
+        try:
+            # Extract match_id and round_number from filename
+            # Format: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+            import re
+            match = re.match(r'^(\d{4}-\d{2}-\d{2}-\d{6})-.*-round-(\d+)\.txt$', filename)
+            if not match:
+                logger.warning(f"Could not parse filename for metadata override: {filename}")
+                return
+
+            match_id = match.group(1)
+            round_number = int(match.group(2))
+
+            # Find the round by match_id + round_number (the unique key)
+            find_query = """
+                SELECT id FROM rounds
+                WHERE match_id = $1 AND round_number = $2
+                ORDER BY id DESC
+                LIMIT 1
+            """
+            result = await self.db_adapter.fetch_one(find_query, (match_id, round_number))
+
+            if not result:
+                logger.warning(f"Could not find round for metadata override: {filename}")
+                return
+
+            round_id = result[0]
+
+            # DEBUG LOGGING: Compare Lua timing vs stats file timing
+            # This helps verify the surrender fix is working correctly
+            # Query current values from DB (from stats file)
+            compare_query = """
+                SELECT round_time_seconds, time_limit_seconds, winner_team
+                FROM rounds WHERE id = $1
+            """
+            current_values = await self.db_adapter.fetch_one(compare_query, (round_id,))
+            if current_values:
+                stats_file_duration = current_values[0] if current_values[0] else 0
+                stats_file_limit = current_values[1] if current_values[1] else 0
+                stats_file_winner = current_values[2] if current_values[2] else 0
+                lua_duration = metadata.get('actual_duration_seconds', 0)
+                lua_winner = metadata.get('winner_team', 0)
+
+                # Log comparison (always to file, helpful for debugging)
+                timing_diff = abs(stats_file_duration - lua_duration)
+                logger.info(
+                    f"🔬 TIMING DEBUG [{filename}]:\n"
+                    f"   Stats file: duration={stats_file_duration}s, limit={stats_file_limit}s, winner={stats_file_winner}\n"
+                    f"   Lua webhook: duration={lua_duration}s, winner={lua_winner}, "
+                    f"end_reason={metadata.get('end_reason', 'unknown')}\n"
+                    f"   Difference: {timing_diff}s {'⚠️ SURRENDER FIX APPLIED' if timing_diff > 60 else '✓ within tolerance'}"
+                )
+
+                # If there's a big difference, it's likely a surrender scenario
+                if timing_diff > 60:
+                    logger.info(
+                        f"   📋 Surrender detected! Stats said {stats_file_duration}s, "
+                        f"actual was {lua_duration}s (saved {timing_diff}s of fake time)"
+                    )
+
+            # Build update query for available metadata fields
+            # Only update columns that exist in the schema
+            update_fields = []
+            update_values = []
+            param_num = 1
+
+            # Always update winner_team if provided
+            if 'winner_team' in metadata and metadata['winner_team']:
+                update_fields.append(f"winner_team = ${param_num}")
+                update_values.append(metadata['winner_team'])
+                param_num += 1
+
+            # Check if new columns exist before trying to update them
+            # These may not be present until schema migration is run
+            try:
+                schema_check = await self.db_adapter.fetch_one(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'rounds' AND column_name = 'actual_duration_seconds'"
+                )
+                has_new_columns = schema_check is not None
+            except Exception:
+                has_new_columns = False
+
+            if has_new_columns:
+                if 'actual_duration_seconds' in metadata:
+                    update_fields.append(f"actual_duration_seconds = ${param_num}")
+                    update_values.append(metadata['actual_duration_seconds'])
+                    param_num += 1
+
+                if 'total_pause_seconds' in metadata:
+                    update_fields.append(f"total_pause_seconds = ${param_num}")
+                    update_values.append(metadata['total_pause_seconds'])
+                    param_num += 1
+
+                if 'pause_count' in metadata:
+                    update_fields.append(f"pause_count = ${param_num}")
+                    update_values.append(metadata['pause_count'])
+                    param_num += 1
+
+                if 'end_reason' in metadata:
+                    update_fields.append(f"end_reason = ${param_num}")
+                    update_values.append(metadata['end_reason'])
+                    param_num += 1
+
+                if 'round_start_unix' in metadata:
+                    update_fields.append(f"round_start_unix = ${param_num}")
+                    update_values.append(metadata['round_start_unix'])
+                    param_num += 1
+
+                if 'round_end_unix' in metadata:
+                    update_fields.append(f"round_end_unix = ${param_num}")
+                    update_values.append(metadata['round_end_unix'])
+                    param_num += 1
+
+            if not update_fields:
+                logger.debug("No metadata fields to update")
+                return
+
+            update_values.append(round_id)
+            update_query = f"""
+                UPDATE rounds
+                SET {', '.join(update_fields)}
+                WHERE id = ${param_num}
+            """
+
+            await self.db_adapter.execute(update_query, tuple(update_values))
+
+            logger.info(
+                f"✅ Applied Lua metadata to round {round_id}: "
+                f"winner={metadata.get('winner_team')}, "
+                f"duration={metadata.get('actual_duration_seconds')}s, "
+                f"pauses={metadata.get('pause_count')}"
+            )
+
+        except Exception as e:
+            logger.warning(f"Failed to apply round metadata override: {e}")
+            # Non-fatal - stats were still imported correctly
 
     async def _import_stats_to_db(self, stats_data, filename):
         """Import parsed stats to database"""
@@ -2290,6 +2460,18 @@ class UltimateETLegacyBot(commands.Bot):
         if not self._check_webhook_rate_limit(message.webhook_id):
             return False
 
+        # ===== NEW: Handle STATS_READY webhook with embedded metadata =====
+        # Lua script sends "STATS_READY" with embeds containing timing/winner data
+        if message.content and message.content.strip() == "STATS_READY":
+            if message.embeds:
+                webhook_logger.info("📥 Received STATS_READY webhook with metadata")
+                asyncio.create_task(self._process_stats_ready_webhook(message))
+                return True
+            else:
+                webhook_logger.warning("STATS_READY webhook received but no embeds found")
+                return False
+
+        # ===== EXISTING: Handle filename-based webhook trigger =====
         # Extract filename from message content
         # Format: 📊 `2025-12-09-221829-etl_sp_delivery-round-1.txt`
         filename = None
@@ -2416,6 +2598,315 @@ class UltimateETLegacyBot(commands.Bot):
                 pass
             # Track for admin alerts
             await self.track_error("webhook_processing", str(e), max_consecutive=3)
+
+    async def _process_stats_ready_webhook(self, message):
+        """
+        Process STATS_READY webhook from Lua script with embedded metadata.
+
+        The Lua script on the game server sends accurate timing data including:
+        - Winner team
+        - Actual duration (correct even on surrender)
+        - Pause tracking
+        - Start/end unix timestamps
+        - Team composition (Axis/Allies player lists)
+
+        This metadata is used to override potentially incorrect values in stats files.
+        Team data is stored separately in lua_round_teams table for analysis.
+        """
+        try:
+            embed = message.embeds[0]
+
+            # Parse metadata from embed fields
+            metadata = {}
+            for field in embed.fields:
+                key = field.name.lower()
+                metadata[key] = field.value
+
+            # Extract structured data
+            round_metadata = {
+                'map_name': metadata.get('map', 'unknown'),
+                'round_number': int(metadata.get('round', 0)),
+                'winner_team': int(metadata.get('winner', 0)),
+                'defender_team': int(metadata.get('defender', 0)),
+                'end_reason': metadata.get('end reason', 'unknown'),
+                'round_start_unix': int(metadata.get('start unix', 0)),
+                'round_end_unix': int(metadata.get('end unix', 0)),
+            }
+
+            # Parse duration (format: "123 sec")
+            duration_str = metadata.get('duration', '0 sec')
+            try:
+                round_metadata['actual_duration_seconds'] = int(duration_str.split()[0])
+            except (ValueError, IndexError):
+                round_metadata['actual_duration_seconds'] = 0
+
+            # Parse time limit (format: "20 min")
+            time_limit_str = metadata.get('time limit', '0 min')
+            try:
+                round_metadata['time_limit_minutes'] = int(time_limit_str.split()[0])
+            except (ValueError, IndexError):
+                round_metadata['time_limit_minutes'] = 0
+
+            # Parse pauses (format: "2 (30 sec)")
+            pauses_str = metadata.get('pauses', '0 (0 sec)')
+            try:
+                parts = pauses_str.split('(')
+                round_metadata['pause_count'] = int(parts[0].strip())
+                if len(parts) > 1:
+                    round_metadata['total_pause_seconds'] = int(parts[1].rstrip(' sec)'))
+                else:
+                    round_metadata['total_pause_seconds'] = 0
+            except (ValueError, IndexError):
+                round_metadata['pause_count'] = 0
+                round_metadata['total_pause_seconds'] = 0
+
+            # Parse team composition from JSON fields (v1.1.0+)
+            # Format: [{"guid":"ABC...","name":"PlayerName"}, ...]
+            axis_json_raw = metadata.get('axis_json', '[]')
+            allies_json_raw = metadata.get('allies_json', '[]')
+
+            # Unescape the embedded JSON (it was escaped for Discord embed)
+            import json
+            try:
+                # Discord embed escapes quotes, we need to unescape
+                axis_json = axis_json_raw.replace('\\"', '"')
+                allies_json = allies_json_raw.replace('\\"', '"')
+                round_metadata['axis_players'] = json.loads(axis_json) if axis_json != '[]' else []
+                round_metadata['allies_players'] = json.loads(allies_json) if allies_json != '[]' else []
+            except json.JSONDecodeError as e:
+                webhook_logger.warning(f"Failed to parse team JSON: {e}")
+                round_metadata['axis_players'] = []
+                round_metadata['allies_players'] = []
+
+            # Human-readable team names (for logging)
+            axis_names = metadata.get('axis', '(none)')
+            allies_names = metadata.get('allies', '(none)')
+
+            webhook_logger.info(
+                f"📊 STATS_READY: {round_metadata['map_name']} R{round_metadata['round_number']} "
+                f"(winner={round_metadata['winner_team']}, duration={round_metadata['actual_duration_seconds']}s, "
+                f"pauses={round_metadata['pause_count']})"
+            )
+            webhook_logger.info(f"   Axis: {axis_names}")
+            webhook_logger.info(f"   Allies: {allies_names}")
+
+            # Store team data in lua_round_teams table (separate from stats file data)
+            await self._store_lua_round_teams(round_metadata)
+
+            # Store metadata for the processing step to use
+            # Key by map + round for lookup
+            metadata_key = f"{round_metadata['map_name']}_R{round_metadata['round_number']}"
+            if not hasattr(self, '_pending_round_metadata'):
+                self._pending_round_metadata = {}
+            self._pending_round_metadata[metadata_key] = round_metadata
+
+            # Now trigger SSH fetch for the actual stats file
+            # Build expected filename pattern: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+            from datetime import datetime
+            timestamp = datetime.fromtimestamp(round_metadata['round_end_unix'])
+            # Give some flexibility - file might have slightly different timestamp
+            date_prefix = timestamp.strftime('%Y-%m-%d')
+
+            webhook_logger.info(f"🔍 Looking for stats file from {date_prefix} for {round_metadata['map_name']}")
+
+            # Trigger immediate SSH check for the file
+            await self._fetch_latest_stats_file(round_metadata, message)
+
+            # Delete the webhook message to keep channel clean
+            try:
+                await message.delete()
+                webhook_logger.debug("🗑️ Deleted STATS_READY webhook message")
+            except Exception as e:
+                webhook_logger.debug(f"Could not delete webhook message: {e}")
+
+        except Exception as e:
+            webhook_logger.error(f"❌ Error processing STATS_READY webhook: {e}", exc_info=True)
+            await self.track_error("stats_ready_webhook", str(e), max_consecutive=3)
+
+    async def _store_lua_round_teams(self, round_metadata: dict):
+        """
+        Store Lua-captured team composition and timing data in database.
+
+        This data is kept separate from stats file parsing - it's real-time capture
+        from the game engine, labeled as such. Useful for:
+        - Accurate team composition at exact round end (before disconnects)
+        - Surrender timing fix (actual_duration_seconds)
+        - Pause tracking
+        - Cross-referencing with stats file data for debugging
+
+        Data stored in lua_round_teams table with match_id + round_number key.
+        """
+        import json
+
+        try:
+            # Generate match_id from timestamp and map (same pattern used elsewhere)
+            from datetime import datetime
+            round_end = round_metadata.get('round_end_unix', 0)
+            map_name = round_metadata.get('map_name', 'unknown')
+            round_number = round_metadata.get('round_number', 0)
+
+            if round_end == 0:
+                webhook_logger.warning("Cannot store Lua teams: missing round_end_unix")
+                return
+
+            # Create match_id in same format as rounds table
+            # Format: YYYY-MM-DD-HHMMSS (timestamp only, NO map name)
+            # This matches how postgresql_database_manager stores match_id
+            timestamp = datetime.fromtimestamp(round_end)
+            match_id = timestamp.strftime('%Y-%m-%d-%H%M%S')
+
+            # Serialize team data as JSON
+            axis_players = round_metadata.get('axis_players', [])
+            allies_players = round_metadata.get('allies_players', [])
+
+            # Get Lua version from footer if available (we'll default to unknown)
+            lua_version = round_metadata.get('lua_version', 'unknown')
+
+            # Insert or update (upsert on conflict)
+            query = """
+                INSERT INTO lua_round_teams (
+                    match_id, round_number, axis_players, allies_players,
+                    round_start_unix, round_end_unix, actual_duration_seconds,
+                    total_pause_seconds, pause_count, end_reason,
+                    winner_team, defender_team, map_name, time_limit_minutes,
+                    lua_version
+                ) VALUES (
+                    $1, $2, $3::jsonb, $4::jsonb,
+                    $5, $6, $7,
+                    $8, $9, $10,
+                    $11, $12, $13, $14,
+                    $15
+                )
+                ON CONFLICT (match_id, round_number) DO UPDATE SET
+                    axis_players = EXCLUDED.axis_players,
+                    allies_players = EXCLUDED.allies_players,
+                    round_start_unix = EXCLUDED.round_start_unix,
+                    round_end_unix = EXCLUDED.round_end_unix,
+                    actual_duration_seconds = EXCLUDED.actual_duration_seconds,
+                    total_pause_seconds = EXCLUDED.total_pause_seconds,
+                    pause_count = EXCLUDED.pause_count,
+                    end_reason = EXCLUDED.end_reason,
+                    winner_team = EXCLUDED.winner_team,
+                    defender_team = EXCLUDED.defender_team,
+                    map_name = EXCLUDED.map_name,
+                    time_limit_minutes = EXCLUDED.time_limit_minutes,
+                    lua_version = EXCLUDED.lua_version,
+                    captured_at = CURRENT_TIMESTAMP
+            """
+
+            params = (
+                match_id,
+                round_number,
+                json.dumps(axis_players),
+                json.dumps(allies_players),
+                round_metadata.get('round_start_unix'),
+                round_metadata.get('round_end_unix'),
+                round_metadata.get('actual_duration_seconds'),
+                round_metadata.get('total_pause_seconds', 0),
+                round_metadata.get('pause_count', 0),
+                round_metadata.get('end_reason'),
+                round_metadata.get('winner_team'),
+                round_metadata.get('defender_team'),
+                map_name,
+                round_metadata.get('time_limit_minutes'),
+                lua_version,
+            )
+
+            await self.db_adapter.execute(query, params)
+
+            axis_count = len(axis_players)
+            allies_count = len(allies_players)
+            webhook_logger.info(
+                f"💾 Stored Lua round data: {match_id} R{round_number} "
+                f"(Axis: {axis_count}, Allies: {allies_count})"
+            )
+
+        except Exception as e:
+            # Non-fatal: log warning but don't fail the webhook processing
+            # This could fail if table doesn't exist (migration not run)
+            webhook_logger.warning(f"⚠️ Could not store Lua team data: {e}")
+
+    async def _fetch_latest_stats_file(self, round_metadata: dict, trigger_message):
+        """
+        Fetch the latest stats file from game server after receiving STATS_READY.
+
+        Uses the metadata to find the correct file and applies accurate timing data.
+        """
+        try:
+            from bot.automation.ssh_handler import SSHHandler
+
+            # Build SSH config
+            ssh_config = {
+                "host": self.config.ssh_host,
+                "port": self.config.ssh_port,
+                "user": self.config.ssh_user,
+                "key_path": self.config.ssh_key_path,
+                "remote_path": self.config.ssh_remote_path,
+            }
+
+            # List files on server to find the matching one
+            files = await SSHHandler.list_files(ssh_config)
+            if not files:
+                webhook_logger.warning("No files found on server")
+                return
+
+            # Find files matching the map and round
+            map_name = round_metadata['map_name']
+            round_num = round_metadata['round_number']
+            target_time = round_metadata['round_end_unix']
+
+            matching_files = []
+            for f in files:
+                # Check if filename matches pattern and contains map name
+                if map_name in f and f'-round-{round_num}.txt' in f and not f.endswith('-endstats.txt'):
+                    matching_files.append(f)
+
+            if not matching_files:
+                webhook_logger.warning(f"No matching file found for {map_name} R{round_num}")
+                return
+
+            # Get the most recent matching file
+            matching_files.sort(reverse=True)  # Newest first (by filename timestamp)
+            filename = matching_files[0]
+
+            webhook_logger.info(f"📥 Found matching file: {filename}")
+
+            # Check if already processed
+            if not await self.file_tracker.should_process_file(filename):
+                webhook_logger.debug(f"⏭️ File already processed: {filename}")
+                return
+
+            # Mark as processing
+            self.file_tracker.processed_files.add(filename)
+
+            # Download the file
+            local_path = await SSHHandler.download_file(
+                ssh_config, filename, self.config.stats_directory
+            )
+
+            if not local_path:
+                webhook_logger.error(f"❌ Failed to download: {filename}")
+                return
+
+            webhook_logger.info(f"✅ Downloaded: {local_path}")
+            await asyncio.sleep(1)  # Brief wait for file write
+
+            # Process the file, passing the accurate metadata
+            result = await self.process_gamestats_file(
+                local_path, filename,
+                override_metadata=round_metadata  # NEW: Pass Lua-provided metadata
+            )
+
+            if result and result.get('success'):
+                webhook_logger.info(f"📊 Posting stats with accurate timing data")
+                await self.round_publisher.publish_round_stats(filename, result)
+                webhook_logger.info(f"✅ Successfully processed: {filename}")
+            else:
+                error_msg = result.get('error', 'Unknown') if result else 'No result'
+                webhook_logger.warning(f"⚠️ Processing failed: {error_msg}")
+
+        except Exception as e:
+            webhook_logger.error(f"❌ Error fetching stats file: {e}", exc_info=True)
 
     async def _process_endstats_file(self, local_path: str, filename: str):
         """

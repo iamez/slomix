@@ -369,6 +369,13 @@ class PostgreSQLDatabaseManager:
                     round_outcome TEXT,
                     gaming_session_id INTEGER,
                     round_status VARCHAR(20) DEFAULT 'completed',
+                    -- Accurate timing from Lua webhook (surrender fix, pause tracking)
+                    round_start_unix BIGINT,
+                    round_end_unix BIGINT,
+                    actual_duration_seconds INTEGER,
+                    total_pause_seconds INTEGER DEFAULT 0,
+                    pause_count INTEGER DEFAULT 0,
+                    end_reason VARCHAR(20),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(match_id, round_number)
                 )
