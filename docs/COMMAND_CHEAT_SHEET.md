@@ -16,14 +16,17 @@ cat .env | Select-String "AUTOMATION|SSH|GAMING"
 # Start bot
 cd g:\VisualStudio\Python\stats
 python bot/ultimate_bot.py
-```
+```text
 
 **Discord commands to test:**
-```
+
+```text
+
 !ping
 !help
 !stats vid
-```
+
+```yaml
 
 ---
 
@@ -40,35 +43,42 @@ Copy-Item .env .env.backup
 
 # Restart bot
 python bot/ultimate_bot.py
-```
+```text
 
 **Expected log:**
-```
+
+```text
+
 ✅ Automation system ENABLED
-```
+
+```yaml
 
 ---
 
 ### Test 3: Voice Channel Config
 
 **Your voice channel IDs:**
+
 - Channel 1: `1029097483697143938`
 - Channel 2: `947583652957659166`
 
 ```bash
 # Add to .env:
 GAMING_VOICE_CHANNELS=1029097483697143938,947583652957659166
-```
+```text
 
 ```powershell
 # Restart bot
 python bot/ultimate_bot.py
-```
+```text
 
 **Expected log:**
-```
+
+```text
+
 🎙️ Voice monitoring enabled for channels: [1029097483697143938, 947583652957659166]
-```
+
+```yaml
 
 ---
 
@@ -77,7 +87,7 @@ python bot/ultimate_bot.py
 ```powershell
 # Test SSH manually first
 ssh -i ~/.ssh/etlegacy_bot et@puran.hehe.si -p 48101
-```
+```text
 
 ```bash
 # Add to .env:
@@ -87,32 +97,39 @@ SSH_PORT=48101
 SSH_USER=et
 SSH_KEY_PATH=~/.ssh/etlegacy_bot
 ETLEGACY_STATS_DIR=/home/et/etlegacy-v2.83.1-x86_64/legacy/gamestats
-```
+```text
 
 ```powershell
 # Restart bot
 python bot/ultimate_bot.py
-```
+```text
 
 **Discord command to test:**
-```
+
+```text
+
 !sync_stats
-```
+
+```yaml
 
 ---
 
 ### Test 5: Full Automation
 
-```
+```text
+
 # Manual session control
+
 !session_start
 !sync_stats
 !session_end
 
 # Check recent imports
+
 !last_round
 !stats <playername>
-```
+
+```yaml
 
 ---
 
@@ -124,7 +141,7 @@ python bot/ultimate_bot.py
 # Open database
 cd g:\VisualStudio\Python\stats
 sqlite3 bot/etlegacy_production.db
-```
+```text
 
 ```sql
 -- Copy-paste all 9 indexes:
@@ -143,7 +160,7 @@ CREATE INDEX IF NOT EXISTS idx_weapons_player ON weapon_comprehensive_stats(play
 
 -- Exit
 .quit
-```
+```yaml
 
 ---
 
@@ -157,14 +174,14 @@ Get-Process python
 
 # View recent logs (if logging to file)
 Get-Content bot.log -Tail 50
-```
+```text
 
 ### Check Database
 
 ```powershell
 cd g:\VisualStudio\Python\stats
 sqlite3 bot/etlegacy_production.db
-```
+```text
 
 ```sql
 -- Check session count
@@ -181,7 +198,7 @@ LIMIT 5;
 
 -- Exit
 .quit
-```
+```text
 
 ### Check .env Configuration
 
@@ -193,7 +210,7 @@ cat .env
 cat .env | Select-String "AUTOMATION"
 cat .env | Select-String "SSH"
 cat .env | Select-String "CHANNEL"
-```
+```yaml
 
 ---
 
@@ -201,43 +218,51 @@ cat .env | Select-String "CHANNEL"
 
 ### Admin Commands
 
-```
+```python
+
 !sync_stats              # Download and process stats files
 !session_start           # Manually start session tracking
 !session_end             # Manually end session and post summary
 !import_legacy <path>    # Import old stats files
 !rebuild_aliases         # Rebuild player alias database
-```
+
+```text
 
 ### Player Commands
 
-```
+```text
+
 !stats <player>          # Show player statistics
 !link <player>           # Link Discord account to player
 !leaderboard [category]  # Show top players
 !compare <p1> <p2>       # Compare two players
 !last_round            # Show most recent session details
 !player_sessions <p>     # Show player's recent sessions
-```
+
+```text
 
 ### Info Commands
 
-```
+```text
+
 !ping                    # Check bot latency
 !help                    # Show command list
 !stats_info              # Show database statistics
 !maps                    # List all maps with stats
 !weapons                 # Show weapon statistics
-```
+
+```text
 
 ### Future Commands (Not Yet Implemented)
 
-```
+```javascript
+
 !export <player>         # Export player stats to CSV
 !trend <player> [days]   # Show performance trends
 !activity heatmap        # Show activity patterns
 !achievements            # View your achievements
-```
+
+```yaml
 
 ---
 
@@ -254,7 +279,7 @@ pip install -r requirements.txt
 
 # Check for syntax errors
 python -m py_compile bot/ultimate_bot.py
-```
+```text
 
 ### Database Issues
 
@@ -264,7 +289,7 @@ Copy-Item bot/etlegacy_production.db bot/etlegacy_production.db.backup
 
 # Check database integrity
 sqlite3 bot/etlegacy_production.db "PRAGMA integrity_check;"
-```
+```text
 
 ### SSH Connection Issues
 
@@ -277,17 +302,20 @@ chmod 600 ~/.ssh/etlegacy_bot
 
 # Test with verbose output
 ssh -vvv -i ~/.ssh/etlegacy_bot et@puran.hehe.si -p 48101
-```
+```text
 
 ### Voice Detection Not Working
 
-```
-# In Discord, check:
+```text
+
+# In Discord, check
+
 1. Bot has "View Channel" permission for voice channels
 2. Channel IDs are correct (right-click → Copy Channel ID)
 3. AUTOMATION_ENABLED=true in .env
 4. Bot logs show voice monitoring enabled
-```
+
+```yaml
 
 ---
 
@@ -299,7 +327,7 @@ ssh -vvv -i ~/.ssh/etlegacy_bot et@puran.hehe.si -p 48101
 -- Time a query (note the time)
 .timer on
 SELECT * FROM player_comprehensive_stats WHERE guid = 'someGUID';
-```
+```text
 
 ### After Adding Indexes
 
@@ -307,7 +335,7 @@ SELECT * FROM player_comprehensive_stats WHERE guid = 'someGUID';
 -- Same query should be 10x faster
 .timer on
 SELECT * FROM player_comprehensive_stats WHERE guid = 'someGUID';
-```
+```yaml
 
 ---
 
@@ -322,7 +350,7 @@ notepad .env
 # Restart bot
 cd g:\VisualStudio\Python\stats
 python bot/ultimate_bot.py
-```
+```yaml
 
 ---
 

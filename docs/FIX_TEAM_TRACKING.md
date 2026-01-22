@@ -9,6 +9,7 @@
 ## Problem Summary
 
 The system can detect which players are on which team, but:
+
 1. **Results never saved** - `session_results` table is never populated
 2. **Team records impossible** - Can't query team win/loss history
 3. **Integration broken** - Team detector uses SQLite but bot uses PostgreSQL
@@ -29,9 +30,11 @@ The system can detect which players are on which team, but:
 ## Fix #1: Async/Sync Mismatch in advanced_team_detector.py
 
 ### Location
+
 `bot/core/advanced_team_detector.py`, line 289
 
 ### Problem
+
 The method `_analyze_multi_round_consensus` is synchronous but called from async context:
 
 ```python
@@ -41,19 +44,22 @@ def _analyze_multi_round_consensus(
     session_date: str,
     players_data: Dict[str, Dict]
 ) -> Dict[str, PlayerTeamScore]:
-```
+```python
 
 ### Fix
+
 Make it async or ensure it's called properly. Since it doesn't do any I/O, it can remain sync but the caller must not await it:
 
 **Option A:** Keep sync, fix caller (simpler):
+
 ```python
 # In the caller, don't await:
 result = self._analyze_multi_round_consensus(session_date, players_data)
 # NOT: result = await self._analyze_multi_round_consensus(...)
-```
+```python
 
 **Option B:** Make async (more consistent):
+
 ```python
 async def _analyze_multi_round_consensus(
     self,
@@ -61,9 +67,10 @@ async def _analyze_multi_round_consensus(
     players_data: Dict[str, Dict]
 ) -> Dict[str, PlayerTeamScore]:
     # ... same implementation, just add async keyword
-```
+```python
 
 ### Verification
+
 Search for all calls to `_analyze_multi_round_consensus` and ensure they match the method's sync/async nature.
 
 ---
@@ -71,9 +78,11 @@ Search for all calls to `_analyze_multi_round_consensus` and ensure they match t
 ## Fix #2: Rewrite team_detector_integration.py for PostgreSQL
 
 ### Location
+
 `bot/core/team_detector_integration.py`
 
 ### Problem
+
 The entire file uses SQLite patterns:
 
 ```python
@@ -88,9 +97,10 @@ def detect_and_validate(
     db: sqlite3.Connection,  # <-- SQLite connection!
     session_date: str,
     ...
-```
+```python
 
 ### Fix
+
 Rewrite to use async PostgreSQL adapter:
 
 ```python
@@ -307,19 +317,22 @@ class TeamDetectorIntegration:
                 'detection_quality': 'medium'
             }
         }
-```
+```python
 
 ---
 
 ## Fix #3: Populate session_results After Scoring
 
 ### Location
+
 `bot/services/stopwatch_scoring_service.py`
 
 ### Problem
+
 The `calculate_session_scores` method calculates scores but never saves them to `session_results`.
 
 ### Current Code (line ~316)
+
 ```python
 # Return team scores with names
 return {
@@ -328,9 +341,10 @@ return {
     'maps': map_results,
     'total_maps': len(map_results)
 }
-```
+```text
 
 ### Fix
+
 Add a method to save results and call it:
 
 ```python
@@ -420,9 +434,10 @@ async def save_session_results(
     except Exception as e:
         logger.error(f"Failed to save session results: {e}", exc_info=True)
         return False
-```
+```sql
 
 ### Integration
+
 Call this from `calculate_session_scores` or from the cog that calls it:
 
 ```python
@@ -443,16 +458,18 @@ if scores:
             team_b_score=scores.get(teams['Team B']['name'], 0),
             map_results=scores.get('maps', [])
         )
-```
+```python
 
 ---
 
 ## Fix #4: Implement get_team_record in team_manager.py
 
 ### Location
+
 `bot/core/team_manager.py`, line 374
 
 ### Current Code
+
 ```python
 async def get_team_record(
     self,
@@ -461,9 +478,10 @@ async def get_team_record(
     # TODO: Implement once we have session results stored
     # This will query the stopwatch scores and match them to team rosters
     pass
-```
+```text
 
 ### Fix
+
 ```python
 async def get_team_record(
     self,
@@ -561,16 +579,18 @@ async def get_team_record(
     except Exception as e:
         logger.error(f"Error getting team record: {e}", exc_info=True)
         return {'wins': 0, 'losses': 0, 'ties': 0, 'total': 0, 'win_rate': 0.0}
-```
+```python
 
 ---
 
 ## Fix #5: Implement get_map_performance in team_manager.py
 
 ### Location
+
 `bot/core/team_manager.py`, line 437
 
 ### Current Code
+
 ```python
 async def get_map_performance(
     self,
@@ -579,9 +599,10 @@ async def get_map_performance(
     # This will integrate with StopwatchScoring
     # TODO: Implement
     pass
-```
+```text
 
 ### Fix
+
 ```python
 async def get_map_performance(
     self,
@@ -640,7 +661,7 @@ async def get_map_performance(
     except Exception as e:
         logger.error(f"Error getting map performance: {e}", exc_info=True)
         return {}
-```
+```sql
 
 ---
 
@@ -676,7 +697,7 @@ CREATE TABLE session_results (
     notes TEXT,
     UNIQUE(session_date, map_name)
 );
-```
+```yaml
 
 ---
 
@@ -685,24 +706,32 @@ CREATE TABLE session_results (
 After making fixes:
 
 1. **Run a test session** or use existing data:
+
    ```bash
    # Check if session_teams has data
    psql -d etlegacy_production -c "SELECT * FROM session_teams LIMIT 5;"
-   ```
+   ```text
 
 2. **Trigger score calculation via Discord:**
-   ```
+
+   ```text
+
    !scores 2026-01-09
-   ```
+
+   ```text
 
 3. **Verify session_results is populated:**
+
    ```bash
    psql -d etlegacy_production -c "SELECT * FROM session_results ORDER BY session_date DESC LIMIT 5;"
-   ```
+   ```text
 
 4. **Test team record query:**
-   ```
+
+   ```text
+
    !team_record
+
    ```
 
 ---
@@ -721,12 +750,14 @@ After making fixes:
 ## Why This Matters
 
 Without these fixes:
+
 - Team chemistry analysis is blocked (can't know who played together and won)
 - Prediction engine has no historical data
 - Team records show "no data"
 - The whole SLOMIX vision of "team chemistry" can't work
 
 With these fixes:
+
 - Every session's results are stored
 - Team win/loss records can be queried
 - Crossfire data can be correlated with team outcomes

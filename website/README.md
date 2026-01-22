@@ -1,17 +1,20 @@
 # ET:Legacy Stats Website - Prototype Documentation
 
 ## Overview
+
 Modern, responsive web frontend for the ET:Legacy stats tracking system. Built with FastAPI backend and Tailwind CSS + Chart.js frontend.
 
 ## Architecture
 
 ### Backend (FastAPI)
+
 - **Port:** 8000 (configurable via `WEBSITE_PORT`)
 - **Database:** Read-only PostgreSQL connection (or SQLite fallback)
 - **Auth:** Discord OAuth2 for user authentication
 - **Security:** CORS enabled, session middleware, parameterized queries
 
 ### Frontend (Vanilla JS + Tailwind)
+
 - **Design:** Glass morphism UI with dark theme
 - **Charts:** Chart.js for data visualization
 - **Icons:** Lucide icons
@@ -24,6 +27,7 @@ Modern, responsive web frontend for the ET:Legacy stats tracking system. Built w
 ### ✅ Core Views
 
 #### Home
+
 - Hero search bar with player autocomplete
 - Season information widget
 - Last session summary with match cards
@@ -31,32 +35,38 @@ Modern, responsive web frontend for the ET:Legacy stats tracking system. Built w
 - Recent matches widget
 
 #### Leaderboards
+
 - Sortable by DPM, Kills, K/D
 - Period filters: 7d, 30d, season, all-time
 - Clickable player names → profile
 
 #### Player Profile
+
 - Comprehensive stats (K/D, DPM, Win Rate, XP, etc.)
 - ELO chart placeholder
 - **Recent 10 matches** with K/D and DPM highlighting
 - Clickable match cards open match details modal
 
 #### Matches
+
 - Grid view of recent 50 matches
 - Winner/loser highlighting
 - **"View Details" buttons** → Match Details Modal
 
 #### Maps
+
 - Map frequency statistics
 - Win rate visualization per map
 - Allied vs Axis breakdown
 
 #### Weapons
+
 - **Live weapon stats from API** (`/api/stats/weapons`)
 - Weapon category grouping (SMG, Rifle, Heavy, etc.)
 - Kill counts and usage rates
 
 #### Community
+
 - **Coming Soon placeholders** for Clips & Configs
 - No broken API calls
 
@@ -65,6 +75,7 @@ Modern, responsive web frontend for the ET:Legacy stats tracking system. Built w
 ### ✅ Modals & Interactions
 
 #### Match Details Modal
+
 - Full match breakdown by team (Allies/Axis)
 - Player performance table with:
   - Kills, Deaths, K/D, Damage, DPM, Headshots, Accuracy
@@ -73,6 +84,7 @@ Modern, responsive web frontend for the ET:Legacy stats tracking system. Built w
 - Match summary cards (Duration, Total Kills, Total Damage, Avg DPM)
 
 #### Player Comparison Modal
+
 - Side-by-side stat comparison
 - Winner highlights (🏆) for each category
 - Compares: K/D, DPM, Kills, Win Rate, Games, Playtime
@@ -82,12 +94,14 @@ Modern, responsive web frontend for the ET:Legacy stats tracking system. Built w
 ### ✅ Enhanced Widgets
 
 #### Session MVP
+
 - Displays top DPM performer from last session
 - Animated gold badge with player initials
 - Shows DPM and K/D stats
 - Clickable → loads player profile
 
 #### Search Functionality
+
 - Hero search bar with live suggestions
 - Player search in modals
 - Escaped HTML to prevent XSS
@@ -124,31 +138,36 @@ Modern, responsive web frontend for the ET:Legacy stats tracking system. Built w
 ### Linux/VPS Setup
 
 1. **Create PostgreSQL read-only user:**
+
    ```bash
    sudo -u postgres psql -d et_stats -f website/setup_readonly_user.sql
-   ```
+   ```text
 
 2. **Configure environment:**
+
    ```bash
    cp website/.env.example website/.env
    nano website/.env
    # Set: POSTGRES_PASSWORD, SESSION_SECRET, DISCORD_CLIENT_ID/SECRET
-   ```
+   ```text
 
 3. **Start website:**
+
    ```bash
    chmod +x website/start_website.sh
    ./website/start_website.sh
-   ```
+   ```text
 
 4. **Or use systemd service:**
+
    ```bash
    sudo cp website/etlegacy-website.service /etc/systemd/system/
    sudo systemctl enable etlegacy-website
    sudo systemctl start etlegacy-website
-   ```
+   ```yaml
 
 ### Access
+
 - **Website:** `http://your-server:8000`
 - **API Docs:** `http://your-server:8000/docs` (FastAPI auto-generated)
 
@@ -168,17 +187,20 @@ Modern, responsive web frontend for the ET:Legacy stats tracking system. Built w
 ## Known Limitations / TODO
 
 ### High Priority
+
 - [ ] **Weapon Usage Chart** on player profile (API endpoint needed: `/api/player/{name}/weapons`)
 - [ ] **Dashboard View** for logged-in users
 - [ ] **Mobile Menu** - Hamburger navigation for small screens
 
 ### Medium Priority
+
 - [ ] Map-specific player stats (e.g., "How well does Player X perform on Supply?")
 - [ ] Weapon mastery leaderboards (per-weapon K/D, accuracy)
 - [ ] Historical performance trends (ELO chart currently placeholder)
 - [ ] Pagination for leaderboards (currently hardcoded limit=50)
 
 ### Low Priority
+
 - [ ] Community Clips/Configs implementation
 - [ ] Dark/Light theme toggle
 - [ ] Export stats to PDF/CSV
@@ -188,7 +210,7 @@ Modern, responsive web frontend for the ET:Legacy stats tracking system. Built w
 
 ## File Structure
 
-```
+```python
 website/
 ├── .env.example                 # Environment config template
 ├── setup_readonly_user.sql      # PostgreSQL read-only user setup
@@ -209,7 +231,7 @@ website/
 └── js/
     ├── app.js                   # Main frontend logic (1750+ lines)
     └── records.js               # Records view helper
-```
+```yaml
 
 ---
 
@@ -224,6 +246,7 @@ website/
   - Player stats: 50-150ms
 
 **Optimization Opportunities:**
+
 - Cache frequently accessed data (leaderboards, season info)
 - Lazy load Chart.js only when needed
 - Self-host Tailwind CSS for offline capability
@@ -234,6 +257,7 @@ website/
 ## Development Workflow
 
 ### Local Testing (Windows)
+
 ```powershell
 cd website
 python -m venv venv
@@ -245,6 +269,7 @@ python -m uvicorn backend.main:app --reload --port 8000
 ```
 
 ### Code Quality
+
 - **Linting:** ESLint for JavaScript (not yet configured)
 - **Type Hints:** Python backend uses type hints
 - **Security Scans:** Codacy MCP integrated (run after edits)
@@ -254,11 +279,13 @@ python -m uvicorn backend.main:app --reload --port 8000
 ## Browser Compatibility
 
 ✅ **Tested:**
+
 - Chrome/Edge 100+
 - Firefox 100+
 - Safari 15+
 
 ⚠️ **Known Issues:**
+
 - Safari <15 - CSS backdrop-filter may not work (glass morphism degrades gracefully)
 - IE11 - Not supported (uses modern ES6+)
 
@@ -276,6 +303,7 @@ python -m uvicorn backend.main:app --reload --port 8000
 ## Support
 
 For issues or feature requests:
+
 1. Check existing TODOs in this document
 2. Review API endpoint documentation at `/docs`
 3. Check browser console for JavaScript errors

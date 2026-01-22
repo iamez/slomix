@@ -3,6 +3,7 @@
 ## Overview
 
 Comprehensive code audit performed across the ET:Legacy Discord Bot codebase, focusing on:
+
 - Security vulnerabilities
 - Silent failure detection
 - Error handling patterns
@@ -19,13 +20,15 @@ Comprehensive code audit performed across the ET:Legacy Discord Bot codebase, fo
 **Issue:** `_backup_database()` only logged warnings on failure, allowing dangerous operations to proceed without valid backups.
 
 **Before:**
+
 ```python
 if result.returncode != 0:
     logger.warning(f"pg_dump failed: {result.stderr}")
     # Continued anyway...
-```
+```text
 
 **After:**
+
 ```python
 if result.returncode != 0:
     error_msg = f"pg_dump failed with exit code {result.returncode}: {result.stderr}"
@@ -35,7 +38,7 @@ if result.returncode != 0:
 # Also added backup file validation:
 if not backup_path.exists() or backup_path.stat().st_size == 0:
     raise RuntimeError(f"Backup file is missing or empty: {backup_path}")
-```
+```python
 
 **Impact:** Prevents data loss by ensuring migrations/dangerous operations only proceed with verified backups.
 
@@ -47,6 +50,7 @@ if not backup_path.exists() or backup_path.stat().st_size == 0:
 **Issue:** `_wipe_all_tables()` continued silently when individual table wipes failed, potentially leaving database in inconsistent state.
 
 **Before:**
+
 ```python
 for table in tables:
     try:
@@ -54,9 +58,10 @@ for table in tables:
     except Exception as e:
         logger.warning(f"Could not wipe {table}: {e}")
         # Continued to next table...
-```
+```text
 
 **After:**
+
 ```python
 failed_tables = []
 for table in tables:
@@ -73,7 +78,7 @@ if failed_tables:
         f"Failed to wipe {len(failed_tables)} table(s): {error_details}. "
         f"Database may be in inconsistent state."
     )
-```
+```python
 
 **Impact:** Ensures database wipe operations are atomic - either all succeed or the operation fails with clear error details.
 
@@ -85,11 +90,13 @@ if failed_tables:
 **Issue:** Website would start with insecure default session secret, making session hijacking trivial.
 
 **Before:**
+
 ```python
 SESSION_SECRET = os.getenv("SESSION_SECRET", "super-secret-key-change-me")
-```
+```text
 
 **After:**
+
 ```python
 SESSION_SECRET = os.getenv("SESSION_SECRET")
 if not SESSION_SECRET or SESSION_SECRET == "super-secret-key-change-me":
@@ -97,7 +104,7 @@ if not SESSION_SECRET or SESSION_SECRET == "super-secret-key-change-me":
         "SESSION_SECRET environment variable must be set to a secure random value. "
         "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
     )
-```
+```python
 
 **Impact:** Website fails fast on startup if session security is not properly configured.
 
@@ -109,14 +116,16 @@ if not SESSION_SECRET or SESSION_SECRET == "super-secret-key-change-me":
 **Issue:** CORS allowed all headers with `["*"]`, potentially exposing sensitive headers.
 
 **Before:**
+
 ```python
 allow_headers=["*"],
-```
+```text
 
 **After:**
+
 ```python
 allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
-```
+```python
 
 **Impact:** Reduces attack surface by only allowing necessary headers.
 
@@ -195,7 +204,7 @@ def reset_error_tracking(self, error_key: str):
     """Reset error counter after successful operation."""
     if hasattr(self, '_error_counts') and error_key in self._error_counts:
         del self._error_counts[error_key]
-```
+```python
 
 **Impact:** Admins are automatically notified when systems experience repeated failures, enabling faster response.
 
@@ -207,12 +216,13 @@ def reset_error_tracking(self, error_key: str):
 **Issue:** Voice state errors were logged but not tracked for patterns.
 
 **Added:**
+
 ```python
 except Exception as e:
     logger.error(f"Voice state update error: {e}", exc_info=True)
     if hasattr(self.bot, 'track_error'):
         await self.bot.track_error("voice_session", str(e), max_consecutive=5)
-```
+```python
 
 **Impact:** Persistent voice session issues now trigger admin alerts.
 
@@ -224,13 +234,14 @@ except Exception as e:
 **Changed:** 12 print statements converted to appropriate logger calls.
 
 **Example:**
+
 ```python
 # Before
 print(f"Processing synergy data...")
 
 # After
 logger.info("Processing synergy data...")
-```
+```python
 
 ---
 
@@ -242,21 +253,23 @@ logger.info("Processing synergy data...")
 **Issue:** Database query failure returned `None` silently without logging.
 
 **Before:**
+
 ```python
 try:
     results = await self.bot.db_adapter.fetch_all(query)
 except Exception:
     return None
-```
+```text
 
 **After:**
+
 ```python
 try:
     results = await self.bot.db_adapter.fetch_all(query)
 except Exception as e:
     logger.warning(f"Failed to fetch leaderboard page {page}: {e}")
     return None
-```
+```python
 
 **Impact:** Failed leaderboard queries are now logged for debugging.
 
@@ -268,20 +281,22 @@ except Exception as e:
 **Issue:** Missing `# nosec B110` marker on intentional exception silencing.
 
 **Before:**
+
 ```python
 try:
     await self._ensure_player_name_alias()
 except Exception:
     pass
-```
+```text
 
 **After:**
+
 ```python
 try:
     await self._ensure_player_name_alias()
 except Exception:  # nosec B110
     pass  # Alias is optional
-```
+```python
 
 **Impact:** Consistent code style, clear intent for security scanners.
 
@@ -290,6 +305,7 @@ except Exception:  # nosec B110
 ### 10. Trailing Whitespace Cleanup
 
 **Files cleaned (12 total):**
+
 - `opusreview/test_security.py` (71 instances)
 - `bot/ultimate_bot.py`
 - `bot/config.py`
@@ -302,9 +318,10 @@ except Exception:  # nosec B110
 - `bot/last_session_redesigned_impl.py`
 
 **Command used:**
+
 ```bash
 sed -i 's/[[:space:]]*$//' <file>
-```
+```python
 
 ---
 
@@ -324,7 +341,8 @@ sed -i 's/[[:space:]]*$//' <file>
 
 ### Files Modified
 
-```
+```python
+
 bot/cogs/leaderboard_cog.py
 bot/cogs/stats_cog.py
 bot/cogs/synergy_analytics.py
@@ -341,13 +359,15 @@ bot/services/voice_session_service.py
 website/backend/main.py
 postgresql_database_manager.py
 opusreview/test_security.py
-```
+
+```yaml
 
 ---
 
 ## Verification
 
 All modified files passed syntax verification:
+
 ```bash
 python3 -m py_compile <file>
 # All returned: syntax OK

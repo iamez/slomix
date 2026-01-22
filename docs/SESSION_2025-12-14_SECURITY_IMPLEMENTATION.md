@@ -1,4 +1,5 @@
 # Session Documentation - Security Implementation
+
 **Date:** 2025-12-14
 **User:** seareal (Discord ID: 231165917604741121)
 **Session Focus:** Penetration Testing + Security Implementation
@@ -18,11 +19,13 @@ This session involved a comprehensive security audit (penetration test) of the D
 ## Timeline of Work
 
 ### 1. Session Start - Context Recovery
+
 - User confirmed previous conversation was saved (found in `docs/WEEK_HANDOFF_MEMORY.md`)
 - Verified live game session was running successfully
 - Confirmed webhook system processing stats files in real-time
 
 ### 2. Penetration Test Execution
+
 **Request:** "we wer gonna scan the whole project in a pentest mindest"
 
 **Approach:** Attacker's mindset - looking for exploitable vulnerabilities
@@ -50,13 +53,14 @@ This session involved a comprehensive security audit (penetration test) of the D
 
 **MEDIUM SEVERITY:**
 
-3. **INFO-001: SSH AutoAddPolicy**
+1. **INFO-001: SSH AutoAddPolicy**
    - Location: `bot/automation/ssh_handler.py:68`
    - Issue: `client.set_missing_host_key_policy(paramiko.AutoAddPolicy())`
    - Impact: Vulnerable to MITM attacks
    - Recommendation: Use strict host key checking
 
 **GOOD PRACTICES FOUND:**
+
 - ✅ SQL injection protected (parameterized queries with asyncpg)
 - ✅ Path traversal protected (filename validation in `file_tracker.py`)
 - ✅ No eval/exec usage found
@@ -70,6 +74,7 @@ This session involved a comprehensive security audit (penetration test) of the D
 > "instead of owner lets call it root, admin is admin then we have moderator"
 
 This changed the entire permission tier naming:
+
 - ~~Owner~~ → **Root** (you only, Discord ID: 231165917604741121)
 - **Admin** (trusted users, can manage server)
 - **Moderator** (limited permissions, analytics/diagnostics)
@@ -81,10 +86,12 @@ This changed the entire permission tier naming:
 ### 4. Implementation Execution
 
 #### PHASE 1: RCON Command Injection Fix ✅
+
 **Time:** 5 minutes
 **File:** `bot/cogs/server_control.py`
 
 **Change at line 593:**
+
 ```python
 # BEFORE (VULNERABLE):
 rcon.send_command(f'map {map_name}')
@@ -94,19 +101,21 @@ safe_map_name = sanitize_rcon_input(map_name)
 if safe_map_name != map_name:
     logger.warning(f"⚠️ Map name sanitized: '{map_name}' -> '{safe_map_name}'")
 rcon.send_command(f'map {safe_map_name}')
-```
+```yaml
 
 **Result:** RCON injection attacks blocked
 
 ---
 
 #### PHASE 2: Database Schema Creation ✅
+
 **Time:** 15 minutes
 **File Created:** `migrations/add_user_permissions.sql`
 
 **Tables Created:**
 
 1. **user_permissions** - User whitelist with permission tiers
+
    ```sql
    CREATE TABLE IF NOT EXISTS user_permissions (
        id SERIAL PRIMARY KEY,
@@ -117,9 +126,10 @@ rcon.send_command(f'map {safe_map_name}')
        added_by BIGINT,
        reason TEXT
    );
-   ```
+   ```text
 
 2. **permission_audit_log** - Complete audit trail
+
    ```sql
    CREATE TABLE IF NOT EXISTS permission_audit_log (
        id SERIAL PRIMARY KEY,
@@ -131,23 +141,26 @@ rcon.send_command(f'map {safe_map_name}')
        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
        reason TEXT
    );
-   ```
+   ```text
 
 **Migration Executed:**
+
 ```bash
 PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -f migrations/add_user_permissions.sql
-```
+```text
 
 **Verification:**
+
 ```bash
 # Verified tables created
 \dt user_permissions
 
 # Verified seareal added as ROOT
 SELECT * FROM user_permissions WHERE tier='root';
-```
+```python
 
 **Error Encountered:**
+
 - Initial migration used 'owner' tier
 - User requested change to 'root'
 - Hit constraint violation when updating
@@ -156,12 +169,14 @@ SELECT * FROM user_permissions WHERE tier='root';
 ---
 
 #### PHASE 3: Permission Decorators ✅
+
 **Time:** 30 minutes
 **File:** `bot/core/checks.py`
 
 **Added 3 New Decorators (after line 136):**
 
 1. **`@is_owner()`** - Root-only commands
+
    ```python
    def is_owner():
        """Restrict command to bot root user only (seareal)"""
@@ -174,9 +189,10 @@ SELECT * FROM user_permissions WHERE tier='root';
            logger.info(f"✅ Root command authorized: {ctx.author}")
            return True
        return commands.check(predicate)
-   ```
+   ```text
 
 2. **`@is_admin()`** - Admin tier and above
+
    ```python
    def is_admin():
        """Restrict command to admin tier or higher (admin + root)"""
@@ -198,12 +214,13 @@ SELECT * FROM user_permissions WHERE tier='root';
            await ctx.send("❌ This command requires admin permissions.")
            return False
        return commands.check(predicate)
-   ```
+   ```python
 
 3. **`@is_moderator()`** - Moderator tier and above
    - Similar logic to `@is_admin()` but checks for moderator, admin, or root
 
 **Key Features:**
+
 - User ID-based checks (immune to Discord role exploits)
 - Database-backed whitelist (persistent across restarts)
 - Tiered access control (root > admin > moderator)
@@ -212,11 +229,13 @@ SELECT * FROM user_permissions WHERE tier='root';
 ---
 
 #### PHASE 4: Configuration Update ✅
+
 **Time:** 10 minutes
 
 **Files Modified:**
 
 1. **`bot/config.py`** (lines 94-99)
+
    ```python
    # Root User ID (for highest permission tier - user ID whitelist)
    self.owner_user_id: int = int(self._get_config('OWNER_USER_ID', '0'))
@@ -224,27 +243,30 @@ SELECT * FROM user_permissions WHERE tier='root';
        logger.warning("⚠️ OWNER_USER_ID not configured! Root-only commands will fail.")
    else:
        logger.info(f"✅ Bot root user: {self.owner_user_id}")
-   ```
+   ```text
 
 2. **`.env`**
+
    ```env
    OWNER_USER_ID=231165917604741121
-   ```
+   ```text
 
 3. **`.env.example`**
+
    ```env
    # Bot Owner (Discord User ID - highest permission tier)
    OWNER_USER_ID=231165917604741121
 
    # Admin Channel (still used for command organization)
    ADMIN_CHANNEL_ID=
-   ```
+   ```python
 
 **Result:** Bot recognizes seareal (231165917604741121) as root user on startup
 
 ---
 
 #### PHASE 5: Permission Management Cog ✅
+
 **Time:** 45 minutes
 **File Created:** `bot/cogs/permission_management_cog.py` (300+ lines)
 
@@ -274,6 +296,7 @@ SELECT * FROM user_permissions WHERE tier='root';
    - Example: `!admin_audit 20`
 
 **Features:**
+
 - Full Discord embed formatting
 - Comprehensive error handling
 - Audit trail for all changes
@@ -282,6 +305,7 @@ SELECT * FROM user_permissions WHERE tier='root';
 ---
 
 #### PHASE 6: Command Migration ✅
+
 **Time:** 60 minutes
 
 **23 Commands Migrated Across 6 Cog Files:**
@@ -319,15 +343,17 @@ SELECT * FROM user_permissions WHERE tier='root';
    - Lines 893, 901, 909: All commands → `@is_moderator()`
 
 **Import Updates:**
+
 ```python
 # BEFORE:
 from bot.core.checks import is_admin_channel
 
 # AFTER:
 from bot.core.checks import is_owner, is_admin, is_moderator
-```
+```python
 
 **Migration Method:**
+
 - Used batch `sed` commands for efficient replacement
 - Verified each change manually
 - Tested decorator functionality
@@ -335,9 +361,11 @@ from bot.core.checks import is_owner, is_admin, is_moderator
 ---
 
 #### PHASE 7: Bot Integration ✅
+
 **File:** `bot/ultimate_bot.py` (lines 428-434)
 
 **Added Permission Management Cog Loading:**
+
 ```python
 # 🔒 Load Permission Management Cog (user whitelist, permission tiers)
 try:
@@ -346,7 +374,7 @@ try:
     logger.info("✅ Permission Management Cog loaded (admin_add, admin_remove, admin_list, admin_audit)")
 except Exception as e:
     logger.error(f"❌ Failed to load Permission Management Cog: {e}", exc_info=True)
-```
+```yaml
 
 **Result:** New cog will load on bot restart
 
@@ -380,15 +408,20 @@ except Exception as e:
 ## Errors Encountered and Fixes
 
 ### Error 1: Database Constraint Violation
+
 **Problem:**
-```
+
+```yaml
+
 ERROR: new row for relation "user_permissions" violates check constraint "user_permissions_tier_check"
 DETAIL: Failing row contains (1, 231165917604741121, seareal, root, ...)
-```
+
+```sql
 
 **Cause:** Tried to update 'owner' to 'root' but constraint only allowed 'owner', 'admin', 'moderator'
 
 **Fix:**
+
 ```sql
 -- 1. Drop constraint
 ALTER TABLE user_permissions DROP CONSTRAINT user_permissions_tier_check;
@@ -399,9 +432,10 @@ UPDATE user_permissions SET tier='root' WHERE tier='owner';
 -- 3. Re-add constraint with new values
 ALTER TABLE user_permissions ADD CONSTRAINT user_permissions_tier_check
 CHECK (tier IN ('root', 'admin', 'moderator'));
-```
+```python
 
 ### Error 2: File Not Found (sed commands)
+
 **Problem:** `sed: can't read bot/cogs/session_management_cog.py: No such file or directory`
 
 **Cause:** Running sed from wrong directory
@@ -409,6 +443,7 @@ CHECK (tier IN ('root', 'admin', 'moderator'));
 **Fix:** Used `pwd` to verify location, corrected paths
 
 ### Error 3: Multiple String Matches (Edit tool)
+
 **Problem:** Multiple instances of `return commands.check(predicate)` found
 
 **Fix:** Provided more context in old_string to uniquely identify location
@@ -418,12 +453,14 @@ CHECK (tier IN ('root', 'admin', 'moderator'));
 ## Files Modified Summary
 
 ### Created Files (4)
+
 1. `migrations/add_user_permissions.sql` - Database schema
 2. `bot/cogs/permission_management_cog.py` - Permission management commands
 3. `docs/PENTEST_FINDINGS_2025-12-14.md` - Security audit report
 4. `docs/IMPLEMENTATION_COMPLETE_2025-12-14.md` - Implementation guide
 
 ### Modified Files (13)
+
 1. `bot/cogs/server_control.py` - RCON fix + decorators
 2. `bot/core/checks.py` - New decorators
 3. `bot/config.py` - Root user ID
@@ -439,7 +476,9 @@ CHECK (tier IN ('root', 'admin', 'moderator'));
 13. `migrations/add_user_permissions.sql` - Updated tier names
 
 ### Backups Created
+
 **Location:** `backups/security_update_2025-12-14/`
+
 - `server_control.py.backup`
 - `checks.py.backup`
 - `config.py.backup`
@@ -465,21 +504,26 @@ CHECK (tier IN ('root', 'admin', 'moderator'));
 ## Database Verification
 
 **Verify tables exist:**
+
 ```bash
 PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -c "\dt user_permissions"
-```
+```text
 
 **Verify root user:**
+
 ```bash
 PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT * FROM user_permissions WHERE tier='root';"
-```
+```text
 
 **Expected result:**
-```
+
+```yaml
+
  id |    discord_id      | username | tier | added_at | added_by | reason
 ----+--------------------+----------+------+----------+----------+--------
   1 | 231165917604741121 | seareal  | root | ...      | ...      | System initialization - Bot root user
-```
+
+```yaml
 
 ✅ **VERIFIED:** Database schema created successfully, seareal added as root
 
@@ -488,11 +532,13 @@ PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
 ## Testing Checklist
 
 ### Phase 1 Testing - RCON Injection Fix
+
 - [ ] Try `!map_change goldrush` (should work)
 - [ ] Try `!map_change goldrush; quit` (should sanitize semicolon)
 - [ ] Try `!map_change map\`whoami\`` (should remove backticks)
 
 ### Phase 5 Testing - Permission Commands
+
 - [ ] Root can run `!admin_add @user admin`
 - [ ] Root can run `!admin_remove @user`
 - [ ] Root can run `!admin_list`
@@ -501,6 +547,7 @@ PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
 - [ ] Admin can view `!admin_list` but not add/remove
 
 ### Phase 6 Testing - Command Migration
+
 - [ ] Root can run `!reload`
 - [ ] Admin can run `!server_restart`
 - [ ] Moderator can run `!enable`
@@ -514,53 +561,74 @@ PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
 ### 1. Restart the Bot (REQUIRED)
 
 **Option A: Using screen session**
+
 ```bash
 screen -r slomix-bot
 # Press Ctrl+C to stop
 python3 -m bot.ultimate_bot
-```
+```text
 
 **Option B: Using !reload command**
-```
+
+```text
+
 !reload
-```
+
+```text
 
 **Expected startup log:**
-```
+
+```text
+
 ✅ Bot root user: 231165917604741121
 ✅ Permission Management Cog loaded (admin_add, admin_remove, admin_list, admin_audit)
 ✅ Admin Cog loaded (11 admin commands)
 ...
-```
+
+```text
 
 ### 2. Test the Permission System
 
 **Verify you're root:**
-```
+
+```text
+
 !admin_list
-```
+
+```text
+
 Should show you (seareal) as ROOT
 
 **Add your first admin:**
-```
+
+```text
+
 !admin_add @username admin Trusted server administrator
-```
+
+```text
 
 **Test root-only command:**
-```
+
+```text
+
 !reload
-```
+
+```text
+
 Only you should be able to run this
 
 **Test admin commands:**
+
 - Have admin try `!server_restart` (should work)
 - Have admin try `!admin_add` (should fail - root only)
 
 **Test moderator commands:**
+
 - Have moderator try `!enable` (should work)
 - Have moderator try `!server_restart` (should fail - admin only)
 
 **Test unauthorized users:**
+
 - Have regular user try `!server_restart` (should get "requires admin permissions")
 
 ### 3. Add Trusted Users
@@ -573,7 +641,7 @@ Only you should be able to run this
 # Add moderators
 !admin_add @user3 moderator Analytics helper
 !admin_add @user4 moderator Diagnostics support
-```
+```text
 
 ### 4. Monitor Audit Log
 
@@ -583,26 +651,32 @@ Only you should be able to run this
 
 # View last 20 changes
 !admin_audit 20
-```
+```yaml
 
 ---
 
 ## Optional Future Enhancements
 
 ### 1. SSH Strict Host Key
+
 **File:** `.env`
+
 ```env
 SSH_STRICT_HOST_KEY=true
-```
+```yaml
+
 This prevents MITM attacks on SSH connections.
 
 ### 2. Rate Limiting
+
 Implement per-user rate limits on commands to prevent abuse.
 
 ### 3. 2FA for Root Commands
+
 Require confirmation message for dangerous root commands like `!reload`.
 
 ### 4. Webhook Signatures
+
 Add HMAC validation for webhook triggers to prevent unauthorized webhook calls.
 
 ---
@@ -612,26 +686,31 @@ Add HMAC validation for webhook triggers to prevent unauthorized webhook calls.
 If something goes wrong:
 
 ### 1. Stop the bot
+
 ```bash
 screen -r slomix-bot
 # Ctrl+C
-```
+```text
 
 ### 2. Restore backups
+
 ```bash
 cd /home/samba/share/slomix_discord
 cp backups/security_update_2025-12-14/server_control.py.backup bot/cogs/server_control.py
 cp backups/security_update_2025-12-14/checks.py.backup bot/core/checks.py
 cp backups/security_update_2025-12-14/config.py.backup bot/config.py
-```
+```text
 
 ### 3. Restart bot
+
 ```bash
 python3 -m bot.ultimate_bot
-```
+```text
 
 ### 4. Database rollback (OPTIONAL)
+
 Only if you want to remove new tables:
+
 ```sql
 DROP TABLE permission_audit_log;
 DROP TABLE user_permissions;

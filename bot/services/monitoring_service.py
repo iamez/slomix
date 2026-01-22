@@ -100,18 +100,20 @@ class MonitoringService:
                 (player_count, max_players, map_name, hostname, players, ping_ms, online)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 """,
-                status.player_count,
-                status.max_players,
-                status.map_name,
-                status.clean_hostname,
-                json.dumps(
-                    [
-                        {"name": p.name, "score": p.score, "ping": p.ping}
-                        for p in status.players
-                    ]
+                (
+                    status.player_count,
+                    status.max_players,
+                    status.map_name,
+                    status.clean_hostname,
+                    json.dumps(
+                        [
+                            {"name": p.name, "score": p.score, "ping": p.ping}
+                            for p in status.players
+                        ]
+                    ),
+                    status.ping_ms,
+                    status.online,
                 ),
-                status.ping_ms,
-                status.online,
             )
 
             logger.debug(
@@ -163,12 +165,14 @@ class MonitoringService:
                 (member_count, channel_id, channel_name, members, first_joiner_id, first_joiner_name)
                 VALUES ($1, $2, $3, $4, $5, $6)
                 """,
-                total_members,
-                channel_id,
-                channel_name,
-                json.dumps(members_data),
-                first_joiner_id,
-                first_joiner_name,
+                (
+                    total_members,
+                    channel_id,
+                    channel_name,
+                    json.dumps(members_data),
+                    first_joiner_id,
+                    first_joiner_name,
+                ),
             )
 
             logger.debug(f"📊 Voice recorded: {total_members} members in voice")

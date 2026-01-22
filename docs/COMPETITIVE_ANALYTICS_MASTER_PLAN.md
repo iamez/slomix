@@ -1,4 +1,5 @@
 # 🎯 Competitive Analytics Master Plan
+
 **Project:** Automated Team Detection, Performance Tracking & Match Prediction
 **Status:** Research & Planning Phase
 **Created:** November 28, 2025
@@ -9,6 +10,7 @@
 ## 📋 Executive Summary
 
 Transform the slomix Discord bot into a competitive esports analytics platform that automatically:
+
 1. **Detects team formations** when players split into voice channels
 2. **Predicts match outcomes** based on historical performance
 3. **Tracks live scores** during gameplay
@@ -21,7 +23,7 @@ Transform the slomix Discord bot into a competitive esports analytics platform t
 
 ## 🏗️ System Architecture Overview
 
-```
+```sql
 ┌─────────────────────────────────────────────────────────────────┐
 │                     DISCORD VOICE CHANNELS                       │
 │  Gaming Channel (8 players) → Team A (4) + Team B (4)          │
@@ -76,21 +78,24 @@ Transform the slomix Discord bot into a competitive esports analytics platform t
 │  - Substitution impact report                                   │
 │  - Updates historical database                                  │
 └─────────────────────────────────────────────────────────────────┘
-```
+```sql
 
 ---
 
 ## 🎯 Core Design Principles
 
 ### 1. **Team-Based Metrics Over Individual Stats**
+
 ET:Legacy stopwatch is about **coordination, timing, and objective play** - not just fragging.
 
 **Traditional FPS Metrics (Less Important):**
+
 - K/D ratio
 - Damage per minute
 - Headshot percentage
 
 **Team Coordination Metrics (More Important):**
+
 - **Objective completion rate** - How often do they complete map objectives?
 - **Stopwatch efficiency** - Do they win rounds quickly or barely?
 - **Defensive holds** - How often do they successfully defend?
@@ -99,13 +104,16 @@ ET:Legacy stopwatch is about **coordination, timing, and objective play** - not 
 - **Role fulfillment** - Engineers planting, medics reviving, etc.
 
 **Lineup Synergy Metrics:**
+
 - **Player combination win rate** - These 5 players together
 - **Substitution impact** - Performance with sub vs without
 - **Head-to-head record** - Team A vs Team B historically
 - **Recent form** - Last 5 sessions performance trend
 
 ### 2. **Zero Manual Commands**
+
 Everything happens automatically:
+
 - ✅ Teams detected when voice channels split
 - ✅ Prediction posted immediately
 - ✅ Score updates after each map
@@ -114,13 +122,16 @@ Everything happens automatically:
 - ❌ NO manual team registration
 
 ### 3. **Confidence Scoring**
+
 Never make blind predictions:
+
 - **High Confidence (>80%):** 20+ historical matchups, regular lineups
 - **Medium Confidence (50-80%):** 10-20 matchups, some substitutes
 - **Low Confidence (<50%):** <10 matchups, many new players
 
 Display confidence to users:
-```
+
+```text
 🎯 Match Prediction (High Confidence - 85%)
 Team A: 68% win probability
 Team B: 32% win probability
@@ -130,7 +141,7 @@ Team B: 32% win probability
   • Team A won 15 of last 23 meetings
   • Team A dominates on these maps (8-2 record)
   • Team B has 1 substitute (Player X → Player Y)
-```
+```python
 
 ---
 
@@ -145,6 +156,7 @@ Team B: 32% win probability
 **Dependencies:** None
 
 ### Current State
+
 - ✅ Voice session detection working (6+ players = session start)
 - ✅ Monitors `gaming_voice_channels` for total player count
 - ❌ Does NOT track which specific channels players are in
@@ -153,9 +165,11 @@ Team B: 32% win probability
 ### What Needs to Be Built
 
 #### 1.1: Enhanced Voice State Tracking
+
 **File:** `bot/services/voice_session_service.py`
 
 **New Data Structure:**
+
 ```python
 class VoiceSessionService:
     def __init__(self, ...):
@@ -167,12 +181,14 @@ class VoiceSessionService:
         self.team_channels_detected: bool = False
         self.team_a_channel_id: Optional[int] = None
         self.team_b_channel_id: Optional[int] = None
-```
+```text
 
 #### 1.2: Team Split Detection Algorithm
+
 **New Method:** `detect_team_formation()`
 
 **Logic:**
+
 ```python
 async def detect_team_formation(self) -> Optional[Dict[str, List[int]]]:
     """
@@ -242,9 +258,10 @@ async def detect_team_formation(self) -> Optional[Dict[str, List[int]]]:
         'confidence': confidence,
         'total_players': total
     }
-```
+```text
 
 #### 1.3: Integration with Voice State Updates
+
 **Modified Method:** `handle_voice_state_change()`
 
 ```python
@@ -266,9 +283,10 @@ async def handle_voice_state_change(self, member, before, after):
 
             # TRIGGER PREDICTION SYSTEM
             await self.trigger_match_prediction(teams)
-```
+```text
 
 #### 1.4: Map Discord User IDs to Player GUIDs
+
 **New Method:** `map_users_to_guids()`
 
 ```python
@@ -295,9 +313,10 @@ async def map_users_to_guids(self, user_ids: List[int]) -> List[str]:
             # TODO: Implement fallback logic
 
     return guids
-```
+```text
 
 **Database Schema Needed:**
+
 ```sql
 -- New table to link Discord users to player GUIDs
 CREATE TABLE IF NOT EXISTS linked_accounts (
@@ -310,7 +329,7 @@ CREATE TABLE IF NOT EXISTS linked_accounts (
 
 -- Index for fast lookups
 CREATE INDEX idx_linked_accounts_guid ON linked_accounts(player_guid);
-```
+```python
 
 ---
 
@@ -321,6 +340,7 @@ CREATE INDEX idx_linked_accounts_guid ON linked_accounts(player_guid);
 **Dependencies:** Phase 1
 
 ### Current Issues
+
 - ❌ Uses `sqlite3.Connection` instead of DatabaseAdapter
 - ❌ Not imported anywhere in production code
 - ❌ Incompatible with current architecture
@@ -328,13 +348,16 @@ CREATE INDEX idx_linked_accounts_guid ON linked_accounts(player_guid);
 ### Refactoring Tasks
 
 #### 2.1: Database Adapter Migration
+
 **Files to Refactor:**
+
 - `bot/core/advanced_team_detector.py`
 - `bot/core/team_detector_integration.py`
 - `bot/core/substitution_detector.py`
 - `bot/core/team_history.py`
 
 **Changes:**
+
 ```python
 # OLD (sqlite3)
 def detect_teams(self, db: sqlite3.Connection, session_date: str):
@@ -348,10 +371,12 @@ async def detect_teams(self, session_date: str) -> Dict:
         query = query.replace('?', '$1')  # PostgreSQL uses $1, $2 instead of ?
 
     results = await self.db_adapter.fetch_all(query, (session_date,))
-```
+```python
 
 #### 2.2: Async/Await Conversion
+
 All methods must be converted to `async def`:
+
 ```python
 # OLD (sync)
 def analyze_historical_patterns(self, player_guids: List[str]) -> Dict:
@@ -361,9 +386,10 @@ def analyze_historical_patterns(self, player_guids: List[str]) -> Dict:
 async def analyze_historical_patterns(self, player_guids: List[str]) -> Dict:
     # Non-blocking async database calls
     results = await self.db_adapter.fetch_all(...)
-```
+```text
 
 #### 2.3: Remove Direct Database Dependencies
+
 **Current:** Modules create their own database connections
 **New:** Use DatabaseAdapter injected via constructor
 
@@ -372,12 +398,14 @@ class AdvancedTeamDetector:
     def __init__(self, db_adapter: DatabaseAdapter):
         self.db_adapter = db_adapter
         # NO self.db_path or sqlite3.connect()
-```
+```python
 
 #### 2.4: Update Integration Layer
+
 **File:** `bot/core/team_detector_integration.py`
 
 Make it compatible with current bot architecture:
+
 ```python
 class TeamDetectorIntegration:
     def __init__(self, db_adapter: DatabaseAdapter, config: BotConfig):
@@ -415,7 +443,7 @@ class TeamDetectorIntegration:
             'substitutions': subs,
             'performance': performance
         }
-```
+```yaml
 
 ---
 
@@ -430,6 +458,7 @@ class TeamDetectorIntegration:
 #### 3.1: New Tables
 
 **Table: `lineup_performance`**
+
 ```sql
 CREATE TABLE lineup_performance (
     id SERIAL PRIMARY KEY,
@@ -449,9 +478,10 @@ CREATE TABLE lineup_performance (
 
 CREATE INDEX idx_lineup_hash ON lineup_performance(lineup_hash);
 CREATE INDEX idx_last_played ON lineup_performance(last_played DESC);
-```
+```text
 
 **Table: `head_to_head_matchups`**
+
 ```sql
 CREATE TABLE head_to_head_matchups (
     id SERIAL PRIMARY KEY,
@@ -467,9 +497,10 @@ CREATE TABLE head_to_head_matchups (
 
 CREATE INDEX idx_h2h_matchups ON head_to_head_matchups(team_a_lineup_hash, team_b_lineup_hash);
 CREATE INDEX idx_h2h_date ON head_to_head_matchups(session_date DESC);
-```
+```text
 
 **Table: `map_performance`**
+
 ```sql
 CREATE TABLE map_performance (
     id SERIAL PRIMARY KEY,
@@ -485,9 +516,10 @@ CREATE TABLE map_performance (
 
 CREATE INDEX idx_map_perf_lineup ON map_performance(lineup_hash);
 CREATE INDEX idx_map_perf_map ON map_performance(map_name);
-```
+```python
 
 #### 3.2: Performance Analyzer Class
+
 **File:** `bot/services/team_performance_analyzer.py` (NEW)
 
 ```python
@@ -697,7 +729,7 @@ class TeamPerformanceAnalyzer:
             'team_b_favored_maps': len([m for m in map_advantages if m['advantage'] == 'team_b']),
             'neutral_maps': len([m for m in map_advantages if m['advantage'] == 'neutral'])
         }
-```
+```python
 
 ---
 
@@ -710,6 +742,7 @@ class TeamPerformanceAnalyzer:
 ### Prediction Algorithm
 
 #### 4.1: Prediction Engine Class
+
 **File:** `bot/services/match_predictor.py` (NEW)
 
 ```python
@@ -1084,12 +1117,14 @@ class MatchPredictor:
             return f"Limited data: {matchups} matchups, prediction less reliable"
         else:
             return f"No direct matchups, based on team records ({a_matches} vs {b_matches} matches)"
-```
+```python
 
 #### 4.2: Integration with Voice Service
+
 **File:** `bot/services/voice_session_service.py`
 
 Add method to trigger prediction:
+
 ```python
 async def trigger_match_prediction(self, teams: Dict):
     """
@@ -1196,7 +1231,7 @@ async def _post_prediction_embed(
 
     await channel.send(embed=embed)
     logger.info("✅ Prediction posted to Discord")
-```
+```python
 
 ---
 
@@ -1209,6 +1244,7 @@ async def _post_prediction_embed(
 ### Implementation
 
 #### 5.1: Score Monitor Service
+
 **File:** `bot/services/live_score_monitor.py` (NEW)
 
 ```python

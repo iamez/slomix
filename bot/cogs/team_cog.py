@@ -11,7 +11,7 @@ import logging
 from typing import Optional
 from datetime import datetime
 
-from bot.core.checks import is_public_channel
+from bot.core.checks import is_public_channel, is_admin
 from bot.core.team_manager import TeamManager
 from bot.services.player_formatter import PlayerFormatter
 from bot.services.stopwatch_scoring_service import StopwatchScoringService
@@ -137,6 +137,7 @@ class TeamCog(commands.Cog):
             logger.error(f"Error in teams command: {e}", exc_info=True)
             await ctx.send("❌ Error retrieving team data.")
 
+    @is_admin()
     @is_public_channel()
     @commands.command(name="set_team_names")
     async def set_team_names_command(
@@ -499,6 +500,7 @@ class TeamCog(commands.Cog):
             logger.error(f"Error in team_pool: {e}", exc_info=True)
             await ctx.send("❌ Error retrieving team pool.")
 
+    @is_admin()
     @is_public_channel()
     @commands.command(name="assign_teams")
     async def assign_teams_command(self, ctx, date: Optional[str] = None):
@@ -711,6 +713,7 @@ class TeamCog(commands.Cog):
             logger.error(f"Error in head_to_head: {e}", exc_info=True)
             await ctx.send("❌ Error retrieving head-to-head record.")
 
+    @is_admin()
     @is_public_channel()
     @commands.command(name="add_team")
     async def add_team_command(self, ctx, name: str, color_hex: Optional[str] = None):

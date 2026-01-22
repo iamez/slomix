@@ -27,15 +27,17 @@
 
 A **Discord bot that tracks game statistics** for Wolfenstein: Enemy Territory (ET:Legacy) - a team-based multiplayer shooter from 2003 that still has an active community.
 
-**The problem it solves:** 
+**The problem it solves:**
 
 Before this bot existed, game stats were completely lost after each match. Players had no persistent way to:
+
 - Track their performance over time
 - Compare themselves to others
 - See who the best players are
 - Analyze their last gaming session
 
 **After this bot:**
+
 - Players query `!stats myname` to see lifetime statistics
 - Communities see `!leaderboard` rankings for who's the best
 - `!last_session` shows beautiful graphs of the most recent gaming session
@@ -58,7 +60,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 
 ## 2. Data Flow Pipeline
 
-```
+```python
 ┌─────────────────────────────────────────────────────────────────┐
 │                     ET:LEGACY GAME SERVER (VPS)                 │
 │                                                                 │
@@ -110,7 +112,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 │  User sees: graphs, stats, leaderboards                         │
 │  Commands: !stats, !last_session, !top, !compare                │
 └─────────────────────────────────────────────────────────────────┘
-```
+```python
 
 ### Key Pipeline Stages
 
@@ -130,7 +132,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 
 ### Layered Modular Architecture
 
-```
+```python
 ┌─────────────────────────────────────────────────────────────────┐
 │                    PRESENTATION LAYER                           │
 │  Discord commands, embeds, graphs                               │
@@ -157,7 +159,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 │  PostgreSQL database                                            │
 │  Tables: rounds, player_stats, weapon_stats, etc.               │
 └─────────────────────────────────────────────────────────────────┘
-```
+```python
 
 ### Patterns Used
 
@@ -177,6 +179,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 ### Layer 1: Entry Point & Configuration
 
 #### `bot/ultimate_bot.py` (4,990 lines)
+
 - **Purpose:** Main bot class. Handles Discord connection, loads Cogs, runs background tasks.
 - **Key sections:**
   - Lines 160-280: `__init__()` - loads config, creates database adapter
@@ -185,6 +188,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 - **Dependencies:** All Cogs access `self.bot` to reach database, config, cache
 
 #### `bot/config.py` (320 lines)
+
 - **Purpose:** Centralized configuration object
 - **Priority:** ENV vars → `bot_config.json` → hardcoded defaults
 - **Key attributes:**
@@ -198,17 +202,21 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 ### Layer 2: Database Access
 
 #### `bot/core/database_adapter.py` (260 lines)
+
 - **Purpose:** Async interface for PostgreSQL
 - **Key methods:**
+
   ```python
   await db.fetch_one(query, params)   # Single row
   await db.fetch_all(query, params)   # All rows
   await db.fetch_val(query, params)   # Single value
   await db.execute(query, params)     # INSERT/UPDATE
-  ```
+  ```python
+
 - **Auto-translation:** `?` placeholders → `$1, $2, $3` for PostgreSQL
 
 #### `postgresql_database_manager.py` (1,573 lines)
+
 - **Purpose:** CLI tool for database administration
 - **Location:** Root directory (runs standalone)
 - **Operations:** Backup, rebuild, import, schema check
@@ -218,15 +226,18 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 ### Layer 3: Data Import Pipeline
 
 #### `bot/community_stats_parser.py` (1,038 lines)
+
 - **Purpose:** Parse raw stats files into Python dicts
 - **Critical detail:** Round 2 files contain CUMULATIVE stats
-  ```
+
+  ```yaml
   R1: kills=10
   R2: kills=25 (includes R1!)
   Parser calculates: 25 - 10 = 15 kills in R2 only
-  ```
+  ```python
 
 #### `bot/automation/file_tracker.py` (310 lines)
+
 - **Purpose:** Prevent duplicate imports
 - **Logic:**
   1. Check file age (skip old files on restart)
@@ -235,6 +246,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
   4. Check if round already exists
 
 #### `bot/automation/ssh_handler.py`
+
 - **Purpose:** SSH operations - connect, list files, download
 - **Used by:** `endstats_monitor` background task
 
@@ -243,6 +255,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 ### Layer 4: Services (Business Logic)
 
 #### `bot/services/voice_session_service.py` (780 lines)
+
 - **Purpose:** Detect gaming sessions via Discord voice channels
 - **Logic:**
   - 6+ players join voice → session starts
@@ -250,10 +263,12 @@ Think of it like a **sports statistics tracking system** - but for a video game,
   - Triggers session summaries and predictions
 
 #### `bot/services/round_publisher_service.py` (432 lines)
+
 - **Purpose:** Auto-post round stats to Discord after processing
 - **Flow:** File processed → service builds embed → posts to channel
 
 #### `bot/services/prediction_engine.py` (573 lines)
+
 - **Purpose:** Predict match outcomes using historical data
 - **Output:** "Based on history, Team A has 62% win chance"
 
@@ -279,10 +294,12 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 ### Layer 6: Core Utilities
 
 #### `bot/core/stats_cache.py`
+
 - **Purpose:** In-memory cache (5-minute TTL)
 - **Why:** Database queries are slow; cache speeds up repeated requests
 
 #### `bot/core/team_manager.py` + related files
+
 - **Purpose:** Determine which team each player is on
 - **Why:** Raw stats files don't always have reliable team data
 - **Methods:** Multiple detection algorithms with confidence scores
@@ -293,7 +310,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 
 ### Flow 1: Bot Startup
 
-```
+```python
 1. main() in ultimate_bot.py
    │
    ├── 2. BotConfig() loads from .env → bot_config.json → defaults
@@ -308,11 +325,12 @@ Think of it like a **sports statistics tracking system** - but for a video game,
    │   └── Start background tasks
    │
    └── 6. bot.run(token) → Connect to Discord
-```
+```text
 
 ### Flow 2: New Stats File Arrives
 
-```
+```sql
+
 1. endstats_monitor task loop (every 60s)
    │
    ├── 2. SSH: List remote files on game server
@@ -327,11 +345,13 @@ Think of it like a **sports statistics tracking system** - but for a video game,
    ├── 6. Database: Insert round + player_stats + weapon_stats
    │
    └── 7. round_publisher: Post embed to Discord channel
-```
+
+```text
 
 ### Flow 3: User Types `!stats playername`
 
-```
+```text
+
 1. Discord message received
    │
    ├── 2. bot.on_message() → process_commands()
@@ -347,7 +367,8 @@ Think of it like a **sports statistics tracking system** - but for a video game,
    │   └── Build Discord embed
    │
    └── 4. ctx.send(embed) → User sees stats card
-```
+
+```python
 
 ---
 
@@ -356,21 +377,24 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 ### Why `BotConfig` class instead of scattered `os.getenv()`?
 
 **Before (anti-pattern):**
+
 ```python
 class SomeCog:
     def __init__(self, bot):
         self.ssh_host = os.getenv('SSH_HOST', 'localhost')  # Hidden dependency!
-```
+```text
 
 **After (centralized):**
+
 ```python
 class SomeCog:
     def __init__(self, bot):
         self.config = bot.config  # Single source of truth
         # Use: self.config.ssh_host
-```
+```yaml
 
 **Benefits:**
+
 1. Testable - inject mock configs in tests
 2. Documented - all options in one file
 3. Validated - `config.validate()` catches missing values at startup
@@ -381,6 +405,7 @@ class SomeCog:
 ### Why Repository Pattern for database access?
 
 **Before (SQL in Cogs):**
+
 ```python
 class SomeCog:
     async def check_file(self, filename):
@@ -388,16 +413,18 @@ class SomeCog:
             "SELECT * FROM processed_files WHERE filename = ?", 
             (filename,)
         )
-```
+```text
 
 **After (Repository):**
+
 ```python
 class SomeCog:
     async def check_file(self, filename):
         return await self.file_repo.get_processed_filenames()
-```
+```sql
 
 **Benefits:**
+
 1. SQL centralized in one place
 2. Change schema → update one file
 3. Easy to mock for tests
@@ -411,9 +438,10 @@ class SomeCog:
 ```python
 # Cog doesn't care if it's SQLite or PostgreSQL:
 await self.db.fetch_one("SELECT * FROM players WHERE name = ?", (name,))
-```
+```python
 
 The adapter:
+
 - Translates `?` → `$1, $2` for PostgreSQL
 - Handles connection pooling
 - Provides async interface
@@ -425,6 +453,7 @@ The adapter:
 **Before:** 5,000+ lines in one file. Too much.
 
 **After:** Each class has ONE responsibility:
+
 - `VoiceSessionService` → voice channel logic only
 - `RoundPublisherService` → Discord posting only
 - `PredictionEngine` → predictions only
@@ -460,7 +489,8 @@ The adapter:
 
 ## Quick Reference: File Locations
 
-```
+```python
+
 slomix_discord/
 ├── bot/
 │   ├── ultimate_bot.py           # Main entry point (4,990 lines)
@@ -493,6 +523,7 @@ slomix_discord/
 ├── postgresql_database_manager.py  # DB admin CLI tool
 ├── local_stats/                    # Downloaded stats files
 └── docs/                           # Documentation
+
 ```
 
 ---

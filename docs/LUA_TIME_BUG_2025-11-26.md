@@ -1,4 +1,5 @@
 # LUA Script Time Tracking Bug
+
 **Date:** 2025-11-26
 **Status:** 🚨 CRITICAL - Parser fixed, but LUA has deeper issue
 
@@ -15,15 +16,18 @@ I fixed the **parser bug** (it was overwriting individual time with round time),
 ## What I Fixed
 
 ### Parser Fix (✅ DONE)
+
 **File:** `bot/community_stats_parser.py` lines 674-705
 
 **Before:**
+
 ```python
 for player in players:
     player['time_played_seconds'] = round_time_seconds  # ❌ Same for all
-```
+```text
 
 **After:**
+
 ```python
 for player in players:
     # Use INDIVIDUAL time from TAB field 22
@@ -33,7 +37,7 @@ for player in players:
         player_time_seconds = int(player_time_minutes * 60)  # ✅ Individual
     else:
         player_time_seconds = round_time_seconds  # Fallback if TAB field is 0
-```
+```yaml
 
 This fix is **correct** and will work once the LUA script outputs proper individual times.
 
@@ -48,16 +52,18 @@ This fix is **correct** and will work once the LUA script outputs proper individ
 ```lua
 -- Line 227: tp = timeAxis + timeAllies
 -- Line 270: TAB field 22 = roundNum((tp/1000)/60, 1)
-```
+```sql
 
 **Expected:** Each player should have different `tp` values (their individual play time)
 
 **Reality:** All players have `tp = 0` in Round 1!
 
-### Evidence from Stats Files:
+### Evidence from Stats Files
 
 **Round 1 (`2025-11-25-232932-etl_frostbite-round-1.txt`):**
-```
+
+```text
+
 Player              TAB Field 22
 bronze.             0.0    ❌
 .olz                0.0    ❌
@@ -67,10 +73,13 @@ SuperBoyy           0.0    ❌
 Cru3lzor.           0.0    ❌
 qmr                 0.0    ❌
 vid                 0.0    ❌
-```
+
+```text
 
 **Round 2 Cumulative (`2025-11-25-233502-etl_frostbite-round-2.txt`):**
-```
+
+```text
+
 Player              TAB Field 22
 SmetarskiProner     13.8   (all same)
 qmr                 13.8   (all same)
@@ -80,7 +89,8 @@ vid                 13.8   (all same)
 .wjs                13.8   (all same)
 Cru3lzor.           13.8   (all same)
 .olz                13.8   (all same)
-```
+
+```yaml
 
 ---
 
@@ -89,15 +99,17 @@ Cru3lzor.           13.8   (all same)
 ### Theory 1: Game Engine Values Not Populated Yet
 
 **Lines 224-227 in c0rnp0rn.lua:**
+
 ```lua
 local timeAxis = et.gentity_get(i, "sess.time_axis")
 local timeAllies = et.gentity_get(i, "sess.time_allies")
 local tp = timeAxis + timeAllies
-```
+```sql
 
 These values come from the ET:Legacy game engine session data. If the engine hasn't populated them yet when the lua script runs, they'll be 0.
 
 **When does the script run?**
+
 - At "intermission" (end of round)
 - Maybe the game engine finalizes time tracking AFTER the lua script runs?
 
@@ -115,7 +127,7 @@ These values come from the ET:Legacy game engine session data. If the engine has
 
 ## Impact
 
-### With Current Setup:
+### With Current Setup
 
 1. **Round 1:**
    - TAB field 22 = 0.0 for all players
@@ -129,7 +141,8 @@ These values come from the ET:Legacy game engine session data. If the engine has
    - But actual R2 duration is 4:38 (4.6 minutes)
    - Parser uses differential, which falls back to round time ❌
 
-### Result:
+### Result
+
 **Everyone still shows the same time**, just like before the parser fix!
 
 ---
@@ -141,11 +154,13 @@ These values come from the ET:Legacy game engine session data. If the engine has
 **Problem:** `timeAxis + timeAllies` is 0 or same for everyone
 
 **Solutions:**
+
 1. Use a different time source from game engine
 2. Track time manually in lua (store join time, calculate elapsed)
 3. Call the stats collection at a different time (after engine finalizes time)
 
 **Where to look:**
+
 - `c0rnp0rn.lua` line 224-227: Getting time values
 - `c0rnp0rn.lua` line 270: Outputting TAB field 22
 - ET:Legacy docs: What other time fields are available from `et.gentity_get()`?
@@ -155,24 +170,34 @@ These values come from the ET:Legacy game engine session data. If the engine has
 **Instead of TAB field 22, use something else:**
 
 1. **TAB Field 8** (`timePlayed` percentage):
+
    ```lua
    -- Line 229: timePlayed = (100.0 * timePlayed / (timeAxis + timeAllies))
-   ```
+   ```text
+
    - This is a percentage (0-100)
    - Calculate: `player_time = (timePlayed / 100) * round_duration`
    - But if `timeAxis + timeAllies` is 0, this will be 0/0 = NaN
 
 2. **Use DPM** to back-calculate time:
-   ```
+
+   ```text
+
    time = (damage * 60) / DPM
-   ```
+
+   ```text
+
    - TAB field 21 has DPM
    - But if DPM is also calculated wrong, this won't help
 
 3. **Use time_dead_ratio** to derive alive time:
-   ```
+
+   ```text
+
    alive_time = round_time * (1 - time_dead_ratio/100)
-   ```
+
+   ```sql
+
    - TAB field 24 has time_dead_ratio
    - But this assumes round_time = player_time, which may not be true
 
@@ -188,6 +213,7 @@ These values come from the ET:Legacy game engine session data. If the engine has
   - Players who spec for part of the round
 
 **How common is this?**
+
 - Check if some players have different kill counts / death counts
 - If kills/deaths vary widely but time is same → bug confirmed
 - If kills/deaths are proportional to time → maybe not a bug?
@@ -199,16 +225,18 @@ These values come from the ET:Legacy game engine session data. If the engine has
 ### 1. Check if Time Values Exist in Game Engine
 
 Add debug output to lua script:
+
 ```lua
 print(string.format("Player %s: timeAxis=%d, timeAllies=%d, tp=%d",
     name, timeAxis, timeAllies, tp))
-```
+```sql
 
 Run a test round and check server console output.
 
 ### 2. Check Other Time Fields
 
 Try these ET:Legacy entity fields:
+
 - `et.gentity_get(i, "sess.time_played")` - Already used for percentage
 - `et.gentity_get(i, "client.sess.timerun_checkpoint")` - Timerun mod
 - `et.trap_Milliseconds()` - Current server time
@@ -217,6 +245,7 @@ Try these ET:Legacy entity fields:
 ### 3. Check When Script Runs
 
 Add timestamp to stats file:
+
 ```lua
 local script_time = et.trap_Milliseconds()
 -- Output this somewhere to see when script executes
@@ -229,15 +258,18 @@ Compare with round end time to see if timing is the issue.
 ## Workaround (Temporary)
 
 Until the LUA script is fixed, the parser will:
+
 1. Try to use TAB field 22 (individual time)
 2. Fall back to round duration if TAB field 22 is 0 or invalid
 3. ✅ This is what my parser fix already does!
 
 **Pros:**
+
 - Works for future files if LUA gets fixed
 - Safe fallback for current files
 
 **Cons:**
+
 - Still shows same time for all players in current files
 - DPM calculations still wrong for late joiners/early leavers
 
@@ -256,10 +288,12 @@ Until the LUA script is fixed, the parser will:
 ## Files Modified
 
 ### ✅ Parser Fix (DONE)
+
 - `bot/community_stats_parser.py` lines 674-705
 - Now uses TAB field 22 if available, falls back to round time
 
 ### ❌ LUA Script (NOT FIXED)
+
 - `c0rnp0rn.lua` line 227: `tp = timeAxis + timeAllies`
 - `c0rnp0rn.lua` line 270: TAB field 22 = `roundNum((tp/1000)/60, 1)`
 - **Issue:** All players have tp=0 (R1) or tp=same_value (R2)

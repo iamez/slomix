@@ -1,4 +1,5 @@
 # AI Agent Implementation Instructions
+
 ## ET:Legacy Discord Bot - Security & Performance Fixes
 
 **Generated:** November 6, 2025  
@@ -10,6 +11,7 @@
 ## 🎯 OVERVIEW
 
 This document contains all recommended fixes from the pre-deployment audit. Implement fixes in priority order. Each fix includes:
+
 - Exact file location
 - Current code (BEFORE)
 - Fixed code (AFTER)
@@ -21,12 +23,14 @@ This document contains all recommended fixes from the pre-deployment audit. Impl
 ## 🔴 HIGH PRIORITY FIXES (Required Before Deploy)
 
 ### FIX #1: SSH Key Validation
+
 **File:** `bot/cogs/server_control.py`  
 **Line:** 45  
 **Issue:** Bot crashes if SSH key file doesn't exist  
 **Time:** 5 minutes
 
-#### BEFORE:
+#### BEFORE
+
 ```python
 def __init__(self, bot):
     self.bot = bot
@@ -36,9 +40,10 @@ def __init__(self, bot):
     self.ssh_port = int(os.getenv('SSH_PORT', 22))
     self.ssh_user = os.getenv('SSH_USER')
     self.ssh_key_path = os.path.expanduser(os.getenv('SSH_KEY_PATH', '~/.ssh/id_rsa'))
-```
+```text
 
-#### AFTER:
+#### AFTER
+
 ```python
 def __init__(self, bot):
     self.bot = bot
@@ -55,9 +60,10 @@ def __init__(self, bot):
         logger.info("   SSH server control features will be disabled")
         logger.info("   Please verify SSH_KEY_PATH in .env points to valid key file")
         self.ssh_host = None  # Disable SSH operations
-```
+```text
 
-#### Testing:
+#### Testing
+
 ```bash
 # Test 1: Valid SSH key
 SSH_KEY_PATH=~/.ssh/id_rsa python bot/ultimate_bot.py
@@ -70,9 +76,10 @@ SSH_KEY_PATH=~/.ssh/nonexistent.key python bot/ultimate_bot.py
 # Test 3: Try SSH command with invalid key
 !server_status
 # Expected: Graceful error message, not crash
-```
+```python
 
-#### Success Criteria:
+#### Success Criteria
+
 - [ ] Bot starts even if SSH key missing
 - [ ] Warning logged if key file not found
 - [ ] SSH commands fail gracefully (don't crash)
@@ -81,6 +88,7 @@ SSH_KEY_PATH=~/.ssh/nonexistent.key python bot/ultimate_bot.py
 ---
 
 ### FIX #2: Filename Sanitization (Security)
+
 **File:** `bot/cogs/server_control.py`  
 **Lines:** Add helper function at top (~line 25), modify commands  
 **Issue:** Directory traversal vulnerability in file operations  
@@ -134,7 +142,7 @@ def sanitize_filename(filename: str) -> str:
 
 class ETLegacyRCON:
     # ... rest of code
-```
+```text
 
 #### STEP 2: Apply Sanitization to Commands
 
@@ -155,7 +163,7 @@ async def map_add(self, ctx, url: str, map_name: str = None):
             return
     
     # ... rest of command
-```
+```sql
 
 **B) In map_delete command (~line 280):**
 
@@ -176,7 +184,7 @@ async def map_delete(self, ctx, map_name: str):
         return
     
     # ... rest of command
-```
+```text
 
 **C) In map_change command (~line 250):**
 
@@ -198,9 +206,10 @@ async def map_change(self, ctx, map_name: str):
         return
     
     # ... rest of command
-```
+```text
 
-#### Testing:
+#### Testing
+
 ```python
 # Test 1: Normal filename
 !map_delete goldrush.pk3
@@ -217,9 +226,10 @@ async def map_change(self, ctx, map_name: str):
 # Test 4: Empty after sanitization
 !map_delete "../../"
 # Expected: "❌ Invalid map name: Invalid filename provided"
-```
+```python
 
-#### Success Criteria:
+#### Success Criteria
+
 - [ ] All user-provided filenames sanitized
 - [ ] Directory traversal attempts blocked
 - [ ] Normal filenames work as expected
@@ -231,12 +241,14 @@ async def map_change(self, ctx, map_name: str):
 ## 🟡 MEDIUM PRIORITY FIXES (Deploy Week 1)
 
 ### FIX #3: Database Connection Pool Size
+
 **File:** `bot/config.py`  
 **Lines:** 49-50  
 **Issue:** Pool exhaustion possible under high load  
 **Time:** 2 minutes
 
-#### BEFORE:
+#### BEFORE
+
 ```python
 # PostgreSQL settings
 self.postgres_host = self._get_config('POSTGRES_HOST', 'localhost')
@@ -246,9 +258,10 @@ self.postgres_user = self._get_config('POSTGRES_USER', 'etlegacy')
 self.postgres_password = self._get_config('POSTGRES_PASSWORD', '')
 self.postgres_min_pool = int(self._get_config('POSTGRES_MIN_POOL', '5'))
 self.postgres_max_pool = int(self._get_config('POSTGRES_MAX_POOL', '20'))
-```
+```text
 
-#### AFTER:
+#### AFTER
+
 ```python
 # PostgreSQL settings
 self.postgres_host = self._get_config('POSTGRES_HOST', 'localhost')
@@ -259,16 +272,18 @@ self.postgres_password = self._get_config('POSTGRES_PASSWORD', '')
 # Increased pool size for 14 cogs + 4 background tasks
 self.postgres_min_pool = int(self._get_config('POSTGRES_MIN_POOL', '10'))
 self.postgres_max_pool = int(self._get_config('POSTGRES_MAX_POOL', '30'))
-```
+```sql
 
-#### Also Update .env.example:
+#### Also Update .env.example
+
 ```bash
 # PostgreSQL Connection Pool
 POSTGRES_MIN_POOL=10
 POSTGRES_MAX_POOL=30
-```
+```text
 
-#### Testing:
+#### Testing
+
 ```python
 # Monitor pool usage after deploy
 # In PostgreSQL:
@@ -276,9 +291,10 @@ SELECT count(*) FROM pg_stat_activity WHERE datname = 'et_stats';
 
 # Expected: Should stay well under 30 connections
 # Watch for warnings in logs about pool exhaustion
-```
+```python
 
-#### Success Criteria:
+#### Success Criteria
+
 - [ ] No "Too many connections" errors
 - [ ] Pool usage monitored in logs
 - [ ] Performance stable under load
@@ -286,6 +302,7 @@ SELECT count(*) FROM pg_stat_activity WHERE datname = 'et_stats';
 ---
 
 ### FIX #4: RCON Server Status Check
+
 **File:** `bot/cogs/server_control.py`  
 **Lines:** Add helper method, modify RCON commands  
 **Issue:** Confusing errors when server offline  
@@ -312,7 +329,7 @@ async def is_server_running(self) -> bool:
     except Exception as e:
         logger.error(f"Error checking server status: {e}")
         return False
-```
+```text
 
 #### STEP 2: Add to RCON Commands
 
@@ -340,7 +357,7 @@ async def rcon_command(self, ctx, *, command: str):
     await self.log_action(ctx, "RCON Command", f"Command: {command}")
     
     # ... rest of command
-```
+```text
 
 **Modify kick_player (~line 350):**
 
@@ -362,7 +379,7 @@ async def kick_player(self, ctx, player_id: int, *, reason: str = "Kicked by adm
     await self.log_action(ctx, "Player Kick", f"Player ID: {player_id}, Reason: {reason}")
     
     # ... rest of command
-```
+```text
 
 **Modify server_say (~line 380):**
 
@@ -382,9 +399,10 @@ async def server_say(self, ctx, *, message: str):
         return
     
     # ... rest of command
-```
+```text
 
-#### Testing:
+#### Testing
+
 ```bash
 # Test 1: RCON when server running
 !server_start
@@ -399,9 +417,10 @@ async def server_say(self, ctx, *, message: str):
 # Test 3: Kick when server offline
 !kick 5 test
 # Expected: Clear offline message
-```
+```python
 
-#### Success Criteria:
+#### Success Criteria
+
 - [ ] Clear error messages when server offline
 - [ ] RCON commands work when server online
 - [ ] No confusing timeout errors
@@ -410,14 +429,15 @@ async def server_say(self, ctx, *, message: str):
 ---
 
 ### FIX #5: Rate Limiting on Dangerous Commands
+
 **File:** `bot/cogs/server_control.py`  
-**Lines:** Add to __init__ and server control commands  
+**Lines:** Add to **init** and server control commands  
 **Issue:** No cooldown on restart/stop commands  
 **Time:** 20 minutes
 
-#### STEP 1: Add Rate Limiting to __init__
+#### STEP 1: Add Rate Limiting to **init**
 
-**Location:** In ServerControl.__init__ method (~line 55)
+**Location:** In ServerControl.**init** method (~line 55)
 
 ```python
 def __init__(self, bot):
@@ -433,7 +453,7 @@ def __init__(self, bot):
     
     logger.info(f"✅ ServerControl initialized")
     # ... rest of init
-```
+```text
 
 #### STEP 2: Add Helper Method
 
@@ -463,7 +483,7 @@ def check_cooldown(self, command_name: str, last_use: float, cooldown_seconds: i
         return False, remaining
     
     return True, 0
-```
+```text
 
 #### STEP 3: Apply to Commands
 
@@ -499,7 +519,7 @@ async def server_restart(self, ctx):
     self.last_restart = time.time()
     
     # ... rest of command
-```
+```text
 
 **Modify server_stop (~line 270):**
 
@@ -532,9 +552,10 @@ async def server_stop(self, ctx):
     self.last_stop = time.time()
     
     # ... rest of command
-```
+```text
 
-#### Testing:
+#### Testing
+
 ```bash
 # Test 1: First restart works
 !server_restart
@@ -553,9 +574,10 @@ async def server_stop(self, ctx):
 !server_stop
 !server_stop
 # Expected: Cooldown message with 3 minute wait
-```
+```python
 
-#### Success Criteria:
+#### Success Criteria
+
 - [ ] Restart limited to once per 5 minutes
 - [ ] Stop limited to once per 3 minutes
 - [ ] Clear cooldown messages with time remaining
@@ -567,7 +589,9 @@ async def server_stop(self, ctx):
 ## 🟢 LOW PRIORITY FIXES (Optional Improvements)
 
 ### FIX #6: Remove Unused SSH Monitor Service
+
 **Files to Delete:**
+
 - `bot/services/automation/ssh_monitor.py`
 - `bot/services/automation/metrics_logger.py`
 - `bot/services/automation/health_monitor.py`
@@ -577,6 +601,7 @@ async def server_stop(self, ctx):
 **Reason:** These were created but never integrated. Bot uses built-in `endstats_monitor()` task instead.
 
 **Action:**
+
 ```bash
 # Delete unused automation services
 git rm bot/services/automation/ssh_monitor.py
@@ -590,25 +615,29 @@ git rm bot/cogs/automation_commands.py
 # Keep: bot/services/automation/__init__.py
 
 git commit -m "Remove unused automation services (not integrated)"
-```
+```yaml
 
 **Or Keep for Future:** If you want these features later, just leave them. They don't cause problems.
 
 ---
 
 ### FIX #7: Cleanup Unused Dependencies
+
 **File:** `requirements.txt`  
 **Time:** 2 minutes
 
-#### Current Analysis:
+#### Current Analysis
+
 ```python
 trueskill>=0.4.5    # ❌ NOT USED - No imports found
 watchdog>=3.0.0     # ❌ NOT USED - No file watching implemented  
 pytz>=2023.3        # ⚠️ POSSIBLY UNUSED - Check if datetime.now() uses it
-```
+```text
 
-#### BEFORE:
-```
+#### BEFORE
+
+```python
+
 discord.py>=2.3.0
 python-dotenv>=1.0.0
 aiosqlite>=0.19.0
@@ -620,30 +649,40 @@ watchdog>=3.0.0
 aiofiles>=23.2.0
 Pillow>=10.0.0
 matplotlib>=3.7.0
-```
 
-#### AFTER:
-```
+```text
+
+#### AFTER
+
+```python
+
 # Core Discord & Bot
+
 discord.py>=2.3.0
 python-dotenv>=1.0.0
 
 # Database
+
 aiosqlite>=0.19.0
 asyncpg>=0.29.0
 
 # File Operations
+
 aiofiles>=23.2.0
 
 # SSH/Server Control
+
 paramiko>=3.4.0
 
 # Image Processing & Graphs
+
 Pillow>=10.0.0
 matplotlib>=3.7.0
-```
 
-#### Testing:
+```text
+
+#### Testing
+
 ```bash
 # Remove unused packages
 pip uninstall trueskill watchdog pytz -y
@@ -654,25 +693,28 @@ pip install -r requirements.txt
 # Test bot starts
 python bot/ultimate_bot.py
 # Expected: No import errors
-```
+```python
 
 **Benefit:** Smaller Docker images, faster installs, cleaner dependencies
 
 ---
 
 ### FIX #8: Embed Truncation Audit
+
 **Files:** Multiple cogs (stats_cog.py, leaderboard_cog.py, session_cog.py)  
 **Time:** 30-60 minutes
 
-#### Problem:
+#### Problem
+
 Discord embeds have limits:
+
 - Total: 6000 characters
 - Per field: 1024 characters
 - Fields: 25 maximum
 
 Some commands don't handle truncation well with many players/rounds.
 
-#### Example Fix Pattern (from last_session_cog.py):
+#### Example Fix Pattern (from last_session_cog.py)
 
 ```python
 def safe_add_field(embed, name: str, value: str, inline: bool = False):
@@ -706,9 +748,10 @@ def safe_add_field(embed, name: str, value: str, inline: bool = False):
     
     embed.add_field(name=name, value=value, inline=inline)
     return embed
-```
+```python
 
-#### Commands to Audit:
+#### Commands to Audit
+
 1. `!stats [player]` - Can be long with many rounds
 2. `!leaderboard` - Can have 50+ players
 3. `!sessions` - Can list many sessions
@@ -721,10 +764,12 @@ def safe_add_field(embed, name: str, value: str, inline: bool = False):
 ---
 
 ### FIX #9: Parallel Graph Generation
+
 **File:** `bot/cogs/last_session_cog.py`  
 **Time:** 45 minutes
 
-#### Current (Sequential):
+#### Current (Sequential)
+
 ```python
 async def last_session(self, ctx, view: str = "overview"):
     # Generate graphs one by one
@@ -736,9 +781,10 @@ async def last_session(self, ctx, view: str = "overview"):
     graph6 = await self.generate_time_graph(session_data)
     
     # Total time: ~6-10 seconds
-```
+```text
 
-#### Optimized (Parallel):
+#### Optimized (Parallel)
+
 ```python
 async def last_session(self, ctx, view: str = "overview"):
     # Generate all graphs in parallel
@@ -760,11 +806,12 @@ async def last_session(self, ctx, view: str = "overview"):
             logger.error(f"Graph {i+1} generation failed: {result}")
     
     # Total time: ~2-4 seconds (60% improvement)
-```
+```text
 
 **Benefit:** Faster response time for !last_session command
 
 **Testing:**
+
 ```bash
 # Before: Time the command
 !last_session
@@ -773,7 +820,7 @@ async def last_session(self, ctx, view: str = "overview"):
 # After: Time again
 !last_session
 # Should be 2-4 seconds
-```
+```python
 
 ---
 
@@ -781,32 +828,37 @@ async def last_session(self, ctx, view: str = "overview"):
 
 After implementing fixes, test the following scenarios:
 
-### Basic Functionality:
+### Basic Functionality
+
 - [ ] Bot starts without errors
 - [ ] All cogs load successfully
 - [ ] Database connection works
 - [ ] Commands respond
 
-### SSH Operations:
+### SSH Operations
+
 - [ ] `!server_status` works
 - [ ] `!server_start` works (if server stopped)
 - [ ] `!server_stop` works (with confirmation)
 - [ ] `!server_restart` respects cooldown
 - [ ] SSH failures don't crash bot
 
-### Security:
+### Security
+
 - [ ] `!map_delete ../../../etc/passwd` blocked
 - [ ] `!map_add` sanitizes filenames
 - [ ] Rate limits enforced on restarts
 - [ ] Invalid SSH key doesn't crash
 
-### RCON Commands:
+### RCON Commands
+
 - [ ] `!rcon status` checks server online first
 - [ ] `!kick` validates server running
 - [ ] `!say` validates server running
 - [ ] Clear error messages when offline
 
-### Database:
+### Database
+
 - [ ] Pool size increased to 30
 - [ ] No connection exhaustion under load
 - [ ] Stats import still works
@@ -817,27 +869,31 @@ After implementing fixes, test the following scenarios:
 ## 🚀 DEPLOYMENT STEPS
 
 ### 1. Backup Current Code
+
 ```bash
 git branch backup-pre-fixes
 git checkout vps-network-migration
-```
+```text
 
 ### 2. Apply HIGH Priority Fixes
+
 ```bash
 # Implement Fix #1 and Fix #2
 # Test thoroughly
 python bot/ultimate_bot.py
 # Run security tests
-```
+```text
 
 ### 3. Commit Changes
+
 ```bash
 git add .
 git commit -m "Security fixes: SSH key validation + filename sanitization"
 git push origin vps-network-migration
-```
+```text
 
 ### 4. Deploy to VPS
+
 ```bash
 # On VPS
 cd /opt/slomix
@@ -846,9 +902,10 @@ source .venv/bin/activate
 pip install -r requirements.txt
 sudo systemctl restart et-bot
 sudo systemctl status et-bot
-```
+```text
 
 ### 5. Monitor for 24-48 Hours
+
 ```bash
 # Check logs
 sudo journalctl -u et-bot -f
@@ -857,20 +914,23 @@ sudo journalctl -u et-bot -f
 !health
 !database_info
 !ssh_stats
-```
+```text
 
 ### 6. Apply MEDIUM Priority Fixes
+
 After 24-48 hours of stable operation:
+
 ```bash
 # Implement Fix #3, #4, #5
 # Test, commit, deploy
-```
+```yaml
 
 ---
 
 ## 📝 SUCCESS CRITERIA
 
-### All Fixes Implemented Successfully When:
+### All Fixes Implemented Successfully When
+
 - [ ] Bot starts without errors
 - [ ] SSH operations work or fail gracefully
 - [ ] Security vulnerabilities patched
@@ -915,18 +975,21 @@ If you encounter issues during implementation:
 
 ## 📈 POST-IMPLEMENTATION MONITORING
 
-### Week 1:
+### Week 1
+
 - Monitor logs daily
 - Check for SSH/RCON errors
 - Verify rate limiting works
 - Watch database pool usage
 
-### Week 2:
+### Week 2
+
 - Apply MEDIUM priority fixes
 - Continue monitoring
 - Tune parameters if needed
 
-### Week 3:
+### Week 3
+
 - Consider LOW priority fixes
 - Optimize if needed
 - Document any new issues

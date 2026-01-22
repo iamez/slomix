@@ -1,4 +1,5 @@
 # PostgreSQL Migration Guide
+
 **ET:Legacy Discord Bot - SQLite to PostgreSQL Migration**
 
 ## 📋 Overview
@@ -20,7 +21,7 @@ All Python code has been successfully migrated to use the database adapter patte
 ### Step 1: Install PostgreSQL Locally (Windows)
 
 1. Download PostgreSQL installer:
-   https://www.postgresql.org/download/windows/
+   <https://www.postgresql.org/download/windows/>
 
 2. Run installer:
    - Install PostgreSQL 16.x or newer
@@ -40,14 +41,14 @@ CREATE DATABASE etlegacy;
 CREATE USER etlegacy_user WITH PASSWORD 'your_secure_password_here';
 GRANT ALL PRIVILEGES ON DATABASE etlegacy TO etlegacy_user;
 \q
-```
+```text
 
 ### Step 3: Apply Schema
 
 ```powershell
 cd C:\Users\seareal\Documents\stats
 psql -U etlegacy_user -d etlegacy -f tools/schema_postgresql.sql
-```
+```sql
 
 ### Step 4: Update Configuration
 
@@ -63,7 +64,7 @@ Edit `config.json`:
   "postgresql_user": "etlegacy_user",
   "postgresql_password": "your_secure_password_here"
 }
-```
+```text
 
 **Note:** Keep `database_type` as `"sqlite"` for now!
 
@@ -76,9 +77,10 @@ cp bot/etlegacy_production.db bot/etlegacy_production.backup.db
 
 # Run migration
 python tools/migrate_to_postgresql.py
-```
+```text
 
 The script will:
+
 - Show what will be migrated
 - Ask for confirmation
 - Copy all data in batches
@@ -86,7 +88,9 @@ The script will:
 - Report success/failures
 
 **Expected output:**
-```
+
+```text
+
 ✅ rounds: SQLite=X, PostgreSQL=X
 ✅ player_comprehensive_stats: SQLite=X, PostgreSQL=X
 ✅ weapon_comprehensive_stats: SQLite=X, PostgreSQL=X
@@ -94,7 +98,8 @@ The script will:
 ✅ player_links: SQLite=X, PostgreSQL=X
 ✅ session_teams: SQLite=X, PostgreSQL=X
 ✅ processed_files: SQLite=X, PostgreSQL=X
-```
+
+```text
 
 ### Step 6: Switch to PostgreSQL
 
@@ -105,24 +110,28 @@ Edit `config.json`:
   "database_type": "postgresql",
   ...
 }
-```
+```text
 
 ### Step 7: Test Bot
 
 ```powershell
 .\restart_bot.bat
-```
+```text
 
 Check startup logs for:
-```
+
+```text
+
 ✅ Configuration loaded: database_type=postgresql
 ✅ PostgreSQL Adapter initialized
 ✅ Connected to database: localhost:5432/etlegacy
-```
+
+```javascript
 
 ### Step 8: Test All Commands
 
 Test in Discord:
+
 - `!help` - Bot responds
 - `!link` - Linking works
 - `!stats <player>` - Stats display correctly
@@ -137,24 +146,29 @@ Let bot run for a few hours monitoring logs for any issues.
 ## 🔧 Troubleshooting
 
 ### "Cannot connect to PostgreSQL"
+
 ```powershell
 # Check PostgreSQL is running
 psql -U postgres -c "SELECT version();"
 
 # Check firewall allows port 5432
 # Check pg_hba.conf allows local connections
-```
+```text
 
 ### "Row counts don't match"
+
 - Check migration script output
 - Look for error messages
 - Re-run migration after fixing issues
 
 ### "Bot errors with PostgreSQL"
+
 - Switch back to SQLite temporarily:
+
   ```json
   "database_type": "sqlite"
-  ```
+  ```sql
+
 - Check logs for specific errors
 - Verify schema was applied correctly
 
@@ -172,6 +186,7 @@ Once local PostgreSQL testing passes:
 ## 📊 Performance Benefits
 
 PostgreSQL advantages:
+
 - ✅ Better concurrent access
 - ✅ Improved query performance
 - ✅ Automatic VACUUM (maintenance)
@@ -185,11 +200,13 @@ If PostgreSQL has issues:
 
 1. Stop bot
 2. Edit config.json:
+
    ```json
    "database_type": "sqlite"
    ```
-3. Restart bot
-4. Bot continues with SQLite (no data loss)
+
+1. Restart bot
+2. Bot continues with SQLite (no data loss)
 
 ## 📝 Files Created
 
@@ -213,6 +230,6 @@ Before considering migration complete:
 - [ ] Performance is equal or better
 - [ ] Backup strategy in place
 
-## 🎉 You're Ready!
+## 🎉 You're Ready
 
 Your bot is fully prepared for PostgreSQL migration. The adapter pattern makes switching seamless - just update config and restart!

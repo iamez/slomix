@@ -3,6 +3,7 @@
 ## ✅ Pre-Deployment Verification (Nov 6, 2025)
 
 ### Critical Files Present in GitHub
+
 - [x] `bot/ultimate_bot.py` (4,452 lines) - Main bot entry point
 - [x] `bot/community_stats_parser.py` (875 lines) - Stats file parser **[FIXED]**
 - [x] `bot/config.py` - Configuration loader
@@ -17,6 +18,7 @@
 - [x] `README.md` - Complete setup guide
 
 ### All 14 Cogs Present
+
 - [x] `bot/cogs/admin_cog.py`
 - [x] `bot/cogs/stats_cog.py`
 - [x] `bot/cogs/leaderboard_cog.py`
@@ -33,6 +35,7 @@
 - [x] `bot/cogs/synergy_analytics_fixed.py`
 
 ### All 9 Core Modules Present
+
 - [x] `bot/core/database_adapter.py`
 - [x] `bot/core/team_manager.py`
 - [x] `bot/core/advanced_team_detector.py`
@@ -44,6 +47,7 @@
 - [x] `bot/core/stats_cache.py`
 
 ### All 4 Automation Services Present
+
 - [x] `bot/services/automation/ssh_monitor.py`
 - [x] `bot/services/automation/database_maintenance.py`
 - [x] `bot/services/automation/health_monitor.py`
@@ -51,6 +55,7 @@
 - [x] `bot/services/automation/INTEGRATION_GUIDE.md`
 
 ### Documentation Complete
+
 - [x] `docs/TECHNICAL_OVERVIEW.md` - Complete pipeline & architecture
 - [x] `docs/DATA_PIPELINE.html` - Visual diagram
 - [x] `docs/FIELD_MAPPING.html` - Field reference
@@ -61,18 +66,21 @@
 ## 🐛 Issues Found & Fixed
 
 ### Issue 1: Parser Missing ❌ → ✅
+
 **Problem:** `bot/community_stats_parser.py` was excluded by .gitignore
 **Impact:** Bot would crash on startup (import error)
 **Fix:** Removed from .gitignore exclusions, force-added to git
 **Status:** ✅ FIXED
 
 ### Issue 2: Corrupted requirements.txt ❌ → ✅
+
 **Problem:** requirements.txt had merge conflict markers and duplicates
 **Impact:** `pip install -r requirements.txt` would fail
 **Fix:** Recreated clean requirements.txt with proper formatting
 **Status:** ✅ FIXED
 
 ### Issue 3: .gitignore Too Aggressive ❌ → ✅
+
 **Problem:** .gitignore excluded essential parser file
 **Impact:** Missing critical 875-line stats parser
 **Fix:** Updated .gitignore to only exclude actual test/helper files
@@ -83,13 +91,15 @@
 ## 🚀 VPS Deployment Steps
 
 ### 1. Clone Repository
+
 ```bash
 git clone https://github.com/iamez/slomix.git
 cd slomix
 git checkout vps-network-migration
-```
+```text
 
 ### 2. Verify Files
+
 ```bash
 # Check critical files exist
 ls bot/ultimate_bot.py
@@ -99,9 +109,10 @@ ls requirements.txt
 
 # Count files (should be 49+)
 git ls-files | wc -l
-```
+```text
 
 ### 3. Setup Python Environment
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate  # Linux/Mac
@@ -109,23 +120,26 @@ source .venv/bin/activate  # Linux/Mac
 .venv\Scripts\activate  # Windows
 
 pip install -r requirements.txt
-```
+```text
 
 ### 4. Setup PostgreSQL
+
 ```bash
 sudo apt install postgresql postgresql-contrib
 sudo -u postgres createdb et_stats
 sudo -u postgres createuser et_bot -P
 # Enter secure password
-```
+```text
 
 ### 5. Configure Environment
+
 ```bash
 cp .env.example .env
 nano .env
-```
+```text
 
 Edit .env:
+
 ```env
 DISCORD_TOKEN=your_actual_token
 POSTGRES_HOST=localhost
@@ -135,32 +149,38 @@ POSTGRES_USER=et_bot
 POSTGRES_PASSWORD=your_password
 LOCAL_STATS_PATH=/path/to/stats/files
 AUTOMATION_ENABLED=true
-```
+```text
 
 ### 6. Initialize Database
+
 ```bash
 python postgresql_database_manager.py
 # Select: 1 - Initialize schema
-```
+```text
 
 ### 7. Test Bot
+
 ```bash
 python bot/ultimate_bot.py
-```
+```text
 
 Should see:
-```
+
+```text
+
 Loaded extension 'admin'
 Loaded extension 'stats'
 Loaded extension 'leaderboard'
 ...
 Bot is ready!
-```
+
+```text
 
 ### 8. Setup Systemd Service
+
 ```bash
 sudo nano /etc/systemd/system/et-bot.service
-```
+```text
 
 ```ini
 [Unit]
@@ -178,20 +198,21 @@ RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-```
+```text
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable et-bot
 sudo systemctl start et-bot
 sudo systemctl status et-bot
-```
+```python
 
 ---
 
 ## ✅ Final Verification Checklist
 
 Before deploying, verify:
+
 - [ ] All 48+ files present in `git ls-files`
 - [ ] `bot/community_stats_parser.py` exists (875 lines)
 - [ ] `requirements.txt` is clean (no merge conflicts)
@@ -221,12 +242,14 @@ Before deploying, verify:
 ## 🔒 Security Reminders
 
 **NEVER commit:**
+
 - Discord bot tokens
 - Database passwords
 - `.env` files
 - Production configs
 
 **Use .env for:**
+
 - `DISCORD_TOKEN`
 - `POSTGRES_PASSWORD`
 - All sensitive credentials
@@ -236,6 +259,7 @@ Before deploying, verify:
 ## 📞 Troubleshooting
 
 ### Bot won't start
+
 ```bash
 # Check dependencies
 pip list | grep discord
@@ -245,18 +269,20 @@ pip list | grep asyncpg
 python -c "from bot.core.database_adapter import create_adapter"
 python -c "from tools.stopwatch_scoring import StopwatchScoring"
 python -c "import bot.community_stats_parser"
-```
+```text
 
 ### Database connection fails
+
 ```bash
 # Test PostgreSQL
 psql -h localhost -U et_bot -d et_stats
 
 # Check service
 sudo systemctl status postgresql
-```
+```text
 
 ### Missing files
+
 ```bash
 # Re-clone repository
 git clone https://github.com/iamez/slomix.git

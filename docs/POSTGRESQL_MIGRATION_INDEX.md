@@ -41,7 +41,7 @@ If you're new to this migration project, read documents in this order:
 
 **Current Status**: Bot is running PostgreSQL in production on Linux VPS
 
-```
+```text
 ✅ Phase 1-17: ALL PHASES COMPLETE
 ✅ PostgreSQL 14 installed and configured
 ✅ Database: etlegacy (user: etlegacy_user)
@@ -50,9 +50,10 @@ If you're new to this migration project, read documents in this order:
 ✅ System service: postgresql.service (enabled, running)
 ✅ Data location: /var/lib/postgresql/14/main/
 ✅ ~1,800 rounds migrated successfully
-```
+```python
 
 **Production Database Info**:
+
 - **Type**: PostgreSQL 14
 - **Database**: etlegacy
 - **User**: etlegacy_user
@@ -61,11 +62,13 @@ If you're new to this migration project, read documents in this order:
 - **Backups**: pg_dump to `.sql` files (see backup scripts)
 
 **Files Modified During Migration**:
+
 - ✅ `bot/core/database_adapter.py` (created)
 - ✅ `bot/config.py` (created)
 - 🟡 `bot/ultimate_bot.py` (in progress)
 
 **Files Remaining**:
+
 - 12 Python files need updates (bot core + cogs + services)
 - 1 schema conversion needed
 - 1 migration script to create
@@ -76,6 +79,7 @@ If you're new to this migration project, read documents in this order:
 ## 🗺️ Document Map
 
 ### Planning & Research
+
 | Document | Purpose | When to Read |
 |----------|---------|--------------|
 | `VPS_DECISION_TREE.md` | Decision framework for VPS vs alternatives | Before starting |
@@ -83,6 +87,7 @@ If you're new to this migration project, read documents in this order:
 | `VPS_POSTGRESQL_RESEARCH_ANALYSIS.md` | Validation that approach is correct | Before coding |
 
 ### Technical Implementation
+
 | Document | Purpose | When to Read |
 |----------|---------|--------------|
 | `POSTGRESQL_MIGRATION_TECHNICAL_ANALYSIS.md` | Deep dive into code changes needed | Before implementing |
@@ -90,6 +95,7 @@ If you're new to this migration project, read documents in this order:
 | `POSTGRESQL_SQL_COMPATIBILITY_REFERENCE.md` | SQL syntax quick reference | During SQL updates |
 
 ### Code Documentation
+
 | File | Purpose | Status |
 |------|---------|--------|
 | `bot/core/database_adapter.py` | Abstraction layer for SQLite/PostgreSQL | ✅ Complete |
@@ -102,21 +108,27 @@ If you're new to this migration project, read documents in this order:
 ## 🎯 Quick Access by Task
 
 ### "I need to update a file to use the adapter"
+
 → Read: **POSTGRESQL_MIGRATION_IMPLEMENTATION_GUIDE.md** Phase 2-4
 
 ### "I need to convert SQL syntax"
+
 → Read: **POSTGRESQL_SQL_COMPATIBILITY_REFERENCE.md**
 
 ### "I need to understand the overall approach"
+
 → Read: **POSTGRESQL_MIGRATION_TECHNICAL_ANALYSIS.md**
 
 ### "I need to know what to do next"
+
 → Check: Todo list or **POSTGRESQL_MIGRATION_IMPLEMENTATION_GUIDE.md** Phase tracking
 
 ### "I encountered an error"
+
 → Check: **POSTGRESQL_MIGRATION_IMPLEMENTATION_GUIDE.md** Troubleshooting section
 
 ### "I need to set up VPS infrastructure"
+
 → Read: **VPS_MIGRATION_SUMMARY.md** + **POSTGRESQL_MIGRATION_IMPLEMENTATION_GUIDE.md** Phase 15-16
 
 ---
@@ -138,6 +150,7 @@ If you're new to this migration project, read documents in this order:
 ## 🚨 Critical Information
 
 ### What Can Break
+
 1. **Type mismatches** (TEXT vs INTEGER in PostgreSQL)
 2. **Connection pool exhaustion** (not closing connections)
 3. **Transaction handling** (PostgreSQL needs explicit transactions)
@@ -145,6 +158,7 @@ If you're new to this migration project, read documents in this order:
 5. **SQL syntax differences** (datetime('now'), date arithmetic)
 
 ### What's Already Safe
+
 1. ✅ Query placeholders (adapter handles ? → $1 conversion)
 2. ✅ DATE() function (works in both)
 3. ✅ substr() function (works in both)
@@ -152,6 +166,7 @@ If you're new to this migration project, read documents in this order:
 5. ✅ Async/await pattern (already used everywhere)
 
 ### What Needs Manual Fix
+
 1. ⚠️ 4 occurrences of `datetime('now')` → `CURRENT_TIMESTAMP`
 2. ⚠️ 1 occurrence of `date('now', '-30 days')` → `CURRENT_DATE - INTERVAL '30 days'`
 3. ⚠️ Schema definition (AUTOINCREMENT → SERIAL)
@@ -162,16 +177,19 @@ If you're new to this migration project, read documents in this order:
 ## 🔬 Research Findings Summary
 
 ### Compatibility Analysis
+
 - **60% of SQL is already compatible** (no changes needed)
 - **30% needs minor fixes** (datetime functions, schema)
 - **10% needs careful attention** (type mismatches, transactions)
 
 ### Risk Assessment
+
 - **Risk Level**: 🟡 Medium-High
 - **Reason**: 132 connection points, many touchpoints
 - **Mitigation**: Incremental approach, thorough testing at each phase
 
 ### Confidence Level
+
 - **Technical Approach**: 95% ✅
 - **Time Estimate**: 70% ⚠️ (could be 60-100 hours)
 - **Success Probability**: 85% ✅ (with proper testing)
@@ -181,6 +199,7 @@ If you're new to this migration project, read documents in this order:
 ## 🎓 Key Learnings
 
 ### From Opus Research
+
 1. **Use abstraction layer** (not direct database access) ✅
 2. **Start with adapter, then update files one by one** ✅
 3. **Test with SQLite first** (regression prevention) ✅
@@ -188,6 +207,7 @@ If you're new to this migration project, read documents in this order:
 5. **Connection pooling is critical** ✅
 
 ### From Codebase Analysis
+
 1. **132 connection points** need updates
 2. **Pattern-based changes** (mostly similar code)
 3. **Few SQLite-specific functions** (easy to fix)
@@ -199,21 +219,25 @@ If you're new to this migration project, read documents in this order:
 ## 📅 Suggested Timeline
 
 ### Week 1: Code Updates
+
 - **Day 1-2**: Phase 3 - Update bot core (12h)
 - **Day 3-4**: Phase 4-5 - Update link_cog + last_session_cog (10h)
 - **Day 5**: Phase 6-8 - Update remaining cogs (10h)
 
 ### Week 2: Schema & Migration
+
 - **Day 6**: Phase 9 - Update automation services (4h)
 - **Day 7-8**: Phase 10 - Convert schema (8h)
 - **Day 9-10**: Phase 11 - Create migration script (8h)
 
 ### Week 3: Testing
+
 - **Day 11-12**: Phase 12 - Test with SQLite (6h)
 - **Day 13-14**: Phase 13-14 - Install PostgreSQL + test locally (12h)
 - **Day 15**: Fix issues, polish, document
 
 ### Future: Production
+
 - **Week 4+**: VPS setup and production migration (when ready)
 
 ---
@@ -233,15 +257,19 @@ Before starting each phase, verify:
 ## 🆘 Getting Help
 
 ### If Stuck on SQL Syntax
+
 → Check: `POSTGRESQL_SQL_COMPATIBILITY_REFERENCE.md`
 
 ### If Stuck on Implementation
+
 → Check: `POSTGRESQL_MIGRATION_IMPLEMENTATION_GUIDE.md`
 
 ### If Encountering Unexpected Error
+
 → Check: Troubleshooting section in Implementation Guide
 
 ### If Questioning the Approach
+
 → Re-read: `VPS_POSTGRESQL_RESEARCH_ANALYSIS.md` (confirms we're on track)
 
 ---
@@ -250,7 +278,7 @@ Before starting each phase, verify:
 
 Update after each completed phase:
 
-```
+```sql
 ✅ Phase 1: Database Abstraction Layer - COMPLETE (Nov 4, 2025)
 ✅ Phase 2: Bot Configuration System - COMPLETE (Nov 4, 2025)
 🟡 Phase 3: Update Bot Core - IN PROGRESS (Started Nov 4, 2025)
@@ -301,7 +329,7 @@ Migration is successful when:
    - Start with `link_cog.py` (smallest, easiest)
    - Test individually before moving to next
 
-3. **Keep Documentation Updated**: 
+3. **Keep Documentation Updated**:
    - Update this file after each phase
    - Document any unexpected issues
    - Share lessons learned

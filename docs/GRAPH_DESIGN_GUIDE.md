@@ -7,14 +7,16 @@
 
 ## 🎨 Graph Style Philosophy
 
-### Core Principles:
+### Core Principles
+
 1. **Clean and Readable** - Not cluttered
 2. **Color-Coded** - Teams/players easily distinguishable
 3. **Interactive Data** - Show exact values on hover
 4. **Consistent Branding** - ET:Legacy theme (military colors)
 5. **Dark Mode Friendly** - Works on Discord's dark theme
 
-### Color Palette:
+### Color Palette
+
 ```python
 # Team Colors
 AXIS_RED = '#FF4444'
@@ -32,13 +34,14 @@ BG_DARK = '#2C2F33'
 BG_LIGHT = '#36393F'
 GRID_COLOR = '#40444B'
 TEXT_COLOR = '#DCDDDE'
-```
+```yaml
 
 ---
 
 ## 📈 Graph Types for `!last_round`
 
 ### 1. **DPM Line Graph** (Keep Current Style!) ✅
+
 **When:** `!last_round` (main overview)  
 **Shows:** DPM trends across all players in the round  
 **Style:** Multi-line chart with player names
@@ -76,11 +79,12 @@ def create_dpm_line_graph(session_data):
         spine.set_color(GRID_COLOR)
     
     return save_graph_to_discord_file(fig, 'dpm_trends.png')
-```
+```yaml
 
 ---
 
 ### 2. **Radar Chart** (Skill Breakdown) 🎯
+
 **When:** `!last_round maps` - Per-player performance on a map  
 **Shows:** Multiple skill dimensions (like your DALL-E examples)  
 **Inspired by:** Image #3 (RANARI radar chart)
@@ -125,11 +129,12 @@ def create_player_radar_chart(player_data):
                  color=TEXT_COLOR, size=14, pad=20)
     
     return save_graph_to_discord_file(fig, 'player_radar.png')
-```
+```yaml
 
 ---
 
 ### 3. **Grouped Bar Chart** (Map Comparison) 📊
+
 **When:** `!last_round maps`  
 **Shows:** Performance comparison across different maps  
 **Inspired by:** Image #4 (Visual Performance Analytics)
@@ -192,11 +197,12 @@ def create_map_comparison_bars(session_data):
     
     plt.tight_layout()
     return save_graph_to_discord_file(fig, 'map_comparison.png')
-```
+```yaml
 
 ---
 
 ### 4. **Stacked Area Chart** (Team Performance Over Time) 🌊
+
 **When:** `!last_round graphs`  
 **Shows:** How team performance evolved throughout the round
 
@@ -231,11 +237,12 @@ def create_team_performance_timeline(session_data):
         spine.set_color(GRID_COLOR)
     
     return save_graph_to_discord_file(fig, 'team_timeline.png')
-```
+```yaml
 
 ---
 
 ### 5. **Heatmap** (Player Activity Map) 🔥
+
 **When:** `!last_round graphs`  
 **Shows:** Which players performed best on which maps
 
@@ -283,11 +290,12 @@ def create_player_map_heatmap(session_data):
     
     plt.tight_layout()
     return save_graph_to_discord_file(fig, 'player_map_heatmap.png')
-```
+```yaml
 
 ---
 
 ### 6. **Circular Progress/Target Chart** 🎯
+
 **When:** Individual player stats  
 **Shows:** Progress towards milestones (inspired by image #1 & #2)
 
@@ -339,25 +347,29 @@ def create_target_accuracy_chart(player_data):
               facecolor=BG_LIGHT, edgecolor=GRID_COLOR, labelcolor=TEXT_COLOR)
     
     return save_graph_to_discord_file(fig, 'accuracy_target.png')
-```
+```yaml
 
 ---
 
 ## 🎨 Complete Graph Suite for `!last_round`
 
 ### `!last_round` (overview)
+
 - ✅ **DPM Line Graph** (keep current - you like it!)
 
 ### `!last_round maps`
+
 - **Per-Map Bar Chart** - Kills/Deaths/Objectives for each map
 - **Radar Chart** - Top 3 players' skill breakdown per map
 - **Win Rate Pie Chart** - Defender vs Attacker wins per map
 
 ### `!last_round rounds`
+
 - **Timeline Graph** - Visual timeline of all rounds with outcomes
 - **Round Duration Chart** - Bar chart of round lengths
 
 ### `!last_round graphs`
+
 - **DPM Trend Lines** - All players' DPM over session
 - **K/D Comparison Bars** - Side-by-side player comparison
 - **Kill Distribution Pie** - Who got what % of kills
@@ -396,40 +408,45 @@ def get_performance_color(kd_ratio):
         return AVERAGE
     else:
         return POOR
-```
+```yaml
 
 ---
 
 ## 📦 Required Dependencies
 
 Add to `requirements.txt`:
+
 ```txt
 matplotlib>=3.7.0
 numpy>=1.24.0
 seaborn>=0.12.0  # For heatmaps
 scipy>=1.10.0    # For advanced statistics
-```
+```yaml
 
 ---
 
 ## 🎯 Implementation Priority
 
-### Phase 1 (Keep working):
+### Phase 1 (Keep working)
+
 1. ✅ DPM Line Graph (already exists - keep it!)
 
-### Phase 2 (Add to maps view):
-2. Map comparison bar chart
-3. Per-map radar charts for top players
+### Phase 2 (Add to maps view)
 
-### Phase 3 (Add to graphs view):
-4. K/D comparison bars
-5. Kill distribution pie chart
-6. Team performance timeline
+1. Map comparison bar chart
+2. Per-map radar charts for top players
 
-### Phase 4 (Advanced):
-7. Player-map heatmap
-8. Accuracy target charts
-9. Custom animations (if you want to get fancy!)
+### Phase 3 (Add to graphs view)
+
+1. K/D comparison bars
+2. Kill distribution pie chart
+3. Team performance timeline
+
+### Phase 4 (Advanced)
+
+1. Player-map heatmap
+2. Accuracy target charts
+3. Custom animations (if you want to get fancy!)
 
 ---
 
@@ -437,7 +454,8 @@ scipy>=1.10.0    # For advanced statistics
 
 When user types `!last_round graphs`:
 
-```
+```text
+
 📈 Statistical Analysis - October 31, 2025
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Generating graphs... This may take a moment.
@@ -461,6 +479,7 @@ Which players dominated which maps
 Most Played Map:     te_escape2 (50% of rounds)
 Longest Round:       etl_adlernest R1 (14:32)
 ...
+
 ```
 
 ---

@@ -3,6 +3,7 @@
 ## 📋 Overview
 
 Remote server control has been added to your Discord bot with these features:
+
 - ✅ **Server Management** - Start/Stop/Restart the Vektor server
 - ✅ **Map Management** - Upload/Change/Delete maps
 - ✅ **RCON Commands** - Kick players, send messages, execute any RCON command
@@ -22,7 +23,7 @@ SSH to your Vektor server and edit your config:
 ssh et@puran.hehe.si -p 48101
 cd ~/etlegacy-v2.83.1-x86_64
 nano vektor.cfg
-```
+```sql
 
 Add or update these lines in `vektor.cfg`:
 
@@ -32,20 +33,22 @@ set rconPassword "YOUR_SECURE_PASSWORD_HERE"
 set net_port "27960"
 set g_log "etserver.log"
 set g_logsync "1"
-```
+```text
 
 **IMPORTANT:** Use a strong RCON password! Generate one with:
+
 ```bash
 openssl rand -base64 32
-```
+```text
 
 Save and restart your server:
+
 ```bash
 screen -r vektor
 # Press Ctrl+C to stop
 # Wait for clean shutdown
 # It will auto-restart via your watchdog daemon
-```
+```sql
 
 ### Step 2: Update Your .env File
 
@@ -71,7 +74,7 @@ ADMIN_CHANNEL_ID=your_admin_channel_id_here
 # SSH_PORT=48101
 # SSH_USER=et
 # SSH_KEY_PATH=~/.ssh/etlegacy_bot
-```
+```text
 
 ### Step 3: Get Your Admin Channel ID
 
@@ -88,17 +91,20 @@ Stop-Process -Name python -Force
 
 # Start it again
 python bot/ultimate_bot.py
-```
+```text
 
 You should see in the logs:
-```
+
+```text
+
 ✅ Server Control cog loaded
-   SSH: et@puran.hehe.si:48101
+   SSH: <et@puran.hehe.si>:48101
    Server Path: /home/et/etlegacy-v2.83.1-x86_64
    Screen: vektor
    RCON: Enabled
    Admin Channel: 123456789
-```
+
+```sql
 
 ---
 
@@ -138,7 +144,8 @@ You should see in the logs:
 
 ### Check Server Status
 
-```
+```text
+
 You: !server_status
 
 Bot: ✅ Server Online
@@ -146,11 +153,13 @@ Bot: ✅ Server Online
      CPU Usage: 12.5%
      Memory: 3.2%
      Players: 8 online
-```
+
+```text
 
 ### Upload a New Map
 
-```
+```text
+
 You: !map_add
 [Attach: goldrush_final.pk3]
 
@@ -159,45 +168,53 @@ Bot: 📤 Uploading to server... (MD5: `a1b2c3d4`)
 Bot: ✅ Map Uploaded
      Size: 15.2 MB
      Use !map_change goldrush_final to load it
-```
+
+```text
 
 ### Change the Map
 
-```
+```text
+
 You: !map_change supply
 
 Bot: 🗺️ Changing map to `supply`...
 Bot: ✅ Map Changed
      Server is now loading supply
-```
+
+```text
 
 ### Send Server Message
 
-```
+```text
+
 You: !say Match will start in 5 minutes, everyone ready up!
 
 Bot: ✅ Message sent to server
-```
+
+```text
 
 ### Check Players
 
-```
+```text
+
 You: !rcon status
 
 Bot: 🎮 RCON Response
-     ```
+     ```yaml
      map: goldrush
      num score ping name            lastmsg address
      --- ----- ---- --------------- ------- -------
        0    45   20 ^1Player1           0 1.2.3.4:27960
        1    38   35 ^2Player2           0 5.6.7.8:27960
        2    22   50 ^3Player3           0 9.8.7.6:27960
-     ```
-```
+     ```text
+
+```text
 
 ### Restart Server
 
-```
+```text
+
 You: !server_restart
 
 Bot: ⚠️ Confirm RESTART server?
@@ -211,32 +228,39 @@ Bot: ✅ Server Stopped
      Note: Your watchdog daemon will restart it automatically in ~1 minute
 Bot: 🚀 Starting ET:Legacy server...
 Bot: ✅ Server Started
-```
+
+```sql
 
 ---
 
 ## 🔒 Security Features
 
 ### 1. Channel-Based Access Control
+
 - Commands only work in the designated admin channel
 - Attempts from other channels are denied with error message
 - No role checking needed - channel membership = permission
 
 ### 2. Local Audit Logging
+
 All admin actions are logged to `logs/server_control_access.log`:
 
-```
+```text
+
 [2025-10-07 14:23:15] Server Stop by YourName (123456789) - Stopping for maintenance
 [2025-10-07 14:25:42] Map Upload Success by YourName (123456789) - goldrush.pk3 - MD5: a1b2c3d4
 [2025-10-07 14:30:11] RCON Command by YourName (123456789) - Command: say Hello players!
-```
+
+```yaml
 
 ### 3. SSH Key Authentication
+
 - Uses existing SSH keys (no passwords)
 - Same credentials as stats sync
 - Secure file transfers via SFTP
 
 ### 4. Confirmation for Destructive Actions
+
 - Server stop/restart require ✅ confirmation
 - Map deletion requires ✅ confirmation
 - 30-second timeout prevents accidents
@@ -247,7 +271,8 @@ All admin actions are logged to `logs/server_control_access.log`:
 
 Your server setup (already configured in the cog):
 
-```
+```text
+
 /home/et/etlegacy-v2.83.1-x86_64/          # Root installation
 ├── etlded.x86_64                           # Server binary
 ├── vektor.cfg                              # Server config
@@ -257,7 +282,8 @@ Your server setup (already configured in the cog):
     └── ... (other maps)
 
 /home/et/.etlegacy/legacy/gamestats/        # Stats files (c0rnp0rn3.lua)
-```
+
+```yaml
 
 Screen session: `vektor`
 
@@ -272,26 +298,31 @@ Watchdog daemon: Automatically restarts server if it crashes
 **Problem:** RCON settings not in `.env` or incorrect
 
 **Fix:**
+
 1. Check `.env` has `RCON_ENABLED=true`
 2. Verify `RCON_PASSWORD` matches what's in `vektor.cfg`
 3. Restart the bot
 4. Test RCON manually:
+
    ```bash
    # On your local PC
    nc -u puran.hehe.si 27960
    # Type: rcon YOUR_PASSWORD status
-   ```
+   ```text
 
 ### Commands Don't Work (Permission Denied)
 
 **Problem:** Not using commands in admin channel
 
 **Fix:**
+
 1. Check you're in the correct channel (the one with ID matching `ADMIN_CHANNEL_ID`)
 2. Verify the channel ID is correct:
+
    ```powershell
    python -c "print(int('paste_your_ADMIN_CHANNEL_ID_here'))"
-   ```
+   ```sql
+
 3. If you want to allow commands from anywhere, remove `ADMIN_CHANNEL_ID` from `.env`
 
 ### SSH Connection Failed
@@ -299,15 +330,20 @@ Watchdog daemon: Automatically restarts server if it crashes
 **Problem:** Bot can't connect to server
 
 **Fix:**
+
 1. Test SSH manually:
+
    ```powershell
    ssh et@puran.hehe.si -p 48101 -i ~/.ssh/etlegacy_bot
-   ```
+   ```text
+
 2. Check SSH key permissions:
+
    ```powershell
    icacls ~\.ssh\etlegacy_bot
    # Should show: YOURUSERNAME:(R)
-   ```
+   ```text
+
 3. Verify `SSH_HOST`, `SSH_PORT`, `SSH_USER`, `SSH_KEY_PATH` in `.env`
 
 ### Map Upload Fails
@@ -315,42 +351,56 @@ Watchdog daemon: Automatically restarts server if it crashes
 **Problem:** Permission denied when uploading map
 
 **Fix:**
+
 1. SSH to server and check permissions:
+
    ```bash
    ls -la ~/etlegacy-v2.83.1-x86_64/etmain/
    # Should be owned by 'et' user
-   ```
+   ```text
+
 2. Fix if needed:
+
    ```bash
    chmod 755 ~/etlegacy-v2.83.1-x86_64/etmain/
-   ```
+   ```text
 
 ### Server Won't Start
 
 **Problem:** `!server_start` doesn't work
 
 **Fix:**
+
 1. SSH to server manually:
+
    ```bash
    ssh et@puran.hehe.si -p 48101
-   ```
+   ```text
+
 2. Check if screen exists:
+
    ```bash
    screen -ls
-   ```
+   ```text
+
 3. Check watchdog is running:
+
    ```bash
    ps aux | grep etlded
-   ```
+   ```text
+
 4. Try starting manually:
+
    ```bash
    cd ~/etlegacy-v2.83.1-x86_64
    screen -dmS vektor ./etlded.x86_64 +exec vektor.cfg
-   ```
+   ```text
+
 5. Check server logs:
+
    ```bash
    tail -f ~/etlegacy-v2.83.1-x86_64/etserver.log
-   ```
+   ```yaml
 
 ---
 
@@ -359,11 +409,13 @@ Watchdog daemon: Automatically restarts server if it crashes
 ### About Your Watchdog Daemon
 
 Your server has an auto-restart watchdog that:
+
 - Checks every 1 minute if `vektor` screen session exists
 - Automatically restarts server if it crashes
 - Runs via `@reboot` cron job
 
 **This means:**
+
 - ✅ When you `!server_stop`, it will auto-restart in ~1 minute
 - ✅ If server crashes, it recovers automatically
 - ⚠️ To keep server stopped permanently, you need to SSH in and disable the watchdog
@@ -377,6 +429,7 @@ Maps go in: `/home/et/etlegacy-v2.83.1-x86_64/etmain/`
 ### Mod/Lua Script Management
 
 The cog currently only handles maps. For mod/Lua updates:
+
 1. We can add commands to upload to `/home/et/etlegacy-v2.83.1-x86_64/legacy/`
 2. Or continue doing it manually via SSH
 3. Let me know if you want mod management commands added!
@@ -388,11 +441,14 @@ The cog currently only handles maps. For mod/Lua updates:
 ### 1. Test Basic Commands
 
 In your admin channel:
-```
+
+```text
+
 !server_status
 !map_list
 !rcon status
-```
+
+```yaml
 
 ### 2. Test Map Upload
 
@@ -404,6 +460,7 @@ In your admin channel:
 ### 3. Set Up Regular Monitoring
 
 You can create simple aliases for common tasks:
+
 - `!status` → Quick server check
 - `!players` → `!rcon status` to see who's online
 - `!announce <msg>` → `!say <msg>` for server announcements
@@ -419,6 +476,7 @@ Keep a list of your custom maps and configs so new admins know what's available.
 Want to add more features? Easy possibilities:
 
 ### Already Implemented
+
 - ✅ Server start/stop/restart
 - ✅ Map upload/change/delete
 - ✅ RCON commands
@@ -427,6 +485,7 @@ Want to add more features? Easy possibilities:
 - ✅ Audit logging
 
 ### Could Add Later
+
 - 📋 Config file management (upload/edit vektor.cfg)
 - 🔧 Mod/Lua script uploads
 - 📊 Real-time server stats (player count, map rotation)
@@ -444,23 +503,27 @@ Let me know if you want any of these!
 If you run into issues:
 
 1. **Check the logs:**
+
    ```powershell
    Get-Content logs\ultimate_bot.log -Tail 50
    Get-Content logs\server_control_access.log -Tail 20
-   ```
+   ```text
 
 2. **Test SSH connection:**
+
    ```powershell
    ssh et@puran.hehe.si -p 48101
-   ```
+   ```text
 
 3. **Verify RCON:**
+
    ```bash
    # On server
    netstat -tulpn | grep 27960
-   ```
+   ```text
 
 4. **Check server logs:**
+
    ```bash
    tail -f ~/etlegacy-v2.83.1-x86_64/etserver.log
    ```

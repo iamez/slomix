@@ -1,10 +1,10 @@
 -- ============================================================
--- PROXIMITY TRACKER v4.0 - FULL PLAYER TRACKING
+-- PROXIMITY TRACKER v4.1 - FULL PLAYER TRACKING + TEST MODE
 -- ET:Legacy Lua Module for Combat Analytics
 --
 -- KEY FEATURES (v4):
 --   • FULL PLAYER TRACKING - All players, spawn to death
---   • Position + velocity + health + weapon every 1 second
+--   • Position + velocity + health + weapon every 500ms
 --   • Stance tracking (standing/crouching/prone)
 --   • Sprint detection
 --   • First movement time after spawn
@@ -13,40 +13,75 @@
 --   • Per-map heatmaps (kills, movement, combat, escapes)
 --   • GUID tracking for forever stats
 --
+-- NEW IN v4.1 (TEST MODE):
+--   • test_mode config - disable advanced features for testing
+--   • Feature flags - independent control of each analytics feature
+--   • Death type categorization (killed/selfkill/fallen/world/teamkill)
+--   • Action event tracking (damage received/dealt)
+--   • Human-readable lifecycle log output (_lifecycle.txt)
+--
 -- OUTPUT: Single file per round with:
 --   - PLAYER_TRACKS: Full movement history for each player
---   - ENGAGEMENTS: Combat interactions
---   - KILL_HEATMAP: Where kills happen
---   - MOVEMENT_HEATMAP: Where players move
+--   - ENGAGEMENTS: Combat interactions (if enabled)
+--   - KILL_HEATMAP: Where kills happen (if enabled)
+--   - MOVEMENT_HEATMAP: Where players move (if enabled)
+--   - _lifecycle.txt: Human-readable lifecycle log (test mode)
 --
 -- LOAD ORDER: lua_modules "c0rnp0rn.lua proximity_tracker.lua"
 -- ============================================================
 
 local modname = "proximity_tracker"
-local version = "4.0"
+local version = "4.1"
 
 -- ===== CONFIGURATION =====
 local config = {
     enabled = true,
     debug = false,
     output_dir = "proximity/",  -- Separate from gamestats/ to avoid mixing data
-    
+
     -- Crossfire detection
     crossfire_window_ms = 1000,     -- 1 second for crossfire detection
-    
+
     -- Escape detection
     escape_time_ms = 5000,          -- 5 seconds no damage
     escape_distance = 300,          -- 300 units minimum travel
-    
+
     -- Position sampling (v4: 500ms for better movement capture)
-    position_sample_interval = 500,  -- 2 samples per second - captures strafe/dodge patterns 
-    
+    position_sample_interval = 500,  -- 2 samples per second - captures strafe/dodge patterns
+
     -- Heatmap
     grid_size = 512,
-    
+
     -- Minimum damage to count
-    min_damage = 1
+    min_damage = 1,
+
+    -- ===== TEST MODE (v4.1) =====
+    -- When enabled, disables advanced analytics and outputs human-readable lifecycle log
+    test_mode = {
+        enabled = false,            -- Master toggle for test mode
+        lifecycle_log = true,       -- Output human-readable lifecycle log file
+        action_annotations = true,  -- Capture fire/grenade/damage events in path
+    },
+
+    -- ===== FEATURE FLAGS (v4.1) =====
+    -- Can be controlled independently, or auto-disabled when test_mode.enabled = true
+    features = {
+        engagement_tracking = true,   -- Full engagement analytics (damage tracking)
+        crossfire_detection = true,   -- Multi-attacker coordination detection
+        escape_detection = true,      -- Escape timeout/distance detection
+        heatmap_generation = true,    -- Spatial heatmap aggregation
+    }
 }
+
+-- ===== FEATURE FLAG HELPERS =====
+-- Returns effective feature state (respects test_mode override)
+local function isFeatureEnabled(feature_name)
+    -- In test mode, all advanced features are disabled
+    if config.test_mode.enabled then
+        return false
+    end
+    return config.features[feature_name]
+end
 
 -- ===== MOVEMENT STATE BIT FLAGS =====
 local PMF_DUCKED = 1        -- Crouching
@@ -78,10 +113,13 @@ local tracker = {
     -- Player position cache (for movement tracking)
     last_positions = {},
 
-    -- NEW: Full player tracking (all players, spawn to death)
+    -- Full player tracking (all players, spawn to death)
     player_tracks = {},         -- clientnum -> track data
     completed_tracks = {},      -- Finished tracks for output
-    last_sample_time = 0        -- Last global sample timestamp
+    last_sample_time = 0,       -- Last global sample timestamp
+
+    -- v4.1: Action event buffer for test mode (clientnum -> array of action events)
+    action_buffer = {}
 }
 
 -- ===== UTILITY FUNCTIONS =====
@@ -205,6 +243,45 @@ local function getPlayerClass(clientnum)
     return classes[ptype] or "UNKNOWN"
 end
 
+-- ===== DEATH TYPE CATEGORIZATION (v4.1) =====
+-- ET:Legacy means of death constants
+local MOD_SELFKILL = 37
+local MOD_FALLING = 38
+
+local function getDeathType(victim, killer, meansOfDeath)
+    -- Self-kill (/kill command)
+    if meansOfDeath == MOD_SELFKILL then
+        return "selfkill"
+    end
+
+    -- Fall damage
+    if meansOfDeath == MOD_FALLING then
+        return "fallen"
+    end
+
+    -- World damage (1022 = world, 1023 = world)
+    if killer == 1022 or killer == 1023 then
+        return "world"
+    end
+
+    -- Self-inflicted (shouldn't reach here but safety check)
+    if killer == victim then
+        return "selfkill"
+    end
+
+    -- Check for teamkill
+    if killer and isPlayerActive(killer) and isPlayerActive(victim) then
+        local victim_team = getPlayerTeam(victim)
+        local killer_team = getPlayerTeam(killer)
+        if victim_team == killer_team then
+            return "teamkill"
+        end
+    end
+
+    -- Standard kill by enemy
+    return "killed"
+end
+
 -- ===== FULL PLAYER TRACKING =====
 
 local function createPlayerTrack(clientnum)
@@ -222,10 +299,15 @@ local function createPlayerTrack(clientnum)
         spawn_pos = pos,
         death_time = nil,
         death_pos = nil,
+        death_type = nil,  -- v4.1: killed/selfkill/fallen/world/teamkill/round_end/disconnect
+        killer_name = nil, -- v4.1: Name of killer (if killed by player)
 
         -- Path: array of samples
         -- Each sample: {time, x, y, z, health, speed, weapon, stance, sprint}
         path = {},
+
+        -- v4.1: Action events for lifecycle log (damage recv/dealt, etc.)
+        actions = {},
 
         -- Track first movement (time to start moving after spawn)
         first_move_time = nil,
@@ -292,20 +374,24 @@ local function samplePlayer(clientnum, track, event_type)
         event = event_type or "sample"
     })
 
-    -- Update movement heatmap
-    local key = getGridKey(pos.x, pos.y)
-    if not tracker.movement_heatmap[key] then
-        tracker.movement_heatmap[key] = { traversal = 0, combat = 0, escape = 0 }
+    -- Update movement heatmap (only if feature enabled)
+    if isFeatureEnabled("heatmap_generation") then
+        local key = getGridKey(pos.x, pos.y)
+        if not tracker.movement_heatmap[key] then
+            tracker.movement_heatmap[key] = { traversal = 0, combat = 0, escape = 0 }
+        end
+        tracker.movement_heatmap[key].traversal = tracker.movement_heatmap[key].traversal + 1
     end
-    tracker.movement_heatmap[key].traversal = tracker.movement_heatmap[key].traversal + 1
 end
 
-local function endPlayerTrack(clientnum, death_pos)
+local function endPlayerTrack(clientnum, death_pos, death_type, killer_name)
     local track = tracker.player_tracks[clientnum]
     if not track then return end
 
     track.death_time = gameTime()
     track.death_pos = death_pos
+    track.death_type = death_type or "unknown"  -- v4.1: Store death type
+    track.killer_name = killer_name             -- v4.1: Store killer name (if applicable)
 
     -- Add final sample
     if death_pos then
@@ -321,7 +407,7 @@ local function endPlayerTrack(clientnum, death_pos)
             weapon = weapon,
             stance = 0,
             sprint = 0,
-            event = "death"
+            event = death_type or "death"  -- v4.1: Use death type as event
         })
     end
 
@@ -330,8 +416,8 @@ local function endPlayerTrack(clientnum, death_pos)
     tracker.player_tracks[clientnum] = nil
 
     if config.debug then
-        et.G_Printf("[PROX] Track ended: %s - %d samples, lived %dms\n",
-            track.name, #track.path, track.death_time - track.spawn_time)
+        et.G_Printf("[PROX] Track ended: %s - %d samples, lived %dms, type=%s\n",
+            track.name, #track.path, track.death_time - track.spawn_time, track.death_type)
     end
 end
 
@@ -458,13 +544,15 @@ local function recordHit(engagement, attacker_slot, damage, weapon)
             z = round(target_pos.z, 1),
             event = "hit"
         })
-        
-        -- Update movement heatmap
-        local key = getGridKey(target_pos.x, target_pos.y)
-        if not tracker.movement_heatmap[key] then
-            tracker.movement_heatmap[key] = { traversal = 0, combat = 0, escape = 0 }
+
+        -- Update movement heatmap (only if feature enabled)
+        if isFeatureEnabled("heatmap_generation") then
+            local key = getGridKey(target_pos.x, target_pos.y)
+            if not tracker.movement_heatmap[key] then
+                tracker.movement_heatmap[key] = { traversal = 0, combat = 0, escape = 0 }
+            end
+            tracker.movement_heatmap[key].combat = tracker.movement_heatmap[key].combat + 1
         end
-        tracker.movement_heatmap[key].combat = tracker.movement_heatmap[key].combat + 1
     end
 end
 
@@ -528,18 +616,18 @@ local function closeEngagement(engagement, outcome, killer_slot)
         local killer_guid = getPlayerGUID(killer_slot)
         engagement.killer_guid = killer_guid
         engagement.killer_name = getPlayerName(killer_slot)
-        
+
         if engagement.attackers[killer_guid] then
             engagement.attackers[killer_guid].got_kill = true
         end
-        
-        -- Update kill heatmap
-        if end_pos then
+
+        -- Update kill heatmap (only if feature enabled)
+        if isFeatureEnabled("heatmap_generation") and end_pos then
             local key = getGridKey(end_pos.x, end_pos.y)
             if not tracker.kill_heatmap[key] then
                 tracker.kill_heatmap[key] = { axis = 0, allies = 0 }
             end
-            
+
             local killer_team = getPlayerTeam(killer_slot)
             if killer_team == "AXIS" then
                 tracker.kill_heatmap[key].axis = tracker.kill_heatmap[key].axis + 1
@@ -548,18 +636,21 @@ local function closeEngagement(engagement, outcome, killer_slot)
             end
         end
     end
-    
-    -- Escape movement heatmap
-    if outcome == "escaped" and end_pos then
+
+    -- Escape movement heatmap (only if feature enabled)
+    if isFeatureEnabled("heatmap_generation") and outcome == "escaped" and end_pos then
         local key = getGridKey(end_pos.x, end_pos.y)
         if not tracker.movement_heatmap[key] then
             tracker.movement_heatmap[key] = { traversal = 0, combat = 0, escape = 0 }
         end
         tracker.movement_heatmap[key].escape = tracker.movement_heatmap[key].escape + 1
     end
-    
-    -- Detect crossfire
-    local is_crossfire, delay, participants = detectCrossfire(engagement)
+
+    -- Detect crossfire (only if feature enabled)
+    local is_crossfire, delay, participants = false, nil, nil
+    if isFeatureEnabled("crossfire_detection") then
+        is_crossfire, delay, participants = detectCrossfire(engagement)
+    end
     engagement.is_crossfire = is_crossfire
     engagement.crossfire_delay = delay
     engagement.crossfire_participants = participants
@@ -617,6 +708,9 @@ local function checkEscapes(levelTime)
 end
 
 -- ===== FILE OUTPUT =====
+
+-- Forward declaration for lifecycle log function (defined below outputData)
+local outputLifecycleLog
 
 local function serializeAttackers(attackers, attacker_order)
     -- Convert attackers to JSON-like format
@@ -746,14 +840,16 @@ local function outputData()
     end
 
     -- PLAYER TRACKS (full movement history)
+    -- v4.1: Added death_type field
     local track_header = "\n# PLAYER_TRACKS\n" ..
-        "# guid;name;team;class;spawn_time;death_time;first_move_time;samples;path\n" ..
+        "# guid;name;team;class;spawn_time;death_time;first_move_time;death_type;samples;path\n" ..
+        "# death_type: killed|selfkill|fallen|world|teamkill|round_end|disconnect|unknown\n" ..
         "# path format: time,x,y,z,health,speed,weapon,stance,sprint,event separated by |\n" ..
         "# stance: 0=standing, 1=crouching, 2=prone | sprint: 0=no, 1=yes\n"
     et.trap_FS_Write(track_header, string.len(track_header), fd)
 
     for _, track in ipairs(tracker.completed_tracks) do
-        local line = string.format("%s;%s;%s;%s;%d;%d;%s;%d;%s\n",
+        local line = string.format("%s;%s;%s;%s;%d;%d;%s;%s;%d;%s\n",
             track.guid,
             track.name,
             track.team,
@@ -761,6 +857,7 @@ local function outputData()
             track.spawn_time,
             track.death_time or 0,
             track.first_move_time or "",
+            track.death_type or "unknown",  -- v4.1: Include death type
             #track.path,
             serializeTrackPath(track.path)
         )
@@ -803,6 +900,147 @@ local function outputData()
     et.G_Print(string.format("[PROX] Saved: %d tracks (%d samples), %d engagements (%d crossfire)\n",
         #tracker.completed_tracks, total_samples, #tracker.completed, crossfire_count))
     et.G_Print(string.format("[PROX] Output: %s\n", filename))
+
+    -- v4.1: Output lifecycle log if test mode enabled
+    if config.test_mode.enabled and config.test_mode.lifecycle_log then
+        outputLifecycleLog()
+    end
+end
+
+-- ===== LIFECYCLE LOG OUTPUT (v4.1) =====
+-- Human-readable log for testing player lifecycles
+
+outputLifecycleLog = function()
+    if #tracker.completed_tracks == 0 then
+        et.G_Print("[PROX] No lifecycle data to output\n")
+        return
+    end
+
+    -- Filename: proximity/YYYY-MM-DD-HHMMSS-mapname-round-N_lifecycle.txt
+    local filename = string.format("%s%s-%s-round-%d_lifecycle.txt",
+        config.output_dir,
+        os.date('%Y-%m-%d-%H%M%S'),
+        tracker.round.map_name,
+        tracker.round.round_num)
+
+    et.G_Print("[PROX] Writing lifecycle log: " .. filename .. "\n")
+
+    local fd, len = et.trap_FS_FOpenFile(filename, 1)
+    if not fd or fd == -1 or fd == 0 then
+        et.G_Print("[PROX] ERROR: Could not open lifecycle log file\n")
+        return
+    end
+
+    -- Header
+    local header = string.format(
+        "# PROXIMITY_TRACKER v%s - LIFECYCLE LOG\n" ..
+        "# map=%s round=%d\n" ..
+        "# test_mode=true\n" ..
+        "# Generated: %s\n" ..
+        "#\n" ..
+        "# Format:\n" ..
+        "#   [SPAWN] guid=X name=X team=X class=X pos=(x,y,z) time=X\n" ..
+        "#     +Xms: MOVE pos=(x,y,z) speed=X health=X\n" ..
+        "#     +Xms: ACTION type=dmg_recv|dmg_dealt amount=X from/to=X weapon=X\n" ..
+        "#     +Xms: EVENT type=revived\n" ..
+        "#   [END] guid=X type=killed|selfkill|fallen|... killer=X pos=(x,y,z) time=X duration=Xms\n" ..
+        "#\n\n",
+        version,
+        tracker.round.map_name,
+        tracker.round.round_num,
+        os.date('%Y-%m-%d %H:%M:%S')
+    )
+    et.trap_FS_Write(header, string.len(header), fd)
+
+    -- Process each completed track
+    for _, track in ipairs(tracker.completed_tracks) do
+        -- Merge path samples and actions into a single timeline
+        local timeline = {}
+
+        -- Add path samples
+        for _, sample in ipairs(track.path) do
+            table.insert(timeline, {
+                time = sample.time,
+                source = "path",
+                data = sample
+            })
+        end
+
+        -- Add action events
+        if track.actions then
+            for _, action in ipairs(track.actions) do
+                table.insert(timeline, {
+                    time = action.time,
+                    source = "action",
+                    data = action
+                })
+            end
+        end
+
+        -- Sort by time
+        table.sort(timeline, function(a, b) return a.time < b.time end)
+
+        -- Write SPAWN line
+        local spawn_pos = track.spawn_pos or {x=0, y=0, z=0}
+        local spawn_line = string.format("[SPAWN] guid=%s name=%s team=%s class=%s pos=(%.0f,%.0f,%.0f) time=%d\n",
+            track.guid,
+            track.name,
+            track.team,
+            track.class,
+            spawn_pos.x, spawn_pos.y, spawn_pos.z,
+            track.spawn_time)
+        et.trap_FS_Write(spawn_line, string.len(spawn_line), fd)
+
+        -- Write timeline entries (skip spawn event, it's already in SPAWN line)
+        for _, entry in ipairs(timeline) do
+            local delta = entry.time - track.spawn_time
+            local line = ""
+
+            if entry.source == "path" then
+                local p = entry.data
+                -- Skip spawn event (already written)
+                if p.event == "spawn" then
+                    -- skip
+                elseif p.event == "revived" then
+                    line = string.format("  +%dms: EVENT type=revived pos=(%.0f,%.0f,%.0f) health=%d\n",
+                        delta, p.x, p.y, p.z, p.health)
+                elseif p.event == "sample" then
+                    line = string.format("  +%dms: MOVE pos=(%.0f,%.0f,%.0f) speed=%.1f health=%d\n",
+                        delta, p.x, p.y, p.z, p.speed, p.health)
+                -- Final events (death types) are handled by END line
+                end
+            elseif entry.source == "action" then
+                local a = entry.data
+                if a.type == "dmg_recv" then
+                    line = string.format("  +%dms: ACTION type=dmg_recv amount=%d from=%s weapon=%d\n",
+                        delta, a.amount, a.from_name or "?", a.weapon or 0)
+                elseif a.type == "dmg_dealt" then
+                    line = string.format("  +%dms: ACTION type=dmg_dealt amount=%d to=%s weapon=%d\n",
+                        delta, a.amount, a.to_name or "?", a.weapon or 0)
+                end
+            end
+
+            if line ~= "" then
+                et.trap_FS_Write(line, string.len(line), fd)
+            end
+        end
+
+        -- Write END line
+        local death_pos = track.death_pos or {x=0, y=0, z=0}
+        local duration = (track.death_time or track.spawn_time) - track.spawn_time
+        local killer_str = track.killer_name and (" killer=" .. track.killer_name) or ""
+        local end_line = string.format("[END] guid=%s type=%s%s pos=(%.0f,%.0f,%.0f) time=%d duration=%dms\n\n",
+            track.guid,
+            track.death_type or "unknown",
+            killer_str,
+            death_pos.x, death_pos.y, death_pos.z,
+            track.death_time or 0,
+            duration)
+        et.trap_FS_Write(end_line, string.len(end_line), fd)
+    end
+
+    et.trap_FS_FCloseFile(fd)
+    et.G_Print(string.format("[PROX] Lifecycle log: %d player lifecycles written\n", #tracker.completed_tracks))
 end
 
 -- ===== ENGINE CALLBACKS =====
@@ -835,11 +1073,16 @@ function et_InitGame(levelTime, randomSeed, restart)
     tracker.player_tracks = {}
     tracker.completed_tracks = {}
     tracker.last_sample_time = 0
+    tracker.action_buffer = {}  -- v4.1: Reset action buffer
 
     et.G_Print(">>> Proximity Tracker v" .. version .. " initialized\n")
     et.G_Print(">>> Map: " .. tracker.round.map_name .. ", Round: " .. tracker.round.round_num .. "\n")
     et.G_Print(">>> Position sample interval: " .. config.position_sample_interval .. "ms\n")
     et.G_Print(">>> Output directory: " .. config.output_dir .. "\n")
+    -- v4.1: Show test mode status
+    if config.test_mode.enabled then
+        et.G_Print(">>> TEST MODE ENABLED - Advanced features disabled, lifecycle log active\n")
+    end
 end
 
 local last_gamestate = -1
@@ -856,6 +1099,7 @@ function et_RunFrame(levelTime)
             local pos = getPlayerPos(clientnum)
             track.death_time = gameTime()
             track.death_pos = pos
+            track.death_type = "round_end"  -- v4.1: Set death type
             if pos then
                 table.insert(track.path, {
                     time = track.death_time,
@@ -889,35 +1133,72 @@ function et_RunFrame(levelTime)
         -- Sample all player positions every interval
         sampleAllPlayers()
 
-        -- Check for escapes (engagement tracking)
-        checkEscapes(levelTime)
+        -- Check for escapes (only if escape detection enabled)
+        if isFeatureEnabled("escape_detection") then
+            checkEscapes(levelTime)
+        end
     end
 end
 
 function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
     if not config.enabled then return end
-    
+
     -- Validate
     if not target or not attacker then return end
     if target == attacker then return end  -- self damage
     if attacker == 1022 or attacker == 1023 then return end  -- world damage
     if damage < config.min_damage then return end
-    
+
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
     if gamestate ~= 0 then return end
-    
+
     -- Check teams
     if not isPlayerActive(target) or not isPlayerActive(attacker) then return end
-    
-    -- Get or create engagement for target
-    local engagement = tracker.engagements[target]
-    if not engagement then
-        engagement = createEngagement(target)
+
+    -- Engagement tracking (only if feature enabled)
+    if isFeatureEnabled("engagement_tracking") then
+        -- Get or create engagement for target
+        local engagement = tracker.engagements[target]
+        if not engagement then
+            engagement = createEngagement(target)
+        end
+
+        -- Record the hit
+        local weapon = et.gentity_get(attacker, "ps.weapon") or 0
+        recordHit(engagement, attacker, damage, weapon)
     end
-    
-    -- Record the hit
-    local weapon = et.gentity_get(attacker, "ps.weapon") or 0
-    recordHit(engagement, attacker, damage, weapon)
+
+    -- v4.1: Action annotation for test mode (record damage received/dealt)
+    if config.test_mode.enabled and config.test_mode.action_annotations then
+        local now = gameTime()
+        local weapon = et.gentity_get(attacker, "ps.weapon") or 0
+
+        -- Record damage received for target (store in track.actions)
+        local target_track = tracker.player_tracks[target]
+        if target_track then
+            table.insert(target_track.actions, {
+                time = now,
+                type = "dmg_recv",
+                amount = damage,
+                from_guid = getPlayerGUID(attacker),
+                from_name = getPlayerName(attacker),
+                weapon = weapon
+            })
+        end
+
+        -- Record damage dealt for attacker (store in track.actions)
+        local attacker_track = tracker.player_tracks[attacker]
+        if attacker_track then
+            table.insert(attacker_track.actions, {
+                time = now,
+                type = "dmg_dealt",
+                amount = damage,
+                to_guid = getPlayerGUID(target),
+                to_name = getPlayerName(target),
+                weapon = weapon
+            })
+        end
+    end
 end
 
 function et_Obituary(victim, killer, meansOfDeath)
@@ -926,36 +1207,72 @@ function et_Obituary(victim, killer, meansOfDeath)
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
     if gamestate ~= 0 then return end
 
-    -- End player track on death
+    -- v4.1: Determine death type and killer name
+    local death_type = getDeathType(victim, killer, meansOfDeath)
+    local killer_name = nil
+    if killer and killer ~= 1022 and killer ~= 1023 and killer ~= victim and isPlayerActive(killer) then
+        killer_name = getPlayerName(killer)
+    end
+
+    -- End player track on death with death type and killer name
     local death_pos = getPlayerPos(victim)
-    endPlayerTrack(victim, death_pos)
+    endPlayerTrack(victim, death_pos, death_type, killer_name)
 
-    -- Check if we have an engagement for this victim
-    local engagement = tracker.engagements[victim]
+    -- Engagement tracking (only if feature enabled)
+    if isFeatureEnabled("engagement_tracking") then
+        -- Check if we have an engagement for this victim
+        local engagement = tracker.engagements[victim]
 
-    if engagement then
-        -- Close with kill
-        closeEngagement(engagement, "killed", killer)
-    else
-        -- No engagement exists - create a minimal one for the kill
-        -- (can happen if killed instantly without prior damage, e.g., headshot)
-        engagement = createEngagement(victim)
+        if engagement then
+            -- Close with kill
+            closeEngagement(engagement, "killed", killer)
+        else
+            -- No engagement exists - create a minimal one for the kill
+            -- (can happen if killed instantly without prior damage, e.g., headshot)
+            engagement = createEngagement(victim)
 
-        -- Add killer as attacker if valid
-        if killer and killer ~= 1022 and killer ~= 1023 and killer ~= victim then
-            local weapon = et.gentity_get(killer, "ps.weapon") or 0
-            recordHit(engagement, killer, 100, weapon)  -- assume lethal damage
+            -- Add killer as attacker if valid
+            if killer and killer ~= 1022 and killer ~= 1023 and killer ~= victim then
+                local weapon = et.gentity_get(killer, "ps.weapon") or 0
+                recordHit(engagement, killer, 100, weapon)  -- assume lethal damage
+            end
+
+            closeEngagement(engagement, "killed", killer)
         end
-
-        closeEngagement(engagement, "killed", killer)
     end
 end
 
 function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
     if not config.enabled then return end
 
-    -- Only track fresh spawns, not revives
+    -- Handle revives (v4.1: add revive action annotation but continue existing track)
     if revived == 1 then
+        -- v4.1: Add revive action annotation for test mode
+        if config.test_mode.enabled and config.test_mode.action_annotations then
+            local track = tracker.player_tracks[clientNum]
+            if track then
+                local now = gameTime()
+                local pos = getPlayerPos(clientNum)
+                -- Add revive as a path sample with "revived" event
+                if pos then
+                    local health = et.gentity_get(clientNum, "health") or 100
+                    local weapon = et.gentity_get(clientNum, "ps.weapon") or 0
+                    local stance, sprint = getPlayerMovementState(clientNum)
+                    table.insert(track.path, {
+                        time = now,
+                        x = round(pos.x, 1),
+                        y = round(pos.y, 1),
+                        z = round(pos.z, 1),
+                        health = health,
+                        speed = 0,
+                        weapon = weapon,
+                        stance = stance,
+                        sprint = sprint,
+                        event = "revived"
+                    })
+                end
+            end
+        end
         if config.debug then
             et.G_Printf("[PROX] %s was revived (continuing existing track)\n", getPlayerName(clientNum))
         end
@@ -967,7 +1284,7 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
 
     -- End any existing track for this slot (shouldn't happen, but safety)
     if tracker.player_tracks[clientNum] then
-        endPlayerTrack(clientNum, nil)
+        endPlayerTrack(clientNum, nil, nil)  -- No death type for safety cleanup
     end
 
     -- Start new track
@@ -978,7 +1295,7 @@ function et_ClientDisconnect(clientNum)
     -- End track if player disconnects mid-round
     if tracker.player_tracks[clientNum] then
         local pos = getPlayerPos(clientNum)
-        endPlayerTrack(clientNum, pos)
+        endPlayerTrack(clientNum, pos, "disconnect")  -- v4.1: Pass disconnect death type
     end
 end
 

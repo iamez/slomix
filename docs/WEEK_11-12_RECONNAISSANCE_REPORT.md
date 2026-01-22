@@ -15,6 +15,7 @@ Analyzed all database calls in `ultimate_bot.py` to plan Repository Pattern impl
 **Most database calls are in SQLite-only code we already skipped!**
 
 Out of 18 total database calls found:
+
 - **14 calls (78%)** are in SQLite-only methods (Week 5-6 - skipped)
 - **4 calls (22%)** are in production code
 
@@ -27,7 +28,8 @@ Out of 18 total database calls found:
 ### Total Database Calls: 18
 
 **By Method Type**:
-```
+
+```text
 SQLite-Only Methods (SKIPPED):        14 calls (78%)
 ├─ _import_stats_to_db()               4 calls
 ├─ _calculate_gaming_session_id()      3 calls
@@ -38,7 +40,7 @@ Production Methods (ACTIVE):           4 calls (22%)
 ├─ validate_database_schema()          2 calls
 ├─ initialize_database()               1 call
 └─ cache_refresher()                   1 call
-```
+```python
 
 ---
 
@@ -51,13 +53,16 @@ Production Methods (ACTIVE):           4 calls (22%)
 **Purpose**: Check database table columns on startup
 
 **Database Calls**:
+
 1. **SQLite path** (Line 305):
+
    ```python
    query = "PRAGMA table_info(player_comprehensive_stats)"
    columns = await self.db_adapter.fetch_all(query)
-   ```
+   ```text
 
 2. **PostgreSQL path** (Line 315):
+
    ```python
    query = """
        SELECT column_name
@@ -66,7 +71,7 @@ Production Methods (ACTIVE):           4 calls (22%)
        ORDER BY ordinal_position
    """
    columns = await self.db_adapter.fetch_all(query)
-   ```
+   ```python
 
 **Called By**: `setup_hook()` on bot startup
 
@@ -83,19 +88,21 @@ Production Methods (ACTIVE):           4 calls (22%)
 **Purpose**: Verify required database tables exist on startup
 
 **Database Call** (Line 592):
+
 ```python
 rows = await self.db_adapter.fetch_all(query, tuple(required_tables))
 existing_tables = [row[0] for row in rows]
-```
+```text
 
 **Query**:
+
 ```sql
 -- SQLite
 SELECT name FROM sqlite_master WHERE type='table' AND name IN (?, ?, ?)
 
 -- PostgreSQL
 SELECT tablename FROM pg_tables WHERE tablename IN ($1, $2, $3)
-```
+```python
 
 **Called By**: `setup_hook()` on bot startup
 
@@ -112,11 +119,13 @@ SELECT tablename FROM pg_tables WHERE tablename IN ($1, $2, $3)
 **Purpose**: Background task that refreshes file tracker cache
 
 **Database Call** (Line 1494):
+
 ```python
 rows = await self.db_adapter.fetch_all(query)
-```
+```text
 
 **Query**:
+
 ```sql
 SELECT filename FROM processed_files
 ```
@@ -140,6 +149,7 @@ These are in methods we decided NOT to extract in Week 5-6 because they're only 
 **SQLite Only**: ✅ YES (PostgreSQL uses `postgresql_database_manager.py`)
 
 **Calls**:
+
 1. Check for duplicate rounds
 2. Insert round record
 3. Check for existing match summary
@@ -156,6 +166,7 @@ These are in methods we decided NOT to extract in Week 5-6 because they're only 
 **SQLite Only**: ✅ YES
 
 **Calls**:
+
 1. Find previous round
 2. Get max session ID (if new session)
 3. Get max session ID (if gap detected)
@@ -171,6 +182,7 @@ These are in methods we decided NOT to extract in Week 5-6 because they're only 
 **SQLite Only**: ✅ YES
 
 **Calls**:
+
 1. Insert player comprehensive stats
 2. Get weapon table columns (SQLite PRAGMA)
 3. Get weapon table columns (PostgreSQL information_schema)
@@ -187,6 +199,7 @@ These are in methods we decided NOT to extract in Week 5-6 because they're only 
 **SQLite Only**: ✅ YES
 
 **Calls**:
+
 1. Check if alias exists
 2. Update existing alias
 3. Insert new alias
@@ -200,6 +213,7 @@ These are in methods we decided NOT to extract in Week 5-6 because they're only 
 ### Original Plan (OBSOLETE)
 
 Create 3 repositories:
+
 - RoundRepository
 - PlayerRepository
 - SessionRepository
@@ -227,6 +241,7 @@ Since only **4 production database calls** exist, and 3 of them are startup vali
    - **Reason**: These run once on startup, don't benefit from abstraction
 
 **Impact**:
+
 - ✅ Minimal changes
 - ✅ Focus on business logic only
 - ✅ Keep infrastructure code in bot
@@ -246,6 +261,7 @@ Since only **4 production database calls** exist, and 3 of them are startup vali
    - `cache_refresher()` query
 
 **Impact**:
+
 - ⚠️ More complex
 - ⚠️ Abstracts infrastructure code (questionable value)
 - ⚠️ 2 repositories for 4 calls (overkill?)
@@ -255,6 +271,7 @@ Since only **4 production database calls** exist, and 3 of them are startup vali
 #### Option C: Skip Week 11-12 Entirely (Pragmatic?)
 
 **Reasoning**:
+
 - Only 4 database calls in production code
 - 3 are startup validation (infrastructure)
 - 1 is a simple SELECT query
@@ -262,6 +279,7 @@ Since only **4 production database calls** exist, and 3 of them are startup vali
 - May be over-engineering
 
 **Impact**:
+
 - ✅ Zero risk
 - ✅ Save time
 - ❌ Don't complete original 12-week plan
@@ -300,6 +318,7 @@ Since only **4 production database calls** exist, and 3 of them are startup vali
 ### 2. Remaining Calls Are Infrastructure
 
 75% of production calls (3 out of 4) are startup validation:
+
 - Schema validation
 - Table existence checks
 
@@ -318,6 +337,7 @@ Creating a full Repository Pattern for 1 query might be overkill.
 ### Risk Level: 🟢 **VERY LOW**
 
 **Why Low Risk:**
+
 1. **Minimal scope** - Only 4 production calls
 2. **Simple queries** - No complex joins or business logic
 3. **Infrastructure focused** - Most are validation, not data access
@@ -330,11 +350,13 @@ Creating a full Repository Pattern for 1 query might be overkill.
 ### 🎯 My Strong Recommendation: **Option A (Minimal Repository)**
 
 **Create FileRepository only:**
+
 - Extract `cache_refresher()` query
 - Leave infrastructure validation in bot
 - Keep it simple and focused
 
 **Rationale**:
+
 1. ✅ Follows Repository Pattern for business logic
 2. ✅ Doesn't over-abstract infrastructure code
 3. ✅ Minimal risk (only 1 query to move)
@@ -347,11 +369,13 @@ Creating a full Repository Pattern for 1 query might be overkill.
 ### Alternative: **Option C (Skip Week 11-12)**
 
 If you want to focus on higher-value work:
+
 - Week 11-12 was designed for 27 database calls
 - We only have 4, and 3 are infrastructure
 - Repository Pattern may be overkill for current state
 
 **Rationale**:
+
 1. ✅ Saves time
 2. ✅ Zero risk
 3. ✅ Bot already well-refactored (775 lines removed!)
@@ -368,6 +392,7 @@ If you want to focus on higher-value work:
 3. **Option C**: Skip Week 11-12 (pragmatic)
 
 **User Input Needed:**
+
 - Which option do you prefer?
 - Do you want Repository Pattern for just 4 database calls?
 - Should we keep infrastructure validation in bot?

@@ -29,6 +29,7 @@ Complete reference of all stats fields captured by the ET:Legacy Stats Bot.
 | `headshots` | INTEGER | Headshot kills | `3` |
 
 **Calculation Examples:**
+
 - K/D Ratio: `kills / deaths` → `15 / 8 = 1.87`
 - Headshot %: `headshots / kills * 100` → `3 / 15 * 100 = 20%`
 
@@ -43,10 +44,11 @@ Complete reference of all stats fields captured by the ET:Legacy Stats Bot.
 | `accuracy_percent` | DECIMAL(5,2) | Hit percentage | `28.44` |
 
 **Calculation:**
-```
+
+```text
 accuracy_percent = (hits / shots) * 100
 Example: (128 / 450) * 100 = 28.44%
-```
+```sql
 
 ---
 
@@ -59,10 +61,11 @@ Example: (128 / 450) * 100 = 28.44%
 | `damage_team` | INTEGER | Friendly fire damage | `0` |
 
 **Damage Efficiency:**
-```
+
+```text
 damage_ratio = damage_given / damage_received
 Example: 1850 / 1200 = 1.54
-```
+```yaml
 
 ---
 
@@ -91,10 +94,11 @@ Example: 1850 / 1200 = 1.54
 | `xp_misc` | INTEGER | Miscellaneous XP | `20` |
 
 **XP Breakdown:**
-```
+
+```text
 xp_total = xp_combat + xp_objective + xp_support + xp_misc
 Example: 150 + 120 + 90 + 20 = 380
-```
+```yaml
 
 ---
 
@@ -107,12 +111,13 @@ Example: 150 + 120 + 90 + 20 = 380
 | `time_allies_seconds` | INTEGER | Time on Allies team | `0` |
 
 **Time Conversions:**
-```
+
+```text
 Minutes = seconds / 60
 Hours = seconds / 3600
 
 Example: 900 seconds = 15 minutes
-```
+```python
 
 ---
 
@@ -124,6 +129,7 @@ Example: 900 seconds = 15 minutes
 | `team_confidence` | DECIMAL(3,2) | Confidence level (0-1) | `0.95` |
 
 **Team Sources:**
+
 - `snapshot` - End-of-round team snapshot
 - `tracker` - Time-based team tracking
 - `vote` - Majority vote from multiple sources
@@ -144,6 +150,7 @@ Example: 900 seconds = 15 minutes
 | `accuracy_percent` | DECIMAL(5,2) | Weapon accuracy | `32.22` |
 
 **Common Weapons:**
+
 - `thompson` - Thompson SMG (Allies)
 - `mp40` - MP40 SMG (Axis)
 - `panzerfaust` - Rocket launcher
@@ -195,6 +202,7 @@ Example: 900 seconds = 15 minutes
 | `duration_seconds` | INTEGER | Total session time | `16200` |
 
 **Session Logic:**
+
 - Rounds within 12 hours = same session
 - Gap > 12 hours = new session
 
@@ -214,56 +222,65 @@ Example: 900 seconds = 15 minutes
 ## 📊 Data Types & Ranges
 
 ### Integer Fields
+
 ```sql
 INTEGER: -2,147,483,648 to 2,147,483,647
 Typical range: 0 to 1000 for most stats
-```
+```text
 
 ### Decimal Fields
+
 ```sql
 DECIMAL(5,2): 000.00 to 999.99
 Used for: accuracy_percent, team_confidence
-```
+```text
 
 ### Text Fields
+
 ```sql
 VARCHAR(N): Variable-length text up to N characters
 player_name: up to 100 chars
 weapon_name: up to 100 chars
-```
+```text
 
 ### Timestamp Fields
+
 ```sql
 TIMESTAMP: Date and time
 Format: YYYY-MM-DD HH:MM:SS
 Example: 2025-11-06 21:30:45
-```
+```yaml
 
 ---
 
 ## 🎯 Field Validation Rules
 
 ### Player Name
+
 - Length: 1-100 characters
 - Sanitized for SQL safety
 - Case-sensitive
 
 ### Team
+
 - Must be: `axis` or `allies`
 - Lowercase only
 - Required for all players
 
 ### Numeric Fields
+
 - Non-negative integers (≥ 0)
 - Kills, deaths, shots, hits, etc.
 - Exception: Can be 0
 
 ### Accuracy
+
 - Range: 0.00 to 100.00
 - Calculated: `(hits / shots) * 100`
 - Null if shots = 0
 
 ### Team Confidence
+
 - Range: 0.00 to 1.00
 - 1.00 = 100% confident
 - 0.50 = 50% confident
@@ -273,35 +290,41 @@ Example: 2025-11-06 21:30:45
 ## 📈 Calculated Fields
 
 ### K/D Ratio
+
 ```sql
 ROUND(CAST(kills AS FLOAT) / NULLIF(deaths, 0), 2) AS kd_ratio
-```
+```text
 
 ### Headshot Percentage
+
 ```sql
 ROUND((headshots * 100.0) / NULLIF(kills, 0), 2) AS headshot_percent
-```
+```text
 
 ### Damage Efficiency
+
 ```sql
 ROUND(CAST(damage_given AS FLOAT) / NULLIF(damage_received, 0), 2) AS damage_ratio
-```
+```text
 
 ### Kills Per Minute
+
 ```sql
 ROUND((kills * 60.0) / NULLIF(time_played_seconds, 0), 2) AS kills_per_minute
-```
+```text
 
 ### Average XP Per Round
+
 ```sql
 ROUND(AVG(xp_total), 0) AS avg_xp
-```
+```yaml
 
 ---
 
 ## 🔍 Common Queries
 
 ### Player Total Stats
+
 ```sql
 SELECT 
     player_name,
@@ -312,9 +335,10 @@ SELECT
 FROM player_stats
 WHERE player_name = 'seareal'
 GROUP BY player_name;
-```
+```text
 
 ### Top Players by K/D
+
 ```sql
 SELECT 
     player_name,
@@ -326,9 +350,10 @@ GROUP BY player_name
 HAVING SUM(deaths) > 0
 ORDER BY kd DESC
 LIMIT 10;
-```
+```text
 
 ### Weapon Usage
+
 ```sql
 SELECT 
     weapon_name,
@@ -337,13 +362,14 @@ SELECT
 FROM weapon_stats
 GROUP BY weapon_name
 ORDER BY total_kills DESC;
-```
+```yaml
 
 ---
 
 ## 📝 Field Presence
 
 **Always Present (Required):**
+
 - ✅ player_name
 - ✅ team
 - ✅ kills
@@ -351,17 +377,20 @@ ORDER BY total_kills DESC;
 - ✅ round_id
 
 **Usually Present:**
+
 - ✅ shots, hits, accuracy
 - ✅ damage_given, damage_received
 - ✅ time_played_seconds
 - ✅ xp_total
 
 **Sometimes Present (Class-Dependent):**
+
 - 🔶 revives (medic only)
 - 🔶 ammogiven (field ops only)
 - 🔶 healthgiven (medic only)
 
 **Rarely Present:**
+
 - 🔸 team_kills, team_deaths (hopefully 0!)
 - 🔸 self_kills (accidents happen)
 

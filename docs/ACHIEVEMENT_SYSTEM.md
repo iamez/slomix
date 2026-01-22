@@ -17,6 +17,7 @@ Implemented a comprehensive achievement tracking and notification system that au
 ### 1. Achievement Categories
 
 **Kill Milestones** (6 tiers):
+
 - 🎯 100 kills - "First Blood Century" (Gray)
 - 💥 500 kills - "Killing Machine" (Blue)
 - 💀 1,000 kills - "Thousand Killer" (Purple)
@@ -25,6 +26,7 @@ Implemented a comprehensive achievement tracking and notification system that au
 - 👑 10,000 kills - "Legendary Slayer" (Gold)
 
 **Game Milestones** (6 tiers):
+
 - 🎮 10 games - "Getting Started" (Gray)
 - 🎯 50 games - "Regular Player" (Blue)
 - 🏆 100 games - "Dedicated Gamer" (Purple)
@@ -33,6 +35,7 @@ Implemented a comprehensive achievement tracking and notification system that au
 - 👑 1,000 games - "Ultimate Champion" (Yellow)
 
 **K/D Ratio Milestones** (4 tiers, requires 20+ games):
+
 - ⚖️ 1.0 K/D - "Balanced Fighter" (Gray)
 - 📈 1.5 K/D - "Above Average" (Blue)
 - 🔥 2.0 K/D - "Elite Killer" (Red)
@@ -41,6 +44,7 @@ Implemented a comprehensive achievement tracking and notification system that au
 ### 2. Notification System
 
 **Features:**
+
 - Beautiful Discord embeds with color-coded achievement tiers
 - @mention notifications for linked players
 - Prevents duplicate notifications (tracked in memory)
@@ -48,7 +52,8 @@ Implemented a comprehensive achievement tracking and notification system that au
 - Timestamp and footer branding
 
 **Notification Format:**
-```
+
+```text
 🏆 Achievement Unlocked!
 ━━━━━━━━━━━━━━━━━━━━
 Title: 💀 Thousand Killer
@@ -57,23 +62,25 @@ Player: @username
 Milestone: 1,000 kills
 
 🎮 ET:Legacy Stats Bot
-```
+```text
 
 ### 3. New Commands
 
 **`!check_achievements [player]`**
 Shows achievement progress for any player:
+
 - ✅ Unlocked achievements (bolded)
 - 🔒 Locked achievements with progress
 - Current stats summary
 - Works with: linked account, player name, @mention
 
 **Example Usage:**
-```
+
+```text
 !check_achievements              # Your progress (if linked)
 !check_achievements vid          # Specific player
 !check_achievements @username    # Mentioned user
-```
+```python
 
 ---
 
@@ -99,11 +106,13 @@ Shows achievement progress for any player:
    - Logs notification for debugging
 
 **Memory Management:**
+
 - Uses `notified_achievements` set to track sent notifications
 - Format: `{player_guid}_{type}_{threshold}`
 - Persists for bot lifetime (resets on restart)
 
 **Integration:**
+
 - Initialized in `ETLegacyCommands.__init__()`
 - Available via `self.achievements` in all commands
 - Can be called from any cog or event handler
@@ -113,6 +122,7 @@ Shows achievement progress for any player:
 ## 📊 Database Queries
 
 **Player Stats Query:**
+
 ```sql
 SELECT 
     SUM(kills) as total_kills,
@@ -125,9 +135,10 @@ SELECT
     END as overall_kd
 FROM player_comprehensive_stats
 WHERE player_guid = ?
-```
+```sql
 
 **Performance:**
+
 - Uses indexed `player_guid` column (from Oct 12 optimization)
 - Typically completes in <10ms with 3,174 sessions
 - Aggregates across all rounds in real-time
@@ -139,29 +150,37 @@ WHERE player_guid = ?
 ### For Players
 
 **Check your progress:**
-```
+
+```text
+
 !link                    # Link your account first
 !check_achievements      # View your achievement progress
-```
+
+```text
 
 **Check others:**
-```
+
+```text
+
 !check_achievements SuperBoyY      # Search by name
 !check_achievements @vid           # Check Discord user
-```
+
+```text
 
 ### For Admins
 
 **Trigger manual check:**
+
 ```python
 # In bot event or command
 await self.achievements.check_player_achievements(
     player_guid="ABCD1234",
     channel=ctx.channel
 )
-```
+```yaml
 
 **Monitor notifications:**
+
 - All achievement notifications logged: `logs/ultimate_bot.log`
 - Format: `🏆 Achievement notification sent: PlayerName - Achievement Title`
 
@@ -172,55 +191,71 @@ await self.achievements.check_player_achievements(
 ### Manual Testing Checklist
 
 1. **New Player (0 stats):**
-   ```
+
+   ```text
+
    !check_achievements newplayer
    Expected: All achievements locked, shows requirements
-   ```
+
+   ```text
 
 2. **Veteran Player (1000+ kills):**
-   ```
+
+   ```text
+
    !check_achievements vid
    Expected: Multiple achievements unlocked, progress on higher tiers
-   ```
+
+   ```text
 
 3. **Linked Player:**
-   ```
+
+   ```text
+
    !check_achievements @yourself
    Expected: Uses your linked account, shows personalized progress
-   ```
+
+   ```text
 
 4. **Invalid Player:**
-   ```
+
+   ```text
+
    !check_achievements nonexistent
    Expected: ❌ Player 'nonexistent' not found!
-   ```
+
+   ```python
 
 ### Automated Testing
 
 **Test Script:** `test_achievements.py` (to be created)
+
 ```python
 # Test all milestone thresholds
 # Verify notification deduplication
 # Check K/D calculation edge cases
 # Test Discord linking integration
-```
+```yaml
 
 ---
 
 ## 📈 Expected Impact
 
 ### Player Engagement
+
 - **Motivation:** Clear progression system encourages continued play
 - **Competition:** Players can compare achievement progress
 - **Recognition:** Public notifications celebrate accomplishments
 - **Social:** @mentions drive community interaction
 
 ### Community Benefits
+
 - **Activity Tracking:** Milestones indicate active player base
 - **Retention:** Achievement goals provide long-term engagement
 - **Celebration Culture:** Automated congratulations foster positive environment
 
 ### Technical Benefits
+
 - **Performance:** Uses cached queries and indexed columns
 - **Reliability:** Duplicate prevention ensures one notification per milestone
 - **Scalability:** In-memory tracking handles thousands of players
@@ -279,7 +314,7 @@ KD_MILESTONES = {threshold: {emoji, title, color}}
 # Instance variables
 notified_achievements = set()  # Tracks sent notifications
 bot = discord.Bot  # Bot instance for database access
-```
+```text
 
 ### Achievement ID Format
 
@@ -311,12 +346,14 @@ bot = discord.Bot  # Bot instance for database access
 **Ready for Deployment:** ✅ YES
 
 **Bot Status:**
+
 - Code changes complete
 - No database migrations needed
 - Backwards compatible
 - PM2 will auto-restart bot
 
 **Next Steps:**
+
 1. Bot will restart automatically with PM2
 2. Players can use `!check_achievements` immediately
 3. Monitor logs for achievement notifications

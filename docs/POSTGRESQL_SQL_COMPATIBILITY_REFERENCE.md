@@ -11,13 +11,14 @@
 | `?` | `$1, $2, $3, ...` | ✅ Yes (automatic) |
 
 **Example**:
+
 ```sql
 -- SQLite (input)
 SELECT * FROM players WHERE guid = ? AND team = ?
 
 -- PostgreSQL (after adapter translation)
 SELECT * FROM players WHERE guid = $1 AND team = $2
-```
+```yaml
 
 **Note**: You write SQLite-style `?`, adapter converts automatically!
 
@@ -39,7 +40,7 @@ INSERT INTO players (name, created_at) VALUES (?, datetime('now'))
 
 -- AFTER (PostgreSQL-compatible)
 INSERT INTO players (name, created_at) VALUES (?, CURRENT_TIMESTAMP)
-```
+```yaml
 
 ### Date Arithmetic
 
@@ -56,7 +57,7 @@ HAVING MAX(p.round_date) >= date('now', '-30 days')
 
 -- AFTER (PostgreSQL-compatible)
 HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'
-```
+```yaml
 
 ### Date Extraction
 
@@ -69,7 +70,7 @@ HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'
 SELECT DISTINCT DATE(round_date) as date FROM rounds
 WHERE DATE(round_date) = ?
 GROUP BY DATE(round_date)
-```
+```yaml
 
 ### String Substring
 
@@ -81,7 +82,7 @@ GROUP BY DATE(round_date)
 -- Works in both! (PostgreSQL accepts substr as alias)
 WHERE substr(round_date, 1, 10) = ?
 SELECT DISTINCT substr(round_date, 1, 10) as date
-```
+```sql
 
 ---
 
@@ -111,7 +112,7 @@ CREATE TABLE players (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(255)
 );
-```
+```yaml
 
 ### Data Types
 
@@ -123,6 +124,7 @@ CREATE TABLE players (
 | `BLOB` | `BYTEA` | Binary data |
 
 **Type Recommendations**:
+
 ```sql
 -- Names, short strings
 player_name VARCHAR(255)
@@ -143,7 +145,7 @@ is_active BOOLEAN  -- PostgreSQL has native BOOLEAN type!
 
 -- JSON data (PostgreSQL advantage!)
 stats_json JSONB  -- Faster than JSON, supports indexing
-```
+```yaml
 
 ### Default Values
 
@@ -160,13 +162,14 @@ stats_json JSONB  -- Faster than JSON, supports indexing
 ### UNIQUE Constraints
 
 **Same in both**:
+
 ```sql
 -- Works in both
 guid VARCHAR(50) NOT NULL UNIQUE
 
 -- OR
 CREATE UNIQUE INDEX idx_players_guid ON players(guid);
-```
+```text
 
 ### Foreign Keys
 
@@ -179,7 +182,7 @@ CREATE TABLE player_stats (
     id SERIAL PRIMARY KEY,
     player_id INTEGER REFERENCES players(id) ON DELETE CASCADE
 );
-```
+```yaml
 
 ---
 
@@ -213,7 +216,7 @@ SELECT GROUP_CONCAT(player_name, ', ') FROM players
 
 -- PostgreSQL
 SELECT STRING_AGG(player_name, ', ') FROM players
-```
+```yaml
 
 ### Math Functions
 
@@ -229,36 +232,41 @@ SELECT STRING_AGG(player_name, ', ') FROM players
 ## 🎯 Common Patterns in Our Codebase
 
 ### Pattern 1: Get Latest Session Date
+
 ```sql
 -- Works in both!
 SELECT DISTINCT DATE(round_date) as date 
 FROM rounds 
 ORDER BY date DESC 
 LIMIT 1
-```
+```text
 
 ### Pattern 2: Filter by Date
+
 ```sql
 -- Works in both!
 SELECT * FROM rounds
 WHERE DATE(round_date) = ?
-```
+```text
 
 ### Pattern 3: Count Players
+
 ```sql
 -- Works in both!
 SELECT COUNT(DISTINCT guid) as player_count
 FROM player_comprehensive_stats
-```
+```text
 
 ### Pattern 4: Get Player Stats
+
 ```sql
 -- Works in both (after adapter translates ? to $1)
 SELECT * FROM players
 WHERE guid = ? OR LOWER(player_name) LIKE LOWER(?)
-```
+```sql
 
 ### Pattern 5: Insert New Record
+
 ```sql
 -- BEFORE (SQLite-only)
 INSERT INTO players (guid, name, created_at)
@@ -267,13 +275,14 @@ VALUES (?, ?, datetime('now'))
 -- AFTER (Both)
 INSERT INTO players (guid, name, created_at)
 VALUES (?, ?, CURRENT_TIMESTAMP)
-```
+```yaml
 
 ---
 
 ## ⚠️ PostgreSQL-Specific Gotchas
 
 ### 1. Case Sensitivity
+
 **PostgreSQL**: Column/table names are case-insensitive UNLESS quoted
 
 ```sql
@@ -284,11 +293,12 @@ SELECT * FROM PLAYERS
 
 -- But this is DIFFERENT
 SELECT * FROM "Players"  -- Must match exact case!
-```
+```text
 
 **Our approach**: Use lowercase always (matches SQLite behavior)
 
 ### 2. String Comparison
+
 **PostgreSQL**: Single quotes for strings, double quotes for identifiers
 
 ```sql
@@ -297,32 +307,37 @@ WHERE player_name = 'John'
 
 -- WRONG (double quotes mean column name)
 WHERE player_name = "John"
-```
+```text
 
 ### 3. Boolean Type
+
 **PostgreSQL has native BOOLEAN**:
+
 ```sql
 -- SQLite (uses INTEGER 0/1)
 is_active INTEGER DEFAULT 0
 
 -- PostgreSQL (native boolean)
 is_active BOOLEAN DEFAULT FALSE
-```
+```text
 
 ### 4. JSON Support
+
 **PostgreSQL has superior JSON support**:
+
 ```sql
 -- Can query JSON fields directly!
 SELECT stats_json->'kills' as kills
 FROM player_stats
 WHERE (stats_json->>'team')::int = 1
-```
+```sql
 
 ---
 
 ## 📊 Performance Considerations
 
 ### Indexes
+
 **PostgreSQL benefits MORE from indexes than SQLite**
 
 ```sql
@@ -336,9 +351,11 @@ CREATE INDEX idx_stats_guid_date ON player_comprehensive_stats(guid, round_date)
 ```
 
 ### Connection Pooling
+
 **Critical for PostgreSQL, not needed for SQLite**
 
 Our adapter handles this automatically:
+
 - SQLite: Creates connection per query (lightweight)
 - PostgreSQL: Uses connection pool (5-20 connections)
 
@@ -361,12 +378,14 @@ When migrating a query, check for:
 ## 📚 Further Reading
 
 **PostgreSQL Official Docs**:
-- Date/Time Functions: https://www.postgresql.org/docs/current/functions-datetime.html
-- String Functions: https://www.postgresql.org/docs/current/functions-string.html
-- Data Types: https://www.postgresql.org/docs/current/datatype.html
+
+- Date/Time Functions: <https://www.postgresql.org/docs/current/functions-datetime.html>
+- String Functions: <https://www.postgresql.org/docs/current/functions-string.html>
+- Data Types: <https://www.postgresql.org/docs/current/datatype.html>
 
 **Migration Guides**:
-- SQLite to PostgreSQL: https://wiki.postgresql.org/wiki/Converting_from_other_Databases_to_PostgreSQL
+
+- SQLite to PostgreSQL: <https://wiki.postgresql.org/wiki/Converting_from_other_Databases_to_PostgreSQL>
 
 ---
 

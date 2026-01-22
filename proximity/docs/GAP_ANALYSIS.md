@@ -29,20 +29,24 @@ Based on your description:
 ## GAPS - What's Missing
 
 ### GAP 1: Respawn Timing
+
 **Impact: CRITICAL for decision analysis**
 
 NOT TRACKED:
+
 - Time until enemy respawn
 - Time until our respawn
 - Spawn wave timing
 - Reinforcement advantage/disadvantage
 
 **Why it matters:**
+
 - If enemy has 20s respawn and you have 5s, dying is less costly
 - If enemy just spawned (30s to respawn), aggressive play is rewarded
 - Good players track this mentally - we should track it too
 
 **What we need:**
+
 ```lua
 -- Track spawn waves
 local team_spawn_times = {
@@ -52,27 +56,31 @@ local team_spawn_times = {
 
 -- On death, record:
 -- time_to_enemy_respawn, time_to_our_respawn, respawn_advantage
-```
+```sql
 
 ---
 
 ### GAP 2: Spawn-to-Death Journey (Full Movement)
+
 **Impact: HIGH for understanding pathing**
 
 CURRENT: Only track position DURING combat engagement (after first hit)
 
 MISSING:
+
 - Where player spawned
 - Which exit they took from spawn
 - Path from spawn to first combat
 - Full journey before engagement
 
 **Why it matters:**
+
 - "This player always exits main and dies at tank"
 - "This player flanks but gets caught at stairs"
 - Spawn exit patterns reveal playstyle
 
 **What we need:**
+
 ```lua
 -- Track from spawn, not from first damage
 local player_journey = {
@@ -82,21 +90,24 @@ local player_journey = {
     path_to_first_combat = {},
     total_distance_before_combat = 0
 }
-```
+```sql
 
 ---
 
 ### GAP 3: Enemy Movement Tracking
+
 **Impact: MEDIUM for tactical analysis**
 
 CURRENT: Only track enemies who attack YOU (attackers in engagement)
 
 MISSING:
+
 - Where enemies are moving (even if not attacking you)
 - Enemy patrol patterns
 - Common enemy positions
 
 **Why it matters:**
+
 - "Enemy often positions at bridge"
 - "Medic usually stays back"
 - Pattern prediction
@@ -104,31 +115,36 @@ MISSING:
 **Challenge:** High data volume - tracking all player positions constantly is expensive
 
 **Possible solution:**
+
 ```lua
 -- Sample ALL player positions every 10 seconds (not every frame)
 -- Store in separate "position_snapshot" table
 -- Use for aggregate analysis, not real-time
-```
+```yaml
 
 ---
 
 ### GAP 4: Decision Analysis (Right/Wrong)
+
 **Impact: HIGH for improvement feedback**
 
 CURRENT: We track WHAT happened, not IF it was a good decision
 
 MISSING:
+
 - Context of engagement (were you outnumbered?)
 - Objective state (should you have pushed?)
 - Team positions (were teammates nearby?)
 - Outcome vs expected outcome
 
 **Why it matters:**
+
 - "You died but objective was planted = GOOD TRADE"
 - "You survived but let bomb defuse = BAD DECISION"
 - "You engaged 1v3 = BAD POSITIONING"
 
 **What we need:**
+
 ```lua
 -- Capture decision context:
 local engagement_context = {
@@ -143,38 +159,44 @@ local engagement_context = {
     -- Result analysis
     outcome_rating = "good_trade|bad_trade|neutral"
 }
-```
+```python
 
 ---
 
 ### GAP 5: Pre-Engagement Awareness
+
 **Impact: MEDIUM for decision quality**
 
 CURRENT: Engagement starts when you take damage
 
 MISSING:
+
 - Did player see enemy first?
 - Reaction time (first shot to first return fire)
 - Who initiated combat?
 
 **Why it matters:**
+
 - "You got shot first 80% of the time = bad positioning"
 - "Your reaction time is slow = need better awareness"
 
 ---
 
 ### GAP 6: Round/Match Context
+
 **Impact: MEDIUM for understanding performance variance**
 
 CURRENT: Track per-engagement, per-round
 
 MISSING:
+
 - Current score
 - Time remaining
 - Which objectives are active
 - Map side (attack vs defense)
 
 **Why it matters:**
+
 - Performance varies by game state
 - Clutch situations vs normal play
 - Leading vs trailing behavior
@@ -202,25 +224,33 @@ MISSING:
 ## Priority Fixes
 
 ### P0: Respawn Timing (Most impactful)
+
 Add to Lua:
+
 - Track spawn wave times per team
 - On death, record: `time_to_respawn`, `enemy_time_to_respawn`
 - Add to engagement record
 
 ### P1: Spawn Journey Tracking
+
 Add to Lua:
+
 - Hook `et_ClientSpawn()` to start tracking
 - Sample position every 5s until first combat
 - Record spawn exit zone
 
 ### P2: Round Context
+
 Add to Lua:
+
 - Round start time, round time limit
 - Objective states at engagement time
 - Current score
 
 ### P3: Enemy Position Snapshots (if performance allows)
+
 Add to Lua:
+
 - Every 10s, snapshot all player positions
 - Aggregate into "common enemy positions" per map
 - Lightweight - only position + team, no damage tracking

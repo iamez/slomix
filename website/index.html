@@ -203,6 +203,8 @@
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Weapons</button>
                 <button id="link-records" onclick="navigateTo('records')"
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Records</button>
+                <button id="link-awards" onclick="navigateTo('awards')"
+                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Awards</button>
                 <button id="link-profile" onclick="navigateTo('profile')"
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Profile</button>
             </div>
@@ -703,6 +705,68 @@
 
                 <!-- Grid -->
                 <div id="records-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- AWARDS VIEW -->
+        <div id="view-awards" class="view-section hidden">
+            <div class="max-w-7xl mx-auto px-6 py-12">
+                <div class="text-center mb-12">
+                    <h1 class="text-4xl font-black text-white mb-4">🏆 Awards</h1>
+                    <p class="text-slate-400">Round awards and achievements from endgame stats</p>
+                </div>
+
+                <!-- Tabs -->
+                <div class="flex justify-center gap-2 mb-8">
+                    <button id="awards-tab-round" onclick="switchAwardsTab('round')"
+                        class="awards-tab-btn px-6 py-3 rounded-lg font-bold text-sm transition bg-brand-blue text-white">
+                        📋 By Round
+                    </button>
+                    <button id="awards-tab-player" onclick="switchAwardsTab('player')"
+                        class="awards-tab-btn px-6 py-3 rounded-lg font-bold text-sm transition bg-slate-700 text-slate-300 hover:bg-slate-600">
+                        👤 By Player
+                    </button>
+                </div>
+
+                <!-- Filters -->
+                <div class="glass-panel p-4 rounded-xl mb-6">
+                    <div class="flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex flex-wrap items-center gap-4">
+                            <div>
+                                <label class="text-xs text-slate-500 uppercase font-bold block mb-1">Award Type</label>
+                                <select id="awards-type-filter" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg focus:ring-brand-blue focus:border-brand-blue p-2.5 min-w-[180px]">
+                                    <option value="">All Awards</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-500 uppercase font-bold block mb-1">Time Period</label>
+                                <select id="awards-time-filter" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg focus:ring-brand-blue focus:border-brand-blue p-2.5">
+                                    <option value="7">Last 7 Days</option>
+                                    <option value="30" selected>Last 30 Days</option>
+                                    <option value="90">Last 90 Days</option>
+                                    <option value="">All Time</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="text-sm text-slate-400" id="awards-count">
+                            <!-- Total count shown here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Content Area -->
+                <div id="awards-content">
+                    <!-- Populated by JS -->
+                    <div class="text-center py-12">
+                        <i data-lucide="loader" class="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4"></i>
+                        <div class="text-slate-400">Loading awards...</div>
+                    </div>
+                </div>
+
+                <!-- Pagination -->
+                <div id="awards-pagination" class="flex justify-center gap-2 mt-8 hidden">
                     <!-- Populated by JS -->
                 </div>
             </div>

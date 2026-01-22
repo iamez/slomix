@@ -1,0 +1,41 @@
+Most damage given	vid	3214
+Most damage received	vid	2717
+Most team damage given	bronze.	54
+Most team damage received	carniee	54
+Most selfkills	bronze.	7
+Most deaths	SuperBoyy	14
+Most kills per minute	vid	1.78
+Most light weapon kills	bronze.	9
+Most grenade kills	v_kt_r	2
+Most revives	bronze.	4
+Most revived	SuperBoyy	4
+Best K/D ratio	bronze.	1.625
+Longest killing spree	bronze.	3
+Longest death spree	carniee	6
+Most corpse gibs	v_kt_r	11
+Most kill assists	vid	5
+Most headshot kills	bronze.	5
+Longest killing spree	bronze.	3
+Most playtime denied	v_kt_r	113 seconds
+Highest light weapons accuracy	SuperBoyy	50.47 percent
+Highest headshot accuracy	carniee	19.09 percent
+Most headshots	bronze.	21
+Most bullets fired	bronze.	333
+carniee	4	0
+SuperBoyy	3	2
+.olz	2	1
+bronze.	2	3
+vid	1	2
+v_kt_r	1	4
+.olz	4	5
+carniee	3	1
+SuperBoyy	2	1
+vid	5	4
+bronze.	1	2
+v_kt_r	1	2
+v_kt_r	3	3
+vid	1	3
+bronze.	0	4
+SuperBoyy	4	1
+carniee	3	3
+.olz	2	1

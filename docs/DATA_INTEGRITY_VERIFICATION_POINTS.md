@@ -1,6 +1,7 @@
 # 🔒 Data Integrity Verification - Where to Add Checks
 
-## The Question:
+## The Question
+
 **"If player carniee got 42 headshots in the file, how do we VERIFY 42 made it to the database?"**
 
 ## Answer: Read-After-Write Verification
@@ -10,6 +11,7 @@
 ## 🎯 Verification Points in the Pipeline
 
 ### ✅ **Point 1: After Parsing (Memory Verification)**
+
 **Location:** Stage 3 - Right after `C0RNP0RN3StatsParser.parse_file()`
 
 ```python
@@ -23,13 +25,14 @@ for player in parsed_data['player_stats']:
     assert 'player_guid' in player, f"Missing GUID for {player['player_name']}"
     
     logger.debug(f"✓ Parsed: {player['player_name']} = {player['headshots']} headshots")
-```
+```sql
 
 **What this catches:** Parser bugs, corrupted file data, logic errors
 
 ---
 
 ### ✅ **Point 2: During Database INSERT (Transaction Verification)**
+
 **Location:** Stage 5 - Immediately after each INSERT
 
 ```python
@@ -52,13 +55,14 @@ if inserted_headshots != 42:
     )
 
 logger.debug(f"✓ DB INSERT verified: carniee = {inserted_headshots} headshots")
-```
+```yaml
 
 **What this catches:** Database type conversion errors, constraint violations, PostgreSQL bugs
 
 ---
 
 ### ✅ **Point 3: After Transaction COMMIT (Post-Commit Verification)**
+
 **Location:** Stage 5 - After `conn.commit()` but before closing connection
 
 ```python
@@ -89,13 +93,14 @@ for saved_player in saved_players:
         raise DatabaseIntegrityError("Post-commit verification failed!")
     
 logger.info(f"✓ Post-commit verified: {len(saved_players)} players match source data")
-```
+```yaml
 
 **What this catches:** Transaction rollback issues, concurrent write conflicts, disk corruption
 
 ---
 
 ### ✅ **Point 4: Aggregate Validation (Sanity Checks)**
+
 **Location:** Stage 5 - After all inserts complete
 
 ```python
@@ -132,13 +137,14 @@ if parsed_total_kills != db_total_kills:
 logger.info(f"✓ Aggregate verification passed:")
 logger.info(f"  Total headshots: {db_total_headshots}")
 logger.info(f"  Total kills: {db_total_kills}")
-```
+```yaml
 
 **What this catches:** Missing rows, partial inserts, dropped data
 
 ---
 
 ### ✅ **Point 5: Weapon Stats Cross-Validation**
+
 **Location:** Stage 5 - After weapon_comprehensive_stats INSERT
 
 ```python
@@ -170,7 +176,7 @@ player_total_kills = 50  # from player_comprehensive_stats
 
 if abs(total_weapon_kills - player_total_kills) > 5:  # Allow ±5 tolerance
     logger.error(f"❌ Weapon kills ({total_weapon_kills}) don't match player kills ({player_total_kills})")
-```
+```yaml
 
 **What this catches:** Inconsistent data between tables, missing weapon records
 
@@ -178,7 +184,7 @@ if abs(total_weapon_kills - player_total_kills) > 5:  # Allow ±5 tolerance
 
 ## 🏗️ Recommended Architecture: Verification Layer
 
-### Create a `DataIntegrityVerifier` class:
+### Create a `DataIntegrityVerifier` class
 
 ```python
 class DataIntegrityVerifier:
@@ -218,17 +224,19 @@ class DataIntegrityVerifier:
     def generate_verification_report(self) -> str:
         """Generate detailed report of all checks"""
         pass
-```
+```yaml
 
 ---
 
 ## 📊 Implementation Strategy
 
 ### **Level 1: Basic (Already exists in your code)**
+
 - ✅ 7-check validation before database insert
 - ✅ PostgreSQL constraints (NOT NULL, CHECK constraints)
 
 ### **Level 2: Read-After-Write (Recommended to add)**
+
 ```python
 # After each INSERT, immediately verify
 cursor.execute("INSERT INTO ... RETURNING *")
@@ -236,9 +244,10 @@ inserted_row = cursor.fetchone()
 
 # Compare inserted_row with source data
 assert inserted_row['headshots'] == expected_headshots
-```
+```text
 
 ### **Level 3: Post-Commit Verification (Paranoid mode)**
+
 ```python
 # After commit, re-query entire round
 actual_data = fetch_round_from_db(round_id)
@@ -249,9 +258,10 @@ for player in expected_data['players']:
     actual_player = find_in_actual(player['guid'])
     for field in ['headshots', 'kills', 'deaths', ...]:
         assert player[field] == actual_player[field]
-```
+```text
 
 ### **Level 4: Periodic Audit (Background job)**
+
 ```python
 # Run nightly/weekly
 def audit_database_integrity():
@@ -261,13 +271,13 @@ def audit_database_integrity():
     # - Logical impossibilities (headshots > kills)
     # - Duplicate GUIDs in same round
     # - Gaming session gaps
-```
+```python
 
 ---
 
 ## 🎯 Where in YOUR Current Code to Add This
 
-### In `postgresql_database_manager.py`:
+### In `postgresql_database_manager.py`
 
 ```python
 async def process_file(self, filepath: str) -> bool:
@@ -298,13 +308,14 @@ async def process_file(self, filepath: str) -> bool:
             
         # ✅ POINT 4: After commit (transaction already committed)
         await self._verify_post_commit(conn, round_id, parsed_data)  # ← ADD THIS
-```
+```yaml
 
 ---
 
 ## 🚨 What Happens When Verification Fails?
 
 ### Option A: **Fail Fast (Recommended)**
+
 ```python
 if not verification_passed:
     # Rollback transaction
@@ -314,16 +325,17 @@ if not verification_passed:
     # Mark file as failed (don't add to processed_files)
     # Raise exception
     raise DatabaseIntegrityError("Data verification failed!")
-```
+```text
 
 ### Option B: **Log and Continue (Dangerous)**
+
 ```python
 if not verification_passed:
     # Log warning but don't fail
     logger.warning(f"⚠️ Verification issue: {error_details}")
     # Still mark as processed
     # Continue operation
-```
+```yaml
 
 **Recommendation: Use Option A** - Better to fail loudly than have corrupted data!
 
@@ -331,7 +343,8 @@ if not verification_passed:
 
 ## 📝 Example Verification Log Output
 
-```
+```sql
+
 [INFO] Processing: gamestats_2025-11-06_20-00-00_goldrush_r1.txt
 [DEBUG] ✓ Parsed: carniee = 42 headshots, 50 kills, 15 deaths
 [DEBUG] ✓ Parsed: player2 = 15 headshots, 38 kills, 22 deaths
@@ -351,6 +364,7 @@ if not verification_passed:
 [INFO] ✓ Post-commit verification: All 8 players match source data
 
 [SUCCESS] File processed successfully with full data integrity verification
+
 ```
 
 ---

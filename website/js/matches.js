@@ -237,9 +237,13 @@ export async function loadWeaponsView() {
 
 /**
  * Load detailed match information in modal
+ * @param {number} matchId - The match/round ID
+ * @param {boolean} skipTabs - If true, don't add tab buttons (used when switching tabs)
  */
-export async function loadMatchDetails(matchId) {
-    openModal('modal-match-details');
+export async function loadMatchDetails(matchId, skipTabs = false) {
+    if (!skipTabs) {
+        openModal('modal-match-details');
+    }
 
     const content = document.getElementById('match-modal-content');
     content.innerHTML = '<div class="text-center py-12"><i data-lucide="loader" class="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4"></i><div class="text-slate-400">Loading match details...</div></div>';
@@ -265,7 +269,18 @@ export async function loadMatchDetails(matchId) {
         const team1Color = team1.is_winner ? 'text-brand-gold' : 'text-slate-400';
         const team2Color = team2.is_winner ? 'text-brand-gold' : 'text-slate-400';
 
+        // Tab buttons
         let html = `
+        <div class="flex gap-2 mb-4">
+            <button id="match-tab-stats" class="match-tab-btn px-4 py-2 rounded-lg font-bold text-sm transition bg-brand-blue text-white"
+                    onclick="switchMatchTab(${matchId}, 'stats')">
+                📊 Stats
+            </button>
+            <button id="match-tab-awards" class="match-tab-btn px-4 py-2 rounded-lg font-bold text-sm transition bg-slate-700 text-slate-300 hover:bg-slate-600"
+                    onclick="switchMatchTab(${matchId}, 'awards')">
+                🏆 Awards
+            </button>
+        </div>
         <div class="space-y-6">
             <div class="flex items-center justify-center gap-8 py-4">
                 <div class="text-center">
@@ -393,5 +408,120 @@ export async function loadMatchDetails(matchId) {
     }
 }
 
+/**
+ * Load awards tab content for a match
+ */
+async function loadMatchAwards(roundId) {
+    const content = document.getElementById('match-modal-content');
+    content.innerHTML = '<div class="text-center py-12"><i data-lucide="loader" class="w-8 h-8 text-brand-gold animate-spin mx-auto mb-4"></i><div class="text-slate-400">Loading awards...</div></div>';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    try {
+        const [awardsData, vsData] = await Promise.all([
+            fetchJSON(`${API_BASE}/rounds/${roundId}/awards`),
+            fetchJSON(`${API_BASE}/rounds/${roundId}/vs-stats`)
+        ]);
+
+        if (Object.keys(awardsData.categories).length === 0) {
+            content.innerHTML = '<div class="text-center py-12 text-slate-400">No awards data available for this round</div>';
+            return;
+        }
+
+        let html = '<div class="space-y-4">';
+
+        // Awards by category
+        for (const [catKey, catData] of Object.entries(awardsData.categories)) {
+            html += `
+            <div class="glass-panel rounded-xl overflow-hidden">
+                <div class="p-3 border-b border-white/10 flex items-center gap-2">
+                    <span class="text-lg">${catData.emoji}</span>
+                    <h3 class="font-bold text-white">${escapeHtml(catData.name)}</h3>
+                </div>
+                <div class="p-3 space-y-2">
+            `;
+
+            for (const award of catData.awards) {
+                html += `
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-slate-400">${escapeHtml(award.award)}</span>
+                        <span class="flex items-center gap-2">
+                            <span class="font-bold text-white">${escapeHtml(award.player)}</span>
+                            <span class="text-brand-gold">(${escapeHtml(award.value)})</span>
+                        </span>
+                    </div>
+                `;
+            }
+
+            html += '</div></div>';
+        }
+
+        // VS Stats table
+        if (vsData.stats && vsData.stats.length > 0) {
+            html += `
+            <div class="glass-panel rounded-xl overflow-hidden">
+                <div class="p-3 border-b border-white/10 flex items-center gap-2">
+                    <span class="text-lg">📊</span>
+                    <h3 class="font-bold text-white">VS Stats</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-[10px] text-slate-500 uppercase bg-slate-900/50">
+                                <th class="text-left py-2 px-3 font-bold">Player</th>
+                                <th class="text-right py-2 px-3 font-bold">Kills</th>
+                                <th class="text-right py-2 px-3 font-bold">Deaths</th>
+                                <th class="text-right py-2 px-3 font-bold">K/D</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            for (const stat of vsData.stats) {
+                const kd = stat.deaths > 0 ? (stat.kills / stat.deaths).toFixed(2) : stat.kills.toFixed(2);
+                const kdColor = kd >= 2.0 ? 'text-brand-emerald' : kd >= 1.0 ? 'text-white' : 'text-brand-rose';
+                html += `
+                    <tr class="border-b border-white/5 hover:bg-white/5 transition">
+                        <td class="py-2 px-3 font-medium text-white">${escapeHtml(stat.player)}</td>
+                        <td class="text-right py-2 px-3 font-mono text-brand-emerald">${stat.kills}</td>
+                        <td class="text-right py-2 px-3 font-mono text-slate-400">${stat.deaths}</td>
+                        <td class="text-right py-2 px-3 font-mono ${kdColor} font-bold">${kd}</td>
+                    </tr>
+                `;
+            }
+
+            html += '</tbody></table></div></div>';
+        }
+
+        html += '</div>';
+        content.innerHTML = html;
+
+    } catch (e) {
+        console.error('Failed to load match awards:', e);
+        content.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load awards data</div>';
+    }
+}
+
+/**
+ * Switch between Stats and Awards tabs in match modal
+ */
+function switchMatchTab(roundId, tab) {
+    // Update tab button states
+    document.querySelectorAll('.match-tab-btn').forEach(btn => {
+        btn.classList.remove('bg-brand-blue', 'text-white');
+        btn.classList.add('bg-slate-700', 'text-slate-300');
+    });
+    document.getElementById(`match-tab-${tab}`).classList.remove('bg-slate-700', 'text-slate-300');
+    document.getElementById(`match-tab-${tab}`).classList.add('bg-brand-blue', 'text-white');
+
+    if (tab === 'awards') {
+        loadMatchAwards(roundId);
+    } else {
+        // Reload stats - we stored the match ID, need to reload
+        loadMatchDetails(roundId, true);
+    }
+}
+
 // Expose to window for onclick handlers in HTML
 window.loadMatchDetails = loadMatchDetails;
+window.loadMatchAwards = loadMatchAwards;
+window.switchMatchTab = switchMatchTab;

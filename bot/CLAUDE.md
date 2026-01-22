@@ -8,7 +8,7 @@ Discord commands for viewing stats, leaderboards, and gaming session summaries.
 
 ## Directory Structure
 
-```
+```python
 bot/
 ├── ultimate_bot.py          # Main entry point (4,990 lines)
 ├── community_stats_parser.py # Stats file parser (1,036 lines)
@@ -25,11 +25,12 @@ bot/
 ├── local_stats/             # Downloaded stats files
 ├── logs/                    # Bot logs
 └── tools/                   # Utility scripts
-```
+```python
 
 ## Critical Files
 
 ### ultimate_bot.py
+
 - Main bot class extending `commands.Bot`
 - Loads all 14 cogs on startup
 - Contains `endstats_monitor` task loop (SSH polling)
@@ -37,6 +38,7 @@ bot/
 - Admin notification system (`alert_admins()`, `track_error()`)
 
 ### community_stats_parser.py
+
 - Parses ET:Legacy stats text files
 - **CRITICAL**: Handles Round 2 differential calculation
   - R2 files contain CUMULATIVE stats
@@ -45,6 +47,7 @@ bot/
 - Handles midnight crossovers
 
 ### config.py
+
 - Loads from `.env` or `bot_config.json`
 - Environment variables take precedence
 - Contains session gap threshold (60 minutes)
@@ -52,6 +55,7 @@ bot/
 ## Key Patterns
 
 ### Database Access
+
 ```python
 # Always use database_adapter for async operations
 results = await self.bot.db_adapter.fetch_all(query, params)
@@ -59,22 +63,24 @@ results = await self.bot.db_adapter.fetch_all(query, params)
 # Use parameterized queries with ?
 query = "SELECT * FROM players WHERE guid = ?"
 params = (player_guid,)
-```
+```text
 
 ### Player Aggregation
+
 ```python
 # ALWAYS group by player_guid, NEVER player_name
 GROUP BY player_guid
 # Use MAX(player_name) to get a display name
 SELECT player_guid, MAX(player_name) as name, SUM(kills) as total_kills
-```
+```text
 
 ### Session Queries
+
 ```python
 # Use gaming_session_id, not date ranges
 WHERE gaming_session_id = ?
 # 60-minute gaps define session boundaries
-```
+```sql
 
 ## Common Pitfalls
 

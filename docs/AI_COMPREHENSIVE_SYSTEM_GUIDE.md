@@ -9,11 +9,13 @@ This document contains complete system understanding to prevent circular problem
 ## Quick Reference
 
 ### System Architecture
-```
+
+```yaml
 ET:Legacy Game Server → SSH/Local Files → Parser → PostgreSQL → Discord Bot → Users
-```
+```python
 
 ### Critical Rules
+
 1. ✅ **ALWAYS** use `gaming_session_id` for session queries, not dates
 2. ✅ **ALWAYS** group by `player_guid`, never `player_name`
 3. ✅ **ALWAYS** use 60-minute gap threshold (not 30!)
@@ -22,6 +24,7 @@ ET:Legacy Game Server → SSH/Local Files → Parser → PostgreSQL → Discord 
 6. ❌ **NEVER** assume corruption without checking raw files
 
 ### Terminology Hierarchy
+
 - **ROUND** = One stats file (R1 or R2)
 - **MATCH** = R1 + R2 together (one map played)
 - **GAMING SESSION** = Multiple matches within 60-min gaps
@@ -31,6 +34,7 @@ ET:Legacy Game Server → SSH/Local Files → Parser → PostgreSQL → Discord 
 ## Section 1: System Architecture
 
 ### Components
+
 1. **Stats Parser** (`community_stats_parser.py`) - Extracts 50+ fields per player
 2. **Database** (PostgreSQL primary, SQLite fallback) - 6 main tables
 3. **Bot Core** (`bot/ultimate_bot.py`) - 4,371 lines, 14 cogs
@@ -38,6 +42,7 @@ ET:Legacy Game Server → SSH/Local Files → Parser → PostgreSQL → Discord 
 5. **Discord Interface** - 63 commands across 6 categories
 
 ### Data Flow (30-70 seconds total)
+
 1. Round ends → Server generates .txt file
 2. SSH monitor detects new file (30s polling)
 3. File downloaded to local_stats/
@@ -54,6 +59,7 @@ ET:Legacy Game Server → SSH/Local Files → Parser → PostgreSQL → Discord 
 ### Primary Tables
 
 #### rounds
+
 ```sql
 id SERIAL PRIMARY KEY
 round_date TEXT                 -- YYYY-MM-DD from filename
@@ -64,9 +70,10 @@ round_number INTEGER            -- 1 or 2 (not 0!)
 gaming_session_id INTEGER       -- Groups continuous play
 time_limit TEXT
 actual_time TEXT
-```
+```yaml
 
 #### player_comprehensive_stats (53 columns)
+
 - Core: player_guid, player_name, round_id
 - Combat: kills, deaths, damage_given, damage_received, accuracy
 - Weapons: headshots, headshot_kills, gibs
@@ -76,9 +83,11 @@ actual_time TEXT
 - Team: team ('axis'/'allies'), team_detection_confidence
 
 #### weapon_comprehensive_stats
+
 Per-weapon breakdown: weapon_name, kills, deaths, headshots, hits, shots, accuracy
 
 #### processed_files
+
 Duplicate detection: filename (UNIQUE), file_hash (SHA256), processed_at, success
 
 ---
@@ -88,6 +97,7 @@ Duplicate detection: filename (UNIQUE), file_hash (SHA256), processed_at, succes
 ### 60-Minute Gap Rule
 
 **Algorithm**:
+
 ```python
 # Get last round in database
 last_round = SELECT id, time FROM rounds ORDER BY date DESC, time DESC LIMIT 1
@@ -100,15 +110,17 @@ for previous_round in get_previous_rounds():
         add_to_session(previous_round)
     else:
         break  # Gap too large - different session
-```
+```python
 
 **Key Points**:
+
 - ✅ Handles midnight crossovers correctly
 - ✅ Uses datetime arithmetic (not string comparison)
 - ✅ Groups rounds into continuous play sessions
 - ⚠️ **CRITICAL**: Must be 60 minutes, not 30!
 
 ### Session ID Formats
+
 - **session_id**: `YYYY-MM-DD-HHMMSS` (legacy, from first round)
 - **gaming_session_id**: Auto-incrementing integer (current system)
 - **match_id**: `YYYY-MM-DD-HHMMSS` (pairs R1+R2)
@@ -128,6 +140,7 @@ for previous_round in get_previous_rounds():
 **CRITICAL**: Round 2 stats files contain **CUMULATIVE** stats (R1 + R2)
 
 **Parser Logic** (`community_stats_parser.py`):
+
 ```python
 def parse_round_2_with_differential(round2_file):
     # 1. Parse R2 file → cumulative (R1+R2) stats
@@ -144,7 +157,7 @@ def parse_round_2_with_differential(round2_file):
 
     # 4. Return ONLY Round 2 differential (not cumulative)
     return r2_differential
-```
+```sql
 
 **Status**: ✅ **100% VALIDATED** (Nov 3, 2025 - 2,700 field comparisons)
 
@@ -155,50 +168,59 @@ def parse_round_2_with_differential(round2_file):
 ### Fixed Issues
 
 #### 1. Gaming Session Detection Bug (FIXED Nov 3, 2025)
+
 **Problem**: Date-based queries included orphan rounds from different sessions
 
 **Fix**: Changed to session_ids list approach
+
 ```python
 # OLD (BROKEN):
 WHERE round_date = '2025-11-02'  # Gets ALL rounds on that date ❌
 
 # NEW (FIXED):
 WHERE round_id IN (2134, 2135, ..., 2151)  # Only session rounds ✅
-```
+```text
 
 #### 2. Player Duplication Bug (FIXED Nov 3, 2025)
+
 **Problem**: Name changes created duplicate player entries
 
 **Fix**: Group by GUID instead of name
+
 ```python
 # OLD (BROKEN):
 GROUP BY player_name  # Duplicates on name change ❌
 
 # NEW (FIXED):
 GROUP BY player_guid  # One entry per player ✅
-```
+```text
 
 #### 3. Duplicate Detection Bug (FIXED Nov 19, 2025)
+
 **Problem**: Only checked `map_name` and `round_number`, not `round_time`
+
 - Same map played twice in one session → second play skipped
 
 **Fix**: Added `round_time` to duplicate check
+
 ```python
 # OLD (BROKEN):
 WHERE round_date = ? AND map_name = ? AND round_number = ?  ❌
 
 # NEW (FIXED):
 WHERE round_date = ? AND round_time = ? AND map_name = ? AND round_number = ?  ✅
-```
+```python
 
 **Location**: `bot/ultimate_bot.py` line 1337
 
 #### 4. Schema Bug - Lost Sessions (FIXED Nov 3, 2025)
+
 **Problem**: UNIQUE constraint rejected multiple matches on same map per day
 
 **Fix**: Changed constraint from `(round_date, map_name, round_number)` to `(match_id, round_number)`
 
 #### 5. 30-Minute vs 60-Minute Gap (FIXED Nov 4, 2025)
+
 **Problem**: Used 30-minute threshold instead of 60 minutes
 
 **Fix**: Changed all instances to 60 minutes
@@ -270,26 +292,32 @@ WHERE round_date = ? AND round_time = ? AND map_name = ? AND round_number = ?  �
 ## Section 8: Common Issues and Solutions
 
 ### Issue: "!last_session shows wrong data"
+
 **First Check**: Using session_ids list or date-based query?
 **Solution**: Use `WHERE round_id IN (session_ids_list)`
 
 ### Issue: "Player appears twice in stats"
+
 **First Check**: Grouping by player_guid or player_name?
 **Solution**: Always `GROUP BY player_guid`
 
 ### Issue: "R2 stats seem wrong"
+
 **First Check**: Parser handles differential correctly
 **Solution**: Don't recalculate, trust parser output
 
 ### Issue: "Same map played twice, second missing"
+
 **First Check**: Duplicate detection includes round_time?
 **Solution**: Check query has `round_time` parameter (fixed Nov 19, 2025)
 
 ### Issue: "Import rejected duplicate"
+
 **First Check**: SHA256 hash match or UNIQUE constraint issue?
 **Solution**: Check if actually duplicate or constraint problem
 
 ### Issue: "Session spans midnight, split incorrectly"
+
 **First Check**: gaming_session_id calculation uses datetime arithmetic?
 **Solution**: Verify 60-minute gap logic handles date boundaries
 
@@ -298,6 +326,7 @@ WHERE round_date = ? AND round_time = ? AND map_name = ? AND round_number = ?  �
 ## Section 9: Essential Files Reference
 
 ### Must-Read Documentation
+
 1. `COMPLETE_SYSTEM_RUNDOWN.md` - High-level architecture
 2. `BUGFIX_SESSION_NOV3_2025.md` - Latest critical fixes
 3. `VALIDATION_FINDINGS_NOV3.md` - Data validation (100% accurate)
@@ -305,6 +334,7 @@ WHERE round_date = ? AND round_time = ? AND map_name = ? AND round_number = ?  �
 5. `DUPLICATE_DETECTION_BUG.md` - Duplicate detection fix
 
 ### Core Code Files
+
 1. `bot/ultimate_bot.py` (4,371 lines) - Main bot
 2. `community_stats_parser.py` (1,036 lines) - Stats parser
 3. `bot/cogs/last_session.py` - Session logic
@@ -352,6 +382,7 @@ WHERE round_date = ? AND round_time = ? AND map_name = ? AND round_number = ?  �
 ## Section 11: Environment Configuration
 
 ### Required .env Variables
+
 ```bash
 # Discord
 DISCORD_BOT_TOKEN=your_token
@@ -408,6 +439,7 @@ SESSION_END_DELAY=180
 ## Emergency Contact
 
 If this document doesn't resolve your issue:
+
 1. Search all BUGFIX_*.md files for keywords
 2. Check VALIDATION_FINDINGS_NOV3.md (2,700 field comparisons)
 3. Review raw stats files in local_stats/

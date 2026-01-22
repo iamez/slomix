@@ -139,9 +139,11 @@ class SessionGraphGenerator:
                            ELSE 0
                        END as dpm,
                        SUM(p.time_played_seconds) as time_played,
+                       -- Use stored time_dead_minutes directly (already calculated with R2 differential)
+                       -- Cap at time_played to prevent edge cases where time_dead > time_played
                        SUM(
                            LEAST(
-                               p.time_played_minutes * p.time_dead_ratio / 100.0,
+                               COALESCE(p.time_dead_minutes, 0),
                                p.time_played_seconds / 60.0
                            )
                        ) as time_dead_minutes,
@@ -192,6 +194,35 @@ class SessionGraphGenerator:
             # Calculate derived metrics
             kd_ratios = [k / max(1, d) for k, d in zip(kills, deaths)]
             time_dead = time_dead_minutes  # Already calculated correctly from time_dead_ratio
+            # FIX: Calculate actual time ALIVE (total time - time dead)
+            # Previously was showing time_played as "Alive" which is TOTAL time, not alive time
+            time_alive = [max(0, tp - td) for tp, td in zip(time_played, time_dead)]
+
+            # ═══════════════════════════════════════════════════════════════════
+            # TIME DEBUG: Validate time values are consistent
+            # ═══════════════════════════════════════════════════════════════════
+            logger.info("═" * 70)
+            logger.info("TIME DEBUG: Graph data validation")
+            logger.info("═" * 70)
+            for i, name in enumerate(names):
+                tp = time_played[i]
+                td = time_dead[i]
+                ta = time_alive[i]
+                # Validate: time_alive + time_dead should equal time_played
+                sum_check = ta + td
+                diff = abs(sum_check - tp)
+                status = "✅" if diff < 0.1 else "⚠️ MISMATCH"
+                logger.info(
+                    f"[TIME] {name[:15]:15} | "
+                    f"played={tp:6.1f}min | dead={td:6.1f}min | alive={ta:6.1f}min | "
+                    f"alive+dead={sum_check:6.1f} | {status}"
+                )
+                if diff >= 0.1:
+                    logger.warning(
+                        f"[TIME MISMATCH] {name}: time_played={tp:.2f} != alive+dead={sum_check:.2f} (diff={diff:.2f})"
+                    )
+            logger.info("═" * 70)
+
             dmg_eff = [
                 dg / max(1, dr)
                 for dg, dr in zip(damage_given, damage_received)
@@ -341,8 +372,9 @@ class SessionGraphGenerator:
             self._add_grouped_bar_labels(axes2[0, 0], bars1, bars2,
                                           revives_given, times_revived)
 
-            # Time Played vs Time Dead (grouped)
-            bars1 = axes2[0, 1].bar(x - bar_width/2, time_played, bar_width,
+            # Time Alive vs Time Dead (grouped)
+            # FIX: Use time_alive (time_played - time_dead), not time_played (total)
+            bars1 = axes2[0, 1].bar(x - bar_width/2, time_alive, bar_width,
                                      color=self.COLORS['cyan'], label='Alive',
                                      edgecolor='white', linewidth=0.5)
             bars2 = axes2[0, 1].bar(x + bar_width/2, time_dead, bar_width,
@@ -354,7 +386,7 @@ class SessionGraphGenerator:
             axes2[0, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
                                edgecolor='white', labelcolor='white')
             self._add_grouped_bar_labels(axes2[0, 1], bars1, bars2,
-                                          time_played, time_dead, "{:.1f}")
+                                          time_alive, time_dead, "{:.1f}")
 
             # Gibs
             bars = axes2[1, 0].bar(x, gibs, color=self.COLORS['red'],

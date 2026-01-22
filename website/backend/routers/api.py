@@ -2073,3 +2073,372 @@ async def get_records(
             results[key] = []
 
     return results
+
+
+# ========================================
+# ENDSTATS / AWARDS ENDPOINTS
+# ========================================
+
+# Award categories for display (mirrors bot/endstats_parser.py)
+AWARD_CATEGORIES = {
+    "combat": {
+        "emoji": "⚔️",
+        "name": "Combat",
+        "awards": [
+            "Most damage given", "Most damage received", "Most kills per minute",
+            "Most damage per minute", "Best K/D ratio", "Tank/Meatshield (Refuses to die)",
+        ],
+    },
+    "deaths": {
+        "emoji": "💀",
+        "name": "Deaths & Mayhem",
+        "awards": [
+            "Most deaths", "Most selfkills", "Most teamkills", "Longest death spree",
+            "Most panzer deaths", "Most mortar deaths", "Most MG42 deaths", "Mortarmagnet",
+        ],
+    },
+    "skills": {
+        "emoji": "🎯",
+        "name": "Skills",
+        "awards": [
+            "Most headshot kills", "Most headshots", "Highest light weapons accuracy",
+            "Highest headshot accuracy", "Most light weapon kills", "Most pistol kills",
+            "Most rifle kills", "Most sniper kills", "Most knife kills",
+            "Longest killing spree", "Most multikills", "Most doublekills",
+            "Quickest multikill w/ light weapons", "Most bullets fired",
+        ],
+    },
+    "weapons": {
+        "emoji": "🔫",
+        "name": "Weapons",
+        "awards": [
+            "Most grenade kills", "Most panzer kills", "Most mortar kills",
+            "Most mine kills", "Most air support kills", "Most riflenade kills",
+            "Farthest riflenade kill", "Most MG42 kills",
+        ],
+    },
+    "teamwork": {
+        "emoji": "🤝",
+        "name": "Teamwork",
+        "awards": [
+            "Most revives", "Most revived", "Most kill assists", "Most killsteals",
+            "Most team damage given", "Most team damage received",
+        ],
+    },
+    "objectives": {
+        "emoji": "🎯",
+        "name": "Objectives",
+        "awards": [
+            "Most dynamites planted", "Most dynamites defused",
+            "Most objectives stolen", "Most objectives returned", "Most corpse gibs",
+        ],
+    },
+    "timing": {
+        "emoji": "⏱️",
+        "name": "Timing",
+        "awards": [
+            "Most useful kills (>Half respawn time left)", "Most useless kills",
+            "Full respawn king", "Most playtime denied", "Least time dead (What spawn?)",
+        ],
+    },
+}
+
+
+def categorize_award(award_name: str) -> tuple:
+    """Return (category_key, emoji, category_name) for an award."""
+    for cat_key, cat_data in AWARD_CATEGORIES.items():
+        if award_name in cat_data["awards"]:
+            return (cat_key, cat_data["emoji"], cat_data["name"])
+    return ("other", "📋", "Other")
+
+
+@router.get("/rounds/{round_id}/awards")
+async def get_round_awards(round_id: int, db: DatabaseAdapter = Depends(get_db)):
+    """
+    Get awards for a specific round, grouped by category.
+    """
+    # Get round info
+    round_query = "SELECT map_name, round_number, round_date FROM rounds WHERE id = $1"
+    round_row = await db.fetch_one(round_query, (round_id,))
+
+    if not round_row:
+        raise HTTPException(status_code=404, detail="Round not found")
+
+    # Get awards
+    awards_query = """
+        SELECT award_name, player_name, award_value, award_value_numeric
+        FROM round_awards
+        WHERE round_id = $1
+        ORDER BY id
+    """
+    awards_rows = await db.fetch_all(awards_query, (round_id,))
+
+    # Group by category
+    categories = {}
+    for row in awards_rows:
+        award_name, player, value, numeric = row
+        cat_key, emoji, cat_name = categorize_award(award_name)
+
+        if cat_key not in categories:
+            categories[cat_key] = {
+                "emoji": emoji,
+                "name": cat_name,
+                "awards": []
+            }
+
+        categories[cat_key]["awards"].append({
+            "award": award_name,
+            "player": player,
+            "value": value,
+            "numeric": numeric
+        })
+
+    return {
+        "round_id": round_id,
+        "map_name": round_row[0],
+        "round_number": round_row[1],
+        "round_date": round_row[2],
+        "categories": categories
+    }
+
+
+@router.get("/rounds/{round_id}/vs-stats")
+async def get_round_vs_stats(round_id: int, db: DatabaseAdapter = Depends(get_db)):
+    """
+    Get VS stats (player K/D) for a specific round.
+    """
+    query = """
+        SELECT player_name, kills, deaths
+        FROM round_vs_stats
+        WHERE round_id = $1
+        ORDER BY kills DESC, deaths ASC
+    """
+    rows = await db.fetch_all(query, (round_id,))
+
+    return {
+        "round_id": round_id,
+        "stats": [
+            {"player": row[0], "kills": row[1], "deaths": row[2]}
+            for row in rows
+        ]
+    }
+
+
+@router.get("/awards/leaderboard")
+async def get_awards_leaderboard(
+    limit: int = 20,
+    days: int = 0,
+    award_type: str = None,
+    db: DatabaseAdapter = Depends(get_db)
+):
+    """
+    Get leaderboard of players by total awards won.
+
+    Args:
+        limit: Number of players to return
+        days: Filter to last N days (0 = all time)
+        award_type: Filter to specific award type
+    """
+    params = []
+    where_clauses = []
+    param_idx = 1
+
+    if days > 0:
+        where_clauses.append(f"ra.created_at >= NOW() - INTERVAL '{days} days'")
+
+    if award_type:
+        where_clauses.append(f"ra.award_name = ${param_idx}")
+        params.append(award_type)
+        param_idx += 1
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+    # Get player award counts with their most won award
+    query = f"""
+        WITH player_counts AS (
+            SELECT
+                player_name,
+                COUNT(*) as award_count,
+                award_name,
+                COUNT(*) as award_specific_count
+            FROM round_awards ra
+            {where_sql}
+            GROUP BY player_name, award_name
+        ),
+        player_totals AS (
+            SELECT
+                player_name,
+                SUM(award_specific_count) as total_awards
+            FROM player_counts
+            GROUP BY player_name
+        ),
+        top_awards AS (
+            SELECT DISTINCT ON (player_name)
+                player_name,
+                award_name as top_award,
+                award_specific_count as top_award_count
+            FROM player_counts
+            ORDER BY player_name, award_specific_count DESC
+        )
+        SELECT
+            pt.player_name,
+            pt.total_awards,
+            ta.top_award,
+            ta.top_award_count
+        FROM player_totals pt
+        JOIN top_awards ta ON pt.player_name = ta.player_name
+        ORDER BY pt.total_awards DESC
+        LIMIT ${param_idx}
+    """
+    params.append(limit)
+
+    rows = await db.fetch_all(query, tuple(params))
+
+    return {
+        "leaderboard": [
+            {
+                "rank": idx + 1,
+                "player": row[0],
+                "award_count": row[1],
+                "top_award": row[2],
+                "top_award_count": row[3]
+            }
+            for idx, row in enumerate(rows)
+        ],
+        "filters": {
+            "days": days,
+            "award_type": award_type
+        }
+    }
+
+
+@router.get("/players/{identifier}/awards")
+async def get_player_awards(
+    identifier: str,
+    limit: int = 10,
+    db: DatabaseAdapter = Depends(get_db)
+):
+    """
+    Get awards won by a specific player.
+
+    Args:
+        identifier: Player name or GUID
+        limit: Number of recent awards to return
+    """
+    # Get award counts by type
+    count_query = """
+        SELECT award_name, COUNT(*) as count
+        FROM round_awards
+        WHERE player_name ILIKE $1 OR player_guid = $1
+        GROUP BY award_name
+        ORDER BY count DESC
+    """
+    count_rows = await db.fetch_all(count_query, (identifier,))
+
+    # Get recent awards
+    recent_query = """
+        SELECT ra.award_name, ra.award_value, ra.round_date, ra.map_name, ra.round_number
+        FROM round_awards ra
+        WHERE ra.player_name ILIKE $1 OR ra.player_guid = $1
+        ORDER BY ra.created_at DESC
+        LIMIT $2
+    """
+    recent_rows = await db.fetch_all(recent_query, (identifier, limit))
+
+    total = sum(row[1] for row in count_rows)
+
+    return {
+        "player": identifier,
+        "total_awards": total,
+        "by_type": {row[0]: row[1] for row in count_rows},
+        "recent": [
+            {
+                "award": row[0],
+                "value": row[1],
+                "date": row[2],
+                "map": row[3],
+                "round": row[4]
+            }
+            for row in recent_rows
+        ]
+    }
+
+
+@router.get("/awards")
+async def list_awards(
+    limit: int = 50,
+    offset: int = 0,
+    player: str = None,
+    award_type: str = None,
+    days: int = 0,
+    db: DatabaseAdapter = Depends(get_db)
+):
+    """
+    List all awards with pagination and filters.
+
+    Args:
+        limit: Number of awards per page
+        offset: Pagination offset
+        player: Filter by player name
+        award_type: Filter by award type
+        days: Filter to last N days
+    """
+    params = []
+    where_clauses = []
+    param_idx = 1
+
+    if player:
+        where_clauses.append(f"ra.player_name ILIKE ${param_idx}")
+        params.append(f"%{player}%")
+        param_idx += 1
+
+    if award_type:
+        where_clauses.append(f"ra.award_name = ${param_idx}")
+        params.append(award_type)
+        param_idx += 1
+
+    if days > 0:
+        where_clauses.append(f"ra.created_at >= NOW() - INTERVAL '{days} days'")
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+    # Get total count
+    count_query = f"SELECT COUNT(*) FROM round_awards ra {where_sql}"
+    count_row = await db.fetch_one(count_query, tuple(params))
+    total = count_row[0] if count_row else 0
+
+    # Get awards
+    query = f"""
+        SELECT ra.award_name, ra.player_name, ra.award_value, ra.round_date,
+               ra.map_name, ra.round_number, ra.round_id
+        FROM round_awards ra
+        {where_sql}
+        ORDER BY ra.created_at DESC
+        LIMIT ${param_idx} OFFSET ${param_idx + 1}
+    """
+    params.extend([limit, offset])
+
+    rows = await db.fetch_all(query, tuple(params))
+
+    return {
+        "awards": [
+            {
+                "award": row[0],
+                "player": row[1],
+                "value": row[2],
+                "date": row[3],
+                "map": row[4],
+                "round_number": row[5],
+                "round_id": row[6]
+            }
+            for row in rows
+        ],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "filters": {
+            "player": player,
+            "award_type": award_type,
+            "days": days
+        }
+    }

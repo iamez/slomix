@@ -283,6 +283,20 @@ class RoundPublisherService:
                     else:
                         dead_pct = denied_pct = 0
 
+                    # ═══════════════════════════════════════════════════════════════════
+                    # TIME DEBUG: Validate time values at posting time
+                    # ═══════════════════════════════════════════════════════════════════
+                    time_alive = time_played - time_dead
+                    if time_dead > time_played and time_played > 0:
+                        logger.warning(
+                            f"[TIME POST] ⚠️ {name}: time_dead ({time_dead:.2f}) > "
+                            f"time_played ({time_played:.2f})!"
+                        )
+                    logger.debug(
+                        f"[TIME POST] {name}: played={time_played:.1f}m, "
+                        f"dead={time_dead:.1f}m ({dead_pct:.0f}%), alive={time_alive:.1f}m"
+                    )
+
                     # Build multikills string (only if any)
                     multikills_parts = []
                     if double_kills > 0:
@@ -540,8 +554,14 @@ class RoundPublisherService:
             categorized = parser.categorize_awards(awards)
 
             # Create embed
+            # Round 1 endstats are per-round, but Round 2+ are cumulative (map-wide)
+            if round_number == 1:
+                title = f"🏆 Round {round_number} Awards - {map_name}"
+            else:
+                title = f"🏆 Map Awards (Cumulative) - {map_name}"
+
             embed = discord.Embed(
-                title=f"🏆 Round {round_number} Awards - {map_name}",
+                title=title,
                 color=discord.Color.gold(),
                 timestamp=datetime.now()
             )
@@ -585,41 +605,14 @@ class RoundPublisherService:
                         inline=True
                     )
 
-            # Add VS stats summary if present
-            if vs_stats:
-                # Aggregate VS stats per player
-                player_totals = {}
-                for vs in vs_stats:
-                    player = vs['player']
-                    if player not in player_totals:
-                        player_totals[player] = {'kills': 0, 'deaths': 0}
-                    player_totals[player]['kills'] += vs['kills']
-                    player_totals[player]['deaths'] += vs['deaths']
-
-                # Sort by kills
-                sorted_players = sorted(
-                    player_totals.items(),
-                    key=lambda x: x[1]['kills'],
-                    reverse=True
-                )[:5]  # Top 5
-
-                if sorted_players:
-                    vs_lines = []
-                    for player, stats in sorted_players:
-                        vs_lines.append(f"**{player}:** {stats['kills']}K/{stats['deaths']}D")
-
-                    # Add explanation for readers
-                    vs_header = "*Sum of all 1v1 matchup results this round*"
-                    vs_text = vs_header + "\n" + "\n".join(vs_lines)
-
-                    embed.add_field(
-                        name="📊 VS Stats (Top 5)",
-                        value=vs_text,
-                        inline=False
-                    )
+            # VS stats removed - the file format doesn't include source player,
+            # so aggregated data is meaningless without knowing who vs who
 
             # Footer
-            embed.set_footer(text=f"Round {round_number} | {filename}")
+            if round_number == 1:
+                embed.set_footer(text=f"Round {round_number} | {filename}")
+            else:
+                embed.set_footer(text=f"Map Total (R1+R2) | {filename}")
 
             # Post embed
             await channel.send(embed=embed)

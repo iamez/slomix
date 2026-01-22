@@ -1,4 +1,5 @@
 # 🔬 Integration Impact Analysis
+
 **System:** Competitive Analytics Integration into Slomix Bot
 **Analysis Date:** November 28, 2025
 **Status:** Pre-Integration Risk Assessment
@@ -11,6 +12,7 @@
 **Goal:** Integrate advanced team detection, performance tracking, and match prediction into the existing working bot without breaking current functionality.
 
 **Current System Status:** ✅ STABLE & PRODUCTION-READY
+
 - Voice session detection: ✅ Working
 - Stats import/processing: ✅ Working
 - Discord auto-posting: ✅ Working
@@ -18,11 +20,13 @@
 - Team management (basic): ✅ Working
 
 **Integration Complexity:** 🟡 MEDIUM
+
 - **Low Risk Areas:** New database tables, new services (isolated)
 - **Medium Risk Areas:** Voice state handler modifications, team detection refactor
 - **High Risk Areas:** None identified (no core system rewrites needed)
 
 **Recommendation:** ✅ **PROCEED WITH PHASED INTEGRATION**
+
 - Integration is feasible with low risk of breaking existing functionality
 - Key: Keep systems isolated with clear interfaces
 - Rollback strategy is straightforward
@@ -33,7 +37,7 @@
 
 ### System Flow Diagram
 
-```
+```python
 ┌─────────────────────────────────────────────────────────────┐
 │                    DISCORD BOT (ultimate_bot.py)             │
 │  - Config loading                                            │
@@ -74,25 +78,28 @@
 │  - leaderboard_cog (rankings)                                │
 │  - session_management_cog (admin tools)                      │
 └─────────────────────────────────────────────────────────────┘
-```
+```python
 
 ### Key Components (Currently Working)
 
 #### 1. Voice Session Service
+
 **File:** `bot/services/voice_session_service.py`
 **Purpose:** Detects when gaming sessions start/end based on voice channel activity
 **State:**
+
 ```python
 self.session_active: bool = False
 self.session_start_time: Optional[datetime] = None
 self.session_participants: Set[int] = set()  # Discord user IDs
 self.session_end_timer: Optional[asyncio.Task] = None
-```
+```python
 
 **Trigger:** `on_voice_state_update` → counts players in `gaming_voice_channels`
 **Thresholds:** 6+ players = start, <2 players = 5min countdown to end
 
 **Current Behavior:**
+
 - ✅ Posts "Session Started" embed to Discord
 - ✅ Enables SSH monitoring (bot.monitoring = True)
 - ✅ Tracks participants
@@ -100,11 +107,13 @@ self.session_end_timer: Optional[asyncio.Task] = None
 - ❌ Does NOT identify which channel each player is in
 
 #### 2. Team Manager (Basic)
+
 **File:** `bot/core/team_manager.py`
 **Purpose:** Detects teams from database data (after rounds are played)
 **Used By:** `team_cog.py` commands (!teams, !lineup_changes, !session_score)
 
 **Current Algorithm:**
+
 1. Seed teams from Round 1 (Axis vs Allies)
 2. Use co-membership voting for late joiners
 3. Store in `session_teams` table
@@ -114,6 +123,7 @@ self.session_end_timer: Optional[asyncio.Task] = None
 #### 3. Database Tables (Existing)
 
 **`session_teams` (Currently Exists)**
+
 ```sql
 session_start_date TEXT
 map_name TEXT
@@ -121,10 +131,12 @@ team_name TEXT
 player_guids JSONB  -- ["guid1", "guid2", ...]
 player_names JSONB
 created_at TIMESTAMP
-```
+```text
+
 **Uniqueness:** (session_start_date, map_name, team_name)
 
 **`player_comprehensive_stats` (Main Stats Table)**
+
 ```sql
 id SERIAL
 round_date TEXT  -- "2025-11-28"
@@ -133,9 +145,10 @@ player_guid TEXT
 player_name TEXT
 team INTEGER  -- 1=Axis, 2=Allies
 kills, deaths, damage_given, etc.
-```
+```text
 
 **`rounds` (Match Metadata)**
+
 ```sql
 id SERIAL
 session_date TEXT
@@ -145,7 +158,7 @@ time_limit TEXT
 actual_time TEXT
 winner_team INTEGER
 defender_team INTEGER
-```
+```yaml
 
 ---
 
@@ -153,7 +166,8 @@ defender_team INTEGER
 
 ### New System Flow
 
-```
+```python
+
 ┌─────────────────────────────────────────────────────────────┐
 │                    DISCORD BOT (ultimate_bot.py)             │
 │  ✅ Existing systems (unchanged)                             │
@@ -237,7 +251,8 @@ defender_team INTEGER
 │  - match_predictions (prediction tracking)                   │
 │  - linked_accounts (Discord → GUID mapping, enhanced)        │
 └─────────────────────────────────────────────────────────────┘
-```
+
+```yaml
 
 ---
 
@@ -245,7 +260,8 @@ defender_team INTEGER
 
 ### Current Dependencies (What Exists Now)
 
-```
+```python
+
 ultimate_bot.py
 ├─→ VoiceSessionService
 │   ├─→ bot (for Discord channel access)
@@ -264,11 +280,13 @@ ultimate_bot.py
 │
 └─→ TeamManager (via team_cog.py)
     └─→ db_path (SQLite legacy - ⚠️ PROBLEM)
-```
+
+```text
 
 ### New Dependencies (What We're Adding)
 
-```
+```python
+
 ultimate_bot.py
 └─→ 🆕 CompetitiveAnalyticsCoordinator (NEW)
     ├─→ db_adapter
@@ -290,11 +308,13 @@ ultimate_bot.py
         ├─→ db_adapter (changed from sqlite3.Connection)
         ├─→ SubstitutionDetector
         └─→ TeamDetectorIntegration
-```
+
+```text
 
 ### Integration Point: VoiceSessionService
 
 **Current Method:**
+
 ```python
 async def handle_voice_state_change(self, member, before, after):
     total_players = count_players_in_gaming_channels()
@@ -304,9 +324,10 @@ async def handle_voice_state_change(self, member, before, after):
 
     elif total_players < 2 and self.session_active:
         await self.delayed_end(participants)  # ✅ Works
-```
+```text
 
 **Enhanced Method (NON-BREAKING):**
+
 ```python
 async def handle_voice_state_change(self, member, before, after):
     # ✅ EXISTING LOGIC (unchanged)
@@ -325,7 +346,7 @@ async def handle_voice_state_change(self, member, before, after):
         if team_split:
             self.team_split_detected = True
             await self.trigger_competitive_analytics(team_split)  # NEW
-```
+```python
 
 **Risk:** 🟢 LOW - Adding logic, not replacing
 **Rollback:** Simply don't call new methods (feature flag)
@@ -339,6 +360,7 @@ async def handle_voice_state_change(self, member, before, after):
 **Problem:** Current `TeamManager` uses `sqlite3.Connection` directly
 
 **File:** `bot/core/team_manager.py`
+
 ```python
 class TeamManager:
     def __init__(self, db_path: str = "bot/etlegacy_production.db"):
@@ -347,9 +369,10 @@ class TeamManager:
     def detect_session_teams(self, db: sqlite3.Connection, session_date: str):
         cursor = db.cursor()  # ❌ Direct SQLite usage
         cursor.execute("SELECT ...")
-```
+```python
 
 **Impact:**
+
 - Used by `team_cog.py` commands (!teams, !lineup_changes)
 - NOT used by main bot (only by cog)
 - Uses database AFTER rounds are processed (not real-time)
@@ -357,32 +380,38 @@ class TeamManager:
 **Integration Approaches:**
 
 **Option A: Keep Both Systems (Coexistence) - 🟢 LOWEST RISK**
+
 ```python
 # Keep existing TeamManager unchanged
 # Add NEW CompetitiveTeamAnalyzer alongside it
 # Let them serve different purposes:
 #   - TeamManager: Post-game analysis (!teams command)
 #   - CompetitiveAnalyzer: Live predictions (automated)
-```
+```text
+
 **Pros:** Zero risk of breaking existing commands
 **Cons:** Code duplication
 **Recommendation:** ✅ START HERE for Phase 1
 
 **Option B: Gradual Migration - 🟡 MEDIUM RISK**
+
 ```python
 # Phase 1: Keep TeamManager, add new system
 # Phase 2: Refactor TeamManager to use DatabaseAdapter
 # Phase 3: Merge functionality
-```
+```text
+
 **Pros:** Eventually cleaner code
 **Cons:** Requires refactoring working code
 **Recommendation:** 🔄 DO THIS LATER (Phase 2+)
 
 **Option C: Immediate Refactor - 🔴 HIGH RISK**
+
 ```python
 # Refactor TeamManager immediately to use DatabaseAdapter
 # Could break team_cog.py commands if bugs introduced
-```
+```sql
+
 **Pros:** Clean from start
 **Cons:** High risk of breaking production features
 **Recommendation:** ❌ DON'T DO THIS
@@ -396,6 +425,7 @@ class TeamManager:
 **Analysis:** All new tables are ADDITIONS, no modifications to existing schema
 
 **Existing Tables:** ✅ NO CHANGES NEEDED
+
 - `player_comprehensive_stats` - Read-only by new system
 - `rounds` - Read-only by new system
 - `session_teams` - May be written by both old and new systems
@@ -403,27 +433,31 @@ class TeamManager:
 **Potential Conflict:** `session_teams` table
 
 **Current Usage:**
+
 ```python
 # TeamManager writes to session_teams (post-game)
 INSERT INTO session_teams (session_start_date, map_name, team_name, ...)
 VALUES (...)
 ON CONFLICT (...) DO UPDATE ...
-```
+```text
 
 **New System Usage:**
+
 ```python
 # AdvancedTeamDetector also writes to session_teams (pre-game)
 INSERT INTO session_teams (session_start_date, map_name, team_name, ...)
 VALUES (...)
 ON CONFLICT (...) DO UPDATE ...
-```
+```sql
 
 **Conflict Scenario:**
+
 1. New system detects teams from voice → writes to `session_teams`
 2. Game plays out
 3. Old TeamManager re-detects teams from game data → overwrites `session_teams`
 
 **Resolution Strategy:**
+
 ```sql
 -- Add source field to track where data came from
 ALTER TABLE session_teams ADD COLUMN detection_source TEXT DEFAULT 'game_data';
@@ -436,7 +470,7 @@ ALTER TABLE session_teams ADD COLUMN confidence REAL DEFAULT 1.0;
 -- voice_split = 0.7 (may have mistakes)
 -- game_data = 1.0 (ground truth after game)
 -- manual = 1.0 (admin override)
-```
+```yaml
 
 **Risk:** 🟢 LOW - Both systems append data, conflicts resolved by confidence
 
@@ -445,6 +479,7 @@ ALTER TABLE session_teams ADD COLUMN confidence REAL DEFAULT 1.0;
 ### 3. Performance Impact (🟡 MEDIUM CONCERN)
 
 **Current Bot Performance:**
+
 - Voice state updates: ~100ms response time
 - Database queries: ~50-200ms each
 - Discord posting: ~500ms
@@ -452,14 +487,17 @@ ALTER TABLE session_teams ADD COLUMN confidence REAL DEFAULT 1.0;
 **New System Additions:**
 
 **A. Voice Split Detection** (NEW)
+
 ```python
 # On EVERY voice state change:
 - Count players in ALL gaming channels (existing)
 - 🆕 Check if split into 2 channels (new logic)
 - 🆕 If split detected, map Discord IDs → GUIDs (1 DB query per player)
 - 🆕 Trigger prediction pipeline (multiple queries)
-```
+```text
+
 **Estimated Additional Load:**
+
 - Voice state events: +10-50ms (negligible)
 - Team split detection: +50-100ms (one-time per session)
 - Prediction generation: +500-1000ms (acceptable, one-time)
@@ -467,13 +505,16 @@ ALTER TABLE session_teams ADD COLUMN confidence REAL DEFAULT 1.0;
 **Total:** ~1.5 seconds added latency for prediction posting (acceptable)
 
 **B. Live Score Monitoring** (NEW)
+
 ```python
 # Background task polling every 30 seconds:
 - Query rounds table for new entries
 - Calculate scores
 - Post updates to Discord
-```
+```text
+
 **Estimated Load:**
+
 - Database poll: ~50ms every 30s
 - CPU: Negligible (<1% sustained)
 - Network: Negligible
@@ -481,19 +522,23 @@ ALTER TABLE session_teams ADD COLUMN confidence REAL DEFAULT 1.0;
 **Risk:** 🟢 LOW - Polling is infrequent, queries are simple
 
 **C. Historical Data Queries** (NEW)
+
 ```python
 # For prediction generation:
 - Query lineup_performance (indexed)
 - Query head_to_head_matchups (indexed)
 - Query map_performance (indexed)
-```
+```sql
+
 **Estimated Load:**
+
 - 3-5 queries @ ~50ms each = 250ms total
 - With proper indexing: <100ms total
 
 **Risk:** 🟢 LOW - Only runs on team split (once per session)
 
 **Overall Performance Assessment:**
+
 - ✅ No impact on core operations (stats import, round processing)
 - ✅ Minimal impact on voice state handler (<100ms added)
 - ✅ Background tasks are low-frequency (no strain)
@@ -504,22 +549,26 @@ ALTER TABLE session_teams ADD COLUMN confidence REAL DEFAULT 1.0;
 ### 4. Discord Rate Limits (🟡 MEDIUM CONCERN)
 
 **Current Bot:**
+
 - Session start: 1 embed posted
 - Session end: 1 embed posted
 - Round completion: 1 embed posted (if enabled)
 
 **New System Adds:**
+
 - Team split: 1 embed (prediction) posted
 - Map completion: 1 embed (score update) per map
 - Session end: 1 embed (final analysis)
 
 **Worst Case:** 10-map session
+
 - Prediction: 1 embed
 - Score updates: 10 embeds
 - Final analysis: 1 embed
 - **Total:** 12 embeds over 2-3 hours
 
 **Discord Rate Limits:**
+
 - 5 messages per 5 seconds per channel
 - Bot is well within limits
 
@@ -530,11 +579,13 @@ ALTER TABLE session_teams ADD COLUMN confidence REAL DEFAULT 1.0;
 ### 5. Data Integrity Risks (🟡 MEDIUM CONCERN)
 
 **Scenario 1: Prediction Posted, Game Never Happens**
+
 - Users split into teams, bot posts prediction
 - Users change minds, never play
 - Database has orphaned prediction record
 
 **Mitigation:**
+
 - Predictions table has `status` field: 'pending', 'completed', 'cancelled'
 - Cleanup job removes predictions >24 hours old with 'pending' status
 - No impact on existing data
@@ -542,10 +593,12 @@ ALTER TABLE session_teams ADD COLUMN confidence REAL DEFAULT 1.0;
 **Risk:** 🟢 LOW - Orphaned predictions are benign
 
 **Scenario 2: GUID Mapping Fails**
+
 - Discord user has no linked GUID
 - Can't generate prediction
 
 **Mitigation:**
+
 - Fallback: Skip prediction, log warning
 - Bot continues working normally
 - Admin notified to link accounts
@@ -553,10 +606,12 @@ ALTER TABLE session_teams ADD COLUMN confidence REAL DEFAULT 1.0;
 **Risk:** 🟢 LOW - Graceful degradation
 
 **Scenario 3: Historical Data Pollution**
+
 - New system writes incorrect lineup data
 - Affects future predictions
 
 **Mitigation:**
+
 - Confidence scoring (game_data > voice_split)
 - Manual override capability (!override_teams command)
 - Audit trail (detection_source field)
@@ -572,6 +627,7 @@ ALTER TABLE session_teams ADD COLUMN confidence REAL DEFAULT 1.0;
 **Goal:** Add infrastructure without touching existing systems
 
 **Tasks:**
+
 1. Create new database tables
 2. Add new service classes (disabled by default)
 3. Add feature flags to config
@@ -589,11 +645,13 @@ ALTER TABLE session_teams ADD COLUMN confidence REAL DEFAULT 1.0;
 **Goal:** Add team split detection to VoiceSessionService
 
 **Tasks:**
+
 1. Add team split detection logic
 2. Add Discord → GUID mapping
 3. Feature flag: `TEAM_SPLIT_DETECTION_ENABLED=false`
 
 **Changes to Existing Code:**
+
 ```python
 # bot/services/voice_session_service.py
 async def handle_voice_state_change(...):
@@ -603,7 +661,7 @@ async def handle_voice_state_change(...):
     # 🆕 NEW LOGIC (guarded by flag)
     if self.config.team_split_detection_enabled:
         await new_team_split_logic()
-```
+```python
 
 **Rollback:** Set feature flag to false
 
@@ -616,6 +674,7 @@ async def handle_voice_state_change(...):
 **Goal:** Enable automated predictions
 
 **Tasks:**
+
 1. Implement performance analyzer
 2. Implement prediction engine
 3. Test with manual trigger command first
@@ -634,6 +693,7 @@ async def handle_voice_state_change(...):
 **Goal:** Add live score updates
 
 **Tasks:**
+
 1. Implement score monitor
 2. Add background polling task
 3. Enable via feature flag
@@ -651,6 +711,7 @@ async def handle_voice_state_change(...):
 **Goal:** Polish and optimize
 
 **Tasks:**
+
 1. Tune prediction weights
 2. Improve insights generation
 3. Performance optimization
@@ -673,7 +734,7 @@ async def handle_voice_state_change(...):
 self.team_split_detection_enabled = self._get_config('TEAM_SPLIT_DETECTION_ENABLED', 'false').lower() == 'true'
 self.match_prediction_enabled = self._get_config('MATCH_PREDICTION_ENABLED', 'false').lower() == 'true'
 self.live_score_updates_enabled = self._get_config('LIVE_SCORE_UPDATES_ENABLED', 'false').lower() == 'true'
-```
+```yaml
 
 **Default:** All features OFF
 **Activation:** Manually enable after testing
@@ -686,6 +747,7 @@ self.live_score_updates_enabled = self._get_config('LIVE_SCORE_UPDATES_ENABLED',
 **Safe:** New tables don't affect existing queries
 
 **Rollback Script:**
+
 ```sql
 -- Emergency rollback: Drop all new tables
 DROP TABLE IF EXISTS lineup_performance;
@@ -697,28 +759,31 @@ DROP TABLE IF EXISTS linked_accounts;
 -- Restore session_teams to original schema (if altered)
 ALTER TABLE session_teams DROP COLUMN IF EXISTS detection_source;
 ALTER TABLE session_teams DROP COLUMN IF EXISTS confidence;
-```
+```text
 
 **Backup Strategy:**
+
 ```bash
 # Before any changes
 pg_dump -h localhost -U etlegacy_user etlegacy > backup_before_analytics_$(date +%Y%m%d).sql
-```
+```bash
 
 ---
 
 ### Code Rollback
 
 **Git Strategy:**
+
 ```bash
 # Create feature branch
 git checkout -b feature/competitive-analytics
 
 # If something breaks
 git checkout main  # Rollback to stable
-```
+```yaml
 
 **Service Isolation:**
+
 - New services are separate files
 - Can be removed without affecting existing code
 - No tight coupling to core bot
@@ -730,6 +795,7 @@ git checkout main  # Rollback to stable
 ### Health Checks
 
 **1. System Health Dashboard**
+
 ```python
 # Add to !health command output
 Competitive Analytics Status:
@@ -742,16 +808,18 @@ Performance:
 - Prediction generation: avg 850ms
 - Database queries: avg 120ms
 - Discord posting: avg 450ms
-```
+```text
 
 **2. Accuracy Tracking**
+
 ```python
 # Store all predictions
 # Compare to actual results
 # Alert if accuracy drops below 50%
-```
+```text
 
 **3. Error Monitoring**
+
 ```python
 # Log all exceptions
 # Alert on:
@@ -815,26 +883,31 @@ Performance:
 ## 💡 Recommendations
 
 ### 1. START SMALL
+
 - **Phase 1 only:** Just create tables and services
 - **No automation:** Test with manual commands first
 - **Observe:** Monitor for 1-2 weeks
 
 ### 2. USE FEATURE FLAGS
+
 - All new features OFF by default
 - Enable one at a time
 - Easy rollback via config change
 
 ### 3. KEEP OLD SYSTEMS
+
 - Don't refactor TeamManager immediately
 - Let old and new coexist
 - Merge later once proven stable
 
 ### 4. COMPREHENSIVE LOGGING
+
 - Log every prediction
 - Log accuracy comparisons
 - Alert on anomalies
 
 ### 5. USER COMMUNICATION
+
 - "Experimental feature" label
 - Gather feedback early
 - Iterate based on usage
@@ -843,14 +916,16 @@ Performance:
 
 ## 🚀 GO/NO-GO Decision Framework
 
-### ✅ GO if:
+### ✅ GO if
+
 - [ ] Full database backup exists
 - [ ] Feature flags implemented
 - [ ] Rollback plan tested
 - [ ] Team has time to monitor
 - [ ] Users notified of experimental feature
 
-### ❌ NO-GO if:
+### ❌ NO-GO if
+
 - [ ] No backup strategy
 - [ ] No feature flags
 - [ ] Can't monitor for 2 weeks
@@ -864,6 +939,7 @@ Performance:
 **Integration is FEASIBLE with LOW-MEDIUM risk** when following phased approach.
 
 **Key Success Factors:**
+
 1. ✅ Use feature flags
 2. ✅ Keep systems isolated
 3. ✅ Don't refactor working code
@@ -871,6 +947,7 @@ Performance:
 5. ✅ Monitor continuously
 
 **Expected Outcome:**
+
 - ✅ Existing bot functionality: UNCHANGED
 - 🆕 New competitive analytics: ADDITIVE
 - 🔄 Rollback: STRAIGHTFORWARD

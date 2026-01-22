@@ -9,6 +9,7 @@
 ## 📋 Current State
 
 ### Prediction System (Discord Bot)
+
 - ✅ Fully functional prediction engine
 - ✅ 12 Discord commands (7 user + 5 admin)
 - ✅ 3 database tables (match_predictions, session_results, map_performance)
@@ -17,6 +18,7 @@
 - ✅ Accuracy tracking with Brier scores
 
 ### Website Frontend (/website/)
+
 - ✅ Modern Tailwind CSS design
 - ✅ Glass morphism UI
 - ✅ Chart.js for visualizations
@@ -61,7 +63,7 @@ All prediction data is stored in PostgreSQL and accessible:
 - matches_played, wins, losses, win_rate
 - avg_kills, avg_deaths, avg_kd_ratio
 - avg_dpm, avg_efficiency
-```
+```python
 
 ### Analytics Available
 
@@ -167,7 +169,7 @@ async def get_player_predictions(
 ):
     """Get predictions for specific player"""
     pass
-```
+```yaml
 
 ---
 
@@ -178,6 +180,7 @@ async def get_player_predictions(
 **New Section:** `<div id="view-predictions" class="view-section">`
 
 **Components:**
+
 - Live prediction feed (glass cards)
 - Accuracy meter (circular progress with Chart.js)
 - Recent trends chart (line graph)
@@ -186,6 +189,7 @@ async def get_player_predictions(
 ### 2. Analytics Page
 
 **Components:**
+
 - Daily accuracy trend chart
 - Best/worst day cards
 - Week-over-week comparison
@@ -195,6 +199,7 @@ async def get_player_predictions(
 ### 3. Leaderboards Tab
 
 **Subtabs:**
+
 - Most Predictable (🥇🥈🥉 medals)
 - Wildcards (unpredictable)
 - Most Active
@@ -203,6 +208,7 @@ async def get_player_predictions(
 ### 4. Map Analysis Section
 
 **Components:**
+
 - Map grid with accuracy badges
 - Team bias indicators
 - Filter by map
@@ -214,6 +220,7 @@ async def get_player_predictions(
 **Triggered by:** Clicking any prediction card
 
 **Shows:**
+
 - Full team rosters with player names
 - Factor breakdown (H2H, Form, Map, Subs)
 - Confidence explanation
@@ -274,7 +281,7 @@ async def get_player_predictions(
         <span class="text-xs text-slate-400">Final: 4-2</span>
     </div>
 </div>
-```
+```text
 
 ### Trend Chart (Chart.js)
 
@@ -335,7 +342,7 @@ const trendChart = new Chart(ctx, {
         }
     }
 });
-```
+```text
 
 ### Accuracy Meter (Circular Progress)
 
@@ -364,13 +371,14 @@ const trendChart = new Chart(ctx, {
         <span class="text-sm text-slate-400">Accuracy</span>
     </div>
 </div>
-```
+```yaml
 
 ---
 
 ## 📊 Data Flow
 
-```
+```sql
+
 Discord Bot                    PostgreSQL                    Website
     │                              │                             │
     ├─ Team Split Detected         │                             │
@@ -387,6 +395,7 @@ Discord Bot                    PostgreSQL                    Website
     │                              │                             │
     │                              │   <────── GET /api/predictions/stats
     │                              │   ─────> Calculate accuracy │
+
 ```
 
 ---
@@ -394,30 +403,35 @@ Discord Bot                    PostgreSQL                    Website
 ## 🚀 Implementation Priority
 
 ### Phase 1: Basic Display (1-2 hours)
+
 - [ ] Add `/api/predictions/recent` endpoint
 - [ ] Create predictions view in frontend
 - [ ] Display prediction cards with glass styling
 - [ ] Show recent 10 predictions
 
 ### Phase 2: Analytics (2-3 hours)
+
 - [ ] Add `/api/predictions/stats` endpoint
 - [ ] Create accuracy meter component
 - [ ] Add trend chart with Chart.js
 - [ ] Show confidence breakdown
 
 ### Phase 3: Leaderboards (1-2 hours)
+
 - [ ] Add `/api/predictions/leaderboard` endpoint
 - [ ] Create leaderboard view with tabs
 - [ ] Medal system (🥇🥈🥉)
 - [ ] Filter by category
 
 ### Phase 4: Map Analysis (1-2 hours)
+
 - [ ] Add `/api/predictions/maps` endpoint
 - [ ] Create map grid view
 - [ ] Team bias indicators
 - [ ] Click for details
 
 ### Phase 5: Real-time Updates (Optional, 3-4 hours)
+
 - [ ] WebSocket integration
 - [ ] Live prediction notifications
 - [ ] Auto-refresh on new predictions
@@ -428,24 +442,28 @@ Discord Bot                    PostgreSQL                    Website
 ## 🔧 Technical Considerations
 
 ### Database Queries
+
 - Use existing DatabaseAdapter pattern
 - Leverage parameterized queries ($1, $2, etc.)
 - Optimize with proper indexes (already exist)
 - Cache frequently accessed data
 
 ### Performance
+
 - Paginate results (limit/offset)
 - Cache API responses (Redis optional)
 - Lazy load charts
 - Optimize database queries
 
 ### Security
+
 - Require authentication for admin endpoints
 - Rate limit API calls
 - Validate all inputs
 - Sanitize player names
 
 ### Responsive Design
+
 - Mobile-first approach
 - Touch-friendly cards
 - Collapsible sections

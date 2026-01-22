@@ -1,4 +1,5 @@
 # 🎮 COMPETITIVE ANALYTICS - IMPLEMENTATION PROGRESS TRACKER
+
 **Project:** Automated Team Detection, Predictions & Match Analytics
 **Start Date:** _____________
 **Target Completion:** _____________ (12-14 weeks)
@@ -14,6 +15,7 @@
 **Status:** Bot running in production for monitoring week
 
 **What's Working:**
+
 - ✅ Voice session detection (counts players)
 - ✅ SSH file monitoring (imports stats)
 - ✅ Database adapter (PostgreSQL ready)
@@ -41,6 +43,7 @@
 - ✅ Map-specific statistics and bias detection
 
 **What's Missing:**
+
 - ⏳ Enhanced form analysis (needs session results data)
 - ⏳ Map performance analysis (needs historical data)
 - ⏳ Substitution impact analysis
@@ -48,10 +51,12 @@
 - ⏳ Prediction weight fine-tuning (Phase 5)
 
 **Current Blockers:**
+
 - None - Core system complete! Ready for refinement.
 
 **Recent Changes/Notes:**
-```
+
+```python
 2025-11-28 END OF WEEK 11-12 - Ready for monitoring week
   ✅ All progress committed (commit e42dfe9)
   ✅ Documentation reviewed and updated
@@ -139,7 +144,7 @@ Phase 5: Refinement & Polish (6/7 hours - 86%) ← NEARLY COMPLETE!
 REMAINING: Phase 5 - Final polish (1 hour)
   - Minor performance optimizations
   - Documentation updates
-```
+```python
 
 ---
 
@@ -153,54 +158,66 @@ REMAINING: Phase 5 - Final polish (1 hour)
 ### Issues Fixed
 
 #### 1. !link Cancel Button ✅
+
 **Problem:** Users stuck waiting 60 seconds when they don't want any of the 3 suggested players
 **Solution:** Added ❌ reaction for immediate cancellation
 **Files Modified:** `bot/cogs/link_cog.py:696-724`
 **Changes:**
+
 - Added cancel_emoji = "❌" to reaction options
 - Updated check() function to accept cancel emoji
 - Added cancellation handler before selection processing
 
 #### 2. !list_players GUID Display ✅
+
 **Problem:** GUID not shown in player list output
 **Solution:** Added GUID to player line format
 **Files Modified:** `bot/cogs/link_cog.py:245-248`
 **Changes:**
+
 - Updated player_lines.append() to include GUID in display
 
 #### 3. !link Performance (62 seconds!) ✅
+
 **Problem:** N+1 query problem - 3-6 separate database queries per !link command
 **Solution:** Optimized to single bulk query for all aliases
 **Files Modified:** `bot/cogs/link_cog.py:633-699`
 **Changes:**
+
 - Fetch all aliases in ONE query using WHERE guid IN (...)
 - Group aliases by GUID in memory
 - Fixed PostgreSQL parameterized query syntax ($1, $2 vs ?)
 - Reduced queries from 7 to 2 (85% reduction)
 
 **Expected Performance:**
+
 - Before: 62 seconds
 - After: <5 seconds (estimated)
 - Improvement: 92%+ faster
 
 #### 4. !find_player Crash ✅
+
 **Problem:** UnboundLocalError: local variable 'datetime' referenced before assignment
 **Root Cause:** Redundant `from datetime import datetime` inside function (line 438)
 **Solution:** Removed redundant import
 **Files Modified:** `bot/cogs/link_cog.py:438`
 
 #### 5. !search Command Clarification ✅
+
 **Problem:** User tried `!search players` - command not found
 **Clarification:** Command is `!search_player` (singular) or `!find_player` (aliases exist)
 
 #### 6. File Integrity Verification ✅
+
 **Checked:** session_data_service.py, database_adapter.py
 **Result:**
+
 - session_data_service.py: Only formatting changes (auto-formatter)
 - database_adapter.py: No changes
 - ✅ No accidental functional changes
 
 ### Testing Checklist
+
 - [ ] Test !link command with cancel (❌ reaction)
 - [ ] Test !list_players shows GUIDs
 - [ ] Test !link performance (<5s)
@@ -208,11 +225,12 @@ REMAINING: Phase 5 - Final polish (1 hour)
 - [ ] Verify !search_player works (not !search)
 
 ### Database Backup
+
 ```bash
 Created: backups/etlegacy_backup_pre_linking_fix_20251128.sql (2.9 MB)
 Database: PostgreSQL (26 MB total)
 Note: 0b SQLite file in /bot/ is legacy/unused
-```
+```yaml
 
 ---
 
@@ -230,6 +248,7 @@ Note: 0b SQLite file in /bot/ is legacy/unused
 | **TOTAL** | **64% Complete** | **39/61 hours** | **39/61 hours** | **Target: Week 14-16** |
 
 **Status Legend:**
+
 - 🔴 NOT STARTED
 - 🟡 IN PROGRESS
 - 🟢 COMPLETED
@@ -248,7 +267,9 @@ Note: 0b SQLite file in /bot/ is legacy/unused
 ### Environment Preparation
 
 #### Database Backup
+
 - [ ] **CRITICAL:** Take full PostgreSQL backup
+
   ```bash
   # Run this command:
   pg_dump -h localhost -U etlegacy_user -d etlegacy > \
@@ -256,58 +277,75 @@ Note: 0b SQLite file in /bot/ is legacy/unused
 
   # Verify backup size (should be >10 MB):
   ls -lh backups/*.sql | tail -1
-  ```
+  ```bash
+
   **Backup Location:** _______________
   **Backup Size:** _______________
   **Verified:** [ ] YES
 
 #### Git Repository State
+
 - [ ] Create feature branch
+
   ```bash
   git checkout -b feature/competitive-analytics
   git push -u origin feature/competitive-analytics
-  ```
+  ```text
+
   **Branch Name:** feature/competitive-analytics
 
 - [ ] Tag current state (before any changes)
+
   ```bash
   git tag pre-competitive-analytics-v1.0
   git push origin pre-competitive-analytics-v1.0
-  ```
+  ```text
+
   **Tag Name:** pre-competitive-analytics-v1.0
 
 - [ ] Verify clean working tree
+
   ```bash
   git status  # Should show "nothing to commit, working tree clean"
-  ```
+  ```sql
+
   **Status:** _______________
 
 #### Test Environment (Optional but Recommended)
+
 - [ ] Test server available (separate from production)
 - [ ] Test database created (copy of production data)
 - [ ] Test Discord bot token configured
 - [ ] Test channels for output verification
 
 **Test Environment Details:**
-```
+
+```yaml
+
 Server: _______________
 Database: _______________
 Bot Token: _______________
 Test Channel ID: _______________
-```
+
+```text
 
 #### Review Documentation
+
 - [ ] Read INTEGRATION_EXECUTIVE_SUMMARY.md (15 min)
 - [ ] Read COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md (30 min)
 - [ ] Review INTEGRATION_SAFETY_CHECKLIST.md (20 min)
 - [ ] Bookmark this tracker for daily updates
 
 **Review Notes:**
-```
+
+```text
+
 [Add any questions or concerns here]
-```
+
+```python
 
 ### Phase 0 Completion Checklist
+
 - [ ] ✅ Database backed up and verified
 - [ ] ✅ Git feature branch created
 - [ ] ✅ Git tag created
@@ -332,8 +370,10 @@ Test Channel ID: _______________
 **Status:** 🔴 NOT STARTED
 **Priority:** CRITICAL (this file is in production!)
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Update `__init__()` method**
+
   ```python
   # OLD (line 28):
   def __init__(self, db_path: str = "bot/etlegacy_production.db"):
@@ -342,7 +382,7 @@ Test Channel ID: _______________
   # NEW:
   def __init__(self, db_adapter):
       self.db = db_adapter
-  ```
+  ```python
 
 - [ ] **Convert `detect_session_teams()` to async**
   - [ ] Change signature: `async def detect_session_teams(self, session_date: str)`
@@ -374,7 +414,8 @@ Test Channel ID: _______________
   - [ ] Add `await` to all TeamManager calls
   - [ ] Test all !team commands
 
-#### Testing Commands:
+#### Testing Commands
+
 ```bash
 # Syntax check
 python -m py_compile bot/core/team_manager.py
@@ -384,9 +425,10 @@ python -c "from bot.core.team_manager import TeamManager; print('OK')"
 
 # Full bot startup test
 python -c "from bot.ultimate_bot import UltimateBot; print('Bot imports OK')"
-```
+```text
 
-#### Manual Testing:
+#### Manual Testing
+
 - [ ] Start bot on test server
 - [ ] Run `!team` command (should work)
 - [ ] Run `!team 2025-11-20` (historical date)
@@ -394,7 +436,9 @@ python -c "from bot.ultimate_bot import UltimateBot; print('Bot imports OK')"
 - [ ] Response time <2 seconds
 
 **Testing Notes:**
-```
+
+```text
+
 Command: !team
 Result: _______________
 Time: _______________
@@ -402,7 +446,8 @@ Time: _______________
 Command: !team 2025-11-20
 Result: _______________
 Time: _______________
-```
+
+```python
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -413,14 +458,16 @@ Time: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Update `__init__()` method**
+
   ```python
   # NEW:
   def __init__(self, db_adapter):
       self.db = db_adapter
       # Remove self.db_path
-  ```
+  ```python
 
 - [ ] **Convert `detect_session_teams()` to async**
   - [ ] Remove `db: sqlite3.Connection` parameter
@@ -428,6 +475,7 @@ Time: _______________
   - [ ] Update all internal method calls to `await`
 
 - [ ] **Convert `_get_session_player_data()` to async**
+
   ```python
   # Line ~144 - Convert from:
   cursor = db.cursor()
@@ -436,7 +484,7 @@ Time: _______________
 
   # To:
   rows = await self.db.fetch_all(query, params)
-  ```
+  ```python
 
 - [ ] **Convert `_analyze_historical_patterns()` to async**
   - [ ] All `cursor.execute()` → `await self.db.fetch_all()`
@@ -454,7 +502,8 @@ Time: _______________
 
 - [ ] **Keep `_cluster_into_teams()` sync** (no DB calls)
 
-#### Testing:
+#### Testing
+
 ```python
 # Test script (create test_advanced_detector.py)
 import asyncio
@@ -477,16 +526,19 @@ async def test():
     await db.close()
 
 asyncio.run(test())
-```
+```text
 
 **Testing Notes:**
-```
+
+```text
+
 Test Date: 2025-11-20
 Team A Size: _______________
 Team B Size: _______________
 Confidence: _______________
 Errors: _______________
-```
+
+```python
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -497,13 +549,15 @@ Errors: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Update `__init__()` method**
+
   ```python
   def __init__(self, db_adapter):
       self.db = db_adapter
       self.substitution_window = 1
-  ```
+  ```python
 
 - [ ] **Convert `analyze_session_roster_changes()` to async**
   - [ ] Remove `db: sqlite3.Connection` parameter
@@ -526,7 +580,8 @@ Errors: _______________
   - [ ] Delete standalone function at bottom (uses sqlite3.connect)
   - [ ] Delete `if __name__ == "__main__":` block
 
-#### Testing:
+#### Testing
+
 ```python
 # Test script
 import asyncio
@@ -549,15 +604,18 @@ async def test():
     await db.close()
 
 asyncio.run(test())
-```
+```text
 
 **Testing Notes:**
-```
+
+```text
+
 Test Date: 2025-11-20
 Total Players: _______________
 Late Joiners: _______________
 Substitutions: _______________
-```
+
+```python
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -568,7 +626,8 @@ Substitutions: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Update `__init__()` method**
 - [ ] **Convert `get_lineup_stats()` to async**
 - [ ] **Convert `get_lineup_sessions()` to async**
@@ -587,14 +646,16 @@ Substitutions: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Update `__init__()` to pass db_adapter to all detectors**
+
   ```python
   def __init__(self, db_adapter):
       self.db = db_adapter
       self.advanced_detector = AdvancedTeamDetector(db_adapter)
       self.sub_detector = SubstitutionDetector(db_adapter)
-  ```
+  ```python
 
 - [ ] **Convert all methods to async**
 - [ ] **Update all detector calls to await**
@@ -608,9 +669,11 @@ Substitutions: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Remove `import aiosqlite`**
 - [ ] **Replace all `aiosqlite.connect()` with `self.bot.db`**
+
   ```python
   # OLD:
   async with aiosqlite.connect(self.bot.db_path) as db:
@@ -619,7 +682,7 @@ Substitutions: _______________
 
   # NEW:
   stats = await self.bot.db.fetch_one(query, params)
-  ```
+  ```yaml
 
 - [ ] **Remove `_ensure_player_name_alias()` method** (SQLite hack)
 
@@ -630,8 +693,10 @@ Substitutions: _______________
 
 ### Phase 1: Final Testing & Deployment
 
-#### Pre-Deployment Checklist:
+#### Pre-Deployment Checklist
+
 - [ ] All syntax checks pass
+
   ```bash
   python -m py_compile bot/core/team_manager.py
   python -m py_compile bot/core/advanced_team_detector.py
@@ -639,9 +704,10 @@ Substitutions: _______________
   python -m py_compile bot/core/team_history.py
   python -m py_compile bot/core/team_detector_integration.py
   python -m py_compile bot/core/achievement_system.py
-  ```
+  ```text
 
 - [ ] All imports work
+
   ```bash
   python -c "
   from bot.core.team_manager import TeamManager
@@ -652,14 +718,16 @@ Substitutions: _______________
   from bot.core.achievement_system import AchievementSystem
   print('All modules import OK')
   "
-  ```
+  ```text
 
 - [ ] Bot starts without errors
+
   ```bash
   python -c "from bot.ultimate_bot import UltimateBot; print('Bot imports OK')"
-  ```
+  ```text
 
-#### Test Server Deployment (24-48 hours):
+#### Test Server Deployment (24-48 hours)
+
 - [ ] Deploy to test server
 - [ ] Run all !team commands
 - [ ] Monitor logs for errors (check every 2 hours for first day)
@@ -667,22 +735,29 @@ Substitutions: _______________
 - [ ] No database connection errors
 
 **Test Server Results:**
-```
+
+```text
+
 Deployment Date: _______________
 Errors Found: _______________
 Performance: _______________
 Issues: _______________
-```
 
-#### Production Deployment:
+```text
+
+#### Production Deployment
+
 - [ ] **BACKUP DATABASE AGAIN**
+
   ```bash
   pg_dump -h localhost -U etlegacy_user -d etlegacy > \
     backups/etlegacy_backup_pre_phase1_$(date +%Y%m%d_%H%M%S).sql
-  ```
+  ```text
+
   **Backup:** _______________
 
 - [ ] Commit all changes
+
   ```bash
   git add bot/core/team_manager.py bot/core/advanced_team_detector.py \
          bot/core/substitution_detector.py bot/core/team_history.py \
@@ -704,7 +779,7 @@ Issues: _______________
   "
 
   git push origin feature/competitive-analytics
-  ```
+  ```text
 
 - [ ] Stop production bot
 - [ ] Pull latest code
@@ -713,15 +788,20 @@ Issues: _______________
 - [ ] Monitor logs for 2 hours
 
 **Production Deployment:**
-```
+
+```text
+
 Deployment Date: _______________
 Deployment Time: _______________
 First Test: _______________
 Issues: _______________
-```
 
-#### Post-Deployment Monitoring (First Week):
+```text
+
+#### Post-Deployment Monitoring (First Week)
+
 **Day 1:**
+
 - [ ] Hour 1: Check logs, test commands
 - [ ] Hour 2: Check logs
 - [ ] Hour 4: Check logs, test commands
@@ -729,13 +809,16 @@ Issues: _______________
 - [ ] End of day: Full health check
 
 **Days 2-7:**
+
 - [ ] Daily log review
 - [ ] Daily command testing
 - [ ] Database connection monitoring
 - [ ] Performance monitoring (response times)
 
 **Monitoring Notes:**
-```
+
+```text
+
 Day 1: _______________
 Day 2: _______________
 Day 3: _______________
@@ -743,9 +826,11 @@ Day 4: _______________
 Day 5: _______________
 Day 6: _______________
 Day 7: _______________
-```
 
-### Phase 1 Success Criteria:
+```python
+
+### Phase 1 Success Criteria
+
 - [ ] ✅ All !team commands work with PostgreSQL
 - [ ] ✅ No database errors in logs
 - [ ] ✅ Response time <2 seconds
@@ -767,6 +852,7 @@ Day 7: _______________
 **Goal:** Detect team splits (6 players → 3+3) to trigger predictions
 
 **Prerequisites:**
+
 - [ ] Phase 1 completed and stable for 1 week
 - [ ] No Phase 1 rollbacks needed
 - [ ] Production running smoothly
@@ -775,8 +861,10 @@ Day 7: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Edit `bot/config.py`**
+
   ```python
   # Add at end of file:
 
@@ -792,7 +880,7 @@ Day 7: _______________
   PREDICTION_COOLDOWN_MINUTES: int = 5       # Min time between predictions
   MIN_PLAYERS_FOR_PREDICTION: int = 6        # Minimum players for prediction
   MIN_GUID_COVERAGE: float = 0.5             # 50% must have linked GUIDs
-  ```
+  ```python
 
 - [ ] Test: Bot starts with new config
 - [ ] Commit config changes
@@ -806,8 +894,10 @@ Day 7: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Edit `bot/services/voice_session_service.py` `__init__()`**
+
   ```python
   def __init__(self, bot, config, db_adapter):
       # ... existing code ...
@@ -822,12 +912,13 @@ Day 7: _______________
       self.last_split_time: Optional[datetime] = None
 
       self.prediction_cooldown_minutes: int = config.PREDICTION_COOLDOWN_MINUTES
-  ```
+  ```text
 
 - [ ] Add imports at top:
+
   ```python
   from typing import Dict, Set, Optional, List
-  ```
+  ```python
 
 **Completion:** [ ] Done
 
@@ -837,7 +928,8 @@ Day 7: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Add method to `voice_session_service.py`** (Copy from Opus guide lines 352-425)
 - [ ] Test detection logic with print statements
 - [ ] Handle edge cases:
@@ -847,7 +939,9 @@ Day 7: _______________
   - [ ] Unbalanced teams (>1 player difference - return None)
 
 **Test Cases:**
-```
+
+```text
+
 Test 1: 6 players split 3+3
 Expected: Detects split, format "3v3"
 Result: _______________
@@ -867,7 +961,8 @@ Result: _______________
 Test 5: 4 players split 2+2
 Expected: No split (<6 minimum)
 Result: _______________
-```
+
+```python
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -878,13 +973,15 @@ Result: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Add method to `voice_session_service.py`** (Copy from Opus guide lines 430-462)
 - [ ] Test with real Discord IDs from player_links table
 - [ ] Verify query works with PostgreSQL
 - [ ] Handle case where no GUIDs found
 
 **Test Query:**
+
 ```sql
 -- Verify player_links table has data:
 SELECT COUNT(*) FROM player_links;
@@ -894,14 +991,17 @@ SELECT COUNT(*) FROM player_links;
 SELECT discord_id, player_guid
 FROM player_links
 WHERE discord_id IN (123456789012);  -- Replace with real ID
-```
+```text
 
 **Testing Notes:**
-```
+
+```text
+
 Total player_links: _______________
 Test Discord ID: _______________
 Found GUID: _______________
-```
+
+```sql
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -912,9 +1012,11 @@ Found GUID: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Add `_check_for_team_split()` method** (Copy from Opus guide lines 476-502)
 - [ ] **Update `handle_voice_state_change()` method:**
+
   ```python
   async def handle_voice_state_change(self, member, before, after):
       # ... existing session detection logic ...
@@ -922,9 +1024,10 @@ Found GUID: _______________
       # NEW: Check for team split (only during active session)
       if self.session_active and self.config.ENABLE_TEAM_SPLIT_DETECTION:
           await self._check_for_team_split()
-  ```
+  ```text
 
 - [ ] **Add placeholder for prediction trigger:**
+
   ```python
   async def _trigger_match_prediction(self, split_data):
       """Trigger prediction (Phase 3)"""
@@ -933,7 +1036,7 @@ Found GUID: _______________
       logger.info(f"   Team B: {len(split_data['team_b_guids'])} players")
       logger.info(f"   Confidence: {split_data['confidence']}")
       # Real prediction logic in Phase 3
-  ```
+  ```sql
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -942,54 +1045,72 @@ Found GUID: _______________
 
 ### Phase 2: Testing & Deployment
 
-#### Manual Voice Channel Testing (CRITICAL):
+#### Manual Voice Channel Testing (CRITICAL)
 
 **Test Environment Setup:**
+
 - [ ] Need 6+ Discord accounts (or friends to help)
 - [ ] All accounts join same voice channel
 - [ ] Bot running with `ENABLE_TEAM_SPLIT_DETECTION = False` (default)
 
 **Test 1: Basic Split Detection**
-```
+
+```yaml
+
 Setup: 6 players in Channel A
 Action: 3 players move to Channel B
 Expected: Bot logs team split detected
 Result: _______________
-```
+
+```text
 
 **Test 2: Unbalanced Split (Should NOT Trigger)**
-```
+
+```yaml
+
 Setup: 6 players in Channel A
 Action: 5 players move to Channel B (1 stays)
 Expected: No split detected (too unbalanced)
 Result: _______________
-```
+
+```text
 
 **Test 3: Too Few Players (Should NOT Trigger)**
-```
+
+```yaml
+
 Setup: 4 players in Channel A
 Action: 2 players move to Channel B
 Expected: No split detected (<6 minimum)
 Result: _______________
-```
+
+```text
 
 **Test 4: Multiple Channels (Should NOT Trigger)**
-```
+
+```yaml
+
 Setup: 4 in Channel A, 4 in Channel B, 4 in Channel C
 Expected: No split detected (>2 channels)
 Result: _______________
-```
+
+```text
 
 **Test 5: Players Return (Should Reset)**
-```
+
+```yaml
+
 Setup: Split detected (3+3)
 Action: All players return to Channel A
 Expected: Split reset, can detect again
 Result: _______________
-```
+
+```text
 
 **Test 6: Cooldown Check**
-```
+
+```yaml
+
 Setup: Split detected at 12:00
 Action: Players merge and split again at 12:02
 Expected: No new detection (within 5 min cooldown)
@@ -998,9 +1119,11 @@ Result: _______________
 Action: Players split again at 12:06
 Expected: New detection (outside cooldown)
 Result: _______________
-```
 
-#### Test Server Deployment (48 hours):
+```text
+
+#### Test Server Deployment (48 hours)
+
 - [ ] Deploy to test server
 - [ ] Enable flag: `ENABLE_TEAM_SPLIT_DETECTION = True`
 - [ ] Monitor logs for false positives
@@ -1009,39 +1132,50 @@ Result: _______________
 - [ ] Check GUID resolution works
 
 **Test Server Notes:**
-```
+
+```text
+
 False Positives: _______________
 GUID Coverage: _______________
 Performance Impact: _______________
 Issues: _______________
-```
 
-#### Production Deployment:
+```text
+
+#### Production Deployment
+
 - [ ] **Deploy code with flag OFF**
+
   ```bash
   git add bot/services/voice_session_service.py bot/config.py
   git commit -m "Phase 2: Add team split detection (disabled by default)"
   git push
-  ```
+  ```text
 
 - [ ] Deploy to production
 - [ ] Monitor for 24 hours (flag still OFF)
 - [ ] **Enable flag in production config**
+
   ```python
   ENABLE_TEAM_SPLIT_DETECTION = True
-  ```
+  ```text
+
 - [ ] Restart bot
 - [ ] Monitor logs for team split events
 
 **Production Deployment:**
-```
+
+```text
+
 Code Deployed: _______________
 Flag Enabled: _______________
 First Split Detected: _______________
 Issues: _______________
-```
 
-### Phase 2 Success Criteria:
+```python
+
+### Phase 2 Success Criteria
+
 - [ ] ✅ Team splits detected accurately
 - [ ] ✅ No false positives (splits when none occurred)
 - [ ] ✅ GUID resolution works for 50%+ of players
@@ -1064,6 +1198,7 @@ Issues: _______________
 **Goal:** Build the brain that predicts match outcomes
 
 **Prerequisites:**
+
 - [ ] Phase 2 completed and stable for 1 week
 - [ ] Team splits being detected correctly
 - [ ] No false positives in logs
@@ -1072,7 +1207,8 @@ Issues: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Create `bot/services/prediction_engine.py`**
 - [ ] Copy base structure from Opus guide (lines 514-840)
 - [ ] Implement core `predict_match()` method
@@ -1081,6 +1217,7 @@ Issues: _______________
 - [ ] Implement `_generate_key_insight()` helper
 
 **Test with Stub Data:**
+
 ```python
 # Test script
 import asyncio
@@ -1109,16 +1246,19 @@ async def test():
     await db.close()
 
 asyncio.run(test())
-```
+```text
 
 **Testing Notes:**
-```
+
+```text
+
 Test Run 1:
 Team A Prob: _______________
 Team B Prob: _______________
 Confidence: _______________
 Errors: _______________
-```
+
+```sql
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -1129,7 +1269,8 @@ Errors: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Implement `_analyze_head_to_head()` method**
 - [ ] Query sessions with lineup overlap >50%
 - [ ] Match teams to historical data
@@ -1137,6 +1278,7 @@ Errors: _______________
 - [ ] Return score (0-1, where >0.5 = Team A favored)
 
 **Test Query:**
+
 ```sql
 -- Verify we have historical session data:
 SELECT DATE(round_date) as session_date, COUNT(DISTINCT player_guid) as players
@@ -1145,10 +1287,12 @@ WHERE round_date > '2025-10-01'
 GROUP BY DATE(round_date)
 ORDER BY session_date DESC
 LIMIT 10;
-```
+```text
 
 **Testing Notes:**
-```
+
+```text
+
 Historical Sessions Available: _______________
 Test Team A: _______________
 Test Team B: _______________
@@ -1156,7 +1300,8 @@ H2H Matches Found: _______________
 Team A Wins: _______________
 Team B Wins: _______________
 H2H Score: _______________
-```
+
+```yaml
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -1167,7 +1312,8 @@ H2H Score: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Implement `_analyze_recent_form()` method**
 - [ ] Query last 5 sessions for each team
 - [ ] Calculate win rate for each team
@@ -1175,13 +1321,16 @@ H2H Score: _______________
 - [ ] Return score (>0.5 = Team A has better form)
 
 **Testing Notes:**
-```
+
+```text
+
 Team A Recent Sessions: _______________
 Team A Win Rate: _______________
 Team B Recent Sessions: _______________
 Team B Win Rate: _______________
 Form Score: _______________
-```
+
+```python
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -1192,7 +1341,8 @@ Form Score: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Implement `_analyze_map_performance()` method**
 - [ ] Query map-specific stats for each team
 - [ ] Calculate win rate on specific map
@@ -1209,7 +1359,8 @@ Form Score: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Implement `_analyze_substitution_impact()` method**
 - [ ] Identify "regular" lineup for each team
 - [ ] Check if current lineup has substitutes
@@ -1225,8 +1376,10 @@ Form Score: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Create embed formatting function in `voice_session_service.py`:**
+
   ```python
   async def _post_prediction_embed(self, prediction: Dict, split_data: Dict):
       """Post prediction to Discord channel"""
@@ -1306,7 +1459,7 @@ Form Score: _______________
 
       # Return names in order
       return [guid_to_name.get(guid, f"Player {i+1}") for i, guid in enumerate(guids)]
-  ```
+  ```python
 
 - [ ] Test embed formatting
 - [ ] Verify colors display correctly
@@ -1321,8 +1474,10 @@ Form Score: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Update `_trigger_match_prediction()` in `voice_session_service.py`:**
+
   ```python
   async def _trigger_match_prediction(self, split_data: Dict):
       """Trigger match prediction when team split detected"""
@@ -1350,7 +1505,7 @@ Form Score: _______________
       except Exception as e:
           logger.error(f"Prediction failed: {e}", exc_info=True)
           # Don't crash bot if prediction fails
-  ```
+  ```sql
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -1359,16 +1514,19 @@ Form Score: _______________
 
 ### Phase 3: Testing & Deployment
 
-#### Historical Accuracy Testing (CRITICAL):
+#### Historical Accuracy Testing (CRITICAL)
 
 **Test Procedure:**
+
 1. Select 10 past sessions with known outcomes
 2. Run predictions retroactively
 3. Compare predicted winner vs actual winner
 4. Calculate accuracy
 
 **Test Template:**
-```
+
+```text
+
 Session 1: 2025-11-15
 Team A: [player1, player2, player3]
 Team B: [player4, player5, player6]
@@ -1378,22 +1536,28 @@ Correct: [ ] YES [ ] NO
 
 Session 2: 2025-11-16
 ...
-```
+
+```text
 
 **Accuracy Calculation:**
-```
+
+```text
+
 Total Tests: 10
 Correct: _______________
 Accuracy: _____% (target >50%)
-```
+
+```text
 
 **If Accuracy <50%:**
+
 - [ ] Review prediction logic
 - [ ] Check data quality (are historical wins recorded?)
 - [ ] Adjust weights (try H2H_WEIGHT = 0.5, others lower)
 - [ ] Retest
 
-#### Test Server Deployment (72 hours):
+#### Test Server Deployment (72 hours)
+
 - [ ] Deploy code with flag OFF
 - [ ] Enable flag: `ENABLE_MATCH_PREDICTIONS = True`
 - [ ] Manually trigger prediction (simulate split)
@@ -1401,43 +1565,54 @@ Accuracy: _____% (target >50%)
 - [ ] Monitor for 3 days with live sessions
 
 **Test Server Results:**
-```
+
+```text
+
 Predictions Posted: _______________
 Accuracy (if outcomes known): _______________
 Performance (time to predict): _______________
 Issues: _______________
-```
 
-#### Production Deployment:
+```text
+
+#### Production Deployment
+
 - [ ] **Deploy with flag OFF**
+
   ```bash
   git add bot/services/prediction_engine.py \
          bot/services/voice_session_service.py
   git commit -m "Phase 3: Add prediction engine (disabled by default)"
   git push
-  ```
+  ```text
 
 - [ ] Deploy to production
 - [ ] Monitor for 24 hours (no predictions yet)
 - [ ] **Enable flag:**
+
   ```python
   ENABLE_MATCH_PREDICTIONS = True
-  ```
+  ```text
+
 - [ ] Restart bot
 - [ ] Wait for first team split
 - [ ] Verify prediction posts
 
 **First Production Prediction:**
-```
+
+```yaml
+
 Date: _______________
 Team Split: _______________
 Prediction Posted: _______________
 Team A Prob: _______________
 Team B Prob: _______________
 Confidence: _______________
-```
 
-### Phase 3 Success Criteria:
+```sql
+
+### Phase 3 Success Criteria
+
 - [ ] ✅ Predictions posted automatically on team splits
 - [ ] ✅ Historical accuracy >50%
 - [ ] ✅ Prediction generation <5 seconds
@@ -1460,6 +1635,7 @@ Confidence: _______________
 **Goal:** Track predictions and update with actual results
 
 **Prerequisites:**
+
 - [ ] Phase 3 completed and stable for 2 weeks
 - [ ] Predictions posting correctly
 - [ ] Accuracy being validated manually
@@ -1468,34 +1644,41 @@ Confidence: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Connect to PostgreSQL:**
+
   ```bash
   PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
-  ```
+  ```sql
 
 - [ ] **Run table creation SQL** (Copy from Opus guide lines 851-917)
+
   ```sql
   -- Run each CREATE TABLE statement
   -- Verify with \dt
-  ```
+  ```text
 
 - [ ] **Verify tables created:**
+
   ```sql
   \dt  -- Should show all 4 new tables
   \d lineup_performance
   \d head_to_head_matchups
   \d map_performance
   \d match_predictions
-  ```
+  ```text
 
 **Tables Created:**
-```
+
+```text
+
 ✓ lineup_performance: [ ] YES
 ✓ head_to_head_matchups: [ ] YES
 ✓ map_performance: [ ] YES
 ✓ match_predictions: [ ] YES
-```
+
+```sql
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -1506,8 +1689,10 @@ Confidence: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Update `_trigger_match_prediction()` to store prediction:**
+
   ```python
   async def _trigger_match_prediction(self, split_data: Dict):
       # ... existing prediction code ...
@@ -1557,19 +1742,23 @@ Confidence: _______________
       logger.info(f"Stored prediction #{prediction_id}")
 
       return prediction_id
-  ```
+  ```text
 
 - [ ] Test: Trigger prediction, verify row in database
+
   ```sql
   SELECT * FROM match_predictions ORDER BY id DESC LIMIT 1;
-  ```
+  ```text
 
 **Testing Notes:**
-```
+
+```text
+
 Prediction ID: _______________
 Stored Correctly: [ ] YES
 Data Integrity: [ ] OK
-```
+
+```python
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -1580,8 +1769,10 @@ Data Integrity: [ ] OK
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Create method in `voice_session_service.py`:**
+
   ```python
   async def update_prediction_with_result(self, session_date: str, winner: str, score_a: int, score_b: int):
       """
@@ -1620,7 +1811,7 @@ Data Integrity: [ ] OK
       else:
           logger.warning(f"No prediction found for session {session_date}")
           return None
-  ```
+  ```python
 
 - [ ] **Hook into SSH import pipeline** (find where R2 is processed)
   - [ ] Identify where round outcomes are determined
@@ -1636,8 +1827,10 @@ Data Integrity: [ ] OK
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Create result embed:**
+
   ```python
   async def post_prediction_result(self, session_date: str, winner: str, score_a: int, score_b: int):
       """Post prediction result to Discord"""
@@ -1690,7 +1883,7 @@ Data Integrity: [ ] OK
       channel = self.bot.get_channel(self.config.stats_channel_id)
       if channel:
           await channel.send(embed=embed)
-  ```
+  ```yaml
 
 - [ ] Test with historical session
 
@@ -1703,8 +1896,10 @@ Data Integrity: [ ] OK
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Create accuracy query method:**
+
   ```python
   async def get_prediction_accuracy(self) -> Dict:
       """Get overall prediction accuracy stats"""
@@ -1732,9 +1927,10 @@ Data Integrity: [ ] OK
           }
 
       return {'total_predictions': 0, 'overall_accuracy': 0}
-  ```
+  ```text
 
 - [ ] Add command to display accuracy:
+
   ```python
   # In a cog:
   @commands.command()
@@ -1761,7 +1957,7 @@ Data Integrity: [ ] OK
       )
 
       await ctx.send(embed=embed)
-  ```
+  ```python
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -1770,7 +1966,8 @@ Data Integrity: [ ] OK
 
 ### Phase 4: Testing & Deployment
 
-#### Testing:
+#### Testing
+
 - [ ] Import historical session
 - [ ] Verify prediction updated
 - [ ] Verify result embed posted
@@ -1778,21 +1975,26 @@ Data Integrity: [ ] OK
 - [ ] Test !prediction_accuracy command
 
 **Testing Notes:**
-```
+
+```text
+
 Test Session: _______________
 Prediction Updated: [ ] YES
 Result Posted: [ ] YES
 Accuracy Calculated: [ ] YES
 Issues: _______________
-```
 
-#### Production Deployment:
+```yaml
+
+#### Production Deployment
+
 - [ ] Deploy database table creation
 - [ ] Deploy result tracking code
 - [ ] Enable flag: `ENABLE_LIVE_SCORING = True`
 - [ ] Monitor next session
 
-### Phase 4 Success Criteria:
+### Phase 4 Success Criteria
+
 - [ ] ✅ Predictions stored in database
 - [ ] ✅ Results auto-updated after matches
 - [ ] ✅ Result embeds post correctly
@@ -1815,6 +2017,7 @@ Issues: _______________
 **Goal:** Optimize and improve based on real data
 
 **Prerequisites:**
+
 - [ ] Phase 4 completed
 - [ ] 20+ predictions with results available
 - [ ] System stable
@@ -1823,8 +2026,10 @@ Issues: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Run accuracy reports:**
+
   ```sql
   -- Overall accuracy
   SELECT
@@ -1852,10 +2057,12 @@ Issues: _______________
   FROM match_predictions
   WHERE actual_winner IS NOT NULL
   GROUP BY h2h_strength;
-  ```
+  ```text
 
 **Analysis Results:**
-```
+
+```text
+
 Overall Accuracy: _____% (target >60%)
 High Confidence Accuracy: _____% (target >70%)
 Medium Confidence Accuracy: _____%
@@ -1864,7 +2071,8 @@ Low Confidence Accuracy: _____%
 H2H Factor Performance: _____%
 Form Factor Performance: _____%
 Map Factor Performance: _____%
-```
+
+```python
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -1875,7 +2083,8 @@ Map Factor Performance: _____%
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **If overall accuracy <60%, tune weights:**
   - [ ] Try increasing H2H_WEIGHT (currently 0.40 → 0.50)
   - [ ] Try decreasing less reliable factors
@@ -1883,6 +2092,7 @@ Map Factor Performance: _____%
   - [ ] Compare new accuracy vs old
 
 - [ ] **Update weights in `prediction_engine.py`:**
+
   ```python
   # Current weights:
   H2H_WEIGHT = 0.40
@@ -1895,15 +2105,18 @@ Map Factor Performance: _____%
   FORM_WEIGHT = 0.25
   MAP_WEIGHT = 0.15
   SUB_WEIGHT = 0.10
-  ```
+  ```text
 
 **Tuning Results:**
-```
-Original Accuracy: _____%
-New Weights: H2H=___ FORM=___ MAP=___ SUB=___
+
+```text
+
+Original Accuracy: **_**%
+New Weights: H2H=**_ FORM=**_ MAP=___SUB=___
 New Accuracy: _____%
 Improvement: _____% points
-```
+
+```yaml
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -1914,12 +2127,14 @@ Improvement: _____% points
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Check prediction generation time:**
+
   ```bash
   grep "Prediction generated in" bot_logs/bot.log | tail -20
   # Average should be <2 seconds
-  ```
+  ```text
 
 - [ ] **If slow (>5s), optimize:**
   - [ ] Add query indexes (already created in Phase 4)
@@ -1928,18 +2143,22 @@ Improvement: _____% points
   - [ ] Consider denormalization if needed
 
 - [ ] **Check memory usage:**
+
   ```bash
   ps aux | grep python | awk '{print $6/1024 " MB"}'
   # Should be <250 MB
-  ```
+  ```text
 
 **Performance Metrics:**
-```
+
+```text
+
 Avg Prediction Time: _____ seconds (target <2s)
 Memory Usage: _____ MB (target <250 MB)
 Database QPS: _____ (target <20 QPS)
 Optimizations Made: _______________
-```
+
+```sql
 
 **Completion:** [ ] Done
 **Time Spent:** _____ hours
@@ -1950,8 +2169,10 @@ Optimizations Made: _______________
 
 **Status:** 🔴 NOT STARTED
 
-#### Tasks:
+#### Tasks
+
 - [ ] **Update README with new features:**
+
   ```markdown
   ## Competitive Analytics Features
 
@@ -1968,7 +2189,7 @@ Optimizations Made: _______________
   - `ENABLE_TEAM_SPLIT_DETECTION` - Enable/disable team detection
   - `ENABLE_MATCH_PREDICTIONS` - Enable/disable predictions
   - `ENABLE_LIVE_SCORING` - Enable/disable live result tracking
-  ```
+  ```yaml
 
 - [ ] **Create user guide for community:**
   - [ ] Explain how predictions work
@@ -1983,7 +2204,8 @@ Optimizations Made: _______________
 
 ### Phase 5: Final Validation
 
-#### Final Checklist:
+#### Final Checklist
+
 - [ ] Overall accuracy >60%
 - [ ] High-confidence accuracy >70%
 - [ ] Prediction time <2 seconds
@@ -1993,17 +2215,21 @@ Optimizations Made: _______________
 - [ ] Documentation complete
 
 **Final Stats:**
-```
+
+```text
+
 Total Predictions: _______________
-Overall Accuracy: _____%
-High Confidence Accuracy: _____%
+Overall Accuracy: _****%
+High Confidence Accuracy: _****%
 Avg Prediction Time: _____ seconds
 Memory Usage: _____ MB
 Uptime: _____ days
-User Reactions: 👍_____ 👎_____
-```
+User Reactions: 👍****_ 👎****_
 
-### Phase 5 Success Criteria:
+```yaml
+
+### Phase 5 Success Criteria
+
 - [ ] ✅ Accuracy >60% overall
 - [ ] ✅ High-confidence predictions >70% accurate
 - [ ] ✅ Performance optimized (<2s predictions)
@@ -2024,31 +2250,38 @@ User Reactions: 👍_____ 👎_____
 **Final Completion Date:** _______________
 **Total Time Spent:** _____ / 56 hours
 
-### Final Metrics:
+### Final Metrics
 
 **Technical:**
+
 - [ ] All features working as designed
 - [ ] No crashes for 30+ days
 - [ ] Performance within targets
 - [ ] Code reviewed and documented
 
 **User Experience:**
+
 - [ ] Predictions posting automatically
 - [ ] Results tracking correctly
 - [ ] Community engagement positive
 - [ ] Feature adds value
 
 **Accuracy:**
+
 - Overall: _____%
 - High Confidence: _____%
 - Total Predictions: _____
 
-### Lessons Learned:
-```
-[Add notes about what went well, what was challenging, what you'd do differently next time]
-```
+### Lessons Learned
 
-### Future Enhancements (Backlog):
+```text
+
+[Add notes about what went well, what was challenging, what you'd do differently next time]
+
+```yaml
+
+### Future Enhancements (Backlog)
+
 - [ ] Add map-specific prediction improvements
 - [ ] Add player performance trends
 - [ ] Add season-long leaderboards
@@ -2059,35 +2292,40 @@ User Reactions: 👍_____ 👎_____
 
 ## 🚨 EMERGENCY ROLLBACK PROCEDURES
 
-### When to Rollback:
+### When to Rollback
 
 **Phase 1 Rollback Triggers:**
+
 - !team command fails
 - Database connection errors
 - Response time >5 seconds
 - Bot crashes on team detection
 
 **Phase 2 Rollback Triggers:**
+
 - False positives (team split when none occurred)
 - Voice state updates lag >500ms
 - Bot crashes on voice event
 
 **Phase 3 Rollback Triggers:**
+
 - Prediction generation >10 seconds
 - Prediction accuracy <30% after 20 matches
 - Bot crashes on prediction
 - Database errors during prediction
 
 **Phase 4 Rollback Triggers:**
+
 - Results not updating
 - Duplicate result posts
 - Database corruption
 
 ---
 
-### Rollback Procedures:
+### Rollback Procedures
 
 #### Level 1: Feature Flag Disable (2 minutes)
+
 ```bash
 # Edit config:
 nano bot/config.py
@@ -2101,21 +2339,25 @@ ENABLE_LIVE_SCORING = False
 screen -r slomix-bot
 # Ctrl+C, then:
 ./start_bot.sh
-```
+```text
 
 **Rollback Log:**
-```
+
+```yaml
+
 Date: _______________
 Phase Rolled Back: _______________
 Reason: _______________
 Flag Disabled: _______________
 Bot Restarted: _______________
 Issue Resolved: [ ] YES [ ] NO
-```
+
+```bash
 
 ---
 
 #### Level 2: Git Revert (10 minutes)
+
 ```bash
 cd /home/samba/share/slomix_discord
 
@@ -2136,20 +2378,24 @@ screen -r slomix-bot
 # Ctrl+C
 git pull
 ./start_bot.sh
-```
+```text
 
 **Rollback Log:**
-```
+
+```yaml
+
 Date: _______________
 Reverted to Commit: _______________
 Reason: _______________
 Bot Restarted: _______________
 Verified Working: [ ] YES [ ] NO
-```
+
+```yaml
 
 ---
 
 #### Level 3: Database Rollback (30-60 minutes)
+
 ```bash
 # CRITICAL: Take snapshot first!
 pg_dump -h localhost -U etlegacy_user -d etlegacy > \
@@ -2180,17 +2426,20 @@ PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
 
 # Verify:
 PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -c "\dt"
-```
+```text
 
 **Rollback Log:**
-```
+
+```yaml
+
 Date: _______________
 Snapshot Taken: _______________
 Backup Used: _______________
 Data Loss: _______________
 Bot Restarted: _______________
 Database OK: [ ] YES [ ] NO
-```
+
+```yaml
 
 ---
 
@@ -2198,7 +2447,8 @@ Database OK: [ ] YES [ ] NO
 
 **Last Updated:** _______________
 
-### Hours Logged:
+### Hours Logged
+
 - Phase 0: _____ / 2 hours
 - Phase 1: _____ / 12 hours
 - Phase 2: _____ / 8 hours
@@ -2207,7 +2457,8 @@ Database OK: [ ] YES [ ] NO
 - Phase 5: _____ / 7 hours
 - **TOTAL: _____ / 56 hours**
 
-### Completion Percentages:
+### Completion Percentages
+
 - Phase 0: ____%
 - Phase 1: ____%
 - Phase 2: ____%
@@ -2216,14 +2467,20 @@ Database OK: [ ] YES [ ] NO
 - Phase 5: ____%
 - **OVERALL: ____%**
 
-### Current Blockers:
-```
-[List any current blockers preventing progress]
-```
+### Current Blockers
 
-### Next Work Session Goals:
-```
+```text
+
+[List any current blockers preventing progress]
+
+```text
+
+### Next Work Session Goals
+
+```text
+
 [Plan for next work session]
+
 ```
 
 ---

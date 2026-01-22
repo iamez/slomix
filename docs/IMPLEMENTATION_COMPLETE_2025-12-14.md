@@ -11,37 +11,48 @@
 ## What Was Implemented
 
 ### ✅ Phase 1: RCON Command Injection Fix
+
 **File:** `bot/cogs/server_control.py:593`
+
 - **Before:** `rcon.send_command(f'map {map_name}')` - vulnerable to injection
 - **After:** Map names are sanitized using `sanitize_rcon_input()` before RCON execution
 - **Protection:** Blocks injection attacks like `!map_change goldrush; quit`
 
 ### ✅ Phase 2: Database Schema Created
+
 **Tables:** `user_permissions`, `permission_audit_log`
+
 - User ID whitelist with 3 permission tiers: **Root → Admin → Moderator**
 - Full audit trail of all permission changes
 - **Your account (seareal)** set as ROOT user
 
 ### ✅ Phase 3: Permission Decorators
+
 **File:** `bot/core/checks.py`
+
 - **`@is_owner()`** - Root-only commands (you only)
 - **`@is_admin()`** - Admin tier and above
 - **`@is_moderator()`** - Moderator tier and above
 - Database-backed checks (immune to Discord role exploits)
 
 ### ✅ Phase 4: Configuration Updated
+
 **Files:** `bot/config.py`, `.env`, `.env.example`
+
 - Added `OWNER_USER_ID=231165917604741121` (your Discord ID)
 - Bot recognizes you as root user on startup
 
 ### ✅ Phase 5: Permission Management Commands
+
 **File:** `bot/cogs/permission_management_cog.py` (NEW)
+
 - `!admin_add @user <tier> [reason]` - Add users to whitelist (root-only)
 - `!admin_remove @user [reason]` - Remove users (root-only)
 - `!admin_list` - View all permissions (admin+)
 - `!admin_audit [limit]` - View change history (root-only)
 
 ### ✅ Phase 6: Command Migration
+
 **23 commands migrated to new permission system:**
 
 | Tier | Commands | Files |
@@ -56,7 +67,7 @@
 
 ### User Tiers
 
-```
+```text
 ROOT (seareal only)
   ├─ Full control of bot
   ├─ Permission management (!admin_add, !admin_remove)
@@ -73,11 +84,12 @@ MODERATOR (managed by root)
   ├─ Analytics (!enable, !disable, !recalculate)
   ├─ Diagnostics (!weapon_diag, !automation_status)
   └─ Read-only operations
-```
+```yaml
 
 ### Security Model
 
 **Before (Channel-Based):**
+
 - ❌ Anyone in admin channel = instant admin
 - ❌ No user verification
 - ❌ No permission tiers
@@ -85,6 +97,7 @@ MODERATOR (managed by root)
 - ❌ Vulnerable to Discord permission misconfiguration
 
 **After (User ID Whitelist):**
+
 - ✅ Only whitelisted Discord user IDs can run commands
 - ✅ 3-tier permission system (root/admin/moderator)
 - ✅ Full audit log of all changes
@@ -99,13 +112,16 @@ MODERATOR (managed by root)
 
 1. **Start the bot** (it should load without errors)
 2. **Run in Discord:**
-   ```
+
+   ```text
    !admin_add @username admin For managing the server
-   ```
+   ```text
+
 3. **Verify:**
-   ```
+
+   ```text
    !admin_list
-   ```
+   ```text
 
 ### Example Usage
 
@@ -124,43 +140,57 @@ MODERATOR (managed by root)
 
 # View audit log
 !admin_audit 20
-```
+```text
 
 ### Testing the System
 
 1. **Test root commands (you):**
-   ```
+
+   ```text
+
    !admin_list          # Should work
    !admin_add @user moderator test  # Should work
    !reload              # Should work (ROOT only!)
-   ```
+
+   ```text
 
 2. **Test admin commands (added users):**
-   ```
+
+   ```text
+
    !server_restart      # Admin should work
    !admin_add @user moderator test  # Should FAIL (root-only)
-   ```
+
+   ```text
 
 3. **Test moderator commands:**
-   ```
+
+   ```text
+
    !enable              # Moderator should work
    !server_restart      # Should FAIL (admin-only)
-   ```
+
+   ```text
 
 4. **Test unauthorized users:**
-   ```
+
+   ```text
+
    !server_restart      # Should get "requires admin permissions"
-   ```
+
+   ```python
 
 ---
 
 ## Files Modified
 
 ### Created (2 files)
+
 - `migrations/add_user_permissions.sql`
 - `bot/cogs/permission_management_cog.py`
 
 ### Modified (13 files)
+
 - `bot/cogs/server_control.py` - RCON fix + decorators
 - `bot/core/checks.py` - New decorators
 - `bot/config.py` - Root user ID
@@ -175,6 +205,7 @@ MODERATOR (managed by root)
 - `bot/cogs/synergy_analytics.py` - Updated decorators
 
 ### Backups Created
+
 - `backups/security_update_2025-12-14/`
   - server_control.py.backup
   - checks.py.backup
@@ -195,15 +226,18 @@ python3 -m bot.ultimate_bot
 
 # Or use !reload command (if bot is running):
 !reload
-```
+```text
 
 **Expected startup log:**
-```
+
+```text
+
 ✅ Bot root user: 231165917604741121
 ✅ Permission Management Cog loaded (admin_add, admin_remove, admin_list, admin_audit)
 ✅ Admin Cog loaded (11 admin commands)
 ...
-```
+
+```yaml
 
 ---
 
@@ -219,7 +253,7 @@ PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
 # id | discord_id         | username | tier | added_at | added_by | reason
 # ---|--------------------|----------|------|----------|----------|--------
 # 1  | 231165917604741121 | seareal  | root | ...      | ...      | System initialization
-```
+```yaml
 
 ---
 
@@ -244,10 +278,13 @@ PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
 ### Recommended Actions
 
 1. **Add 2-3 trusted admins**
-   ```
+
+   ```text
+
    !admin_add @user1 admin Server administrator
    !admin_add @user2 moderator Community helper
-   ```
+
+   ```text
 
 2. **Test all permission tiers**
    - Have admin try `!server_restart` (should work)
@@ -256,9 +293,12 @@ PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
    - Have moderator try `!server_restart` (should fail - admin only)
 
 3. **Monitor audit log**
-   ```
+
+   ```text
+
    !admin_audit 10
-   ```
+
+   ```sql
 
 4. **Update documentation**
    - Announce new permission system to Discord server
@@ -278,11 +318,13 @@ PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
 ### Bot won't start
 
 **Check logs:**
+
 ```bash
 tail -50 logs/bot.log
-```
+```python
 
 **Common issues:**
+
 - Database migration not run → Run `migrations/add_user_permissions.sql`
 - OWNER_USER_ID not set → Add to `.env`
 - Import errors → Check all cog files exist
@@ -290,11 +332,15 @@ tail -50 logs/bot.log
 ### Commands not working
 
 **Verify permissions:**
-```
+
+```text
+
 !admin_list
-```
+
+```text
 
 **Check user tier:**
+
 - Root commands require you (seareal)
 - Admin commands require admin or root tier
 - Moderator commands require moderator, admin, or root tier
@@ -302,14 +348,16 @@ tail -50 logs/bot.log
 ### Database errors
 
 **Verify tables exist:**
+
 ```bash
 PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -c "\dt user_permissions"
-```
+```text
 
 **Rerun migration if needed:**
+
 ```bash
 PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -f migrations/add_user_permissions.sql
-```
+```yaml
 
 ---
 
@@ -319,14 +367,17 @@ If something goes wrong:
 
 1. **Stop the bot**
 2. **Restore backups:**
+
    ```bash
    cp backups/security_update_2025-12-14/*.backup bot/cogs/
    cp backups/security_update_2025-12-14/checks.py.backup bot/core/checks.py
    cp backups/security_update_2025-12-14/config.py.backup bot/config.py
-   ```
+   ```text
+
 3. **Restart bot**
 
 **Database rollback (OPTIONAL):**
+
 ```bash
 # Only if you want to remove new tables:
 PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -c "DROP TABLE permission_audit_log; DROP TABLE user_permissions;"

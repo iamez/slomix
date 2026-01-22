@@ -1,4 +1,5 @@
 # Session Documentation: EndStats Feature Implementation
+
 **Date:** 2026-01-14
 **Duration:** ~2 hours
 **Focus:** Webhook notification system review + EndStats file processing feature
@@ -6,6 +7,7 @@
 ---
 
 ## Table of Contents
+
 1. [Session Overview](#session-overview)
 2. [Part 1: Webhook Notification System Review](#part-1-webhook-notification-system-review)
 3. [Part 2: EndStats Feature Implementation](#part-2-endstats-feature-implementation)
@@ -23,6 +25,7 @@
 ## Session Overview
 
 ### What We Accomplished
+
 1. **Reviewed** the existing webhook notification system (VPS → Discord → Bot)
 2. **Implemented** complete EndStats processing feature:
    - Parse `-endstats.txt` files from `endstats.lua`
@@ -32,11 +35,14 @@
 4. **Deployed** updates to both VPS and local bot
 
 ### The Problem We Solved
+
 The game server generates two types of stats files when a round ends:
+
 - `c0rnp0rn7.lua` → `YYYY-MM-DD-HHMMSS-mapname-round-N.txt` (player statistics)
 - `endstats.lua` → `YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt` (awards & VS stats)
 
 Previously, the bot only processed the main stats files. The new endstats files were being:
+
 1. Sent by VPS webhook notifier (triggering spam)
 2. Rejected by bot security validation (wrong filename pattern)
 3. Never stored or displayed
@@ -48,6 +54,7 @@ Now both file types are properly handled, stored, and displayed.
 ## Part 1: Webhook Notification System Review
 
 ### Background
+
 We had previously developed two notification approaches:
 
 | Approach | Status | Why |
@@ -56,7 +63,8 @@ We had previously developed two notification approaches:
 | **Discord Webhook** | ✅ Production | Outbound-only, no open ports needed |
 
 ### Current Architecture (Webhook Approach)
-```
+
+```python
 ┌─────────────────────┐
 │   VPS Game Server   │
 │                     │
@@ -93,10 +101,12 @@ We had previously developed two notification approaches:
 │  7. Delete trigger message
 │                     │
 └─────────────────────┘
-```
+```yaml
 
 ### Issue Found During Review
+
 The VPS webhook URL had `404 - Unknown Webhook` errors because the webhook didn't exist in Discord. User needed to:
+
 1. Create webhook in Discord server settings
 2. Copy webhook URL to VPS service config
 3. Add webhook ID to bot's whitelist in `.env`
@@ -106,24 +116,26 @@ The VPS webhook URL had `404 - Unknown Webhook` errors because the webhook didn'
 ## Part 2: EndStats Feature Implementation
 
 ### EndStats File Format
-```
+
+```text
 # Section 1: Awards (tab-separated)
-Most damage given	vid	3214
-Most damage received	vid	2717
-Best K/D ratio	bronze.	1.625
-Most playtime denied	v_kt_r	113 seconds
-Highest light weapons accuracy	SuperBoyy	50.47 percent
+Most damage given vid 3214
+Most damage received vid 2717
+Best K/D ratio bronze. 1.625
+Most playtime denied v_kt_r 113 seconds
+Highest light weapons accuracy SuperBoyy 50.47 percent
 ...
 
 # Section 2: VS Stats (tab-separated)
-carniee	4	0
-SuperBoyy	3	2
-.olz	2	1
+carniee 4 0
+SuperBoyy 3 2
+.olz 2 1
 ...
-```
+```text
 
 ### Processing Flow
-```
+
+```python
 1. Round ends on game server
    │
    ├── c0rnp0rn7.lua creates: 2026-01-14-143052-supply-round-1.txt
@@ -152,9 +164,10 @@ SuperBoyy	3	2
    │   ├── Lookup matching round by match_id
    │   ├── Store in round_awards + round_vs_stats (NEW TABLES)
    │   └── Post awards embed (NEW)
-```
+```python
 
 ### Award Categories
+
 Awards are organized into categories for the Discord embed:
 
 | Category | Example Awards |
@@ -172,9 +185,11 @@ Awards are organized into categories for the Discord embed:
 ## Files Created
 
 ### 1. `bot/endstats_parser.py`
+
 **Purpose:** Parse endstats files from `endstats.lua`
 
 **Key Components:**
+
 - `KNOWN_AWARDS` - Set of all recognized award names
 - `AWARD_CATEGORIES` - Mapping of awards to display categories
 - `EndStatsParser` class:
@@ -185,6 +200,7 @@ Awards are organized into categories for the Discord embed:
 - `validate_endstats_filename()` - Security validation function
 
 **Usage:**
+
 ```python
 from bot.endstats_parser import parse_endstats_file
 
@@ -195,12 +211,14 @@ result = parse_endstats_file("/path/to/endstats.txt")
 #     'awards': [{'name': 'Most damage', 'player': 'vid', 'value': '3214', 'numeric': 3214.0}, ...],
 #     'vs_stats': [{'player': 'carniee', 'kills': 4, 'deaths': 0}, ...]
 # }
-```
+```python
 
 ### 2. `tools/migrate_add_endstats_tables.sql`
+
 **Purpose:** Database migration for new endstats tables
 
 **Tables Created:**
+
 - `round_awards` - Stores individual awards per round
 - `round_vs_stats` - Stores player VS stats per round
 - `processed_endstats_files` - Tracks processed files (prevents duplicates)
@@ -212,6 +230,7 @@ result = parse_endstats_file("/path/to/endstats.txt")
 ### 1. `vps_scripts/stats_webhook_notify.py`
 
 **Changes:**
+
 1. Added `is_endstats_file()` helper function
 2. Updated `is_valid_stats_file()` docstring to document both formats
 3. Modified `send_discord_notification()`:
@@ -227,6 +246,7 @@ result = parse_endstats_file("/path/to/endstats.txt")
 ### 2. `bot/ultimate_bot.py`
 
 **Changes:**
+
 1. Added `_validate_endstats_filename()` method (lines 2157-2212):
    - Pattern: `YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt`
    - Same security checks as stats files (path traversal, injection, etc.)
@@ -253,6 +273,7 @@ result = parse_endstats_file("/path/to/endstats.txt")
 
 **Changes:**
 Added `publish_endstats()` method (lines 491-617):
+
 - Creates gold-colored Discord embed
 - Title: "🏆 Round N Awards - mapname"
 - Organizes awards into category fields (Combat, Skills, etc.)
@@ -263,6 +284,7 @@ Added `publish_endstats()` method (lines 491-617):
 
 **Changes:**
 Added new table definitions at end of file:
+
 - `round_awards` table
 - `round_vs_stats` table
 - `processed_endstats_files` table
@@ -272,9 +294,12 @@ Added new table definitions at end of file:
 
 **Changes:**
 Updated webhook whitelist to include new webhook ID:
-```
+
+```bash
+
 WEBHOOK_TRIGGER_WHITELIST=1449808769725890580,1460874526567956481
-```
+
+```yaml
 
 ---
 
@@ -283,6 +308,7 @@ WEBHOOK_TRIGGER_WHITELIST=1449808769725890580,1460874526567956481
 ### New Tables
 
 #### `round_awards`
+
 ```sql
 CREATE TABLE round_awards (
     id SERIAL PRIMARY KEY,
@@ -298,9 +324,10 @@ CREATE TABLE round_awards (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE
 );
-```
+```text
 
 #### `round_vs_stats`
+
 ```sql
 CREATE TABLE round_vs_stats (
     id SERIAL PRIMARY KEY,
@@ -315,9 +342,10 @@ CREATE TABLE round_vs_stats (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE
 );
-```
+```text
 
 #### `processed_endstats_files`
+
 ```sql
 CREATE TABLE processed_endstats_files (
     id SERIAL PRIMARY KEY,
@@ -328,32 +356,36 @@ CREATE TABLE processed_endstats_files (
     processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE SET NULL
 );
-```
+```text
 
 ### Migration Command
+
 ```bash
 PGPASSWORD=etlegacy_secure_2025 psql -h 192.168.64.116 -U etlegacy_user -d etlegacy \
   -f tools/migrate_add_endstats_tables.sql
-```
+```yaml
 
 ---
 
 ## Configuration Changes
 
 ### VPS Service (`/etc/systemd/system/et-stats-webhook.service`)
+
 No config changes needed - the service automatically picks up code changes on restart.
 
 ### Bot `.env`
+
 ```bash
 # Added new webhook ID to whitelist
 WEBHOOK_TRIGGER_WHITELIST=1449808769725890580,1460874526567956481
-```
+```yaml
 
 ---
 
 ## Deployment Steps
 
 ### 1. Deploy VPS Script
+
 ```bash
 # From local machine
 scp -i ~/.ssh/etlegacy_bot -P 48101 \
@@ -363,29 +395,33 @@ scp -i ~/.ssh/etlegacy_bot -P 48101 \
 # On VPS (or via SSH)
 ssh -i ~/.ssh/etlegacy_bot -p 48101 et@puran.hehe.si \
   "sudo systemctl restart et-stats-webhook"
-```
+```text
 
 ### 2. Run Database Migration
+
 ```bash
 PGPASSWORD=etlegacy_secure_2025 psql -h 192.168.64.116 -U etlegacy_user -d etlegacy \
   -f tools/migrate_add_endstats_tables.sql
-```
+```text
 
 ### 3. Restart Bot
+
 ```bash
 sudo systemctl restart etlegacy-bot
-```
+```sql
 
 ---
 
 ## Bug Fixes During Session
 
 ### Bug 1: VPS Script Missing Time Filter
+
 **Symptom:** On restart, VPS script tried to send webhooks for ALL 4114 old files from 2024
 
 **Cause:** `scan_existing_files()` had no age filter
 
 **Fix:** Added 48-hour cutoff filter:
+
 ```python
 def scan_existing_files(state: dict, stats_path: str, max_age_hours: int = 48):
     cutoff_time = datetime.now() - timedelta(hours=max_age_hours)
@@ -393,38 +429,45 @@ def scan_existing_files(state: dict, stats_path: str, max_age_hours: int = 48):
     if file_mtime < cutoff_time:
         skipped_old += 1
         continue
-```
+```text
 
 **Result:** `✅ Startup scan complete: 0 new files processed, 4114 old files skipped`
 
 ### Bug 2: Webhook ID Not in Whitelist
+
 **Symptom:** Bot logs showed `🚨 SECURITY: Unauthorized webhook 1460874526567956481`
 
 **Cause:** User created new webhook but didn't add ID to whitelist
 
 **Fix:** Updated `.env`:
-```
+
+```bash
+
 WEBHOOK_TRIGGER_WHITELIST=1449808769725890580,1460874526567956481
-```
+
+```python
 
 ### Bug 3: Startup Log Shows "Database: None"
+
 **Symptom:** Bot startup showed `📍 Database: None` when using PostgreSQL
 
 **Cause:** Code was logging `self.db_path` which is only set for SQLite
 
 **Fix:** Conditional logging based on database type:
+
 ```python
 if self.config.database_type == 'postgresql':
     logger.info(f"📍 Database: {self.config.postgres_database}@{self.config.postgres_host}")
 else:
     logger.info(f"📍 Database: {self.db_path}")
-```
+```yaml
 
 ---
 
 ## Testing & Verification
 
 ### Parser Test
+
 ```bash
 python3 -m bot.endstats_parser "2026-01-12-224606-te_escape2-round-2-endstats.txt"
 
@@ -432,41 +475,46 @@ python3 -m bot.endstats_parser "2026-01-12-224606-te_escape2-round-2-endstats.tx
 # Metadata: {'date': '2026-01-12', 'map_name': 'te_escape2', 'round_number': 2, ...}
 # Awards (23): Most damage given: vid (3214), ...
 # VS Stats (18): carniee: 4K/0D, ...
-```
+```text
 
 ### Compilation Test
+
 ```bash
 python3 -m py_compile bot/ultimate_bot.py bot/endstats_parser.py \
   bot/services/round_publisher_service.py vps_scripts/stats_webhook_notify.py
 # ✅ All files compile successfully
-```
+```text
 
 ### Database Verification
+
 ```sql
 SELECT table_name FROM information_schema.tables
 WHERE table_name IN ('round_awards', 'round_vs_stats', 'processed_endstats_files');
 -- Returns all 3 tables
-```
+```text
 
 ### VPS Service Status
+
 ```bash
 sudo systemctl status et-stats-webhook
 # Active: active (running)
 # Loaded state: 128 files previously processed
 # Scanning (last 48h)... 0 new files, 4114 old files skipped
-```
+```yaml
 
 ---
 
 ## Future Considerations
 
 ### Potential Enhancements
+
 1. **Award Leaderboards** - Query `round_awards` to show "Most 'Most damage given' awards"
 2. **VS Stats Rivalries** - Track player-vs-player statistics over time
 3. **Award Streaks** - Track consecutive rounds with same award
 4. **Session Awards Summary** - Aggregate awards across a gaming session
 
 ### Queries for Future Features
+
 ```sql
 -- Most awarded players
 SELECT player_name, award_name, COUNT(*) as times_won
@@ -483,6 +531,7 @@ ORDER BY total_kills DESC;
 ```
 
 ### Known Limitations
+
 1. **VS Stats format** - The endstats.lua VS stats section format is ambiguous (multiple entries per player). Currently storing all entries; may need aggregation.
 2. **Retry logic** - If endstats file arrives before main stats file, it shows ⏳ but doesn't auto-retry. Manual reprocessing may be needed.
 

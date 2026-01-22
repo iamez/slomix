@@ -568,23 +568,30 @@ class SessionViewHandlers:
                     # Format time_denied as MM:SS (it's in seconds)
                     td_min = int(time_denied // 60)
                     td_sec = int(time_denied % 60)
-                    
+
+                    # Calculate time percentages
+                    if time_played > 0:
+                        dead_pct = (time_dead / time_played) * 100
+                        denied_pct = ((time_denied / 60) / time_played) * 100
+                    else:
+                        dead_pct = denied_pct = 0
+
                     # Line 1: Rank + Name + Core stats
                     line1 = (
                         f"{rank_display} **{name}** • K/D:`{kd_str}` "
                         f"DMG:`{int(dmg):,}` DPM:`{int(dpm)}` "
                         f"ACC:`{acc:.1f}%` HS:`{hs}`"
                     )
-                    
+
                     # Line 2: Support + Time stats
                     line2 = (
                         f"     ↳ Rev:`{int(revives)}/{int(got_revived)}` Gibs:`{gibs}` "
                         f"TmDmg:`{int(team_dmg)}` "
-                        f"⏱️`{tp_min}:{tp_sec:02d}` 💀`{time_dead:.1f}m` ⏳`{td_min}:{td_sec:02d}`"
+                        f"⏱️`{tp_min}:{tp_sec:02d}` 💀`{time_dead:.1f}m`({dead_pct:.0f}%) ⏳`{td_min}:{td_sec:02d}`({denied_pct:.0f}%)"
                     )
-                    
+
                     player_lines.append(f"{line1}\n{line2}")
-                
+
                 embed.add_field(
                     name=field_name,
                     value='\n'.join(player_lines) if player_lines else 'No stats',
@@ -816,7 +823,14 @@ class SessionViewHandlers:
                 # Format time_denied as MM:SS (it's in seconds)
                 td_min = int(time_denied // 60)
                 td_sec = int(time_denied % 60)
-                
+
+                # Calculate percentages (time_dead and time_played in minutes, time_denied in seconds)
+                if time_played > 0:
+                    dead_pct = (time_dead / time_played) * 100
+                    denied_pct = ((time_denied / 60) / time_played) * 100
+                else:
+                    dead_pct = denied_pct = 0
+
                 # Line 1: Rank + Name + Core stats
                 line1 = (
                     f"{rank_display} **{name}** • K/D:`{kd_str}` "
@@ -828,7 +842,7 @@ class SessionViewHandlers:
                 line2 = (
                     f"     ↳ Rev:`{int(revives)}/{int(got_revived)}` Gibs:`{gibs}` "
                     f"TmDmg:`{int(team_dmg)}` "
-                    f"⏱️`{tp_min}:{tp_sec:02d}` 💀`{time_dead:.1f}m` ⏳`{td_min}:{td_sec:02d}`"
+                    f"⏱️`{tp_min}:{tp_sec:02d}` 💀`{time_dead:.1f}m`({dead_pct:.0f}%) ⏳`{td_min}:{td_sec:02d}`({denied_pct:.0f}%)"
                 )
                 
                 player_lines.append(f"{line1}\n{line2}")

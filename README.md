@@ -65,6 +65,7 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 **Status:** Fully functional, ready to enable after monitoring week (64% of project complete, 39/61 hours)
 
 **Latest Session Enhancements:**
+
 - 🏆 **Achievement System** - Player badges for medics, engineers, combat specialists, and more!
 - 🎨 **Custom Display Names** - Linked players can set personalized display names
 - 📊 **Enhanced Performance Graphs** - Exact value labels on all stat visualizations
@@ -72,6 +73,7 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 - 🎯 **Improved Session Output** - Redesigned !last_session format with achievement badges
 
 **Previous Critical Optimizations:**
+
 - ✅ **Voice-Conditional SSH Monitoring** - Only checks SSH when players in voice (massive resource savings!)
 - ✅ **SSH Monitor Startup Optimization** - Only checks last 24h on startup (not all 3,766 files)
 - ✅ **PostgreSQL Boolean Compatibility** - Fixed boolean type errors in queries
@@ -88,7 +90,7 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 - 🎯 **Zero Data Loss** - PostgreSQL transactions, rollback on error, 4,193 verified inserts
 - 🏆 **EndStats Awards** - Post-round awards with 7 categories (Combat, Skills, Teamwork, etc.)
 
-**[📊 View Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation Systems](docs/SAFETY_VALIDATION_SYSTEMS.md)** | **[ Changelog](docs/CHANGELOG.md)**
+**[📊 View Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation Systems](docs/SAFETY_VALIDATION_SYSTEMS.md)** | **[Changelog](docs/CHANGELOG.md)**
 
 ---
 
@@ -96,7 +98,7 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 
 This bot is part of a larger **SLOMIX ecosystem** for competitive ET:Legacy analytics:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                     SLOMIX ECOSYSTEM                            │
 ├─────────────────────────────────────────────────────────────────┤
@@ -115,7 +117,7 @@ This bot is part of a larger **SLOMIX ecosystem** for competitive ET:Legacy anal
 │                    │  DATABASE     │                           │
 │                    └───────────────┘                           │
 └─────────────────────────────────────────────────────────────────┘
-```
+```yaml
 
 | Project | Status | Description |
 |---------|--------|-------------|
@@ -131,7 +133,7 @@ This bot is part of a larger **SLOMIX ecosystem** for competitive ET:Legacy anal
 
 ### **Data Pipeline Overview**
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ET:Legacy Game Server (VPS)                  │
 │  /home/et/.etlegacy/legacy/gamestats/*.txt (3,694 files)       │
@@ -187,9 +189,10 @@ This bot is part of a larger **SLOMIX ecosystem** for competitive ET:Legacy anal
 │                  Discord Auto-Post (Optional)                   │
 │  Round summaries → #stats channel (if automation enabled)       │
 └─────────────────────────────────────────────────────────────────┘
-```
+```sql
 
 **Processing Speed:**
+
 - Download: ~0.5s per file
 - Parse: ~0.8s per file (Round 2: +0.3s for differential)
 - Validate: ~0.2s per file
@@ -218,7 +221,9 @@ This bot is part of a larger **SLOMIX ecosystem** for competitive ET:Legacy anal
 ### **Special Safety Features**
 
 #### **Round 2 Differential Calculation**
+
 When processing Round 2 files (team-swap rounds), the system:
+
 1. ✅ Detects Round 2 files automatically
 2. ✅ Searches for matching Round 1 file (same map, <60min gap)
 3. ✅ Rejects old Round 1 files (prevents matching wrong session)
@@ -226,30 +231,35 @@ When processing Round 2 files (team-swap rounds), the system:
 5. ✅ Produces accurate per-team performance metrics
 
 **Example:**
-```
+
+```text
 Round 1: 21:31 (etl_adlernest) - Player vid: 20 kills
 Round 2: 23:41 (etl_adlernest) - Player vid: 42 kills cumulative
          ❌ REJECTED: 21:31 Round 1 (135.9 min gap - different session)
          ✅ MATCHED: 23:41 Round 1 (5.8 min gap - same session)
          Result: vid Round 2 stats = 22 kills (42 - 20)
-```
+```python
 
 **[📖 Full Documentation: ROUND_2_PIPELINE_EXPLAINED.txt](docs/ROUND_2_PIPELINE_EXPLAINED.txt)**
 
 #### **Gaming Session ID Calculation**
+
 Automatically groups rounds into gaming sessions:
+
 - ✅ Calculates time gap between rounds
 - ✅ If gap > 60 minutes: **New session**
 - ✅ If gap ≤ 60 minutes: **Same session**
 - ✅ Powers `!last_session` command accuracy
 
 #### **Transaction Safety (ACID)**
+
 - ✅ **Atomicity:** All inserts succeed or all rollback
 - ✅ **Consistency:** Database constraints enforced
 - ✅ **Isolation:** Concurrent operations don't interfere
 - ✅ **Durability:** Committed data survives crashes
 
 **Production Proof:**
+
 - **303 files downloaded** ✅
 - **0 files failed** ✅
 - **4,193 successful verifications** ✅
@@ -264,6 +274,7 @@ Automatically groups rounds into gaming sessions:
 **The most advanced prediction system for any gaming stats platform:**
 
 #### **Prediction Engine**
+
 - 🤖 **Automatic Detection** - Detects when players split into team voice channels (3v3, 4v4, 5v5, 6v6)
 - 🧠 **4-Factor Algorithm** - Weighted analysis of Head-to-Head (40%), Recent Form (25%), Map Performance (20%), Substitutions (15%)
 - 🎯 **Confidence Scoring** - High/Medium/Low confidence based on historical data quality
@@ -271,6 +282,7 @@ Automatically groups rounds into gaming sessions:
 - ⏱️ **Cooldown Management** - Smart 5-minute cooldown prevents prediction spam
 
 #### **Analytics & Commands**
+
 - 📈 **!predictions** - View recent predictions with beautiful embeds
 - 📊 **!prediction_stats** - Accuracy statistics dashboard (overall, by confidence level, recent trends)
 - 👤 **!my_predictions** - Personal match history and performance
@@ -280,6 +292,7 @@ Automatically groups rounds into gaming sessions:
 - ❓ **!prediction_help** - Complete user documentation
 
 #### **Admin Tools**
+
 - 🔧 **!admin_predictions** - Advanced filtering (pending, completed, correct, incorrect)
 - ✏️ **!update_prediction_outcome** - Manual result updates with Brier score calculation
 - 🔄 **!recalculate_predictions** - Batch accuracy recalculation
@@ -287,6 +300,7 @@ Automatically groups rounds into gaming sessions:
 - 🛠️ **!admin_prediction_help** - Admin documentation
 
 #### **Database & Tracking**
+
 - 💾 **3 New Tables** - match_predictions (35 columns), session_results (21 columns), map_performance (13 columns)
 - 🎯 **Accuracy Tracking** - Brier score calculation, prediction correctness, confidence analysis
 - 📊 **Trend Analysis** - Week-over-week comparison, best/worst days, improving/declining detection
@@ -299,6 +313,7 @@ Automatically groups rounds into gaming sessions:
 ### **Production-Ready Statistics** ✅
 
 #### **Intelligent Stats System**
+
 - 📊 **53+ Statistics Tracked** - K/D, DPM, accuracy, efficiency, headshots, damage, playtime
 - 🎯 **Smart Player Lookup** - `!stats vid` or `!stats @discord_user` (instant)
 - 🔗 **Interactive Linking** - React with 1️⃣2️⃣3️⃣ to link Discord account to game stats
@@ -309,11 +324,13 @@ Automatically groups rounds into gaming sessions:
 - 🎨 **Custom Display Names** - Linked players can set personalized names with `!set_display_name`
 
 #### **Leaderboard System**
+
 - 🥇 **11 Leaderboard Categories** - K/D, DPM, accuracy, headshots, efficiency, etc.
 - � **Dynamic Rankings** - Real-time updates as games are played
 - 🎮 **Minimum Thresholds** - Prevents stat padding (min 10 rounds, 300 damage, etc.)
 
 #### **Database & Performance**
+
 - �️ **PostgreSQL 18.0** - Production-grade ACID compliance
 - ⚡ **Connection Pooling** - asyncpg for high-performance async queries
 - 📦 **7 Tables, 53 Columns** - Comprehensive unified schema
@@ -325,6 +342,7 @@ Automatically groups rounds into gaming sessions:
 **All automation features are production-ready!** Requires `.env` configuration.
 
 #### **Zero-Touch Operation**
+
 - 🎙️ **Voice Detection** - Monitors gaming voice channels (6+ users = auto-start)
 - 🔄 **SSH Monitoring** - Checks VPS every 60 seconds for new files
 - 📥 **Auto-Download** - SFTP transfer with integrity verification
@@ -333,12 +351,14 @@ Automatically groups rounds into gaming sessions:
 - 🏁 **Session Summaries** - Auto-posted when players leave voice
 
 #### **Smart Startup Optimization** ⚡
+
 - 🚀 **24-Hour Lookback** - On startup, only processes files from last 24 hours (not all historical files)
 - 📅 **Configurable Window** - Set `SSH_STARTUP_LOOKBACK_HOURS` (default: 24)
 - 🎯 **File Filtering** - Automatically excludes `_ws.txt` and other unwanted files
 - ⏱️ **Fast Startup** - Processes ~5 recent files instead of 3,766+ historical files
 
 #### **Voice-Conditional SSH Monitoring** 🎙️
+
 - 🎮 **Smart Checks** - Only checks SSH when players are in voice channels (saves resources!)
 - 💤 **Idle Mode** - Skips SSH checks when voice channels are empty (0 players)
 - ⚡ **Active Mode** - Checks SSH every 60s when 1+ players in voice
@@ -354,6 +374,7 @@ Automatically groups rounds into gaming sessions:
 ## 🚀 Quick Start
 
 ### **Prerequisites**
+
 - Python 3.9+
 - PostgreSQL 12+ (local or remote)
 - Discord Bot Token ([Discord Developer Portal](https://discord.com/developers/applications))
@@ -386,9 +407,10 @@ sudo ./install.sh --vps --auto
 
 # Custom installation directory
 sudo ./install.sh --full --deploy-dir /opt/etlegacy-bot --auto
-```
+```sql
 
 **Installation Modes:**
+
 - `--full` - Complete installation from scratch (clones repo, sets up PostgreSQL, creates systemd service)
 - `--vps` - VPS setup assuming repo exists (PostgreSQL + systemd)
 - `--env-only` - Python environment only (no root required, no database/systemd)
@@ -396,6 +418,7 @@ sudo ./install.sh --full --deploy-dir /opt/etlegacy-bot --auto
 - `--auto` - Non-interactive with auto-generated passwords
 
 **Additional Options:**
+
 - `--skip-postgresql` - Skip PostgreSQL installation
 - `--skip-systemd` - Skip systemd service creation
 - `--skip-git` - Skip repository cloning
@@ -428,11 +451,12 @@ python postgresql_database_manager.py
 
 # 5. Run the bot
 python -m bot.ultimate_bot
-```
+```text
 
 ### **Database Configuration**
 
 Edit `.env` file:
+
 ```env
 # PostgreSQL Configuration
 POSTGRES_HOST=localhost
@@ -469,7 +493,7 @@ WS_AUTH_TOKEN=your_secret_token
 
 # Voice Logging
 ENABLE_VOICE_LOGGING=false
-```
+```sql
 
 ---
 
@@ -478,6 +502,7 @@ ENABLE_VOICE_LOGGING=false
 ### **🔮 Prediction Commands** 🆕
 
 **User Commands (7):**
+
 - `!predictions [limit]` - View recent predictions (default: 10)
 - `!prediction_stats [days]` - Accuracy statistics dashboard (default: 30 days)
 - `!my_predictions` - Your personal match prediction history
@@ -487,6 +512,7 @@ ENABLE_VOICE_LOGGING=false
 - `!prediction_help` - Complete prediction system documentation
 
 **Admin Commands (5):**
+
 - `!admin_predictions [status] [limit]` - Advanced prediction filtering
 - `!update_prediction_outcome <id> <winner> <score_a> <score_b>` - Update match results
 - `!recalculate_predictions [days]` - Recalculate accuracy for recent predictions
@@ -496,11 +522,13 @@ ENABLE_VOICE_LOGGING=false
 ---
 
 ### **Player Statistics**
+
 - `!stats <player>` - Full player statistics (K/D, DPM, accuracy, etc.)
 - `!stats @user` - Stats for Discord-linked player
 - `!compare <player1> <player2>` - Head-to-head comparison
 
 ### **Leaderboards**
+
 - `!top_dpm` - Damage per minute rankings
 - `!top_kd` - K/D ratio leaderboard
 - `!top_accuracy` - Weapon accuracy rankings
@@ -508,11 +536,13 @@ ENABLE_VOICE_LOGGING=false
 - Plus 7 more leaderboard categories!
 
 ### **Session & Round Info**
+
 - `!last_session` - Latest gaming session (14-20 rounds)
 - `!last_round` - Most recent round played
 - `!session_stats` - Current session analytics
 
 ### **Account Management**
+
 - `!link` - Link Discord account to game stats (interactive)
 - `!link_me` - Quick link (if GUID known)
 - `!unlink` - Remove Discord link
@@ -520,16 +550,19 @@ ENABLE_VOICE_LOGGING=false
 - `!achievements` - View achievement system help and available badges
 
 ### **Admin Commands**
+
 - `!sync_month` - Sync last 30 days from VPS
 - `!sync_all` - Sync all files from VPS
 - `!rebuild_sessions` - Recalculate gaming sessions
 - `!health` - System health check
 
 ### **🎯 Team Balancing** 🆕
+
 - `!suggest_teams` - AI-powered team suggestions from voice channel players
 - `!balance_teams` - Alias for suggest_teams
 
 ### **Help & Info**
+
 - `!help` - Show all commands
 - `!mvp` - MVP awards for session
 - `!ping` - Bot latency and cache stats
@@ -538,7 +571,7 @@ ENABLE_VOICE_LOGGING=false
 
 ## 📁 Project Structure
 
-```
+```text
 slomix/
 ├── 📊 Core Systems
 │   ├── bot/
@@ -618,9 +651,10 @@ slomix/
     ├── check_last_session_data.py       # Diagnostic scripts
     ├── find_missing_files.py            # VPS sync verification
     └── test_logging.py                  # Log system test
-```
+```python
 
 **Key Files:**
+
 - **`postgresql_database_manager.py`** - ALL database operations (1,573 lines: create, import, rebuild, validate)
 - **`bot/ultimate_bot.py`** - Main production bot (enhanced with predictions)
 - **`bot/community_stats_parser.py`** - Round 2 differential calculation (1,036 lines)
@@ -680,20 +714,22 @@ map_performance (13 columns)
     ├── Player: player_guid, map_name
     ├── Stats: matches_played, wins, losses, win_rate
     └── Performance: avg_kills, avg_deaths, avg_kd_ratio, avg_dpm
-```
+```text
 
 **Gaming Session ID:**
+
 - Automatically calculated during import
 - 60-minute gap = new session
 - Powers `!last_session` accuracy
 
 **Indexes:**
+
 ```sql
 CREATE INDEX idx_rounds_session ON rounds(gaming_session_id);
 CREATE INDEX idx_player_round ON player_comprehensive_stats(round_id);
 CREATE INDEX idx_player_guid ON player_comprehensive_stats(player_guid);
 CREATE UNIQUE INDEX idx_player_round_unique ON player_comprehensive_stats(round_id, player_guid);
-```
+```yaml
 
 ---
 
@@ -704,15 +740,18 @@ CREATE UNIQUE INDEX idx_player_round_unique ON player_comprehensive_stats(round_
 ET:Legacy maps have **team-swap rounds** (Round 1 → Round 2). Stats files show **cumulative totals**, not per-round performance. The bot calculates true Round 2 stats:
 
 **The Problem:**
-```
+
+```text
 Round 1 (Axis): Player vid gets 20 kills
 Round 2 (Allies): Stats file shows 42 kills (cumulative)
-```
+```text
 
 **Without Differential:**
+
 - Round 2 stats = 42 kills ❌ (WRONG - includes Round 1)
 
 **With Differential:**
+
 1. ✅ Detect Round 2 file: `2025-11-04-234716-etl_adlernest-round-2.txt`
 2. ✅ Search for Round 1: `2025-11-04-*-etl_adlernest-round-1.txt`
 3. ✅ Find multiple candidates:
@@ -723,6 +762,7 @@ Round 2 (Allies): Stats file shows 42 kills (cumulative)
 6. ✅ Calculate: `Round 2 kills = 42 - 20 = 22 kills` ✅ (CORRECT)
 
 **Time-Gap Validation:**
+
 ```python
 if time_gap_minutes > 60:
     logger.warning(f"❌ Rejected: {r1_file} ({time_gap_minutes:.1f} min gap - too old)")
@@ -731,17 +771,18 @@ if time_gap_minutes > 60:
 if time_gap_minutes < 60:
     logger.info(f"✅ Match found: {r1_file} ({time_gap_minutes:.1f} min before)")
     # Use this Round 1 for subtraction
-```
+```text
 
 **Production Proof:**
-```
+
+```text
 [2025-11-06 09:19:16] Processing 2025-11-04-234716-etl_adlernest-round-2.txt
 [R2] Detected Round 2 file
   → Found 2 same-day Round 1 files
   → ❌ Rejected: 2025-11-04-213124-etl_adlernest-round-1.txt (135.9 min gap)
   → ✅ Match found: 2025-11-04-234127-etl_adlernest-round-1.txt (5.8 min)
 [OK] Successfully calculated Round 2-only stats for 8 players
-```
+```yaml
 
 **[📖 Complete Documentation: ROUND_2_PIPELINE_EXPLAINED.txt](docs/ROUND_2_PIPELINE_EXPLAINED.txt)**
 
@@ -767,14 +808,16 @@ dpm = damage_given / actual_playtime_minutes if actual_playtime_minutes > 0 else
 # Damage given: 1500
 # DPM = 1500 / 5 = 300 DPM (accurate)
 # NOT 1500 / 10 = 150 DPM (wrong - player wasn't there)
-```
+```python
 
 **Why This Matters:**
+
 - ✅ Fair comparison for late joiners
 - ✅ Accurate performance metrics
 - ✅ Leaderboards reflect true skill
 
 ---
+
 ## 🛠️ Development
 
 ### **Database Operations**
@@ -783,9 +826,10 @@ dpm = damage_given / actual_playtime_minutes if actual_playtime_minutes > 0 else
 
 ```bash
 python postgresql_database_manager.py
-```
+```python
 
 **Available Operations:**
+
 1. **Create Fresh Database** - Initialize schema from scratch
 2. **Import All Files** - Incremental import (safe, skips processed files)
 3. **Rebuild from Scratch** - Nuclear option (wipes all data, re-imports)
@@ -808,44 +852,50 @@ python postgresql_database_manager.py
 # Test Discord bot
 python -m bot.ultimate_bot
 # Use !ping to check latency
-```
+```text
 
 ### **Adding New Features**
 
 **Bot Commands:**
+
 ```bash
 # Edit main bot file
 nano bot/ultimate_bot.py
 
 # Or add a new cog
 nano bot/cogs/new_feature_cog.py
-```
+```text
 
 **Parser Logic:**
+
 ```bash
 # Edit differential calculation
 nano bot/community_stats_parser.py
-```
+```text
 
 **Database Operations:**
+
 ```bash
 # Edit database manager (NOT new scripts!)
 nano postgresql_database_manager.py
-```
+```python
 
 ### **Code Quality**
 
 **Logging:**
+
 - All operations logged to `logs/` directory
 - Structured logging with timestamps
 - Separate error, database, and command logs
 
 **Error Handling:**
+
 - Transaction rollback on errors
 - Graceful degradation
 - Detailed error messages in logs
 
 **Performance:**
+
 - asyncio/asyncpg for async operations
 - Connection pooling (min 2, max 10)
 - TTL-based caching (300s)
@@ -857,6 +907,7 @@ nano postgresql_database_manager.py
 ### **Production Environment**
 
 **Requirements:**
+
 - Ubuntu 20.04+ or Windows Server
 - PostgreSQL 12+
 - Python 3.9+
@@ -864,6 +915,7 @@ nano postgresql_database_manager.py
 - SSH access to ET:Legacy server (for automation)
 
 **Production Checklist:**
+
 - [ ] PostgreSQL installed and running
 - [ ] Bot user created with database access
 - [ ] `.env` file configured with production values
@@ -893,9 +945,10 @@ python3 postgresql_database_manager.py  # Option 1, then 2
 
 # Run as service
 sudo nano /etc/systemd/system/etlegacy-bot.service
-```
+```text
 
 **Service File:**
+
 ```ini
 [Unit]
 Description=ET:Legacy Stats Bot
@@ -912,14 +965,14 @@ RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-```
+```text
 
 ```bash
 # Enable and start
 sudo systemctl enable etlegacy-bot
 sudo systemctl start etlegacy-bot
 sudo systemctl status etlegacy-bot
-```
+```text
 
 ### **Monitoring**
 
@@ -934,7 +987,7 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds;"
 # Check bot health (in Discord)
 !health
 !ping
-```
+```text
 
 ### **Backup Strategy**
 
@@ -947,7 +1000,7 @@ find backup/ -name "etlegacy_*.sql" -mtime +7 -delete
 
 # Test restore
 psql -d etlegacy_test < backup/etlegacy_20251106.sql
-```
+```python
 
 ---
 
@@ -968,18 +1021,21 @@ psql -d etlegacy_test < backup/etlegacy_20251106.sql
 ### **Scalability**
 
 **Current Load:**
+
 - 60-second SSH monitoring cycle
 - ~10 new files per gaming session
 - ~30 seconds total import time per session
 - Zero performance degradation
 
 **Tested Capacity:**
+
 - ✅ 3,694 files on VPS (tested with sync)
 - ✅ Concurrent Discord commands (10+ simultaneous)
 - ✅ Large gaming sessions (20 rounds, 10 players)
 - ✅ 24/7 uptime (weeks without restart)
 
 **Optimization:**
+
 - Connection pooling prevents DB bottlenecks
 - TTL caching reduces query load by 80%
 - Async operations prevent blocking
@@ -992,6 +1048,7 @@ psql -d etlegacy_test < backup/etlegacy_20251106.sql
 ### **Common Issues**
 
 #### **Bot Won't Start**
+
 ```bash
 # Check logs
 tail -n 50 logs/errors.log
@@ -1001,9 +1058,10 @@ psql -d etlegacy -c "SELECT 1;"
 
 # Check .env file
 cat .env | grep -v "^#"
-```
+```text
 
 #### **Files Not Importing**
+
 ```bash
 # Check processed files
 psql -d etlegacy -c "SELECT COUNT(*) FROM processed_files WHERE success = false;"
@@ -1013,9 +1071,10 @@ psql -d etlegacy -c "SELECT filename, error_message FROM processed_files WHERE s
 
 # Re-import failed files
 python postgresql_database_manager.py  # Option 2
-```
+```text
 
 #### **Automation Not Working**
+
 ```bash
 # Check SSH connection
 ssh -i ~/.ssh/etlegacy_bot et@your.vps.server
@@ -1025,9 +1084,10 @@ cat .env | grep SSH_
 
 # Check automation logs
 tail -f logs/bot.log | grep "SSH"
-```
+```text
 
 #### **Database Errors**
+
 ```bash
 # Check database health
 python postgresql_database_manager.py  # Option 5
@@ -1068,6 +1128,7 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 ## 📚 Documentation Index
 
 ### **Getting Started**
+
 - [README.md](README.md) - This file (you are here!)
 - [docs/DEPLOYMENT_CHECKLIST.md](docs/DEPLOYMENT_CHECKLIST.md) - Deployment guide
 - [docs/FRESH_INSTALL_GUIDE.md](docs/FRESH_INSTALL_GUIDE.md) - Fresh installation guide
@@ -1075,6 +1136,7 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 - [docs/AI_AGENT_INSTRUCTIONS.md](docs/AI_AGENT_INSTRUCTIONS.md) - For AI assistants
 
 ### **🆕 Competitive Analytics (Prediction System)**
+
 - [docs/COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md](docs/COMPETITIVE_ANALYTICS_IMPLEMENTATION_GUIDE.md) - Complete implementation guide
 - [docs/IMPLEMENTATION_PROGRESS_TRACKER.md](docs/IMPLEMENTATION_PROGRESS_TRACKER.md) - Project progress (64% complete, 39/61 hours)
 - [docs/WEEK_HANDOFF_MEMORY.md](docs/WEEK_HANDOFF_MEMORY.md) - Week handoff documentation
@@ -1082,11 +1144,13 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 - [docs/GEMINI_IMPLEMENTATION_GUIDE.md](docs/GEMINI_IMPLEMENTATION_GUIDE.md) - Website integration guide
 
 ### **🆕 Website Project (In Development)**
+
 - [docs/WEBSITE_PROJECT_REVIEW.md](docs/WEBSITE_PROJECT_REVIEW.md) - Technical review (8/10 rating)
 - [docs/WEBSITE_VISION_REVIEW_2025-11-28.md](docs/WEBSITE_VISION_REVIEW_2025-11-28.md) - Strategic vision (9.5/10 rating)
 - [docs/WEBSITE_APPJS_CHANGES_2025-11-28.md](docs/WEBSITE_APPJS_CHANGES_2025-11-28.md) - Recent changes analysis
 
 ### **System Architecture**
+
 - [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md) - Complete data pipeline
 - [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md) - Technical architecture
 - [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) - System overview
@@ -1094,18 +1158,21 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 - [docs/ROUND_2_PIPELINE_EXPLAINED.txt](docs/ROUND_2_PIPELINE_EXPLAINED.txt) - Differential calculation
 
 ### **Reference & Guides**
+
 - [docs/FIELD_MAPPING.md](docs/FIELD_MAPPING.md) - Stats field reference
 - [docs/COMMANDS.md](docs/COMMANDS.md) - Bot commands reference
 - [docs/CONFIGURATION_REFERENCE.md](docs/CONFIGURATION_REFERENCE.md) - Configuration guide
 - [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) - Testing procedures
 
 ### **Operations & Deployment**
+
 - [docs/VPS_DEPLOYMENT_GUIDE.md](docs/VPS_DEPLOYMENT_GUIDE.md) - VPS deployment
 - [docs/LINUX_DEPLOYMENT_GUIDE.md](docs/LINUX_DEPLOYMENT_GUIDE.md) - Linux deployment
 - [docs/LAPTOP_DEPLOYMENT_GUIDE.md](docs/LAPTOP_DEPLOYMENT_GUIDE.md) - Local deployment
 - [docs/DISASTER_RECOVERY.md](docs/DISASTER_RECOVERY.md) - Disaster recovery procedures
 
 ### **System Documentation**
+
 - [docs/ACHIEVEMENT_SYSTEM.md](docs/ACHIEVEMENT_SYSTEM.md) - Achievement system
 - [docs/ADVANCED_TEAM_DETECTION.md](docs/ADVANCED_TEAM_DETECTION.md) - Team detection
 - [docs/SEASON_SYSTEM.md](docs/SEASON_SYSTEM.md) - Season system
@@ -1118,6 +1185,7 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 ## 🤝 Contributing
 
 **Contributions welcome!** Please:
+
 1. Fork the repository
 2. Create a feature branch
 3. Follow existing code style
@@ -1126,6 +1194,7 @@ psql -d etlegacy -c "SELECT COUNT(*) FROM rounds WHERE gaming_session_id IS NULL
 6. Submit pull request
 
 **Code Standards:**
+
 - PEP 8 for Python
 - Docstrings for functions
 - Type hints where applicable
@@ -1143,6 +1212,7 @@ This is a private project. All rights reserved.
 ## 🙏 Acknowledgments
 
 **Built With:**
+
 - [discord.py](https://github.com/Rapptz/discord.py) - Discord API wrapper
 - [asyncpg](https://github.com/MagicStack/asyncpg) - PostgreSQL async driver
 - [PostgreSQL](https://www.postgresql.org/) - Production database
@@ -1150,6 +1220,7 @@ This is a private project. All rights reserved.
 - [gamestats.lua](https://github.com/x0rnn) by **x0rnn (c0rn)** - The stats Lua mod that makes this all possible
 
 **Special Thanks:**
+
 - **x0rnn** for creating the gamestats.lua (c0rnp0rn.lua) - without his work, this bot wouldn't exist
 - ET:Legacy community for EndStats mod
 - Discord.py community for excellent documentation

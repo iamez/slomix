@@ -1,7 +1,9 @@
 # Proximity Tracker v4 - Session Notes
+
 ## January 8-9, 2026
 
 ### Session Goal
+
 Upgrade Proximity Tracker from v3 (engagement-centric) to v4 (full player tracking).
 
 ### Final Status: READY FOR LIVE TEST
@@ -21,7 +23,9 @@ Upgrade Proximity Tracker from v3 (engagement-centric) to v4 (full player tracki
 ## What Changed: v3 → v4
 
 ### The Problem with v3
+
 v3 only tracked players **during combat engagements** (from first damage to death/escape). This missed:
+
 - Where players spawned
 - How long before they started moving
 - Their full path from spawn to first combat
@@ -29,7 +33,9 @@ v3 only tracked players **during combat engagements** (from first damage to deat
 - Sprint/stance behavior
 
 ### The v4 Vision
+
 Track **ALL players** from **spawn to death**, every 1 second, with:
+
 - Position (x, y, z)
 - Health
 - Speed (from velocity)
@@ -39,6 +45,7 @@ Track **ALL players** from **spawn to death**, every 1 second, with:
 - First movement time after spawn
 
 This enables:
+
 - Full path visualization on map images
 - Heatmaps of where players go (not just where they fight)
 - Spawn exit analysis
@@ -52,13 +59,14 @@ This enables:
 ### BEFORE (v3 Schema)
 
 Tables that existed:
-```
+
+```sql
 combat_engagement      - Per-engagement data (when player takes damage)
 player_teamplay_stats  - Aggregated stats per player
 crossfire_pairs        - Duo coordination stats
 map_kill_heatmap       - Where kills happen
 map_movement_heatmap   - Where combat/escapes happen
-```
+```text
 
 ### AFTER (v4 Schema)
 
@@ -103,15 +111,16 @@ CREATE TABLE IF NOT EXISTS player_track (
 
     UNIQUE(session_date, round_number, player_guid, spawn_time_ms)
 );
-```
+```text
 
 **NEW INDEXES:**
+
 ```sql
 CREATE INDEX idx_track_session ON player_track(session_date, round_number);
 CREATE INDEX idx_track_player ON player_track(player_guid);
 CREATE INDEX idx_track_map ON player_track(map_name);
 CREATE INDEX idx_track_class ON player_track(player_class);
-```
+```python
 
 ### Why These Columns?
 
@@ -128,11 +137,13 @@ CREATE INDEX idx_track_class ON player_track(player_class);
 
 ### Data Volume Estimate
 
-```
+```text
+
 player_track: ~20 tracks/round × 10 rounds/day × 365 days = 73,000 rows/year
 Each track: ~1KB average (with path JSON)
 Total: ~73MB/year additional storage
-```
+
+```yaml
 
 ---
 
@@ -144,20 +155,23 @@ Total: ~73MB/year additional storage
 **Lines:** ~640 → 1004
 
 **New Constants:**
+
 ```lua
 local PMF_DUCKED = 1        -- Crouching bit flag
 local PMF_PRONE = 512       -- Prone bit flag
 local PMF_SPRINT = 16384    -- Sprinting bit flag
-```
+```text
 
 **New Tracker State:**
+
 ```lua
 tracker.player_tracks = {}      -- clientnum -> active track
 tracker.completed_tracks = {}   -- finished tracks for output
 tracker.last_sample_time = 0    -- throttle sampling
-```
+```text
 
 **New Functions:**
+
 ```lua
 getPlayerVelocity(clientnum)      -- Get velocity vector
 getPlayerSpeed(clientnum)         -- Calculate speed magnitude
@@ -168,25 +182,31 @@ samplePlayer(clientnum, track)    -- Record one sample
 endPlayerTrack(clientnum, pos)    -- End on death/disconnect
 sampleAllPlayers()                -- Called from et_RunFrame
 serializeTrackPath(path)          -- Format path for output
-```
+```text
 
 **New Callbacks:**
+
 ```lua
 et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
   -- Only tracks fresh spawns (revived == 0), not medic revives
 
 et_ClientDisconnect(clientNum)
   -- Ends track if player disconnects mid-round
-```
+```text
 
 **Output Format Change:**
 
 Added new section to output file:
-```
+
+```text
+
 # PLAYER_TRACKS
+
 # guid;name;team;class;spawn_time;death_time;first_move_time;samples;path
+
 # path format: time,x,y,z,health,speed,weapon,stance,sprint,event separated by |
-```
+
+```python
 
 ### 2. Python Parser: `proximity/parser/parser.py`
 
@@ -194,6 +214,7 @@ Added new section to output file:
 (with backwards compatibility alias)
 
 **New Dataclasses:**
+
 ```python
 @dataclass
 class PathPoint:
@@ -222,20 +243,22 @@ class PlayerTrack:
 
     # Computed properties:
     duration_ms, time_to_first_move_ms, total_distance, avg_speed, sprint_percentage
-```
+```text
 
 **New Methods:**
+
 ```python
 _parse_player_track_line(line)   # Parse PLAYER_TRACKS section
 _import_player_tracks(session_date)  # Insert into database
-```
+```text
 
 **Updated Methods:**
+
 ```python
 parse_file()   # Now handles PLAYER_TRACKS section
 import_file()  # Calls _import_player_tracks()
 get_stats()    # Includes track statistics
-```
+```yaml
 
 ### 3. Schema File: `proximity/schema/schema.sql`
 
@@ -257,7 +280,7 @@ scp -P 48101 -i ~/.ssh/etlegacy_bot \
   et@puran.hehe.si:/home/et/etlegacy-v2.83.1-x86_64/legacy/
 
 # Config already includes proximity_tracker.lua in lua_modules
-```
+```text
 
 ### Database Server (192.168.64.116)
 
@@ -266,7 +289,7 @@ scp -P 48101 -i ~/.ssh/etlegacy_bot \
 PGPASSWORD='etlegacy_secure_2025' psql -h 192.168.64.116 -U etlegacy_user -d etlegacy
 
 # Ran CREATE TABLE and CREATE INDEX statements
-```
+```sql
 
 ---
 
@@ -275,44 +298,51 @@ PGPASSWORD='etlegacy_secure_2025' psql -h 192.168.64.116 -U etlegacy_user -d etl
 ### Critical Discoveries (from etlegacy-lua-docs.readthedocs.io)
 
 1. **`et_ClientSpawn` has 4 parameters:**
+
    ```lua
    et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
    -- revived=0: fresh spawn
    -- revived=1: medic revive (don't create new track!)
-   ```
+   ```text
 
 2. **Movement state via bit flags:**
+
    ```lua
    local pm_flags = et.gentity_get(clientnum, "ps.pm_flags")
    -- PMF_DUCKED = 1
    -- PMF_PRONE = 512
    -- PMF_SPRINT = 16384
-   ```
+   ```text
 
 3. **Velocity available:**
+
    ```lua
    local vel = et.gentity_get(clientnum, "ps.velocity")
    -- Returns table: vel[1]=x, vel[2]=y, vel[3]=z (1-indexed!)
-   ```
+   ```sql
 
 4. **GUID from userinfo, not entity:**
+
    ```lua
    local userinfo = et.trap_GetUserinfo(clientnum)
    local guid = et.Info_ValueForKey(userinfo, "cl_guid")
-   ```
+   ```text
 
 5. **File write mode:**
+
    ```lua
    -- et.FS_WRITE doesn't exist as constant, use numeric: 1
    local fd, len = et.trap_FS_FOpenFile(filename, 1)
-   ```
+   ```python
 
 ---
 
 ## Development Isolation
 
 ### Why Isolated?
+
 The proximity tracker is developed **separately** from the main bot to avoid breaking:
+
 - Discord bot functionality
 - Website backend
 - Existing stats collection (c0rnp0rn)
@@ -349,19 +379,21 @@ python3 test_standalone.py --cleanup
 
 # Clean up specific date
 python3 test_standalone.py --cleanup-date 2026-01-08
-```
+```text
 
 ### File Paths on Game Server
 
-```
+```sql
+
 /home/et/etlegacy-v2.83.1-x86_64/
 ├── legacy/
 │   ├── proximity_tracker.lua     # Our Lua module
 │   └── proximity/                # Output folder (NEW - separate from gamestats)
 │       └── *_engagements.txt     # Proximity output files
 ├── gamestats/                    # c0rnp0rn stats (untouched)
-│   └── *.txt                     # Existing stats files
-```
+│   └──*.txt                     # Existing stats files
+
+```yaml
 
 ---
 
@@ -378,7 +410,7 @@ if bit and bit.band then
 
 -- CORRECT (Lua 5.4 native)
 if (pm_flags & PMF_PRONE) ~= 0 then
-```
+```sql
 
 **Impact:** Would have fallen back to broken subtraction logic.
 **Fix:** Changed to native `&` operator.
@@ -386,6 +418,7 @@ if (pm_flags & PMF_PRONE) ~= 0 then
 ### Change #2: Sampling Rate (500ms)
 
 Changed from 1000ms to 500ms for better movement capture:
+
 - 2 samples per second per player
 - Captures strafe/dodge patterns
 - ~24,000 samples per 10-min round with 20 players
@@ -446,7 +479,7 @@ SELECT player_class,
 FROM player_track
 GROUP BY player_class
 ORDER BY avg_sprint_pct DESC;
-```
+```yaml
 
 ---
 
@@ -455,15 +488,17 @@ ORDER BY avg_sprint_pct DESC;
 If v4 causes issues:
 
 1. **Revert Lua script:**
+
    ```bash
    # If we had saved v3, restore it. Otherwise disable tracking:
    ssh et@puran.hehe.si "sed -i 's/proximity_tracker.lua//' /home/et/etlegacy-v2.83.1-x86_64/etmain/legacy.cfg"
-   ```
+   ```text
 
 2. **Drop new table (if needed):**
+
    ```sql
    DROP TABLE IF EXISTS player_track;
-   ```
+   ```python
 
 3. **Parser is backwards compatible:**
    - `ProximityParserV3` alias still works
@@ -492,6 +527,7 @@ If v4 causes issues:
 ---
 
 ## Session Duration
+
 ~2.5 hours
 
 ## Key Decisions Made

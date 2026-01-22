@@ -30,7 +30,7 @@ GAMING_VOICE_CHANNELS=1234567890,9876543210  # Your voice channel IDs
 
 # 2. Restart the bot
 python bot/ultimate_bot.py
-```
+```sql
 
 That's it! Bot will now automatically monitor voice channels and post stats.
 
@@ -53,17 +53,23 @@ Before enabling automation, ensure you have:
 You need the Discord channel IDs for voice channels you want to monitor:
 
 **Method 1: Enable Developer Mode**
+
 1. Discord → User Settings → Advanced → Enable "Developer Mode"
 2. Right-click your gaming voice channel → "Copy Channel ID"
 3. Save this ID for the next step
 
 **Method 2: Use Bot Command**
-```
+
+```text
+
 !channel_info
-```
+
+```sql
+
 The bot will list all voice channels with their IDs.
 
 **Example Channel IDs:**
+
 - Gaming Voice 1: `1420158097741058130`
 - Gaming Voice 2: `1420158097741058131`
 
@@ -90,9 +96,10 @@ SSH_KEY_PATH=~/.ssh/etlegacy_bot
 
 # ========== SERVER PATHS ==========
 ETLEGACY_STATS_DIR=/home/et/etlegacy-v2.83.1-x86_64/legacy/gamestats
-```
+```text
 
 **Important Notes:**
+
 - `GAMING_VOICE_CHANNELS` must be comma-separated with NO SPACES
 - SSH credentials must be valid and tested
 - Stats directory path must match your server installation
@@ -107,7 +114,7 @@ ssh -i ~/.ssh/etlegacy_bot et@puran.hehe.si -p 48101
 
 # Once connected, verify stats directory exists
 ls /home/et/etlegacy-v2.83.1-x86_64/legacy/gamestats
-```
+```text
 
 You should see `.stats` files in the directory.
 
@@ -116,20 +123,24 @@ You should see `.stats` files in the directory.
 ```bash
 # Start with logging to see automation messages
 python bot/ultimate_bot.py
-```
+```text
 
 **Expected Startup Messages:**
-```
+
+```text
+
 ✅ Automation system ENABLED
 🎙️ Voice monitoring enabled for channels: [1420158097741058130, 1420158097741058131]
 🔄 Background task: endstats_monitor started
-```
+
+```sql
 
 If you see `⚠️ Automation system DISABLED`, check your `.env` file settings.
 
 ### Step 6: Test Voice Detection
 
 **Test Scenario:**
+
 1. Have 6+ players join one of the configured voice channels
 2. Bot should automatically detect and post: "🎮 Gaming session detected! Monitoring started."
 3. Play a match and complete a round
@@ -137,6 +148,7 @@ If you see `⚠️ Automation system DISABLED`, check your `.env` file settings.
 5. When everyone leaves voice, bot posts comprehensive session summary
 
 **Manual Override Commands:**
+
 - `!session_start` - Manually start monitoring
 - `!session_end` - Manually stop monitoring
 - `!sync_stats` - Manually trigger stats file sync
@@ -147,7 +159,8 @@ If you see `⚠️ Automation system DISABLED`, check your `.env` file settings.
 
 ### Voice Channel Detection
 
-```
+```sql
+
 1. Bot monitors configured voice channels every 30 seconds
 2. When 6+ users join a gaming voice channel:
    → Sets session_active = True
@@ -157,28 +170,33 @@ If you see `⚠️ Automation system DISABLED`, check your `.env` file settings.
    → Processes final stats
    → Posts comprehensive session summary
    → Sets session_active = False
-```
+
+```text
 
 ### SSH File Monitoring
 
-```
+```text
+
 1. Background task checks server every 60 seconds
 2. Downloads new .stats files via SSH/SCP
 3. Verifies file integrity (not empty, correct format)
 4. Parses stats and imports to database
 5. Posts round summaries and session updates
 6. Marks files as processed to avoid duplicates
-```
+
+```yaml
 
 ### Auto-Posting Behavior
 
 **Round Summary (after each round):**
+
 - Top 5 players by kills
 - Team scores and winner
 - Average DPM and accuracy
 - Posted within 30 seconds of round end
 
 **Session Summary (when everyone leaves):**
+
 - Full session analytics with multiple embeds
 - Team breakdown and MVP calculations
 - Weapon mastery and special awards
@@ -193,6 +211,7 @@ If you see `⚠️ Automation system DISABLED`, check your `.env` file settings.
 **Symptom:** Bot says "Automation system DISABLED"
 
 **Solutions:**
+
 ```bash
 # 1. Check .env file has correct values (no quotes)
 AUTOMATION_ENABLED=true  # ✅ Correct
@@ -201,86 +220,100 @@ AUTOMATION_ENABLED="true"  # ❌ Wrong (remove quotes)
 # 2. Restart the bot after editing .env
 pkill -f ultimate_bot.py
 python bot/ultimate_bot.py
-```
+```sql
 
 ### Voice Detection Not Working
 
 **Symptom:** Bot doesn't react when 6+ join voice
 
 **Solutions:**
+
 1. **Check Channel IDs:** Verify `GAMING_VOICE_CHANNELS` has correct IDs
+
    ```bash
    # In Discord, enable Developer Mode and copy channel ID
    # Should be a long number like: 1420158097741058130
-   ```
+   ```text
 
 2. **Check Bot Permissions:** Bot needs "View Channels" permission for voice channels
 
 3. **Check Logs:** Look for voice detection messages
+
    ```bash
    grep "voice" logs/bot.log
-   ```
+   ```text
 
 ### SSH Connection Fails
 
 **Symptom:** Bot says "SSH connection failed" or "Cannot download stats"
 
 **Solutions:**
+
 1. **Test SSH Manually:**
+
    ```bash
    ssh -i ~/.ssh/etlegacy_bot et@puran.hehe.si -p 48101
-   ```
+   ```text
 
 2. **Check SSH Key Permissions:**
+
    ```bash
    chmod 600 ~/.ssh/etlegacy_bot
-   ```
+   ```text
 
 3. **Verify SSH Key Path in .env:**
+
    ```bash
    SSH_KEY_PATH=~/.ssh/etlegacy_bot  # Use absolute path if this fails
    SSH_KEY_PATH=/home/youruser/.ssh/etlegacy_bot
-   ```
+   ```text
 
 4. **Check Stats Directory Path:**
+
    ```bash
    # Connect via SSH and verify path exists
    ls /home/et/etlegacy-v2.83.1-x86_64/legacy/gamestats
-   ```
+   ```text
 
 ### Stats Not Posting
 
 **Symptom:** Bot is monitoring but not posting stats
 
 **Solutions:**
+
 1. **Check Database:** Verify files are being processed
+
    ```bash
    python -c "import sqlite3; conn=sqlite3.connect('bot/etlegacy_production.db'); print(conn.execute('SELECT COUNT(*) FROM processed_files').fetchone())"
-   ```
+   ```text
 
 2. **Check Stats Channel:** Verify `STATS_CHANNEL_ID` in .env is correct
 
 3. **Check Bot Permissions:** Bot needs "Send Messages" and "Embed Links" permissions
 
 4. **Check Logs for Errors:**
+
    ```bash
    tail -f logs/bot.log
-   ```
+   ```text
 
 ### Files Processing Multiple Times
 
 **Symptom:** Same stats posted multiple times
 
 **Solutions:**
+
 1. **Clear Processed Files (if testing):**
+
    ```bash
    python -c "import sqlite3; conn=sqlite3.connect('bot/etlegacy_production.db'); conn.execute('DELETE FROM processed_files'); conn.commit()"
-   ```
+   ```text
 
 2. **Check File Timestamps:** Bot tracks files by filename and timestamp
+
    ```sql
    SELECT filename, processed_at FROM processed_files ORDER BY processed_at DESC LIMIT 10;
-   ```
+   ```python
 
 ---
 
@@ -298,7 +331,7 @@ async def check_voice_channels(self):
 # Line ~5483: SSH monitoring interval  
 @tasks.loop(seconds=60)  # Check server every 60 seconds
 async def endstats_monitor(self):
-```
+```text
 
 ### Custom Voice Thresholds
 
@@ -307,22 +340,24 @@ Change minimum players required for auto-start:
 ```python
 # Line ~4644: Minimum players for session start
 if len(members) >= 6:  # Change '6' to your preferred threshold
-```
+```text
 
 ### Disable Specific Auto-Posts
 
 **Disable Round Summaries:**
+
 ```python
 # Comment out post_round_summary() call in endstats_monitor()
 # Line ~5567
 # await self.post_round_summary(data)  # Disabled
-```
+```text
 
 **Disable Session Summaries:**
+
 ```python
 # Comment out post_map_summary() call
 # await self.post_map_summary(round_id)  # Disabled
-```
+```yaml
 
 ---
 
@@ -331,13 +366,17 @@ if len(members) >= 6:  # Change '6' to your preferred threshold
 ### Check Automation Status
 
 **Discord Commands:**
-```
+
+```text
+
 !ping          # Shows automation enabled status
 !status        # Shows current session state
 !last_round  # Verify latest session was auto-imported
-```
+
+```text
 
 **Check Logs:**
+
 ```bash
 # Watch real-time logs
 tail -f logs/bot.log
@@ -346,11 +385,12 @@ tail -f logs/bot.log
 grep "Automation" logs/bot.log
 grep "Gaming session detected" logs/bot.log
 grep "SSH" logs/bot.log
-```
+```text
 
 ### Database Queries
 
 **Check Recent Sessions:**
+
 ```sql
 SELECT 
   round_date,
@@ -360,9 +400,10 @@ FROM rounds
 WHERE round_date >= date('now', '-1 day')
 GROUP BY round_date, map_name
 ORDER BY round_date DESC;
-```
+```text
 
 **Check Processed Files:**
+
 ```sql
 SELECT 
   filename,
@@ -371,7 +412,7 @@ SELECT
 FROM processed_files 
 ORDER BY processed_at DESC 
 LIMIT 10;
-```
+```yaml
 
 ---
 
@@ -381,7 +422,8 @@ LIMIT 10;
 
 **Scenario:** Regular gaming night with 8 players
 
-```
+```sql
+
 7:00 PM - 8 players join "ET Legacy Gaming" voice channel
 7:00 PM - 🎮 Bot: "Gaming session detected! Monitoring started."
 7:15 PM - Round 1 ends
@@ -391,7 +433,8 @@ LIMIT 10;
 8:00 PM - New map starts (bot continues monitoring)
 10:00 PM - Everyone leaves voice
 10:00 PM - 🏁 Bot posts comprehensive session summary
-```
+
+```text
 
 **Result:** Zero manual commands needed, complete stats coverage!
 
@@ -399,30 +442,38 @@ LIMIT 10;
 
 **Scenario:** Want to track stats but <6 players online
 
-```
+```text
+
 !session_start  # Manually start monitoring
 !sync_stats     # Manually sync stats files after each map
 !session_end    # Post final summary when done
-```
+
+```text
 
 ### Example 3: Testing Automation
 
 **Scenario:** First time setup, want to verify it works
 
-```
+```sql
+
 # Step 1: Join voice with 6 people
+
 # Wait for: "🎮 Gaming session detected!"
 
 # Step 2: Play one round
+
 # Wait for: Round summary post
 
 # Step 3: Check logs
+
 tail -f logs/bot.log | grep "session\|SSH\|voice"
 
 # Step 4: Leave voice
+
 # Wait for: Session summary post
 
 # Success! Automation is working ✅
+
 ```
 
 ---
@@ -445,6 +496,7 @@ tail -f logs/bot.log | grep "session\|SSH\|voice"
 ### Bot Permissions
 
 **Minimum Required Permissions:**
+
 - Read Messages/View Channels
 - Send Messages
 - Embed Links
@@ -452,6 +504,7 @@ tail -f logs/bot.log | grep "session\|SSH\|voice"
 - Add Reactions (for !link_me feature)
 
 **Optional Permissions:**
+
 - Manage Messages (for cleaning up bot messages)
 - Attach Files (for future features)
 

@@ -8,7 +8,7 @@
 
 ## 📋 What's Being Deployed
 
-### Critical Fixes Applied:
+### Critical Fixes Applied
 
 1. **✅ DPM Calculation Fix** (Commit: bc1013b)
    - Fixed weighted DPM to use round durations instead of player playtime
@@ -73,7 +73,7 @@ git branch
 # Check git status
 git status
 # Should show clean or uncommitted changes
-```
+```text
 
 ### 2. Backup Current State
 
@@ -86,7 +86,7 @@ ls -lh ~/etlegacy_stats_backup_*.sql
 
 # Backup current code (if needed)
 cp -r /path/to/slomix /path/to/slomix_backup_$(date +%Y%m%d_%H%M%S)
-```
+```text
 
 ### 3. Stop Current Bot
 
@@ -107,7 +107,7 @@ tmux list-sessions
 tmux attach -t etlegacy-bot
 # Press Ctrl+C to stop bot
 # Press Ctrl+B then D to detach
-```
+```yaml
 
 ---
 
@@ -126,7 +126,7 @@ git checkout claude/fix-production-critical-issues-01TSoke7RTuTbKEhrQCgG2AF-01Gp
 
 # Pull latest commits
 git pull origin claude/fix-production-critical-issues-01TSoke7RTuTbKEhrQCgG2AF-01GphrWr5zkJmarkb6RXQdZk
-```
+```text
 
 ### Step 2: Verify Changes
 
@@ -149,7 +149,7 @@ git show --name-only 50b4ae1
 git show --name-only 94a508d
 git show --name-only f8e017d
 git show --name-only c2eaca1
-```
+```text
 
 ### Step 3: Apply Database Migration
 
@@ -167,7 +167,7 @@ psql -U your_db_user -d etlegacy_stats -f migrations/add_round_status.sql
 # Verify migration succeeded
 psql -U your_db_user -d etlegacy_stats -c "\d rounds" | grep round_status
 # Should show: round_status | character varying(20) | | default 'completed'::character varying
-```
+```text
 
 ### Step 4: Test Imports (Dry Run)
 
@@ -213,7 +213,7 @@ else
     echo "❌ Import test failed - DO NOT DEPLOY"
     exit 1
 fi
-```
+```text
 
 ### Step 5: Verify Database Schema
 
@@ -239,7 +239,7 @@ SQLEOF
 # Should show:
 #  idx_rounds_status
 #  idx_rounds_gaming_session
-```
+```text
 
 ### Step 6: Start Bot (Test Mode)
 
@@ -257,57 +257,79 @@ python3 bot/ultimate_bot.py
 # ✅ Bot ready! Logged in as <BotName>
 
 # Keep it running for next step
-```
+```text
 
 ### Step 7: Test Commands in Discord
 
 **Open Discord and test these commands:**
 
-```
+```text
+
 !ping
+
 # Should respond with latency (e.g., "Pong! 45ms")
 
 !stats <player_name>
+
 # Should show player stats with CORRECT DPM values
+
 # Stats should NOT include R0 summary rounds
 
 !last_session
+
 # Should show correct round count (excluding restarts and R0)
+
 # Team stats should be accurate
 
 !check_achievements
+
 # Should show accurate kill/game counts (R0 excluded)
 
 !compare player1 player2
+
 # DPM should be consistent for players in same session
+
 # All stats should exclude R0
 
 !season_info
+
 # Season champion stats should be accurate (R0 excluded)
 
 !lp
+
 # List players command should show accurate stats (lower than before)
+
 # All players should have correct kill/death counts
 
 !find_player <name>
+
 # Search results should show accurate stats
+
 # No more inflated numbers
 
 !link
+
 # Smart link should show correct top unlinked players
+
 # Stats should be accurate
 
 !check_achievements
+
 # Achievement progress should be accurate
+
 # Milestones trigger at correct thresholds
 
 !leaderboard kills
+
 # Should show correct kill counts (not inflated by R0)
+
 # Rankings should be accurate
 
 !leaderboard dpm
+
 # Should show correct DPM values (not inflated)
-```
+
+```sql
 
 **Validation Tests:**
 
@@ -338,7 +360,7 @@ python3 bot/ultimate_bot.py
 # ✅ No query syntax errors
 # ✅ Stats file monitoring working (if files present)
 # ✅ No asyncpg connection errors
-```
+```text
 
 ### Step 9: Production Deployment
 
@@ -364,7 +386,7 @@ python3 bot/ultimate_bot.py
 tmux new -s etlegacy-bot
 python3 bot/ultimate_bot.py
 # Press Ctrl+B then D to detach
-```
+```yaml
 
 ---
 
@@ -383,7 +405,7 @@ sudo journalctl -u etlegacy-bot -n 50 --no-pager
 # Check logs (screen/tmux)
 screen -r etlegacy-bot  # or tmux attach -t etlegacy-bot
 # Ctrl+A, D to detach (screen) or Ctrl+B, D (tmux)
-```
+```text
 
 ### 2. Test File Monitoring
 
@@ -396,7 +418,7 @@ ps aux | grep endstats_monitor
 # Wait for a new stats file to be created on game server
 # Verify it gets downloaded within 10 minutes (IDLE mode)
 # Verify grace period keeps bot active for 30 min after download
-```
+```text
 
 ### 3. Verify Restart Detection
 
@@ -413,7 +435,7 @@ SQLEOF
 
 # If restarts occurred, you should see cancelled rounds
 # If no restarts yet, this will be empty (normal)
-```
+```text
 
 ### 4. Compare Stats Before/After
 
@@ -435,7 +457,7 @@ SQLEOF
 
 # Compare with your backup database if you want to see the difference
 # New values should be ~33-50% LOWER (correct, not inflated)
-```
+```sql
 
 ---
 
@@ -444,11 +466,13 @@ SQLEOF
 ### Stat Values Will DECREASE (This is CORRECT!)
 
 **Before (Inflated by R0):**
+
 - Player with 300 actual kills showed 450 kills (50% inflation)
 - Player with 10 actual maps showed 15 maps (50% inflation)
 - DPM values appeared correct but were calculated wrong
 
 **After (Correct):**
+
 - Same player shows 300 kills ✅
 - Same player shows 10 maps ✅
 - DPM values calculated from actual playtime ✅
@@ -465,7 +489,8 @@ SQLEOF
 
 You may want to announce in Discord:
 
-```
+```text
+
 📢 Stats System Update
 
 We've deployed critical fixes to our stats system:
@@ -478,7 +503,8 @@ We've deployed critical fixes to our stats system:
 Your stats are now MORE ACCURATE. Some values may appear lower than before - this is correct! The previous system was inflating stats by including match summary data.
 
 Questions? Ask in #support
-```
+
+```yaml
 
 ---
 
@@ -491,7 +517,7 @@ Questions? Ask in #support
 ```bash
 sudo systemctl stop etlegacy-bot
 # or press Ctrl+C if running in foreground
-```
+```text
 
 ### 2. Restore Previous Code
 
@@ -505,7 +531,7 @@ git checkout <previous-commit-hash>
 # Or restore from backup
 # rm -rf /path/to/slomix
 # cp -r /path/to/slomix_backup_TIMESTAMP /path/to/slomix
-```
+```text
 
 ### 3. Rollback Database (If Needed)
 
@@ -521,14 +547,14 @@ SQLEOF
 
 # Or restore full backup
 # sudo -u postgres psql etlegacy_stats < ~/etlegacy_stats_backup_TIMESTAMP.sql
-```
+```text
 
 ### 4. Restart Old Bot
 
 ```bash
 sudo systemctl start etlegacy-bot
 sudo systemctl status etlegacy-bot
-```
+```yaml
 
 ---
 
@@ -538,14 +564,16 @@ sudo systemctl status etlegacy-bot
 
 **Cause:** Migration didn't run or failed
 **Fix:**
+
 ```bash
 psql -U your_db_user -d etlegacy_stats -f migrations/add_round_status.sql
-```
+```text
 
 ### Issue: Queries returning no results
 
 **Cause:** All rounds marked as cancelled (unlikely but possible)
 **Fix:**
+
 ```bash
 # Check round statuses
 psql -U your_db_user -d etlegacy_stats << 'SQLEOF'
@@ -553,12 +581,13 @@ SELECT round_status, COUNT(*) FROM rounds GROUP BY round_status;
 SQLEOF
 
 # Should show mostly 'completed', few 'cancelled'
-```
+```text
 
 ### Issue: Stats still look inflated
 
 **Cause:** R0 filtering not applied
 **Fix:**
+
 ```bash
 # Verify fix is applied
 grep -n "round_number IN (1, 2)" bot/cogs/leaderboard_cog.py
@@ -567,12 +596,13 @@ grep -n "round_number IN (1, 2)" bot/cogs/leaderboard_cog.py
 # Check git commit
 git log --oneline -1
 # Should show commit 50b4ae1 or later
-```
+```text
 
 ### Issue: File loss still occurring
 
 **Cause:** Grace period not working
 **Fix:**
+
 ```bash
 # Verify grace period code exists
 grep -A5 "grace_period_active" bot/ultimate_bot.py
@@ -581,7 +611,7 @@ grep -A5 "grace_period_active" bot/ultimate_bot.py
 # Check last_file_download_time is being tracked
 grep "last_file_download_time" bot/ultimate_bot.py
 # Should show initialization and update
-```
+```yaml
 
 ---
 
@@ -607,7 +637,7 @@ SELECT COUNT(*) as total_rounds,
        COUNT(CASE WHEN round_status = 'cancelled' THEN 1 END) as cancelled
 FROM rounds;
 "
-```
+```text
 
 ### Weekly Checks
 
@@ -626,7 +656,7 @@ HAVING SUM(time_played_seconds) > 600  -- At least 10 min playtime
 ORDER BY dpm DESC
 LIMIT 10;
 SQLEOF
-```
+```bash
 
 ---
 
@@ -659,6 +689,7 @@ SQLEOF
 5. Review this guide's troubleshooting section
 
 **Emergency Contact:**
+
 - Review `CRITICAL_BUGS_FOUND.md` for technical details
 - Review `TEAM_TRACKING_DESIGN.md` for future enhancements
 - Check GitHub issues for similar problems

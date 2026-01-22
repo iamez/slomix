@@ -10,6 +10,7 @@
 From your database schema (`player_comprehensive_stats` table):
 
 ### Core Combat (7 fields)
+
 - `kills`
 - `deaths`
 - `damage_given`
@@ -19,28 +20,34 @@ From your database schema (`player_comprehensive_stats` table):
 - `gibs`
 
 ### Special Kills (4 fields)
+
 - `self_kills`
 - `team_kills`
 - `team_gibs`
 - `headshot_kills`
 
 ### Time Tracking (4 fields)
+
 - `time_played_seconds` (PRIMARY)
 - `time_played_minutes` (deprecated, calculated)
 - `time_dead_minutes`
 - `time_dead_ratio`
 - time denied is also something  i would like to include and is something very importiant to me
+
 ### Performance Metrics (4 fields)
+
 - `xp`
 - `kd_ratio` (calculated: kills/deaths)
 - `dpm` (calculated: damage_given / time_seconds * 60)
 - `efficiency` (calculated: accuracy-like metric)
 
 ### Weapon Stats (2 fields)
-- `bullets_fired` + bullets hit aswell 
+
+- `bullets_fired` + bullets hit aswell
 - `accuracy` (calculated: hits/bullets_fired)
 
 ### Objective Stats (8 fields)
+
 - `objectives_completed`
 - `objectives_destroyed`
 - `objectives_stolen`
@@ -51,11 +58,13 @@ From your database schema (`player_comprehensive_stats` table):
 - `tank_meatshield`
 
 ### Support Stats (3 fields)
+
 - `kill_assists`
 - `times_revived`
 - `revives_given`
 
 ### Advanced Stats (6 fields)
+
 - `most_useful_kills`
 - `useless_kills`
 - `kill_steals`
@@ -72,8 +81,10 @@ From your database schema (`player_comprehensive_stats` table):
 ## 🎨 Proposed Grouping for Visualizations
 
 ### Group 1: **COMBAT STATS** (Primary Kill Power)
+
 **Best for:** Bar charts, line graphs  
 **Fields:**
+
 - Kills
 - Deaths  
 - Gibs
@@ -81,7 +92,8 @@ From your database schema (`player_comprehensive_stats` table):
 - DPM (Damage Per Minute)
 
 **Graph Type:** Grouped bar chart
-```
+
+```text
 [Player 1] | [Player 2] | [Player 3]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Kills      ████████ 45  ██████ 38   █████ 32
@@ -89,20 +101,23 @@ Deaths     ████ 22      ███ 19      ████ 22
 Gibs       ██ 12        ██ 11       █ 8
 Damage     ████████ 3420 ██████ 2980 █████ 2650
 DPM        ████████ 156  ██████ 142  █████ 128
-```
+```yaml
 
 ---
 
 ### Group 2: **TIME & SURVIVAL** (How Long You Played & Stayed Alive)
+
 **Best for:** Stacked bar charts, area charts  
 **Fields:**
+
 - Time Played (minutes)
 - Time Dead (minutes)
 - Time Dead Ratio (%)
 - Denied Playtime (how long you kept enemies dead)
 
 **Graph Type:** Stacked bar chart
-```
+
+```text
 [Player 1]    [Player 2]    [Player 3]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  Playing:        |  Playing:        |  Playing:
@@ -112,13 +127,15 @@ DPM        ████████ 156  ██████ 142  █████
  ███  5m        |  ████  8m        |  ████████  12m
  
 Time Dead: 17%  |  Time Dead: 29%  |  Time Dead: 40%
-```
+```yaml
 
 ---
 
 ### Group 3: **SUPPORT & TEAMWORK** (Helping Your Team)
+
 **Best for:** Grouped bar chart, radar chart  
 **Fields:**
+
 - Revives Given
 - Times Revived
 - Kill Assists
@@ -126,20 +143,23 @@ Time Dead: 17%  |  Time Dead: 29%  |  Time Dead: 40%
 - Tank/Meatshield
 
 **Graph Type:** Grouped bar or Radar
-```
+
+```text
          Revives  Times    Kill    Construct  Tank
          Given    Revived  Assists
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Player1   ████ 18  ███ 12  ████ 22  ██ 5      █ 3
 Player2   ███ 15   ████ 15 ███ 18   ███ 8     ██ 4
 Player3   ██ 10    █████ 20 ██ 12   █ 2       █ 1
-```
+```yaml
 
 ---
 
 ### Group 4: **OBJECTIVES** (Mission Completion)
+
 **Best for:** Pie chart, bar chart  
 **Fields:**
+
 - Objectives Completed
 - Objectives Destroyed
 - Objectives Stolen
@@ -148,7 +168,8 @@ Player3   ██ 10    █████ 20 ██ 12   █ 2       █ 1
 - Dynamites Defused
 
 **Graph Type:** Stacked bar or pie
-```
+
+```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Objectives Completed:      ████████ 8
 Objectives Destroyed:      █████ 5
@@ -156,13 +177,15 @@ Objectives Stolen:         ███ 3
 Objectives Returned:       ██ 2
 Dynamites Planted:         ████ 4
 Dynamites Defused:         ██ 2
-```
+```yaml
 
 ---
 
 ### Group 5: **ACCURACY & EFFICIENCY** (How Precise You Are)
+
 **Best for:** Circular target chart, bar chart  
 **Fields:**
+
 - Headshot Kills
 - Bullets Fired
 - Accuracy (%)
@@ -170,20 +193,23 @@ Dynamites Defused:         ██ 2
 - K/D Ratio
 
 **Graph Type:** Target/bullseye chart or bar
-```
+
+```text
        Headshot  Accuracy  Efficiency  K/D
        Kills     %         %          Ratio
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Player1  ███ 12  ████ 45%  ████ 82%   3.2
 Player2  ██ 8    ███ 38%   ███ 75%    2.0
 Player3  ██ 9    ██ 32%    ██ 68%     1.4
-```
+```yaml
 
 ---
 
 ### Group 6: **SPECIAL EVENTS** (Multikills & Sprees)
+
 **Best for:** Bar chart, badge display  
 **Fields:**
+
 - Double Kills
 - Triple Kills
 - Quad Kills
@@ -193,7 +219,8 @@ Player3  ██ 9    ██ 32%    ██ 68%     1.4
 - Death Spree Worst
 
 **Graph Type:** Horizontal bar with icons
-```
+
+```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔥 Killing Spree:    ████████ 12
 💀 Death Spree:      ███ 5
@@ -202,13 +229,15 @@ Player3  ██ 9    ██ 32%    ██ 68%     1.4
 🎯 Quad Kills:       █ 2
 🚀 Multi Kills:      █ 1
 💫 Mega Kills:       ░ 0
-```
+```yaml
 
 ---
 
 ### Group 7: **NEGATIVE STATS** (Mistakes & Team Damage)
+
 **Best for:** Small warning badges  
 **Fields:**
+
 - Self Kills
 - Team Kills
 - Team Gibs
@@ -217,20 +246,21 @@ Player3  ██ 9    ██ 32%    ██ 68%     1.4
 - Kill Steals
 
 **Display:** Only show if non-zero (warning indicator)
-```
+
+```text
 ⚠️ Negative Stats:
   • Team Kills: 2
   • Self Kills: 3
   • Team Damage: 450
-```
+```yaml
 
 ---
 
 ## 🎨 Visual Layout for `!last_round maps`
 
-### Map Performance Card Example:
+### Map Performance Card Example
 
-```
+```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📍 te_escape2 (4 games, 8 rounds)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -264,7 +294,7 @@ player3    ████     ██       █
 vid        ██         ██       █
 slomix     ███        ███      ██
 player3    ██         █        █
-```
+```yaml
 
 ---
 
@@ -329,7 +359,7 @@ def get_grouped_stats(player_data):
             'kill_steals': player_data.get('kill_steals', 0)
         }
     }
-```
+```text
 
 ### Create Grouped Bar Chart
 

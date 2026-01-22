@@ -102,7 +102,7 @@ A crossfire is detected when 2+ players damage the same target within a configur
 
 ### Detection Logic
 
-```
+```text
 1. When player takes first damage, start engagement
 2. Track all attackers with timestamps
 3. If second attacker hits within 1000ms of first hit:
@@ -205,6 +205,7 @@ Players are identified by GUID in this priority order:
 ### Name Sanitization
 
 Player names are sanitized to prevent parsing issues:
+
 - Color codes (^0-^9) are stripped
 - Semicolons replaced with underscores
 - Pipe characters replaced with underscores

@@ -1,5 +1,7 @@
 # 🔍 ET:Legacy Discord Stats Bot - Code Audit Report
+
 ## Comprehensive Review - December 1, 2025
+
 ### *"As reviewed by a 300-year-old IT specialist"*
 
 ---
@@ -22,30 +24,35 @@ The ET:Legacy Stats Bot is a **mature, production-capable system** with solid fu
 ## 🚨 CRITICAL PRIORITY (Fix This Week)
 
 ### 1. LIKE SQL Injection Risk
+
 **Impact:** Malicious player names could manipulate query results
 
 **Files:** 7 locations including `stats_cog.py`, `leaderboard_cog.py`, `link_cog.py`
 
 **Problem:**
+
 ```python
 f"WHERE clean_name LIKE '%{player_name}%'"  # User input unescaped
-```
+```text
 
 **Fix:**
+
 ```python
 def escape_like_pattern(s: str) -> str:
     return s.replace('%', r'\%').replace('_', r'\_')
 
 safe_name = escape_like_pattern(player_name)
 f"WHERE clean_name LIKE '%{safe_name}%' ESCAPE '\\'"
-```
+```python
 
 ---
 
 ### 2. Broken Team Detection (SQLite References)
+
 **Impact:** Team detection features silently fail on PostgreSQL
 
 **Files:**
+
 - `bot/core/team_detector_integration.py` - Uses `import sqlite3` directly
 - `bot/core/substitution_detector.py` - Uses `sqlite3.connect()`
 - `bot/core/team_history.py` - Uses `sqlite3.connect()`
@@ -55,23 +62,27 @@ f"WHERE clean_name LIKE '%{safe_name}%' ESCAPE '\\'"
 ---
 
 ### 3. Error Message Leakage
+
 **Impact:** Exposes DB schema, paths, and internals to Discord users
 
 **Pattern in 50+ locations:**
+
 ```python
 await ctx.send(f"❌ Error: {e}")  # Raw exception to users
-```
+```text
 
 **Fix:** Create error sanitization helper:
+
 ```python
 async def send_error(ctx, user_msg: str, e: Exception):
     logger.exception(f"Error in {ctx.command}: {e}")
     await ctx.send(f"❌ {user_msg}")  # Clean message only
-```
+```python
 
 ---
 
 ### 4. Bare `except:` Clauses
+
 **Impact:** Catches `KeyboardInterrupt`, `SystemExit`, prevents graceful shutdown
 
 **Files:** `ultimate_bot.py`, `automation_enhancements.py`, `server_control.py` (12 instances)
@@ -83,36 +94,42 @@ async def send_error(ctx, user_msg: str, e: Exception):
 ## ⚠️ HIGH PRIORITY (Fix This Month)
 
 ### 5. Blocking I/O in Async Functions
+
 **Impact:** Bot freezes for 10-500ms during file operations
 
 **Files:**
+
 - `community_stats_parser.py` - `open()` in parser
 - `server_control.py` - `open()` for audit log
 - SSH handler - synchronous `execute_ssh_command()`
 
 **Fix:** Use `aiofiles` or `run_in_executor()`:
+
 ```python
 await asyncio.get_event_loop().run_in_executor(None, sync_function)
-```
+```yaml
 
 ---
 
 ### 6. Silent Exception Swallowing
+
 **Impact:** Errors ignored, debugging impossible
 
 **Pattern in 20+ locations:**
+
 ```python
 try:
     await self._ensure_player_name_alias()
 except Exception:
     pass  # Silently ignored!
-```
+```python
 
 **Fix:** At minimum, add `logger.debug()`
 
 ---
 
 ### 7. Service Duplication Across Cogs
+
 **Impact:** Memory waste, inconsistent state, maintenance burden
 
 **Issue:** `LastSessionCog` and `SessionCog` each instantiate 7 identical services
@@ -122,6 +139,7 @@ except Exception:
 ---
 
 ### 8. `traceback.print_exc()` Usage
+
 **Impact:** Errors go to stdout, lost when running as service
 
 **File:** `synergy_analytics.py` (5 instances)
@@ -133,6 +151,7 @@ except Exception:
 ## 📋 MEDIUM PRIORITY (Fix This Quarter)
 
 ### 9. Cache Not Being Used
+
 **Impact:** 80% more DB queries than necessary
 
 The `StatsCache` class exists but is barely utilized - only 1 actual usage found.
@@ -142,6 +161,7 @@ The `StatsCache` class exists but is barely utilized - only 1 actual usage found
 ---
 
 ### 10. Hardcoded `$N` Placeholders
+
 **Impact:** Breaks if code ever runs against SQLite again
 
 **Files:** 14+ files with `$1`, `$2` instead of portable `?`
@@ -149,6 +169,7 @@ The `StatsCache` class exists but is barely utilized - only 1 actual usage found
 ---
 
 ### 11. `_ensure_player_name_alias()` Duplicated
+
 **Impact:** Schema change = 7 files to update
 
 **Fix:** Extract to `bot/core/utils.py` as single shared function
@@ -156,6 +177,7 @@ The `StatsCache` class exists but is barely utilized - only 1 actual usage found
 ---
 
 ### 12. Graph Generation Blocks Event Loop
+
 **Impact:** 500-2000ms freeze during `!last_session graphs`
 
 **Fix:** Offload matplotlib to executor
@@ -163,6 +185,7 @@ The `StatsCache` class exists but is barely utilized - only 1 actual usage found
 ---
 
 ### 13. No Retry Logic for Database Connection
+
 **Impact:** Transient network issues = bot crashes
 
 **Note:** SSH handler has exponential backoff (good!), but DB adapter doesn't
@@ -170,6 +193,7 @@ The `StatsCache` class exists but is barely utilized - only 1 actual usage found
 ---
 
 ### 14. Missing Rate Limiting
+
 **Impact:** Users can spam expensive queries
 
 Only `!last_session` has `@commands.cooldown`. Add to: `!stats`, `!leaderboard`, `!compare`
@@ -179,20 +203,25 @@ Only `!last_session` has `@commands.cooldown`. Add to: `!stats`, `!leaderboard`,
 ## 📝 LOW PRIORITY (Technical Debt)
 
 ### 15. Dead Code Files
+
 - `ultimate_bot.cleaned.py` (6,592 lines - corrupted)
 - 3 `.backup_*` copies in `bot/` directory
 - 100+ obsolete files in `dev/` and `archive/`
 
 ### 16. Type Hints (~40% coverage)
+
 Missing return types on most functions
 
 ### 17. Test Coverage (<10%)
+
 Critical logic untested: `StatsCalculator`, `C0RNP0RN3StatsParser`, cog commands
 
 ### 18. 15+ Unresolved TODOs
+
 Scattered through production code
 
 ### 19. SQLite Schema Out of Sync
+
 `bot/schema.sql` uses `session_id` but PostgreSQL uses `round_id`
 
 ---
@@ -211,7 +240,8 @@ Scattered through production code
 
 ## Architecture Diagram (Current State)
 
-```
+```python
+
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ultimate_bot.py (~1,745 lines)                │
 │  ┌─────────────────────────────────────────────────────────┐    │
@@ -232,6 +262,7 @@ Scattered through production code
 │   error       │      │                   │      │ ✅ Database      │
 │   handlers    │      │                   │      │   adapter OK     │
 └───────────────┘      └───────────────────┘      └──────────────────┘
+
 ```
 
 ---

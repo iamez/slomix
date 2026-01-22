@@ -120,7 +120,7 @@ local objectives = {
     }
     -- etc.
 }
-```
+```text
 
 ### What We Need to Fix (Bot/Database)
 
@@ -151,20 +151,24 @@ GROUP BY player1_guid, player2_guid;
 Once the gaps are filled, we want to answer:
 
 ### Team Building
+
 - "Which 3-player combination has the highest crossfire rate?"
 - "Who should I pair with Player X for best movement synergy?"
 - "We need a strong defender — who performs best on Axis side?"
 
 ### Individual Insights
+
 - "What's my playstyle? Am I a fragger, anchor, or objective player?"
 - "Who do I synergize best with?"
 - "What's my weakness?"
 
 ### Team Balance
+
 - "Given these 10 players, what's the fairest 5v5 split?"
 - "Team A has better fraggers, Team B has better coordination — is this balanced?"
 
 ### Opponent Context
+
 - "How does Team X perform against strong opponents vs weak ones?"
 - "Which teams crumble under pressure?"
 

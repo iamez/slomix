@@ -8,9 +8,11 @@
 ## 🎯 What This Bot Does
 
 ### Core Purpose
+
 Tracks player statistics from **Wolfenstein: Enemy Territory Legacy** game servers and provides Discord-based analytics, leaderboards, and session summaries.
 
 ### Key Features
+
 1. **Real-time stats tracking** - Monitors game server for new stats files
 2. **Round-by-round analytics** - Each match has 2 rounds (Round 1 and Round 2)
 3. **Match summaries** - Cumulative stats for entire matches (R1 + R2 combined)
@@ -26,7 +28,7 @@ Tracks player statistics from **Wolfenstein: Enemy Territory Legacy** game serve
 
 ### File Generation Flow
 
-```
+```python
 ET:Legacy Game Server (Running on VPS or Dedicated Server)
   │
   │ [After each round ends]
@@ -58,14 +60,15 @@ Database (rounds, player_comprehensive_stats, weapon_comprehensive_stats)
   │
   ▼
 Discord Bot Posts Stats
-```
+```text
 
 ### File Naming Convention
 
 **Format:** `YYYY-MM-DD-HHMMSS-mapname-round-N.txt`
 
 **Examples:**
-```
+
+```text
 2025-11-06-213045-supply-round-1.txt
   │    │    │   │      │       │   └─ Round number (1 or 2)
   │    │    │   │      │       └───── Always "round"
@@ -77,7 +80,7 @@ Discord Bot Posts Stats
 
 2025-11-06-215312-supply-round-2.txt
   ↑ Same date, ~23 minutes later (round took ~23 min to play)
-```
+```yaml
 
 **Critical Insight:** The timestamp is when the round **ENDED**, not when it started!
 
@@ -100,7 +103,7 @@ match_id = "2025-11-06-213045-supply-round-1"
 # Result for Round 2 (DIFFERENT match_id):
 match_id = "2025-11-06-215312-supply-round-2"
 #           ^^^^^^^^^^^^^^^^^^^^^^ DIFFERENT TIMESTAMP
-```
+```python
 
 **The Problem:** Each round gets a DIFFERENT match_id because timestamps are different!
 
@@ -153,9 +156,10 @@ def find_corresponding_round_1_file(self, round_2_file_path: str):
                     print(f"✅ Match found: {r1_filename} ({time_diff:.1f} min before)")
     
     return best_r1_file
-```
+```text
 
 **How It Works:**
+
 - Uses **filename timestamps** to find the Round 1 file that is **closest in time** but **before** Round 2
 - Allows up to 30 minutes gap (typical rounds are 10-20 minutes)
 - Returns the **most recent** Round 1 for the same map on the same day
@@ -164,7 +168,8 @@ def find_corresponding_round_1_file(self, round_2_file_path: str):
 
 **Critical Detail:** Round 2 stats files contain **CUMULATIVE** stats!
 
-```
+```text
+
 Player Stats in Round 1 file:
   Kills: 15
   Deaths: 8
@@ -174,13 +179,15 @@ Player Stats in Round 2 file (CUMULATIVE):
   Kills: 32     ← This is R1 kills (15) + R2 kills (17)
   Deaths: 21    ← This is R1 deaths (8) + R2 deaths (13)
   Damage: 9800  ← This is R1 damage (4500) + R2 damage (5300)
-```
+
+```text
 
 **To get Round 2 ONLY stats:**
+
 ```python
 r2_only_kills = r2_cumulative_kills - r1_kills
 r2_only_kills = 32 - 15 = 17  ✅
-```
+```sql
 
 **This is why the parser needs to find Round 1!**
 
@@ -199,6 +206,7 @@ r2_only_kills = 32 - 15 = 17  ✅
 ### Why Round 0 Exists
 
 **Before:**
+
 ```sql
 -- To get match totals, had to aggregate:
 SELECT player_guid, 
@@ -207,16 +215,17 @@ FROM player_comprehensive_stats
 WHERE match_id LIKE '2025-11-06-%-supply-%'
   AND round_number IN (1, 2)
 GROUP BY player_guid
-```
+```text
 
 **After:**
+
 ```sql
 -- Now just query round 0:
 SELECT player_guid, kills, deaths, damage_given
 FROM player_comprehensive_stats
 WHERE match_id = '2025-11-06-213045-supply-round-1'
   AND round_number = 0
-```
+```yaml
 
 **Performance:** 50-70% faster queries for `!last_session` command
 
@@ -227,14 +236,16 @@ WHERE match_id = '2025-11-06-213045-supply-round-1'
 ### The Centralized Match Tracker Mistake
 
 **What We Did:**
+
 ```python
 # Created bot/core/match_tracker.py with:
 def generate_match_id(filename):
     # Strip timestamp to make R1 and R2 have same match_id
     return f"{date}-{map_name}"  # "2025-11-06-supply"
-```
+```text
 
 **The Problem:**
+
 1. ✅ **Good intent:** Make R1 and R2 share the same match_id
 2. ❌ **Bad side effect:** Parser's `find_round_1_file()` uses **timestamp proximity** to find the correct R1 file
 3. ❌ **Result:** When match_id no longer includes timestamp, parser can't find correct R1 file
@@ -242,7 +253,8 @@ def generate_match_id(filename):
 
 ### Why It Failed
 
-```
+```yaml
+
 Scenario: Two games of supply on same day
 
 Game 1:
@@ -262,7 +274,8 @@ When parsing 2025-11-06-212500-supply-round-2.txt:
   Without timestamps, it picks the WRONG one
   Calculates differential against 2:00 PM game instead of 9:00 PM game
   Result: Garbage stats, negative kills, headshot scrambling
-```
+
+```yaml
 
 ---
 
@@ -276,7 +289,7 @@ When parsing 2025-11-06-212500-supply-round-2.txt:
 
 match_identifier = f"{gaming_session_id}-{map_name}"
 # This naturally links R1 and R2 without breaking parser!
-```
+```text
 
 ### Option 2: Store Round 1 filename reference in Round 2
 
@@ -286,7 +299,7 @@ rounds table:
   - match_id (unique per round)
   - parent_round_id (for R2, references R1's round_id)
   - round_1_filename (for R2, stores R1 filename)
-```
+```text
 
 ### Option 3: Keep timestamp, add match_group_id
 
@@ -297,13 +310,14 @@ rounds table:
   - match_id: "2025-11-06-213045-supply-round-1" (unique)
   - match_group_id: "2025-11-06-supply-session-5" (links R1 and R2)
   - gaming_session_id: 5
-```
+```yaml
 
 ---
 
 ## 📊 Database Schema (Key Tables)
 
 ### rounds
+
 ```sql
 CREATE TABLE rounds (
     id SERIAL PRIMARY KEY,
@@ -317,9 +331,10 @@ CREATE TABLE rounds (
     round_outcome TEXT,
     UNIQUE(match_id, round_number)
 )
-```
+```text
 
 ### player_comprehensive_stats (51 columns!)
+
 ```sql
 CREATE TABLE player_comprehensive_stats (
     id SERIAL PRIMARY KEY,
@@ -340,9 +355,10 @@ CREATE TABLE player_comprehensive_stats (
     -- ... 35 more fields ...
     UNIQUE(round_id, player_guid)
 )
-```
+```text
 
 ### weapon_comprehensive_stats
+
 ```sql
 CREATE TABLE weapon_comprehensive_stats (
     id SERIAL PRIMARY KEY,
@@ -357,9 +373,10 @@ CREATE TABLE weapon_comprehensive_stats (
     accuracy REAL,
     UNIQUE(round_id, player_guid, weapon_name)
 )
-```
+```text
 
 ### processed_files (Duplicate Detection)
+
 ```sql
 CREATE TABLE processed_files (
     id SERIAL PRIMARY KEY,
@@ -369,19 +386,23 @@ CREATE TABLE processed_files (
     error_message TEXT,
     processed_at TIMESTAMP
 )
-```
+```yaml
 
 ---
 
 ## 🔄 Complete File Processing Pipeline
 
 ### 1. File Appears on Game Server
-```
+
+```yaml
+
 ET:Legacy server writes:
   /path/to/gamestats/2025-11-06-213045-supply-round-1.txt
-```
+
+```text
 
 ### 2. SSH Monitor Detects File
+
 ```python
 # ssh_monitor.py runs every N minutes
 async def check_and_process_new_files(self):
@@ -394,16 +415,18 @@ async def check_and_process_new_files(self):
     # Download new files
     for filename in new_files:
         await self._process_new_file(filename)
-```
+```text
 
 ### 3. Download File
+
 ```python
 # Downloads to bot/local_stats/
 local_path = await self._download_file(filename)
 # Result: bot/local_stats/2025-11-06-213045-supply-round-1.txt
-```
+```text
 
 ### 4. Parse File
+
 ```python
 # community_stats_parser.py
 parsed_data = parser.parse_stats_file(local_path)
@@ -427,9 +450,10 @@ parsed_data = parser.parse_stats_file(local_path)
         # ... more players
     ]
 }
-```
+```python
 
 ### 5. Import to Database
+
 ```python
 # postgresql_database_manager.py
 async def process_file(file_path):
@@ -458,9 +482,10 @@ async def process_file(file_path):
     
     # Mark as processed
     await self.mark_file_processed(filename, success=True)
-```
+```text
 
 ### 6. Post to Discord
+
 ```python
 # ssh_monitor.py
 await self._post_round_stats(filename)
@@ -493,6 +518,7 @@ if '-round-2.txt' in filename:
 ## 🔧 Current State (November 7, 2025)
 
 ### What Works ✅
+
 - Round numbering (R0, R1, R2) stored correctly
 - Parser differential calculation
 - SSH monitoring and file download
@@ -501,11 +527,13 @@ if '-round-2.txt' in filename:
 - Gaming session grouping
 
 ### What's Broken ❌
+
 - match_tracker.py exists but shouldn't (causes differential calculation errors)
 - Verification warnings indicate headshot mismatches
 - R1 and R2 have different match_ids (can't easily link them in queries)
 
 ### What's Next 🚀
+
 1. Delete match_tracker.py (cleanup)
 2. Rebuild database with clean code
 3. Investigate better match linking (gaming_session_id + map?)

@@ -7,12 +7,14 @@
 ## Step 1: Fix Merge Conflicts (5 minutes)
 
 ### Fix .gitignore
+
 ```powershell
 # Open in editor and remove conflict markers
 code .gitignore
-```
+```text
 
 **Choose this version and save:**
+
 ```gitignore
 # Python
 __pycache__/
@@ -86,14 +88,16 @@ htmlcov/
 publish_temp/
 publish_clean/
 github/
-```
+```text
 
 ### Fix .env.example
+
 ```powershell
 code .env.example
-```
+```text
 
 **Choose this version and save:**
+
 ```bash
 # ET:Legacy Discord Bot - Configuration Template
 # Copy this file to .env and fill in your values
@@ -129,17 +133,19 @@ AUTOMATION_ENABLED=false
 GAMING_VOICE_CHANNELS=channel_id1,channel_id2
 ACTIVE_PLAYER_THRESHOLD=6
 INACTIVE_DURATION_SECONDS=180
-```
+```text
 
 ### Fix README.md
+
 ```powershell
 code README.md
-```
+```text
 
 **Use the github/README.md content** (it's cleaner):
+
 ```powershell
 Copy-Item github\README.md README.md -Force
-```
+```yaml
 
 ---
 
@@ -160,7 +166,7 @@ pip install -r requirements.txt
 
 # Verify installation
 python -c "import discord; import aiosqlite; print('✅ Dependencies installed')"
-```
+```yaml
 
 ---
 
@@ -192,7 +198,7 @@ Get-ChildItem -Filter "test_*.py" | Where-Object { $_.Name -ne "test_suite.py" }
 Get-ChildItem -Filter "add_*.py" | Move-Item -Destination "archive\diagnostics\"
 
 Write-Host "✅ Root directory cleaned!"
-```
+```sql
 
 ---
 
@@ -211,16 +217,17 @@ Remove-Item -Recurse -Force "publish_temp"
 Remove-Item -Recurse -Force "publish_clean"
 
 # DON'T delete github/ yet - we'll handle it properly in Step 5
-```
+```bash
 
 ---
 
 ## Step 5: Fix Git Workflow (5 minutes)
 
-### Current Problem:
+### Current Problem
+
 You're manually copying files to `github/` folder, which is wrong. Git should manage this.
 
-### Proper Solution:
+### Proper Solution
 
 ```powershell
 # 1. Your main directory is already a git repo
@@ -247,9 +254,10 @@ git push origin main
 
 # 6. NOW delete the github/ folder (it's redundant)
 Remove-Item -Recurse -Force "github"
-```
+```text
 
-### New Workflow Going Forward:
+### New Workflow Going Forward
+
 ```powershell
 # Edit files in main directory
 code bot\ultimate_bot.py
@@ -264,7 +272,7 @@ git commit -m "Fix: Add error handling to stats command"
 git push origin main
 
 # DONE! No manual copying needed.
-```
+```yaml
 
 ---
 
@@ -282,13 +290,14 @@ python -c "from bot.community_stats_parser import C0RNP0RN3StatsParser; parser =
 
 # Test bot imports (don't run, just import)
 python -c "import sys; sys.path.insert(0, 'bot'); from ultimate_bot import UltimateETLegacyBot; print('✅ Bot imports successfully')"
-```
+```bash
 
 ---
 
-## ✅ DONE!
+## ✅ DONE
 
 Your workspace is now:
+
 - ✅ No merge conflicts
 - ✅ Virtual environment set up
 - ✅ Root directory clean (72 files moved to archive)

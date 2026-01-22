@@ -15,6 +15,7 @@
 ### Tech Stack
 
 **Frontend:**
+
 - HTML5 (637 lines)
 - JavaScript (654 lines)
 - Tailwind CSS (CDN)
@@ -23,6 +24,7 @@
 - Custom fonts (Inter, JetBrains Mono)
 
 **Backend:**
+
 - FastAPI (Python)
 - PostgreSQL database
 - Discord OAuth2 authentication
@@ -38,6 +40,7 @@
 ### Design System
 
 **Theme: Dark Glass Morphism**
+
 ```css
 Colors:
 - Primary Background: #020617 (slate-950)
@@ -46,9 +49,10 @@ Colors:
 - Accent Cyan: #06b6d4
 - Success Green: #10b981
 - Error Red: #f43f5e
-```
+```text
 
 **UI Components:**
+
 - `.glass-panel` - Blurred glass effect panels
 - `.glass-card` - Hover-interactive cards
 - Custom scrollbars
@@ -81,6 +85,7 @@ Colors:
 ### JavaScript Features
 
 **Core Functions:**
+
 ```javascript
 initApp()              // App initialization, API health check
 loadSeasonInfo()       // Current season data
@@ -89,9 +94,10 @@ loadLeaderboard()      // Top players by DPM
 loadMatches()          // Recent match history
 checkLoginStatus()     // Discord OAuth status
 navigateTo(view)       // Single-page navigation
-```
+```python
 
 **API Integration:**
+
 - Base URL: `http://localhost:8000/api`
 - Auth URL: `http://localhost:8000/auth`
 - Async/await pattern
@@ -99,6 +105,7 @@ navigateTo(view)       // Single-page navigation
 - Real-time server status indicator
 
 **State Management:**
+
 - Session-based (browser sessions)
 - No Redux/Vuex (vanilla JS)
 - DOM manipulation for view switching
@@ -111,6 +118,7 @@ navigateTo(view)       // Single-page navigation
 ### FastAPI Application
 
 **Main App** (`main.py` - 43 lines)
+
 ```python
 Features:
 - FastAPI app with session middleware
@@ -118,7 +126,7 @@ Features:
 - API router inclusion
 - Auth router inclusion
 - Startup/shutdown events
-```
+```python
 
 ### API Routes (`api.py` - 153 lines)
 
@@ -178,6 +186,7 @@ Features:
    - 401 if not authenticated
 
 **Security Features:**
+
 - Session middleware with secret key
 - Environment variables for credentials
 - HTTPS redirect URI support
@@ -186,12 +195,14 @@ Features:
 ### Database Integration
 
 **Database Adapter:**
+
 - Unified adapter pattern
 - Supports both SQLite and PostgreSQL
 - Async query execution
 - Parameter binding
 
 **Services:**
+
 - `SessionDataService` - Session data fetching
 - `SessionStatsAggregator` - Stats calculations
 - `SeasonManager` - Season management
@@ -265,17 +276,19 @@ Features:
 ## 📊 Database Schema Usage
 
 **Tables Referenced:**
+
 - `player_links` - Discord → ET:Legacy mapping
 - `sessions` - Gaming session data
 - `player_comprehensive_stats` - Player statistics
 - Queries via DatabaseAdapter
 
 **Query Pattern:**
+
 ```python
 # Async queries with parameter binding
 result = await db.fetch_one(query, (param1, param2))
 results = await db.fetch_all(query, (param1,))
-```
+```yaml
 
 ---
 
@@ -307,13 +320,15 @@ results = await db.fetch_all(query, (param1,))
 ### Design Patterns
 
 **Card Pattern:**
+
 ```html
 <div class="glass-card p-6 rounded-xl hover:border-brand-blue/30">
     <!-- Content -->
 </div>
-```
+```text
 
 **List Item Pattern:**
+
 ```html
 <div class="flex items-center justify-between group cursor-pointer">
     <div class="flex items-center gap-3">
@@ -323,9 +338,10 @@ results = await db.fetch_all(query, (param1,))
         <!-- Right content -->
     </div>
 </div>
-```
+```text
 
 **Status Indicator:**
+
 ```html
 <div class="flex items-center gap-2">
     <div class="w-2 h-2 rounded-full bg-green-500"></div>
@@ -533,6 +549,7 @@ The website is **perfectly positioned** to showcase the prediction system:
 ## 📈 Project Metrics
 
 **Codebase Size:**
+
 - Frontend HTML: 637 lines
 - Frontend JS: 654 lines
 - Backend Main: 43 lines
@@ -545,6 +562,7 @@ The website is **perfectly positioned** to showcase the prediction system:
 **Database Tables Used:** 4+ (sessions, player_links, player_comprehensive_stats, etc.)
 
 **External Dependencies:**
+
 - FastAPI (backend framework)
 - httpx (async HTTP client)
 - Tailwind CSS (styling)
@@ -608,6 +626,7 @@ The website is **perfectly positioned** to showcase the prediction system:
 **Rating: 8/10** (Excellent foundation, needs polish)
 
 **Readiness:**
+
 - Development: ✅ Ready
 - Staging: 🟡 Needs security/testing
 - Production: 🔴 Needs hardening

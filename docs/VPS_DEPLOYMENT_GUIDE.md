@@ -1,17 +1,19 @@
 # VPS Deployment Guide - Split Architecture
+
 **ET:Legacy Discord Bot - PostgreSQL Database + Bot on Separate Servers**
 
 ## 🏗️ Architecture Overview
 
-```
+```text
 ┌─────────────────────┐         ┌─────────────────────┐
 │   VPS 1: Database   │◄───────►│   VPS 2: Bot        │
 │   PostgreSQL Server │  5432   │   Discord Bot       │
 │   (Debian/Arch)     │         │   (Debian/Arch)     │
 └─────────────────────┘         └─────────────────────┘
-```
+```bash
 
 **Recommended Setup:**
+
 - **VPS 1 (Database)**: 2GB RAM, 20GB SSD - Hosts PostgreSQL
 - **VPS 2 (Bot)**: 1GB RAM, 10GB SSD - Hosts Discord bot
 
@@ -49,7 +51,7 @@ chmod +x tools/setup_postgresql_debian.sh
 sudo ./tools/setup_postgresql_debian.sh
 
 # 5. Save the credentials displayed (they're also in /root/etlegacy_db_credentials.txt)
-```
+```text
 
 ### Option B: Arch/EndeavourOS Database Server
 
@@ -72,7 +74,7 @@ chmod +x tools/setup_postgresql_arch.sh
 sudo ./tools/setup_postgresql_arch.sh
 
 # 5. Save the credentials displayed
-```
+```text
 
 ### Apply Database Schema
 
@@ -86,7 +88,7 @@ sudo -u postgres psql -d etlegacy -f /tmp/schema_postgresql.sql
 
 # Verify schema was applied:
 sudo -u postgres psql -d etlegacy -c "\dt"
-```
+```text
 
 ### Secure Database Server
 
@@ -106,7 +108,7 @@ host    etlegacy    etlegacy_user    BOT_SERVER_IP/32    md5
 
 # Restart PostgreSQL:
 sudo systemctl restart postgresql
-```
+```yaml
 
 ---
 
@@ -141,7 +143,7 @@ sudo -u etlegacy /home/etlegacy/bot/.venv/bin/pip install -r requirements.txt
 
 # 7. Create config.json
 sudo -u etlegacy nano /home/etlegacy/bot/config.json
-```
+```text
 
 ### Option B: Arch/EndeavourOS Bot Server
 
@@ -170,7 +172,7 @@ sudo -u etlegacy /home/etlegacy/bot/.venv/bin/pip install -r requirements.txt
 
 # 7. Create config.json
 sudo -u etlegacy nano /home/etlegacy/bot/config.json
-```
+```text
 
 ### Configure Bot
 
@@ -188,7 +190,7 @@ Create `/home/etlegacy/bot/config.json`:
   "stats_channel_id": "YOUR_DISCORD_CHANNEL_ID",
   "admin_channel_id": "YOUR_DISCORD_CHANNEL_ID"
 }
-```
+```text
 
 ### Test Database Connection
 
@@ -202,7 +204,7 @@ sudo pacman -S postgresql-libs
 
 # Test connection from bot server to database server:
 psql -h DB_SERVER_IP -U etlegacy_user -d etlegacy -c "SELECT version();"
-```
+```sql
 
 ---
 
@@ -224,7 +226,7 @@ ssh etlegacy@BOT_SERVER_IP
 # 4. Run migration
 cd /home/etlegacy/bot
 .venv/bin/python tools/migrate_to_postgresql.py
-```
+```text
 
 ### Option 2: Fresh Start (No Migration)
 
@@ -234,7 +236,7 @@ If you're starting fresh without existing data:
 # Schema is already applied, so just start the bot!
 sudo systemctl start etlegacy-bot
 sudo systemctl status etlegacy-bot
-```
+```yaml
 
 ---
 
@@ -255,7 +257,7 @@ sudo journalctl -u etlegacy-bot -f
 
 # Or view log file directly
 tail -f /home/etlegacy/bot/logs/bot.log
-```
+```sql
 
 ---
 
@@ -273,7 +275,7 @@ git pull origin vps-network-migration
 
 # Restart bot
 sudo systemctl restart etlegacy-bot
-```
+```text
 
 ### Database Backup
 
@@ -288,7 +290,7 @@ pg_dump -U etlegacy_user -d etlegacy -F c -f /tmp/etlegacy_backup_$(date +%Y%m%d
 sudo crontab -e
 # Add this line:
 0 3 * * * pg_dump -U etlegacy_user -d etlegacy -F c -f /backups/etlegacy_$(date +\%Y\%m\%d).dump
-```
+```text
 
 ### Monitor Bot
 
@@ -304,19 +306,19 @@ sudo journalctl -u etlegacy-bot -n 100
 
 # Check for errors
 sudo journalctl -u etlegacy-bot | grep ERROR
-```
+```text
 
 ### Restart Bot
 
 ```bash
 sudo systemctl restart etlegacy-bot
-```
+```text
 
 ### Stop Bot
 
 ```bash
 sudo systemctl stop etlegacy-bot
-```
+```sql
 
 ---
 
@@ -347,7 +349,7 @@ sudo netstat -plnt | grep 5432
 
 # Check firewall on DB server:
 sudo ufw status  # or iptables -L
-```
+```text
 
 ### Bot Won't Start
 
@@ -361,7 +363,7 @@ python3 -m json.tool /home/etlegacy/bot/config.json
 # Test bot manually:
 cd /home/etlegacy/bot
 .venv/bin/python bot/ultimate_bot.py
-```
+```text
 
 ### Migration Fails
 
@@ -374,7 +376,7 @@ ls -lh /home/etlegacy/bot/bot/etlegacy_production.db
 
 # Run migration with verbose output:
 .venv/bin/python tools/migrate_to_postgresql.py
-```
+```yaml
 
 ---
 
@@ -418,15 +420,17 @@ sudo systemctl restart postgresql
 
 ---
 
-## 🎉 You're Done!
+## 🎉 You're Done
 
 Your bot is now running with a production-ready split architecture:
+
 - PostgreSQL on dedicated database server
 - Discord bot on separate application server
 - Secure network configuration
 - Automated startup and monitoring
 
 **Next Steps:**
+
 - Monitor for 24-48 hours
 - Test all commands thoroughly
 - Set up monitoring/alerting (optional)

@@ -3,6 +3,7 @@
 ## Automated Deployment (Recommended)
 
 ### Prerequisites
+
 1. Python 3.8+ installed on Windows
 2. SSH key configured for VPS access
 3. `.env` file with all configuration
@@ -10,16 +11,19 @@
 ### Run Deployment
 
 **Option 1: Windows Batch Script**
+
 ```batch
 deploy.bat
-```
+```text
 
 **Option 2: Python Script Directly**
+
 ```bash
 python deploy_to_linux.py
-```
+```sql
 
 The script will automatically:
+
 - ✓ Test SSH connection
 - ✓ Install PostgreSQL 16
 - ✓ Install Python dependencies
@@ -34,11 +38,13 @@ The script will automatically:
 ## Manual Deployment (If Automated Script Fails)
 
 ### Step 1: Connect to VPS
+
 ```bash
 ssh samba@192.168.64.116
-```
+```text
 
 ### Step 2: Install Dependencies
+
 ```bash
 # Update system
 sudo apt update && sudo apt upgrade -y
@@ -51,9 +57,10 @@ sudo apt install -y python3 python3-pip python3-venv git
 
 # Install build dependencies
 sudo apt install -y python3-dev libpq-dev
-```
+```text
 
 ### Step 3: Setup PostgreSQL
+
 ```bash
 # Switch to postgres user
 sudo -u postgres psql
@@ -65,16 +72,19 @@ GRANT ALL PRIVILEGES ON DATABASE etlegacy TO etlegacy_user;
 \c etlegacy
 GRANT ALL ON SCHEMA public TO etlegacy_user;
 \q
-```
+```text
 
 ### Step 4: Clone Repository
+
 ```bash
 cd /slomix
 git clone -b vps-network-migration https://github.com/iamez/slomix.git .
-```
+```text
 
 ### Step 5: Configure Bot
+
 Create `/slomix/bot/config.json`:
+
 ```json
 {
   "token": "YOUR_DISCORD_TOKEN_FROM_ENV",
@@ -87,35 +97,40 @@ Create `/slomix/bot/config.json`:
     "password": "etlegacy_secure_2025"
   }
 }
-```
+```text
 
 ### Step 6: Setup Python Environment
+
 ```bash
 cd /slomix
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install discord.py asyncpg matplotlib numpy python-dotenv
-```
+```text
 
 ### Step 7: Populate Database
+
 ```bash
 cd /slomix
 venv/bin/python3 postgresql_database_manager.py
-```
+```python
 
 This will:
+
 - Create all database tables
 - Import stats from `/home/et/.etlegacy/legacy/gamestats`
 - Calculate gaming sessions
 - Run validation checks
 
 ### Step 8: Create Systemd Service
+
 ```bash
 sudo nano /etc/systemd/system/etlegacy-bot.service
-```
+```text
 
 Paste this content:
+
 ```ini
 [Unit]
 Description=ET Legacy Discord Bot
@@ -134,16 +149,18 @@ StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-```
+```text
 
 ### Step 9: Enable and Start Service
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable etlegacy-bot
 sudo systemctl start etlegacy-bot
-```
+```text
 
 ### Step 10: Verify Deployment
+
 ```bash
 # Check service status
 sudo systemctl status etlegacy-bot
@@ -153,13 +170,14 @@ sudo journalctl -u etlegacy-bot -f
 
 # Check database
 psql -U etlegacy_user -d etlegacy -c "SELECT COUNT(*) FROM rounds;"
-```
+```yaml
 
 ---
 
 ## Post-Deployment Management
 
 ### View Logs
+
 ```bash
 # Live logs (follow mode)
 sudo journalctl -u etlegacy-bot -f
@@ -169,9 +187,10 @@ sudo journalctl -u etlegacy-bot -n 100
 
 # Logs from today
 sudo journalctl -u etlegacy-bot --since today
-```
+```text
 
 ### Control Bot Service
+
 ```bash
 # Restart bot
 sudo systemctl restart etlegacy-bot
@@ -184,16 +203,18 @@ sudo systemctl start etlegacy-bot
 
 # Check status
 sudo systemctl status etlegacy-bot
-```
+```sql
 
 ### Update Bot Code
+
 ```bash
 cd /slomix
 git pull origin vps-network-migration
 sudo systemctl restart etlegacy-bot
-```
+```text
 
 ### Database Management
+
 ```bash
 # Connect to PostgreSQL
 psql -U etlegacy_user -d etlegacy
@@ -208,20 +229,22 @@ SELECT gaming_session_id, COUNT(*) as rounds
 FROM rounds
 GROUP BY gaming_session_id
 ORDER BY gaming_session_id;
-```
+```python
 
 ### Re-import Stats (Nuclear Rebuild)
+
 ```bash
 cd /slomix
 venv/bin/python3 postgresql_database_manager.py
 sudo systemctl restart etlegacy-bot
-```
+```yaml
 
 ---
 
 ## Troubleshooting
 
 ### Bot Won't Start
+
 ```bash
 # Check logs for errors
 sudo journalctl -u etlegacy-bot -n 50
@@ -234,9 +257,10 @@ psql -U etlegacy_user -d etlegacy -c "SELECT 1;"
 
 # Check config file
 cat /slomix/bot/config.json
-```
+```text
 
 ### Database Connection Issues
+
 ```bash
 # Reset PostgreSQL password
 sudo -u postgres psql
@@ -248,9 +272,10 @@ sudo ss -tunlp | grep 5432
 
 # Edit pg_hba.conf if needed
 sudo nano /etc/postgresql/16/main/pg_hba.conf
-```
+```text
 
 ### Permission Issues
+
 ```bash
 # Fix ownership
 sudo chown -R samba:samba /slomix
@@ -259,9 +284,10 @@ sudo chown -R samba:samba /slomix
 sudo -u postgres psql -d etlegacy
 GRANT ALL ON SCHEMA public TO etlegacy_user;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO etlegacy_user;
-```
+```python
 
 ### Import Stats Not Working
+
 ```bash
 # Check stats directory exists and has files
 ls -la /home/et/.etlegacy/legacy/gamestats/
@@ -271,7 +297,7 @@ sudo -u samba ls /home/et/.etlegacy/legacy/gamestats/
 
 # If permission denied, add samba to et group
 sudo usermod -aG et samba
-```
+```sql
 
 ---
 
@@ -287,6 +313,7 @@ The deployment script reads these values from your `.env` file:
 - `REMOTE_STATS_PATH` - Stats directory on VPS
 
 PostgreSQL credentials (default):
+
 - Host: localhost
 - Port: 5432
 - Database: etlegacy
@@ -306,6 +333,7 @@ Once deployed, test these Discord commands:
 5. `!help` - Should show all available commands
 
 Expected data:
+
 - 245 rounds
 - 18 gaming sessions
 - 1,651 player stats
@@ -327,25 +355,28 @@ Expected data:
 ## Backup Strategy
 
 ### Database Backup
+
 ```bash
 # Backup database
 pg_dump -U etlegacy_user etlegacy > backup_$(date +%Y%m%d_%H%M%S).sql
 
 # Restore from backup
 psql -U etlegacy_user etlegacy < backup_20251105_120000.sql
-```
+```text
 
 ### Full Backup
+
 ```bash
 # Backup everything
 tar -czf slomix_backup_$(date +%Y%m%d).tar.gz /slomix
-```
+```yaml
 
 ---
 
 ## Performance Monitoring
 
 ### Check Resource Usage
+
 ```bash
 # CPU and memory
 htop
@@ -355,9 +386,10 @@ df -h
 
 # PostgreSQL stats
 psql -U etlegacy_user -d etlegacy -c "SELECT pg_size_pretty(pg_database_size('etlegacy'));"
-```
+```text
 
 ### Optimize PostgreSQL
+
 ```bash
 # Run VACUUM ANALYZE periodically
 psql -U etlegacy_user -d etlegacy -c "VACUUM ANALYZE;"

@@ -115,13 +115,15 @@ class ProximityParserV3:
                         self.metadata['round_num'] = int(line.split('=')[1])
                         continue
                     if line.startswith('# crossfire_window='):
-                        self.metadata['crossfire_window'] = int(line.split('=')[1])
+                        value = int(line.split('=')[1])
+                        self.metadata['crossfire_window'] = value
                         continue
                     if line.startswith('# escape_time='):
                         self.metadata['escape_time'] = int(line.split('=')[1])
                         continue
                     if line.startswith('# escape_distance='):
-                        self.metadata['escape_distance'] = int(line.split('=')[1])
+                        value = int(line.split('=')[1])
+                        self.metadata['escape_distance'] = value
                         continue
                     
                     # Section detection
@@ -147,7 +149,8 @@ class ProximityParserV3:
                     elif section == 'movement_heatmap':
                         self._parse_movement_heatmap_line(line)
             
-            self.logger.info(f"Parsed {len(self.engagements)} engagements from {filepath}")
+            count = len(self.engagements)
+            self.logger.info(f"Parsed {count} engagements from {filepath}")
             return True
             
         except Exception as e:
@@ -318,7 +321,9 @@ class ProximityParserV3:
                 }
                 for a in eng.attackers.values()
             ])
-            cf_participants_json = json.dumps(eng.crossfire_participants) if eng.crossfire_participants else None
+            cf_participants_json = None
+            if eng.crossfire_participants:
+                cf_participants_json = json.dumps(eng.crossfire_participants)
             
             query = """
                 INSERT INTO combat_engagement (
@@ -326,14 +331,17 @@ class ProximityParserV3:
                     start_time_ms, end_time_ms, duration_ms,
                     target_guid, target_name, target_team,
                     outcome, total_damage_taken, killer_guid, killer_name,
-                    position_path, start_x, start_y, start_z, end_x, end_y, end_z,
+                    position_path,
+                    start_x, start_y, start_z, end_x, end_y, end_z,
                     distance_traveled, attackers, num_attackers,
                     is_crossfire, crossfire_delay_ms, crossfire_participants
                 ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                    $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                    $11, $12, $13, $14, $15, $16, $17, $18,
+                    $19, $20, $21, $22, $23, $24, $25, $26, $27
                 )
-                ON CONFLICT (session_date, round_number, engagement_id) DO NOTHING
+                ON CONFLICT (session_date, round_number, engagement_id)
+                DO NOTHING
             """
             
             await self.db_adapter.execute(query, (
@@ -420,40 +428,79 @@ class ProximityParserV3:
         
         # Upsert to database
         for guid, stats in player_stats.items():
-            avg_escape = sum(stats['escape_distances']) / len(stats['escape_distances']) \
-                if stats['escape_distances'] else None
-            avg_duration = sum(stats['engagement_durations']) / len(stats['engagement_durations']) \
-                if stats['engagement_durations'] else None
-            avg_crossfire_delay = sum(stats['crossfire_delays']) / len(stats['crossfire_delays']) \
-                if stats['crossfire_delays'] else None
+            escape_dists = stats['escape_distances']
+            avg_escape = (
+                sum(escape_dists) / len(escape_dists)
+                if escape_dists else None
+            )
+            eng_durs = stats['engagement_durations']
+            avg_duration = (
+                sum(eng_durs) / len(eng_durs)
+                if eng_durs else None
+            )
+            cf_delays = stats['crossfire_delays']
+            avg_crossfire_delay = (
+                sum(cf_delays) / len(cf_delays)
+                if cf_delays else None
+            )
             
             query = """
                 INSERT INTO player_teamplay_stats (
                     player_guid, player_name,
-                    crossfire_participations, crossfire_kills, crossfire_damage,
-                    crossfire_final_blows, avg_crossfire_delay_ms,
+                    crossfire_participations, crossfire_kills,
+                    crossfire_damage, crossfire_final_blows,
+                    avg_crossfire_delay_ms,
                     solo_kills, solo_engagements,
-                    times_targeted, times_focused, focus_escapes, focus_deaths,
+                    times_targeted, times_focused,
+                    focus_escapes, focus_deaths,
                     solo_escapes, solo_deaths,
-                    avg_escape_distance, avg_engagement_duration_ms, total_damage_taken
+                    avg_escape_distance, avg_engagement_duration_ms,
+                    total_damage_taken
                 ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9,
+                    $10, $11, $12, $13, $14, $15, $16, $17, $18
                 )
                 ON CONFLICT (player_guid) DO UPDATE SET
                     player_name = EXCLUDED.player_name,
-                    crossfire_participations = player_teamplay_stats.crossfire_participations + EXCLUDED.crossfire_participations,
-                    crossfire_kills = player_teamplay_stats.crossfire_kills + EXCLUDED.crossfire_kills,
-                    crossfire_damage = player_teamplay_stats.crossfire_damage + EXCLUDED.crossfire_damage,
-                    crossfire_final_blows = player_teamplay_stats.crossfire_final_blows + EXCLUDED.crossfire_final_blows,
-                    solo_kills = player_teamplay_stats.solo_kills + EXCLUDED.solo_kills,
-                    solo_engagements = player_teamplay_stats.solo_engagements + EXCLUDED.solo_engagements,
-                    times_targeted = player_teamplay_stats.times_targeted + EXCLUDED.times_targeted,
-                    times_focused = player_teamplay_stats.times_focused + EXCLUDED.times_focused,
-                    focus_escapes = player_teamplay_stats.focus_escapes + EXCLUDED.focus_escapes,
-                    focus_deaths = player_teamplay_stats.focus_deaths + EXCLUDED.focus_deaths,
-                    solo_escapes = player_teamplay_stats.solo_escapes + EXCLUDED.solo_escapes,
-                    solo_deaths = player_teamplay_stats.solo_deaths + EXCLUDED.solo_deaths,
-                    total_damage_taken = player_teamplay_stats.total_damage_taken + EXCLUDED.total_damage_taken,
+                    crossfire_participations =
+                        player_teamplay_stats.crossfire_participations
+                        + EXCLUDED.crossfire_participations,
+                    crossfire_kills =
+                        player_teamplay_stats.crossfire_kills
+                        + EXCLUDED.crossfire_kills,
+                    crossfire_damage =
+                        player_teamplay_stats.crossfire_damage
+                        + EXCLUDED.crossfire_damage,
+                    crossfire_final_blows =
+                        player_teamplay_stats.crossfire_final_blows
+                        + EXCLUDED.crossfire_final_blows,
+                    solo_kills =
+                        player_teamplay_stats.solo_kills
+                        + EXCLUDED.solo_kills,
+                    solo_engagements =
+                        player_teamplay_stats.solo_engagements
+                        + EXCLUDED.solo_engagements,
+                    times_targeted =
+                        player_teamplay_stats.times_targeted
+                        + EXCLUDED.times_targeted,
+                    times_focused =
+                        player_teamplay_stats.times_focused
+                        + EXCLUDED.times_focused,
+                    focus_escapes =
+                        player_teamplay_stats.focus_escapes
+                        + EXCLUDED.focus_escapes,
+                    focus_deaths =
+                        player_teamplay_stats.focus_deaths
+                        + EXCLUDED.focus_deaths,
+                    solo_escapes =
+                        player_teamplay_stats.solo_escapes
+                        + EXCLUDED.solo_escapes,
+                    solo_deaths =
+                        player_teamplay_stats.solo_deaths
+                        + EXCLUDED.solo_deaths,
+                    total_damage_taken =
+                        player_teamplay_stats.total_damage_taken
+                        + EXCLUDED.total_damage_taken,
                     last_updated = CURRENT_TIMESTAMP
             """
             

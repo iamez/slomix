@@ -5,6 +5,7 @@
 This document describes the new webhook-based notification system that replaces the WebSocket approach for live stats posting.
 
 **Why the change?**
+
 - WebSocket server was unreliable (connection refused errors)
 - Required open port on VPS (security concern)
 - Complex connection management (reconnect loops)
@@ -12,7 +13,7 @@ This document describes the new webhook-based notification system that replaces 
 
 ## Architecture
 
-```
+```sql
 ┌─────────────────┐    ┌──────────────────────┐    ┌─────────────┐
 │ ET:Legacy Game  │───▶│ stats_webhook_notify │───▶│   Discord   │
 │    Server       │    │     (VPS script)     │    │   Webhook   │
@@ -33,7 +34,7 @@ This document describes the new webhook-based notification system that replaces 
 │  Bot (SSH Poll) │───▶│   PostgreSQL DB      │──────────┘
 │  ultimate_bot   │    │   (stats storage)    │   Rich embeds
 └─────────────────┘    └──────────────────────┘   from bot commands
-```
+```python
 
 ## Components
 
@@ -44,6 +45,7 @@ This document describes the new webhook-based notification system that replaces 
 **Function:** Watches the stats directory for new files and sends Discord webhook notifications.
 
 **Features:**
+
 - Uses `watchdog` for filesystem monitoring
 - Tracks processed files in state file (survives restarts)
 - Validates stats file format before notifying
@@ -54,6 +56,7 @@ This document describes the new webhook-based notification system that replaces 
 **File:** `bot/ultimate_bot.py`
 
 **Changes:**
+
 - WebSocket client disabled (`WS_ENABLED=false` in `.env`)
 - SSH polling continues as primary mechanism
 - No code changes needed for webhook reception (Discord handles it)
@@ -87,15 +90,16 @@ pip3 install watchdog requests
 export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/YOUR_ID/YOUR_TOKEN"
 export STATS_PATH="/home/et/server/legacy/stats"
 python3 /home/et/scripts/stats_webhook_notify.py
-```
+```text
 
 ### Step 3: Create Systemd Service
 
 ```bash
 sudo nano /etc/systemd/system/et-stats-webhook.service
-```
+```text
 
 Contents:
+
 ```ini
 [Unit]
 Description=ET:Legacy Stats Webhook Notifier
@@ -114,25 +118,27 @@ RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-```
+```text
 
 Enable and start:
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable et-stats-webhook
 sudo systemctl start et-stats-webhook
 sudo systemctl status et-stats-webhook
-```
+```sql
 
 ### Step 4: Update Bot Configuration
 
 In `.env` on bot machine:
+
 ```bash
 # WebSocket DISABLED
 WS_ENABLED=false
 #WS_HOST=puran.hehe.si
 #WS_PORT=8765
-```
+```text
 
 No bot restart needed if already running with WS disabled.
 
@@ -170,7 +176,7 @@ journalctl -u et-stats-webhook -f
 curl -X POST "YOUR_WEBHOOK_URL" \
   -H "Content-Type: application/json" \
   -d '{"content":"Test message"}'
-```
+```text
 
 ### Files Not Detected
 
@@ -180,7 +186,7 @@ ls -la /home/et/server/legacy/stats/
 
 # Check state file
 cat /home/et/scripts/state/processed_files.json
-```
+```text
 
 ### Permission Issues
 
@@ -190,29 +196,33 @@ sudo chown -R et:et /home/et/scripts/
 
 # Check stats directory is readable
 ls -la /home/et/server/legacy/stats/
-```
+```python
 
 ## Migration Notes
 
 ### Old System (WebSocket)
 
 Files:
+
 - `vps_scripts/ws_notify_server.py` - WebSocket server (deprecated)
 - `bot/services/automation/ws_client.py` - WebSocket client
 
 Config:
+
 ```bash
 WS_ENABLED=true
 WS_HOST=puran.hehe.si
 WS_PORT=8765
-```
+```python
 
 ### New System (Webhook)
 
 Files:
+
 - `vps_scripts/stats_webhook_notify.py` - Webhook notifier
 
 Config:
+
 ```bash
 WS_ENABLED=false
 # Webhook URL configured on VPS only

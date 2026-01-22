@@ -7,7 +7,7 @@ Provides REST API endpoints for player stats, leaderboards, and predictions.
 
 ## Architecture
 
-```
+```python
 Frontend (index.html + app.js)
     │
     │ HTTP/REST
@@ -21,7 +21,7 @@ FastAPI (main.py)
     └── Database (local_database_adapter.py)
             │
             └── PostgreSQL (shared with bot)
-```
+```python
 
 ## File Reference
 
@@ -49,19 +49,22 @@ FastAPI (main.py)
 ## Security Requirements
 
 ### SESSION_SECRET (CRITICAL)
+
 ```python
 # main.py - No defaults allowed
 SESSION_SECRET = os.getenv("SESSION_SECRET")
 if not SESSION_SECRET or SESSION_SECRET == "super-secret-key-change-me":
     raise ValueError("SESSION_SECRET must be set to secure value")
-```
+```text
 
 Generate a secret:
+
 ```bash
 python -c 'import secrets; print(secrets.token_urlsafe(32))'
-```
+```text
 
 ### CORS Configuration
+
 ```python
 # Restricted to specific origins
 allow_origins=[
@@ -69,9 +72,10 @@ allow_origins=[
     "https://your-domain.com"
 ]
 allow_headers=["Content-Type", "Authorization", "X-Requested-With"]
-```
+```text
 
 ### SQL Injection Prevention
+
 ```python
 # All queries use parameterized SQL
 from website.backend.routers.api import escape_like_pattern
@@ -79,7 +83,7 @@ from website.backend.routers.api import escape_like_pattern
 # For LIKE queries
 pattern = escape_like_pattern(user_input)
 query = "SELECT * FROM players WHERE name LIKE ?"
-```
+```yaml
 
 ## API Endpoints
 
@@ -114,7 +118,7 @@ DATABASE_URL = f"postgresql://{user}:{password}@{host}:{port}/{db}"
 async def fetch_all(query: str, params: tuple = ()):
     async with pool.acquire() as conn:
         return await conn.fetch(query, *params)
-```
+```text
 
 ## Running the Backend
 
@@ -125,7 +129,7 @@ uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
 # Production (systemd)
 sudo systemctl start etlegacy-website
-```
+```text
 
 ## Environment Variables
 
@@ -144,11 +148,12 @@ SESSION_SECRET=<generate-with-secrets-module>
 DISCORD_CLIENT_ID=...
 DISCORD_CLIENT_SECRET=...
 DISCORD_REDIRECT_URI=...
-```
+```text
 
 ## Common Patterns
 
 ### Endpoint with Pagination
+
 ```python
 @router.get("/leaderboard")
 async def get_leaderboard(
@@ -164,9 +169,10 @@ async def get_leaderboard(
         LIMIT ? OFFSET ?
     """
     return await db.fetch_all(query, (limit, offset))
-```
+```text
 
 ### Error Handling
+
 ```python
 from fastapi import HTTPException
 

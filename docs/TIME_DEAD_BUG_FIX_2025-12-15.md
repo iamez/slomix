@@ -12,7 +12,8 @@
 ## Bug Report Analysis
 
 ### Original Issue (#4 from Bug Report)
-```
+
+```text
 Impossible time_dead values - Players showing dead longer than they played
 
 Example: qmr in Round 8054
@@ -22,7 +23,7 @@ Example: qmr in Round 8054
 - Time Dead Minutes: 100.424
 
 This is mathematically impossible - you can't be dead longer than you played!
-```
+```sql
 
 ### Corruption Evidence from PostgreSQL
 
@@ -31,7 +32,7 @@ SELECT player_name, time_played_minutes, time_dead_minutes, time_dead_ratio
 FROM player_comprehensive_stats 
 WHERE time_dead_minutes > time_played_minutes 
 ORDER BY time_dead_minutes DESC LIMIT 10;
-```
+```yaml
 
 | Player | Time Played | Time Dead | Ratio |
 |--------|-------------|-----------|-------|
@@ -54,7 +55,8 @@ ORDER BY time_dead_minutes DESC LIMIT 10;
 
 ### The Data Pipeline
 
-```
+```python
+
 ┌─────────────────────┐     ┌──────────────────────┐     ┌─────────────────────┐
 │   ET:Legacy Game    │────▶│   c0rnp0rn.lua       │────▶│   Stats Files       │
 │   (Game Server)     │     │   (Stats Collection) │     │   (R1 & R2 .txt)    │
@@ -65,11 +67,13 @@ ORDER BY time_dead_minutes DESC LIMIT 10;
 │   PostgreSQL DB     │◀────│   DB Manager         │◀────│   Parser            │
 │   (Production)      │     │   (Import Logic)     │     │   (R2 Differential) │
 └─────────────────────┘     └──────────────────────┘     └─────────────────────┘
-```
+
+```python
 
 ### Key Insight: Round 2 Files Contain CUMULATIVE Stats
 
 When ET:Legacy plays a map with 2 rounds:
+
 - **Round 1 file**: Contains R1-only stats ✅
 - **Round 2 file**: Contains R1+R2 CUMULATIVE stats ⚠️
 
@@ -88,7 +92,7 @@ To get R2-only stats, the parser must calculate: `R2_only = R2_cumulative - R1`
 elif key in ['time_dead_minutes', 'time_dead_ratio']:
     # SKIP time_dead fields - we'll calculate them properly later
     pass  # ❌ WRONG: This skipped the R2-R1 subtraction!
-```
+```text
 
 The parser calculated differentials for all fields EXCEPT death time, which was skipped entirely.
 
@@ -105,9 +109,10 @@ r2_time_dead_ratio = r2_obj.get('time_dead_ratio', 0)  # ❌ CUMULATIVE ratio!
 # Calculate time_dead_minutes for R2 differential using R2 ratio
 if diff_time_minutes > 0 and r2_time_dead_ratio > 0:
     time_dead_mins = diff_time_minutes * (r2_time_dead_ratio / 100.0)  # ❌ WRONG!
-```
+```text
 
 **The Fatal Flaw**: This formula used:
+
 - `diff_time_minutes` = R2-only played time (correct)
 - `r2_time_dead_ratio` = R2 CUMULATIVE ratio (WRONG!)
 
@@ -116,28 +121,38 @@ if diff_time_minutes > 0 and r2_time_dead_ratio > 0:
 Let's trace through qmr's actual values:
 
 **Raw Lua Output (correct values):**
-```
+
+```text
+
 Round 1: time_played=13.7 min, time_dead=3.8 min, ratio=27.9%
 Round 2: time_played=21.7 min, time_dead=5.0 min, ratio=23.1% (cumulative)
-```
+
+```text
 
 **Correct R2-only calculation:**
-```
+
+```text
+
 R2_only_played = 21.7 - 13.7 = 8.0 min
 R2_only_dead = 5.0 - 3.8 = 1.2 min
 R2_only_ratio = (1.2 / 8.0) × 100 = 15%
-```
+
+```text
 
 **What the buggy code did:**
-```
+
+```sql
+
 R2_only_played = 8.0 min (correct subtraction)
 R2_cumulative_ratio = 593.76% (from cumulative, which includes R1's high death ratio!)
 R2_only_dead = 8.0 × (593.76 / 100) = 47.5 min ❌ WRONG!
-```
+
+```javascript
 
 Wait, but database shows 100.4 min... Let me check if there was another multiplier issue:
 
 **Investigating the 1275% ratio:**
+
 ```python
 # Database values for qmr:
 time_played_minutes = 8.0
@@ -156,7 +171,7 @@ time_dead_ratio = 1255.3
 # 21.7 × 5.93 = 128.7 min (close to 100 but not exact)
 
 # Actually the issue is in the database manager too!
-```
+```python
 
 ### Second Bug: Database Manager Also Recalculated
 
@@ -168,7 +183,7 @@ time_dead_ratio = 1255.3
 raw_td = obj_stats.get('time_dead_ratio', 0) or 0
 time_dead_ratio = raw_td * 100.0 if raw_td <= 1 else float(raw_td)
 time_dead_minutes = time_minutes * (time_dead_ratio / 100.0)  # ❌ Recalculated!
-```
+```python
 
 The database manager IGNORED the parser's `time_dead_minutes` and recalculated it using whatever ratio came through - which was the corrupted cumulative ratio.
 
@@ -191,7 +206,7 @@ elif key == 'time_dead_minutes':
 elif key == 'time_dead_ratio':
     # Skip ratio here - will be recalculated from differential values below
     pass
-```
+```python
 
 ### Fix #2: Parser - Recalculate Ratio from Differential Values
 
@@ -213,7 +228,7 @@ if diff_time_minutes > 0 and diff_dead_minutes > 0:
     differential_player['objective_stats']['time_dead_ratio'] = min(100.0, calculated_ratio)
 else:
     differential_player['objective_stats']['time_dead_ratio'] = 0.0
-```
+```python
 
 ### Fix #3: Database Manager - Use Parsed Values Directly
 
@@ -231,7 +246,7 @@ time_dead_minutes = float(obj_stats.get('time_dead_minutes', 0) or 0)
 if time_dead_ratio > 100.0:
     time_dead_ratio = min(100.0, time_dead_ratio)
     time_dead_minutes = min(time_dead_minutes, time_minutes)
-```
+```python
 
 ---
 
@@ -257,7 +272,8 @@ if time_dead_ratio > 100.0:
 
 ### Test Results
 
-```
+```text
+
 ✅ Test 1: Basic differential calculation
    R1: 5.0 min played, 1.0 min dead
    R2 cumulative: 12.0 min played, 2.5 min dead
@@ -275,15 +291,19 @@ if time_dead_ratio > 100.0:
    R2 cumulative: 8.0 min played, 6.5 min dead
    Expected R2-only: 5.0 min played, 4.0 min dead, 80% ratio
    Result: PASS
-```
+
+```text
 
 ### Raw Lua Output Verification
 
 Verified that c0rnp0rn.lua outputs correct values:
-```
+
+```text
+
 qmr Round 1: time_dead_ratio=27.9%, time_dead_minutes=1.2 ✅
 qmr Round 2 (cumulative): time_dead_ratio=23.1%, time_dead_minutes=5.0 ✅
-```
+
+```sql
 
 The Lua script was NOT the problem - it outputs correct data. The corruption happened in Python.
 
@@ -292,23 +312,27 @@ The Lua script was NOT the problem - it outputs correct data. The corruption hap
 ## Remediation Steps
 
 ### Immediate (Code Fix)
+
 - [x] Fix parser R2 differential calculation
 - [x] Fix database manager to use parsed values
 - [x] Create validation tests
 - [x] Document the bug and fix
 
 ### Deployment Required
+
 1. Deploy fixed code to VPS
 2. Rebuild database from raw stats files:
+
    ```bash
    cd /path/to/bot
    python postgresql_database_manager.py
    # Select option 2: Rebuild from scratch
-   ```
+   ```sql
 
 ### Why Database Rebuild is Necessary
 
 The corrupted records cannot be fixed with a SQL UPDATE because:
+
 - The original correct values from Lua were lost during the bad import
 - We only have the inflated calculated values stored
 - The raw stats files still exist and contain the correct data
@@ -335,7 +359,8 @@ Rebuilding reimports all 3,324+ records with the fixed logic, correcting the 43 
 
 When the parser skipped death time subtraction but kept the cumulative ratio:
 
-```
+```sql
+
 R1 stats: played=13.7 min, dead=3.8 min → ratio = 27.7%
 R2 cumulative: played=21.7 min, dead=5.0 min → ratio = 23.1%
 
@@ -344,12 +369,14 @@ R2_only_played = 21.7 - 13.7 = 8.0 min ✅ (correctly subtracted)
 R2_cumulative_ratio = 593.76% ← This came from multiplied/corrupted chain
 
 The ratio got inflated because:
+
 1. Death time wasn't subtracted
 2. Formula multiplied small played time by large cumulative ratio
 3. Then stored that as "death time"
 4. Then calculated ratio from that → even larger ratio
 5. Cycle repeated on subsequent imports
-```
+
+```text
 
 ### The 100x Multiplier Mystery
 

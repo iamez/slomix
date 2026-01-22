@@ -22,7 +22,7 @@ Focus: Systematic, merge-safe, no duplicate functions.
 
 ## v3 Lua Structure (What Exists)
 
-```
+```text
 proximity_tracker.lua (641 lines)
 ├── config (lines 21-41)
 ├── tracker state (lines 44-67)
@@ -52,7 +52,7 @@ proximity_tracker.lua (641 lines)
     ├── et_RunFrame()
     ├── et_Damage()
     └── et_Obituary()
-```
+```yaml
 
 ---
 
@@ -61,6 +61,7 @@ proximity_tracker.lua (641 lines)
 **Location:** Lines 21-41
 
 **What to change:**
+
 ```lua
 -- OLD (v3)
 position_sample_interval = 2000, -- sample every 2 seconds during engagement
@@ -69,9 +70,10 @@ position_sample_interval = 2000, -- sample every 2 seconds during engagement
 position_sample_interval = 500,       -- 2 samples per second (all players)
 precombat_sample_interval = 500,      -- pre-combat sampling rate
 spawn_exit_distance = 400,            -- units from spawn to count as "exited"
-```
+```text
 
 **Full v4 config block:**
+
 ```lua
 local config = {
     enabled = true,
@@ -98,7 +100,7 @@ local config = {
     -- Minimum damage to count
     min_damage = 1
 }
-```
+```yaml
 
 ---
 
@@ -107,6 +109,7 @@ local config = {
 **Location:** Lines 44-67
 
 **Add new state fields:**
+
 ```lua
 local tracker = {
     -- EXISTING (keep all)
@@ -135,7 +138,7 @@ local tracker = {
         ALLIES = { wave_time = 30000, last_spawn = 0 }
     }
 }
-```
+```yaml
 
 ---
 
@@ -144,6 +147,7 @@ local tracker = {
 **Location:** After line 129 (after `gameTime()`)
 
 **Add these new functions:**
+
 ```lua
 -- ===== NEW v4 UTILITY FUNCTIONS =====
 
@@ -224,7 +228,7 @@ local function getRoundContext()
         allies_score = allies_score
     }
 end
-```
+```yaml
 
 ---
 
@@ -233,6 +237,7 @@ end
 **Location:** After new utility functions (new section)
 
 **Add spawn journey management:**
+
 ```lua
 -- ===== SPAWN JOURNEY TRACKING (NEW in v4) =====
 
@@ -360,7 +365,7 @@ end
 local function endJourney(clientnum)
     tracker.player_journeys[clientnum] = nil
 end
-```
+```yaml
 
 ---
 
@@ -371,6 +376,7 @@ end
 **What to change:** Add journey data and respawn context to engagement
 
 **Replace the function with:**
+
 ```lua
 local function createEngagement(target_slot)
     tracker.engagement_counter = tracker.engagement_counter + 1
@@ -474,7 +480,7 @@ local function createEngagement(target_slot)
 
     return engagement
 end
-```
+```yaml
 
 ---
 
@@ -483,6 +489,7 @@ end
 **Location:** After `et_Obituary()` (before module end)
 
 **Add new callback:**
+
 ```lua
 function et_ClientSpawn(clientnum, revived)
     if not config.enabled then return end
@@ -501,7 +508,7 @@ function et_ClientSpawn(clientnum, revived)
     -- Create new journey for this player
     createJourney(clientnum)
 end
-```
+```yaml
 
 ---
 
@@ -512,6 +519,7 @@ end
 **What to change:** Add pre-combat position sampling for ALL players
 
 **Replace with:**
+
 ```lua
 local last_gamestate = -1
 
@@ -564,7 +572,7 @@ function et_RunFrame(levelTime)
         end
     end
 end
-```
+```sql
 
 ---
 
@@ -575,13 +583,14 @@ end
 **What to change:** Update position sampling interval from 2000 to 1000
 
 **In checkEscapes(), line 378:**
+
 ```lua
 -- OLD (v3)
 if time_since_sample >= config.position_sample_interval then
 
 -- NEW (v4) - already uses config.position_sample_interval,
 -- just ensure config is updated to 1000
-```
+```sql
 
 No code change needed here if config is updated.
 
@@ -594,6 +603,7 @@ No code change needed here if config is updated.
 **What to change:** Add new fields to output
 
 **Update header (line 448-460):**
+
 ```lua
 local header = string.format(
     "# PROXIMITY_TRACKER_V4\n" ..
@@ -614,9 +624,10 @@ local header = string.format(
     getSpawnWaveInfo("AXIS").wave_time,
     getSpawnWaveInfo("ALLIES").wave_time
 )
-```
+```sql
 
 **Update engagement format (new columns):**
+
 ```lua
 -- Add these to the engagement line format (after existing fields)
 -- spawn_time;spawn_exit_time;time_in_spawn;distance_before_combat;
@@ -655,7 +666,7 @@ local line = string.format(
     eng.initial_health or 100,
     eng.path_from_spawn and serializePositions(eng.path_from_spawn) or ""
 )
-```
+```sql
 
 ---
 
@@ -664,6 +675,7 @@ local line = string.format(
 **Location:** Lines 542-560
 
 **Add journey reset:**
+
 ```lua
 function et_InitGame(levelTime, randomSeed, restart)
     et.RegisterModname(modname .. " " .. version)

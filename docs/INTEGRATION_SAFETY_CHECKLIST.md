@@ -1,4 +1,5 @@
 # Integration Safety Checklist & Rollback Strategy
+
 **Competitive Analytics System Integration**
 *Generated: 2025-11-28*
 
@@ -26,7 +27,9 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ### Environment Preparation
 
 #### Database Backup
+
 - [ ] Full PostgreSQL backup completed
+
   ```bash
   # Backup command
   pg_dump -h localhost -U etlegacy_user -d etlegacy > \
@@ -34,26 +37,34 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 
   # Verify backup size (should be >10 MB)
   ls -lh etlegacy_production_backup_*.sql
-  ```
+  ```bash
+
 - [ ] Backup stored in safe location (off-server)
 - [ ] Backup tested (able to restore to test database)
 - [ ] Backup retention: Keep last 7 days
 
 #### Git Repository State
+
 - [ ] All changes committed to feature branch
+
   ```bash
   git status  # Should show "nothing to commit, working tree clean"
-  ```
+  ```text
+
 - [ ] Feature branch: `feature/competitive-analytics` created
+
 - [ ] Current commit tagged: `pre-competitive-analytics-v1.0`
+
   ```bash
   git tag pre-competitive-analytics-v1.0
   git push origin pre-competitive-analytics-v1.0
-  ```
+  ```python
+
 - [ ] Remote repository up to date
 - [ ] No uncommitted changes in production branch
 
 #### Test Environment
+
 - [ ] Test server running (separate from production)
 - [ ] Test database seeded with production data copy
 - [ ] Test Discord bot token configured
@@ -61,37 +72,49 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 - [ ] Test channels configured for output verification
 
 #### Configuration Management
+
 - [ ] Feature flags added to `bot/config.py`
+
   ```python
   # Feature Flags for Competitive Analytics
   ENABLE_TEAM_SPLIT_DETECTION = False  # Default: OFF
   ENABLE_MATCH_PREDICTIONS = False     # Default: OFF
   ENABLE_LIVE_SCORING = False          # Default: OFF
   ENABLE_PREDICTION_LOGGING = True     # Always on for debugging
-  ```
+  ```text
+
 - [ ] Environment variables documented
 - [ ] Config changes backward compatible (bot runs with flags OFF)
 - [ ] Rollback config prepared (revert flags to OFF)
 
 #### Dependencies
+
 - [ ] Python 3.10+ confirmed
+
   ```bash
   python --version  # Should be 3.10 or higher
-  ```
+  ```text
+
 - [ ] All dependencies installed
+
   ```bash
   pip install -r requirements.txt
-  ```
+  ```text
+
 - [ ] No dependency conflicts
+
   ```bash
   pip check  # Should show "No broken requirements found"
-  ```
+  ```text
+
 - [ ] PostgreSQL 14+ confirmed
+
   ```bash
   psql --version  # Should be 14 or higher
-  ```
+  ```python
 
 #### Code Review
+
 - [ ] All code reviewed (preferably by second person)
 - [ ] No `TODO` or `FIXME` comments in critical paths
 - [ ] Error handling present in all async functions
@@ -106,6 +129,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ### Phase 1: Database Adapter Refactoring
 
 #### Pre-Deployment
+
 - [ ] **Refactor team_manager.py**
   - [ ] All `sqlite3.Connection` replaced with `db_adapter`
   - [ ] All `cursor.execute()` replaced with `db_adapter.fetch_*()`
@@ -121,6 +145,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
   - [ ] Roster change detection tested
 
 #### Testing
+
 - [ ] Unit tests written for each refactored method
 - [ ] Integration test: `!team` command works
 - [ ] Integration test: `!teams 2025-11-20` works (historical date)
@@ -129,6 +154,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 - [ ] No performance regression (<2s response time)
 
 #### Deployment
+
 - [ ] Deploy to test server first
 - [ ] Run for 24 hours on test server
 - [ ] Monitor logs for errors
@@ -138,6 +164,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 - [ ] Verify `!team` command works in production
 
 #### Rollback Criteria
+
 - [ ] IF `!team` command fails → **ROLLBACK**
 - [ ] IF database errors appear → **ROLLBACK**
 - [ ] IF response time >5 seconds → **ROLLBACK**
@@ -147,19 +174,24 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ### Phase 2: Voice Channel Enhancement
 
 #### Pre-Deployment
+
 - [ ] **Create new database tables**
+
   ```sql
   -- Execute these on TEST database first
   CREATE TABLE IF NOT EXISTS lineup_performance (...);
   CREATE TABLE IF NOT EXISTS head_to_head_matchups (...);
   CREATE TABLE IF NOT EXISTS map_performance (...);
   CREATE TABLE IF NOT EXISTS match_predictions (...);
-  ```
+  ```text
+
 - [ ] **Verify table creation**
+
   ```sql
   \dt  -- Should show all 4 new tables
   \d lineup_performance  -- Verify schema
-  ```
+  ```python
+
 - [ ] **Enhance voice_session_service.py**
   - [ ] `_detect_team_split()` method added
   - [ ] `channel_distribution` tracking added
@@ -172,6 +204,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
   - [ ] Handles missing entries gracefully
 
 #### Testing
+
 - [ ] **Manual voice channel test:**
   - [ ] Join voice channel with 6+ test accounts
   - [ ] Split into 2 channels (3+3)
@@ -189,22 +222,28 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
   - [ ] Verify session resumes correctly
 
 #### Deployment
+
 - [ ] Enable feature flag on test server:
+
   ```python
   ENABLE_TEAM_SPLIT_DETECTION = True
-  ```
+  ```text
+
 - [ ] Test for 48 hours with live voice activity
 - [ ] Verify logs show team split events
 - [ ] Verify no false positives
 - [ ] Deploy to production with flag **OFF**
 - [ ] Monitor for 24 hours (ensure no regressions)
 - [ ] Enable flag in production:
+
   ```python
   ENABLE_TEAM_SPLIT_DETECTION = True
-  ```
+  ```yaml
+
 - [ ] Monitor for team split events
 
 #### Rollback Criteria
+
 - [ ] IF false positives detected (split when none occurred) → **ROLLBACK**
 - [ ] IF voice state updates lag >500ms → **ROLLBACK**
 - [ ] IF bot crashes on voice event → **ROLLBACK**
@@ -214,6 +253,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ### Phase 3: Prediction Engine
 
 #### Pre-Deployment
+
 - [ ] **Create PredictionEngine service**
   - [ ] `predict_match()` method implemented
   - [ ] `_analyze_head_to_head()` implemented and tested
@@ -234,6 +274,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
   - [ ] Calculate baseline accuracy (should be >50%)
 
 #### Testing
+
 - [ ] **Unit tests:**
   - [ ] H2H analysis with mock data
   - [ ] Form analysis with mock data
@@ -250,23 +291,29 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
   - [ ] Calculate accuracy (target >60%)
 
 #### Deployment
+
 - [ ] Deploy to test server with flag **OFF**
 - [ ] Enable prediction flag on test server:
+
   ```python
   ENABLE_MATCH_PREDICTIONS = True
-  ```
+  ```text
+
 - [ ] Trigger test prediction manually (simulate team split)
 - [ ] Verify embed posted
 - [ ] Verify prediction stored in database
 - [ ] Monitor for 72 hours with live sessions
 - [ ] Deploy to production with flag **OFF**
 - [ ] Enable flag in production:
+
   ```python
   ENABLE_MATCH_PREDICTIONS = True
-  ```
+  ```python
+
 - [ ] Monitor first 5 predictions carefully
 
 #### Rollback Criteria
+
 - [ ] IF prediction generation >5 seconds → **ROLLBACK**
 - [ ] IF database errors during prediction → **ROLLBACK**
 - [ ] IF incorrect team assignments in prediction → **ROLLBACK**
@@ -277,6 +324,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ### Phase 4: Live Scoring
 
 #### Pre-Deployment
+
 - [ ] **Connect prediction to SSH monitor**
   - [ ] Detect when R1/R2 files arrive
   - [ ] Parse stopwatch scores
@@ -292,6 +340,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
   - [ ] Verify predictions updated
 
 #### Testing
+
 - [ ] **Manual test:**
   - [ ] Generate prediction for test session
   - [ ] Import R1/R2 files manually
@@ -304,16 +353,20 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
   - [ ] No manual intervention needed
 
 #### Deployment
+
 - [ ] Deploy to test server
 - [ ] Enable live scoring flag:
+
   ```python
   ENABLE_LIVE_SCORING = True
-  ```
+  ```yaml
+
 - [ ] Monitor for 1 week
 - [ ] Deploy to production with flag **OFF**
 - [ ] Enable in production after 24 hours
 
 #### Rollback Criteria
+
 - [ ] IF scores parsed incorrectly → **ROLLBACK**
 - [ ] IF predictions not updated → **ROLLBACK**
 - [ ] IF spam posts (multiple results for same match) → **ROLLBACK**
@@ -323,7 +376,9 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ### Phase 5: Refinement
 
 #### Pre-Deployment
+
 - [ ] **Calculate prediction accuracy**
+
   ```sql
   SELECT
     COUNT(*) as total,
@@ -331,7 +386,8 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
     ROUND(100.0 * SUM(CASE WHEN prediction_correct THEN 1 ELSE 0 END) / COUNT(*), 2) as accuracy
   FROM match_predictions
   WHERE actual_winner IS NOT NULL;
-  ```
+  ```yaml
+
 - [ ] **Tune weights if needed**
   - [ ] If accuracy <60%, adjust weights
   - [ ] Rerun historical predictions
@@ -346,6 +402,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
   - [ ] Tune TTL if stale data detected
 
 #### Testing
+
 - [ ] **Performance testing:**
   - [ ] Load test: 12 players, 8 maps, 4 hours
   - [ ] Measure prediction latency (should be <2s)
@@ -357,12 +414,14 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
   - [ ] Verify high-confidence predictions more accurate
 
 #### Deployment
+
 - [ ] Deploy optimizations to test server
 - [ ] Run for 1 week
 - [ ] Deploy to production
 - [ ] Monitor for 1 month
 
 #### Success Criteria
+
 - [ ] Accuracy >60% overall
 - [ ] High-confidence (>75%) predictions >70% accurate
 - [ ] Prediction latency <2 seconds
@@ -376,43 +435,50 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ### Rollback Levels
 
 #### Level 1: Feature Flag Disable (Fastest - 2 minutes)
+
 **When to use:** Minor issues, no data corruption, can try again later
 
 **Procedure:**
+
 1. SSH to production server
+
    ```bash
    ssh user@production-server
    cd /path/to/slomix_discord
-   ```
+   ```text
 
 2. Edit config file
+
    ```bash
    nano bot/config.py
-   ```
+   ```text
 
 3. Disable feature flags
+
    ```python
    ENABLE_TEAM_SPLIT_DETECTION = False
    ENABLE_MATCH_PREDICTIONS = False
    ENABLE_LIVE_SCORING = False
-   ```
+   ```text
 
 4. Restart bot
+
    ```bash
    systemctl restart slomix-bot
    # OR
    screen -r slomix-bot
    # Ctrl+C to stop, then restart with start script
-   ```
+   ```text
 
 5. Verify bot operational
+
    ```bash
    # Check logs
    tail -f bot_logs/bot.log
 
    # Test basic command
    # In Discord: !ping or !last_session
-   ```
+   ```bash
 
 **Rollback Time:** 2-5 minutes
 **Data Loss:** None (tables remain, just unused)
@@ -421,24 +487,29 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ---
 
 #### Level 2: Git Revert (Moderate - 10 minutes)
+
 **When to use:** Code bugs, crashes, cannot fix quickly
 
 **Procedure:**
+
 1. SSH to production server
+
    ```bash
    ssh user@production-server
    cd /path/to/slomix_discord
-   ```
+   ```text
 
 2. Stop bot
+
    ```bash
    systemctl stop slomix-bot
    # OR
    screen -r slomix-bot
    # Ctrl+C
-   ```
+   ```bash
 
 3. Git revert to pre-integration tag
+
    ```bash
    git status  # Check current state
    git log --oneline -10  # Verify commits
@@ -448,20 +519,22 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 
    # OR create revert commit (preserves history)
    git revert HEAD~5..HEAD  # Revert last 5 commits
-   ```
+   ```text
 
 4. Restart bot
+
    ```bash
    systemctl start slomix-bot
    # OR
    screen -S slomix-bot
    ./start_bot.sh
-   ```
+   ```text
 
 5. Verify bot operational
+
    ```bash
    tail -f bot_logs/bot.log
-   ```
+   ```yaml
 
 **Rollback Time:** 10-15 minutes
 **Data Loss:** None (database untouched)
@@ -470,21 +543,26 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ---
 
 #### Level 3: Database Rollback (Slow - 30-60 minutes)
+
 **When to use:** Data corruption, bad migrations, need full state restore
 
 **Procedure:**
+
 1. **CRITICAL: Take snapshot before rollback**
+
    ```bash
    pg_dump -h localhost -U etlegacy_user -d etlegacy > \
      etlegacy_pre_rollback_$(date +%Y%m%d_%H%M%S).sql
-   ```
+   ```text
 
 2. Stop bot
+
    ```bash
    systemctl stop slomix-bot
-   ```
+   ```sql
 
 3. Restore database from backup
+
    ```bash
    # Drop existing database
    psql -h localhost -U postgres -c "DROP DATABASE etlegacy;"
@@ -498,26 +576,29 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 
    # Verify restoration
    psql -h localhost -U etlegacy_user -d etlegacy -c "\dt"
-   ```
+   ```bash
 
 4. Git revert code
+
    ```bash
    cd /path/to/slomix_discord
    git checkout pre-competitive-analytics-v1.0
-   ```
+   ```text
 
 5. Restart bot
+
    ```bash
    systemctl start slomix-bot
-   ```
+   ```text
 
 6. Verify bot operational
+
    ```bash
    tail -f bot_logs/bot.log
 
    # Test commands in Discord
    # !last_session, !player_stats
-   ```
+   ```yaml
 
 **Rollback Time:** 30-60 minutes (depends on database size)
 **Data Loss:** ALL changes since backup (could lose hours of data)
@@ -526,26 +607,31 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ---
 
 #### Level 4: Full System Restore (Emergency - 2-4 hours)
+
 **When to use:** Complete system failure, multiple cascading issues
 
 **Procedure:**
+
 1. **Notify users:** Post maintenance message in Discord
 
 2. **Full server snapshot** (if VM/cloud)
+
    ```bash
    # AWS example
    aws ec2 create-snapshot --volume-id vol-xxx --description "Pre-rollback snapshot"
-   ```
+   ```text
 
 3. **Stop all services**
+
    ```bash
    systemctl stop slomix-bot
    systemctl stop postgresql
-   ```
+   ```sql
 
 4. **Restore from server backup** (varies by infrastructure)
 
 5. **Verify restoration**
+
    ```bash
    # Check database
    psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT COUNT(*) FROM rounds;"
@@ -555,13 +641,14 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 
    # Check config
    cat bot/config.py | grep database_type
-   ```
+   ```text
 
 6. **Restart services**
+
    ```bash
    systemctl start postgresql
    systemctl start slomix-bot
-   ```
+   ```yaml
 
 7. **Full system test**
    - Test all !commands
@@ -577,7 +664,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 
 ### Rollback Decision Tree
 
-```
+```bash
                     ┌─────────────────┐
                     │  Issue Detected  │
                     └────────┬─────────┘
@@ -609,7 +696,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
        │ Git      │  │ Feature Flag │
        │ Revert   │  │ Disable      │
        └──────────┘  └──────────────┘
-```
+```bash
 
 ---
 
@@ -618,6 +705,7 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ### Emergency Contact Protocol
 
 **In order of escalation:**
+
 1. **Primary Admin** (Discord username: @PrimaryAdmin)
    - Responsible for: Feature flags, git operations
    - Available: 24/7 (ping in #admin channel)
@@ -629,7 +717,8 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 3. **Community notification**
    - Channel: #announcements
    - Template message:
-     ```
+
+     ```text
      🚨 **Bot Maintenance**
 
      We're experiencing technical difficulties with the bot.
@@ -637,67 +726,80 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
      investigate and resolve the issue.
 
      Thank you for your patience!
-     ```
+     ```text
 
 ### Critical Error Responses
 
 #### Bot Crash Loop
+
 **Symptoms:** Bot repeatedly crashes and restarts
 
 **Response:**
+
 1. Stop bot immediately
+
    ```bash
    systemctl stop slomix-bot
-   ```
+   ```text
 
 2. Check logs for error
+
    ```bash
    tail -100 bot_logs/bot.log | grep -i error
-   ```
+   ```bash
 
 3. IF error in new code → Level 2 Rollback (Git Revert)
 4. IF error in existing code → Investigate, fix, restart
 
 #### Database Connection Exhaustion
+
 **Symptoms:** "Too many connections" errors in logs
 
 **Response:**
+
 1. Check active connections
+
    ```sql
    SELECT COUNT(*) FROM pg_stat_activity WHERE datname = 'etlegacy';
-   ```
+   ```text
 
 2. Kill idle connections
+
    ```sql
    SELECT pg_terminate_backend(pid)
    FROM pg_stat_activity
    WHERE datname = 'etlegacy'
      AND state = 'idle'
      AND state_change < NOW() - INTERVAL '5 minutes';
-   ```
+   ```text
 
 3. IF issue persists → Disable feature flags (Level 1 Rollback)
 
 4. Review connection pool settings
+
    ```python
    # bot/ultimate_bot.py
    min_pool_size=10  # Maybe increase?
    max_pool_size=30
-   ```
+   ```text
 
 #### Discord Rate Limit Hit
+
 **Symptoms:** "Rate limited" errors, messages not posting
 
 **Response:**
+
 1. Disable live scoring immediately
+
    ```python
    ENABLE_LIVE_SCORING = False
-   ```
+   ```text
 
 2. Check rate limit logs
+
    ```bash
    grep -i "rate limit" bot_logs/bot.log
-   ```
+   ```text
 
 3. Identify offending code (likely prediction/result posts)
 
@@ -706,13 +808,16 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 5. Re-enable gradually
 
 #### False Predictions
+
 **Symptoms:** Predictions wildly inaccurate (0% correct after 10 matches)
 
 **Response:**
+
 1. Disable predictions
+
    ```python
    ENABLE_MATCH_PREDICTIONS = False
-   ```
+   ```text
 
 2. Review prediction logic
    - Check H2H query results
@@ -720,28 +825,34 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
    - Review weight calculations
 
 3. Test with historical data
+
    ```python
    # Manual prediction test
    python -m bot.services.prediction_engine 2025-11-20
-   ```
+   ```text
 
 4. Fix logic, test thoroughly, re-enable
 
 #### Data Corruption
+
 **Symptoms:** Incorrect data in prediction tables, inconsistent state
 
 **Response:**
+
 1. **STOP BOT IMMEDIATELY**
+
    ```bash
    systemctl stop slomix-bot
-   ```
+   ```text
 
 2. **Take database snapshot**
+
    ```bash
    pg_dump -h localhost -U etlegacy_user -d etlegacy > emergency_snapshot.sql
-   ```
+   ```text
 
 3. **Assess damage**
+
    ```sql
    -- Check prediction tables
    SELECT COUNT(*) FROM match_predictions WHERE confidence > 1.0;  -- Should be 0
@@ -752,16 +863,17 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
    FROM match_predictions
    GROUP BY team_a_guids, team_b_guids, session_start_date
    HAVING COUNT(*) > 1;
-   ```
+   ```text
 
 4. **IF core tables (rounds, player_stats) affected → Level 3 Rollback**
 5. **IF only prediction tables affected → Truncate and rebuild**
+
    ```sql
    TRUNCATE match_predictions;
    TRUNCATE lineup_performance;
    TRUNCATE head_to_head_matchups;
    TRUNCATE map_performance;
-   ```
+   ```sql
 
 6. **Restart bot, rebuild data from scratch**
 
@@ -772,31 +884,41 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ### First 24 Hours (Critical Monitoring)
 
 **Check every 2 hours:**
+
 - [ ] Bot is running (uptime check)
 - [ ] No error spikes in logs
+
   ```bash
   grep -c "ERROR" bot_logs/bot.log  # Count errors
-  ```
+  ```text
+
 - [ ] Discord commands working (!ping, !last_session)
 - [ ] Voice detection working (if enabled)
 - [ ] Predictions posted correctly (if enabled)
 - [ ] Database connections stable
+
   ```sql
   SELECT COUNT(*) FROM pg_stat_activity WHERE datname = 'etlegacy';
-  ```
+  ```text
+
 - [ ] Memory usage stable
+
   ```bash
   ps aux | grep python | awk '{print $6/1024 " MB"}'
-  ```
+  ```text
 
 ### First Week (Active Monitoring)
 
 **Check daily:**
+
 - [ ] Review logs for warnings
+
   ```bash
   grep "WARNING\|ERROR" bot_logs/bot.log | tail -50
-  ```
+  ```text
+
 - [ ] Check prediction accuracy
+
   ```sql
   SELECT
     COUNT(*) as total,
@@ -804,24 +926,31 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
   FROM match_predictions
   WHERE actual_winner IS NOT NULL
     AND prediction_time > NOW() - INTERVAL '7 days';
-  ```
+  ```text
+
 - [ ] Review performance metrics
+
   ```bash
   grep "Prediction generated in" bot_logs/bot.log | tail -20
-  ```
+  ```text
+
 - [ ] Check database size growth
+
   ```sql
   SELECT pg_size_pretty(pg_database_size('etlegacy'));
-  ```
+  ```text
+
 - [ ] Review false positive rate (team splits that weren't real)
+
   ```bash
   grep "Team split detected" bot_logs/bot.log | wc -l
   # Compare to actual session count
-  ```
+  ```text
 
 ### First Month (Passive Monitoring)
 
 **Check weekly:**
+
 - [ ] Overall system health
 - [ ] Prediction accuracy trend
 - [ ] User feedback (Discord reactions/comments)
@@ -832,11 +961,13 @@ This document provides a comprehensive pre-flight checklist and rollback procedu
 ### Automated Monitoring (Setup)
 
 **Recommended tools:**
+
 1. **Uptime monitoring:** UptimeRobot or similar
 2. **Log monitoring:** Logtail or Papertrail
 3. **Alerting:** Discord webhooks for critical errors
 
 **Alert Setup Example:**
+
 ```python
 # bot/logging_config.py
 import requests
@@ -866,6 +997,7 @@ logger.addHandler(webhook_handler)
 ### Phase 1: Database Adapter Refactoring
 
 **GO if:**
+
 - ✅ All unit tests pass
 - ✅ Integration tests pass on test server
 - ✅ !team command works correctly
@@ -874,6 +1006,7 @@ logger.addHandler(webhook_handler)
 - ✅ Backup completed
 
 **NO-GO if:**
+
 - ❌ Any test fails
 - ❌ Response time >5 seconds
 - ❌ Database errors in test
@@ -884,6 +1017,7 @@ logger.addHandler(webhook_handler)
 ### Phase 2: Voice Channel Enhancement
 
 **GO if:**
+
 - ✅ Phase 1 stable for 1 week
 - ✅ Manual voice test successful
 - ✅ Edge cases tested (unbalanced, >2 channels, etc.)
@@ -892,6 +1026,7 @@ logger.addHandler(webhook_handler)
 - ✅ Feature flag tested (can disable)
 
 **NO-GO if:**
+
 - ❌ False positives detected
 - ❌ Voice state lag >500ms
 - ❌ Bot crashes on voice event
@@ -902,6 +1037,7 @@ logger.addHandler(webhook_handler)
 ### Phase 3: Prediction Engine
 
 **GO if:**
+
 - ✅ Phase 2 stable for 1 week
 - ✅ Historical accuracy test >50%
 - ✅ Prediction generation <5 seconds
@@ -911,6 +1047,7 @@ logger.addHandler(webhook_handler)
 - ✅ 72 hours test server success
 
 **NO-GO if:**
+
 - ❌ Historical accuracy <40%
 - ❌ Prediction generation >10 seconds
 - ❌ Database errors during prediction
@@ -922,6 +1059,7 @@ logger.addHandler(webhook_handler)
 ### Phase 4: Live Scoring
 
 **GO if:**
+
 - ✅ Phase 3 stable for 2 weeks
 - ✅ Prediction accuracy >55%
 - ✅ Score parsing tested with 10+ files
@@ -930,6 +1068,7 @@ logger.addHandler(webhook_handler)
 - ✅ No duplicate posts in test
 
 **NO-GO if:**
+
 - ❌ Scores parsed incorrectly
 - ❌ Predictions not updated
 - ❌ Duplicate result posts
@@ -941,6 +1080,7 @@ logger.addHandler(webhook_handler)
 ### Phase 5: Refinement
 
 **GO if:**
+
 - ✅ All previous phases stable
 - ✅ Prediction accuracy >60% (target met)
 - ✅ Performance acceptable (<2s predictions)
@@ -949,6 +1089,7 @@ logger.addHandler(webhook_handler)
 - ✅ No critical bugs reported
 
 **NO-GO if:**
+
 - ❌ Accuracy still <55%
 - ❌ Performance degraded
 - ❌ Memory leaks detected
@@ -960,6 +1101,7 @@ logger.addHandler(webhook_handler)
 ## Success Criteria Summary
 
 ### Technical Metrics
+
 - ✅ Prediction accuracy: >60% overall
 - ✅ High-confidence predictions: >70% accurate
 - ✅ Prediction latency: <2 seconds
@@ -969,6 +1111,7 @@ logger.addHandler(webhook_handler)
 - ✅ Uptime: >99%
 
 ### User Experience Metrics
+
 - ✅ Predictions posted automatically for >80% of sessions
 - ✅ No false positives (team split when none occurred)
 - ✅ No user complaints about spam
@@ -976,6 +1119,7 @@ logger.addHandler(webhook_handler)
 - ✅ Predictions add value (users engage with them)
 
 ### Operational Metrics
+
 - ✅ No manual intervention required
 - ✅ Rollback procedure tested and works
 - ✅ Monitoring in place and functional
@@ -989,6 +1133,7 @@ logger.addHandler(webhook_handler)
 ### Pre-Flight Check (Day of Production Deployment)
 
 **T-2 hours:**
+
 - [ ] Backup database (verified)
 - [ ] Git tag created
 - [ ] Feature flags OFF
@@ -997,12 +1142,14 @@ logger.addHandler(webhook_handler)
 - [ ] Discord maintenance message prepared (don't send yet)
 
 **T-1 hour:**
+
 - [ ] Review deployment plan
 - [ ] Confirm rollback contact available
 - [ ] Check server load (deploy during off-peak)
 - [ ] Verify no other deployments in progress
 
 **T-0 (Deployment):**
+
 - [ ] Post maintenance message (if needed)
 - [ ] Stop bot
 - [ ] Git pull new code
@@ -1014,6 +1161,7 @@ logger.addHandler(webhook_handler)
 - [ ] IF all good → post completion message
 
 **T+30 minutes:**
+
 - [ ] Review logs
 - [ ] Check for errors
 - [ ] Test all commands

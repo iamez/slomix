@@ -1,0 +1,13 @@
+node_modules/
+backups/
+.git/
+archive/
+docs/archive/
+prompt_instructions/
+test_suite/
+dev/
+venv/
+website/venv/
+asdf/
+proximity/
+

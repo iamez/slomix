@@ -7,7 +7,7 @@ Handles SSH file monitoring, health checks, and scheduled tasks.
 
 ## Architecture
 
-```
+```python
 Game Server (VPS)
     │
     │ SSH (every 60s)
@@ -22,7 +22,7 @@ endstats_monitor (ultimate_bot.py)
     ├── Parse stats
     ├── Import to PostgreSQL
     └── Post to Discord
-```
+```python
 
 ## Module Reference
 
@@ -47,12 +47,15 @@ endstats_monitor (ultimate_bot.py)
 The `SSHMonitor` service is initialized but NOT auto-started.
 
 ### Why?
+
 Previously, two systems competed:
+
 1. SSHMonitor processed files first
 2. Marked files as "processed" before Discord posting
 3. Result: Files imported but never posted to Discord
 
 ### Current Flow (Fixed Dec 2025)
+
 ```python
 # ultimate_bot.py - endstats_monitor task
 @tasks.loop(seconds=60)
@@ -62,7 +65,7 @@ async def endstats_monitor():
     # 3. Parse and import to database
     # 4. Post to Discord channel
     # All in one atomic flow
-```
+```python
 
 ## FileTracker (file_tracker.py)
 
@@ -75,14 +78,15 @@ Multi-layer deduplication system:
 3. Local filesystem check
 4. Database processed_files table
 5. Rounds table (definitive source)
-```
+```text
 
 ### Lookback Window (Dec 2025 Fix)
+
 ```python
 # Files from 7 days before bot startup are considered
 # Prevents data loss from bot downtime
 STARTUP_LOOKBACK_HOURS = 168  # 7 days
-```
+```python
 
 ## SSH Handler (ssh_handler.py)
 
@@ -97,7 +101,7 @@ SSH_KEY_PATH=~/.ssh/etlegacy_bot
 
 # Remote path
 REMOTE_STATS_PATH=/home/et/.etlegacy/nitmod/stats/
-```
+```python
 
 ## Timeout Values (CRITICAL)
 
@@ -127,7 +131,7 @@ async def daily_cleanup():
     except Exception as e:
         logger.error(f"Cleanup failed: {e}")
         await self.track_error("daily_cleanup", str(e))
-```
+```text
 
 ## Monitoring & Alerts
 

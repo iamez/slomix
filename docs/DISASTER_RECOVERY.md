@@ -33,7 +33,7 @@ python database_manager.py
 # 5. Type: YES DELETE EVERYTHING
 # 6. Wait 5-10 minutes
 # 7. Done! ✅
-```
+```python
 
 That's it. No AI needed. No token waste.
 
@@ -42,22 +42,27 @@ That's it. No AI needed. No token waste.
 ## 🎯 Common Scenarios
 
 ### Scenario 1: Database Deleted
+
 **Symptom:** `etlegacy_production.db` is missing  
 **Solution:** Rebuild from scratch (Option 3)
 
 ### Scenario 2: Corrupted Data
+
 **Symptom:** Wrong stats, duplicate entries, or SQL errors  
 **Solution:** Rebuild from scratch (Option 3)
 
 ### Scenario 3: Missing Recent Data
+
 **Symptom:** Recent sessions not in database  
 **Solution:** Incremental import (Option 2)
 
 ### Scenario 4: Bad Data for Specific Dates
+
 **Symptom:** Oct 28-30 has wrong stats  
 **Solution:** Fix date range (Option 4)
 
 ### Scenario 5: Schema Changes
+
 **Symptom:** Bot crashes with "no such column" errors  
 **Solution:** Create fresh database (Option 1) + Import (Option 2)
 
@@ -66,15 +71,17 @@ That's it. No AI needed. No token waste.
 ## 📖 Step-by-Step Instructions
 
 ### Option 1: Create Fresh Database
+
 **When to use:** Need clean schema with no data
 
 ```powershell
 python database_manager.py
 # Choose: 1
 # Result: New empty database with correct schema
-```
+```python
 
 **What it does:**
+
 - ✅ Creates backup of existing DB (if present)
 - ✅ Creates all 7 tables with correct schema
 - ✅ Applies 51-field player stats structure
@@ -85,6 +92,7 @@ python database_manager.py
 ---
 
 ### Option 2: Import All Files (Incremental)
+
 **When to use:** Add new data without touching existing data
 
 ```powershell
@@ -92,9 +100,10 @@ python database_manager.py
 # Choose: 2
 # Enter year: 2025 (or leave blank for 2025)
 # Result: Only NEW files imported
-```
+```sql
 
 **What it does:**
+
 - ✅ Skips already-processed files (safe)
 - ✅ Imports only new stats files
 - ✅ Shows progress with ETA
@@ -106,6 +115,7 @@ python database_manager.py
 ---
 
 ### Option 3: Rebuild from Scratch (NUCLEAR OPTION)
+
 **When to use:** Database is corrupted, has wrong data, or you need to start over
 
 ```powershell
@@ -114,9 +124,10 @@ python database_manager.py
 # Confirm: YES DELETE EVERYTHING
 # Enter year: 2025
 # Result: Fresh database with all data re-imported
-```
+```sql
 
 **What it does:**
+
 - ⚠️ **DELETES EVERYTHING**
 - ✅ Creates backup first (safety)
 - ✅ Creates fresh schema
@@ -128,6 +139,7 @@ python database_manager.py
 ---
 
 ### Option 4: Fix Specific Date Range
+
 **When to use:** Known bad data for specific dates (e.g., Oct 28-30)
 
 ```powershell
@@ -136,9 +148,10 @@ python database_manager.py
 # Start date: 2025-10-28
 # End date: 2025-10-30
 # Result: Only that date range is deleted and re-imported
-```
+```yaml
 
 **What it does:**
+
 - ✅ Surgical deletion of date range
 - ✅ Re-imports only those dates
 - ✅ Rest of database untouched
@@ -149,15 +162,17 @@ python database_manager.py
 ---
 
 ### Option 5: Validate Database
+
 **When to use:** Check if database is healthy
 
 ```powershell
 python database_manager.py
 # Choose: 5
 # Result: Statistics and integrity report
-```
+```yaml
 
 **What it shows:**
+
 - Total sessions, players, weapons
 - Date range
 - Orphan sessions (data integrity issues)
@@ -166,13 +181,14 @@ python database_manager.py
 ---
 
 ### Option 6: Quick Test
+
 **When to use:** Test if everything works before full import
 
 ```powershell
 python database_manager.py
 # Choose: 6
 # Result: Import 10 files to verify functionality
-```
+```yaml
 
 **Use case:** After code changes, verify imports still work.
 
@@ -185,22 +201,28 @@ After any recovery operation, validate the database:
 ```powershell
 python database_manager.py
 # Choose: 5 (Validate)
-```
+```text
 
 **Good output looks like:**
-```
+
+```text
+
 ✅ Database validation passed!
    Sessions:          1,234
    Player stats:      45,678
    Weapon stats:      234,567
    Orphan sessions:   0  ← Should be 0!
-```
+
+```text
 
 **Bad output:**
-```
+
+```text
+
 ⚠️  Database has integrity issues!
    Orphan sessions:   15  ← This means data corruption
-```
+
+```sql
 
 If you see orphan sessions, run **Option 3 (Rebuild from scratch)**.
 
@@ -209,26 +231,29 @@ If you see orphan sessions, run **Option 3 (Rebuild from scratch)**.
 ## 🔧 Troubleshooting
 
 ### Problem: "No such file or directory: local_stats"
+
 **Solution:** Make sure you're in the project root directory
 
 ```powershell
 cd C:\Users\seareal\Documents\stats
 python database_manager.py
-```
+```yaml
 
 ---
 
 ### Problem: "Module not found: discord"
+
 **Solution:** Activate virtual environment first
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 python database_manager.py
-```
+```yaml
 
 ---
 
 ### Problem: "Database is locked"
+
 **Solution:** Close any other Python scripts or bot instances
 
 ```powershell
@@ -237,11 +262,12 @@ Get-Process python | Stop-Process -Force
 
 # Then retry
 python database_manager.py
-```
+```python
 
 ---
 
 ### Problem: Import is slow (< 0.5 files/sec)
+
 **Solution:** This is normal for first import (lots of weapons data)
 
 - Expected: 1-2 files per second
@@ -250,6 +276,7 @@ python database_manager.py
 ---
 
 ### Problem: "Parse error" on specific files
+
 **Solution:** Check if stats file is corrupted
 
 ```powershell
@@ -268,19 +295,23 @@ python database_manager.py
 ## 🎯 Best Practices
 
 ### Daily Operations
+
 - Use **Option 2** (Incremental import) for regular updates
 - Run **Option 5** (Validate) once a week
 
 ### After Code Changes
+
 - Run **Option 6** (Quick test) to verify
 - If test passes, run **Option 2** (Full import)
 
 ### When Things Break
+
 1. Try **Option 4** (Date range fix) if you know the bad dates
 2. If that doesn't work, try **Option 3** (Rebuild from scratch)
 3. Always run **Option 5** (Validate) after recovery
 
 ### Backups
+
 - Database manager creates automatic backups before destructive operations
 - Backups are stored in `bot/` directory with timestamp
 - Example: `etlegacy_production.db.backup_20251103_143022`
@@ -311,6 +342,7 @@ If this guide doesn't solve your problem:
 3. Look for error patterns in recent log entries
 
 **Common log locations:**
+
 - `C:\Users\seareal\Documents\stats\database_manager.log`
 - Check last 50 lines: `Get-Content database_manager.log -Tail 50`
 
@@ -319,6 +351,7 @@ If this guide doesn't solve your problem:
 ## 📝 Change Log
 
 ### November 3, 2025 - Initial Version
+
 - Consolidated 20+ scattered tools into ONE tool
 - All fixes applied (51 fields, transactions, UNIQUE constraints)
 - Tested and verified on production data

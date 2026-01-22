@@ -12,6 +12,7 @@
 This document contains code review findings for 6 files in the slomix bot. Each section describes issues found and provides exact code fixes to implement. Work through each file systematically, testing after each change.
 
 **Priority Order:**
+
 1. `bot/stats/calculator.py` - Add missing method (LOW RISK)
 2. `bot/logging_config.py` - Fix deprecated API (LOW RISK)
 3. `bot/community_stats_parser.py` - Fix unreachable code (LOW RISK)
@@ -25,21 +26,23 @@ This document contains code review findings for 6 files in the slomix bot. Each 
 
 ### Status: ⭐⭐⭐⭐⭐ Excellent - NO CHANGES NEEDED
 
-The calculator module is well-designed and complete. 
+The calculator module is well-designed and complete.
 
 **Note:** The Lua script (c0rnp0rn3.lua) already calculates `time_dead_ratio` and `time_dead_minutes` server-side:
+
 - `topshots[i][14]` → TAB field 24 → `time_dead_ratio` (percentage)
 - `death_time_total[i] / 60000` → TAB field 25 → `time_dead_minutes`
 
 The parser correctly extracts these pre-computed values, so no additional calculator methods are needed.
 
 **Verification:** (optional)
+
 ```python
 from bot.stats import StatsCalculator
 assert StatsCalculator.calculate_dpm(1200, 300) == 240.0
 assert StatsCalculator.calculate_kd(20, 10) == 2.0
 print("calculator.py is working correctly!")
-```
+```python
 
 ---
 
@@ -52,6 +55,7 @@ print("calculator.py is working correctly!")
 **Location:** Function `log_command_execution`, approximately line 127
 
 **Find this code:**
+
 ```python
 def log_command_execution(ctx, command_name, start_time=None, end_time=None, error=None):
     """
@@ -62,9 +66,10 @@ def log_command_execution(ctx, command_name, start_time=None, end_time=None, err
     
     # Build context info
     user = f"{ctx.author.name}#{ctx.author.discriminator} ({ctx.author.id})"
-```
+```text
 
 **Replace with:**
+
 ```python
 def log_command_execution(ctx, command_name, start_time=None, end_time=None, error=None):
     """
@@ -82,13 +87,14 @@ def log_command_execution(ctx, command_name, start_time=None, end_time=None, err
     # Build context info
     # Note: Discord removed discriminators in 2023, use display_name instead
     user = f"{ctx.author.display_name} ({ctx.author.id})"
-```
+```text
 
 ### Task 2.2: Add automation event logger (Optional Enhancement)
 
 **Location:** After the `log_performance_warning` function, before `get_logger`
 
 **Add this new function:**
+
 ```python
 def log_automation_event(event_type, details, success=True, error=None):
     """
@@ -108,13 +114,14 @@ def log_automation_event(event_type, details, success=True, error=None):
         logger.info(f"✓ {event_type}: {details}")
     else:
         logger.warning(f"⚠️ {event_type}: {details}")
-```
+```python
 
 **Verification:** Import test:
+
 ```python
 from bot.logging_config import log_command_execution, log_automation_event
 print("logging_config.py imports successfully!")
-```
+```python
 
 ---
 
@@ -127,6 +134,7 @@ print("logging_config.py imports successfully!")
 **Location:** Function `parse_player_line`, approximately lines 640-660
 
 **Find this code (at the END of parse_player_line):**
+
 ```python
             return {
                 'guid': guid[:8],  # Truncate GUID
@@ -159,9 +167,10 @@ print("logging_config.py imports successfully!")
         except Exception as e:
             print(f"Error parsing player line: {e}")
             return None
-```
+```text
 
 **Replace with (move comment BEFORE return):**
+
 ```python
             # ⚠️ CRITICAL DISTINCTION - DO NOT CONFUSE THESE TWO:
             # 1. player['headshots'] = Sum of all weapon headshot HITS (shots that hit head, may not kill)
@@ -194,13 +203,14 @@ print("logging_config.py imports successfully!")
         except Exception as e:
             print(f"Error parsing player line: {e}")
             return None
-```
+```text
 
 ### Task 3.2: Add format documentation comment
 
 **Location:** Top of file, after the imports, before `C0RNP0RN3_WEAPONS`
 
 **Add this comment block:**
+
 ```python
 # =============================================================================
 # FILENAME FORMAT: YYYY-MM-DD-HHMMSS-<map_name>-round-<N>.txt
@@ -215,14 +225,15 @@ print("logging_config.py imports successfully!")
 # Round 2 files contain CUMULATIVE stats from both rounds.
 # To get Round 2-only stats: R2_cumulative - R1 = R2_only
 # =============================================================================
-```
+```text
 
 **Verification:**
+
 ```python
 from bot.community_stats_parser import C0RNP0RN3StatsParser
 parser = C0RNP0RN3StatsParser()
 print("community_stats_parser.py imports successfully!")
-```
+```python
 
 ---
 
@@ -235,16 +246,19 @@ print("community_stats_parser.py imports successfully!")
 **Location:** Multiple places in the file. Search for `BaseException` and replace all occurrences.
 
 **Find all instances of:**
+
 ```python
 except BaseException:
-```
+```text
 
 **Replace each with:**
+
 ```python
 except Exception:
-```
+```text
 
 There should be approximately 4-5 occurrences in:
+
 - `create_session_overview` (font loading)
 - `create_performance_graphs` (if any)
 - `create_weapon_mastery_image` (font loading)
@@ -254,13 +268,15 @@ There should be approximately 4-5 occurrences in:
 **Location:** At the top of the file, after imports
 
 **Add:**
+
 ```python
 import logging
 
 logger = logging.getLogger('bot.image_generator')
-```
+```text
 
 **Then modify font loading blocks. Find:**
+
 ```python
         try:
             title_font = ImageFont.truetype("arial.ttf", 48)
@@ -272,9 +288,10 @@ logger = logging.getLogger('bot.image_generator')
             header_font = ImageFont.load_default()
             stat_font = ImageFont.load_default()
             small_font = ImageFont.load_default()
-```
+```text
 
 **Replace with:**
+
 ```python
         try:
             title_font = ImageFont.truetype("arial.ttf", 48)
@@ -287,13 +304,14 @@ logger = logging.getLogger('bot.image_generator')
             header_font = ImageFont.load_default()
             stat_font = ImageFont.load_default()
             small_font = ImageFont.load_default()
-```
+```text
 
 ### Task 4.3: Extract magic numbers to constants (Optional)
 
 **Location:** Top of the `StatsImageGenerator` class, after `COLORS`
 
 **Add:**
+
 ```python
     # Layout spacing constants
     SPACING = {
@@ -303,16 +321,17 @@ logger = logging.getLogger('bot.image_generator')
         'player_entry_height': 32,
         'divider_height': 2,
     }
-```
+```python
 
 **Note:** This is optional. If you do this, you'll need to update the magic numbers throughout the file to use `self.SPACING['title_margin']` etc. This is a larger refactor and can be done later.
 
 **Verification:**
+
 ```python
 from bot.image_generator import StatsImageGenerator
 gen = StatsImageGenerator()
 print("image_generator.py imports successfully!")
-```
+```python
 
 ---
 
@@ -325,21 +344,23 @@ print("image_generator.py imports successfully!")
 **Location:** Top of file, add to imports
 
 **Find:**
+
 ```python
 import asyncio
 import logging
 import os
 from datetime import datetime
 from typing import Optional, Set
-```
+```python
 
 **No change needed to imports** (asyncio is already imported)
 
-### Task 5.2: Add lock to __init__
+### Task 5.2: Add lock to **init**
 
 **Location:** In the `__init__` method
 
 **Find:**
+
 ```python
     def __init__(self, db_adapter, config, bot_startup_time: datetime, processed_files: Set[str]):
         """
@@ -350,9 +371,10 @@ from typing import Optional, Set
         self.config = config
         self.bot_startup_time = bot_startup_time
         self.processed_files = processed_files  # Reference to bot's set
-```
+```text
 
 **Replace with:**
+
 ```python
     def __init__(self, db_adapter, config, bot_startup_time: datetime, processed_files: Set[str]):
         """
@@ -369,13 +391,14 @@ from typing import Optional, Set
         self.bot_startup_time = bot_startup_time
         self.processed_files = processed_files  # Reference to bot's set
         self._process_lock = asyncio.Lock()  # Prevent race conditions
-```
+```text
 
 ### Task 5.3: Use lock in should_process_file
 
 **Location:** In `should_process_file` method
 
 **Find the beginning of the method:**
+
 ```python
     async def should_process_file(
         self, filename: str, ignore_startup_time: bool = False, check_db_only: bool = False
@@ -386,9 +409,10 @@ from typing import Optional, Set
         """
         try:
             # 1. Check file age - only import files created AFTER bot startup
-```
+```text
 
 **Replace with (add lock context manager):**
+
 ```python
     async def should_process_file(
         self, filename: str, ignore_startup_time: bool = False, check_db_only: bool = False
@@ -420,11 +444,12 @@ from typing import Optional, Set
         """Internal implementation of should_process_file (called under lock)"""
         try:
             # 1. Check file age - only import files created AFTER bot startup
-```
+```text
 
 **IMPORTANT:** You need to rename the rest of the original method body. The entire `try:` block and everything after stays the same, just inside `_should_process_file_impl`.
 
 **Full structure should be:**
+
 ```python
 async def should_process_file(...) -> bool:
     """Docstring..."""
@@ -444,21 +469,23 @@ async def _should_process_file_impl(...) -> bool:
     except Exception as e:
         logger.error(f"Error checking if should process {filename}: {e}")
         return False
-```
+```text
 
 ### Task 5.4: Fix diagnostic message for both DB types
 
 **Location:** In `sync_local_files_to_processed_table`, find the warning message
 
 **Find:**
+
 ```python
                 logger.warning(
                     f"💡 To import them, use: python postgresql_database_manager.py "
                     f"or !import command"
                 )
-```
+```text
 
 **Replace with:**
+
 ```python
                 if self.config.database_type == "postgresql":
                     logger.warning(
@@ -469,13 +496,14 @@ async def _should_process_file_impl(...) -> bool:
                     logger.warning(
                         f"💡 To import them, use the !import command"
                     )
-```
+```text
 
 **Verification:**
+
 ```python
 from bot.automation.file_tracker import FileTracker
 print("file_tracker.py imports successfully!")
-```
+```python
 
 ---
 
@@ -488,6 +516,7 @@ print("file_tracker.py imports successfully!")
 **Location:** In `_download_file_sync` method
 
 **Find:**
+
 ```python
     @staticmethod
     def _download_file_sync(ssh_config: Dict, filename: str, local_dir: str) -> str:
@@ -519,9 +548,10 @@ print("file_tracker.py imports successfully!")
         ssh.close()
 
         return local_file
-```
+```text
 
 **Replace with:**
+
 ```python
     @staticmethod
     def _download_file_sync(ssh_config: Dict, filename: str, local_dir: str) -> str:
@@ -565,19 +595,21 @@ print("file_tracker.py imports successfully!")
                 ssh.close()
             except Exception:
                 pass
-```
+```text
 
 ### Task 6.2: Add timeout to list files operation
 
 **Location:** In `_list_files_sync` method
 
 **Find:**
+
 ```python
         sftp = ssh.open_sftp()
         files = sftp.listdir(ssh_config["remote_path"])
-```
+```text
 
 **Replace with:**
+
 ```python
         sftp = ssh.open_sftp()
         
@@ -585,25 +617,27 @@ print("file_tracker.py imports successfully!")
         sftp.get_channel().settimeout(15.0)
         
         files = sftp.listdir(ssh_config["remote_path"])
-```
+```text
 
 ### Task 6.3: Add security comment about AutoAddPolicy
 
 **Location:** Near the top of the file, after the docstring
 
 **Add this comment:**
+
 ```python
 # SECURITY NOTE: This module uses paramiko.AutoAddPolicy() which accepts any SSH host key.
 # This is acceptable for connecting to our own VPS (puran.hehe.si) but should be
 # changed to RejectPolicy with a known_hosts file if connecting to untrusted servers.
 # See: https://docs.paramiko.org/en/stable/api/client.html#paramiko.client.AutoAddPolicy
-```
+```text
 
 **Verification:**
+
 ```python
 from bot.automation.ssh_handler import SSHHandler
 print("ssh_handler.py imports successfully!")
-```
+```python
 
 ---
 
@@ -612,6 +646,7 @@ print("ssh_handler.py imports successfully!")
 After implementing all fixes, run these tests:
 
 ### 1. Import Tests
+
 ```bash
 cd /path/to/slomix
 python -c "
@@ -623,9 +658,10 @@ from bot.automation.file_tracker import FileTracker
 from bot.automation.ssh_handler import SSHHandler
 print('All imports successful!')
 "
-```
+```text
 
 ### 2. Calculator Tests
+
 ```bash
 python -c "
 from bot.stats import StatsCalculator
@@ -634,9 +670,10 @@ assert StatsCalculator.calculate_kd(20, 10) == 2.0
 assert StatsCalculator.calculate_time_dead_ratio(30, 300) == 10.0
 print('Calculator tests passed!')
 "
-```
+```text
 
 ### 3. Parser Test
+
 ```bash
 python -c "
 from bot.community_stats_parser import C0RNP0RN3StatsParser
@@ -650,19 +687,21 @@ if os.path.exists('local_stats'):
         print(f'Parsed {files[0]}: success={result[\"success\"]}')
 print('Parser test passed!')
 "
-```
+```text
 
 ### 4. Bot Startup Test
+
 ```bash
 # Start the bot briefly to verify no import errors
 timeout 10 python main.py || echo "Bot started successfully (timeout expected)"
-```
+```yaml
 
 ---
 
 ## Commit Message Template
 
-```
+```python
+
 refactor: code review fixes part 2/3
 
 - stats/calculator.py: Add calculate_time_dead_ratio method
@@ -673,6 +712,7 @@ refactor: code review fixes part 2/3
 - ssh_handler.py: Add SFTP timeout handling, add security documentation
 
 Part of ongoing refactoring effort for slomix Discord bot.
+
 ```
 
 ---
@@ -680,6 +720,7 @@ Part of ongoing refactoring effort for slomix Discord bot.
 ## Questions?
 
 If you encounter issues:
+
 1. Check Python syntax with `python -m py_compile <filename>`
 2. Run import tests to isolate which file has issues
 3. Check git diff to see what changed

@@ -6,7 +6,7 @@ How the proximity tracker connects to the broader SLOMIX ecosystem.
 
 ## Data Flow Overview
 
-```
+```python
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         ET:Legacy Game Server                        │
 │                                                                      │
@@ -56,7 +56,7 @@ How the proximity tracker connects to the broader SLOMIX ecosystem.
 │  • Voice monitoring       │      │  • Heatmap visualizations │
 │  • Team detection         │      │  • Live status            │
 └──────────────────────────┘      └──────────────────────────┘
-```
+```python
 
 ---
 
@@ -76,6 +76,7 @@ How the proximity tracker connects to the broader SLOMIX ecosystem.
 ### Schema Location
 
 Database schema definitions are in:
+
 - `proximity/schema/schema.sql` - Proximity-specific tables
 - `bot/database/` - Bot database utilities
 
@@ -98,6 +99,7 @@ Located at: `proximity/parser/parser.py`
 ### How It Runs
 
 The parser can be run:
+
 1. **Manually** - `python parser/parser.py`
 2. **Via bot** - Background task scans every 5 minutes
 3. **On demand** - Triggered by bot commands
@@ -163,6 +165,7 @@ The proximity tracker correctly captures player data, but **upstream systems** h
 | `get_map_performance()` unimplemented | HIGH | `team_manager.py:437` | No per-map team stats |
 
 These issues affect the ability to:
+
 - Track which "team" (not Axis/Allies) a player was on
 - Calculate team win/loss records
 - Build team chemistry metrics
@@ -171,13 +174,13 @@ See [GAPS_AND_ROADMAP.md](GAPS_AND_ROADMAP.md) for the full roadmap.
 
 ### Data Flow Gap
 
-```
+```text
 Proximity Tracker → Parser → Database ✅ WORKING
                                  ↓
                     Team Assignment ❌ BROKEN
                                  ↓
                     Team Chemistry Analysis ❌ BLOCKED
-```
+```yaml
 
 ---
 
@@ -185,7 +188,7 @@ Proximity Tracker → Parser → Database ✅ WORKING
 
 ### Current Flow
 
-```
+```text
 Game Player (GUID) ←→ player_links table ←→ Discord User (discord_id)
 ```
 

@@ -7,14 +7,18 @@ Use this checklist to track your progress integrating the automation enhancement
 ## 📦 Phase 1: Setup & Preparation
 
 ### Dependencies
+
 - [ ] Installed `psutil` package
+
   ```powershell
   pip install psutil
   ```
+
 - [ ] Verified all other dependencies exist (discord.py, aiosqlite)
 - [ ] Ran `python bot/test_automation.py` successfully
 
 ### Configuration
+
 - [ ] Created/updated `.env` file from `.env.example`
 - [ ] Added `ADMIN_CHANNEL_ID` to `.env`
 - [ ] Verified `AUTOMATION_ENABLED=true` in `.env`
@@ -22,6 +26,7 @@ Use this checklist to track your progress integrating the automation enhancement
 - [ ] Verified `GAMING_VOICE_CHANNELS` configured (if using voice detection)
 
 ### Files & Backups
+
 - [ ] Created backup of `bot/ultimate_bot.py`
 - [ ] Verified `bot/etlegacy_production.db` exists
 - [ ] Created `bot/backups/` directory (for automatic backups)
@@ -32,10 +37,13 @@ Use this checklist to track your progress integrating the automation enhancement
 ## 🔧 Phase 2: Code Integration
 
 ### Imports (at top of ultimate_bot.py)
+
 - [ ] Added `import psutil` with other imports
 
 ### Initialization (in `__init__` method)
+
 - [ ] Added health monitoring variables after `self.error_count = 0`:
+
   ```python
   # 🏥 Health Monitoring System
   self.bot_start_time = datetime.now()
@@ -55,9 +63,10 @@ Use this checklist to track your progress integrating the automation enhancement
   
   # Admin channel
   self.admin_channel_id = int(os.getenv("ADMIN_CHANNEL_ID", self.stats_channel_id))
-  ```
+  ```text
 
 ### Core Methods (add these methods to ETStatsBot class)
+
 - [ ] Copied `get_bot_health_status()` method
 - [ ] Copied `send_health_alert()` method
 - [ ] Copied `backup_database()` method
@@ -69,28 +78,34 @@ Use this checklist to track your progress integrating the automation enhancement
 - [ ] Copied `graceful_shutdown()` method
 
 ### Background Tasks (add after existing @tasks.loop definitions)
+
 - [ ] Added `health_monitor_task()` (runs every 5 min)
 - [ ] Added `daily_report_task()` (runs at 23:00 CET)
 - [ ] Added `database_maintenance_task()` (runs at 04:00 CET)
 
 ### Task Startup (in `on_ready()` or `setup_hook()`)
+
 - [ ] Added task starts:
+
   ```python
   self.loop.create_task(self.health_monitor_task())
   self.loop.create_task(self.daily_report_task())
   self.loop.create_task(self.database_maintenance_task())
-  ```
+  ```python
 
 ### Admin Commands (create new Cog or add to bot)
+
 - [ ] Added `!health` command
 - [ ] Added `!backup` command
 - [ ] Added `!vacuum` command
 - [ ] Added `!errors` command
 
 ### Shutdown Handler (modify or add `close()` method)
+
 - [ ] Added call to `graceful_shutdown()` in close method
 
 ### Error Recovery Integration (in existing error handlers)
+
 - [ ] Updated SSH error handling to call `recover_from_ssh_error()`
 - [ ] Updated DB error handling to call `recover_from_db_error()`
 
@@ -99,6 +114,7 @@ Use this checklist to track your progress integrating the automation enhancement
 ## 🧪 Phase 3: Testing
 
 ### Startup Testing
+
 - [ ] Bot starts without errors
 - [ ] Saw log message: "✅ Health monitoring task ready"
 - [ ] Saw log message: "✅ Daily report task ready"
@@ -106,6 +122,7 @@ Use this checklist to track your progress integrating the automation enhancement
 - [ ] No Python syntax errors or import errors
 
 ### Command Testing
+
 - [ ] Tested `!health` command in Discord
   - [ ] Shows bot status
   - [ ] Shows uptime
@@ -125,6 +142,7 @@ Use this checklist to track your progress integrating the automation enhancement
   - [ ] Posts confirmation
 
 ### Background Task Testing
+
 - [ ] Waited 5 minutes, checked logs for health check
 - [ ] Health check completed successfully
 - [ ] No errors in health check logs
@@ -134,6 +152,7 @@ Use this checklist to track your progress integrating the automation enhancement
 ## 📊 Phase 4: 24-Hour Validation
 
 ### Day 1 Checks
+
 - [ ] Bot ran for 24 hours without crashes
 - [ ] Health checks ran every 5 minutes (288 checks per day)
 - [ ] Daily report posted at 23:00 CET
@@ -143,6 +162,7 @@ Use this checklist to track your progress integrating the automation enhancement
 - [ ] Error count stayed low (<10)
 
 ### Monitoring
+
 - [ ] Checked `!health` multiple times
 - [ ] Reviewed log files for errors
 - [ ] Verified database backups exist
@@ -153,6 +173,7 @@ Use this checklist to track your progress integrating the automation enhancement
 ## 🚀 Phase 5: Week-Long Production Testing
 
 ### Weekly Checks
+
 - [ ] **Day 1:** Initial 24-hour test passed
 - [ ] **Day 2:** Normal operation, no issues
 - [ ] **Day 3:** Reviewed error patterns
@@ -162,6 +183,7 @@ Use this checklist to track your progress integrating the automation enhancement
 - [ ] **Day 7:** Final health check
 
 ### Validation Criteria
+
 - [ ] 7 daily reports posted (at 23:00 each day)
 - [ ] 7 database backups created (at 04:00 each day)
 - [ ] ~2,000 health checks completed (288/day × 7)
@@ -176,6 +198,7 @@ Use this checklist to track your progress integrating the automation enhancement
 ## 🎯 Phase 6: Production Ready
 
 ### Final Validation
+
 - [ ] Bot has run continuously for 1 week
 - [ ] All automation features working correctly
 - [ ] Error recovery tested and working
@@ -186,12 +209,14 @@ Use this checklist to track your progress integrating the automation enhancement
 - [ ] Documentation reviewed and understood
 
 ### Tuning (if needed)
+
 - [ ] Adjusted health check frequency (if desired)
 - [ ] Adjusted error alert thresholds (if needed)
 - [ ] Adjusted backup retention (if desired)
 - [ ] Adjusted log cleanup age (if desired)
 
 ### Documentation
+
 - [ ] Documented any custom changes made
 - [ ] Noted any issues encountered and solutions
 - [ ] Created runbook for common issues
@@ -220,7 +245,7 @@ Use this checklist to track your progress integrating the automation enhancement
 
 Use this space to track any issues or customizations:
 
-```
+```yaml
 Date: ___________
 Issue: 
 
@@ -276,15 +301,12 @@ Reason:
 
 ---
 
-## ✨ Congratulations!
+## ✨ Congratulations
 
 When all boxes are checked, your bot is **production-ready** and can run autonomously for weeks or months!
 
 **Date Completed:** ___________  
-**Notes:** 
-
-
-
+**Notes:**
 
 ---
 

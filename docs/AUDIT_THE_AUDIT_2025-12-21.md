@@ -3,6 +3,7 @@
 ## Executive Summary
 
 The December 21st audit (`CODE_AUDIT_SESSION_2025-12-21.md`) was a **defensive security audit** focusing on:
+
 - Silent failure detection
 - Error handling patterns
 - Security vulnerabilities
@@ -50,6 +51,7 @@ This meta-audit identifies what was **NOT covered** and proposes **innovative im
 | `config.py:126` | **60 min** | Gaming session gap threshold | Sessions created inconsistently |
 
 **Scenario**: If last file arrived 45 minutes ago:
+
 - Grace period: INACTIVE (>30 min)
 - Session gap: NOT REACHED (<60 min)
 - **Result**: Undefined behavior at boundaries
@@ -117,7 +119,7 @@ async def validate_imported_round(self, round_id: int) -> List[str]:
             issues.append(f"{row['player_guid']}: DPM mismatch")
 
     return issues
-```
+```text
 
 ### B. File Integrity Checksums
 
@@ -137,7 +139,7 @@ VALUES (?, ?, ?, ?);
 -- On re-import, verify checksum matches
 SELECT file_sha256 FROM processed_files WHERE filename = ?;
 -- If different, log warning about file change
-```
+```text
 
 ### C. Session Boundary Verification
 
@@ -155,7 +157,7 @@ self.grace_period_minutes = 45         # Match R1-R2 window
 # R1-R2 must be within 45 minutes of each other
 # New session starts after 60 minutes of inactivity
 # Grace period prevents premature session closure
-```
+```text
 
 ### D. Player Name Change Tracking
 
@@ -173,7 +175,7 @@ async def track_name_change(self, guid: str, old_name: str, new_name: str, round
     """, guid, old_name, new_name, round_id)
 
     logger.info(f"Player {guid}: name changed from '{old_name}' to '{new_name}'")
-```
+```text
 
 ### E. Match Summary Verification
 
@@ -198,7 +200,7 @@ async def verify_match_integrity(self, match_id: str):
                     f"R1({r1[player_guid][stat]}) + R2({r2_diff[player_guid][stat]}) "
                     f"= {expected} but cumulative shows {actual}"
                 )
-```
+```text
 
 ### F. Comprehensive Health Dashboard
 
@@ -221,7 +223,7 @@ async def health_deep(self, ctx):
         "File Integrity": await self.verify_recent_files(),
     }
     # Display as embed with color-coded status
-```
+```python
 
 ---
 
@@ -242,7 +244,7 @@ MAX_TIME_DIFF_MINUTES = config.round_match_window_minutes  # Was hardcoded 30
 
 # bot/ultimate_bot.py - Use config
 grace_period_seconds = config.grace_period_minutes * 60  # Was hardcoded 1800
-```
+```python
 
 ### Fix 2: Add File Checksum Verification
 
@@ -268,7 +270,7 @@ async def verify_file_integrity(self, filename: str, local_path: str) -> bool:
         logger.warning(f"File {filename} has changed! Old hash: {stored_hash}, New: {current_hash}")
         return False
     return True
-```
+```python
 
 ### Fix 3: Add Cross-Field Validation
 
@@ -296,7 +298,7 @@ async def validate_player_stats(self, stats: dict) -> List[str]:
         issues.append(f"revives_given suspiciously high: {stats.get('revives_given')}")
 
     return issues
-```
+```sql
 
 ---
 
@@ -332,7 +334,7 @@ def test_midnight_crossover_session():
     r1_time = "235500"  # 23:55
     r2_time = "001000"  # 00:10 next day
     assert is_same_session(r1_time, r2_time) == True
-```
+```text
 
 ### Integration Tests Needed
 
@@ -361,24 +363,28 @@ def test_same_map_twice_no_collision():
 ## Priority Action Items
 
 ### P0 - Critical (Do Now)
+
 1. [ ] Reconcile 30 vs 60 minute timeout values
 2. [ ] Update CLAUDE.md to reflect actual SHA256 status
 
 ### P1 - High (This Week)
-3. [ ] Add file integrity checksum to processed_files table
-4. [ ] Implement cross-field validation on import
-5. [ ] Add match summary verification (R1 + R2 = cumulative)
+
+1. [ ] Add file integrity checksum to processed_files table
+2. [ ] Implement cross-field validation on import
+3. [ ] Add match summary verification (R1 + R2 = cumulative)
 
 ### P2 - Medium (This Month)
-6. [ ] Create unit test suite for data validation
-7. [ ] Add player name change tracking
-8. [ ] Implement deep health check command
-9. [ ] Add integration tests for edge cases
+
+1. [ ] Create unit test suite for data validation
+2. [ ] Add player name change tracking
+3. [ ] Implement deep health check command
+4. [ ] Add integration tests for edge cases
 
 ### P3 - Low (Backlog)
-10. [ ] Consolidate DPM calculation to single source
-11. [ ] Add sub-round activity tracking (if Lua supports it)
-12. [ ] Create automated regression test suite
+
+1. [ ] Consolidate DPM calculation to single source
+2. [ ] Add sub-round activity tracking (if Lua supports it)
+3. [ ] Create automated regression test suite
 
 ---
 

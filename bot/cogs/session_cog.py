@@ -181,8 +181,9 @@ class SessionCog(commands.Cog, name="Session Commands"):
             # Maps view routing
             if subcommand and subcommand.lower() == "maps":
                 # Check for "full" subcommand
+                # For "!session 2025-01-20 maps full": parts[0]=!session, [1]=date, [2]=maps, [3]=full
                 parts = ctx.message.content.split()
-                if len(parts) > 2 and parts[2].lower() == "full":
+                if len(parts) > 3 and parts[3].lower() == "full":
                     await self.view_handlers.show_maps_full_view(ctx, target_date, sessions, session_ids, session_ids_str, player_count)
                 else:
                     await self.view_handlers.show_maps_view(ctx, target_date, sessions, session_ids, session_ids_str, player_count)

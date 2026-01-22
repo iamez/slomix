@@ -7,10 +7,10 @@ Services encapsulate complex business logic, data aggregation, and external inte
 
 ## Service Architecture
 
-```
+```text
 Cogs (commands) → Services (business logic) → DatabaseAdapter (data access)
                                             → External APIs
-```
+```python
 
 Services are stateless and receive the bot instance for database/config access.
 
@@ -51,6 +51,7 @@ Services are stateless and receive the bot instance for database/config access.
 ## Key Patterns
 
 ### Service Initialization
+
 ```python
 class SessionDataService:
     def __init__(self, bot):
@@ -61,9 +62,10 @@ class SessionDataService:
         query = "SELECT MAX(gaming_session_id) FROM rounds"
         result = await self.db.fetch_one(query)
         return result
-```
+```text
 
 ### Player GUID Aggregation (CRITICAL)
+
 ```python
 # ALWAYS group by player_guid, use MAX(player_name) for display
 query = """
@@ -74,9 +76,10 @@ query = """
     WHERE round_id IN ({placeholders})
     GROUP BY player_guid
 """
-```
+```text
 
 ### Session ID Queries
+
 ```python
 # Use gaming_session_id for session boundaries
 # 60-minute gap = new session
@@ -85,9 +88,10 @@ query = """
     WHERE gaming_session_id = ?
     ORDER BY round_date, round_time
 """
-```
+```text
 
 ### Time Dead Capping (Bug Workaround)
+
 ```python
 # ET:Legacy Lua bug causes time_dead > time_played
 # Cap per-round using LEAST()
@@ -98,11 +102,12 @@ SELECT
         time_played_seconds
     ) as capped_time_dead
 FROM player_comprehensive_stats
-```
+```text
 
 ## Critical Implementation Notes
 
 ### SessionStatsAggregator (lines 88-96)
+
 ```python
 """
 IMPORTANT: In stopwatch mode, players swap sides between rounds,
@@ -111,14 +116,16 @@ not their actual team.
 We must use hardcoded teams or session_teams table to determine
 actual teams.
 """
-```
+```text
 
 ### SessionGraphGenerator
+
 - Generates matplotlib graphs as Discord file attachments
 - Uses `io.BytesIO` for in-memory image creation
 - Graphs: DPM over rounds, K/D trends, team performance
 
 ### VoiceSessionService
+
 - Tracks Discord voice channel membership
 - Uses for team detection (players in same voice = same team)
 - Error tracking integrated with bot.track_error()
@@ -133,7 +140,7 @@ dpm = damage_given / (time_played_seconds / 60)
 
 # NOT
 dpm = damage_given / time_played_minutes  # May have rounding errors
-```
+```text
 
 ## Testing Services
 

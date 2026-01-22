@@ -50,7 +50,7 @@ def parse_stats_file_simple(path: str):
 
     try:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            lines = [l.rstrip("\n") for l in f.readlines()]
+            lines = [line.rstrip("\n") for line in f.readlines()]
         if lines:
             header = lines[0]
             parts = header.split("\\")

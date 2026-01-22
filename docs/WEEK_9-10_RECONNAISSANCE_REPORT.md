@@ -13,6 +13,7 @@ Analyzed 5 Discord auto-posting methods in `ultimate_bot.py` (~445 lines total).
 ### 🎯 KEY FINDINGS
 
 **Production Usage**: ✅ ALL methods are actively used in production
+
 - `post_round_stats_auto()` is called after every stats file is processed
 - Posts detailed player statistics to Discord automatically
 - Handles round completion and map completion embeds
@@ -30,6 +31,7 @@ Analyzed 5 Discord auto-posting methods in `ultimate_bot.py` (~445 lines total).
 **Purpose**: Automatically post round statistics to Discord after file processing
 
 **Key Operations**:
+
 1. Fetch production channel from Discord
 2. Query database for full player stats (54 fields)
 3. Query database for round info (time limit, winner, outcome)
@@ -41,6 +43,7 @@ Analyzed 5 Discord auto-posting methods in `ultimate_bot.py` (~445 lines total).
 6. Call `_check_and_post_map_completion()` to check for map finish
 
 **Dependencies**:
+
 - `self.get_channel()` - Discord bot method
 - `self.production_channel_id` - Config attribute
 - `self.db_adapter` - Database queries
@@ -48,9 +51,11 @@ Analyzed 5 Discord auto-posting methods in `ultimate_bot.py` (~445 lines total).
 - Calls: `_check_and_post_map_completion()`
 
 **Called By**:
+
 - `check_ssh_stats()` at line 1901 (after successful file processing)
 
 **Database Queries**: 2
+
 - Round info query (time_limit, actual_time, winner_team, round_outcome)
 - Player stats query (18 columns from player_comprehensive_stats)
 
@@ -63,19 +68,23 @@ Analyzed 5 Discord auto-posting methods in `ultimate_bot.py` (~445 lines total).
 **Purpose**: Check if the current round was the last round of a map, trigger map summary if so
 
 **Key Operations**:
+
 1. Query max round number for the map
 2. Count total rounds for the map
 3. If current round == max round AND >= 2 rounds: Map complete!
 4. Call `_post_map_summary()` to post aggregate stats
 
 **Dependencies**:
+
 - `self.db_adapter` - Database query
 - Calls: `_post_map_summary()`
 
 **Called By**:
+
 - `post_round_stats_auto()` at line 999
 
 **Database Queries**: 1
+
 - Check map completion (max round number, round count)
 
 ---
@@ -87,6 +96,7 @@ Analyzed 5 Discord auto-posting methods in `ultimate_bot.py` (~445 lines total).
 **Purpose**: Post aggregate statistics for all rounds of a completed map
 
 **Key Operations**:
+
 1. Query map-level aggregate stats (total kills, deaths, damage, headshots, etc.)
 2. Query top 5 players across all rounds on the map
 3. Build Discord embed with:
@@ -95,14 +105,17 @@ Analyzed 5 Discord auto-posting methods in `ultimate_bot.py` (~445 lines total).
 4. Post to production channel
 
 **Dependencies**:
+
 - `self.db_adapter` - Database queries
 - `discord.Embed` - Discord library
 - `datetime.now()` - Timestamp
 
 **Called By**:
+
 - `_check_and_post_map_completion()` at line 1030
 
 **Database Queries**: 2
+
 - Map aggregate stats query (7 columns)
 - Top players query (5 columns, grouped by player_guid)
 
@@ -115,18 +128,21 @@ Analyzed 5 Discord auto-posting methods in `ultimate_bot.py` (~445 lines total).
 **Purpose**: Post round summary to Discord (alternate/older implementation)
 
 **Key Operations**:
+
 1. Get stats channel (not production channel!)
 2. Build simple embed with top 3 players
 3. Post to stats channel
 4. If map complete, call `post_map_summary()`
 
 **Dependencies**:
+
 - `self.get_channel()` - Discord bot method
 - `self.stats_channel_id` - Config attribute (different from production_channel_id!)
 - `discord.Embed` - Discord library
 - Calls: `post_map_summary()`
 
 **Called By**:
+
 - **UNKNOWN** - No callers found in codebase!
 - Likely legacy/unused code
 
@@ -141,16 +157,19 @@ Analyzed 5 Discord auto-posting methods in `ultimate_bot.py` (~445 lines total).
 **Purpose**: Post simple map completion notice (alternate/older implementation)
 
 **Key Operations**:
+
 1. Get stats channel
 2. Build simple "MAP COMPLETE" embed
 3. Post to stats channel
 
 **Dependencies**:
+
 - `self.get_channel()` - Discord bot method
 - `self.stats_channel_id` - Config attribute
 - `discord.Embed` - Discord library
 
 **Called By**:
+
 - `post_round_summary()` at line 1681
 
 **Database Queries**: 0
@@ -159,7 +178,7 @@ Analyzed 5 Discord auto-posting methods in `ultimate_bot.py` (~445 lines total).
 
 ## 🔗 Call Chain Diagram
 
-```
+```python
 check_ssh_stats() [bot/ultimate_bot.py:1901]
   └─> post_round_stats_auto()              [243 lines - MAIN PATH]
        ├─> DB Query: Round info
@@ -175,9 +194,9 @@ check_ssh_stats() [bot/ultimate_bot.py:1901]
 ❓ ORPHANED/LEGACY PATH (no callers found):
 post_round_summary()                        [56 lines - UNUSED?]
   └─> post_map_summary()                   [23 lines - UNUSED?]
-```
+```yaml
 
-**Total Lines in Active Path**: 366 lines (post_round_stats_auto + _check_and_post_map_completion + _post_map_summary)
+**Total Lines in Active Path**: 366 lines (post_round_stats_auto +_check_and_post_map_completion + _post_map_summary)
 **Total Lines in Legacy Path**: 79 lines (post_round_summary + post_map_summary)
 **Total All Methods**: 445 lines
 
@@ -202,9 +221,10 @@ self.db_adapter                       # DatabaseAdapter instance
 # External Modules
 from discord import Embed, Color
 from datetime import datetime
-```
+```python
 
 ### NO Dependencies on (Safe!)
+
 - ❌ No voice state
 - ❌ No SSH operations
 - ❌ No file processing
@@ -218,6 +238,7 @@ from datetime import datetime
 ### Risk Level: 🟢 **LOW**
 
 **Why Low Risk:**
+
 1. **Pure Discord posting logic** - No game logic or critical systems
 2. **Already isolated** - Methods are self-contained, minimal cross-dependencies
 3. **Database queries are simple** - All use db_adapter abstraction
@@ -227,19 +248,23 @@ from datetime import datetime
 ### Critical Risk Factors
 
 #### 1. Database Query Compatibility (🟡 MEDIUM RISK)
+
 - 5 database queries use `?` placeholders (SQLite style)
 - **Current adapter handles this** - `db_adapter.fetch_one/fetch_all` abstracts placeholders
 - **Mitigation**: Keep using db_adapter, no changes needed
 
 #### 2. Discord Channel Access (🟢 LOW RISK)
+
 - Needs `bot.get_channel()` to access Discord channels
 - **Solution**: Pass bot instance to service (same as VoiceSessionService)
 
 #### 3. Configuration Dependencies (🟢 LOW RISK)
+
 - Needs `production_channel_id` and `stats_channel_id`
 - **Solution**: Pass config to service (same as VoiceSessionService)
 
 #### 4. Legacy/Unused Code (🟢 LOW RISK - OPPORTUNITY!)
+
 - `post_round_summary()` and `post_map_summary()` appear unused
 - No callers found in entire codebase
 - **Opportunity**: Can remove these 79 lines during extraction!
@@ -253,11 +278,13 @@ from datetime import datetime
 #### Option A: Extract Only Active Path (RECOMMENDED)
 
 **Extract 3 methods**:
+
 - `post_round_stats_auto()` (243 lines)
 - `_check_and_post_map_completion()` (30 lines)
 - `_post_map_summary()` (93 lines)
 
 **Leave or Remove**:
+
 - `post_round_summary()` (56 lines) - **Remove** (unused)
 - `post_map_summary()` (23 lines) - **Remove** (unused)
 
@@ -266,12 +293,14 @@ from datetime import datetime
 **Net Reduction**: 445 lines (18% reduction from current ~2,216 lines)
 
 **Pros**:
+
 - ✅ Clean extraction of production code only
 - ✅ Remove dead code (bonus cleanup!)
 - ✅ Smaller service, easier to maintain
 - ✅ No risk of breaking unused features
 
 **Cons**:
+
 - ⚠️ Must verify legacy methods are truly unused
 - ⚠️ Should check git history to understand why they exist
 
@@ -282,10 +311,12 @@ from datetime import datetime
 **Extract all 5 methods**, mark legacy ones as deprecated
 
 **Pros**:
+
 - ✅ Zero risk of removing needed code
 - ✅ Can deprecate later if confirmed unused
 
 **Cons**:
+
 - ❌ Carry forward dead code
 - ❌ Larger service
 - ❌ More maintenance burden
@@ -314,7 +345,7 @@ class RoundPublisherService:
 
     async def _post_map_summary(self, ...):
         """Post aggregate map statistics"""
-```
+```python
 
 **Estimated Size**: ~370 lines (366 methods + 4 lines for class boilerplate)
 
@@ -325,16 +356,19 @@ class RoundPublisherService:
 **Modify**: `bot/ultimate_bot.py`
 
 1. **Add import**:
+
    ```python
    from bot.services.round_publisher_service import RoundPublisherService
-   ```
+   ```python
 
 2. **Initialize service** (in `__init__`):
+
    ```python
    self.round_publisher = RoundPublisherService(self, self.config, self.db_adapter)
-   ```
+   ```sql
 
 3. **Update caller** (in `check_ssh_stats()`):
+
    ```python
    # OLD:
    await self.post_round_stats_auto(filename, result)
@@ -343,7 +377,7 @@ class RoundPublisherService:
    await self.round_publisher.publish_round_stats(filename, result)
    ```
 
-4. **Remove old methods**:
+1. **Remove old methods**:
    - `post_round_stats_auto()` (243 lines)
    - `_check_and_post_map_completion()` (30 lines)
    - `_post_map_summary()` (93 lines)
@@ -357,6 +391,7 @@ class RoundPublisherService:
 ### Phase C: Testing
 
 **Test Cases**:
+
 1. ✅ Process a Round 1 file → Verify round stats posted to production channel
 2. ✅ Process a Round 2 file → Verify round stats + map summary posted
 3. ✅ Check Discord embeds format correctly (player stats, round summary)
@@ -371,6 +406,7 @@ class RoundPublisherService:
 ### 1. Dual Posting Implementations
 
 **Discovery**: Two separate implementations exist:
+
 - **Active**: `post_round_stats_auto()` → Posts to `production_channel_id` (detailed stats from DB)
 - **Legacy**: `post_round_summary()` → Posts to `stats_channel_id` (simple stats from parser)
 
@@ -379,11 +415,13 @@ class RoundPublisherService:
 ### 2. Database vs Parser Stats
 
 **Active method** (`post_round_stats_auto`):
+
 - ✅ Fetches ALL 54 fields from database
 - ✅ Shows comprehensive stats (K/D, DPM, ACC, HS, revives, gibs, team damage)
 - ✅ More accurate, authoritative source
 
 **Legacy method** (`post_round_summary`):
+
 - ⚠️ Uses limited parser output (stats_data dict)
 - ⚠️ Only shows top 3 players
 - ⚠️ Less detailed
@@ -393,6 +431,7 @@ class RoundPublisherService:
 ### 3. Channel Configuration
 
 **Two channels configured**:
+
 - `production_channel_id` - Used by active auto-posting
 - `stats_channel_id` - Used by legacy manual posting
 
@@ -422,6 +461,7 @@ class RoundPublisherService:
 2. **Option B**: Extract all 5 methods (445 lines total, keep legacy as deprecated)
 
 **User Input Needed:**
+
 - Which option do you prefer?
 - Should we verify legacy methods are truly unused before removing?
 - Are there any other callers of `post_round_summary()` we should check?

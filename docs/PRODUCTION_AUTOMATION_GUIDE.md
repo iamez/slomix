@@ -12,36 +12,42 @@
 You now have **6 major automation enhancements** ready to integrate:
 
 ### 1. 🏥 Health Monitoring System
+
 - **Automatic health checks** every 5 minutes
 - Tracks: uptime, errors, memory, CPU, database stats
 - **Smart alerting** - notifies admins when issues detected
 - Rate-limited to prevent alert spam (5-minute cooldown)
 
 ### 2. 📊 Automated Daily Reports
+
 - **Runs daily at 23:00 CET**
 - Posts summary of the day's statistics
 - Includes: sessions, rounds, kills, top players
 - Shows bot health status
 
 ### 3. 🔧 Database Maintenance
+
 - **Runs daily at 04:00 CET** (low-traffic time)
 - Automatic database backups (keeps last 7)
 - Database optimization (VACUUM)
 - Old log file cleanup (30+ days)
 
 ### 4. 🔄 Error Recovery
+
 - **Automatic SSH reconnection** with exponential backoff
 - Database error recovery with connection retry
 - Tracks error counts per category (SSH, DB, tasks)
 - Disables problematic features temporarily if needed
 
 ### 5. 🚨 Smart Alert System
+
 - Health alerts sent to admin channel
 - Rate-limited to prevent spam
 - Severity levels: Info, Warning, Critical
 - Actionable error messages
 
 ### 6. 👋 Graceful Shutdown
+
 - Saves state before exit
 - Posts maintenance notice to Discord
 - Cleanly closes all connections
@@ -67,7 +73,9 @@ Once integrated, you'll have these new commands:
 Your project now has three new files in `bot/`:
 
 ### 1. `automation_enhancements.py` (Main Code)
+
 Contains all the new functionality:
+
 - `AutomationEnhancements` class (mixin for your bot)
 - Health monitoring methods
 - Background task definitions
@@ -76,13 +84,17 @@ Contains all the new functionality:
 - Admin command definitions
 
 ### 2. `integrate_automation.py` (Integration Helper)
+
 Helps you integrate the enhancements:
+
 - Creates backups before changes
 - Shows what needs to be added where
 - Provides step-by-step instructions
 
 ### 3. `test_automation.py` (Testing & Validation)
+
 Test and validate your setup:
+
 - Check dependencies
 - Validate configuration
 - Test individual features
@@ -96,15 +108,16 @@ Test and validate your setup:
 
 ```powershell
 pip install psutil
-```
+```text
 
 ### Step 2: Run Tests
 
 ```powershell
 python bot/test_automation.py
-```
+```text
 
 This will:
+
 - ✅ Check if all dependencies are installed
 - ✅ Validate your `.env` configuration
 - ✅ Show integration status
@@ -117,13 +130,14 @@ Add this to your `.env` file:
 ```bash
 # Admin channel for health alerts (can be same as stats channel)
 ADMIN_CHANNEL_ID=your_channel_id_here
-```
+```python
 
 ### Step 4: Integration Options
 
 You have **two options**:
 
 #### Option A: Manual Integration (Recommended)
+
 Follow the detailed guide in `bot/automation_enhancements.py`
 
 1. Open both `ultimate_bot.py` and `automation_enhancements.py`
@@ -131,13 +145,15 @@ Follow the detailed guide in `bot/automation_enhancements.py`
 3. Follow the integration instructions at the bottom of `automation_enhancements.py`
 
 #### Option B: Guided Integration
+
 Run the integration helper:
 
 ```powershell
 python bot/integrate_automation.py
-```
+```sql
 
 This will:
+
 - Create a backup of your bot
 - Show you exactly where to add code
 - Provide step-by-step instructions
@@ -146,18 +162,22 @@ This will:
 
 ```powershell
 python bot/ultimate_bot.py
-```
+```text
 
 Check the startup logs for:
-```
+
+```text
+
 ✅ Health monitoring task ready
 ✅ Daily report task ready  
 ✅ Database maintenance task ready
-```
+
+```yaml
 
 ### Step 6: Test Commands
 
 In Discord, try:
+
 - `!health` - Should show bot health status
 - Wait 5 minutes and check for health monitoring logs
 
@@ -201,26 +221,31 @@ You'll get Discord notifications for:
 Here's how to validate the system over a week:
 
 ### Day 1: Initial Testing
+
 - [ ] Run `!health` command
 - [ ] Verify health monitoring logs every 5 minutes
 - [ ] Check tasks are running
 
 ### Day 2-3: Normal Operation
+
 - [ ] Monitor for SSH errors
 - [ ] Check database is growing correctly
 - [ ] Verify stats posts are working
 
 ### Day 4: Maintenance Day
+
 - [ ] Wait for 04:00 backup to run
 - [ ] Verify backup was created in `bot/backups/`
 - [ ] Check vacuum completed successfully
 
 ### Day 5-6: Load Testing
+
 - [ ] Have multiple gaming sessions
 - [ ] Verify all stats are processed
 - [ ] Check error counts stay low
 
 ### Day 7: Health Check
+
 - [ ] Run `!health` to see week stats
 - [ ] Run `!errors` to check error patterns
 - [ ] Verify 23:00 daily report posted
@@ -256,7 +281,7 @@ SSH_PORT=22
 SSH_USER=username
 SSH_KEY_PATH=/path/to/key
 REMOTE_STATS_PATH=/path/to/stats
-```
+```python
 
 ### Tuning Parameters
 
@@ -274,7 +299,7 @@ for old_backup in backups[7:]:  # Change number to keep more/less
 
 # Log cleanup age (default: 30 days)
 await self.cleanup_old_logs(days=30)  # Change days
-```
+```yaml
 
 ---
 
@@ -284,7 +309,8 @@ await self.cleanup_old_logs(days=30)  # Change days
 
 Use `!health` to see:
 
-```
+```text
+
 📊 Overall Status
 HEALTHY
 Uptime: 5 days, 12:34:56
@@ -312,13 +338,15 @@ CPU: 4.2%
 ✅ endstats_monitor
 ✅ cache_refresher
 ✅ scheduled_monitoring_check
-```
+
+```text
 
 ### Error Statistics Command
 
 Use `!errors` to see:
 
-```
+```text
+
 ❌ Error Statistics
 
 Total Errors: 8
@@ -329,7 +357,8 @@ Task Errors:
 endstats_monitor: 2
 cache_refresher: 0
 scheduled_monitoring_check: 0
-```
+
+```python
 
 ---
 
@@ -338,6 +367,7 @@ scheduled_monitoring_check: 0
 ### Problem: Health monitoring not starting
 
 **Solution:**
+
 1. Check logs for "Health monitoring task ready"
 2. Verify task is started in `on_ready()` or `setup_hook()`
 3. Make sure `psutil` is installed
@@ -345,6 +375,7 @@ scheduled_monitoring_check: 0
 ### Problem: Alerts not being sent
 
 **Solution:**
+
 1. Check `ADMIN_CHANNEL_ID` is set correctly in `.env`
 2. Verify bot has permissions in admin channel
 3. Check `self.error_alert_cooldown` - might be rate-limited
@@ -352,6 +383,7 @@ scheduled_monitoring_check: 0
 ### Problem: Daily report not posting
 
 **Solution:**
+
 1. Check timezone setup (needs `pytz` or `zoneinfo`)
 2. Verify bot is running at 23:00 CET
 3. Check logs for "Generating daily report..."
@@ -359,6 +391,7 @@ scheduled_monitoring_check: 0
 ### Problem: Backups not being created
 
 **Solution:**
+
 1. Check `bot/backups/` directory exists (created automatically)
 2. Verify disk space is available
 3. Check file permissions
@@ -366,6 +399,7 @@ scheduled_monitoring_check: 0
 ### Problem: Tasks showing as "not running" in health check
 
 **Solution:**
+
 1. Check if tasks are started in bot initialization
 2. Look for errors in task startup
 3. Verify `@tasks.loop` decorators are correct
@@ -379,12 +413,14 @@ scheduled_monitoring_check: 0
 If you want just the essentials:
 
 1. **Health monitoring** - Add in `__init__`:
+
    ```python
    self.bot_start_time = datetime.now()
    self.task_last_run = {}
-   ```
+   ```text
 
 2. **Health command** - Add to your commands:
+
    ```python
    @commands.command(name="health")
    async def health_command(ctx):

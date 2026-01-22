@@ -1,4 +1,5 @@
 # 🎮 COMPETITIVE ANALYTICS IMPLEMENTATION GUIDE
+
 ## For Claude Code (Sonnet 4.5) - Step-by-Step Instructions
 
 **Project:** slomix ET:Legacy Discord Bot  
@@ -11,13 +12,16 @@
 ## 📋 EXECUTIVE SUMMARY
 
 ### What We're Building
+
 An automated competitive analytics system that:
+
 1. **Detects** when players split into teams (voice channels)
 2. **Predicts** match outcomes using historical data
 3. **Tracks** live scores during gameplay
 4. **Analyzes** results and improves over time
 
 ### Current State
+
 - ✅ Voice session detection works (counts players)
 - ✅ SSH file monitoring works (imports stats)
 - ✅ Database adapter exists (PostgreSQL ready)
@@ -26,6 +30,7 @@ An automated competitive analytics system that:
 - ❌ Live scoring incomplete
 
 ### The Problem with "Dead Code"
+
 The modules in `bot/core/` (advanced_team_detector.py, substitution_detector.py, etc.) are NOT dead - they're **80% complete but use wrong database patterns**. They were written before the PostgreSQL migration.
 
 ---
@@ -33,6 +38,7 @@ The modules in `bot/core/` (advanced_team_detector.py, substitution_detector.py,
 ## 🛠️ PHASE 1: DATABASE ADAPTER REFACTORING (12 hours)
 
 ### Goal
+
 Convert all sqlite3 patterns to async DatabaseAdapter patterns.
 
 ### Files to Refactor
@@ -40,6 +46,7 @@ Convert all sqlite3 patterns to async DatabaseAdapter patterns.
 #### 1. `bot/core/team_manager.py` (PRIORITY - in production!)
 
 **Current (BROKEN):**
+
 ```python
 # Line 28
 def __init__(self, db_path: str = "bot/etlegacy_production.db"):
@@ -54,9 +61,10 @@ def detect_session_teams(
     cursor = db.cursor()  # ❌ WRONG
     cursor.execute(query, (f"{session_date}%",))  # ❌ WRONG
     rows = cursor.fetchall()  # ❌ WRONG
-```
+```text
 
 **Convert to (CORRECT):**
+
 ```python
 from typing import TYPE_CHECKING, Dict, List, Optional
 import logging
@@ -110,9 +118,10 @@ class TeamManager:
         
         # Rest of logic stays the same, just uses rows directly
         # ... (process rows as before)
-```
+```python
 
 **Key Changes:**
+
 1. `__init__` accepts `db_adapter` instead of `db_path`
 2. All methods become `async def`
 3. Replace `cursor.execute()` + `fetchall()` → `await self.db.fetch_all()`
@@ -120,6 +129,7 @@ class TeamManager:
 5. Remove `db: sqlite3.Connection` parameters
 
 **All Methods to Convert in team_manager.py:**
+
 - [ ] `__init__()` - Accept db_adapter
 - [ ] `detect_session_teams()` - async + adapter
 - [ ] `store_session_teams()` - async + adapter
@@ -134,6 +144,7 @@ class TeamManager:
 #### 2. `bot/core/advanced_team_detector.py`
 
 **Same refactoring pattern. Key methods:**
+
 - [ ] `__init__()` - Accept db_adapter
 - [ ] `detect_session_teams()` - async
 - [ ] `_get_session_player_data()` - async
@@ -183,13 +194,14 @@ async def _get_session_player_data(
         guid, name, round_num, game_team, kills, deaths, time_played = row
         # ... rest of logic
     return players
-```
+```python
 
 ---
 
 #### 3. `bot/core/substitution_detector.py`
 
 **Same pattern. Key methods:**
+
 - [ ] `__init__()` - Accept db_adapter
 - [ ] `analyze_session_roster_changes()` - async
 - [ ] `_get_player_activity()` - async
@@ -206,6 +218,7 @@ async def _get_session_player_data(
 #### 4. `bot/core/team_history.py`
 
 **Key methods:**
+
 - [ ] `__init__()` - Accept db_adapter
 - [ ] `get_lineup_stats()` - async
 - [ ] `get_lineup_sessions()` - async
@@ -238,26 +251,29 @@ class TeamDetectorIntegration:
             session_date, use_historical=True
         )
         # ... rest of validation logic
-```
+```python
 
 ---
 
 #### 6. `bot/core/achievement_system.py`
 
 **Current (uses aiosqlite - wrong library):**
+
 ```python
 async with aiosqlite.connect(self.bot.db_path) as db:
     async with db.execute(query, params) as cursor:
         stats = await cursor.fetchone()
-```
+```text
 
 **Convert to (use bot's DatabaseAdapter):**
+
 ```python
 # Use self.bot.db (the bot's DatabaseAdapter instance)
 stats = await self.bot.db.fetch_one(query, params)
-```
+```python
 
 **Remove:**
+
 - Any `import aiosqlite` statements
 - The `_ensure_player_name_alias()` method (SQLite compatibility hack)
 
@@ -289,7 +305,7 @@ print('All team modules import OK')
 
 # 3. Full bot startup test
 python -c "from bot.ultimate_bot import UltimateBot; print('Bot imports OK')"
-```
+```python
 
 ---
 
@@ -314,13 +330,14 @@ teams = self.team_manager.detect_session_teams(db, session_date)
 
 # NEW
 teams = await self.team_manager.detect_session_teams(session_date)
-```
+```python
 
 ---
 
 ## 🛠️ PHASE 2: VOICE CHANNEL ENHANCEMENT (6-8 hours)
 
 ### Goal
+
 Detect when players split into 2 team channels (trigger for predictions).
 
 ### File: `bot/services/voice_session_service.py`
@@ -344,7 +361,7 @@ def __init__(self, bot, config, db_adapter):
     
     # Cooldown to prevent spam (min 5 minutes between predictions)
     self.prediction_cooldown_minutes: int = 5
-```
+```text
 
 ### New Method: `_detect_team_split()`
 
@@ -422,7 +439,7 @@ async def _detect_team_split(self) -> Optional[Dict]:
         'confidence': confidence,
         'guid_coverage': guid_coverage
     }
-```
+```text
 
 ### New Method: `_resolve_discord_ids_to_guids()`
 
@@ -459,7 +476,7 @@ async def _resolve_discord_ids_to_guids(
             guids.append(id_to_guid[discord_id])
     
     return guids
-```
+```sql
 
 ### Update `_handle_voice_state_update()` method
 
@@ -499,13 +516,14 @@ async def _check_for_team_split(self):
         # Teams merged back - reset
         logger.info("Teams merged back, resetting split detection")
         self.team_split_detected = False
-```
+```python
 
 ---
 
 ## 🛠️ PHASE 3: PREDICTION ENGINE (16-20 hours)
 
 ### Goal
+
 Build the brain that predicts match outcomes.
 
 ### New File: `bot/services/prediction_engine.py`
@@ -837,7 +855,7 @@ class PredictionEngine:
             return "Limited historical data - prediction may be less accurate"
         
         return insights[0]
-```
+```yaml
 
 ---
 
@@ -914,7 +932,7 @@ CREATE INDEX idx_h2h_teams ON head_to_head_matchups(team_a_hash, team_b_hash);
 CREATE INDEX idx_map_perf_lineup ON map_performance(lineup_hash);
 CREATE INDEX idx_predictions_date ON match_predictions(session_date);
 CREATE INDEX idx_predictions_accuracy ON match_predictions(prediction_correct) WHERE actual_winner IS NOT NULL;
-```
+```python
 
 ---
 
@@ -946,13 +964,14 @@ ENABLE_PREDICTION_LOGGING: bool = True
 PREDICTION_COOLDOWN_MINUTES: int = 5  # Min time between predictions
 MIN_PLAYERS_FOR_PREDICTION: int = 6  # Minimum players for prediction
 MIN_GUID_COVERAGE: float = 0.5  # 50% of players must have linked GUIDs
-```
+```python
 
 ---
 
 ## 📋 IMPLEMENTATION CHECKLIST
 
 ### Phase 1: Database Adapter Refactoring (Week 1-2)
+
 - [ ] Refactor `team_manager.py` - async + DatabaseAdapter
 - [ ] Refactor `advanced_team_detector.py` - async + DatabaseAdapter  
 - [ ] Refactor `substitution_detector.py` - async + DatabaseAdapter
@@ -964,6 +983,7 @@ MIN_GUID_COVERAGE: float = 0.5  # 50% of players must have linked GUIDs
 - [ ] Deploy to production
 
 ### Phase 2: Voice Enhancement (Week 3-4)
+
 - [ ] Add feature flags to config
 - [ ] Add `_detect_team_split()` to voice service
 - [ ] Add `_resolve_discord_ids_to_guids()` method
@@ -972,6 +992,7 @@ MIN_GUID_COVERAGE: float = 0.5  # 50% of players must have linked GUIDs
 - [ ] Deploy with flag OFF, then enable
 
 ### Phase 3: Prediction Engine (Week 5-8)
+
 - [ ] Create `bot/services/prediction_engine.py`
 - [ ] Implement H2H analysis
 - [ ] Implement form analysis
@@ -983,6 +1004,7 @@ MIN_GUID_COVERAGE: float = 0.5  # 50% of players must have linked GUIDs
 - [ ] Deploy with flag OFF, then enable
 
 ### Phase 4: Database Tables & Live Scoring (Week 9-10)
+
 - [ ] Create new PostgreSQL tables
 - [ ] Store predictions in database
 - [ ] Connect SSH monitor to score updates
@@ -990,6 +1012,7 @@ MIN_GUID_COVERAGE: float = 0.5  # 50% of players must have linked GUIDs
 - [ ] Post final results with accuracy
 
 ### Phase 5: Refinement (Week 11-12)
+
 - [ ] Track prediction accuracy over time
 - [ ] Tune prediction weights based on results
 - [ ] Add accuracy dashboard command
@@ -1000,23 +1023,26 @@ MIN_GUID_COVERAGE: float = 0.5  # 50% of players must have linked GUIDs
 ## 🚨 ROLLBACK PROCEDURES
 
 ### Level 1: Feature Flag Disable (2 minutes)
+
 ```python
 # In config.py or environment:
 ENABLE_TEAM_SPLIT_DETECTION = False
 ENABLE_MATCH_PREDICTIONS = False
 ENABLE_LIVE_SCORING = False
 # Restart bot
-```
+```bash
 
 ### Level 2: Git Revert (10 minutes)
+
 ```bash
 git log --oneline -5  # Find last good commit
 git revert HEAD  # Or specific commit
 git push
 # Restart bot
-```
+```text
 
 ### Level 3: Database Rollback (30 minutes)
+
 ```sql
 -- Drop new tables (doesn't affect existing data)
 DROP TABLE IF EXISTS match_predictions;

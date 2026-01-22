@@ -1,4 +1,5 @@
 # Integration Conflicts - Detailed Analysis
+
 **Competitive Analytics System Integration**
 *Generated: 2025-11-28*
 
@@ -28,14 +29,17 @@ After examining the unfinished competitive analytics modules alongside the curre
 ## CONFLICT 1: Database Adapter Incompatibility
 
 ### Severity: CRITICAL 🔴
+
 This is the PRIMARY BLOCKER for integration.
 
 ### Problem Description
+
 All unfinished competitive analytics modules use direct `sqlite3.Connection` objects, while the production system has migrated to a `DatabaseAdapter` abstraction that supports both PostgreSQL and SQLite.
 
 ### Affected Files
 
 #### 1. `bot/core/advanced_team_detector.py`
+
 ```python
 # Line 55: Class initialization
 def __init__(self, db_path: str = "bot/etlegacy_production.db"):
@@ -56,11 +60,12 @@ rows = cursor.fetchall()  # ❌ sqlite3-specific
 
 # Lines 183-235: Historical pattern analysis
 # Uses direct sqlite3 cursor operations throughout
-```
+```python
 
 **Issue:** The entire class assumes `sqlite3.Connection` and uses cursor-based operations.
 
 #### 2. `bot/core/substitution_detector.py`
+
 ```python
 # Line 80: Method signature
 def analyze_session_roster_changes(
@@ -76,11 +81,12 @@ cursor = db.cursor()  # ❌ sqlite3-specific
 def demonstrate_substitution_detection(session_date: str, db_path: str = "bot/etlegacy_production.db"):
     import sqlite3
     db = sqlite3.connect(db_path)  # ❌ Direct connection
-```
+```python
 
 **Issue:** All database operations use sqlite3-specific cursor API.
 
 #### 3. `bot/core/team_manager.py` (CURRENTLY IN PRODUCTION!)
+
 ```python
 # Line 28: Class initialization
 def __init__(self, db_path: str = "bot/etlegacy_production.db"):
@@ -96,7 +102,7 @@ def detect_session_teams(
 # Line 58: Direct cursor usage
 cursor = db.cursor()  # ❌ sqlite3-specific
 cursor.execute(query, (f"{session_date}%",))
-```
+```python
 
 **Issue:** Even the CURRENT production code uses sqlite3 directly. This is a legacy issue that affects both old and new systems.
 
@@ -105,6 +111,7 @@ cursor.execute(query, (f"{session_date}%",))
 For comparison, here's how the production bot uses DatabaseAdapter:
 
 **bot/services/voice_session_service.py** (Lines 362-370):
+
 ```python
 recent_round = await self.db_adapter.fetch_one(
     """
@@ -115,9 +122,10 @@ recent_round = await self.db_adapter.fetch_one(
     """,
     (cutoff_date, cutoff_date, cutoff_time_str)
 )
-```
+```python
 
 **Key Difference:**
+
 - ✅ Uses `db_adapter.fetch_one()` (async, adapter-based)
 - ❌ NOT `cursor.execute()` / `cursor.fetchone()` (sync, sqlite3-specific)
 
@@ -128,12 +136,14 @@ The unfinished modules were developed during Week 11-12 (November 2, 2025 commit
 ### Impact Assessment
 
 **If we try to integrate as-is:**
+
 1. ❌ Code won't run on PostgreSQL (production database)
 2. ❌ Type errors at runtime (passing sqlite3.Connection where DatabaseAdapter expected)
 3. ❌ Can't be called from async contexts (team_manager uses sync sqlite3)
 4. ❌ No connection pooling (performance degradation)
 
 **Production Evidence:**
+
 - Current bot uses PostgreSQL: `database_type = "postgresql"` (bot/config.py)
 - Current connection string: `postgresql://etlegacy_user:etlegacy_secure_2025@localhost/etlegacy`
 - NONE of the unfinished modules would work with this setup
@@ -141,12 +151,14 @@ The unfinished modules were developed during Week 11-12 (November 2, 2025 commit
 ### Solution Strategy
 
 #### Option A: Refactor All Modules to DatabaseAdapter (RECOMMENDED)
+
 **Time:** 8-12 hours
 **Risk:** LOW (controlled refactor)
 
 **Changes Required:**
 
 1. **Class Constructor Changes**
+
 ```python
 # OLD (sqlite3-based)
 class AdvancedTeamDetector:
@@ -158,9 +170,10 @@ class AdvancedTeamDetector:
     def __init__(self, db_adapter):
         self.db_adapter = db_adapter
         self.config = db_adapter.config  # Access to bot config
-```
+```text
 
-2. **Method Signature Changes**
+1. **Method Signature Changes**
+
 ```python
 # OLD
 def detect_session_teams(
@@ -175,9 +188,10 @@ async def detect_session_teams(
     session_date: str
 ) -> Dict[str, Dict]:
     # Use self.db_adapter instead of db parameter
-```
+```text
 
-3. **Query Execution Changes**
+1. **Query Execution Changes**
+
 ```python
 # OLD (sqlite3 cursor)
 cursor = db.cursor()
@@ -189,9 +203,10 @@ rows = await self.db_adapter.fetch_all(
     query,
     (f"{session_date}%",)
 )
-```
+```text
 
-4. **Parameterized Query Syntax**
+1. **Parameterized Query Syntax**
+
 ```python
 # OLD (SQLite ? placeholders)
 query = "SELECT * FROM rounds WHERE round_date = ?"
@@ -204,19 +219,20 @@ query = "SELECT * FROM rounds WHERE round_date = ?"
 # OR
 query = "SELECT * FROM rounds WHERE round_date = $1"
 # Adapter handles conversion!
-```
+```python
 
 **File-by-File Refactor Plan:**
 
 | File | Methods to Refactor | Estimated Time |
 |------|---------------------|----------------|
-| advanced_team_detector.py | 7 methods (detect_session_teams, _get_session_player_data, _analyze_historical_patterns, _analyze_multi_round_consensus, _analyze_cooccurrence, _combine_strategies, _cluster_into_teams) | 4 hours |
-| substitution_detector.py | 5 methods (analyze_session_roster_changes, _get_player_activity, _get_round_rosters, _detect_roster_changes, adjust_team_detection_for_substitutions) | 3 hours |
+| advanced_team_detector.py | 7 methods (detect_session_teams, _get_session_player_data, _analyze_historical_patterns,_analyze_multi_round_consensus,_analyze_cooccurrence,_combine_strategies,_cluster_into_teams) | 4 hours |
+| substitution_detector.py | 5 methods (analyze_session_roster_changes,_get_player_activity, _get_round_rosters,_detect_roster_changes, adjust_team_detection_for_substitutions) | 3 hours |
 | team_manager.py | 4 methods (detect_session_teams, store_session_teams, get_session_teams, detect_lineup_changes) | 2 hours |
 | **Testing & Integration** | | 3 hours |
 | **TOTAL** | | **12 hours** |
 
 #### Option B: Create Adapter Wrapper (NOT RECOMMENDED)
+
 **Time:** 4 hours
 **Risk:** HIGH (abstraction leak, maintenance burden)
 
@@ -227,12 +243,14 @@ Create a `LegacyDatabaseBridge` that wraps DatabaseAdapter to look like sqlite3.
 **PROCEED WITH OPTION A:** Full refactor to DatabaseAdapter.
 
 **Reasoning:**
+
 1. team_manager.py is ALSO using sqlite3 (it's affected too!)
 2. One-time fix resolves the issue permanently
 3. Enables async/await throughout (better performance)
 4. Future-proof for other database backends
 
 **Rollout Strategy:**
+
 1. ✅ Refactor team_manager.py FIRST (it's in production, low risk, high value)
 2. ✅ Test team_manager.py with existing !team commands
 3. ✅ Refactor advanced_team_detector.py (uses same patterns)
@@ -246,6 +264,7 @@ Create a `LegacyDatabaseBridge` that wraps DatabaseAdapter to look like sqlite3.
 ### Severity: HIGH 🟡
 
 ### Problem Description
+
 The current `voice_session_service.py` only counts TOTAL players across all voice channels. It **CANNOT** detect team splits (e.g., 6 players → 3 in Channel A + 3 in Channel B).
 
 This is the trigger mechanism for the competitive analytics system.
@@ -253,6 +272,7 @@ This is the trigger mechanism for the competitive analytics system.
 ### Current Implementation
 
 **bot/services/voice_session_service.py (Lines 74-82):**
+
 ```python
 # Count players in gaming voice channels
 total_players = 0
@@ -265,9 +285,10 @@ for channel_id in self.config.gaming_voice_channels:
         current_participants.update([m.id for m in channel.members])
 
 logger.debug(f"🎙️ Voice update: {total_players} players in gaming channels")
-```
+```text
 
 **What This Does:**
+
 - ✅ Counts total players across all channels
 - ✅ Tracks Discord user IDs
 - ❌ Does NOT track which channel each player is in
@@ -277,7 +298,8 @@ logger.debug(f"🎙️ Voice update: {total_players} players in gaming channels"
 
 To trigger competitive analytics, we need to detect:
 
-```
+```text
+
 BEFORE (Group Channel):
 Channel A: [Player1, Player2, Player3, Player4, Player5, Player6]
 Channel B: []
@@ -287,7 +309,8 @@ Channel A: [Player1, Player2, Player3]  ← Team 1
 Channel B: [Player4, Player5, Player6]  ← Team 2
 
 🎯 TRIGGER: Team split detected! → Generate prediction
-```
+
+```sql
 
 ### User's Vision (from conversation)
 
@@ -377,11 +400,12 @@ def _detect_team_split(self, previous: Dict, current: Dict) -> Optional[Dict]:
         'format': f"{len(team1)}v{len(team2)}",
         'timestamp': discord.utils.utcnow()
     }
-```
+```python
 
 ### Integration Points
 
 Once team split is detected:
+
 1. Map Discord IDs → Player GUIDs (using player_links table)
 2. Query historical performance data
 3. Generate match prediction
@@ -414,6 +438,7 @@ The infrastructure for Discord ID → Player GUID mapping **ALREADY EXISTS** in 
 ### Database Evidence
 
 **player_links table schema:**
+
 ```sql
 CREATE TABLE player_links (
     id SERIAL PRIMARY KEY,
@@ -426,9 +451,10 @@ CREATE TABLE player_links (
     display_name_source TEXT DEFAULT 'auto',
     display_name_updated_at TIMESTAMP
 );
-```
+```text
 
 **Sample Data:**
+
 ```bash
 $ psql -c "SELECT discord_id, player_guid, player_name FROM player_links LIMIT 3;"
   discord_id   |         player_guid          | player_name
@@ -436,20 +462,22 @@ $ psql -c "SELECT discord_id, player_guid, player_name FROM player_links LIMIT 3
  123456789012  | 550e8400-e29b-41d4-a716-... | SloMix
  234567890123  | 660e8400-e29b-41d4-a716-... | AnotherPlayer
  345678901234  | 770e8400-e29b-41d4-a716-... | ThirdPlayer
-```
+```python
 
 ### Current Gap
 
 **voice_session_service.py** tracks:
+
 ```python
 self.session_participants: Set[int] = set()  # Discord user IDs only
-```
+```text
 
 But to generate predictions, we need:
+
 ```python
 # Map Discord IDs → Player GUIDs → Historical stats
 discord_id_123456789012 → "550e8400-e29b..." → Query player_comprehensive_stats
-```
+```text
 
 ### Solution Implementation
 
@@ -549,7 +577,7 @@ class VoiceSessionService:
 
         # Post to Discord
         await self._post_prediction_embed(prediction)
-```
+```python
 
 ### Implementation Estimate
 
@@ -580,6 +608,7 @@ We have TWO team detection implementations:
 ### Risk Analysis
 
 **If we integrate advanced_team_detector.py WITHOUT a plan:**
+
 - ❌ Code duplication (two classes doing similar things)
 - ❌ Maintenance burden (which one to update?)
 - ❌ Confusion (which one should be used where?)
@@ -588,6 +617,7 @@ We have TWO team detection implementations:
 ### Current TeamManager Usage
 
 **bot/cogs/team_cog.py imports and uses TeamManager:**
+
 ```python
 from bot.core.team_manager import TeamManager
 
@@ -595,7 +625,7 @@ class TeamCog(commands.Cog):
     async def teams(self, ctx, session_date: str = None):
         manager = TeamManager(self.config.db_path)
         # Uses detect_session_teams(), store_session_teams(), etc.
-```
+```yaml
 
 ### Comparison Matrix
 
@@ -613,9 +643,11 @@ class TeamCog(commands.Cog):
 ### Solution Options
 
 #### Option A: Coexistence Strategy (RECOMMENDED)
+
 **Keep both, use each for different purposes**
 
-```
+```text
+
 TeamManager (Simple)
 ├── Used by: !team commands (manual team management)
 ├── Purpose: Quick team detection for Discord commands
@@ -625,9 +657,11 @@ AdvancedTeamDetector (Sophisticated)
 ├── Used by: Automated competitive analytics
 ├── Purpose: High-confidence team detection for predictions
 └── Algorithm: Multi-strategy with confidence scoring
-```
+
+```text
 
 **Integration:**
+
 ```python
 # In prediction engine
 if prediction_needed:
@@ -644,25 +678,30 @@ if user_command:
     # Use simple TeamManager for quick results
     manager = TeamManager(db_adapter)
     teams = await manager.detect_session_teams(session_date)
-```
+```python
 
 **Pros:**
+
 - ✅ No breaking changes to existing !team commands
 - ✅ Advanced detection used only where needed
 - ✅ Gradual rollout possible
 
 **Cons:**
+
 - ⚠️ Two implementations to maintain
 - ⚠️ Must keep APIs compatible
 
 #### Option B: Migration Strategy
+
 **Replace TeamManager with AdvancedTeamDetector**
 
 **Pros:**
+
 - ✅ Single implementation
 - ✅ Best algorithm everywhere
 
 **Cons:**
+
 - ❌ Riskier (breaking changes)
 - ❌ More testing needed
 - ❌ Performance impact on simple commands
@@ -672,12 +711,14 @@ if user_command:
 **PROCEED WITH OPTION A:** Coexistence strategy.
 
 **Reasoning:**
+
 1. Existing !team commands work fine with simple detector
 2. Competitive analytics needs advanced detector
 3. Low risk (no changes to production code initially)
 4. Can migrate to advanced later if desired
 
 **Action Items:**
+
 1. Refactor both to use DatabaseAdapter
 2. Keep TeamManager for manual commands
 3. Use AdvancedTeamDetector for automated predictions
@@ -702,12 +743,14 @@ The unfinished modules provide **team detection** infrastructure, but there's NO
 ### What Exists vs. What's Needed
 
 **Exists:**
+
 - ✅ Team detection (advanced_team_detector.py)
 - ✅ Substitution tracking (substitution_detector.py)
 - ✅ Match pairing logic (match_tracker.py)
 - ✅ Voice session detection (voice_session_service.py)
 
 **Missing:**
+
 - ❌ Prediction engine (calculate win probability)
 - ❌ Head-to-head tracking (Team A vs Team B history)
 - ❌ Lineup performance database (win/loss by roster)
@@ -719,6 +762,7 @@ The unfinished modules provide **team detection** infrastructure, but there's NO
 > "we want it automated.. as soon as the teams are in their channels it means games started and we can start our prediction because we know who plays together... and we know one more important thing. we know exactly who they play against... we can predict... its a teamgame... so being the most aggressive and hardcore frager with top dpm and top dmg is not necessarily the biggest skillset needed to win competitive games of stopwatch in et:legacy, tailor predictions accordingly"
 
 **Key Requirements:**
+
 - ✅ Team-based predictions (not individual player stats)
 - ✅ Automated (triggered by voice channel split)
 - ✅ Matchup-aware (Team A vs Team B specifically)
@@ -729,6 +773,7 @@ The unfinished modules provide **team detection** infrastructure, but there's NO
 #### 1. Database Tables
 
 **lineup_performance** - Track team win/loss records
+
 ```sql
 CREATE TABLE lineup_performance (
     id SERIAL PRIMARY KEY,
@@ -747,9 +792,10 @@ CREATE TABLE lineup_performance (
 
 CREATE INDEX idx_lineup_performance_guids ON lineup_performance
 USING gin (lineup_guids jsonb_path_ops);
-```
+```text
 
 **head_to_head_matchups** - Track specific Team A vs Team B history
+
 ```sql
 CREATE TABLE head_to_head_matchups (
     id SERIAL PRIMARY KEY,
@@ -768,9 +814,10 @@ CREATE INDEX idx_h2h_team_a ON head_to_head_matchups
 USING gin (team_a_guids jsonb_path_ops);
 CREATE INDEX idx_h2h_team_b ON head_to_head_matchups
 USING gin (team_b_guids jsonb_path_ops);
-```
+```text
 
 **map_performance** - Map-specific team stats
+
 ```sql
 CREATE TABLE map_performance (
     id SERIAL PRIMARY KEY,
@@ -783,9 +830,10 @@ CREATE TABLE map_performance (
 
     UNIQUE (lineup_guids, map_name)
 );
-```
+```text
 
 **match_predictions** - Store predictions for accuracy tracking
+
 ```sql
 CREATE TABLE match_predictions (
     id SERIAL PRIMARY KEY,
@@ -800,11 +848,12 @@ CREATE TABLE match_predictions (
     session_start_date TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-```
+```python
 
 #### 2. PredictionEngine Service
 
 **bot/services/prediction_engine.py** (NEW FILE)
+
 ```python
 """
 Prediction Engine - Match Outcome Prediction
@@ -1042,6 +1091,7 @@ class PredictionEngine:
 ### Implementation Estimate
 
 **PredictionEngine Development:**
+
 - Core prediction logic: 6 hours
 - Head-to-head analysis: 3 hours
 - Recent form analysis: 3 hours
@@ -1060,6 +1110,7 @@ This is the LARGEST piece of missing functionality.
 Based on the conflict analysis, here's the recommended integration sequence:
 
 ### Phase 1: Foundation (Weeks 1-2)
+
 **Goal:** Fix database adapter compatibility
 
 1. ✅ **Refactor team_manager.py** to DatabaseAdapter (2 hours)
@@ -1087,6 +1138,7 @@ Based on the conflict analysis, here's the recommended integration sequence:
 ---
 
 ### Phase 2: Voice Enhancement (Weeks 3-4)
+
 **Goal:** Detect team splits and trigger events
 
 1. ✅ **Enhance voice_session_service.py** (6 hours)
@@ -1104,6 +1156,7 @@ Based on the conflict analysis, here's the recommended integration sequence:
 ---
 
 ### Phase 3: Prediction Engine (Weeks 5-8)
+
 **Goal:** Build prediction capabilities
 
 1. ✅ **Create PredictionEngine service** (16 hours)
@@ -1126,6 +1179,7 @@ Based on the conflict analysis, here's the recommended integration sequence:
 ---
 
 ### Phase 4: Live Scoring (Weeks 9-10)
+
 **Goal:** Track match results in real-time
 
 1. ✅ **Connect to SSH monitor** (4 hours)
@@ -1142,6 +1196,7 @@ Based on the conflict analysis, here's the recommended integration sequence:
 ---
 
 ### Phase 5: Refinement (Weeks 11-12)
+
 **Goal:** Polish and optimize
 
 1. ✅ **Accuracy tracking** (3 hours)
@@ -1198,16 +1253,19 @@ Based on the conflict analysis, here's the recommended integration sequence:
 ## Success Metrics
 
 ### Prediction Accuracy
+
 - **Target:** >60% correct predictions after 20 matches
 - **Measure:** `match_predictions.prediction_correct` ratio
 - **Threshold:** If accuracy <50% after 30 matches, revisit weights
 
 ### Performance Impact
+
 - **Target:** Prediction generation <2 seconds
 - **Measure:** Log timestamps
 - **Threshold:** If >5 seconds, optimize queries
 
 ### User Engagement
+
 - **Target:** Predictions posted automatically for >80% of sessions
 - **Measure:** Count predictions vs sessions
 - **Threshold:** If <60%, investigate why splits not detected

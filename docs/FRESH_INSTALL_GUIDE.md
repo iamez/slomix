@@ -27,7 +27,7 @@ git checkout claude/architecture-review-framework-01UyGTWjM75BCq5crDQ3qiu5
 # Verify you're on the right branch
 git branch
 # Should show: * claude/architecture-review-framework-01UyGTWjM75BCq5crDQ3qiu5
-```
+```sql
 
 ---
 
@@ -39,9 +39,10 @@ cp ~/slomix/.env ~/slomix-refactored/.env
 
 # Or create new .env if needed
 nano .env
-```
+```text
 
 **Add these settings:**
+
 ```env
 # Discord Bot Token
 DISCORD_BOT_TOKEN=your_discord_token_here
@@ -59,9 +60,10 @@ AUTOMATION_ENABLED=false
 
 # Stats directory
 STATS_DIRECTORY=./local_stats
-```
+```yaml
 
 **⚠️ IMPORTANT:**
+
 - Use the **same database** as your old bot (shares data)
 - Use a **different Discord token** if you want to run both bots simultaneously
 - Or stop the old bot before starting the new one
@@ -85,9 +87,10 @@ pip install --upgrade pip
 
 # Install requirements
 pip install -r requirements.txt
-```
+```text
 
 **Verify installation:**
+
 ```bash
 # Check discord.py
 pip list | grep discord
@@ -98,7 +101,7 @@ pip list | grep asyncpg
 # Should see:
 # discord.py    2.x.x
 # asyncpg       0.x.x
-```
+```yaml
 
 ---
 
@@ -116,7 +119,7 @@ cp -r ~/slomix/local_stats/* ~/slomix-refactored/local_stats/
 
 # Option C: Start fresh (no old stats)
 # Just leave local_stats/ empty
-```
+```yaml
 
 ---
 
@@ -157,7 +160,7 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 PYEOF
-```
+```yaml
 
 ---
 
@@ -181,7 +184,7 @@ sudo systemctl stop etlegacy-bot
 # If just running in terminal:
 # Find PID and kill it
 kill <PID>
-```
+```yaml
 
 **Or use a different Discord bot token to run both simultaneously!**
 
@@ -198,10 +201,12 @@ source venv/bin/activate
 
 # Start bot in foreground (for testing)
 python3 bot/ultimate_bot.py
-```
+```text
 
 **You should see:**
-```
+
+```text
+
 ✅ Configuration loaded
 ✅ PostgreSQL adapter created: localhost:5432/etlegacy_stats
 ✅ Database adapter connected successfully
@@ -217,7 +222,8 @@ python3 bot/ultimate_bot.py
 ✅ Team Management Cog loaded
 ✅ Team System Cog loaded
 ✅ Bot ready! Logged in as YourBotName
-```
+
+```yaml
 
 **Press Ctrl+C to stop when done testing**
 
@@ -225,19 +231,25 @@ python3 bot/ultimate_bot.py
 
 ## Step 8: Test Commands in Discord
 
-```
+```text
+
 !ping
+
 # Should respond with latency
 
 !stats yourname
+
 # Should show your stats
 
 !last_session
+
 # Should show latest session
 
 !leaderboard kills
+
 # Should show rankings
-```
+
+```yaml
 
 **Everything should work exactly as before!**
 
@@ -262,16 +274,18 @@ python3 bot/ultimate_bot.py
 
 # Detach: Press Ctrl+A then D
 # Reattach later: screen -r etlegacy-bot-refactored
-```
+```text
 
 ### Option B: Using Systemd (Recommended)
 
 **Create service file:**
+
 ```bash
 sudo nano /etc/systemd/system/etlegacy-bot-refactored.service
-```
+```text
 
 **Add:**
+
 ```ini
 [Unit]
 Description=ET:Legacy Discord Stats Bot (Refactored)
@@ -293,28 +307,31 @@ StandardError=append:/var/log/etlegacy-bot-refactored-error.log
 
 [Install]
 WantedBy=multi-user.target
-```
+```text
 
 **Enable and start:**
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable etlegacy-bot-refactored
 sudo systemctl start etlegacy-bot-refactored
 sudo systemctl status etlegacy-bot-refactored
-```
+```text
 
 **View logs:**
+
 ```bash
 sudo tail -f /var/log/etlegacy-bot-refactored.log
-```
+```yaml
 
 ---
 
 ## 📊 Side-by-Side Comparison
 
-### Your Directories:
+### Your Directories
 
-```
+```python
+
 ~/slomix/                          # OLD bot (still working)
 ├── bot/
 │   └── ultimate_bot.py           # 4,708 lines
@@ -326,16 +343,19 @@ sudo tail -f /var/log/etlegacy-bot-refactored.log
 │   │   └── calculator.py
 │   └── ultimate_bot.py           # 2,687 lines (43% smaller!)
 └── .env
-```
 
-### Running Both Simultaneously:
+```yaml
+
+### Running Both Simultaneously
 
 **Old Bot:**
+
 - Process: `screen -r etlegacy-bot` OR `systemctl status etlegacy-bot`
 - Logs: `/var/log/etlegacy-bot.log`
 - Directory: `~/slomix/`
 
 **New Bot (Refactored):**
+
 - Process: `screen -r etlegacy-bot-refactored` OR `systemctl status etlegacy-bot-refactored`
 - Logs: `/var/log/etlegacy-bot-refactored.log`
 - Directory: `~/slomix-refactored/`
@@ -346,9 +366,10 @@ sudo tail -f /var/log/etlegacy-bot-refactored.log
 
 ## 🔄 Migration Path (When Ready)
 
-### Once you confirm refactored bot works perfectly:
+### Once you confirm refactored bot works perfectly
 
 **Option 1: Replace Old Bot**
+
 ```bash
 # Stop old bot
 sudo systemctl stop etlegacy-bot
@@ -365,9 +386,10 @@ sudo nano /etc/systemd/system/etlegacy-bot.service
 # Start bot
 sudo systemctl daemon-reload
 sudo systemctl start etlegacy-bot
-```
+```text
 
 **Option 2: Keep New Directory**
+
 ```bash
 # Just disable old bot
 sudo systemctl disable etlegacy-bot
@@ -376,7 +398,7 @@ sudo systemctl stop etlegacy-bot
 # Run refactored bot as main bot
 sudo systemctl enable etlegacy-bot-refactored
 sudo systemctl start etlegacy-bot-refactored
-```
+```python
 
 ---
 
@@ -401,16 +423,18 @@ Test the refactored bot:
 Watch the logs to compare performance:
 
 **Old bot:**
+
 ```bash
 tail -f /var/log/etlegacy-bot.log | grep "Processed"
 # ✅ Processed in 0.45s (12 players, 24 weapons) (WITH WARNINGS)
-```
+```text
 
 **New bot (refactored):**
+
 ```bash
 tail -f /var/log/etlegacy-bot-refactored.log | grep "Processed"
 # ✅ Processed in 0.28s (12 players, 24 weapons)
-```
+```yaml
 
 **Expected improvement: ~38% faster imports!**
 
@@ -429,7 +453,7 @@ rm -rf ~/slomix
 sudo systemctl disable etlegacy-bot
 sudo rm /etc/systemd/system/etlegacy-bot.service
 sudo systemctl daemon-reload
-```
+```yaml
 
 ---
 
@@ -448,7 +472,7 @@ which python3
 
 # Reinstall requirements
 pip install --upgrade -r requirements.txt
-```
+```text
 
 ### Issue: Database Connection Failed
 
@@ -458,7 +482,7 @@ cat .env | grep POSTGRES
 
 # Test PostgreSQL connection
 psql -h localhost -U your_db_user -d etlegacy_stats -c "SELECT 1;"
-```
+```text
 
 ### Issue: Both Bots Conflict
 
@@ -468,7 +492,7 @@ psql -h localhost -U your_db_user -d etlegacy_stats -c "SELECT 1;"
 
 # Check which is running:
 ps aux | grep ultimate_bot
-```
+```yaml
 
 ---
 

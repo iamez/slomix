@@ -13,7 +13,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Discord.py**: Version 2.0+
 **Status**: Production-Ready ✅
 
-### Recent Updates (1.0.3)
+## Recent Updates (1.0.3)
+
 - Configurable timing values (R1-R2 matching, grace period, session gap)
 - SHA256 file integrity checking on import
 - Cross-field data validation (headshots <= kills, etc.)
@@ -24,9 +25,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ⚠️ CRITICAL RULES - READ FIRST ⚠️
 
 ### 🗄️ DATABASE: PostgreSQL (NOT SQLite!)
+
 **IMPORTANT**: Bot migrated from SQLite to PostgreSQL in December 2025
 
 **Database Details**:
+
 - **Type**: PostgreSQL 14 (system service)
 - **Database**: etlegacy
 - **User**: etlegacy_user
@@ -37,6 +40,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Old SQLite**: `bot/database.db` - NO LONGER EXISTS
 
 **Critical Differences**:
+
 - ✅ Use `postgresql_database_manager.py` for ALL database operations (NOT `database_manager.py`)
 - ✅ Use `?` for query parameters (NOT `{ph}` placeholders)
 - ✅ Backups: `pg_dump` to `.sql` files (NOT `.db` files)
@@ -49,6 +53,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ---
 
 ### 🚨 BRANCH POLICY (Version 1.0+)
+
 **NEVER COMMIT DIRECTLY TO MAIN!**
 
 1. ✅ **ALWAYS** create a feature branch for changes
@@ -58,6 +63,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 5. ❌ **NEVER** use `git commit` without being on a feature branch
 
 **Workflow:**
+
 ```bash
 # Create and switch to feature branch
 git checkout -b feature/my-feature-name
@@ -71,9 +77,10 @@ git push origin feature/my-feature-name
 git checkout main
 git merge feature/my-feature-name
 git push origin main
-```
+```python
 
 ### Database Operations
+
 1. ✅ **ALWAYS** use `postgresql_database_manager.py` for ALL database operations (NOT `database_manager.py`)
 2. ✅ **ALWAYS** use `gaming_session_id` for session queries (NOT dates)
 3. ✅ **ALWAYS** group by `player_guid` (NOT `player_name`)
@@ -84,19 +91,24 @@ git push origin main
 8. ❌ **NEVER** create new import/database scripts (use `postgresql_database_manager.py`)
 
 ### Terminology (MUST USE CORRECTLY)
+
 - **ROUND** = One stats file (R1 or R2), one half of a match
 - **MATCH** = R1 + R2 together (one complete map played)
 - **GAMING SESSION** = Multiple matches within 60-minute gaps
 
 ### System Architecture
-```
+
+```yaml
+
 ET:Legacy Game Server → SSH Monitor → Parser → PostgreSQL → Discord Bot → Users
                         (60s poll)   (53+ fields)  (7 tables)   (70+ commands)
-```
+
+```python
 
 ### Critical Architecture Patterns
 
 #### SSH Monitoring - Single System Design (Dec 2025 Fix)
+
 **Only `endstats_monitor` task loop handles SSH operations.** SSHMonitor service is initialized but NOT auto-started.
 
 - **endstats_monitor** (in `ultimate_bot.py` lines 551-568): SSH check → Download → DB import → Discord posting
@@ -105,11 +117,13 @@ ET:Legacy Game Server → SSH Monitor → Parser → PostgreSQL → Discord Bot 
 **If live posting stops:** Check that SSHMonitor isn't being auto-started. This is a known race condition fix.
 
 #### Database Adapter Pattern
+
 - **Active abstraction:** `bot/core/database_adapter.py` provides unified async interface
 - **PostgreSQL is primary:** Configured via `.env` or `bot_config.json`
 - **Schema validation critical:** Bot validates 53-column schema on startup - wrong schema = silent failures
 
 #### Stats Import Pipeline (4 Stages)
+
 1. **File Generation** → ET:Legacy server writes `YYYY-MM-DD-HHMMSS-mapname-round-N.txt`
 2. **Parsing** → `bot/community_stats_parser.py` extracts 53+ fields per player
 3. **Database Import** → `postgresql_database_manager.py` with:
@@ -122,6 +136,7 @@ ET:Legacy Game Server → SSH Monitor → Parser → PostgreSQL → Discord Bot 
 **Critical:** Round 2 files contain CUMULATIVE stats - parser calculates differentials by subtracting Round 1 values.
 
 #### Timing Configuration (Dec 2025 Update)
+
 | Setting | Default | Purpose |
 |---------|---------|---------|
 | `SESSION_GAP_MINUTES` | 60 | Minutes of inactivity before new session |
@@ -135,9 +150,11 @@ These values work together - ensure `ROUND_MATCH_WINDOW_MINUTES` < `SESSION_GAP_
 ## 🎉 Version 1.0 Release (November 20, 2025)
 
 ### Release Milestone
+
 **Slomix** is now officially production-ready and fully documented!
 
-### What's Included in 1.0:
+### What's Included in 1.0
+
 - ✅ **63 Discord Commands** - Complete bot functionality
 - ✅ **6-Layer Data Validation** - ACID-compliant PostgreSQL pipeline
 - ✅ **Full Automation** - SSH monitoring, voice detection, auto-posting
@@ -148,14 +165,17 @@ These values work together - ensure `ROUND_MATCH_WINDOW_MINUTES` < `SESSION_GAP_
 - ✅ **Comprehensive Documentation** - Complete technical docs
 
 ### Repository Cleanup (Nov 20, 2025)
+
 - 🧹 Removed **~6.5 GB** of development artifacts from GitHub
 - 📁 Organized all documentation into `/docs/` structure
 - 🛡️ Updated `.gitignore` to prevent future clutter
 - 📚 Created comprehensive documentation index
 - ✨ Clean root directory with only essential files
 
-### Documentation Structure:
-```
+### Documentation Structure
+
+```text
+
 docs/
 ├── SAFETY_VALIDATION_SYSTEMS.md
 ├── CHANGELOG.md
@@ -169,7 +189,8 @@ docs/
 ├── AI_COMPREHENSIVE_SYSTEM_GUIDE.md
 ├── archive/ (historical documentation)
 └── [30+ additional system docs]
-```
+
+```python
 
 ---
 
@@ -180,12 +201,14 @@ docs/
 **Issue**: 13 player records show `time_dead_minutes > time_played_minutes` by small margins (0.06 to 2.06 minutes).
 
 **Investigation**: Comprehensive investigation revealed:
+
 - Parser correctly uses round duration for stopwatch mode (design intent)
 - DPM calculations are correct (confirmed by user)
 - Database rebuild reduced corruption from 43 records (100+ min errors) to 13 records (0.06-2.06 min errors)
 - Field mappings verified correct: tab_fields[22] = time_played, [25] = time_dead_ratio, [26] = time_dead_minutes
 
 **Possible Causes**:
+
 1. Rounding differences between Lua (`roundNum(value, 1)`) and Python (`int(minutes * 60)`)
 2. Edge cases: players joining mid-round or disconnecting
 3. Potential Lua bug in `death_time_total` accumulation
@@ -202,6 +225,7 @@ docs/
 ## Recent Major Fixes (Dec 2025)
 
 ### 1. Duplicate Player Entries in Rankings (FIXED Dec 14-15) 🆕
+
 - **Problem**: Player "olympus" appeared twice in `!last_session` rankings (positions 6 and 7) due to name aliases.
 - **Root Cause**: SQL queries used `GROUP BY player_guid, player_name`, creating separate groups when same player had different names.
 - **Fix**: Changed all GROUP BY clauses to use only `player_guid` and select name with `MAX(player_name)`.
@@ -212,18 +236,21 @@ docs/
   - `bot/services/session_data_service.py` (1 query fixed)
 
 ### 2. Stats Command UnboundLocalError (FIXED Dec 14-15) 🆕
+
 - **Problem**: `!stats` command crashed with "UnboundLocalError: local variable 'embed' referenced before assignment".
 - **Root Cause**: `embed` variable created inside cache MISS block but referenced outside for both HIT and MISS paths.
 - **Fix**: Moved embed creation and formatting code outside the if/else blocks to run for both cache paths.
 - **Location**: `bot/cogs/leaderboard_cog.py` lines 316-440
 
 ### 3. Find Player SQL Syntax Error (FIXED Dec 14-15) 🆕
+
 - **Problem**: `!find_player` command crashed with "syntax error at or near {".
 - **Root Cause**: SQL queries used `{ph}` placeholder instead of PostgreSQL `?` parameter syntax.
 - **Fix**: Replaced `{ph}` with `?` in 2 SQL queries.
 - **Location**: `bot/cogs/link_cog.py` lines 334 and 348
 
 ### 4. Impossible Time Dead Values (FIXED Dec 14-15) 🆕
+
 - **Problem**: Players showing dead longer than they played (e.g., qmr: 96:41 played, 💀131:45 dead).
 - **Root Cause**: ET:Legacy Lua stats script has bug tracking `death_time_total`, causing impossible values like 1255% dead ratio. Affects 43 player records across 33 rounds.
 - **Fix**: Cap `time_dead` at `time_played` per-round before aggregating using PostgreSQL `LEAST()` function.
@@ -233,15 +260,18 @@ docs/
 - **SQL Logic**: `LEAST(time_played_minutes * time_dead_ratio / 100.0 * 60, time_played_seconds)` caps per-round death time.
 
 ### 5. Webhook Notification Security Hardening (FIXED Dec 14) 🆕
+
 - **Commit**: 3f15b1a - Security: Webhook notification hardening
 - Enhanced security for webhook notification system.
 
 ### 6. Leaderboard Pagination & Session Graphs (FIXED Dec 14) 🆕
+
 - **Commit**: 065d01b - Change Denied Playtime graph to show percentage instead of seconds
 - **Commit**: ba8e89e - Fix leaderboard pagination, expand help command, improve session graphs
 - Improved graph visualizations and command help.
 
 ### 7. Incomplete local_stats Sync (FIXED Dec 17) 🆕
+
 - **Problem**: Bot's startup time filter skipped ALL files created before bot startup, causing incomplete local_stats mirror and data loss during bot downtime.
 - **Root Cause**: `file_tracker.py` had hard cutoff at bot startup time - files created while bot offline were never downloaded.
 - **Fix**: Implemented 7-day lookback window + new !sync_historical command:
@@ -256,43 +286,52 @@ docs/
 - **Result**: local_stats maintained as complete mirror, database rebuilds work correctly, no data loss from bot restarts
 
 ### 8. SSHMonitor Race Condition (FIXED Dec 1)
+
 - **Problem**: Two monitoring systems (SSHMonitor + endstats_monitor) competed for files. SSHMonitor processed files first, marking them as "already processed" before Discord posting could occur.
 - **Fix**: Disabled SSHMonitor auto-start. endstats_monitor now handles SSH + DB import + Discord posting as single unified system.
 - **Location**: `bot/ultimate_bot.py` lines 551-568
 
 ### 2. Channel Checks Silent Ignore (FIXED Dec 1) 🆕
+
 - **Problem**: `is_public_channel()` and `is_admin_channel()` raised exceptions and sent error messages when commands used in wrong channels.
 - **Fix**: Changed to silently `return False` instead of raising `ChannelCheckFailure`.
 - **Location**: `bot/core/checks.py`
 
 ### 3. on_message Channel Filtering (FIXED Dec 1) 🆕
+
 - **Problem**: Bot responded to commands in wrong channels when `bot_command_channels` was not configured.
 - **Fix**: Now uses `public_channels` config as fallback for channel filtering.
 - **Location**: `bot/ultimate_bot.py` `on_message` handler
 
 ### 4. Website Security Fixes (FIXED Dec 1) 🆕
+
 - Fixed HTML corruption in `website/index.html`
 - Fixed duplicate function declarations in `website/js/app.js`
 - Added SQL injection protection via `escape_like_pattern()` in `website/backend/routers/api.py`
 
 ### 5. Gaming Session Detection Bug (FIXED Nov 3)
+
 - **Problem**: Date-based queries included orphan rounds
 - **Fix**: Use `WHERE round_id IN (session_ids_list)` instead of date filters
 
 ### 2. Player Duplication Bug (FIXED Nov 3)
+
 - **Problem**: Name changes created duplicate entries
 - **Fix**: Always `GROUP BY player_guid`, never by player_name
 
 ### 3. Duplicate Detection Bug (FIXED Nov 19)
+
 - **Problem**: Same map played twice in one session → second play skipped
 - **Fix**: Added `round_time` to duplicate check (not just map_name + round_number)
 - **Location**: `bot/ultimate_bot.py` line 1337
 
 ### 4. 30-Minute vs 60-Minute Gap (FIXED Nov 4)
+
 - **Problem**: Used 30-minute threshold instead of 60
 - **Fix**: Changed all instances to 60 minutes
 
 ### 5. Achievement System (ADDED Nov 19)
+
 - **Feature**: Badge emojis for lifetime achievements
 - **Files**: `bot/services/player_badge_service.py`, `bot/cogs/achievements_cog.py`
 - **Display**: Shown in `!last_session`, `!leaderboard`, `!badges`
@@ -303,12 +342,14 @@ docs/
 ## Key Database Schema
 
 ### rounds table
+
 - `gaming_session_id` - Groups continuous play (60-minute gaps)
 - `match_id` - Links R1+R2 (format: YYYY-MM-DD-HHMMSS)
 - `round_number` - 1 or 2 (NOT 0 - no warmup rounds)
 - `round_date`, `round_time` - From filename
 
 ### player_comprehensive_stats (53 columns)
+
 - Primary keys: `player_guid` (string), `round_id` (foreign key)
 - Combat: kills, deaths, damage_given, damage_received, accuracy
 - Weapons: headshots, headshot_kills, gibs
@@ -320,6 +361,7 @@ docs/
 - Team: team ('axis'/'allies'), team_detection_confidence
 
 ### weapon_comprehensive_stats
+
 - Per-weapon breakdown: weapon_name, kills, deaths, headshots, hits, shots, accuracy
 - Linked by round_id and player_guid
 
@@ -327,7 +369,8 @@ docs/
 
 ## Common Pitfalls (AVOID THESE)
 
-### ❌ DON'T:
+### ❌ DON'T
+
 1. Use date-based queries for gaming sessions (multiple sessions per day possible)
 2. Group by player_name (name changes break aggregations)
 3. Assume `headshots` = `headshot_kills` (different stats, both correct)
@@ -336,7 +379,8 @@ docs/
 6. Modify processed_files manually (SHA256 hash stored for integrity verification)
 7. **NEVER provide destructive commands unprompted** - No `rm`, `del`, `Remove-Item`, `DROP TABLE`, etc. Report findings, let user decide what to delete
 
-### ✅ DO:
+### ✅ DO
+
 1. Use `gaming_session_id` for session queries
 2. Group by `player_guid` for player aggregations
 3. Read `AI_COMPREHENSIVE_SYSTEM_GUIDE.md` before claiming bugs
@@ -349,6 +393,7 @@ docs/
 ## Common Development Tasks
 
 ### Building & Running
+
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -359,9 +404,10 @@ python -m bot.ultimate_bot
 # Or with systemd service
 sudo systemctl start etlegacy-bot
 sudo systemctl status etlegacy-bot
-```
+```text
 
 ### Database Operations
+
 ```bash
 # All database operations use this ONE tool:
 python postgresql_database_manager.py
@@ -380,9 +426,10 @@ PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
 # Common queries
 psql -d etlegacy -c "SELECT COUNT(*) FROM rounds;"
 psql -d etlegacy -c "SELECT MAX(gaming_session_id) FROM rounds;"
-```
+```text
 
 ### Testing
+
 ```bash
 # No formal test suite - use validation scripts:
 python test_phase1_implementation.py    # Schema validation
@@ -396,9 +443,10 @@ python bot/community_stats_parser.py local_stats/sample-round-1.txt
 !ping                # Check latency
 !health              # System health check
 !last_session        # Latest gaming session
-```
+```text
 
 ### Deployment
+
 ```bash
 # Automated installation (recommended)
 sudo ./install.sh --full --auto           # Full VPS setup
@@ -410,11 +458,12 @@ cp .env.example .env
 nano .env
 python postgresql_database_manager.py    # Create DB (option 1)
 python -m bot.ultimate_bot               # Run bot
-```
+```python
 
 ## File Locations
 
 ### Core Files (MUST UNDERSTAND)
+
 - `bot/ultimate_bot.py` (4,990 lines) - Main bot entry point, 14 Cogs, on_ready handler
 - `bot/community_stats_parser.py` (1,036 lines) - R1/R2 differential parser
 - `postgresql_database_manager.py` (1,573 lines) - **ONLY tool for DB operations**
@@ -422,6 +471,7 @@ python -m bot.ultimate_bot               # Run bot
 - `bot/core/stats_cache.py` - 5-minute TTL query cache
 
 ### 14 Cogs (Command Modules)
+
 - `bot/cogs/last_session_cog.py` - Session stats & summaries (!last_session)
 - `bot/cogs/leaderboard_cog.py` - Rankings (!top_dpm, !top_kd, etc.)
 - `bot/cogs/stats_cog.py` - Player statistics (!stats <player>)
@@ -436,6 +486,7 @@ python -m bot.ultimate_bot               # Run bot
 **Always add new commands to appropriate Cog** - never add to `ultimate_bot.py` directly.
 
 ### 12 Core Modules (Business Logic)
+
 - `bot/core/team_manager.py` - Team detection orchestration
 - `bot/core/advanced_team_detector.py` - Snapshot-based detection
 - `bot/core/substitution_detector.py` - Mid-game player switches
@@ -445,6 +496,7 @@ python -m bot.ultimate_bot               # Run bot
 - Plus 6 more modules (season, pagination, checks, utils, etc.)
 
 ### Services Layer
+
 - `bot/services/prediction_engine.py` (540 lines) - AI prediction engine
 - `bot/services/round_publisher_service.py` - Auto-post round stats
 - `bot/services/voice_session_service.py` - Voice logging & team detection
@@ -454,6 +506,7 @@ python -m bot.ultimate_bot               # Run bot
 - `bot/services/player_formatter.py` - Global player display formatting
 
 ### Documentation (READ THESE FIRST)
+
 - `docs/CLAUDE.md` - This file (AI assistant guide)
 - `docs/AI_COMPREHENSIVE_SYSTEM_GUIDE.md` - Complete system reference
 - `docs/SAFETY_VALIDATION_SYSTEMS.md` - 6-layer validation system
@@ -493,16 +546,18 @@ GAMING_VOICE_CHANNELS=...
 SESSION_START_THRESHOLD=6
 SESSION_END_THRESHOLD=2
 SESSION_END_DELAY=180
-```
+```python
 
 ---
 
 ## High-Level Architecture
 
 ### Cog-Based Modular Design
+
 The bot follows Discord.py's **Cog pattern** for separation of concerns:
 
-```
+```python
+
 bot/ultimate_bot.py (Main Entry Point)
 ├── Loads 14 Cogs from bot/cogs/
 ├── Initializes database adapter (async PostgreSQL/SQLite)
@@ -529,19 +584,24 @@ bot/services/ (Service Layer)
 ├── Voice session service (team detection from voice)
 ├── Stats aggregation (session statistics)
 └── Graph generation (performance visualizations)
-```
+
+```text
 
 ### Round 2 Differential Calculation (CRITICAL)
+
 **Problem:** ET:Legacy Round 2 stats files show **cumulative totals** (R1 + R2), not R2-only performance.
 
 **Solution:** Parser automatically:
+
 1. Detects Round 2 files by filename pattern `*-round-2.txt`
 2. Searches for matching Round 1 file (same map, same day)
 3. **Rejects Round 1 files with >60min time gap** (different gaming session)
 4. Calculates R2-only stats: `R2_stat = R2_cumulative - R1_stat`
 
 **Example:**
-```
+
+```sql
+
 Round 1 (21:31): Player vid = 20 kills
 Round 2 (23:41): Stats file = 42 kills (cumulative)
 Time gap: 5.8 minutes ✅ (same session)
@@ -551,11 +611,13 @@ Parser calculates: R2 kills = 42 - 20 = 22 kills (correct!)
 If Round 1 was from 2 hours earlier:
 Time gap: 135 minutes ❌ (rejected - different session)
 Parser finds correct Round 1 from 5 minutes earlier instead.
-```
+
+```python
 
 **Never treat R2 stats as standalone** - they are always differential calculations.
 
 ### Bot Startup Sequence (Debug Reference)
+
 1. `bot/logging_config.py` - Sets up logging to `logs/` directory
 2. `bot/config.py` - Loads `.env` or `bot_config.json` (env vars take precedence)
 3. Schema validation - `validate_database_schema()` checks for 53 columns
@@ -570,6 +632,7 @@ Parser finds correct Round 1 from 5 minutes earlier instead.
 ## Quick Command Reference
 
 ### Most Used Bot Commands
+
 - `!last_session` - Show latest gaming session stats (main feature)
 - `!last_session graphs` - Performance graphs for session
 - `!stats <player>` - Individual player lifetime stats
@@ -583,6 +646,7 @@ Parser finds correct Round 1 from 5 minutes earlier instead.
 - `!admin sync_historical` - Download missing files to local_stats/ (complete mirror)
 
 ### PostgreSQL Commands (Direct Access)
+
 ```bash
 # Connect to database
 PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
@@ -639,6 +703,7 @@ SELECT COUNT(*) FROM processed_files WHERE success = true;
 ## Maintenance Guidelines (Version 1.0+)
 
 ### Repository Cleanliness
+
 - ✅ Keep root directory minimal (12-15 files only)
 - ✅ All documentation goes in `/docs/`
 - ✅ All bot code goes in `/bot/`
@@ -646,6 +711,7 @@ SELECT COUNT(*) FROM processed_files WHERE success = true;
 - 📖 See repository maintenance guide for details
 
 ### Before Committing
+
 1. **Ensure you're on a feature branch** (NOT main!)
 2. Check `git status` - ensure no trash files
 3. Review `git diff --cached --name-only`

@@ -39,6 +39,7 @@ The **Season System** adds quarterly competitive seasons to your ET:Legacy bot, 
 Seasons are identified as: `YYYY-QN`
 
 Examples:
+
 - `2025-Q4` = 2025 Winter (Oct-Dec 2025)
 - `2025-Q3` = 2025 Fall (Jul-Sep 2025)
 - `2024-Q1` = 2024 Spring (Jan-Mar 2024)
@@ -50,19 +51,22 @@ Examples:
 ### !season_info (or !season)
 
 Shows current season information including:
+
 - Season name and dates
 - Days remaining in season
 - Current season champion (most kills)
 - All-time champion
 
 **Usage:**
-```
+
+```text
 !season_info
 !season
-```
+```text
 
 **Example Output:**
-```
+
+```text
 📅 Season Information
 2025 Winter (Q4)
 
@@ -80,17 +84,18 @@ Games: 45
 SuperBoyy
 Kills: 27,194 | K/D: 1.19
 Games: 2,731
-```
+```text
 
 ### !leaderboard (Current Implementation)
 
 Currently shows **all-time** statistics. In a future update, this will default to current season with an option for all-time.
 
 **Planned Enhancement:**
-```
+
+```text
 !leaderboard kills      → Current season (Q4)
 !leaderboard kills all  → All-time stats
-```
+```python
 
 ---
 
@@ -126,13 +131,14 @@ is_new = season_manager.is_new_season("2025-Q3")
 # Get days until season ends
 days = season_manager.get_days_until_season_end()  
 # Returns: 80
-```
+```text
 
 ### Database Integration
 
 The season system uses existing database tables - no migrations needed!
 
 **Season-Filtered Query Example:**
+
 ```python
 season_filter = self.season_manager.get_season_sql_filter()
 
@@ -148,9 +154,10 @@ query = f'''
     ORDER BY total_kills DESC
     LIMIT 10
 '''
-```
+```text
 
 **All-Time Query Example:**
+
 ```python
 season_filter = self.season_manager.get_season_sql_filter('alltime')  # Returns ""
 
@@ -164,25 +171,28 @@ query = f'''
     GROUP BY player_guid
     ORDER BY total_kills DESC
 '''
-```
+```sql
 
 ---
 
 ## 🚀 Future Enhancements
 
 ### Phase 1 (Current) ✅
+
 - [x] SeasonManager class
 - [x] !season_info command
 - [x] Season champion tracking
 - [x] Test suite
 
 ### Phase 2 (Next Update)
+
 - [ ] Enhance !leaderboard with season parameter
 - [ ] Add season transition announcements
 - [ ] Track season champions history
 - [ ] Create !season_history command
 
 ### Phase 3 (Future)
+
 - [ ] Season rewards/badges
 - [ ] "Player of the Season" awards
 - [ ] Season-end recap embeds
@@ -234,18 +244,26 @@ All tests passed successfully on October 12, 2025:
 ### Manual Testing
 
 1. **View Season Info:**
-   ```
+
+   ```text
+
    !season_info
-   ```
+
+   ```text
+
    - Verify current season is Q4 (Oct-Dec)
    - Check dates are correct
    - Confirm days remaining calculation
 
 2. **Test Aliases:**
-   ```
+
+   ```text
+
    !season
    !seasons
-   ```
+
+   ```text
+
    - All aliases should work identically
 
 3. **Check Champions:**
@@ -256,9 +274,10 @@ All tests passed successfully on October 12, 2025:
 ### Automated Testing
 
 Run the test suite:
+
 ```bash
 python test_season_system.py
-```
+```python
 
 Expected output: All 6 tests pass ✅
 
@@ -279,7 +298,8 @@ Expected output: All 6 tests pass ✅
 
 ### For Players
 
-```
+```text
+
 Player: !season
 Bot: 📅 Shows 2025 Winter (Q4) with 80 days left
       🏆 Current champion: SuperBoyy (1,234 kills)
@@ -288,7 +308,8 @@ Bot: 📅 Shows 2025 Winter (Q4) with 80 days left
 Player: !leaderboard
 Bot: 🏆 Shows all-time kills leaderboard
      (Future: Will show current season by default)
-```
+
+```text
 
 ### For Admins
 
@@ -339,6 +360,7 @@ A: They simply won't appear in that season's leaderboard. Their all-time stats r
 The Season System is **production-ready** and adds a fresh competitive element to your community! Players can compete for quarterly titles while their legacy stats remain intact.
 
 **Next Steps:**
+
 1. Deploy the updated bot
 2. Test !season_info command
 3. Monitor player engagement

@@ -62,10 +62,15 @@ except ImportError:
         ]
     )
     logger = logging.getLogger('PostgreSQLManager')
-    log_database_operation = lambda *args, **kwargs: None
-    log_stats_import = lambda *args, **kwargs: None
-    log_performance_warning = lambda *args, **kwargs: None
 
+    def log_database_operation(*args, **kwargs):
+        pass
+
+    def log_stats_import(*args, **kwargs):
+        pass
+
+    def log_performance_warning(*args, **kwargs):
+        pass
 
 
 class PostgreSQLDatabaseManager:
@@ -1290,9 +1295,9 @@ class PostgreSQLDatabaseManager:
     # =========================================================================
     
     async def import_all_files(self, year_filter: Optional[int] = None,
-                              start_date: Optional[str] = None,
-                              end_date: Optional[str] = None,
-                              limit: Optional[int] = None):
+                               start_date: Optional[str] = None,
+                               end_date: Optional[str] = None,
+                               limit: Optional[int] = None):
         """
         Import all files from local_stats directory
         
@@ -1364,9 +1369,9 @@ class PostgreSQLDatabaseManager:
         logger.info(f"🔫 Weapon stats: {self.stats['weapons_inserted']}")
     
     async def rebuild_from_scratch(self, year: int = 2025,
-                                  start_date: Optional[str] = None,
-                                  end_date: Optional[str] = None,
-                                  confirm: bool = False) -> bool:
+                                   start_date: Optional[str] = None,
+                                   end_date: Optional[str] = None,
+                                   confirm: bool = False) -> bool:
         """
         Nuclear option: Wipe database and rebuild from scratch
         

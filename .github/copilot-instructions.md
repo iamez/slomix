@@ -38,7 +38,7 @@ DB_PORT=5432
 DB_NAME=etlegacy
 DB_USER=etlegacy_user
 DB_PASSWORD=etlegacy_secure_2025
-```
+```python
 
 ### Stats Import Pipeline: Four-Stage Process
 **1. File Generation** → ET:Legacy game server writes `YYYY-MM-DD-HHMMSS-mapname-round-N.txt` to gamestats/  
@@ -85,7 +85,7 @@ python postgresql_database_manager.py
 # ❌ python dev/bulk_import_stats.py
 # ❌ python tools/nuclear_reset.py  
 # ❌ python database_manager.py  # Old SQLite-only version
-```
+```text
 
 ### Running Tests
 **No formal test suite** - validation scripts in root directory test specific scenarios:
@@ -94,7 +94,7 @@ python test_phase1_implementation.py  # Schema validation
 python test_parser_fixes.py           # Parser accuracy
 python validate_nov2_complete.py      # Data integrity
 python tools/phase2_final_validation.py  # Comprehensive checks
-```
+```python
 
 ### Bot Startup Sequence (Critical for Debugging)
 1. `bot/logging_config.py` - Sets up comprehensive logging to `logs/`

@@ -13,6 +13,7 @@ After thorough analysis of the 6 voice session methods (~327 lines), these metho
 ### 🎯 KEY FINDINGS
 
 **This IS production code:**
+
 - ✅ Used constantly (every voice state change)
 - ✅ Core functionality (session detection)
 - ✅ Clean dependencies (can be extracted)
@@ -32,6 +33,7 @@ After thorough analysis of the 6 voice session methods (~327 lines), these metho
 **Purpose**: Discord.py event handler triggered when ANY user changes voice state
 
 **Key Operations**:
+
 1. Check if automation enabled
 2. Count players in gaming voice channels
 3. Start session if threshold met (6+ players)
@@ -40,6 +42,7 @@ After thorough analysis of the 6 voice session methods (~327 lines), these metho
 6. Cancel end timer if players return
 
 **Dependencies**:
+
 - `self.automation_enabled` (bool)
 - `self.gaming_voice_channels` (list[int])
 - `self.session_start_threshold` (int, default 6)
@@ -51,10 +54,12 @@ After thorough analysis of the 6 voice session methods (~327 lines), these metho
 - Calls: `self._delayed_session_end()` (as async task)
 
 **State Modified**:
+
 - `self.session_end_timer` (asyncio.Task)
 - `self.session_participants` (set)
 
 **Special Considerations**:
+
 - 🔴 **CRITICAL**: This is a Discord.py event handler
 - Must remain as bot method (can't be fully extracted)
 - **Solution**: Delegate to service from event handler
@@ -68,6 +73,7 @@ After thorough analysis of the 6 voice session methods (~327 lines), these metho
 **Purpose**: Start a gaming session when threshold met
 
 **Key Operations**:
+
 1. Set session_active = True
 2. Record start time
 3. Copy participants
@@ -75,17 +81,20 @@ After thorough analysis of the 6 voice session methods (~327 lines), these metho
 5. Post Discord embed to production channel
 
 **Dependencies**:
+
 - `self.production_channel_id` (int)
 - `self.get_channel()` (Discord.py)
 - `discord.Embed`, `discord.utils.utcnow()` (Discord.py)
 
 **State Modified**:
+
 - `self.session_active` = True
 - `self.session_start_time` = utcnow()
 - `self.session_participants` = participants.copy()
 - `self.monitoring` = True
 
 **Discord Integration**:
+
 - ✅ Posts green embed to production channel
 - Title: "🎮 Gaming Session Started!"
 - Shows player count and timestamp
@@ -99,12 +108,14 @@ After thorough analysis of the 6 voice session methods (~327 lines), these metho
 **Purpose**: Wait 5 minutes before ending (allows bathroom breaks!)
 
 **Key Operations**:
+
 1. Sleep for session_end_delay seconds (default 300)
 2. Re-check player count after delay
 3. Cancel if players returned
 4. Call `_end_gaming_session()` if still empty
 
 **Dependencies**:
+
 - `self.session_end_delay` (int)
 - `self.gaming_voice_channels` (list)
 - `self.session_end_threshold` (int)
@@ -112,6 +123,7 @@ After thorough analysis of the 6 voice session methods (~327 lines), these metho
 - Calls: `self._end_gaming_session()`
 
 **Special Considerations**:
+
 - 🟡 **IMPORTANT**: Uses `asyncio.sleep()` - can be cancelled
 - Handles `asyncio.CancelledError` gracefully
 - Created as async task in `on_voice_state_update()`
@@ -125,6 +137,7 @@ After thorough analysis of the 6 voice session methods (~327 lines), these metho
 **Purpose**: End gaming session and post summary
 
 **Key Operations**:
+
 1. Check if session active (guard clause)
 2. Calculate duration
 3. Disable monitoring
@@ -132,12 +145,14 @@ After thorough analysis of the 6 voice session methods (~327 lines), these metho
 5. Reset all session state
 
 **Dependencies**:
+
 - `self.production_channel_id` (int)
 - `self.get_channel()` (Discord.py)
 - `discord.Embed`, `discord.utils.utcnow()` (Discord.py)
 - `self._format_duration()` (helper method - 10 lines)
 
 **State Modified** (Reset to defaults):
+
 - `self.monitoring` = False
 - `self.session_active` = False
 - `self.session_start_time` = None
@@ -145,6 +160,7 @@ After thorough analysis of the 6 voice session methods (~327 lines), these metho
 - `self.session_end_timer` = None
 
 **Discord Integration**:
+
 - ✅ Posts gold embed to production channel
 - Title: "🏁 Gaming Session Complete!"
 - Shows duration and participant count
@@ -158,29 +174,34 @@ After thorough analysis of the 6 voice session methods (~327 lines), these metho
 **Purpose**: Auto-end session and attempt to post last_session summary
 
 **Key Operations**:
+
 1. Mark session as ended
 2. Post notification to stats channel
 3. Query database for most recent session
 4. Post session summary link
 
 **Dependencies**:
+
 - `self.stats_channel_id` (int, NOTE: different from production_channel_id!)
 - `self.db_adapter` (database queries)
 - `discord.Embed` (Discord.py)
 
 **State Modified**:
+
 - `self.session_active` = False
 - `self.session_end_timer` = None
 
 **Database Queries**:
+
 ```sql
 SELECT DISTINCT DATE(round_date) as date
 FROM player_comprehensive_stats
 ORDER BY date DESC
 LIMIT 1
-```
+```python
 
 **Notes**:
+
 - ⚠️  Uses `stats_channel_id` (different from production_channel_id)
 - ⚠️  Has TODO comment for comprehensive summary
 - ⚠️  Currently just posts notification + tells user to use !last_session
@@ -194,6 +215,7 @@ LIMIT 1
 **Purpose**: Check voice state on bot startup, auto-start if players present
 
 **Key Operations**:
+
 1. Wait 2 seconds for Discord cache to populate
 2. Count players in gaming voice channels (exclude bots!)
 3. Check for recent database activity (within 60 min)
@@ -201,6 +223,7 @@ LIMIT 1
 5. Resume monitoring silently if ongoing session detected
 
 **Dependencies**:
+
 - `self.automation_enabled` (bool)
 - `self.gaming_voice_channels` (list)
 - `self.session_start_threshold` (int)
@@ -209,18 +232,21 @@ LIMIT 1
 - Calls: `self._start_gaming_session()`
 
 **Database Queries**:
+
 ```sql
 SELECT id FROM rounds
 WHERE (round_date > $1 OR (round_date = $2 AND round_time >= $3))
 ORDER BY round_date DESC, round_time DESC
 LIMIT 1
-```
+```python
 
 **State Modified**:
+
 - `self.session_active` = True (if resuming)
 - `self.session_participants` = current_participants (if resuming)
 
 **Special Logic**:
+
 - ✅ Prevents duplicate "session start" messages on bot restart
 - ✅ Silently resumes monitoring if session ongoing
 - ✅ Only announces new session if no recent database activity
@@ -238,11 +264,12 @@ self.session_active = False         # Is a gaming session currently active?
 self.session_start_time = None      # When did the session start? (datetime)
 self.session_participants = set()   # Discord user IDs of participants
 self.session_end_timer = None       # asyncio.Task for delayed end
-```
+```text
 
 ### State Transitions
 
-```
+```text
+
 [IDLE] session_active = False
    │
    ├─> 6+ players detected (on_voice_state_update)
@@ -254,11 +281,12 @@ self.session_end_timer = None       # asyncio.Task for delayed end
    ├─> <2 players detected (on_voice_state_update)
    │   └─> _delayed_session_end() [5-min timer]
    │       ├─> Players return → Cancel timer → Stay [ACTIVE]
-   │       └─> Still empty → _end_gaming_session() → [IDLE]
+   │       └─> Still empty →_end_gaming_session() → [IDLE]
    │
    └─> Auto-end (unused currently)
        └─> _auto_end_session() → [IDLE]
-```
+
+```yaml
 
 ---
 
@@ -290,7 +318,7 @@ self.session_start_time              # datetime
 self.session_participants            # set[int]
 self.session_end_timer               # asyncio.Task
 self.monitoring                      # bool
-```
+```text
 
 ### External Modules
 
@@ -298,13 +326,14 @@ self.monitoring                      # bool
 import discord                       # Discord.py library
 import asyncio                       # Python async
 from datetime import datetime, timedelta
-```
+```yaml
 
 ---
 
 ## 🔗 Call Chain Diagram
 
-```
+```sql
+
 [Discord Event]
   │
   └─> on_voice_state_update(member, before, after)  [Event Handler - CAN'T EXTRACT]
@@ -312,7 +341,7 @@ from datetime import datetime, timedelta
        ├─> Count players in voice channels
        │
        ├─> If 6+ players and not active:
-       │    └─> _start_gaming_session(participants)
+       │    └─>_start_gaming_session(participants)
        │         ├─> Set state (active, start_time, participants, monitoring)
        │         └─> Post Discord embed (green)
        │
@@ -321,7 +350,7 @@ from datetime import datetime, timedelta
        │         ├─> asyncio.sleep(300)  # 5 minutes
        │         ├─> Re-check player count
        │         └─> If still empty:
-       │              └─> _end_gaming_session()
+       │              └─>_end_gaming_session()
        │                   ├─> Calculate duration
        │                   ├─> Set monitoring = False
        │                   ├─> Post Discord embed (gold)
@@ -339,7 +368,7 @@ from datetime import datetime, timedelta
        ├─> Check database for recent activity (60 min)
        └─> If threshold met:
             ├─> If recent activity: Resume monitoring silently
-            └─> If no recent activity: _start_gaming_session()
+            └─> If no recent activity:_start_gaming_session()
 
 [Unused Currently]
   │
@@ -347,7 +376,8 @@ from datetime import datetime, timedelta
        ├─> Mark session ended
        ├─> Post notification embed
        └─> Query DB for recent session
-```
+
+```python
 
 ---
 
@@ -356,6 +386,7 @@ from datetime import datetime, timedelta
 ### Risk Level: 🟡 MEDIUM
 
 **Complexity Factors:**
+
 1. **Discord Event Handler** (🔴 HIGH COMPLEXITY)
    - `on_voice_state_update` is a Discord.py event
    - Can't be moved to service (must stay on bot)
@@ -382,34 +413,42 @@ from datetime import datetime, timedelta
 ### Breaking Points
 
 #### 1. Event Handler Integration (🔴 CRITICAL)
+
 **Risk**: on_voice_state_update() must stay as bot method
 
 **Mitigation**:
+
 ```python
 # In bot
 async def on_voice_state_update(self, member, before, after):
     await self.voice_session_service.handle_voice_state_change(member, before, after)
-```
+```python
 
 #### 2. State Synchronization (🟡 MEDIUM)
+
 **Risk**: Bot and service state could desync
 
 **Mitigation**:
+
 - Service owns all state
 - Bot accesses via properties: `self.voice_session_service.session_active`
 - Or keep state on bot, service modifies it
 
 #### 3. Timer Cancellation (🟡 MEDIUM)
+
 **Risk**: Race condition if timer cancelled while running
 
 **Mitigation**:
+
 - Service handles all timer lifecycle
 - Proper `asyncio.CancelledError` handling (already exists)
 
 #### 4. Channel Access (🟢 LOW)
+
 **Risk**: Service needs access to Discord channels
 
 **Mitigation**:
+
 - Pass bot instance to service
 - Service calls `self.bot.get_channel()`
 
@@ -462,7 +501,7 @@ class VoiceSessionService:
         """Check voice on bot startup"""
         # Logic from _check_voice_channels_on_startup
         pass
-```
+```sql
 
 ### Phase 2: Update Bot to Delegate (MEDIUM RISK)
 
@@ -483,6 +522,7 @@ await self.voice_session_service.check_startup_voice_state()
 ### Phase 3: Test Thoroughly (HIGH IMPORTANCE)
 
 **Test Cases**:
+
 1. ✅ Join voice → Session starts (6+ players)
 2. ✅ Leave voice → 5-min timer → Session ends
 3. ✅ Leave then rejoin → Timer cancelled
@@ -508,6 +548,7 @@ await self.voice_session_service.check_startup_voice_state()
 ### State Variables
 
 Move to service:
+
 - `self.session_active`
 - `self.session_start_time`
 - `self.session_participants`
@@ -518,29 +559,33 @@ Move to service:
 
 ## ✅ Recommendation: **PROCEED with Extraction**
 
-### Why Extract:
+### Why Extract
+
 1. ✅ **Production code** - Runs 24/7
 2. ✅ **Clean boundaries** - Clear service interface
 3. ✅ **Testable** - Can unit test service independently
 4. ✅ **~300 line reduction** - Significant cleanup
 5. ✅ **Better separation** - Voice logic isolated
 
-### Implementation Plan:
+### Implementation Plan
 
 **Phase A: Create Service** (2-3 hours)
+
 1. Create `bot/services/voice_session_service.py`
 2. Move all 6 methods (keeping exact logic)
 3. Move state variables to service
-4. Add service initialization in bot.__init__()
+4. Add service initialization in bot.**init**()
 5. **No bot changes yet** - just create service
 
 **Phase B: Integrate & Delegate** (1-2 hours)
+
 1. Update `on_voice_state_update()` to delegate
 2. Update `on_ready()` to call `check_startup_voice_state()`
 3. Remove old methods from bot
 4. Test locally
 
 **Phase C: Production Testing** (1 week)
+
 1. Deploy to production
 2. Monitor for 24-48 hours
 3. Verify session detection works

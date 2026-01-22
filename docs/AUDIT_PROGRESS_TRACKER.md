@@ -1,5 +1,7 @@
 # 📋 Code Audit Progress Tracker
+
 ## ET:Legacy Discord Stats Bot - Fix Tracking
+
 ### Last Updated: December 1, 2025
 
 ---
@@ -10,6 +12,7 @@ This document tracks our progress on fixing issues identified in the code audit.
 After each session, update the status of completed items and note any blockers.
 
 **Status Legend:**
+
 - ⬜ Not Started
 - 🔄 In Progress
 - ✅ Completed
@@ -109,6 +112,7 @@ After each session, update the status of completed items and note any blockers.
 ## 📅 Session Log
 
 ### December 1, 2025 - Session 3 (Continuation)
+
 - ✅ Fixed `traceback.print_exc()` in `synergy_analytics.py` (5 instances → logger.error)
 - ✅ Created `bot/services/stopwatch_scoring_service.py` - async PostgreSQL scorer
 - ✅ Updated `team_cog.py` to use new async `StopwatchScoringService`
@@ -121,6 +125,7 @@ After each session, update the status of completed items and note any blockers.
 - All `{e}` and `{error}` in `ctx.send()` now use `sanitize_error_message()`
 
 ### December 1, 2025 - Session 2
+
 - ✅ Fixed bare `except:` clauses in 3 files (5 instances total)
 - ✅ Deleted dead code files (ultimate_bot.cleaned.py + 2 backups)
 - ✅ **MAJOR FIX:** Rewrote `team_cog.py` from sqlite3 to async PostgreSQL
@@ -140,12 +145,14 @@ After each session, update the status of completed items and note any blockers.
 - Note: StopwatchScoring temporarily wrapped with asyncio.to_thread()
 
 ### December 1, 2025 - Session 1
+
 - ✅ Completed comprehensive code audit
 - ✅ Created `CODE_AUDIT_REPORT.md`
 - ✅ Created this progress tracker
 - ✅ Fixed `CommandNotFound` responding to other bots' commands (ultimate_bot.py line 1685)
 
 ### [Next Session Date]
+
 - [ ] Tasks completed...
 - [ ] Blockers encountered...
 - [ ] Notes...
@@ -155,15 +162,18 @@ After each session, update the status of completed items and note any blockers.
 ## 🔧 Environment Notes
 
 **VPS Details:**
+
 - Host: `samba@192.168.64.116`
 - Path: `/home/samba/share/slomix_discord/`
 - Database: PostgreSQL `et_stats`
 
 **Local Development:**
+
 - Path: `z:\slomix_discord`
 - Samba share mounted
 
 **Bot Status:**
+
 - Running on VPS since ~November 28, 2025
 - Branch: `vps-network-migration`
 
@@ -185,4 +195,3 @@ After each session, update the status of completed items and note any blockers.
 - Service container (7.x) is a larger refactor - may want to plan architecture first
 - Some files may need VPS restart to test changes
 - `StopwatchScoring` (tools/stopwatch_scoring.py) needs full async refactor - currently uses sqlite3
-

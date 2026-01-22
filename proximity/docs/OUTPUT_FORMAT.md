@@ -6,9 +6,9 @@ The proximity tracker outputs a single text file per round containing all tracki
 
 ## File Naming
 
-```
+```text
 {output_dir}/{YYYY-MM-DD-HHMMSS}-{mapname}-round-{N}_engagements.txt
-```
+```yaml
 
 Example: `proximity/2026-01-10-193245-supply-round-1_engagements.txt`
 
@@ -30,7 +30,7 @@ The file contains these sections in order:
 
 Lines starting with `#` are comments/metadata.
 
-```
+```text
 # PROXIMITY_TRACKER_V4
 # map=supply
 # round=1
@@ -38,7 +38,7 @@ Lines starting with `#` are comments/metadata.
 # escape_time=5000
 # escape_distance=300
 # position_sample_interval=500
-```
+```yaml
 
 | Field | Description |
 |-------|-------------|
@@ -54,12 +54,14 @@ Lines starting with `#` are comments/metadata.
 ## 2. ENGAGEMENTS Section
 
 ### Format Header
-```
+
+```text
 # ENGAGEMENTS
 # id;start_time;end_time;duration;target_guid;target_name;target_team;outcome;total_damage;killer_guid;killer_name;num_attackers;is_crossfire;crossfire_delay;crossfire_participants;start_x;start_y;start_z;end_x;end_y;end_z;distance_traveled;positions;attackers
-```
+```yaml
 
 ### Field Delimiter
+
 - **Primary:** Semicolon (`;`) separates fields
 - **Nested:** Pipe (`|`) separates items in lists
 - **Sub-nested:** Comma (`,`) separates values within items
@@ -93,9 +95,9 @@ Lines starting with `#` are comments/metadata.
 
 Pipe-separated list of position samples during the engagement.
 
-```
+```text
 time,x,y,z,event|time,x,y,z,event|...
-```
+```yaml
 
 | Value | Description |
 |-------|-------------|
@@ -104,17 +106,18 @@ time,x,y,z,event|time,x,y,z,event|...
 | event | `hit`, `sample`, `escape`, or `death` |
 
 Example:
-```
+
+```text
 15000,1234.5,5678.2,100.0,hit|15500,1240.0,5680.0,100.0,sample|16000,1250.0,5690.0,100.0,death
-```
+```text
 
 ### Attackers Format (Field 24)
 
 Pipe-separated list of attackers.
 
-```
+```text
 guid,name,team,damage,hits,first_hit,last_hit,got_kill,weapons|...
-```
+```yaml
 
 | Value | Description |
 |-------|-------------|
@@ -129,21 +132,23 @@ guid,name,team,damage,hits,first_hit,last_hit,got_kill,weapons|...
 | weapons | Weapon usage: `weaponid:count;weaponid:count;...` |
 
 Example:
-```
+
+```text
 ABC123,Player1,AXIS,85,3,15000,15800,1,8:2;9:1|DEF456,Player2,AXIS,40,2,15100,15500,0,8:2
-```
+```yaml
 
 ---
 
 ## 3. PLAYER_TRACKS Section
 
 ### Format Header
-```
+
+```text
 # PLAYER_TRACKS
 # guid;name;team;class;spawn_time;death_time;first_move_time;samples;path
 # path format: time,x,y,z,health,speed,weapon,stance,sprint,event separated by |
 # stance: 0=standing, 1=crouching, 2=prone | sprint: 0=no, 1=yes
-```
+```python
 
 ### Fields
 
@@ -163,9 +168,9 @@ ABC123,Player1,AXIS,85,3,15000,15800,1,8:2;9:1|DEF456,Player2,AXIS,40,2,15100,15
 
 Pipe-separated list of position samples from spawn to death.
 
-```
+```text
 time,x,y,z,health,speed,weapon,stance,sprint,event|...
-```
+```yaml
 
 | Value | Type | Description |
 |-------|------|-------------|
@@ -179,19 +184,21 @@ time,x,y,z,health,speed,weapon,stance,sprint,event|...
 | event | string | `spawn`, `sample`, `death`, or `round_end` |
 
 Example:
-```
+
+```text
 10000,1500.0,2000.0,100.0,100,0.0,8,0,0,spawn|10500,1520.0,2010.0,100.0,100,45.5,8,0,1,sample|...
-```
+```yaml
 
 ---
 
 ## 4. KILL_HEATMAP Section
 
 ### Format Header
-```
+
+```text
 # KILL_HEATMAP
 # grid_x;grid_y;axis_kills;allies_kills
-```
+```yaml
 
 ### Fields
 
@@ -204,26 +211,28 @@ Example:
 
 ### Grid Calculation
 
-```
+```text
 grid_x = floor(x / 512)
 grid_y = floor(y / 512)
-```
+```text
 
 Example:
-```
+
+```text
 2;4;3;1
 3;4;5;2
-```
+```yaml
 
 ---
 
 ## 5. MOVEMENT_HEATMAP Section
 
 ### Format Header
-```
+
+```text
 # MOVEMENT_HEATMAP
 # grid_x;grid_y;traversal;combat;escape
-```
+```yaml
 
 ### Fields
 
@@ -236,10 +245,11 @@ Example:
 | 5 | escape | int | Samples during escape detection |
 
 Example:
-```
+
+```text
 2;4;150;45;12
 3;4;200;30;8
-```
+```yaml
 
 ---
 

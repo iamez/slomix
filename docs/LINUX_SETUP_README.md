@@ -11,7 +11,7 @@
 ```bash
 # On your Windows machine, from the stats directory
 scp -i ~/.ssh/etlegacy_bot install.sh et@puran.hehe.si:/tmp/
-```
+```text
 
 ### Step 2: Run the setup script on VPS
 
@@ -21,14 +21,16 @@ ssh -i ~/.ssh/etlegacy_bot et@puran.hehe.si
 
 # Run the unified install script
 sudo bash /tmp/install.sh --full --interactive
-```
+```text
 
 **Alternative: Automated (non-interactive) installation**
+
 ```bash
 sudo bash /tmp/install.sh --full --auto
-```
+```python
 
 The script will:
+
 - ✓ Install PostgreSQL 16
 - ✓ Install Python 3 and dependencies  
 - ✓ Clone repository to `/slomix`
@@ -45,39 +47,44 @@ The script will:
 The unified `install.sh` script supports multiple modes:
 
 ### Full Installation (Recommended for new VPS)
+
 ```bash
 # Interactive (prompts for all settings)
 sudo ./install.sh --full --interactive
 
 # Automatic (auto-generates passwords)
 sudo ./install.sh --full --auto
-```
+```text
 
 ### VPS Setup (Repository already cloned)
+
 ```bash
 # Interactive
 sudo ./install.sh --vps --interactive
 
 # Automatic
 sudo ./install.sh --vps --auto
-```
+```text
 
 ### Environment Only (No database/systemd)
+
 ```bash
 # For development or testing
 ./install.sh --env-only
-```
+```text
 
 ### View All Options
+
 ```bash
 ./install.sh --help
-```
+```sql
 
 ---
 
 ## What You'll Need
 
 When using interactive mode (`--interactive`), the script will ask for:
+
 - **Discord Bot Token** - From your `.env` file: `DISCORD_BOT_TOKEN`
 - **PostgreSQL Password** - Will be auto-generated in `--auto` mode or prompted in `--interactive` mode
 
@@ -88,25 +95,29 @@ In auto mode (`--auto`), passwords are generated automatically and saved to `.en
 ## After Installation
 
 ### View logs
+
 ```bash
 sudo journalctl -u etlegacy-bot -f
-```
+```text
 
 ### Check bot status
+
 ```bash
 sudo systemctl status etlegacy-bot
-```
+```text
 
 ### Restart bot
+
 ```bash
 sudo systemctl restart etlegacy-bot
-```
+```sql
 
 ### Update bot code
+
 ```bash
 cd /slomix
 bash update_bot.sh
-```
+```python
 
 ---
 
@@ -127,22 +138,24 @@ If you need to re-import all stats:
 cd /slomix
 venv/bin/python3 postgresql_database_manager.py
 sudo systemctl restart etlegacy-bot
-```
+```yaml
 
 ---
 
 ## Troubleshooting
 
 ### Bot won't start
+
 ```bash
 # Check logs
 sudo journalctl -u etlegacy-bot -n 50
 
 # Check config
 cat /slomix/.env
-```
+```text
 
 ### Database connection issues
+
 ```bash
 # Test database connection
 psql -U etlegacy_user -d etlegacy -c "SELECT COUNT(*) FROM rounds;"
@@ -151,16 +164,17 @@ psql -U etlegacy_user -d etlegacy -c "SELECT COUNT(*) FROM rounds;"
 sudo -u postgres psql
 ALTER USER etlegacy_user WITH PASSWORD 'etlegacy_secure_2025';
 \q
-```
+```text
 
 ### Stats not importing
+
 ```bash
 # Check stats directory exists
 ls -la /home/et/.etlegacy/legacy/gamestats/
 
 # Make sure bot user can access it
 sudo chmod -R 755 /home/et/.etlegacy/legacy/gamestats/
-```
+```sql
 
 ---
 
@@ -169,6 +183,7 @@ sudo chmod -R 755 /home/et/.etlegacy/legacy/gamestats/
 The install script uses these default values:
 
 **PostgreSQL:**
+
 - Host: `localhost`
 - Port: `5432`
 - Database: `etlegacy`
@@ -176,16 +191,18 @@ The install script uses these default values:
 - Password: Auto-generated (saved to `.env`)
 
 **Paths:**
+
 - Deploy directory: `/slomix` (configurable with `--deploy-dir`)
 - Stats path: `local_stats/`
 
 You can customize these with command-line options:
+
 ```bash
 sudo ./install.sh --full --auto \
   --deploy-dir /opt/mybot \
   --pg-user myuser \
   --pg-database mydb
-```
+```yaml
 
 ---
 
@@ -194,29 +211,34 @@ sudo ./install.sh --full --auto \
 After installation:
 
 1. **Secure .env file**
+
    ```bash
    chmod 600 /slomix/.env
-   ```
+   ```text
+
    (This is done automatically by the install script)
 
 2. **Review generated password**
+
    ```bash
    cat /slomix/.env | grep POSTGRES_PASSWORD
-   ```
+   ```text
 
 3. **Change PostgreSQL password** (optional)
+
    ```bash
    sudo -u postgres psql
    ALTER USER etlegacy_user WITH PASSWORD 'your_new_password';
    \q
    # Update /slomix/.env with new password
-   ```
+   ```text
 
-3. **Firewall rules**
+4. **Firewall rules**
+
    ```bash
    # PostgreSQL should only listen on localhost (default)
    sudo ss -tunlp | grep 5432
-   ```
+   ```sql
 
 ---
 
@@ -229,6 +251,7 @@ If you previously used `setup_linux_bot.sh`, `vps_install.sh`, or `vps_setup.sh`
 - Old scripts still work but show deprecation warnings
 
 **Migration examples:**
+
 ```bash
 # Old: ./setup_linux_bot.sh
 # New: sudo ./install.sh --full --interactive
@@ -238,7 +261,7 @@ If you previously used `setup_linux_bot.sh`, `vps_install.sh`, or `vps_setup.sh`
 
 # Old: ./vps_setup.sh
 # New: sudo ./install.sh --vps --interactive
-```
+```yaml
 
 ---
 
@@ -272,6 +295,7 @@ After successful installation, you should have:
 - **Discord commands working**: `!last_session`, `!stats`, `!leaderboard`
 
 Test data (from current Windows setup):
+
 - 245 rounds
 - 18 gaming sessions  
 - 1,651 player stats

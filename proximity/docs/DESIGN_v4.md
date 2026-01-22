@@ -8,7 +8,7 @@ Extend the current engagement-centric tracker to capture the **full player journ
 
 ## Core Concept: The Player Journey
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        PLAYER JOURNEY                                │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -31,7 +31,7 @@ Extend the current engagement-centric tracker to capture the **full player journ
 │  • Team positions (alone? supported?)                               │
 │  • Score context (leading? trailing?)                               │
 └─────────────────────────────────────────────────────────────────────┘
-```
+```sql
 
 ---
 
@@ -133,7 +133,7 @@ function et_ClientSpawn(clientnum, revived)
         }
     end
 end
-```
+```text
 
 #### 1.2 Spawn Area Detection
 
@@ -185,7 +185,7 @@ local function checkSpawnExit(clientnum, journey)
         })
     end
 end
-```
+```text
 
 #### 1.3 Respawn Wave Tracking
 
@@ -228,7 +228,7 @@ local function getRespawnContext(player_team)
         enemy_wave_time = waves[enemy_team].wave_time
     }
 end
-```
+```text
 
 #### 1.4 Objective State Tracking
 
@@ -281,7 +281,7 @@ local function getRoundContext()
         allies_score = allies_score
     }
 end
-```
+```text
 
 #### 1.5 Enhanced Engagement Creation
 
@@ -340,7 +340,7 @@ local function createEngagement(target_slot)
 
     return engagement
 end
-```
+```text
 
 #### 1.6 Pre-Combat Position Sampling
 
@@ -390,7 +390,7 @@ function et_RunFrame(levelTime)
 
     -- ... existing frame logic ...
 end
-```
+```yaml
 
 ---
 
@@ -472,14 +472,16 @@ CREATE TABLE IF NOT EXISTS decision_analysis (
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-```
+```yaml
 
 ---
 
 ### Phase 3: Output File Format Changes
 
-```
+```sql
+
 # METADATA
+
 map=goldrush
 round=1
 crossfire_window=1000
@@ -487,23 +489,32 @@ axis_spawn_wave=30000
 allies_spawn_wave=25000
 
 # ENGAGEMENTS
+
 # Now includes journey data
+
 engagement_id;spawn_time;spawn_exit_time;first_damage_time;...;our_respawn;enemy_respawn;objective_status;...
 
 # SPAWN_JOURNEYS (NEW SECTION)
+
 # For players who died this round
+
 guid;spawn_time;spawn_pos;spawn_exit_time;spawn_exit_zone;path_to_combat;death_pos;total_distance
 
 # KILL_HEATMAP
+
 grid_x;grid_y;axis_kills;allies_kills
 
 # DEATH_HEATMAP_BY_SPAWN_EXIT (NEW)
+
 # Where do players die based on which exit they took?
+
 spawn_exit;grid_x;grid_y;death_count
 
 # MOVEMENT_HEATMAP
+
 grid_x;grid_y;traversal;combat;escape
-```
+
+```yaml
 
 ---
 
@@ -552,7 +563,7 @@ SELECT
 FROM combat_engagement
 WHERE objective_status IN ('planted', 'defusing')
 GROUP BY target_guid, target_name, objective_status, outcome;
-```
+```yaml
 
 ---
 
@@ -596,6 +607,7 @@ async def spawn_analysis(self, ctx, player: str = None, map: str = None):
 ## Implementation Order
 
 ### Week 1: Core Lua Changes
+
 1. [ ] Add spawn tracking (`et_ClientSpawn` hook)
 2. [ ] Add spawn area detection
 3. [ ] Add pre-combat position sampling
@@ -603,6 +615,7 @@ async def spawn_analysis(self, ctx, player: str = None, map: str = None):
 5. [ ] Test locally
 
 ### Week 2: Context & Output
+
 1. [ ] Add round context (score, time, objective)
 2. [ ] Add combat initiation tracking
 3. [ ] Update output file format
@@ -610,6 +623,7 @@ async def spawn_analysis(self, ctx, player: str = None, map: str = None):
 5. [ ] Test locally
 
 ### Week 3: Schema & Analytics
+
 1. [ ] Apply schema migrations
 2. [ ] Update parser to store new data
 3. [ ] Create spawn_patterns aggregation
@@ -617,6 +631,7 @@ async def spawn_analysis(self, ctx, player: str = None, map: str = None):
 5. [ ] Test end-to-end
 
 ### Week 4: Discord Integration
+
 1. [ ] Add new commands
 2. [ ] Create embed designs
 3. [ ] Add decision analysis logic
