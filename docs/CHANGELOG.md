@@ -9,7 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Nothing yet
+- **Lua Webhook Real-Time Stats Notification** - Instant round-end notification from game server
+  - New Lua script `stats_discord_webhook.lua` (v1.1.0) runs on ET:Legacy game server
+  - Captures accurate round timing at gamestate transition (fixes surrender timing bug)
+  - Captures team composition at round end (Axis/Allies player lists)
+  - Tracks pause count and duration (new capability)
+  - Uses Discord webhook as relay (supports outbound-only architecture)
+  - ~3 second latency vs 60-second SSH polling
+  - Config: Webhook URL in Lua script, webhook ID in `WEBHOOK_TRIGGER_WHITELIST`
+- **lua_round_teams Database Table** - Stores Lua-captured data separately for cross-reference
+  - Team composition (JSONB arrays with guid/name)
+  - Accurate timing data for validation against stats files
+  - Links to rounds table via `match_id` + `round_number`
+- **Timing Comparison Debug Logging** - Shows stats file vs Lua timing for every webhook-processed round
+  - Identifies surrender scenarios automatically
+  - Logs to bot logs (not visible to users)
+
+### Fixed
+
+- **Surrender Timing Bug** - Rounds ending early (surrender/objective) now show actual played time instead of full map duration
+  - Stats files show map time limit on surrender (e.g., 20 min)
+  - Lua captures actual end time (e.g., 8 min)
+  - Bot overrides broken timing with accurate Lua data
+
+### Technical Details
+
+- **New Files**: `vps_scripts/stats_discord_webhook.lua`, `migrations/001_add_timing_metadata_columns.sql`, `migrations/002_add_lua_round_teams_table.sql`, `docs/LUA_WEBHOOK_SETUP.md`
+- **Modified**: `bot/ultimate_bot.py` (+493 lines), `postgresql_database_manager.py` (+7 lines)
+- **Branch**: `feature/lua-webhook-realtime-stats`
+- **Inspiration**: Patterns adapted from Oksii's `game-stats-web.lua` used by competitive ET:Legacy communities
 
 ---
 

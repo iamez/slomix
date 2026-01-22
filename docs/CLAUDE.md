@@ -6,14 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Slomix - ET:Legacy Discord Bot
 
-**Version**: 1.0.3 (Updated: December 21, 2025)
+**Version**: 1.0.4 (Updated: January 22, 2026)
 **Project**: ET:Legacy Statistics Discord Bot
 **Database**: PostgreSQL (primary), SQLite (fallback)
 **Language**: Python 3.11+
 **Discord.py**: Version 2.0+
 **Status**: Production-Ready ✅
 
-## Recent Updates (1.0.3)
+## Recent Updates (1.0.4)
+
+- **Lua Webhook Real-Time Stats** - Instant round notification from game server (~3s vs 60s polling)
+- **Surrender Timing Fix** - Accurate duration captured via Lua (stats files show wrong time on surrender)
+- **Team Composition Capture** - Lua captures Axis/Allies player lists at round end
+- **Pause Tracking** - New capability to track game pauses
+- **lua_round_teams Table** - Separate storage for Lua-captured data (cross-reference/validation)
+- **Debug Timing Logs** - Compares stats file vs Lua timing for every webhook-processed round
+
+## Previous Updates (1.0.3)
 
 - Configurable timing values (R1-R2 matching, grace period, session gap)
 - SHA256 file integrity checking on import
@@ -122,7 +131,7 @@ ET:Legacy Game Server → SSH Monitor → Parser → PostgreSQL → Discord Bot 
 - **PostgreSQL is primary:** Configured via `.env` or `bot_config.json`
 - **Schema validation critical:** Bot validates 53-column schema on startup - wrong schema = silent failures
 
-#### Stats Import Pipeline (4 Stages)
+#### Stats Import Pipeline (4 Stages + Lua Webhook)
 
 1. **File Generation** → ET:Legacy server writes `YYYY-MM-DD-HHMMSS-mapname-round-N.txt`
 2. **Parsing** → `bot/community_stats_parser.py` extracts 53+ fields per player
@@ -134,6 +143,27 @@ ET:Legacy Game Server → SSH Monitor → Parser → PostgreSQL → Discord Bot 
 4. **Bot Access** → Cogs query via `database_adapter.py` with 5-min cache (`bot/core/stats_cache.py`)
 
 **Critical:** Round 2 files contain CUMULATIVE stats - parser calculates differentials by subtracting Round 1 values.
+
+#### Lua Webhook Real-Time Notification (Jan 2026)
+
+**New system for instant stats notification, fixing surrender timing bug:**
+
+```
+Game Server Lua → POST to Discord Webhook → Bot sees message → SSH fetch → Override timing
+```
+
+- **Lua Script**: `vps_scripts/stats_discord_webhook.lua` (v1.1.0) runs on game server
+- **Trigger**: Gamestate transition PLAYING → INTERMISSION
+- **Data Captured**: Accurate timing, winner, pause count, team composition
+- **Storage**: `lua_round_teams` table (separate from stats file data)
+- **Purpose**: Fixes surrender timing bug (stats files show full map time on surrender)
+
+**Why needed:** Stats files have a bug where surrenders show full map duration (e.g., 20 min) instead of actual played time (e.g., 8 min). Lua captures the exact moment the round ends.
+
+**Cross-reference:** Both sources stored for data health validation:
+- `rounds` table: Stats file data
+- `lua_round_teams` table: Lua webhook data
+- Compare timing to detect/validate surrender scenarios
 
 #### Timing Configuration (Dec 2025 Update)
 
@@ -679,6 +709,7 @@ SELECT COUNT(*) FROM processed_files WHERE success = true;
 ✅ **Player Aggregation**: Fixed (uses player_guid)
 ✅ **Achievement System**: Active, rebalanced thresholds
 ✅ **Automation**: Voice channel monitoring + scheduled tasks
+✅ **Lua Webhook**: Real-time stats notification, surrender timing fix (branch: feature/lua-webhook-realtime-stats)
 ✅ **Documentation**: Complete and organized in /docs/
 ✅ **Repository**: Clean and maintainable (50-100 MB)
 ✅ **Website**: HTML/JS/SQL injection fixes applied
