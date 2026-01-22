@@ -12,7 +12,24 @@ A **production-grade Discord bot** with **zero-downtime automation**, **6-layer 
 
 ## 🔥 Recent Updates (January 2026)
 
-### **🏆 v1.0.3: EndStats & Awards System (January 14, 2026)** 🆕
+### **⚡ v1.0.4: Lua Webhook Real-Time Stats (January 22, 2026)** 🆕
+
+**Instant round notifications with accurate timing — fixes surrender bug!**
+
+- ⚡ **Real-Time Webhook** - Game server Lua posts to Discord webhook on round end (~3s vs 60s SSH polling)
+- 🎯 **Surrender Timing Fix** - Captures actual played time (stats files show wrong duration on surrender)
+- 👥 **Team Composition Capture** - Records Axis/Allies player lists at exact round end
+- ⏸️ **Pause Tracking** - New capability to track game pauses and duration
+- 🔬 **Debug Timing Logs** - Compares stats file vs Lua timing for validation
+- 🗄️ **lua_round_teams Table** - Separate storage for Lua-captured data (cross-reference)
+
+**Technical:** New `stats_discord_webhook.lua` (v1.1.0) on game server, adapted from Oksii's patterns used by competitive communities. Discord webhook acts as relay for outbound-only architecture.
+
+**Branch:** `feature/lua-webhook-realtime-stats` (testing before merge)
+
+---
+
+### **🏆 v1.0.3: EndStats & Awards System (January 14, 2026)**
 
 **Post-round awards and VS stats from ET:Legacy's endstats system!**
 
