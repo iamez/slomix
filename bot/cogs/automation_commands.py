@@ -479,8 +479,8 @@ class AutomationCommands(commands.Cog):
             if hasattr(self.bot, 'db_maintenance'):
                 maint_stats = self.bot.db_maintenance.get_stats()
                 last_backup = maint_stats.get('last_backup', 'Never')
-                if last_backup != 'Never' and len(last_backup) > 10:
-                    last_backup = last_backup[:10]
+                if last_backup and last_backup != 'Never' and len(str(last_backup)) > 10:
+                    last_backup = str(last_backup)[:10]
                 maint_value = (
                     f"Backups: `{maint_stats['backup_count']}`\n"
                     f"Last: `{last_backup}`"
