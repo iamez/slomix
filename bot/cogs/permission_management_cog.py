@@ -251,7 +251,7 @@ class PermissionManagement(commands.Cog):
                 ORDER BY changed_at DESC
                 LIMIT $1
                 """,
-                min(limit, 50)  # Max 50 entries
+                (min(limit, 50),)  # Max 50 entries - must be tuple
             )
 
             if not logs:
