@@ -168,8 +168,9 @@ class SessionGraphGenerator:
                 return None, None, None, None, None
 
             # Extract all data arrays (keep full names for matching)
-            names = [p[0] for p in top_players]
-            display_names = [n[:12] for n in names]
+            # Handle None names - use player_guid as fallback
+            names = [(p[0] or p[13] or f"Player_{i}") for i, p in enumerate(top_players)]
+            display_names = [str(n)[:12] for n in names]
             kills = [p[1] or 0 for p in top_players]
             deaths = [p[2] or 0 for p in top_players]
             damage_given = [p[3] or 0 for p in top_players]
