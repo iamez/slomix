@@ -7,15 +7,17 @@ All team detection work has been committed and pushed to GitHub! You can pull it
 ## Quick Setup on Laptop
 
 ### 1. Pull Latest Code
+
 ```bash
 cd path/to/stats
 git checkout team-system
 git pull origin team-system
-```
+```python
 
 ### 2. Key Files You'll Have
 
 **Working Solutions:**
+
 - `correct_team_detector.py` - ⭐ Main per-map detection (WORKS!)
 - `analyze_last_session.py` - Round-by-round session analysis
 - `bot/core/advanced_team_detector.py` - Multi-strategy system
@@ -23,65 +25,77 @@ git pull origin team-system
 - `bot/core/team_detector_integration.py` - Bot integration layer
 
 **Documentation:**
+
 - `TEAM_DETECTION_COMPLETE.md` - Full implementation guide
 - `ADVANCED_TEAM_DETECTION.md` - Technical deep dive
 - `SUBSTITUTION_DETECTION.md` - Substitution system docs
 
 **Testing Scripts:**
+
 - `test_advanced_team_detection.py` - Test the system
 - `demo_advanced_detector.py` - See it in action
 - `find_good_sessions.py` - Find testable sessions
 
 **Database Files:**
+
 - 200+ stat files in `bot/local_stats/` (Oct-Nov 2025)
 - Database: `bot/etlegacy_production.db`
 
 ## What Works Right Now ✅
 
 ### Detection Accuracy
+
 - **Oct 28, 2024**: 3v3 match (5 maps) - Perfect detection
 - **Nov 1-2, 2025**: 5v5 clan war (4 maps) - Perfect detection
 - Stopwatch swap detection: ✅ Working
 - Substitution tracking: ✅ Working
 
 ### Key Discovery
+
 The database has **multiple snapshot records** per player/round when you query all maps together. The solution is to **analyze each map separately**!
 
 ## Quick Test Commands
 
 ### Test Detection on Nov 1-2 Session
+
 ```bash
 python analyze_last_session.py
-```
+```text
 
 ### Test Detection on Oct 28 Session
+
 ```bash
 python correct_team_detector.py 2024-10-28
-```
+```text
 
 ### See Advanced Detector in Action
+
 ```bash
 python demo_advanced_detector.py
-```
+```python
 
 ## Next Steps (For You to Continue)
 
 ### 1. Integration into Bot
+
 - [ ] Move `correct_team_detector.py` to `bot/core/`
 - [ ] Update `bot/core/team_manager.py` to use new detection
 - [ ] Integrate with `bot/cogs/last_session_cog.py`
 
 ### 2. Testing
+
 - [ ] Test on more sessions (use `find_good_sessions.py`)
 - [ ] Test substitution detection
 - [ ] Test with different team sizes (3v3, 4v4, 5v5, etc.)
 
 ### 3. Bot Commands
+
 - [ ] Update `!last_round` to show per-map teams
 - [ ] Add `!detect_teams <date>` command
 - [ ] Add `!verify_teams <date>` command
 
 ### 4. Historical Data
+
 - [ ] Create script to re-detect all historical sessions
 - [ ] Populate `session_teams` table with new detection
 - [ ] Compare old vs new detections
@@ -123,11 +137,12 @@ CREATE TABLE player_comprehensive_stats (
     team INTEGER,  -- 1=Axis, 2=Allies
     kills, deaths, damage_given, etc...
 );
-```
+```text
 
 ## Key Concepts to Remember
 
-### Per-Map Analysis is Critical!
+### Per-Map Analysis is Critical
+
 ```python
 # ❌ WRONG - Queries all maps together
 SELECT * FROM player_comprehensive_stats
@@ -136,39 +151,45 @@ WHERE round_date = '2025-11-01'
 # ✅ CORRECT - Query each map separately
 SELECT * FROM player_comprehensive_stats
 WHERE round_date = '2025-11-01' AND map_name = 'supply'
-```
+```text
 
 ### Stopwatch Mode
+
 - Round 1: Team A = Axis, Team B = Allies
 - Round 2: Teams SWAP sides
 - Track by GUID, not by Axis/Allies label!
 
 ### Deduplication
+
 When needed, use:
+
 ```sql
 ROW_NUMBER() OVER (
     PARTITION BY player_guid, round_number, team
     ORDER BY time_played_minutes DESC
 ) as rn
-```
+```text
 
 ## Sample Usage
 
 ### Analyze Last Round
+
 ```python
 from analyze_last_session import analyze_session
 result = analyze_session()
 # Shows full round-by-round breakdown
-```
+```text
 
 ### Detect Teams for Any Date
+
 ```python
 from correct_team_detector import detect_session_teams
 result = detect_session_teams('2024-10-28')
 # Returns team_a, team_b, player_names
-```
+```text
 
 ### Advanced Detection with Confidence
+
 ```python
 from bot.core.team_detector_integration import TeamDetectorIntegration
 detector = TeamDetectorIntegration()
@@ -179,6 +200,7 @@ result, is_reliable = detector.detect_and_validate(conn, '2025-11-01')
 ## Files You Can Ignore
 
 These were development/testing scripts:
+
 - `comprehensive_round_analyzer.py`
 - `stopwatch_team_tracker.py`
 - `real_team_detector.py`
@@ -190,6 +212,7 @@ These were development/testing scripts:
 ## Support Files
 
 All stat files are included:
+
 - `bot/local_stats/*.txt` - Raw game stats
 - 2025-10-12 through 2025-11-02
 - All maps, all rounds

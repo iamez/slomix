@@ -19,6 +19,7 @@ import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP } fro
 import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js';
 import { loadCommunityView } from './community.js';
 import { loadRecordsView } from './records.js';
+import { loadAwardsView } from './awards.js';
 import './compare.js'; // Self-registers to window
 
 // ============================================================================
@@ -74,6 +75,8 @@ export function navigateTo(viewId, updateHistory = true) {
         loadWeaponsView();
     } else if (viewId === 'records') {
         loadRecordsView();
+    } else if (viewId === 'awards') {
+        loadAwardsView();
     }
 }
 
@@ -88,6 +91,7 @@ window.navigateTo = navigateTo;
 window.loadPlayerProfile = loadPlayerProfile;
 window.loadMatchDetails = loadMatchDetails;
 window.loadLeaderboard = loadLeaderboard;
+window.loadAwardsView = loadAwardsView;
 
 // ============================================================================
 // BROWSER HISTORY

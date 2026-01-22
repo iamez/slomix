@@ -8,28 +8,31 @@
 ## Quick Summary
 
 **Architecture**:
+
 - **Bot**: Local Linux (samba) running Discord.py bot
 - **Game Server**: VPS (puran) running ET:Legacy
 - **Notification**: Discord Webhook (Dec 2025) → WebSocket deprecated
 - **Database**: PostgreSQL 14 (system service)
 
 **Key Flow**:
-```
+
+```python
 Game finishes → VPS webhook → Discord control channel → Bot downloads via SSH →
 Parse → PostgreSQL import → Post to production channel → Users see stats
-```
+```python
 
 ---
 
 ## 1. Bot Startup Sequence
 
 ### Entry Point
+
 **File**: `bot/ultimate_bot.py`
 **Command**: `python -m bot.ultimate_bot`
 
 ### Initialization Order
 
-```
+```python
 main() [Line 2131]
   ↓
 __init__() [Line 169-296]
@@ -61,7 +64,7 @@ on_ready() [Line 2016-2045]
   ├─ Validate webhook security
   ├─ Clear old slash commands
   └─ Auto-resume voice sessions (if players present)
-```
+```python
 
 ---
 
@@ -70,10 +73,12 @@ on_ready() [Line 2016-2045]
 ### Current: Discord Webhook (Dec 2025)
 
 #### VPS Side
+
 **File**: `vps_scripts/stats_webhook_notify.py`
 **Service**: `et-stats-webhook.service` (systemd)
 
 **What it does**:
+
 1. Watches `/home/et/.etlegacy/legacy/gamestats/` (inotify)
 2. Detects new `.txt` file creation
 3. Validates filename format
@@ -82,23 +87,27 @@ on_ready() [Line 2016-2045]
 6. Marks file as processed (state JSON)
 
 **Webhook Payload**:
-```
+
+```text
 Content: "📊 `2025-12-17-201530-supply-round-1.txt`"
 Embed: Minimal (map name, round number)
-```
+```python
 
 #### Bot Side
+
 **File**: `ultimate_bot.py`
 **Handler**: `_handle_webhook_trigger()` [Line 1847-1915]
 
 **Security**:
+
 1. Webhook ID whitelist (WEBHOOK_TRIGGER_WHITELIST)
 2. Rate limiting (5 triggers per 60s per webhook)
 3. Filename validation (regex, no path traversal)
 4. Channel isolation (control vs production)
 
 **Flow**:
-```
+
+```python
 on_message() receives webhook
   ↓
 Validate webhook ID (whitelist check)
@@ -114,7 +123,7 @@ Launch background task: _process_webhook_triggered_file()
   ├─ Parse + import to database
   ├─ Post to production stats channel
   └─ Delete trigger message (cleanup)
-```
+```python
 
 ### Deprecated: WebSocket (Pre-Dec 2025)
 
@@ -134,12 +143,14 @@ Launch background task: _process_webhook_triggered_file()
 **Purpose**: SSH polling fallback + Discord posting
 
 **Intelligence**:
+
 - **Dead Hours**: 02:00-11:00 CET → No checks (save SSH calls)
 - **Active Mode**: 6+ voice players OR <30min since last file → 60s interval
 - **Idle Mode**: No activity → 10min interval
 - **Voice Detection**: Monitors gaming_voice_channels for player count
 
 **Why it exists**:
+
 - Fallback if webhook fails
 - Handles historical sync (one-time operations)
 - Posts to Discord (webhook only triggers, doesn't post)
@@ -160,7 +171,7 @@ Launch background task: _process_webhook_triggered_file()
 
 ### Stage 1: Detection (4 Methods)
 
-```
+```text
 Priority 1: Discord Webhook (CURRENT)
   VPS webhook → Discord control → Bot handler
 
@@ -172,12 +183,13 @@ Priority 3: SSH Polling (FALLBACK)
 
 Priority 4: Manual Import
   Admin command → File selection
-```
+```python
 
 ### Stage 2: Download via SSH
 
 **Handler**: `bot/automation/ssh_handler.py` [Line 163-238]
 **Config**:
+
 ```python
 {
   "host": SSH_HOST,           # VPS hostname
@@ -186,9 +198,10 @@ Priority 4: Manual Import
   "key_path": SSH_KEY_PATH,   # ~/.ssh/etlegacy_bot
   "remote_path": REMOTE_STATS_PATH  # /home/et/.etlegacy/legacy/gamestats
 }
-```
+```python
 
 **Security**:
+
 - Key-based auth (no passwords)
 - Host key verification (configurable)
 - 30s timeout on SFTP operations
@@ -200,29 +213,36 @@ Priority 4: Manual Import
 
 **File**: `bot/automation/file_tracker.py` [Line 65-132]
 
-```
+```sql
+
 Layer 1: File Age Check
-  - Parse datetime from filename
-  - Skip if created BEFORE bot startup
-  - WHY: Prevents re-importing on every restart
-  - SKIPPED: If ignore_startup_time=True (manual sync)
+
+- Parse datetime from filename
+- Skip if created BEFORE bot startup
+- WHY: Prevents re-importing on every restart
+- SKIPPED: If ignore_startup_time=True (manual sync)
 
 Layer 2: In-Memory Cache
-  - Check bot.processed_files set (O(1))
-  - Fastest layer
+
+- Check bot.processed_files set (O(1))
+- Fastest layer
 
 Layer 3: Local File Exists
-  - Check if local_stats/<filename> exists
-  - Fast filesystem check
+
+- Check if local_stats/<filename> exists
+- Fast filesystem check
 
 Layer 4: Database - processed_files Table
-  - SELECT WHERE filename=?
-  - Indexed query
+
+- SELECT WHERE filename=?
+- Indexed query
 
 Layer 5: Database - rounds Table
-  - Parse filename → Check rounds
-  - Definitive source of truth
-```
+
+- Parse filename → Check rounds
+- Definitive source of truth
+
+```python
 
 ### Stage 4: Parsing
 
@@ -230,6 +250,7 @@ Layer 5: Database - rounds Table
 **Format**: c0rnp0rn3.lua TAB-delimited
 
 **Round 2 Intelligence**:
+
 - Detects `-round-2.txt` files
 - Finds matching Round 1 file (same timestamp)
 - Calculates R2-only stats: `R2_cumulative - R1`
@@ -237,6 +258,7 @@ Layer 5: Database - rounds Table
 - Creates match_summary (R1 + R2 combined, round_number=0)
 
 **Extracted Data**:
+
 - **Round Metadata**: map, time, outcome, winner
 - **Player Stats**: 54 fields (kills, deaths, damage, accuracy, headshots, revives, multikills, time_dead, denied_playtime, etc.)
 - **Weapon Stats**: Per-weapon kills, deaths, accuracy, headshots (27 weapons)
@@ -247,7 +269,9 @@ Layer 5: Database - rounds Table
 **Fallback**: SQLite (dev)
 
 **Flow**:
-```
+
+```sql
+
 process_gamestats_file() [Line 801]
   ↓
 PostgreSQLDatabase.process_file()
@@ -262,9 +286,11 @@ PostgreSQLDatabase.process_file()
   ├─ If R2: INSERT match_summary (round_number=0)
   ├─ INSERT processed_files
   └─ COMMIT
-```
+
+```python
 
 **Session Grouping**:
+
 - Uses chronologically PREVIOUS round (not latest in DB)
 - Allows out-of-order imports without breaking sessions
 - 60-minute gap = new session
@@ -274,7 +300,9 @@ PostgreSQLDatabase.process_file()
 **File**: `bot/services/round_publisher_service.py` [Line 47-200]
 
 **Flow**:
-```
+
+```sql
+
 publish_round_stats()
   ↓
 Fetch FULL data from database (not parser!)
@@ -291,9 +319,11 @@ Build Discord Embed
   └─ Footer: Filename + timestamp
   ↓
 Send to PRODUCTION stats channel
-```
+
+```python
 
 **Why query database instead of using parser output?**
+
 - Parser might have been run hours ago (manual import)
 - Database is source of truth
 - Ensures consistency with what users see in !stats
@@ -307,7 +337,8 @@ Send to PRODUCTION stats channel
 
 ### Session Lifecycle
 
-```
+```sql
+
 Players join voice → 6+ players → start_session()
   ├─ Set session_active = True
   ├─ Track session_participants (Discord IDs)
@@ -324,15 +355,18 @@ end_session()
   ├─ Disable SSH monitoring
   ├─ Clear session_participants
   └─ Post "Gaming session ended!" to general channel
-```
+
+```yaml
 
 **Startup Recovery**:
+
 - `check_startup_voice_state()` called during `on_ready()`
 - Scans gaming_voice_channels for active players
 - If 6+ found → auto-resume session
 - Prevents session loss on bot restart
 
 **WHY**:
+
 - Triggers active monitoring mode (60s SSH checks)
 - Provides session context for stats
 - Allows voice-based session detection (no game server needed)
@@ -343,50 +377,58 @@ end_session()
 
 ### Flow
 
-```
+```python
+
 User types !command in Discord
   ↓
 bot_check() [Line 383-402]
-  - Global channel filter
-  - Only respond in configured channels
-  - Silently ignore other channels
+
+- Global channel filter
+- Only respond in configured channels
+- Silently ignore other channels
   ↓
 Discord.py routes to Cog
-  - Based on command name
+- Based on command name
   ↓
 Cog command handler
-  - Execute business logic
-  - Query database via db_adapter
-  - Build response (embed/text)
+- Execute business logic
+- Query database via db_adapter
+- Build response (embed/text)
   ↓
 on_command_completion() [Line 2062]
-  - Log execution time
-  - Warn if >5 seconds
+- Log execution time
+- Warn if >5 seconds
 OR
 on_command_error() [Line 2078]
-  - Handle errors (not found, cooldown, etc.)
-  - Sanitize error messages (security)
-```
+- Handle errors (not found, cooldown, etc.)
+- Sanitize error messages (security)
+
+```sql
 
 ### Major Command Groups
 
 **Stats** (StatsCog, LeaderboardCog):
+
 - `!stats <player>` - Player statistics
 - `!leaderboard` - Top players
 - `!compare <p1> <p2>` - Player comparison
 
 **Session** (SessionCog, LastSessionCog):
+
 - `!session <id>` - View specific session
 - `!last_session` - Last session with graphs
 
 **Linking** (LinkCog):
+
 - `!link <player>` - Link Discord to ET player
 - `!find_player <name>` - Search
 
 **Team** (TeamCog):
+
 - `!teams <session>` - Team compositions
 
 **Admin** (AdminCog):
+
 - Database operations, maintenance, sync
 
 ---
@@ -399,6 +441,7 @@ on_command_error() [Line 2078]
 **New**: ~200 SSH checks/day
 
 **How**:
+
 1. Dead hours (02:00-11:00 CET) - No checks
 2. Voice-triggered active mode - 60s when 6+ players
 3. Grace period - 30min after last file
@@ -408,6 +451,7 @@ on_command_error() [Line 2078]
 ### Deduplication Efficiency
 
 **5-Layer Check** (fastest to slowest):
+
 1. String parsing (free)
 2. In-memory set O(1)
 3. Filesystem check (fast I/O)
@@ -429,7 +473,8 @@ Only goes to next layer if previous says "process"
 
 ### Webhook Security (CRITICAL)
 
-```
+```text
+
 1. Webhook ID Whitelist
    - WEBHOOK_TRIGGER_WHITELIST env var
    - Only whitelisted webhooks can trigger
@@ -449,11 +494,13 @@ Only goes to next layer if previous says "process"
    - Webhook → control channel
    - Stats → production channel
    - Trigger messages deleted after processing
-```
+
+```text
 
 ### SSH Security
 
-```
+```text
+
 1. Key-Based Auth
    - No passwords, SSH key only
    - SSH_KEY_PATH configurable
@@ -469,11 +516,13 @@ Only goes to next layer if previous says "process"
 4. Timeouts
    - SSH connect: 10s
    - SFTP operations: 30s
-```
+
+```text
 
 ### Discord Command Security
 
-```
+```text
+
 1. Channel Restrictions
    - Global bot_check() filter
    - Silent ignore for unauthorized channels
@@ -487,7 +536,8 @@ Only goes to next layer if previous says "process"
    - Error message sanitization
    - Color code stripping
    - Embed field length limits (1024)
-```
+
+```yaml
 
 ---
 
@@ -527,7 +577,7 @@ SESSION_END_DELAY=300
 
 # WebSocket (DEPRECATED - leave disabled)
 WS_ENABLED=false
-```
+```yaml
 
 ---
 
@@ -535,7 +585,8 @@ WS_ENABLED=false
 
 ### Happy Path: Game Finishes → Discord Post
 
-```
+```python
+
 ┌─────────────────────────────────────────┐
 │ 1. GAME SERVER (VPS)                    │
 │ ET:Legacy finishes round                │
@@ -561,7 +612,7 @@ WS_ENABLED=false
 │   ↓                                     │
 │ Security validation (ID, rate, filename)│
 │   ↓                                     │
-│ Launch _process_webhook_triggered_file()│
+│ Launch_process_webhook_triggered_file()│
 └─────────────────────────────────────────┘
                 ↓
 ┌─────────────────────────────────────────┐
@@ -613,11 +664,13 @@ WS_ENABLED=false
 └─────────────────────────────────────────┘
                 ↓
              [DONE]
-```
+
+```text
 
 ### Fallback: SSH Polling
 
-```
+```text
+
 endstats_monitor (60s loop)
   ↓
 Dead hours check (02:00-11:00 CET) → Skip
@@ -631,6 +684,7 @@ For each new file:
   ├─ Download via SSH
   ├─ Parse + Import
   └─ Post to Discord
+
 ```
 
 ---
@@ -640,6 +694,7 @@ For each new file:
 ### Webhook vs WebSocket
 
 **Webhook (Current)**:
+
 - ✅ Simpler (standard Discord feature)
 - ✅ More reliable (no persistent connection)
 - ✅ Easier to debug (HTTP request logs)
@@ -647,6 +702,7 @@ For each new file:
 - ✅ Built-in retry logic (Discord)
 
 **WebSocket (Deprecated)**:
+
 - ❌ Complex (persistent connection)
 - ❌ Requires port forwarding or reverse tunnel
 - ❌ Connection drops require reconnection
@@ -721,15 +777,18 @@ Each layer catches different edge cases.
 ## Maintenance Tasks
 
 ### Daily
+
 - Monitor `!automation_status` for errors
 - Check production channel for normal posting
 
 ### Weekly
+
 - Review logs for SSH errors
 - Check disk space (local_stats/, database)
 - Verify processed_files count matches local_stats
 
 ### Monthly
+
 - Backup database (`pg_dump`)
 - Rotate logs
 - Review performance metrics

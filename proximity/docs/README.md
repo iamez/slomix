@@ -39,7 +39,7 @@ The proximity tracker runs as a Lua module inside the ET:Legacy game server. It 
 
 ### Data Flow
 
-```
+```python
 ET:Legacy Game Server
         |
         v
@@ -74,12 +74,14 @@ Historical development session notes are in [session-notes/](session-notes/).
 ## Current Status
 
 **Working:**
+
 - Full player movement tracking
 - Combat engagement detection with attacker details
 - Crossfire detection (2+ attackers)
 - Heatmap generation
 
 **Not Yet Implemented:**
+
 - Round/match outcomes (who won)
 - Objective tracking (dynamite, constructions)
 - "Team" identity (currently only tracks Axis/Allies per round)

@@ -77,27 +77,30 @@ class MyCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(MyCog(bot))
-```
+```text
 
 ## Key Patterns
 
 ### Channel Checks
+
 ```python
 from bot.core.checks import is_public_channel, is_admin_channel
 
 @is_public_channel()  # For user commands
 @is_admin_channel()   # For admin commands
-```
+```text
 
 ### Database Access
+
 ```python
 # Always use bot.db_adapter
 results = await self.bot.db_adapter.fetch_all(query, params)
 result = await self.bot.db_adapter.fetch_one(query, params)
 await self.bot.db_adapter.execute(query, params)
-```
+```text
 
 ### Player Lookup
+
 ```python
 # When aggregating player stats, group by GUID not name
 query = """
@@ -106,14 +109,15 @@ query = """
     WHERE gaming_session_id = ?
     GROUP BY player_guid
 """
-```
+```text
 
 ### Session Queries
+
 ```python
 # Use gaming_session_id for session queries
 # 60-minute gap between rounds = new session
 WHERE gaming_session_id = ?
-```
+```text
 
 ## Common Mistakes to Avoid
 

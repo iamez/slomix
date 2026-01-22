@@ -41,7 +41,7 @@ A comprehensive Discord bot that tracks, analyzes, and displays ET:Legacy game s
 
 ### Project Structure
 
-```
+```python
 stats/
 â”œâ”€â”€ bot/
 â”‚   â”œâ”€â”€ ultimate_bot.py           # Main bot (4,371 lines) - Core logic
@@ -67,7 +67,7 @@ stats/
 â”œâ”€â”€ local_stats/                   # Downloaded stats files
 â”œâ”€â”€ logs/                          # Bot logs
 â””â”€â”€ .env                          # Configuration
-```
+```python
 
 ### Technology Stack
 
@@ -87,6 +87,7 @@ stats/
 **Main Table:** `player_comprehensive_stats`
 
 #### Core Identification (6 columns)
+
 ```sql
 id                  INTEGER PRIMARY KEY
 session_id          TEXT       -- Format: YYYY-MM-DD-HHMMSS
@@ -94,9 +95,10 @@ round_num           INTEGER    -- 1 or 2
 player_name         TEXT       -- Player's name
 map_name            TEXT       -- Map played
 timestamp           TEXT       -- When round happened
-```
+```text
 
 #### Combat Stats (9 columns)
+
 ```sql
 kills               INTEGER
 deaths              INTEGER
@@ -107,9 +109,10 @@ damage_given        INTEGER
 damage_received     INTEGER
 damage_team         INTEGER
 accuracy            REAL       -- Percentage (0-100)
-```
+```text
 
 #### Weapon Stats (10 columns)
+
 ```sql
 headshots           INTEGER
 gibs                INTEGER
@@ -121,9 +124,10 @@ weapon_headshots    INTEGER
 knife_kills         INTEGER
 poison_kills        INTEGER
 poison_deaths       INTEGER
-```
+```text
 
 #### Objective Stats (12 columns)
+
 ```sql
 obj_captured        INTEGER    -- Objectives taken
 obj_destroyed       INTEGER    -- Objectives destroyed
@@ -137,9 +141,10 @@ ammo_given          INTEGER
 health_given        INTEGER
 kill_assists        INTEGER
 useless_kills       INTEGER    -- Kills on last player alive
-```
+```text
 
 #### Performance Metrics (6 columns)
+
 ```sql
 efficiency          REAL       -- Kill efficiency rating
 skill_rating        REAL       -- Overall skill score
@@ -147,42 +152,47 @@ kdr                 REAL       -- Kill/Death ratio
 kpr                 REAL       -- Kills per round
 dpr                 REAL       -- Deaths per round
 damage_efficiency   REAL       -- Damage per death
-```
+```text
 
 #### Time Stats (3 columns)
+
 ```sql
 time_played         INTEGER    -- Seconds in round
 time_axis           INTEGER    -- Seconds on Axis
 time_allies         INTEGER    -- Seconds on Allies
-```
+```text
 
 #### Team Assignment (5 columns)
+
 ```sql
 team                TEXT       -- 'axis', 'allies', or NULL
 round_winner        TEXT       -- 'axis', 'allies', or NULL
 won_round           INTEGER    -- 1 if won, 0 if lost, NULL if unknown
 most_useful_kills   INTEGER    -- Important kills
 team_detection_confidence TEXT  -- 'high', 'medium', 'low'
-```
+```text
 
 #### Advanced Stats (2 columns)
+
 ```sql
 xp_total            INTEGER    -- Total XP earned
 map_id              TEXT       -- Unique ID per map session
-```
+```text
 
 ### Supporting Tables
 
 **`processed_files`** - Tracks which files have been imported
+
 ```sql
 id                  INTEGER PRIMARY KEY
 filename            TEXT UNIQUE
 processed_at        TEXT
 success             INTEGER    -- 1 = success, 0 = failed
 error_message       TEXT
-```
+```text
 
 **`session_teams`** - Stores team rosters per session
+
 ```sql
 id                  INTEGER PRIMARY KEY
 session_id          TEXT
@@ -191,9 +201,10 @@ axis_players        TEXT       -- JSON array
 allies_players      TEXT       -- JSON array
 timestamp           TEXT
 UNIQUE(session_id, round_num)
-```
+```text
 
 **`team_history`** - Player's team history for consistency
+
 ```sql
 id                  INTEGER PRIMARY KEY
 player_name         TEXT
@@ -203,7 +214,7 @@ session_id          TEXT
 round_num           INTEGER
 timestamp           TEXT
 UNIQUE(player_name, session_id, round_num)
-```
+```python
 
 ---
 
@@ -214,12 +225,16 @@ UNIQUE(player_name, session_id, round_num)
 **Parser:** `community_stats_parser.py`
 
 **Input:** ET:Legacy stats files (`.txt` format)
-```
+
+```text
+
 Filename format: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
 Example: 2025-11-02-201530-goldrush-round-2.txt
-```
+
+```sql
 
 **What it extracts:**
+
 - Player names and basic stats (K/D, accuracy)
 - Weapon performance (hits, shots, headshots)
 - Objective actions (captures, plants, defuses)
@@ -228,6 +243,7 @@ Example: 2025-11-02-201530-goldrush-round-2.txt
 - XP and skill ratings
 
 **Parser Features:**
+
 - âœ… Handles special characters in player names
 - âœ… Parses weapon-specific stats
 - âœ… Extracts objective stats from detailed sections
@@ -241,43 +257,54 @@ Example: 2025-11-02-201530-goldrush-round-2.txt
 **Solution:** 5-layer detection algorithm
 
 #### Layer 1: Time-Based Detection (Most Reliable)
+
 ```python
 if time_axis > time_allies * 1.5:
     team = "axis"
 elif time_allies > time_axis * 1.5:
     team = "allies"
-```
+```text
+
 If player spent 75%+ time on one team â†’ assign that team
 
 #### Layer 2: Historical Consistency
+
 ```python
 # Check team_history table
 "Did this player play for this team on this map in previous rounds?"
-```
+```text
+
 Players tend to stay on same team across rounds
 
 #### Layer 3: Objective-Based Detection
+
 ```python
 # Axis players: More dynamite plants
 # Allied players: More dynamite defuses
-```
+```text
+
 Team-specific objective patterns
 
 #### Layer 4: Collaborative Analysis
+
 ```python
 # If player A killed player B a lot, they're on opposite teams
 # If player A gave ammo to player B, they're on same team
-```
+```text
+
 Interaction-based inference
 
 #### Layer 5: Team Balancing Heuristics
+
 ```python
 # Try to create balanced teams by skill
 # Ensure ~6 players per team
-```
+```python
+
 Final fallback using skill ratings
 
 **Confidence Levels:**
+
 - `high` - 90%+ certain (time-based or strong historical)
 - `medium` - 70-90% certain (multiple weak signals)
 - `low` - < 70% certain (fallback heuristics)
@@ -319,6 +346,7 @@ Final fallback using skill ratings
 **What:** Background task that runs every 30 seconds
 
 **Flow:**
+
 ```python
 @tasks.loop(seconds=30)
 async def endstats_monitor(self):
@@ -341,15 +369,18 @@ async def endstats_monitor(self):
             # 5. ðŸ†• AUTO-POST to Discord!
             if result.get('success'):
                 await self.post_round_stats_auto(filename, result)
-```
+```text
 
 **What Gets Posted:**
-```
+
+```text
+
 ðŸŽ® Round 2 Complete!
 
 Map: goldrush | Players: 12
 
 ðŸ† Top Players
+
 1. PlayerName - 25/8 K/D | 3,450 DMG | 35.2% ACC
 2. PlayerTwo - 22/10 K/D | 3,100 DMG | 28.9% ACC
 3. PlayerThree - 18/7 K/D | 2,800 DMG | 41.5% ACC
@@ -360,25 +391,28 @@ Total Kills: 245
 Total Deaths: 218
 
 File: 2025-11-02-201530-goldrush-round-2.txt
-```
+
+```text
 
 #### Voice Channel Monitoring (`voice_session_monitor` task)
 
 **What:** Checks voice channels every 30 seconds
 
 **Auto-Start Logic:**
+
 ```python
 if human_player_count >= SESSION_START_THRESHOLD:  # Default: 6
     await self.start_session_auto()
-```
+```text
 
 **Auto-End Logic:**
+
 ```python
 if human_player_count <= SESSION_END_THRESHOLD:  # Default: 2
     start_end_timer()
     if timer_exceeds(SESSION_END_DELAY):  # Default: 180s (3 min)
         await self.end_session_auto()
-```
+```text
 
 #### Cache Refresher (`cache_refresher` task)
 
@@ -391,13 +425,14 @@ if human_player_count <= SESSION_END_THRESHOLD:  # Default: 2
 async def cache_refresher(self):
     # Reload processed_files set from database
     self.processed_files = {filename for filename in DB}
-```
+```text
 
 ### 5. Command System (50+ Commands)
 
 **Architecture:** Discord Cogs (modular command groups)
 
 **Categories:**
+
 - Player Stats (16 commands) - Individual performance
 - Session Management (6 commands) - Session control
 - Team Analysis (8 commands) - Team-based stats
@@ -414,7 +449,7 @@ async def cache_refresher(self):
 !leaderboard kills             # Top players by kills
 !sync_stats                    # Manual file sync
 !check_schema                  # Database validation
-```
+```python
 
 ---
 
@@ -423,6 +458,7 @@ async def cache_refresher(self):
 ### Current (Integrated)
 
 #### 1. SSH File Monitoring âœ…
+
 - **Status:** Active, built into `ultimate_bot.py` (line 4073)
 - **Function Name:** `endstats_monitor()` task
 - **Frequency:** Every 30 seconds
@@ -432,17 +468,20 @@ async def cache_refresher(self):
 - **Note:** This is the ONLY SSH monitor - we merged it with Discord posting today
 
 #### 2. Voice Channel Automation âœ…
+
 - **Status:** Active
 - **Function:** Auto-start/stop sessions based on voice activity
 - **Thresholds:** 6+ players to start, 2- players for 3 min to end
 - **Config:** `AUTOMATION_ENABLED=true`, `GAMING_VOICE_CHANNELS` in `.env`
 
 #### 3. Scheduled Monitoring âœ…
+
 - **Status:** Active
 - **Function:** Auto-start monitoring at 20:00 CET daily
 - **Why:** Ensures monitoring is active for evening gaming sessions
 
 #### 4. Cache Management âœ…
+
 - **Status:** Active
 - **Function:** Keeps processed files cache synchronized
 - **Why:** Fast duplicate detection without database queries
@@ -452,29 +491,34 @@ async def cache_refresher(self):
 These were created as separate modules but are **NOT USED** by the bot:
 
 #### âŒ SSH Monitor Service (Not Used)
+
 - **File:** `bot/services/automation/ssh_monitor.py`
 - **Status:** Superseded by enhanced `endstats_monitor()` in ultimate_bot.py
 - **Action:** Can be deleted - functionality merged into main bot
 
 #### âŒ Metrics Logging (Not Used)
+
 - **File:** `bot/services/automation/metrics_logger.py`
 - **Function:** Track all events, errors, performance for analysis
 - **Status:** Created but not integrated
 - **Action:** Can be integrated later for analytics
 
 #### âŒ Health Monitoring (Not Used)
+
 - **File:** `bot/services/automation/health_monitor.py`
 - **Function:** Monitor bot health, send Discord alerts
 - **Status:** Created but not integrated
 - **Action:** Can be integrated later for proactive monitoring
 
 #### âŒ Database Maintenance (Not Used)
+
 - **File:** `bot/services/automation/database_maintenance.py`
 - **Function:** Auto-backups, VACUUM, log cleanup
 - **Status:** Created but not integrated
 - **Action:** Can be integrated later for maintenance
 
 #### âŒ Automation Commands Cog (Not Used)
+
 - **File:** `bot/cogs/automation_commands.py`
 - **Function:** Discord commands for automation services
 - **Status:** Created but not integrated (tied to unused services above)
@@ -574,7 +618,8 @@ These were created as separate modules but are **NOT USED** by the bot:
 
 ### Complete Pipeline
 
-```
+```python
+
 â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
 â”‚                    ET:Legacy Game Server                            â”‚
 â”‚  Players play rounds â†’ Server generates .txt stats files            â”‚
@@ -640,11 +685,13 @@ These were created as separate modules but are **NOT USED** by the bot:
 â”‚  â€¢ Use commands to query database (!player_stats, !leaderboard)     â”‚
 â”‚  â€¢ View session summaries when session ends                         â”‚
 â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-```
+
+```text
 
 ### Alternative Flow: Manual Sync
 
-```
+```python
+
 User types: !sync_stats 1week
     â†“
 sync_cog.py: sync_stats()
@@ -658,7 +705,8 @@ Processes each file sequentially
 (Same parsing â†’ team detection â†’ import flow)
     â†“
 Reports summary: "Processed 15 files"
-```
+
+```yaml
 
 ---
 
@@ -667,12 +715,17 @@ Reports summary: "Processed 15 files"
 ### Example: Typical Gaming Session
 
 #### 1. Pre-Session (18:00)
-```
+
+```text
+
 Bot is idle, monitoring = False
-```
+
+```sql
 
 #### 2. Players Join Voice (19:45)
-```
+
+```python
+
 [19:45:00] Player joins voice channel #1
 [19:45:15] Player joins voice channel #2
 ...
@@ -683,24 +736,33 @@ voice_session_monitor task detects 6+ players:
   â†’ Sets self.monitoring = True
   â†’ Logs: "âœ… Auto-starting gaming session"
   â†’ Posts to Discord: "ðŸŽ® Gaming session started!"
-```
+
+```text
 
 #### 3. Scheduled Start Trigger (20:00)
-```
+
+```text
+
 scheduled_monitoring_check task:
   â†’ Checks time: 20:00 CET
   â†’ Ensures monitoring = True (already is)
   â†’ Logs: "âœ… Scheduled monitoring check - already active"
-```
+
+```text
 
 #### 4. First Round Starts (20:05)
-```
+
+```text
+
 Players start playing goldrush
 Game server generates: 2025-11-02-200530-goldrush-round-1.txt
-```
+
+```text
 
 #### 5. SSH Monitor Detects File (20:06:00)
-```
+
+```text
+
 endstats_monitor (runs every 30s):
   [20:06:00] Check #1:
     â†’ Lists remote files via SSH
@@ -716,7 +778,7 @@ endstats_monitor (runs every 30s):
     â†’ Marks file as processed
     â†’ Adds to cache
     â†’ ðŸ†• AUTO-POSTS to Discord:
-    
+
         ðŸŽ® Round 1 Complete!
         
         Map: goldrush | Players: 12
@@ -727,24 +789,33 @@ endstats_monitor (runs every 30s):
         ...
         
     â†’ Logs: "âœ… Posted round stats for 2025-11-02-200530-goldrush-round-1.txt"
-```
+
+```text
 
 #### 6. Cache Refresh (20:06:30)
-```
+
+```sql
+
 cache_refresher task:
   â†’ Reloads processed_files from database
   â†’ Now includes: 2025-11-02-200530-goldrush-round-1.txt
   â†’ Ensures endstats_monitor won't re-process it
-```
+
+```text
 
 #### 7. Second Round Starts (20:25)
-```
+
+```text
+
 Players swap sides and play round 2
 Game server generates: 2025-11-02-202530-goldrush-round-2.txt
-```
+
+```text
 
 #### 8. SSH Monitor Detects Round 2 (20:26:00)
-```
+
+```text
+
 endstats_monitor:
   [20:26:00] Check #5:
     â†’ Lists remote files
@@ -759,24 +830,32 @@ endstats_monitor:
       - PlayerTwo: time_axis=300s â†’ axis (swapped teams! âœ“)
     â†’ Imports to database
     â†’ AUTO-POSTS round 2 stats
-```
+
+```text
 
 #### 9. Multiple Maps (20:30 - 22:00)
-```
+
+```text
+
 Players continue playing:
-  - adlernest round 1, round 2
-  - supply round 1, round 2
-  - radar round 1, round 2
+
+- adlernest round 1, round 2
+- supply round 1, round 2
+- radar round 1, round 2
 
 endstats_monitor processes all files automatically:
-  - Every 30 seconds checks for new files
-  - Downloads and processes immediately
-  - Posts stats after each round
-  - Database grows continuously
-```
+
+- Every 30 seconds checks for new files
+- Downloads and processes immediately
+- Posts stats after each round
+- Database grows continuously
+
+```text
 
 #### 10. Players Leave (22:15)
-```
+
+```python
+
 [22:15:00] Players start leaving voice channels
 [22:15:30] 5 players remain
 [22:16:00] 3 players remain
@@ -806,24 +885,30 @@ voice_session_monitor:
       Best Accuracy: PlayerTwo (45.2%)
       
       Use !last_session for full details
-```
+
+```text
 
 #### 11. Post-Session
-```
+
+```text
+
 monitoring = False
 endstats_monitor still runs but returns immediately
 SSH checks stop
 Bot waits for next session trigger
-```
+
+```text
 
 ### Example: Manual Query (Anytime)
 
-```
+```python
+
 User types: !player_stats Slomix
 
 player_cog.py: player_stats() command:
+
   1. Queries database:
-     SELECT * FROM player_comprehensive_stats 
+     SELECT * FROM player_comprehensive_stats
      WHERE player_name = 'Slomix'
   
   2. Aggregates stats:
@@ -844,7 +929,8 @@ player_cog.py: player_stats() command:
   5. User can navigate with reactions
 
 Total query time: ~200-500ms
-```
+
+```yaml
 
 ---
 
@@ -879,7 +965,7 @@ SESSION_END_DELAY=180
 # Optional
 ADMIN_CHANNEL_ID=admin_channel_id
 LOG_LEVEL=INFO
-```
+```yaml
 
 ---
 
@@ -887,7 +973,8 @@ LOG_LEVEL=INFO
 
 ### Startup Flow
 
-```
+```python
+
 1. python bot/ultimate_bot.py
    â†“
 2. Loads .env configuration
@@ -909,31 +996,39 @@ LOG_LEVEL=INFO
 8. Connects to Discord
    â†“
 9. Bot ready! Listening for commands and monitoring triggers
-```
+
+```text
 
 ### Runtime Monitoring
 
 **Check bot health:**
-```
+
+```text
+
 !session_status         # Current session state
 !database_info          # Database statistics
 !recent_imports         # Last processed files
-```
+
+```text
 
 **Check logs:**
+
 ```powershell
 tail -f logs/discord_bot.log
-```
+```text
 
 **Key log messages:**
-```
+
+```text
+
 âœ… SSH monitoring task ready
 âœ… Background tasks started
 ðŸ“¥ New file detected: [filename]
 âœ… Posted round stats for [filename] to Discord
 âš ï¸ SSH config incomplete - monitoring disabled
 âŒ endstats_monitor error: [error]
-```
+
+```python
 
 ---
 
@@ -960,6 +1055,7 @@ tail -f logs/discord_bot.log
 ### Scalability
 
 **Current limits:**
+
 - Players per round: Tested up to 32
 - Rounds per session: Tested up to 50
 - Total database size: Tested up to 500MB (no slowdown)
@@ -976,6 +1072,7 @@ tail -f logs/discord_bot.log
 **After:** Single table with round_num column
 
 **Benefits:**
+
 - âœ… Simpler queries (no JOINs)
 - âœ… Easier team detection across rounds
 - âœ… Better historical analysis
@@ -987,6 +1084,7 @@ tail -f logs/discord_bot.log
 **After:** Separate cog files (bot.py now 4,371 lines)
 
 **Benefits:**
+
 - âœ… Easier to maintain
 - âœ… Clear organization
 - âœ… Can disable/enable features
@@ -999,6 +1097,7 @@ tail -f logs/discord_bot.log
 **Alternative:** Server pushes notifications to bot
 
 **Why polling?**
+
 - âœ… Simpler (no server-side modifications)
 - âœ… More reliable (handles disconnects)
 - âœ… Sufficient latency (30-60s is acceptable)
@@ -1011,6 +1110,7 @@ tail -f logs/discord_bot.log
 **With cache:** Check in-memory set (O(1) lookup)
 
 **Benefits:**
+
 - âœ… 1000x faster lookups
 - âœ… Reduces database load
 - âœ… Refreshed every 30s (stays synchronized)
@@ -1067,7 +1167,8 @@ A **production-ready Discord bot** that:
 
 ### The Stack
 
-```
+```python
+
 Discord Bot (discord.py)
     â†“
 Command Cogs (6 cogs, 50+ commands)
@@ -1083,16 +1184,18 @@ Team Detection (5-layer algorithm)
 PostgreSQL Database (production schema, connection pooling)
     â†“
 Discord Embeds (auto-posted stats)
+
 ```
 
 ### Recent Changes (Today - November 2, 2025)
 
 **Merged SSH monitoring with Discord posting:**
+
 - âœ… Enhanced existing `endstats_monitor` task in `ultimate_bot.py` (line 4073)
 - âœ… Added `post_round_stats_auto()` method (line 3278)
 - âœ… Now auto-posts round stats to Discord after processing
 - âœ… **Single unified system** - only ONE SSH monitor exists
-- âœ… Did NOT integrate separate `bot/services/automation/ssh_monitor.py` 
+- âœ… Did NOT integrate separate `bot/services/automation/ssh_monitor.py`
 - âœ… That file can be deleted - it's not used by the bot
 
 ### Current State
@@ -1100,6 +1203,7 @@ Discord Embeds (auto-posted stats)
 **Production-ready and fully functional!** ðŸŽ‰
 
 Just need to:
+
 1. Set `SSH_ENABLED=true` in `.env`
 2. Configure SSH credentials
 3. Set `STATS_CHANNEL_ID`
@@ -1109,4 +1213,3 @@ Just need to:
 ---
 
 **That's your complete ET:Legacy Discord Bot!** ðŸŽ®
-

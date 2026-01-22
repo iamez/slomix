@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - Nothing yet
 
 ---
@@ -17,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### December 2025 Feature Release - Real-Time Push & Voice Logging
 
 ### Added
+
 - **WebSocket Real-Time Push System** - Instant file detection from VPS via WebSocket (replaces 60s SSH polling)
   - `vps_ws_notifier.py` - VPS-side file watcher that pushes notifications to bot
   - Bot receives instant alerts when new stats files are written
@@ -38,11 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Synergy calculation and team optimization algorithms ready for future activation
 
 ### Changed
+
 - **SSH Monitoring Now Optional** - WebSocket push is preferred method for instant file detection
 - **Round Stats Format Enhanced** - New compact 2-line format with all stats including multikills and time denied
 - **Player Chunk Size Increased** - Bumped from 5 to 8 players per embed field (typical games don't split across fields)
 
 ### Fixed
+
 - **SQL Nosec Comment Bug** - Fixed `# nosec B608` comment appearing inside SQL query string causing PostgreSQL syntax errors
 - **Command Alias Conflicts** - Resolved `balance_teams` and `suggest_teams` alias conflicts between team_builder and synergy_analytics cogs
 - **Channel Check Decorators** - Removed `@is_public_channel()` from team commands that was blocking execution
@@ -53,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Redundant Imports** - Removed duplicate `datetime` imports in ultimate_bot.py
 
 ### Technical Details
+
 - **New Files**: `bot/services/round_publisher_service.py`, `bot/services/voice_session_service.py`, `tools/vps_ws_notifier.py`
 - **Config Additions**: WebSocket settings (`WS_*`), voice logging (`ENABLE_VOICE_LOGGING`)
 - **Branch**: Merged from `feature/websocket-push-voice-logging` (PR #22)
@@ -64,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### December 2025 Maintenance Release - Critical Bug Fixes
 
 ### Fixed
+
 - **CRITICAL: SSHMonitor Race Condition** - Fixed live Discord posting not working due to race condition between SSHMonitor service and endstats_monitor task. Both were running simultaneously causing files to be marked "processed" before Discord posting could occur. Solution: Disabled SSHMonitor auto-start; endstats_monitor now handles SSH + DB import + Discord posting.
 - **Channel Permission Checks** - `is_public_channel()` and `is_admin_channel()` decorators now silently return `False` instead of raising exceptions and sending error messages. Bot no longer announces "wrong channel" to users.
 - **on_message Channel Filtering** - Fixed bot responding to commands in wrong channels. Now properly uses `public_channels` config as fallback when `bot_command_channels` is not set.
@@ -72,11 +78,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Website SQL Injection** - Added `escape_like_pattern()` function to `website/backend/routers/api.py` to prevent SQL injection via search patterns.
 
 ### Changed
+
 - SSHMonitor service is now initialized but NOT auto-started on bot startup
 - SSHMonitor remains available for manual control via `!automation` commands
 - endstats_monitor task loop is now the sole handler for: SSH connection, file download, database import, and Discord posting
 
 ### Technical Details
+
 - **Root Cause**: Two monitoring systems (SSHMonitor + endstats_monitor) were competing for the same files. SSHMonitor downloaded files first, marking them as "processed" in local filesystem. When endstats_monitor ran, `should_process_file()` check #3 ("does file exist locally?") returned True, skipping the file before Discord posting could occur.
 - **Files Modified**: `bot/ultimate_bot.py`, `bot/core/checks.py`, `bot/services/automation/ssh_monitor.py`, `website/index.html`, `website/js/app.js`, `website/backend/routers/api.py`
 
@@ -87,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Version 1.0 Release - Production Ready
 
 ### Added
+
 - Achievement badge system for players (medic, engineer, sharpshooter, rambo, objective specialist)
 - Custom display name system for linked Discord accounts
 - `!set_display_name` command to set personalized display names
@@ -95,12 +104,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Badge stacking support for players with multiple achievements
 
 ### Changed
+
 - **BREAKING**: Auto-posting now shows ALL players with comprehensive stats (not just top performers)
 - Improved !last_session output format with achievement badges displayed next to player names
 - Enhanced session statistics display with two-line player format for better readability
 - Updated achievement badges to appear in !last_session player listings
 
 ### Fixed
+
 - Critical bug in !list_players command that caused crashes
 - Codacy static analysis warnings for code quality
 - Various production bugs and edge cases
@@ -110,6 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Major Release - Production-Ready System
 
 ### Added
+
 - **6-Layer Data Validation System** - Comprehensive data integrity with ACID guarantees
 - **Full Automation Suite** - Zero-touch operation with SSH monitoring
 - **Voice-Conditional SSH Monitoring** - Resource-efficient monitoring based on voice channel activity
@@ -125,6 +137,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **TTL-based Caching** - 300-second cache for improved performance
 
 ### Changed
+
 - **DPM Calculations** - Now use actual playtime instead of round duration for accuracy
 - **Leaderboard Queries** - Fixed stat inflation by properly filtering R0 warmup rounds
 - **Session Detection** - Improved gaming session boundary detection
@@ -133,6 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Voice Detection** - Enhanced voice channel monitoring with grace periods
 
 ### Fixed
+
 - **Security**: Rate limiting, Discord intents, database SSL support
 - **Performance**: Fixed !lp command unbounded query (critical optimization)
 - **Data Integrity**: R0/R1/R2 filtering across all queries
@@ -145,6 +159,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sync Commands**: Fixed !sync_month and !sync_week errors
 
 ### Security
+
 - Added rate limiting to prevent abuse
 - Implemented secure temp file handling
 - Added command sanitization for shell commands
@@ -157,6 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Initial Production Release
 
 ### Added
+
 - Basic Discord bot functionality
 - SQLite database support
 - Manual stats file import
@@ -166,6 +182,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Player linking system
 
 ### Features
+
 - 53+ statistics tracked per player
 - K/D ratio, DPM, accuracy calculations
 - Weapon statistics breakdown
@@ -184,6 +201,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Upgrade Notes
 
 ### Upgrading to 2.0.0
+
 1. **Database Migration Required**: Run `postgresql_database_manager.py` to migrate from SQLite to PostgreSQL
 2. **Configuration Changes**: Update `.env` file with PostgreSQL credentials
 3. **New Dependencies**: Install updated requirements with `pip install -r requirements.txt`
@@ -191,6 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 5. **Voice Monitoring**: Add `GAMING_VOICE_CHANNELS` to `.env` for voice-conditional monitoring
 
 ### Breaking Changes in 2.0.0
+
 - SQLite is no longer the primary database (PostgreSQL required)
 - Database schema changes require migration
 - Some command outputs have changed format

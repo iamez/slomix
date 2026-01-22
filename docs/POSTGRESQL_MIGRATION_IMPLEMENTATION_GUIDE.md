@@ -22,10 +22,12 @@ This guide provides detailed, copy-paste-ready instructions for migrating the ET
 
 **Status**: ✅ Done  
 **Files Created**:
+
 - `bot/core/database_adapter.py`
 - `bot/config.py`
 
 **What Was Done**:
+
 - Created `SQLiteAdapter` class
 - Created `PostgreSQLAdapter` class
 - Implemented query translation (? → $1, $2)
@@ -33,6 +35,7 @@ This guide provides detailed, copy-paste-ready instructions for migrating the ET
 - Created config system
 
 **Validation**:
+
 ```python
 # Test the adapter
 from bot.core.database_adapter import create_adapter
@@ -41,7 +44,7 @@ await adapter.connect()
 result = await adapter.fetch_one("SELECT COUNT(*) FROM rounds")
 print(f"Total rounds: {result[0]}")
 await adapter.close()
-```
+```python
 
 ---
 
@@ -60,20 +63,22 @@ await adapter.close()
 # Add these imports
 from bot.core.database_adapter import create_adapter, DatabaseAdapter
 from bot.config import load_config
-```
+```python
 
 #### Step 2.2: Update Bot Initialization
 
 **Location**: `__init__` method of main bot class
 
 **Find**:
+
 ```python
 def __init__(self):
     super().__init__(command_prefix='!', intents=intents)
     self.db_path = os.getenv('DATABASE_PATH', 'bot/etlegacy_production.db')
-```
+```text
 
 **Replace with**:
+
 ```python
 def __init__(self):
     super().__init__(command_prefix='!', intents=intents)
@@ -87,7 +92,7 @@ def __init__(self):
     
     # Keep db_path for backward compatibility (some helpers might use it)
     self.db_path = self.config.sqlite_db_path if self.config.database_type == 'sqlite' else None
-```
+```text
 
 #### Step 2.3: Add setup_hook for Connection Pool
 
@@ -101,7 +106,7 @@ async def setup_hook(self):
     
     # Validate schema
     await self.validate_database_schema()
-```
+```text
 
 #### Step 2.4: Add close method for Cleanup
 
@@ -113,18 +118,20 @@ async def close(self):
     await self.db_adapter.close()
     logger.info("🔌 Database adapter closed")
     await super().close()
-```
+```sql
 
 #### Step 2.5: Update validate_database_schema Method
 
 **Find**:
+
 ```python
 async def validate_database_schema(self):
     async with aiosqlite.connect(self.db_path) as db:
         cursor = await db.execute("PRAGMA table_info(player_comprehensive_stats)")
-```
+```text
 
 **Replace with**:
+
 ```python
 async def validate_database_schema(self):
     """Validate database has correct schema (works with both SQLite and PostgreSQL)."""
@@ -161,24 +168,27 @@ async def validate_database_schema(self):
     except Exception as e:
         logger.error(f"Schema validation failed: {e}")
         raise
-```
+```sql
 
 #### Step 2.6: Update Database Connection Pattern (26 locations)
 
 **Pattern to Find**:
+
 ```python
 async with aiosqlite.connect(self.db_path) as db:
     cursor = await db.execute(query, params)
     result = await cursor.fetchone()
-```
+```text
 
 **Replace with**:
+
 ```python
 async with self.db_adapter.connection() as conn:
     result = await self.db_adapter.fetch_one(query, params)
-```
+```python
 
 **Helper Script** (create `tools/update_connections.py`):
+
 ```python
 #!/usr/bin/env python3
 """
@@ -207,21 +217,24 @@ if __name__ == "__main__":
     print(f"Found {len(matches)} connection points in {file_path}:")
     for line_num, line_text in matches:
         print(f"  Line {line_num}: {line_text}")
-```
+```sql
 
 #### Step 2.7: Update SQL Queries with datetime('now')
 
 **Find** (4 occurrences):
+
 ```sql
 VALUES (?, ?, ?, ?, datetime('now'), 1)
-```
+```text
 
 **Replace with**:
+
 ```sql
 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
-```
+```sql
 
 **Locations**:
+
 - Line ~1408
 - Line ~1556  
 - Line ~1707
@@ -230,14 +243,16 @@ VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
 #### Step 2.8: Update date arithmetic query
 
 **Find** (1 occurrence):
+
 ```sql
 HAVING MAX(p.round_date) >= date('now', '-30 days')
-```
+```text
 
 **Replace with**:
+
 ```sql
 HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'
-```
+```text
 
 **Location**: Line ~1094
 
@@ -249,18 +264,22 @@ echo "DATABASE_TYPE=sqlite" >> .env
 
 # Start bot
 python bot/ultimate_bot.py
-```
+```text
 
 **Expected Output**:
-```
+
+```text
+
 ✅ Database adapter connected
 ✅ Database schema validated: 54 columns
 🤖 Bot is ready!
-```
+
+```python
 
 #### Step 2.10: Test Basic Commands
 
 Test these commands in Discord:
+
 - `!help` - Should show commands
 - `!last` - Should show last session
 - `!stats` - Should show player stats
@@ -283,16 +302,20 @@ Test these commands in Discord:
 **Connections**: 5 locations  
 
 **Changes**:
+
 1. Replace all `async with aiosqlite.connect(self.bot.db_path)` with adapter
 2. Update type hints: `"aiosqlite.Connection"` → `"asyncpg.Connection"` or remove quotes
 3. Test Discord linking commands
 
 **Testing**:
-```
+
+```text
+
 !link <player_name>
 !unlink
 !linked
-```
+
+```python
 
 #### Phase 3.2: Update last_session_cog.py (6 hours)
 
@@ -301,11 +324,14 @@ Test these commands in Discord:
 **Complexity**: High (complex queries)
 
 **Testing**:
-```
+
+```text
+
 !last
 !last <date>
 !lastsession
-```
+
+```python
 
 #### Phase 3.3: Update stats_cog.py (3 hours)
 
@@ -313,11 +339,14 @@ Test these commands in Discord:
 **Connections**: 4 locations
 
 **Testing**:
-```
+
+```text
+
 !stats
 !stats <player>
 !playerstats
-```
+
+```python
 
 #### Phase 3.4: Update leaderboard_cog.py (2 hours)
 
@@ -325,15 +354,19 @@ Test these commands in Discord:
 **Connections**: 2 locations
 
 **Testing**:
-```
+
+```text
+
 !leaderboard
 !leaderboard kills
 !leaderboard accuracy
-```
+
+```python
 
 #### Phase 3.5: Update Other Cogs (5 hours total)
 
 Files to update:
+
 - `bot/cogs/admin_cog.py` (1 hour)
 - `bot/cogs/session_cog.py` (1 hour)
 - `bot/cogs/team_management_cog.py` (1 hour)
@@ -344,6 +377,7 @@ Files to update:
 ### ⏳ Phase 4: Update Automation Services (4 hours)
 
 **Files**:
+
 - `bot/automation_enhancements.py`
 - `bot/services/automation/ssh_monitor.py`
 - `bot/services/automation/metrics_logger.py`
@@ -362,13 +396,14 @@ Files to update:
 ```bash
 # Export SQLite schema
 sqlite3 bot/etlegacy_production.db .schema > schema_sqlite.sql
-```
+```sql
 
 #### Step 5.2: Convert Schema
 
 **Create**: `schema_postgresql.sql`
 
 **Conversion Rules**:
+
 1. `INTEGER PRIMARY KEY AUTOINCREMENT` → `SERIAL PRIMARY KEY`
 2. `TEXT` → `VARCHAR(255)` or `TEXT` (review case-by-case)
 3. `datetime('now')` → `CURRENT_TIMESTAMP`
@@ -397,7 +432,7 @@ CREATE TABLE players (
 
 CREATE INDEX idx_players_guid ON players(guid);
 CREATE INDEX idx_players_name ON players(player_name);
-```
+```text
 
 #### Step 5.3: Test Schema Creation
 
@@ -412,7 +447,7 @@ psql etlegacy_test < schema_postgresql.sql
 
 # Verify tables
 psql etlegacy_test -c "\dt"
-```
+```python
 
 ---
 
@@ -557,7 +592,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-```
+```yaml
 
 ---
 
@@ -566,6 +601,7 @@ if __name__ == "__main__":
 **Goal**: Ensure adapter doesn't break existing functionality
 
 **Steps**:
+
 1. Set `DATABASE_TYPE=sqlite` in config
 2. Run bot locally
 3. Test ALL commands systematically
@@ -573,7 +609,9 @@ if __name__ == "__main__":
 5. Monitor performance
 
 **Test Checklist**:
-```
+
+```text
+
 [ ] Bot starts successfully
 [ ] !help command works
 [ ] !last command shows sessions
@@ -584,7 +622,8 @@ if __name__ == "__main__":
 [ ] SSH monitoring works (if enabled)
 [ ] No memory leaks over 1 hour
 [ ] Performance is same as before
-```
+
+```yaml
 
 ---
 
@@ -592,7 +631,8 @@ if __name__ == "__main__":
 
 **Platform-specific instructions**:
 
-#### Windows:
+#### Windows
+
 ```powershell
 # Download PostgreSQL installer
 # https://www.postgresql.org/download/windows/
@@ -603,9 +643,10 @@ choco install postgresql
 # Or use Windows Subsystem for Linux (WSL)
 wsl --install
 # Then follow Linux instructions in WSL
-```
+```text
 
-#### Linux (Ubuntu/Debian):
+#### Linux (Ubuntu/Debian)
+
 ```bash
 sudo apt update
 sudo apt install postgresql postgresql-contrib
@@ -613,16 +654,18 @@ sudo apt install postgresql postgresql-contrib
 # Start service
 sudo systemctl start postgresql
 sudo systemctl enable postgresql
-```
+```text
 
-#### macOS:
+#### macOS
+
 ```bash
 # Using Homebrew
 brew install postgresql
 brew services start postgresql
-```
+```text
 
-#### Create Database:
+#### Create Database
+
 ```bash
 # Switch to postgres user
 sudo -u postgres psql
@@ -632,14 +675,15 @@ CREATE DATABASE etlegacy_stats;
 CREATE USER etlegacy WITH PASSWORD 'your_secure_password';
 GRANT ALL PRIVILEGES ON DATABASE etlegacy_stats TO etlegacy;
 \q
-```
+```text
 
-#### Test Connection:
+#### Test Connection
+
 ```bash
 psql -h localhost -U etlegacy -d etlegacy_stats
 # Enter password when prompted
 # Should see: etlegacy_stats=#
-```
+```yaml
 
 ---
 
@@ -648,16 +692,19 @@ psql -h localhost -U etlegacy -d etlegacy_stats
 **Steps**:
 
 1. **Create Schema**:
+
 ```bash
 psql -h localhost -U etlegacy -d etlegacy_stats < schema_postgresql.sql
-```
+```text
 
-2. **Run Migration Script**:
+1. **Run Migration Script**:
+
 ```bash
 python tools/migrate_to_postgresql.py
-```
+```sql
 
-3. **Update Config**:
+1. **Update Config**:
+
 ```bash
 # In .env or bot_config.json
 DATABASE_TYPE=postgresql
@@ -666,14 +713,16 @@ POSTGRES_PORT=5432
 POSTGRES_DATABASE=etlegacy_stats
 POSTGRES_USER=etlegacy
 POSTGRES_PASSWORD=your_secure_password
-```
+```text
 
-4. **Start Bot**:
+1. **Start Bot**:
+
 ```bash
 python bot/ultimate_bot.py
-```
+```yaml
 
-5. **Test Everything**:
+1. **Test Everything**:
+
 - Run through entire test checklist
 - Check PostgreSQL logs for errors
 - Monitor connection pool
@@ -698,6 +747,7 @@ See `VPS_MIGRATION_SUMMARY.md` for VPS selection and setup.
 ### ⏳ Phase 12: Post-Migration Monitoring (1 week)
 
 **Daily tasks**:
+
 - Check error logs
 - Monitor connection pool
 - Verify data integrity
@@ -715,10 +765,11 @@ See `VPS_MIGRATION_SUMMARY.md` for VPS selection and setup.
 **Cause**: Connection pool is full
 
 **Fix**:
+
 ```python
 # In bot/config.py, increase pool size
 POSTGRES_MAX_POOL=50  # Increase from 20
-```
+```text
 
 ### Issue: "column does not exist"
 
@@ -727,12 +778,13 @@ POSTGRES_MAX_POOL=50  # Increase from 20
 **Cause**: Schema mismatch
 
 **Fix**:
+
 ```sql
 -- Check actual columns
 \d player_comprehensive_stats
 
 -- Compare with expected schema
-```
+```text
 
 ### Issue: Type mismatch errors
 
@@ -741,6 +793,7 @@ POSTGRES_MAX_POOL=50  # Increase from 20
 **Cause**: PostgreSQL is stricter with types
 
 **Fix**:
+
 ```python
 # Ensure parameter types match
 # WRONG:
@@ -748,7 +801,7 @@ params = (str(player_id),)  # ID is INTEGER in DB
 
 # RIGHT:
 params = (int(player_id),)
-```
+```sql
 
 ---
 
@@ -756,7 +809,8 @@ params = (int(player_id),)
 
 Update this section as you complete phases:
 
-```
+```sql
+
 ✅ Phase 1: Database Abstraction Layer (2 hours) - COMPLETE
 ✅ Phase 2: Bot Configuration System (1 hour) - COMPLETE
 🟡 Phase 3: Update Bot Core (12 hours) - IN PROGRESS
@@ -772,6 +826,7 @@ Update this section as you complete phases:
 ⏳ Phase 13: Monitoring (1 week) - FUTURE
 
 Total Completed: 3 hours / 80 hours (4%)
+
 ```
 
 ---
@@ -779,14 +834,17 @@ Total Completed: 3 hours / 80 hours (4%)
 ## 🎓 Learning Resources
 
 **PostgreSQL Documentation**:
-- https://www.postgresql.org/docs/
-- https://www.postgresql.org/docs/current/tutorial.html
+
+- <https://www.postgresql.org/docs/>
+- <https://www.postgresql.org/docs/current/tutorial.html>
 
 **asyncpg Documentation**:
-- https://magicstack.github.io/asyncpg/
+
+- <https://magicstack.github.io/asyncpg/>
 
 **SQL Syntax Differences**:
-- https://wiki.postgresql.org/wiki/Things_to_find_out_about_when_moving_from_MySQL
+
+- <https://wiki.postgresql.org/wiki/Things_to_find_out_about_when_moving_from_MySQL>
 
 ---
 

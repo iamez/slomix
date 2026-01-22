@@ -27,20 +27,20 @@
 ```lua
 -- 2+ attackers hit same target within 1 second
 crossfire_window_ms = 1000
-```
+```text
 
 ### Escape Detection
 ```lua
 -- 5 seconds no damage AND 300+ units traveled
 escape_time_ms = 5000
 escape_distance = 300
-```
+```text
 
 ### Position Sampling
 ```lua
 -- v4: 500ms for better movement capture (2 samples per second)
 position_sample_interval = 500
-```
+```yaml
 
 ## Database Tables
 
@@ -68,7 +68,7 @@ from proximity.parser import ProximityParserV3
 
 parser = ProximityParserV3(db_adapter=self.db, output_dir="gamestats")
 await parser.import_file(filepath, session_date)
-```
+```python
 
 ## Key Files
 
@@ -92,7 +92,7 @@ await parser.import_file(filepath, session_date)
 python parser/parser.py path/to/engagements.txt
 
 # Output shows engagement count, crossfire %, kills/escapes
-```
+```text
 
 ## Config (in Lua)
 

@@ -79,11 +79,10 @@ class SynergyAnalytics(commands.Cog):
     async def cog_check(self, ctx):
         """Global check - is analytics enabled?"""
         if not is_enabled():
-            await ctx.send(
-                "🔒 Synergy analytics is currently disabled.\n"
+            raise commands.CheckFailure(
+                "🔒 Synergy analytics is currently disabled. "
                 "Contact an admin to enable this feature."
             )
-            return False
         return True
     
     async def cog_command_error(self, ctx, error):
@@ -889,10 +888,9 @@ class SynergyAnalytics(commands.Cog):
     # =========================================================================
     # ADMIN COMMANDS
     # =========================================================================
-    
+
     @is_moderator()
     @commands.command(name='fiveeyes_enable')
-    
     async def enable_command(self, ctx):
         """Enable FIVEEYES synergy analytics (Admin only)"""
         config.enable()
@@ -900,7 +898,6 @@ class SynergyAnalytics(commands.Cog):
 
     @is_moderator()
     @commands.command(name='fiveeyes_disable')
-    
     async def disable_command(self, ctx):
         """Disable FIVEEYES synergy analytics (Admin only)"""
         config.disable()
@@ -908,7 +905,6 @@ class SynergyAnalytics(commands.Cog):
 
     @is_moderator()
     @commands.command(name='recalculate_synergies')
-    
     async def recalculate_command(self, ctx):
         """Manually trigger synergy recalculation (Admin only)"""
         await ctx.send("🔄 Starting synergy recalculation... This may take a few minutes.")

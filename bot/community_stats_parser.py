@@ -641,6 +641,14 @@ class C0RNP0RN3StatsParser:
             else:
                 differential_player['objective_stats']['time_dead_ratio'] = 0.0
 
+            # [TIME DEBUG] Log Round 2 differential values for debugging time stat issues
+            diff_denied = differential_player['objective_stats'].get('denied_playtime', 0)
+            logger.info(f"[TIME DEBUG] {player_name} R2 DIFFERENTIAL: "
+                f"time_played_min={diff_time_minutes:.2f}, "
+                f"time_dead_ratio={differential_player['objective_stats'].get('time_dead_ratio', 0):.1f}%, "
+                f"time_dead_min={diff_dead_minutes:.2f}, "
+                f"denied_playtime_sec={diff_denied}")
+
             round_2_only_players.append(differential_player)
 
         # Calculate new MVP based on Round 2-only stats
@@ -912,6 +920,14 @@ class C0RNP0RN3StatsParser:
                         'repairs_constructions': safe_int(tab_fields, 36),
                         'revives_given': safe_int(tab_fields, 37),
                     }
+
+                    # [TIME DEBUG] Log raw values from Lua for debugging time stat issues
+                    logger.info(f"[TIME DEBUG] {clean_name} RAW from Lua: "
+                        f"time_played_min={safe_float(tab_fields, 22)}, "
+                        f"time_dead_ratio={safe_float(tab_fields, 24)}, "
+                        f"time_dead_min={safe_float(tab_fields, 25)}, "
+                        f"denied_playtime_sec={safe_int(tab_fields, 28)}")
+
                 except Exception as e:
                     # Defensive fallback: ensure we always have at least basic numbers
                     logger.warning(f"Could not fully parse extended fields, falling back: {e}")

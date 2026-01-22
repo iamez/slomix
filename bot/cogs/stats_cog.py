@@ -767,6 +767,7 @@ class StatsCog(commands.Cog, name="Stats"):
             season_filter = self.season_manager.get_season_sql_filter()
 
             # Season kills leader
+            # Note: season_filter is a trusted SQL fragment from SeasonManager, not user input
             season_query = """
                 SELECT
                     (SELECT player_name FROM player_comprehensive_stats
@@ -782,10 +783,10 @@ class StatsCog(commands.Cog, name="Stats"):
                   AND (s.round_status IN ('completed', 'substitution') OR s.round_status IS NULL)
                   {season_filter}
                 GROUP BY p.player_guid
-                HAVING games > 5
+                HAVING COUNT(DISTINCT p.round_id) > 5
                 ORDER BY total_kills DESC
                 LIMIT 1
-            """
+            """.format(season_filter=season_filter)  # nosec B608 - season_filter from trusted SeasonManager
 
             season_leader = await self.bot.db_adapter.fetch_one(season_query)
 

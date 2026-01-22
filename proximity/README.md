@@ -35,13 +35,14 @@ cp lua/proximity_tracker.lua /path/to/etlegacy/lua_modules/
 
 # 3. Run database schema
 psql -d your_db -f schema/schema.sql
-```
+```yaml
 
 ---
 
 ## Project Structure
 
-```
+```python
+
 proximity/
 ├── lua/
 │   └── proximity_tracker.lua    # Game server module (v4)
@@ -58,4 +59,5 @@ proximity/
 │   └── session-notes/
 ├── SLOMIX_PROJECT_BRIEF.md      # Project vision
 └── README.md                    # This file
+
 ```

@@ -1,4 +1,5 @@
 # Missing Round-1 Files Audit
+
 **Date:** 2025-11-26
 **Status:** 🚨 CRITICAL DATA LOSS ISSUE
 **Impact:** 141 matches with incomplete data
@@ -26,7 +27,8 @@
 ## Examples
 
 ### Nov 23, 2025 (Recent)
-```
+
+```text
 ❌ MISSING: 2025-11-23-211849-etl_adlernest-round-1.txt
    EXISTS:  2025-11-23-211849-etl_adlernest-round-2.txt
 
@@ -35,21 +37,22 @@
 
 ❌ MISSING: 2025-11-23-225436-etl_frostbite-round-1.txt
    EXISTS:  2025-11-23-225436-etl_frostbite-round-2.txt
-```
+```text
 
 ### Database Impact
+
 ```sql
 -- etl_frostbite 225436 example:
 -- Has: R0 (id 7459) + R2 (id 7458)
 -- Missing: R1
 -- Round 7457 is from DIFFERENT timestamp (225050)
-```
+```yaml
 
 ---
 
 ## Root Cause Analysis
 
-### Possible Causes:
+### Possible Causes
 
 1. **Game Server Issue:**
    - Server doesn't generate R1 file
@@ -71,20 +74,23 @@
 ## Investigation Steps
 
 ### 1. Check Game Server Directory
+
 ```bash
 # Where does the game server write stats files?
 # Are R1 files being created on the server?
 # Check game server logs for file creation
-```
+```text
 
 ### 2. Check File Transfer Process
+
 ```bash
 # How do files get from game server to local_stats?
 # Is there a cron job? SCP? SMB mount?
 # Check transfer logs
-```
+```text
 
 ### 3. Check Bot Processing
+
 ```bash
 # Does bot delete files after processing?
 # Check bot logs for R1 file processing
@@ -95,7 +101,8 @@
 
 ## Impact Assessment
 
-### Data Loss:
+### Data Loss
+
 - **141 maps** have R1 data completely missing
 - Cannot calculate:
   - R1-only player stats
@@ -103,7 +110,8 @@
   - Round 1 vs Round 2 comparison
   - Accurate differential for R2
 
-### Affected Features:
+### Affected Features
+
 - `/last_session` shows incomplete matches
 - Session stats missing R1 data
 - Map statistics skewed (more R2 data than R1)
@@ -114,11 +122,13 @@
 ## Workaround (Current)
 
 Parser currently:
+
 1. Tries to find R1 file matching R2 timestamp
 2. Falls back to "same-day match" (finds closest R1 by time)
 3. If no R1 found: imports only R0 + R2
 
 This partially works but:
+
 - May pair wrong R1 with R2
 - Some R1 files from different matches get used
 - R1 data often doesn't match R2 timestamp
@@ -127,13 +137,15 @@ This partially works but:
 
 ## Recommended Solutions
 
-### Short-term:
+### Short-term
+
 1. **Check game server** - verify R1 files are being created
 2. **Add file monitoring** - log when files appear/disappear
 3. **Preserve files** - don't delete after processing
 4. **Add timestamps** - track file creation vs processing time
 
-### Long-term:
+### Long-term
+
 1. **Fix root cause** on game server (if that's the issue)
 2. **Improve file sync** process (if transfer is the issue)
 3. **Add backup mechanism** - copy files before processing
@@ -143,12 +155,14 @@ This partially works but:
 
 ## Files to Investigate
 
-### Bot Code:
+### Bot Code
+
 - `bot/community_stats_parser.py` - File processing logic
 - `bot/ultimate_bot.py` - File import trigger
 - Check for file deletion/move operations
 
-### Server/Transfer:
+### Server/Transfer
+
 - Game server config - stats file generation
 - Transfer scripts - how files get to local_stats
 - File permissions - can bot read/write?
@@ -163,6 +177,7 @@ This partially works but:
 - ⏳ **Solution** - depends on root cause
 
 **Next steps:**
+
 1. Check where game server writes stats files
 2. Verify R1 files are created on server
 3. Check file transfer/sync mechanism

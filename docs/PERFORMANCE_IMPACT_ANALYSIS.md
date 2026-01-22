@@ -1,4 +1,5 @@
 # Performance Impact Analysis
+
 **Competitive Analytics System Integration**
 *Generated: 2025-11-28*
 
@@ -44,9 +45,10 @@ async def handle_voice_state_change(self, member, before, after):
     # Session logic: ~40ms
     if total_players >= threshold:
         await self.start_session(participants)
-```
+```text
 
 **Measured Latency (production logs):**
+
 - Voice state update: 30-70ms (avg: 50ms)
 - Start session: 80-150ms (includes Discord API call)
 - End session: 100-200ms (includes database query + Discord API)
@@ -81,9 +83,10 @@ async def handle_voice_state_change(self, member, before, after):
         await self._post_prediction_embed(prediction)
 
     # Existing session logic: ~40ms
-```
+```yaml
 
 **Total Added Latency:**
+
 - Team split detection: +15ms
 - GUID resolution: +50ms (cached after first lookup)
 - Prediction generation: +80ms (see section 2)
@@ -95,11 +98,13 @@ async def handle_voice_state_change(self, member, before, after):
 ✅ **ACCEPTABLE** - This only triggers when teams split (1-2 times per session), not on every voice update.
 
 **Frequency:**
+
 - Voice updates: ~100-200 per hour (every player join/leave)
 - Team splits: ~1-2 per session (only when match starts)
 - Performance hit applies to: **0.5-1% of voice updates**
 
 **User Experience:**
+
 - Voice state updates remain instant (<200ms total)
 - No impact on Discord voice quality
 - Prediction posted within 2 seconds of team formation
@@ -113,57 +118,66 @@ async def handle_voice_state_change(self, member, before, after):
 **PredictionEngine.predict_match() breakdown:**
 
 #### Query 1: Head-to-Head History
+
 ```sql
 SELECT winner, COUNT(*) as count
 FROM head_to_head_matchups
 WHERE team_a_guids = $1::jsonb AND team_b_guids = $2::jsonb
    OR team_a_guids = $2::jsonb AND team_b_guids = $1::jsonb
 GROUP BY winner
-```
+```text
 
 **Estimated Execution Time:**
+
 - Table size: ~500 rows (assuming 50 sessions × 10 unique matchups)
 - JSONB index: GIN index on team_a_guids, team_b_guids
 - Query time: **10-15ms** (indexed JSONB lookup)
 
 #### Query 2: Lineup Performance
+
 ```sql
 SELECT matches_played, matches_won, win_rate
 FROM lineup_performance
 WHERE lineup_guids = $1::jsonb
-```
+```text
 
 **Estimated Execution Time:**
+
 - Table size: ~200 rows (unique lineups)
 - JSONB index: GIN index on lineup_guids
 - Query time: **5-8ms** (indexed lookup)
 
 #### Query 3: Map Performance
+
 ```sql
 SELECT matches_played, matches_won, win_rate
 FROM map_performance
 WHERE lineup_guids = $1::jsonb AND map_name = $2
-```
+```text
 
 **Estimated Execution Time:**
+
 - Table size: ~1000 rows (lineups × maps)
 - Composite index: (lineup_guids, map_name)
 - Query time: **5-10ms** (indexed lookup)
 
 #### Query 4: Recent Form (Last 5 Matches)
+
 ```sql
 SELECT session_date, winner
 FROM head_to_head_matchups
 WHERE team_a_guids = $1::jsonb OR team_b_guids = $1::jsonb
 ORDER BY session_date DESC
 LIMIT 5
-```
+```text
 
 **Estimated Execution Time:**
+
 - Partial index scan
 - Query time: **8-12ms** (indexed + limit)
 
 **Total Prediction Engine Time:**
+
 - Database queries: 4 × ~10ms = **40ms**
 - Calculation overhead: **20ms** (weighted scoring, confidence)
 - **TOTAL: ~60-80ms**
@@ -171,6 +185,7 @@ LIMIT 5
 ### Optimization Strategies
 
 #### 1. Query Result Caching
+
 ```python
 class PredictionEngine:
     def __init__(self, db_adapter):
@@ -191,12 +206,13 @@ class PredictionEngine:
         result = await self._query_h2h(team1_guids, team2_guids)
         self._h2h_cache[cache_key] = (result, datetime.now())
         return result
-```
+```text
 
 **Cache Hit Rate:** Expected ~60-70% (same lineups play multiple times per session)
 **Performance Gain:** 40ms → 5ms on cache hit (**8x faster**)
 
 #### 2. Parallel Query Execution
+
 ```python
 async def predict_match(self, team1_guids, team2_guids):
     # Run all queries in parallel (not sequential)
@@ -209,24 +225,26 @@ async def predict_match(self, team1_guids, team2_guids):
     h2h, form, maps, subs = await asyncio.gather(
         h2h_task, form_task, maps_task, subs_task
     )
-```
+```python
 
 **Performance Gain:** 40ms sequential → 15ms parallel (**2.7x faster**)
 
 #### 3. Database Connection Pooling
 
 **Current Setup (bot/ultimate_bot.py):**
+
 ```python
 self.db_adapter = DatabaseAdapter(
     self.config,
     min_pool_size=10,  # Good
     max_pool_size=30   # Good
 )
-```
+```sql
 
 ✅ **Already optimized** - Connection pooling is in place.
 
 **Under Load:**
+
 - 10 min connections: Handle steady load
 - 30 max connections: Handle bursts during session start
 - No bottleneck expected
@@ -238,6 +256,7 @@ self.db_adapter = DatabaseAdapter(
 ### Current Database Load (Baseline)
 
 **Production metrics (estimated from table sizes):**
+
 - player_comprehensive_stats: 1928 KB (~15,000 rows)
 - rounds: 192 KB (~1,500 rounds)
 - Queries per session: ~50-100
@@ -246,6 +265,7 @@ self.db_adapter = DatabaseAdapter(
 ### Added Database Load
 
 **New Tables:**
+
 1. **lineup_performance**: ~200 rows, 40 KB
 2. **head_to_head_matchups**: ~500 rows, 80 KB
 3. **map_performance**: ~1000 rows, 100 KB
@@ -253,6 +273,7 @@ self.db_adapter = DatabaseAdapter(
 5. **TOTAL NEW TABLES: ~340 KB** (negligible storage impact)
 
 **New Queries Per Session:**
+
 1. Team split detection: 1 query (GUID resolution)
 2. Prediction generation: 4 queries (H2H, form, maps, subs)
 3. Store prediction: 1 insert
@@ -260,6 +281,7 @@ self.db_adapter = DatabaseAdapter(
 5. **TOTAL: ~7 queries per session**
 
 **Load Increase:**
+
 - Sessions per day: ~5-10
 - New queries per session: 7
 - **Additional queries per day: ~35-70**
@@ -290,9 +312,10 @@ CREATE INDEX idx_predictions_session
 ON match_predictions(session_start_date);
 CREATE INDEX idx_predictions_time
 ON match_predictions(prediction_time DESC);
-```
+```python
 
 **Index Size Estimate:**
+
 - GIN indexes on JSONB: ~2x row count (160 KB per index)
 - B-tree indexes: ~1.5x row count
 - **Total index overhead: ~1-1.5 MB** (negligible)
@@ -312,6 +335,7 @@ ON match_predictions(prediction_time DESC);
 ### Current Memory Footprint
 
 **Bot Process (production estimate):**
+
 - Base Discord.py: ~80 MB
 - Bot code + services: ~50 MB
 - DatabaseAdapter connection pool: ~30 MB
@@ -347,6 +371,7 @@ ON match_predictions(prediction_time DESC);
 ### Memory Optimization
 
 **Cache Size Limits:**
+
 ```python
 class PredictionEngine:
     MAX_CACHE_ENTRIES = 100  # Limit cache to 100 lineups
@@ -369,9 +394,10 @@ class PredictionEngine:
                 reverse=True
             )
             self._h2h_cache = dict(sorted_cache[:self.MAX_CACHE_ENTRIES])
-```
+```sql
 
 **Memory Safety:**
+
 - Set max cache size (100 entries = ~10 MB)
 - TTL-based eviction (5 minutes)
 - Periodic cleanup (every 10 minutes)
@@ -384,11 +410,13 @@ class PredictionEngine:
 ### Current API Usage
 
 **Discord Rate Limits:**
+
 - Global: 50 requests per second
 - Per-channel messages: 5 per 5 seconds (1/sec sustained)
 - Per-guild: 10,000 requests per 10 minutes
 
 **Current Bot Usage (estimated):**
+
 - Voice state updates: Passive (no API calls out)
 - Message posts: ~2-5 per gaming session
 - Embed posts: ~3-8 per session
@@ -413,6 +441,7 @@ class PredictionEngine:
 **Total New API Calls: ~6-11 per session**
 
 **Combined Usage:**
+
 - Existing: 5-10 per session
 - New: 6-11 per session
 - **TOTAL: 11-21 per session** (still well under limits)
@@ -420,12 +449,14 @@ class PredictionEngine:
 ### Rate Limit Safety
 
 **Discord Limits:**
+
 - 5 messages per 5 seconds per channel = 1/sec sustained
 - Sessions last ~2-4 hours
 - Messages posted: ~20 per session
 - **Rate: 0.002-0.003 messages/sec** (500x under limit ✅)
 
 **Burst Protection:**
+
 ```python
 class DiscordRateLimiter:
     def __init__(self):
@@ -442,7 +473,7 @@ class DiscordRateLimiter:
 
         await channel.send(embed=embed)
         self.last_post = datetime.now()
-```
+```yaml
 
 **Safety Margin: 500x under limit** - No rate limit concerns.
 
@@ -453,11 +484,13 @@ class DiscordRateLimiter:
 ### User-Facing Commands
 
 **Existing Commands (unaffected):**
+
 - `!last_session`: ~1-2 seconds (database query + embed generation)
 - `!player_stats`: ~0.5-1 second (database query)
 - `!team`: ~1-1.5 seconds (team detection + database)
 
 **NEW: Automated Actions (no user command):**
+
 - Team split → prediction post: ~2 seconds
 - Round end → result post: ~0.5 seconds
 
@@ -466,11 +499,13 @@ class DiscordRateLimiter:
 ### Background Task Performance
 
 **Current Background Tasks:**
+
 - SSH monitor: Polls every 60 seconds, ~2-5 seconds per check
 - File tracker: Runs on file arrival, ~100-200ms per file
 - Voice state monitor: ~50ms per voice update
 
 **NEW Background Tasks:**
+
 - Prediction generation: Triggered on team split, ~80ms
 - Result tracking: Triggered on round import, ~20ms
 
@@ -481,9 +516,11 @@ class DiscordRateLimiter:
 ## 7. Stress Testing Scenarios
 
 ### Scenario 1: High Activity Session
+
 **Setup:** 12 players, 8 maps, 2 rounds each (16 rounds total), 4 hours
 
 **Expected Load:**
+
 - Voice updates: ~200 (players joining/leaving)
 - Team splits: 2 (match start, rematch)
 - Predictions: 2 posts
@@ -491,6 +528,7 @@ class DiscordRateLimiter:
 - Result updates: 16 database updates
 
 **Performance:**
+
 - Voice updates: 200 × 50ms = 10 seconds total (over 4 hours ✅)
 - Predictions: 2 × 80ms = 160ms total ✅
 - Database queries: ~100 queries over 4 hours = 0.007 QPS (negligible ✅)
@@ -498,11 +536,13 @@ class DiscordRateLimiter:
 **RESULT: No performance issues expected**
 
 ### Scenario 2: Bot Restart During Active Session
+
 **Setup:** Bot restarts while 8 players in voice channels
 
 **Risk:** Multiple predictions triggered on startup?
 
 **Mitigation (already implemented):**
+
 ```python
 # bot/services/voice_session_service.py:check_startup_voice_state()
 async def check_startup_voice_state(self):
@@ -516,16 +556,18 @@ async def check_startup_voice_state(self):
         self.session_active = True
         logger.info("✅ Resumed ongoing session")
         return
-```
+```yaml
 
 ✅ **Already handled** - No duplicate predictions on restart.
 
 ### Scenario 3: Database Connection Exhaustion
+
 **Setup:** Connection pool exhausted (all 30 connections in use)
 
 **Trigger:** Extremely rare (would require 30 simultaneous database operations)
 
 **Mitigation:**
+
 - Connection timeout: 30 seconds (config.connection_timeout)
 - Pool size: 30 connections (more than enough for single bot)
 - Query optimization: Queries complete in <100ms
@@ -539,6 +581,7 @@ async def check_startup_voice_state(self):
 ### Key Performance Metrics
 
 **1. Prediction Generation Time**
+
 ```python
 import time
 
@@ -552,11 +595,12 @@ async def predict_match(self, team1_guids, team2_guids):
 
     if elapsed > 5.0:
         logger.warning(f"⚠️ Slow prediction: {elapsed:.2f}s (threshold: 5s)")
-```
+```text
 
 **Alert Threshold:** >5 seconds
 
 **2. Database Query Time**
+
 ```python
 async def fetch_all(self, query, params):
     start_time = time.time()
@@ -569,11 +613,12 @@ async def fetch_all(self, query, params):
         logger.warning(f"⚠️ Slow query ({elapsed:.2f}s): {query[:100]}")
 
     return result
-```
+```text
 
 **Alert Threshold:** >100ms per query
 
 **3. Memory Usage**
+
 ```python
 import psutil
 import os
@@ -587,13 +632,14 @@ async def log_memory_usage():
 
     if mem_mb > 500:
         logger.warning(f"⚠️ High memory usage: {mem_mb:.1f} MB (threshold: 500 MB)")
-```
+```text
 
 **Alert Threshold:** >500 MB
 
 ### Logging Strategy
 
 **Performance Logging:**
+
 ```python
 logger.info(f"🎯 Prediction: {prediction['predicted_winner']} "
             f"({prediction['confidence']:.1%} confidence) "
@@ -601,22 +647,24 @@ logger.info(f"🎯 Prediction: {prediction['predicted_winner']} "
 logger.debug(f"  H2H: {factors['h2h']['details']}")
 logger.debug(f"  Form: {factors['form']['details']}")
 logger.debug(f"  Maps: {factors['maps']['details']}")
-```
+```text
 
 **Error Logging:**
+
 ```python
 try:
     prediction = await engine.predict_match(team1, team2)
 except Exception as e:
     logger.error(f"❌ Prediction failed: {e}", exc_info=True)
     # Fail gracefully - don't crash bot
-```
+```sql
 
 ---
 
 ## 9. Optimization Roadmap
 
 ### Phase 1: Initial Deployment (Weeks 1-4)
+
 **Focus:** Get system working, establish baseline metrics
 
 - ✅ Deploy with basic logging
@@ -625,11 +673,13 @@ except Exception as e:
 - ✅ No optimization yet (premature optimization = root of evil)
 
 **Success Criteria:**
+
 - Predictions complete in <5 seconds
 - No user-visible lag
 - No database timeouts
 
 ### Phase 2: Performance Monitoring (Weeks 5-8)
+
 **Focus:** Identify bottlenecks from real usage data
 
 - ✅ Add detailed timing logs
@@ -638,20 +688,24 @@ except Exception as e:
 - ✅ Profile memory usage
 
 **Success Criteria:**
+
 - Identify queries >100ms
 - Establish baseline cache hit rate
 - Confirm memory stable under load
 
 ### Phase 3: Targeted Optimization (Weeks 9-12)
+
 **Focus:** Optimize specific bottlenecks found in Phase 2
 
 **Likely Optimizations:**
+
 1. Add missing indexes (if queries slow)
 2. Increase cache size (if hit rate <60%)
 3. Parallelize queries (if sequential bottleneck)
 4. Denormalize data (if complex joins slow)
 
 **Success Criteria:**
+
 - All queries <50ms
 - Cache hit rate >70%
 - Memory stable <250 MB
@@ -663,6 +717,7 @@ except Exception as e:
 ### What Happens If We Disable?
 
 **Feature Flags:**
+
 ```python
 # bot/config.py
 ENABLE_TEAM_SPLIT_DETECTION = False  # Disable team split detection
@@ -670,6 +725,7 @@ ENABLE_MATCH_PREDICTIONS = False     # Disable predictions
 ```
 
 **Performance Impact of Rollback:**
+
 - Voice service returns to baseline (no team split detection)
 - No prediction queries (0 added load)
 - New tables idle (no inserts/updates)

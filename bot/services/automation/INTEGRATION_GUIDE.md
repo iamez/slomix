@@ -1,17 +1,17 @@
-# 🚀 Automation Refactoring Complete!
+# 🚀 Automation Refactoring Complete
 
 ## What We Just Built
 
 We've refactored the automation system into clean, modular services:
 
-```
+```python
 bot/services/automation/
 ├── __init__.py              # Package initialization
 ├── ssh_monitor.py           # 🔄 SSH file monitoring (NEW!)
 ├── metrics_logger.py        # 📊 Comprehensive logging
 ├── health_monitor.py        # 🏥 Health monitoring
 └── database_maintenance.py  # 🔧 DB maintenance
-```
+```yaml
 
 ---
 
@@ -29,7 +29,8 @@ The `SSHFileMonitor` does exactly what you wanted:
 ### What Gets Posted
 
 When a round finishes:
-```
+
+```text
 🎮 Round 2 Complete!
 Map: goldrush  |  Players: 12
 
@@ -44,7 +45,7 @@ Total Kills: 245
 Total Deaths: 218
 
 File: endstats_20251102_201500.txt
-```
+```yaml
 
 ---
 
@@ -58,13 +59,14 @@ The `MetricsLogger` tracks **everything**:
 - Health checks over time
 
 After running for a week, you can:
+
 ```python
 # Generate report
 report = await metrics.generate_report(hours=168)  # Last week
 
 # Export to JSON
 await metrics.export_to_json()  # Analyze in Excel/Python
-```
+```yaml
 
 ---
 
@@ -85,7 +87,7 @@ health = await health_monitor.perform_health_check()
   'files_processed': 145,
   ...
 }
-```
+```yaml
 
 ---
 
@@ -95,7 +97,7 @@ health = await health_monitor.perform_health_check()
 
 ```powershell
 pip install scp paramiko psutil
-```
+```python
 
 ### Step 2: Add to ultimate_bot.py
 
@@ -135,7 +137,7 @@ self.db_maintenance = DatabaseMaintenance(
     db_path=self.db_path,
     admin_channel_id=self.admin_channel_id
 )
-```
+```text
 
 ### Step 3: Start Services in `on_ready`
 
@@ -152,7 +154,7 @@ async def on_ready(self):
         await self.health_monitor.start_monitoring(check_interval=300)
         
         logger.info("✅ All automation services started")
-```
+```python
 
 ### Step 4: Add Admin Commands
 
@@ -260,7 +262,7 @@ class AutomationCommands(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(AutomationCommands(bot))
-```
+```python
 
 ### Step 5: Load the Cog
 
@@ -271,7 +273,7 @@ async def load_cogs(self):
     # ... existing cogs ...
     await self.load_extension("bot.cogs.automation_commands")
     logger.info("✅ Loaded automation commands cog")
-```
+```yaml
 
 ---
 
@@ -279,14 +281,17 @@ async def load_cogs(self):
 
 Once integrated, you can:
 
-```
+```text
+
 !health              # Check bot health
 !ssh_stats           # Check SSH monitor status
 !metrics_report 24   # Get 24-hour metrics report
 !backup_db           # Manual database backup
-```
+
+```yaml
 
 The bot will automatically:
+
 - ✅ Monitor SSH directory every 30 seconds
 - ✅ Post round stats immediately when new files appear
 - ✅ Check health every 5 minutes
@@ -347,7 +352,7 @@ cursor = conn.execute("""
     ORDER BY hour
 """)
 # Plot this data!
-```
+```yaml
 
 ---
 
@@ -363,13 +368,15 @@ cursor = conn.execute("""
 
 ## 💡 Benefits
 
-### Before:
+### Before
+
 - ❌ Manual checking for new rounds
 - ❌ No visibility into bot behavior
 - ❌ Can't analyze long-term performance
 - ❌ Don't know if automation is working
 
-### After:
+### After
+
 - ✅ Automatic round detection and posting
 - ✅ Complete visibility with metrics
 - ✅ Can analyze week/month performance
@@ -401,7 +408,7 @@ ADMIN_CHANNEL_ID=your_admin_channel_id
 
 ---
 
-## ✅ Ready to Go!
+## ✅ Ready to Go
 
 The refactoring is complete. Your bot now has:
 
@@ -416,6 +423,7 @@ The refactoring is complete. Your bot now has:
 ---
 
 Want me to:
+
 1. Create the `automation_commands.py` Cog?
 2. Add the integration code to `ultimate_bot.py`?
 3. Create a test script to validate everything?

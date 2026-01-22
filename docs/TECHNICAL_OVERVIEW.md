@@ -20,7 +20,7 @@
 
 ### Overview: From Game Server → Discord
 
-```
+```python
 ┌─────────────────┐
 │  ET Game Server │ Generates .stats files every round
 └────────┬────────┘
@@ -59,11 +59,12 @@
 │ Discord Channel │ Graphs, stats, leaderboards
 │ User sees stats │ !stats, !last_session, !top, etc.
 └─────────────────┘
-```
+```python
 
 ### Key Pipeline Stages
 
 #### Stage 1: Stats File Generation
+
 - **Source:** ET:Legacy game server mod
 - **Frequency:** After each round completes
 - **Format:** Plain text with tab-separated values
@@ -71,12 +72,14 @@
 - **Naming:** `YYYY-MM-DD-HHMMSS-mapname-round-N.txt`
 
 #### Stage 2: File Collection
+
 - **Method 1:** Direct file access (local bot)
 - **Method 2:** SSH/SCP download (remote bot)
 - **Storage:** `bot/local_stats/` directory
 - **Monitoring:** Optional automation service (`ssh_monitor.py`)
 
 #### Stage 3: Parsing
+
 - **Parser:** `community_stats_parser.py` - Custom C0RNP0RN3StatsParser class
 - **Input:** Raw .stats file
 - **Output:** Structured Python dict with 50+ fields per player
@@ -87,6 +90,7 @@
   - `calculate_differential()` - R2 cumulative stats calculation
 
 #### Stage 4: Database Import
+
 - **Manager:** `postgresql_database_manager.py`
 - **Features:**
   - SHA256 hash duplicate detection
@@ -102,12 +106,14 @@
   - `gaming_sessions` - Session groups
 
 #### Stage 5: Discord Bot Access
+
 - **Adapter:** `bot/core/database_adapter.py`
 - **Supports:** SQLite AND PostgreSQL
 - **Mode:** Async queries (aiosqlite/asyncpg)
 - **Caching:** `bot/core/stats_cache.py` for performance
 
 #### Stage 6: User Commands
+
 - **Framework:** discord.py with cog architecture
 - **Commands:** 50+ across 14 cogs
 - **Output:** Embedded messages, graphs (matplotlib), leaderboards
@@ -118,7 +124,7 @@
 
 ### Bot Structure (Current - Nov 2025)
 
-```
+```python
 slomix/
 ├── bot/
 │   ├── ultimate_bot.py              # Main bot (4,990 lines)
@@ -166,7 +172,7 @@ slomix/
 ├── postgresql_database_manager.py   # Main DB CLI tool
 ├── community_stats_parser.py        # Stats file parser
 └── requirements.txt                 # Python dependencies
-```
+```python
 
 ### Technology Stack
 
@@ -185,6 +191,7 @@ slomix/
 ### Core Tables
 
 #### `rounds`
+
 Round-level metadata and scores.
 
 ```sql
@@ -199,9 +206,10 @@ allies_score        INTEGER
 winning_team        VARCHAR(20)     -- 'axis', 'allies', 'tie'
 map_id              VARCHAR(100)    -- Unique map identifier
 gaming_session_id   INTEGER         -- Links to gaming_sessions
-```
+```text
 
 #### `player_stats`
+
 Player performance per round (50+ columns).
 
 ```sql
@@ -255,9 +263,10 @@ team_confidence     DECIMAL(3,2)    -- 0.0 to 1.0
 is_bot              BOOLEAN
 is_differential     BOOLEAN         -- True if R2 cumulative stats
 created_at          TIMESTAMP
-```
+```text
 
 #### `weapon_stats`
+
 Weapon usage per player per round.
 
 ```sql
@@ -270,9 +279,10 @@ headshots           INTEGER
 shots               INTEGER
 hits                INTEGER
 accuracy_percent    DECIMAL(5,2)
-```
+```text
 
 #### `gaming_sessions`
+
 Consolidated gaming sessions (groups of rounds).
 
 ```sql
@@ -284,11 +294,12 @@ unique_maps         INTEGER
 total_players       INTEGER
 duration_seconds    INTEGER
 created_at          TIMESTAMP
-```
+```text
 
 **Session Logic:** Rounds within 12 hours = same session
 
 #### `processed_files`
+
 Track imported files to prevent duplicates.
 
 ```sql
@@ -297,9 +308,10 @@ file_path           VARCHAR(500)    -- Full file path
 file_hash           VARCHAR(64)     -- SHA256 hash
 processed_at        TIMESTAMP
 round_id            INTEGER         -- FK to rounds
-```
+```text
 
 #### `player_links`
+
 Link ET players to Discord users.
 
 ```sql
@@ -308,7 +320,7 @@ discord_id          BIGINT          -- Discord user ID
 player_name         VARCHAR(100)    -- ET player name
 guid                VARCHAR(32)     -- ET player GUID
 created_at          TIMESTAMP
-```
+```sql
 
 ---
 
@@ -317,12 +329,14 @@ created_at          TIMESTAMP
 ### Per-Player Fields (50+ fields)
 
 #### Identity
+
 - `player_name` - In-game name
 - `guid` - ET player GUID (if available)
 - `team` - 'axis' or 'allies'
 - `is_bot` - Boolean flag
 
 #### Combat
+
 - `kills` - Enemy kills
 - `deaths` - Times killed
 - `team_kills` - Friendly fire kills
@@ -331,28 +345,33 @@ created_at          TIMESTAMP
 - `headshots` - Headshot kills
 
 #### Support
+
 - `revives` - Players revived
 - `ammogiven` - Ammo packs given
 - `healthgiven` - Health packs given
 - `poisoned` - Times poisoned (?)
 
 #### Accuracy
+
 - `shots` - Total shots fired
 - `hits` - Total hits landed
 - `accuracy_percent` - Calculated (hits/shots * 100)
 
 #### Damage
+
 - `damage_given` - Damage dealt to enemies
 - `damage_received` - Damage taken
 - `damage_team` - Friendly fire damage dealt
 
 #### Objectives
+
 - `obj_captured` - Objectives captured
 - `obj_destroyed` - Objectives destroyed
 - `obj_returned` - Objectives returned
 - `obj_taken` - Objectives taken
 
 #### XP System
+
 - `xp_total` - Total XP earned
 - `xp_combat` - Combat XP
 - `xp_objective` - Objective XP
@@ -360,12 +379,15 @@ created_at          TIMESTAMP
 - `xp_misc` - Miscellaneous XP
 
 #### Time Tracking
+
 - `time_played_seconds` - Total play time
 - `time_axis_seconds` - Time on Axis
 - `time_allies_seconds` - Time on Allies
 
 #### Per-Weapon Stats (nested)
+
 For each weapon used:
+
 - `weapon_name`
 - `kills`
 - `deaths`
@@ -390,7 +412,9 @@ For each weapon used:
 ### Example: Player joins server, plays 2 rounds
 
 #### Step 1: Game Generates Stats
+
 Player "seareal" joins Axis team on supply map.
+
 - Round 1 ends after 15 minutes
 - Server generates: `2025-11-06-210000-supply-round-1.txt`
 - File contains stats for all 12 players
@@ -399,11 +423,13 @@ Player "seareal" joins Axis team on supply map.
 - Server generates: `2025-11-06-213300-supply-round-2.txt`
 
 #### Step 2: Files Collected
+
 - Bot monitors `local_stats/` directory
 - OR SSH monitor downloads from server every 30 seconds
 - Files copied to `bot/local_stats/`
 
 #### Step 3: Parsing
+
 ```python
 from community_stats_parser import C0RNP0RN3StatsParser
 
@@ -431,9 +457,10 @@ data = parser.parse_file('2025-11-06-210000-supply-round-1.txt')
         ... # 11 more players
     ]
 }
-```
+```text
 
 #### Step 4: Database Import
+
 ```python
 from postgresql_database_manager import PostgreSQLDatabase
 
@@ -447,9 +474,10 @@ db.import_stats_file('2025-11-06-210000-supply-round-1.txt')
 # - Inserts ~100 rows into weapon_stats (per player)
 # - Marks file as processed
 # - Commits transaction
-```
+```text
 
 #### Step 5: Bot Query
+
 User types: `!stats seareal`
 
 ```python
@@ -465,44 +493,55 @@ async def get_player_stats(player_name):
         WHERE player_name = $1
     """
     return await db.fetch_one(query, player_name)
-```
+```text
 
 #### Step 6: Discord Response
+
 Bot sends embedded message:
-```
+
+```text
+
 📊 Stats for seareal
 ━━━━━━━━━━━━━━━━━━
 🎯 K/D: 1.87 (15 kills, 8 deaths)
 🎲 Accuracy: 28.5%
 🕒 Rounds Played: 1
 ⏱️ Time Played: 15m
-```
+
+```sql
 
 ---
 
 ## 🎯 Key Design Decisions
 
 ### Why Separate Rounds Table?
+
 - Enables querying by map, date, duration
 - Track session metadata independently
 - Calculate map-specific statistics
 
 ### Why R2 Differential Stats?
+
 ET:Legacy rounds show **cumulative** stats in R2:
+
 - R1: kills=10, deaths=5
 - R2: kills=25, deaths=12 (includes R1!)
 - **Solution:** Subtract R1 from R2 to get R2-only stats
 - Implemented in `calculate_differential()`
 
 ### Why Team Detection System?
+
 ET stats files don't always have reliable team info:
+
 - Use multiple algorithms (snapshot, tracker, vote)
 - Confidence scoring (0.0 to 1.0)
 - Manual override capability
 - Historical team tracking
 
 ### Why Gaming Sessions?
+
 Group related rounds together:
+
 - Gap threshold: 12 hours
 - Enables session analytics (!last_session)
 - Track player progression within sessions
@@ -512,19 +551,22 @@ Group related rounds together:
 ## 📈 Performance Considerations
 
 ### Database Indexes
+
 ```sql
 CREATE INDEX idx_player_name ON player_stats(player_name);
 CREATE INDEX idx_round_id ON player_stats(round_id);
 CREATE INDEX idx_timestamp ON rounds(timestamp);
 CREATE INDEX idx_session_id ON rounds(gaming_session_id);
-```
+```python
 
 ### Query Optimization
+
 - Use `stats_cache.py` for frequently accessed data
 - Batch inserts during imports
 - Async queries prevent blocking Discord bot
 
 ### File Processing
+
 - SHA256 hashing prevents duplicate imports
 - Transaction safety: rollback on errors
 - Parallel processing for bulk imports (optional)
@@ -534,12 +576,15 @@ CREATE INDEX idx_session_id ON rounds(gaming_session_id);
 ## 🔐 Security & Data Integrity
 
 ### Duplicate Prevention
+
 - SHA256 hash of entire file
 - Stored in `processed_files` table
 - Import fails gracefully if duplicate detected
 
 ### Transaction Safety
+
 All imports wrapped in database transactions:
+
 ```python
 async with db.transaction():
     # Import round
@@ -550,6 +595,7 @@ async with db.transaction():
 ```
 
 ### Data Validation
+
 - Player name sanitization
 - Team value validation ('axis'/'allies' only)
 - Numeric field bounds checking

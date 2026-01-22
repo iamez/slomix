@@ -1,6 +1,7 @@
 # Bot Changes - November 26, 2025 (Session 2)
 
 ## Summary
+
 Fixed emoji ranking display issues and corrected player playtime calculation bug.
 
 ---
@@ -8,10 +9,12 @@ Fixed emoji ranking display issues and corrected player playtime calculation bug
 ## 🎯 ISSUES FIXED
 
 ### 1. **Player Rankings Showing Wrong Symbols** ✅
+
 **Problem:** Rankings 4+ were displaying as ❌ and 🔹 instead of numbers
 **Root Cause:** `session_embed_builder.py` had incomplete medals array: `["🥇", "🥈", "🥉", "❌"]`
 
 **Files Fixed:**
+
 - `bot/services/session_embed_builder.py:78` - Updated medals array
 - `bot/services/session_view_handlers.py:507, 694` - Updated medals arrays
 - `bot/image_generator.py:616` - Updated medals array
@@ -19,10 +22,12 @@ Fixed emoji ranking display issues and corrected player playtime calculation bug
 - `bot/services/automation/ssh_monitor.py:734, 985` - Updated medal logic
 
 **Solution:**
+
 - Medals array now: `["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "1️⃣0️⃣", "1️⃣1️⃣", "1️⃣2️⃣"]`
 - Fallback for 13+: Generates number emojis dynamically (e.g., 1️⃣3️⃣, 1️⃣4️⃣)
 
 **Visual Result:**
+
 - 🥇 🥈 🥉 (top 3 medals)
 - 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣ (single digit emojis)
 - 1️⃣0️⃣ 1️⃣1️⃣ 1️⃣2️⃣ (multi-digit emojis)
@@ -30,10 +35,12 @@ Fixed emoji ranking display issues and corrected player playtime calculation bug
 ---
 
 ### 2. **All Players Showing Same Playtime** ✅
+
 **Problem:** All players showed ⏱100:30 (same value) instead of individual playtimes
 **Root Cause:** SQL query used `session_total.total_seconds` (total session duration) instead of individual player time
 
 **Files Fixed:**
+
 - `bot/services/session_stats_aggregator.py:53`
   - **Before:** `session_total.total_seconds as total_seconds`
   - **After:** `SUM(p.time_played_seconds) as total_seconds`
@@ -67,6 +74,7 @@ Fixed emoji ranking display issues and corrected player playtime calculation bug
 ## 🧪 TESTING CHECKLIST
 
 To verify fixes work:
+
 - [x] Bot starts successfully
 - [ ] `!last_session` - Rankings show proper emojis (🥇🥈🥉4️⃣5️⃣6️⃣...)
 - [ ] `!last_session` - Each player shows different playtime (⏱)
@@ -86,6 +94,7 @@ To verify fixes work:
 ## 📝 RELATED DOCUMENTS
 
 Previous session fixes (from earlier today):
+
 - `FIXES_APPLIED_2025-11-26.md` - SQL fixes, graphs implementation
 - `SESSION_SUMMARY_2025-11-26.md` - Session 1 summary
 - `BOT_AUDIT_REPORT_2025-11-26.md` - Comprehensive audit
@@ -94,14 +103,17 @@ Previous session fixes (from earlier today):
 
 ## 🎓 TECHNICAL NOTES
 
-### Why keycap emojis work now:
+### Why keycap emojis work now
+
 The original audit report suggested keycap emojis (4️⃣5️⃣6️⃣) were causing rendering issues. However, the actual problem was:
+
 1. Incomplete medals array (`["🥇", "🥈", "🥉", "❌"]` only had 4 items)
 2. Wrong fallback symbol (🔹)
 
 Once the array was properly populated with all 12 medals, the keycap emojis render correctly in Discord.
 
-### Playtime calculation:
+### Playtime calculation
+
 - **Before:** CROSS JOIN with session_total subquery gave same value to all players
 - **After:** Direct SUM of player's time_played_seconds across their rounds
 - **Note:** Playtime includes dead time (you're still playing even when dead)

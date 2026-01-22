@@ -27,7 +27,7 @@
 from backend.local_database_adapter import LocalDatabaseAdapter
 db = LocalDatabaseAdapter()
 await db.connect()
-```
+```python
 
 ## Key Files
 
@@ -53,7 +53,7 @@ await db.connect()
 cd website
 pip install -r requirements.txt
 uvicorn backend.main:app --reload --port 8000
-```
+```text
 
 Then open `index.html` in browser or use Live Server extension.
 

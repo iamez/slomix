@@ -1,4 +1,5 @@
 # Time Tracking Pipeline Audit
+
 **Date:** 2025-11-26
 **Status:** 🚨 CRITICAL BUG FOUND
 
@@ -34,28 +35,31 @@
 
 ## The Bug Explained
 
-### What Lua Outputs (c0rnp0rn.lua line 270):
+### What Lua Outputs (c0rnp0rn.lua line 270)
 
 ```lua
 -- TAB Field 22: roundNum((tp/1000)/60, 1)
 -- where tp = timeAxis + timeAllies (in milliseconds)
-```
+```python
 
 **TAB Field 22 = Individual player's total time on both teams (in minutes)**
 
 Example:
+
 - Player A: TAB Field 22 = 15.0 (played full round)
 - Player B: TAB Field 22 = 8.5 (joined late)
 - Player C: TAB Field 22 = 12.3 (left early)
 
-### What Parser Does (community_stats_parser.py):
+### What Parser Does (community_stats_parser.py)
 
 **Step 1 (line 854):** ✅ Correctly reads TAB Field 22
+
 ```python
 'time_played_minutes': safe_float(tab_fields, 22)
-```
+```text
 
 **Step 2 (lines 664-693):** ❌ **OVERWRITES with round duration!**
+
 ```python
 # Get round duration from header
 if actual_playtime_seconds is not None:
@@ -67,14 +71,15 @@ else:
 for player in players:
     player['time_played_seconds'] = round_time_seconds  # ❌ BUG!
     player['time_played_minutes'] = round_time_seconds / 60.0
-```
+```text
 
 Result:
+
 - Player A: time_played_seconds = 900 ✅ (correct, played full round)
 - Player B: time_played_seconds = 900 ❌ (wrong, only played 510 seconds)
 - Player C: time_played_seconds = 900 ❌ (wrong, only played 738 seconds)
 
-### Database Evidence:
+### Database Evidence
 
 ```sql
 -- Round 7483 (278 seconds total)
@@ -83,7 +88,7 @@ round_id | player_name     | time_played_seconds | time_dead_minutes
 7483     | Cru3lzor.       | 278                 | 0.95         ✅ Individual
 7483     | vid             | 278                 | 0.18         ✅ Individual
          | (all same)      | (all 278!)          | (all different) ✅
-```
+```yaml
 
 **Proof:** `time_dead_minutes` is different per player (✅ correct), but `time_played_seconds` is identical (❌ bug).
 
@@ -94,14 +99,16 @@ round_id | player_name     | time_played_seconds | time_dead_minutes
 ### 1. DPM (Damage Per Minute) is Wrong
 
 **Current calculation (lines 687-690):**
+
 ```python
 if round_time_seconds > 0:
     player['dpm'] = (damage_given * 60) / round_time_seconds
-```
+```sql
 
 **Problem:** Uses round time instead of player's actual time
 
 **Example:**
+
 - Player B did 3000 damage in 8.5 minutes (joined late)
 - But DPM calculated as: `(3000 * 60) / 900 = 200 DPM`
 - Correct DPM should be: `(3000 * 60) / 510 = 352.9 DPM`
@@ -118,6 +125,7 @@ if round_time_seconds > 0:
 ### 3. Efficiency Metrics are Skewed
 
 Any metric that uses time is wrong:
+
 - Damage per minute
 - Kills per minute
 - Revives per minute
@@ -128,12 +136,13 @@ Any metric that uses time is wrong:
 ## Why time_dead_minutes is Correct
 
 **Lua script (line 257-260):**
+
 ```lua
 if tp > 120000 then
     topshots[i][14] = roundNum((death_time_total[i] / tp) * 100, 1)  -- ratio
 end
 topshots[i][14] = roundNum((death_time_total[i] / 60000), 1)  -- minutes
-```
+```sql
 
 The lua script **calculates and outputs** `time_dead_minutes` and `time_dead_ratio` directly. The parser just reads these values from TAB fields 24 & 25, never overwrites them.
 
@@ -141,7 +150,7 @@ The lua script **calculates and outputs** `time_dead_minutes` and `time_dead_rat
 
 ## Time Metrics Sources
 
-### From LUA Script (c0rnp0rn.lua):
+### From LUA Script (c0rnp0rn.lua)
 
 | TAB Field | What Lua Outputs | Formula | Notes |
 |-----------|------------------|---------|-------|
@@ -152,7 +161,7 @@ The lua script **calculates and outputs** `time_dead_minutes` and `time_dead_rat
 | Field 25 | `time_dead_minutes` | `death_time_total / 60000` | Minutes dead |
 | Field 28 | `denied_playtime` | `topshots[i][16] / 1000` | Seconds (not milliseconds) |
 
-### From Header (fields 6-9):
+### From Header (fields 6-9)
 
 | Field | Content | Example | Usage |
 |-------|---------|---------|-------|
@@ -160,7 +169,7 @@ The lua script **calculates and outputs** `time_dead_minutes` and `time_dead_rat
 | 7 | `actual_time` (round duration) | "12:34" | How long round lasted |
 | 9 | `actual_playtime_seconds` | 754 | NEW format: exact seconds |
 
-### In Database:
+### In Database
 
 | Column | Should Be | Actually Is |
 |--------|-----------|-------------|
@@ -174,7 +183,7 @@ The lua script **calculates and outputs** `time_dead_minutes` and `time_dead_rat
 
 ## Correct Time Calculations
 
-### What SHOULD happen:
+### What SHOULD happen
 
 ```python
 # 1. Read individual player time from TAB field 22
@@ -188,9 +197,9 @@ player['time_played_minutes'] = player_time_minutes
 # 3. Calculate DPM using PLAYER'S time
 if player_time_seconds > 0:
     player['dpm'] = (damage_given * 60) / player_time_seconds  # ✅ CORRECT
-```
+```text
 
-### What ACTUALLY happens:
+### What ACTUALLY happens
 
 ```python
 # 1. Read individual player time
@@ -203,7 +212,7 @@ player['time_played_seconds'] = round_time_seconds  # ❌ BUG!
 # 3. Calculate DPM using ROUND time
 if round_time_seconds > 0:
     player['dpm'] = (damage_given * 60) / round_time_seconds  # ❌ WRONG!
-```
+```python
 
 ---
 
@@ -268,19 +277,23 @@ for player in players:
 ## Other Time Questions
 
 ### Q: What about "map time"?
+
 - **Not tracked directly**
 - We have `time_limit` (map setting) and `actual_time` (how long round ran)
 - "Map time" = sum of both rounds' `actual_time` values
 
 ### Q: What about "round time"?
+
 - Stored in `sessions` table as `actual_time` (TEXT, MM:SS format)
 - Also in header field 9 as `actual_playtime_seconds` (INTEGER, NEW format)
 
 ### Q: What about "session time"?
+
 - Not stored directly
 - Calculate by summing all `actual_time` values for rounds in session
 
 ### Q: Should DPM use player time or round time?
+
 - **PLAYER TIME!**
 - DPM = "damage per minute of playtime"
 - If player only played 5 minutes, divide by 5, not by round's 15 minutes
@@ -301,21 +314,25 @@ for player in players:
 ## Recommendations
 
 ### Priority 1: Fix the Parser (CRITICAL)
+
 - **File:** `bot/community_stats_parser.py` lines 664-693
 - **Action:** Use TAB field 22 instead of round time for `time_played_seconds`
 - **Impact:** Fixes all future imports
 
 ### Priority 2: Document Time Semantics
+
 - **File:** `docs/FIELD_MAPPING.md`
 - **Action:** Clarify that `time_played_seconds` is individual player time, not round time
 - **Impact:** Prevents future confusion
 
 ### Priority 3: Fix Historical Data (Optional)
+
 - **Action:** Re-parse all stats files to update database with correct times
 - **Impact:** Fixes DPM and time-based stats for historical rounds
 - **Note:** This is a big job - 7483 rounds would need re-import
 
 ### Priority 4: Add Validation
+
 - **Action:** Add warning if all players have identical time (likely indicates bug)
 - **Impact:** Early detection of similar issues
 
@@ -323,7 +340,8 @@ for player in players:
 
 ## Summary
 
-### Time Metrics Tracked:
+### Time Metrics Tracked
+
 1. **time_played_seconds** - Individual player time in round (❌ currently broken)
 2. **time_played_minutes** - Same as above in minutes (❌ currently broken)
 3. **time_dead_minutes** - Individual time spent dead (✅ correct)
@@ -332,13 +350,16 @@ for player in players:
 6. **actual_time** (rounds table) - Round duration (✅ correct)
 7. **time_limit** (rounds table) - Map time limit setting (✅ correct)
 
-### Root Cause:
+### Root Cause
+
 Parser overwrites individual player time (TAB field 22) with round duration (header field 7/9)
 
-### Solution:
+### Solution
+
 Use TAB field 22 value instead of round duration for player time
 
-### Impact:
+### Impact
+
 - All DPM calculations wrong
 - All time-based stats meaningless
 - Can't distinguish late joiners from full-timers

@@ -1,0 +1,47 @@
+[project]
+name = "etlegacy-stats-bot"
+version = "1.0.3"
+description = "ET:Legacy Discord Stats Bot - Production-grade gaming analytics"
+readme = "README.md"
+requires-python = ">=3.9"
+
+[tool.pycodestyle]
+max-line-length = 120
+# E226: whitespace around arithmetic - stylistic
+# E231: whitespace after comma - stylistic  
+# E127/E128: continuation indent - minor
+# W504: line break after binary - preference
+# E701: one-line if statements - readable in Python
+ignore = ["W503", "E203", "E402", "E226", "E231", "E127", "E128", "W504", "E701"]
+
+[tool.flake8]
+max-line-length = 120
+extend-ignore = ["W503", "E203", "E402", "E226", "E231", "E127", "E128", "W504", "E701"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "venv",
+    ".venv",
+    "node_modules",
+    "archive",
+    "backups",
+    "test_suite",
+    "dev",
+    "asdf",
+    "prompt_instructions"
+]
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint.messages_control]
+disable = [
+    "C0114",
+    "C0115",
+    "C0116",
+    "W0612",
+    "W0613",
+    "R0913",
+    "R0914",
+    "R0915",
+]

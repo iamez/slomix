@@ -29,7 +29,7 @@ The new advanced team detection system replaces the simple Round 1 seeding appro
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │     TeamDetectorIntegration (Facade)            │
 │  - Unified interface                            │
@@ -45,7 +45,7 @@ The new advanced team detection system replaces the simple Round 1 seeding appro
 │  Strategy 3: Co-occurrence Matrix (25%)         │
 │  → Combines strategies with weighted scoring    │
 └─────────────────────────────────────────────────┘
-```
+```text
 
 ## Usage
 
@@ -64,7 +64,7 @@ teams = detect_session_teams_smart(
 print(f"Team A: {teams['Team A']['names']}")
 print(f"Team B: {teams['Team B']['names']}")
 print(f"Confidence: {teams['Team A']['confidence']:.1%}")
-```
+```text
 
 ### Advanced Usage (Custom Detection)
 
@@ -94,7 +94,7 @@ else:
     print("Detection not reliable enough!")
 
 db.close()
-```
+```python
 
 ### Integration with Existing Code
 
@@ -113,24 +113,28 @@ def detect_session_teams(self, db, round_date):
     detector = TeamDetectorIntegration(self.db_path)
     result = detector.get_or_detect_teams(db, round_date, auto_detect=True)
     return result
-```
+```text
 
 ## Detection Strategies Explained
 
 ### 1. Historical Pattern Analysis (40% weight)
 
 **How it works:**
+
 - Looks at last 10 sessions
 - Identifies players who consistently play together
 - Uses "anchor players" with most historical data
 - Scores other players based on co-occurrence with anchors
 
 **Best for:**
+
 - Regular players with consistent teams
 - Rounds with same rosters as before
 
 **Example:**
-```
+
+```text
+
 Session History:
   2025-10-28: Player A + Player B on same team (3 times)
   2025-10-29: Player A + Player B on same team (2 times)
@@ -138,40 +142,48 @@ Session History:
 
 New Session 2025-11-01:
   → Player A and Player B have HIGH confidence to be on same team
-```
+
+```text
 
 ### 2. Multi-Round Consensus (35% weight)
 
 **How it works:**
+
 - Analyzes ALL rounds in the round, not just Round 1
 - Builds consensus based on game-team consistency
 - Players who are always on same game-team → same persistent team
 - Uses graph clustering to find team boundaries
 
 **Best for:**
+
 - Rounds with multiple rounds
 - Detecting mid-session joiners
 - Handling team swaps
 
 **Example:**
-```
+
+```text
+
 Round 1: Player A (Allies), Player B (Allies), Player C (Axis)
 Round 2: Player A (Axis), Player B (Axis), Player C (Allies)
 Round 3: Player A (Allies), Player B (Allies), Player C (Axis)
 
 Consensus: Player A and B are ALWAYS together → Same team
            Player C is ALWAYS opposite → Different team
-```
+
+```yaml
 
 ### 3. Co-occurrence Matrix (25% weight)
 
 **How it works:**
+
 - Counts how often each pair of players is on same game-team
 - Builds adjacency graph of "teammates"
 - Finds two largest connected components
 - This is the fallback method (lowest weight)
 
 **Best for:**
+
 - First session (no history available)
 - New player combinations
 - Backup when other strategies uncertain
@@ -199,7 +211,7 @@ python -m bot.core.test_advanced_detector 2025-11-01 --force
 
 # Compare with old detection
 python -m bot.core.test_advanced_detector 2025-11-01 --compare
-```
+```text
 
 ## Migration Guide
 
@@ -208,7 +220,7 @@ python -m bot.core.test_advanced_detector 2025-11-01 --compare
 ```bash
 # Backup session_teams table
 sqlite3 bot/etlegacy_production.db "SELECT * FROM session_teams" > session_teams_backup.csv
-```
+```text
 
 ### Step 2: Test New System
 
@@ -221,11 +233,12 @@ result = detect_session_teams_smart("bot/etlegacy_production.db", "2025-11-01")
 # Check results
 print(f"Team A: {len(result['Team A']['guids'])} players")
 print(f"Team B: {len(result['Team B']['guids'])} players")
-```
+```python
 
 ### Step 3: Update Integration Points
 
 Update these files:
+
 - `bot/core/team_manager.py` - Replace detect_session_teams()
 - `bot/cogs/last_session_cog.py` - Update _build_team_mappings()
 - `bot/cogs/team_cog.py` - Use new detector

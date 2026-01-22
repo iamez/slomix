@@ -3,6 +3,7 @@
 You are reviewing and fixing the `refactor/configuration-object` branch of the slomix ET:Legacy Discord bot. The codebase has been refactored from a monolithic structure to a service-oriented architecture. Below are issues identified during code review that need to be addressed.
 
 ## Project Context
+
 - **Repository:** slomix-bot (ET:Legacy Discord stats bot)
 - **Branch:** refactor/configuration-object
 - **Database:** PostgreSQL (migrated from SQLite)
@@ -23,13 +24,13 @@ The codebase has mixed SQL placeholder styles. PostgreSQL requires `$1, $2, $3` 
 
 **Files to check and fix:**
 
-```
+```python
 bot/services/player_badge_service.py
 bot/services/player_display_name_service.py
 bot/services/session_data_service.py
 bot/services/automation/ssh_monitor.py
 bot/services/session_view_handlers.py
-```
+```python
 
 **Pattern to find:** `WHERE.*= \?` or `IN \(\?\)` or `VALUES.*\?`
 
@@ -45,7 +46,7 @@ result = await self.db_adapter.fetch_one(query, (guid, name))
 # AFTER (PostgreSQL style):
 query = "SELECT * FROM players WHERE guid = $1 AND name = $2"
 result = await self.db_adapter.fetch_one(query, (guid, name))
-```
+```python
 
 **Specific locations to fix:**
 
@@ -56,13 +57,14 @@ result = await self.db_adapter.fetch_one(query, (guid, name))
 - `ssh_monitor.py` line ~385: `WHERE map_name = ?`
 
 For dynamic IN clauses, fix the placeholder generation:
+
 ```python
 # BEFORE:
 placeholders = ",".join("?" * len(player_guids))
 
 # AFTER:
 placeholders = ",".join(f"${i+1}" for i in range(len(player_guids)))
-```
+```python
 
 ### 2. Verify Import Paths Work
 
@@ -72,11 +74,12 @@ The automation services import from parent package. Verify these imports work:
 # In bot/services/automation/ssh_monitor.py
 from bot.services.player_badge_service import PlayerBadgeService
 from bot.services.player_display_name_service import PlayerDisplayNameService
-```
+```python
 
 **Test:** Run `python -c "from bot.services.automation.ssh_monitor import SSHMonitor"` from project root.
 
 If imports fail, either:
+
 - Add `__init__.py` files if missing
 - Use relative imports: `from ..player_badge_service import PlayerBadgeService`
 - Ensure PYTHONPATH includes project root
@@ -103,23 +106,25 @@ self.error_threshold = bot.config.health_error_threshold
 self.ssh_error_threshold = bot.config.health_ssh_error_threshold
 self.db_error_threshold = bot.config.health_db_error_threshold
 self.alert_cooldown = bot.config.health_alert_cooldown
-```
+```text
 
 **Add to BotConfig class:**
+
 ```python
 health_error_threshold: int = 10
 health_ssh_error_threshold: int = 5
 health_db_error_threshold: int = 5
 health_alert_cooldown: int = 300
-```
+```python
 
 **File:** `bot/services/automation/ssh_monitor.py`
 
 The 60-minute session gap is hardcoded:
+
 ```python
 # Line ~290 area - find and make configurable:
 if time_gap_minutes > 60:  # Should be config
-```
+```python
 
 ### 4. Remove Duplicate Badge Logic
 
@@ -138,22 +143,25 @@ async def get_player_badges(self, player_guid: str, session_stats: Optional[Dict
     from bot.services.player_badge_service import PlayerBadgeService
     badge_service = PlayerBadgeService(self.db_adapter)
     return await badge_service.get_player_badges(player_guid)
-```
+```text
 
 Or better, inject `PlayerBadgeService` in constructor:
+
 ```python
 def __init__(self, db_adapter, badge_service: PlayerBadgeService = None):
     self.db_adapter = db_adapter
     self.badge_service = badge_service or PlayerBadgeService(db_adapter)
-```
+```python
 
 ### 5. Add Type Hints to Services
 
 **Files missing return type hints:**
+
 - `bot/services/player_formatter.py`
 - `bot/services/session_embed_builder.py`
 
 **Example fixes:**
+
 ```python
 # player_formatter.py
 async def get_player_badges(self, player_guid: str, session_stats: Optional[Dict] = None) -> str:
@@ -173,7 +181,7 @@ async def format_players_batch(
     players: List[Tuple[str, str]],
     include_badges: bool = True
 ) -> Dict[str, str]:
-```
+```python
 
 ---
 
@@ -184,13 +192,14 @@ async def format_players_batch(
 **File:** `bot/services/automation/ssh_monitor.py`
 
 Change routine "no new files" log from INFO to DEBUG:
+
 ```python
 # BEFORE (line ~270 area):
 logger.info(f"✓ No new files (checked {len(stats_files)} files)")
 
 # AFTER:
 logger.debug(f"✓ No new files (checked {len(stats_files)} files)")
-```
+```python
 
 ### 7. Add Admin Notification Fallback
 
@@ -213,7 +222,7 @@ async def _post_round_stats(self, filename: str):
                     f"Stats for `{filename}` could not be posted."
                 )
             return
-```
+```yaml
 
 ---
 

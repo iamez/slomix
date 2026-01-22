@@ -1,4 +1,5 @@
 # Session DPM Calculation Bug - CRITICAL
+
 **Date:** 2025-11-26
 **Status:** 🚨 CRITICAL BUG - Confirmed and Ready to Fix
 **File:** `bot/services/session_stats_aggregator.py` lines 44-82
@@ -42,7 +43,7 @@ CROSS JOIN (
     WHERE r.id IN ({session_ids_str})
       AND r.round_number IN (1, 2)  # ✅ Correctly filters R0
 ) session_total
-```
+```sql
 
 **Problem:** Every player's DPM is calculated using `session_total.total_seconds`, which is the sum of ALL round durations in the session (same value for everyone).
 
@@ -59,7 +60,7 @@ CROSS JOIN (
 | .olz | 26,874 | **4,387 sec** | 6,030 sec | **267.40** | **367.55** | **-27%** |
 | vid | 40,006 | **6,027 sec** | 6,030 sec | 398.07 | 398.27 | -0.05% |
 
-### Analysis:
+### Analysis
 
 1. **bronze.** played only 26% of the session (1547/6030 seconds)
    - His damage is divided by 6030 instead of 1547
@@ -80,20 +81,29 @@ CROSS JOIN (
 
 ## Why This Happens
 
-### DPM Formula:
-```
+### DPM Formula
+
+```text
+
 DPM = (total_damage × 60) / time_in_seconds
-```
 
-### Current Calculation:
-```
+```text
+
+### Current Calculation
+
+```text
+
 bronze DPM = (11,739 × 60) / 6,030 = 116.81  ❌ WRONG
-```
 
-### Correct Calculation:
-```
+```text
+
+### Correct Calculation
+
+```text
+
 bronze DPM = (11,739 × 60) / 1,547 = 455.29  ✅ CORRECT
-```
+
+```yaml
 
 The system uses `session_total.total_seconds` (6030) for ALL players instead of each player's individual `SUM(p.time_played_seconds)` (1547 for bronze).
 
@@ -104,24 +114,26 @@ The system uses `session_total.total_seconds` (6030) for ALL players instead of 
 ### Change Required: Lines 44-48
 
 **BEFORE (WRONG):**
+
 ```python
 CASE
     WHEN session_total.total_seconds > 0
     THEN (SUM(p.damage_given) * 60.0) / session_total.total_seconds
     ELSE 0
 END as weighted_dpm,
-```
+```text
 
 **AFTER (CORRECT):**
+
 ```python
 CASE
     WHEN SUM(p.time_played_seconds) > 0
     THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
     ELSE 0
 END as weighted_dpm,
-```
+```python
 
-### Additional Changes:
+### Additional Changes
 
 1. **Remove the CROSS JOIN** (lines 68-82) since we're no longer using `session_total.total_seconds`
 2. **Keep the R0 filter** - Line 80 `AND r.round_number IN (1, 2)` is correct (excludes warmup rounds)
@@ -130,15 +142,16 @@ END as weighted_dpm,
 
 ## Round Type Handling (R0, R1, R2)
 
-### Current Behavior (CORRECT):
+### Current Behavior (CORRECT)
 
 **Line 80:** `AND r.round_number IN (1, 2)`
 
 This **correctly excludes R0** (warmup/practice rounds) from session statistics.
 
-### Evidence:
+### Evidence
 
 From database query on 2025-11-23:
+
 - **Round 7457 (R1):** 183 seconds, 4,013 damage
 - **Round 7458 (R2):** 179 seconds, 5,371 damage
 - **Round 7459 (R0):** 183 seconds, 9,384 damage (MUCH higher - warmup)
@@ -162,7 +175,7 @@ player['time_played_seconds'] = round_time_seconds
 # Calculate DPM: (damage * 60) / seconds
 if round_time_seconds > 0:
     player['dpm'] = (damage_given * 60) / round_time_seconds
-```
+```python
 
 In stopwatch mode, all players have the same `time_played_seconds` (round duration) because teams are locked and everyone plays the full round. This is correct.
 
@@ -170,18 +183,21 @@ In stopwatch mode, all players have the same `time_played_seconds` (round durati
 
 ## Testing Plan
 
-### Before Fix:
+### Before Fix
+
 1. Query session 24 stats for bronze
 2. Verify DPM shows 116.81 (WRONG)
 
-### After Fix:
+### After Fix
+
 1. Apply the fix to `session_stats_aggregator.py`
 2. Query session 24 stats for bronze
 3. Verify DPM shows 455.29 (CORRECT)
 4. Test with other players (Imbecil, .olz, vid)
 5. Verify players who played full session (vid) still show correct values
 
-### SQL Test Query:
+### SQL Test Query
+
 ```sql
 -- Test query to verify fix
 WITH session_rounds AS (
@@ -205,18 +221,21 @@ ORDER BY correct_dpm DESC;
 ### Severity: 🚨 CRITICAL
 
 **Who is affected:**
+
 - ❌ Players who join late
 - ❌ Players who leave early
 - ❌ Players who miss some maps in a session
 - ✅ Players who play full session (minimal impact)
 
 **What is affected:**
+
 - `/last_session` command output
 - Session leaderboards
 - Player performance comparisons across sessions
 - Historical session stats (will need recalculation?)
 
 **Frequency:**
+
 - Every session where not all players play all maps
 - Very common in casual/public gaming sessions
 
@@ -234,11 +253,13 @@ ORDER BY correct_dpm DESC;
 
 ## Files to Modify
 
-### Primary Fix:
+### Primary Fix
+
 - ✅ `bot/services/session_stats_aggregator.py` lines 44-48 (change DPM formula)
 - ✅ `bot/services/session_stats_aggregator.py` lines 68-82 (remove CROSS JOIN session_total)
 
-### No Changes Needed:
+### No Changes Needed
+
 - ✅ `bot/community_stats_parser.py` (per-round DPM is correct)
 - ✅ Round type filtering (R0 exclusion is correct)
 

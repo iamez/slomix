@@ -1,4 +1,5 @@
 # SLOMIX Project Brief
+
 ## ET:Legacy Team Chemistry Analytics Platform
 
 ---
@@ -16,6 +17,7 @@ Raw stats lie. The player with the highest K/D might be a killstealer who's neve
 ## GAME CONTEXT: ET:Legacy Competitive Stopwatch
 
 ### Format
+
 - **Stopwatch mode**: Two teams play the same map twice, switching sides (attackers/defenders)
 - **Team sizes**: Typically 3v3, 5v5, or 6v6
 - **Teams**: Allies (usually attackers) vs Axis (usually defenders)
@@ -23,6 +25,7 @@ Raw stats lie. The player with the highest K/D might be a killstealer who's neve
 - **Winning**: Faster objective completion time wins
 
 ### Why This Matters for Analytics
+
 - Every team plays both attack and defense → can normalize for map balance
 - Can compare same players on attack vs defense (fraggers vs anchors)
 - Objective completion matters more than kills
@@ -34,7 +37,7 @@ Raw stats lie. The player with the highest K/D might be a killstealer who's neve
 
 ### The Stack
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     SLOMIX ECOSYSTEM                        │
 ├─────────────────────────────────────────────────────────────┤
@@ -55,7 +58,7 @@ Raw stats lie. The player with the highest K/D might be a killstealer who's neve
 │                    └───────────────┘                        │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
-```
+```sql
 
 ### Component Status
 
@@ -73,6 +76,7 @@ Raw stats lie. The player with the highest K/D might be a killstealer who's neve
 ### What It Currently Tracks
 
 **Player Tracking (spawn to death):**
+
 - Position (x, y, z) sampled every 500ms
 - Velocity and speed
 - Health
@@ -83,17 +87,21 @@ Raw stats lie. The player with the highest K/D might be a killstealer who's neve
 - GUID for persistent player identity
 
 **Engagement Tracking:**
+
 - Damage events (attacker → target)
 - Crossfire detection (2+ attackers within 1 second window)
 - Escape detection (survived 5 seconds + moved 300 units after taking damage)
 - Kill attribution
 
 **Heatmaps:**
+
 - Kill locations (grid-based, per team)
 - Movement density (traversal vs combat movement)
 
 ### Output Format
+
 Single file per round containing:
+
 - `PLAYER_TRACKS`: Full movement history for each player
 - `ENGAGEMENTS`: Combat interactions with crossfire flags
 - `KILL_HEATMAP`: Where kills happen
@@ -108,6 +116,7 @@ Single file per round containing:
 **Current:** Detects when 2+ players damage the same target within 1 second.
 
 **What We Really Want:**
+
 - Which player **pairs** consistently create crossfires together?
 - How synchronized are they? (simultaneous vs sequential)
 - Are they setting up crossfires intentionally (pre-positioned) or reactively?
@@ -120,6 +129,7 @@ Single file per round containing:
 **Current:** We have position data every 500ms for all players.
 
 **What We Want to Derive:**
+
 - Do certain player pairs move in complementary patterns?
 - Distance between teammates over time (tight vs spread formations)
 - Role detection: Who pushes first? Who holds angles? Who flanks?
@@ -132,6 +142,7 @@ Single file per round containing:
 **Current:** We have player positions but no game state context.
 
 **What We Need to Add:**
+
 - Current objective status (which objectives are active/completed)
 - Game phase (early round, mid push, objective attempt, post-plant)
 - For defenders: Are they set up in crossfire positions BEFORE attackers arrive?
@@ -144,6 +155,7 @@ Single file per round containing:
 **Current:** We track kills and damage.
 
 **What We Want:**
+
 - Distance from active objective over time
 - Who dies ON the objective vs far away?
 - Engineers: Time spent near constructible/destructible objectives
@@ -157,6 +169,7 @@ Single file per round containing:
 **Current:** We track team (Axis/Allies).
 
 **What We Want:**
+
 - Per-player performance split by role (attacker vs defender)
 - Identify natural fraggers (excel on attack) vs anchors (excel on defense)
 - Balance teams by ensuring mix of both types
@@ -168,6 +181,7 @@ Single file per round containing:
 ## DATA WE PROBABLY NEED TO ADD
 
 ### Map-Specific Objective Data
+
 ```lua
 -- Example: Goldrush objectives
 local objectives = {
@@ -175,18 +189,21 @@ local objectives = {
     bankdoor = {x = 2345, y = 6789, z = 100, type = "destroy"},
     -- etc.
 }
-```
+```sql
 
 ### Game Phase Detection
+
 - Objective status changes (listen for game events)
 - Time remaining
 - Which stage of multi-stage map
 
 ### Team Assignment at Engagement Time
+
 - Who was on which team during each crossfire
 - Needed to correlate player pairs with crossfire success
 
 ### Distances
+
 - Player-to-objective distance
 - Player-to-teammate distances (for cohesion analysis)
 
@@ -195,17 +212,20 @@ local objectives = {
 ## ANALYSIS GOALS (What We Want to Answer)
 
 ### Team Building Questions
+
 1. "Which 3-player combination has the highest crossfire rate?"
 2. "Who should I pair with Player X for best movement synergy?"
 3. "We need a strong defender — who performs best on Axis?"
 4. "This player has good stats but low objective focus — where should they play?"
 
 ### Individual Insights
+
 1. "What's my playstyle? Am I a fragger, anchor, or objective player?"
 2. "Who do I synergize best with?"
 3. "What's my weakness? (e.g., poor positioning on defense)"
 
 ### Team Balance
+
 1. "Given these 10 players, what's the fairest 5v5 split?"
 2. "Team A has better fraggers, Team B has better coordination — is this balanced?"
 
@@ -214,17 +234,20 @@ local objectives = {
 ## TECHNICAL NOTES
 
 ### ET:Legacy Lua API
+
 - `et.gentity_get()` — Get entity properties (position, health, team, etc.)
 - `et.trap_Milliseconds()` — Current game time
 - `et.trap_FS_Write()` — Write to files
 - Callbacks: `et_Damage`, `et_Obituary`, `et_ClientSpawn`, `et_RunFrame`
 
 ### Coordinate System
+
 - ET uses Quake 3 coordinate system
 - Maps are mostly flat (2D distance usually sufficient)
 - Grid size 512 units works well for heatmaps
 
 ### Performance Considerations
+
 - 500ms sampling is aggressive but manageable
 - File I/O happens at round end only
 - Avoid expensive operations in `et_RunFrame`
@@ -233,7 +256,8 @@ local objectives = {
 
 ## FILE STRUCTURE
 
-```
+```text
+
 slomix/
 ├── bot/                    # Discord bot (Python)
 │   ├── cogs/              # Command modules
@@ -248,6 +272,7 @@ slomix/
 │   └── proximity_tracker.lua
 └── docs/
     └── SESSION_NOTES_*.md  # Development session logs
+
 ```
 
 ---
@@ -255,13 +280,16 @@ slomix/
 ## WORKING WITH THIS PROJECT
 
 ### My Context
+
 - I'm a night shift worker (18:00-06:00) in Slovenia
 - I communicate ideas better through discussion than formal specs
 - I learn by building — explain concepts through working code
 - Privacy-conscious (GrapheneOS user, Mullvad VPN, etc.)
 
 ### Session Notes
+
 We maintain `SESSION_NOTES_YYYY-MM-DD.md` files documenting:
+
 - What was requested
 - What was implemented
 - Files modified
@@ -269,6 +297,7 @@ We maintain `SESSION_NOTES_YYYY-MM-DD.md` files documenting:
 - Next steps
 
 ### How to Help
+
 1. Ask clarifying questions when my explanations are vague
 2. Show me working code with explanations
 3. Keep session notes updated
@@ -291,7 +320,7 @@ The web dashboard and Discord bot can evolve later once we have richer data to d
 
 ## REMEMBER
 
-This isn't about finding the "best" player. It's about finding the best **team compositions**. 
+This isn't about finding the "best" player. It's about finding the best **team compositions**.
 
 A group of individually skilled players who don't mesh will lose to a coordinated team of "average" players who move together, crossfire effectively, and play the objective.
 

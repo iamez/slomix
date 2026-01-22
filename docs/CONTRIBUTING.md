@@ -25,9 +25,10 @@ git pull origin main
 git checkout -b feature/your-feature-name
 # or
 git checkout -b fix/bug-description
-```
+```powershell
 
-### Branch Naming Convention:
+### Branch Naming Convention
+
 - `feature/` - New features (e.g., `feature/new-leaderboard`)
 - `fix/` - Bug fixes (e.g., `fix/session-timing`)
 - `docs/` - Documentation updates (e.g., `docs/update-readme`)
@@ -52,18 +53,19 @@ git commit -m "Add new feature: description
 
 - Detailed change 1
 - Detailed change 2"
-```
+```text
 
 ### 3. Push Your Branch
 
 ```bash
 # Push your feature branch
 git push origin feature/your-feature-name
-```
+```sql
 
 ### 4. Test in Your Branch
 
 Before merging:
+
 - ✅ Test all functionality
 - ✅ Verify no breaking changes
 - ✅ Update documentation if needed
@@ -72,13 +74,15 @@ Before merging:
 ### 5. Merge to Main
 
 **Option A: Pull Request (Recommended)**
+
 ```bash
 # Create a pull request on GitHub
 # Review the changes
 # Merge via GitHub UI
-```
+```text
 
 **Option B: Direct Merge (Local)**
+
 ```bash
 # Switch back to main
 git checkout main
@@ -92,7 +96,7 @@ git push origin main
 # Delete the feature branch (optional)
 git branch -d feature/your-feature-name
 git push origin --delete feature/your-feature-name
-```
+```python
 
 ---
 
@@ -101,6 +105,7 @@ git push origin --delete feature/your-feature-name
 ### File Organization
 
 **Root Directory** (12-15 files only):
+
 - `README.md`
 - `requirements.txt`
 - `.env.example`
@@ -109,12 +114,14 @@ git push origin --delete feature/your-feature-name
 - Deployment scripts (`.sh` files)
 
 **Bot Code** → `/bot/`
+
 - All Python modules
 - Cogs
 - Core systems
 - Services
 
 **Documentation** → `/docs/`
+
 - All `.md` files
 - System documentation
 - Guides and references
@@ -122,6 +129,7 @@ git push origin --delete feature/your-feature-name
 ### What NOT to Commit
 
 ❌ **Never commit:**
+
 - `.env` files (contains secrets!)
 - `*.log` files
 - `*.db` database files or backups
@@ -135,6 +143,7 @@ git push origin --delete feature/your-feature-name
 ### Pre-Commit Checklist
 
 Before every commit:
+
 1. ✅ You're on a feature branch (NOT main)
 2. ✅ Check `git status` for unwanted files
 3. ✅ Review `git diff --cached --name-only`
@@ -147,8 +156,10 @@ Before every commit:
 
 ## Commit Message Guidelines
 
-### Format:
-```
+### Format
+
+```javascript
+
 Brief description (50 chars or less)
 
 More detailed explanation if needed. Wrap at 72 characters.
@@ -156,34 +167,42 @@ More detailed explanation if needed. Wrap at 72 characters.
 - Bullet point changes
 - Another change
 - Reference issues: Fixes #123
-```
 
-### Examples:
+```text
+
+### Examples
 
 **Good:**
-```
+
+```python
+
 Add achievement badge for medics
 
 - Created new badge for 1000+ revives
 - Updated player_badge_service.py
 - Added tests for badge calculation
-```
+
+```text
 
 **Bad:**
-```
+
+```text
+
 fixed stuff
-```
+
+```yaml
 
 ---
 
 ## Testing Requirements
 
-### Before Merging to Main:
+### Before Merging to Main
 
 1. **Run the bot locally**
+
    ```bash
    python -m bot.ultimate_bot
-   ```
+   ```sql
 
 2. **Test affected commands**
    - Use Discord to test all modified commands
@@ -201,7 +220,7 @@ fixed stuff
 
 ## Database Changes
 
-### If Modifying Database Schema:
+### If Modifying Database Schema
 
 1. Create migration script in `/migrations/` (if needed)
 2. Update `docs/SYSTEM_ARCHITECTURE.md`
@@ -209,7 +228,8 @@ fixed stuff
 4. Document in `docs/CHANGELOG.md`
 5. **Test rollback procedure**
 
-### Database Best Practices:
+### Database Best Practices
+
 - Always use transactions
 - Test with production data copy
 - Never modify production DB directly
@@ -219,14 +239,16 @@ fixed stuff
 
 ## Documentation Requirements
 
-### For New Features:
+### For New Features
+
 1. Update `docs/COMMANDS.md` (if adding commands)
 2. Create feature doc in `/docs/`
 3. Update `README.md` if user-facing
 4. Update `docs/CHANGELOG.md`
 5. Update `.claude/init.md` if critical
 
-### For Bug Fixes:
+### For Bug Fixes
+
 1. Document the fix in commit message
 2. Update `docs/CHANGELOG.md`
 3. Consider adding to `docs/archive/` if major
@@ -254,7 +276,7 @@ git push origin main
 
 # Clean up
 git branch -d hotfix/critical-bug-description
-```
+```yaml
 
 ---
 

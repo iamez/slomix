@@ -1,5 +1,5 @@
 """
-PROXIMITY TRACKER v4 - FULL PLAYER TRACKING PARSER
+PROXIMITY TRACKER v4.1 - FULL PLAYER TRACKING PARSER
 Parse engagement-centric data AND full player tracks
 
 Features:
@@ -10,8 +10,9 @@ Features:
 - Update crossfire pair stats
 - Update per-map heatmaps
 
-v4 Output Format:
-- PLAYER_TRACKS: guid;name;team;class;spawn_time;death_time;first_move_time;samples;path
+v4.1 Output Format:
+- PLAYER_TRACKS: guid;name;team;class;spawn_time;death_time;first_move_time;death_type;samples;path
+- death_type: killed|selfkill|fallen|world|teamkill|round_end|disconnect|unknown
 - path format: time,x,y,z,health,speed,weapon,stance,sprint,event separated by |
 """
 
@@ -90,6 +91,7 @@ class PlayerTrack:
     spawn_time: int
     death_time: Optional[int]
     first_move_time: Optional[int]  # When player first moved after spawn
+    death_type: Optional[str]  # v4.1: killed|selfkill|fallen|world|teamkill|round_end|disconnect|unknown
     sample_count: int
     path: List[PathPoint] = field(default_factory=list)
 
@@ -333,9 +335,10 @@ class ProximityParserV4:
             self.logger.warning(f"Error parsing engagement: {e}")
 
     def _parse_player_track_line(self, line: str):
-        """Parse player track line (v4 format)
+        """Parse player track line (v4/v4.1 format)
 
-        Format: guid;name;team;class;spawn_time;death_time;first_move_time;samples;path
+        v4.1 Format: guid;name;team;class;spawn_time;death_time;first_move_time;death_type;samples;path
+        v4 Format:   guid;name;team;class;spawn_time;death_time;first_move_time;samples;path
         Path format: time,x,y,z,health,speed,weapon,stance,sprint,event separated by |
         """
         parts = line.split(';')
@@ -351,12 +354,24 @@ class ProximityParserV4:
             spawn_time = int(parts[4])
             death_time = int(parts[5]) if parts[5] and parts[5] != '0' else None
             first_move_time = int(parts[6]) if parts[6] else None
-            sample_count = int(parts[7])
+
+            # v4.1 format has death_type as 8th field, v4 has samples
+            # Detect format by checking if field 7 looks like a number (sample_count) or a string (death_type)
+            if len(parts) >= 10:
+                # v4.1 format: death_type is field 7, samples is field 8, path is field 9
+                death_type = parts[7] if parts[7] and parts[7] != 'unknown' else None
+                sample_count = int(parts[8])
+                path_data = parts[9] if len(parts) > 9 else ""
+            else:
+                # v4 format: samples is field 7, path is field 8, no death_type
+                death_type = None
+                sample_count = int(parts[7])
+                path_data = parts[8] if len(parts) > 8 else ""
 
             # Parse path
             path = []
-            if parts[8]:
-                for point_str in parts[8].split('|'):
+            if path_data:
+                for point_str in path_data.split('|'):
                     point_parts = point_str.split(',')
                     if len(point_parts) >= 10:
                         path.append(PathPoint(
@@ -380,6 +395,7 @@ class ProximityParserV4:
                 spawn_time=spawn_time,
                 death_time=death_time,
                 first_move_time=first_move_time,
+                death_type=death_type,
                 sample_count=sample_count,
                 path=path
             )
@@ -919,6 +935,7 @@ if __name__ == "__main__":
         print(f"Player: {t.name} ({t.player_class})")
         print(f"Team: {t.team}")
         print(f"Lived: {t.duration_ms}ms")
+        print(f"Death type: {t.death_type or 'N/A'}")  # v4.1
         print(f"Distance: {t.total_distance:.1f} units")
         print(f"Avg speed: {t.avg_speed:.1f}")
         print(f"Sprint %: {t.sprint_percentage:.1f}%")

@@ -20,6 +20,7 @@ I'm going to share **exactly** how the Discord bot commands work, what data they
 **Database:** PostgreSQL
 **Connection Info:** Available in `/bot/config.py`
 **Key Tables:**
+
 - `gaming_sessions` - Session metadata
 - `player_comprehensive_stats` - All player stats per round
 - `match_predictions` - Prediction system (Phase 3-5)
@@ -37,7 +38,9 @@ I'll show you how to implement each Discord bot command as a website feature.
 ## 1️⃣ **!last_session Command**
 
 ### **What It Does:**
+
 Shows stats from the most recent gaming session:
+
 - Date of session
 - Number of players
 - Number of rounds played
@@ -52,6 +55,7 @@ Shows stats from the most recent gaming session:
 **Step-by-step:**
 
 1. **Get latest session date:**
+
 ```python
 # From session_data_service.py:302
 query = """
@@ -64,9 +68,10 @@ query = """
 """
 result = await db.fetch_one(query)
 latest_date = result[0]  # e.g., "2025-11-28"
-```
+```text
 
-2. **Get session gaming_session IDs:**
+1. **Get session gaming_session IDs:**
+
 ```python
 # From session_data_service.py:119
 query = """
@@ -82,9 +87,10 @@ query = """
 """
 sessions = await db.fetch_all(query, (latest_date,))
 session_ids = [row[0] for row in sessions]  # List of gaming_session_id
-```
+```text
 
-3. **Count unique players:**
+1. **Count unique players:**
+
 ```python
 # From session_data_service.py:147
 query = """
@@ -94,9 +100,10 @@ query = """
 """
 result = await db.fetch_one(query, (session_ids,))
 player_count = result[0]
-```
+```text
 
-4. **Get player stats (DPM leaderboard):**
+1. **Get player stats (DPM leaderboard):**
+
 ```python
 # From session_stats_aggregator.py:45
 query = """
@@ -122,11 +129,12 @@ query = """
     LIMIT $2
 """
 leaderboard = await db.fetch_all(query, (session_ids, limit))
-```
+```text
 
 ### **Website Implementation:**
 
 **API Endpoint (already exists!):**
+
 ```python
 # /website/backend/routers/api.py:30
 @router.get("/stats/last-session")
@@ -139,9 +147,10 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
     #     "maps": ["goldrush", "supply", "radar"],
     #     "map_counts": {"goldrush": 2, "supply": 4, "radar": 2}
     # }
-```
+```text
 
 **Frontend (already using it!):**
+
 ```javascript
 // /website/js/app.js:79
 async function loadLastSession() {
@@ -151,7 +160,7 @@ async function loadLastSession() {
     document.getElementById('ls-rounds').textContent = data.rounds;
     document.getElementById('ls-maps').textContent = data.maps.length;
 }
-```
+```python
 
 ✅ **Status:** Already implemented!
 
@@ -160,7 +169,9 @@ async function loadLastSession() {
 ## 2️⃣ **!session Command**
 
 ### **What It Does:**
+
 Shows full session breakdown for a specific date:
+
 - Session summary (date, duration, players)
 - Map rotation with rounds per map
 - Top 3 players by DPM
@@ -174,6 +185,7 @@ Shows full session breakdown for a specific date:
 **Key Queries:**
 
 1. **Get all rounds for date:**
+
 ```python
 query = """
     SELECT
@@ -189,16 +201,18 @@ query = """
     ORDER BY round_date
 """
 rounds = await db.fetch_all(query, (date,))
-```
+```text
 
-2. **Calculate session duration:**
+1. **Calculate session duration:**
+
 ```python
 # Total stopwatch time across all rounds
 total_time = sum(row[3] for row in rounds)  # stopwatch_time column
 duration_minutes = int(total_time / 60)
-```
+```text
 
-3. **Get map statistics:**
+1. **Get map statistics:**
+
 ```python
 # Group by map_name
 map_stats = {}
@@ -208,9 +222,10 @@ for row in rounds:
         map_stats[map_name] = {"rounds": 0, "time": 0}
     map_stats[map_name]["rounds"] += 1
     map_stats[map_name]["time"] += row[3]
-```
+```text
 
-4. **Get kill leaders:**
+1. **Get kill leaders:**
+
 ```python
 query = """
     SELECT
@@ -223,11 +238,12 @@ query = """
     LIMIT 5
 """
 kill_leaders = await db.fetch_all(query, (session_ids,))
-```
+```text
 
 ### **Website Implementation:**
 
 **NEW API Endpoint Needed:**
+
 ```python
 # Add to /website/backend/routers/api.py
 
@@ -355,9 +371,10 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
             for row in kill_leaders
         ]
     }
-```
+```text
 
 **Frontend Component:**
+
 ```javascript
 // Add to /website/js/app.js
 
@@ -418,7 +435,7 @@ async function loadSessionDetails(date) {
 }
 
 // Usage: loadSessionDetails('2025-11-28');
-```
+```python
 
 ⏳ **Status:** Needs implementation
 
@@ -427,7 +444,9 @@ async function loadSessionDetails(date) {
 ## 3️⃣ **!leaderboard Command**
 
 ### **What It Does:**
+
 Shows global leaderboards across different metrics:
+
 - DPM (Damage Per Minute) - default
 - Kills
 - K/D Ratio
@@ -436,6 +455,7 @@ Shows global leaderboards across different metrics:
 - Revives (for medics)
 
 Supports filtering by:
+
 - Time period (7 days, 30 days, season, all-time)
 - Minimum games played
 
@@ -444,6 +464,7 @@ Supports filtering by:
 **File:** `/bot/cogs/leaderboard_cog.py:31-198`
 
 **Key Query (DPM Leaderboard):**
+
 ```python
 # From session_stats_aggregator.py:76
 query = """
@@ -476,7 +497,7 @@ query = """
     LIMIT $3
 """
 leaderboard = await db.fetch_all(query, (start_date, min_games, limit))
-```
+```text
 
 **Other Stat Types:**
 
@@ -514,7 +535,7 @@ query = """
     ORDER BY total_headshots DESC
     LIMIT $1
 """
-```
+```text
 
 ### **Website Implementation:**
 
@@ -702,9 +723,10 @@ async def get_leaderboard(
         })
 
     return result
-```
+```text
 
 **Frontend Component:**
+
 ```javascript
 // Add to /website/js/app.js
 
@@ -762,9 +784,10 @@ document.getElementById('leaderboard-period-select').addEventListener('change', 
     const stat = document.getElementById('leaderboard-stat-select').value;
     loadFullLeaderboard(stat, period);
 });
-```
+```text
 
 **HTML for Leaderboard Page:**
+
 ```html
 <!-- Add to index.html in #view-leaderboards -->
 <div id="view-leaderboards" class="view-section">
@@ -820,7 +843,7 @@ document.getElementById('leaderboard-period-select').addEventListener('change', 
         </div>
     </div>
 </div>
-```
+```python
 
 ⏳ **Status:** Needs backend expansion + frontend implementation
 
@@ -829,7 +852,9 @@ document.getElementById('leaderboard-period-select').addEventListener('change', 
 ## 4️⃣ **Live Scoring / Match Updates**
 
 ### **What It Does:**
+
 Shows live match progress when a game is being played:
+
 - Current round number
 - Current map
 - Team scores (if available)
@@ -841,6 +866,7 @@ Shows live match progress when a game is being played:
 **File:** `/bot/services/voice_session_service.py`
 
 The bot detects when:
+
 1. 6+ players join voice channels (session starts)
 2. Players split into 2 channels (match starts)
 3. Stats files are imported (round ends)
@@ -857,31 +883,34 @@ class VoiceSessionService:
         self.current_player_count = 0
         self.peak_player_count = 0
         self.last_import_time = None
-```
+```text
 
 **Session Detection:**
+
 ```python
 # When 6+ players join
 if player_count >= self.session_start_threshold and not self.session_active:
     self.session_active = True
     self.session_start_time = datetime.now()
     # Post to Discord: "Gaming session started! 🎮"
-```
+```text
 
 **Round Completion:**
+
 ```python
 # When stats file imported (from SSH monitor)
 async def on_stats_imported(self, filename):
     # Parse R1 file for round data
     # Extract: map_name, round_time, player_stats
     # Post to Discord: "Round complete! goldrush - 12:34"
-```
+```text
 
 ### **Website Implementation:**
 
 This is more complex because it requires **real-time updates**. Here's how:
 
 **Option 1: Polling (Simple)**
+
 ```javascript
 // Check every 10 seconds for new data
 setInterval(async () => {
@@ -890,9 +919,10 @@ setInterval(async () => {
         updateLiveSessionUI(latest);
     }
 }, 10000);  // 10 seconds
-```
+```text
 
 **Option 2: WebSocket (Better)**
+
 ```python
 # Backend: WebSocket endpoint
 from fastapi import WebSocket
@@ -906,7 +936,7 @@ async def websocket_live(websocket: WebSocket):
         # Wait for new data
         data = await wait_for_round_complete()
         await websocket.send_json(data)
-```
+```text
 
 ```javascript
 // Frontend: WebSocket client
@@ -916,9 +946,10 @@ ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
     updateLiveSessionUI(data);
 };
-```
+```text
 
 **API Endpoint for Live Data:**
+
 ```python
 @router.get("/stats/live-session")
 async def get_live_session(db: DatabaseAdapter = Depends(get_db)):
@@ -974,9 +1005,10 @@ async def get_live_session(db: DatabaseAdapter = Depends(get_db)):
         "last_round_time": format_stopwatch_time(latest[2]) if latest else None,
         "last_update": result[0].isoformat()
     }
-```
+```text
 
 **Frontend Component:**
+
 ```javascript
 // Live session widget
 async function updateLiveSession() {
@@ -1001,7 +1033,7 @@ async function updateLiveSession() {
 // Poll every 10 seconds
 setInterval(updateLiveSession, 10000);
 updateLiveSession();  // Initial load
-```
+```text
 
 ```html
 <!-- Live Session Widget (add to homepage) -->
@@ -1030,7 +1062,7 @@ updateLiveSession();  // Initial load
         Watch Live
     </button>
 </div>
-```
+```sql
 
 ⏳ **Status:** Needs implementation (consider WebSocket for real-time)
 
@@ -1041,23 +1073,27 @@ updateLiveSession();  // Initial load
 Based on user value and complexity:
 
 ### **Phase 1: Core Stats (1-2 days)**
+
 1. ✅ Fix player search SQL bugs (you found them)
 2. ✅ Expand `/stats/leaderboard` endpoint (backend)
 3. ✅ Build leaderboard table UI (frontend)
 4. ✅ Remove "Coming Soon" placeholder
 
 ### **Phase 2: Session Details (1 day)**
+
 1. ⏳ Add `/stats/session/{date}` endpoint
 2. ⏳ Create session detail page
 3. ⏳ Add navigation from match cards to session
 
 ### **Phase 3: Live Updates (2-3 days)**
+
 1. ⏳ Add `/stats/live-session` endpoint
 2. ⏳ Build live session widget
 3. ⏳ Add polling (10s intervals)
 4. ⏳ Consider WebSocket upgrade
 
 ### **Phase 4: Player Profiles (3-4 days)**
+
 1. ⏳ Add `/stats/player/{name}` endpoint
 2. ⏳ Create player profile page
 3. ⏳ Add charts (performance over time)
@@ -1068,6 +1104,7 @@ Based on user value and complexity:
 ## 📦 Database Schema Quick Reference
 
 ### **player_comprehensive_stats** (Main Stats Table)
+
 ```sql
 Columns:
 - id (primary key)
@@ -1080,15 +1117,17 @@ Columns:
 - kills, deaths, damage, headshots, hits, shots
 - stopwatch_time (round duration in seconds)
 - xp_total, xp_battle, xp_engineer, xp_medic, etc.
-```
+```text
 
 **Key Indexes:**
+
 - round_date (for date filtering)
 - gaming_session_id (for session queries)
 - player_guid (for player lookups)
 - player_name (for name search)
 
 ### **gaming_sessions** (Session Metadata)
+
 ```sql
 Columns:
 - id (primary key)
@@ -1097,9 +1136,10 @@ Columns:
 - total_rounds (int)
 - unique_players (int)
 - duration_minutes (int)
-```
+```text
 
 ### **match_predictions** (Prediction System)
+
 ```sql
 Columns:
 - id (primary key)
@@ -1111,74 +1151,83 @@ Columns:
 - actual_winner (int: 1=A, 2=B, 0=draw)
 - prediction_correct (boolean)
 - discord_message_id, discord_channel_id
-```
+```yaml
 
 ---
 
 ## 🔧 Useful Helper Functions
 
 ### **Format Stopwatch Time**
+
 ```python
 def format_stopwatch_time(seconds: int) -> str:
     """Convert seconds to MM:SS format."""
     minutes = int(seconds / 60)
     secs = int(seconds % 60)
     return f"{minutes}:{secs:02d}"
-```
+```text
 
 ### **Calculate DPM**
+
 ```python
 def calculate_dpm(damage: int, time: int) -> float:
     """Calculate damage per minute."""
     if time == 0:
         return 0.0
     return round((damage / time) * 60, 2)
-```
+```text
 
 ### **Get Season Start Date**
+
 ```python
 from bot.core.season_manager import SeasonManager
 
 sm = SeasonManager()
 season_start = sm.get_season_start_date()  # Returns YYYY-MM-DD
-```
+```yaml
 
 ---
 
 ## 🐛 Common Pitfalls
 
 ### **1. SQL Parameter Placeholders**
+
 **WRONG (SQLite style):**
+
 ```python
 query = "SELECT * FROM table WHERE id = ?"
-```
+```text
 
 **RIGHT (PostgreSQL style):**
+
 ```python
 query = "SELECT * FROM table WHERE id = $1"
-```
+```text
 
 **You already hit this bug!** Make sure all queries use `$1, $2, $3` format.
 
 ### **2. NULL Handling in Division**
+
 ```python
 # WRONG - will crash if denominator is 0
 SELECT kills / deaths as kd
 
 # RIGHT - use NULLIF
 SELECT kills::numeric / NULLIF(deaths, 1) as kd
-```
+```text
 
 ### **3. Date Filtering**
+
 ```python
 # WRONG - might miss time component
 WHERE round_date = '2025-11-28'
 
 # RIGHT - use DATE()
 WHERE DATE(round_date) = '2025-11-28'
-```
+```text
 
 ### **4. JSON Fields in PostgreSQL**
+
 ```python
 # Storing JSON
 import json
@@ -1196,12 +1245,14 @@ guids = json.loads(result[0])
 ## 💬 Communication Protocol
 
 **When you need help:**
+
 - Check this guide first
 - Check `/bot/cogs/` for Discord command examples
 - Check `/bot/services/` for data service examples
 - Ask the user to get Claude (me) to help
 
 **When you make changes:**
+
 - Test queries in PostgreSQL first
 - Use `console.log()` liberally on frontend
 - Check browser Network tab for API errors
@@ -1214,6 +1265,7 @@ guids = json.loads(result[0])
 You'll know you've succeeded when:
 
 ✅ Users can:
+
 1. View full leaderboards (DPM, kills, K/D, accuracy)
 2. Filter by time period (7d, 30d, season, all)
 3. Click on session date to see full breakdown

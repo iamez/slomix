@@ -166,8 +166,7 @@ def is_owner():
 
         if ctx.author.id != owner_id:
             logger.warning(f"⚠️ Unauthorized root command attempt by {ctx.author} ({ctx.author.id})")
-            await ctx.send("❌ This command is restricted to the bot root user.")
-            return False
+            raise commands.CheckFailure("This command is restricted to the bot root user.")
 
         logger.info(f"✅ Root command authorized: {ctx.author}")
         return True
@@ -199,24 +198,24 @@ def is_admin():
 
         # Check database for admin/moderator tier
         try:
-            db = ctx.bot.db
+            db = ctx.bot.db_adapter
             result = await db.fetch_one(
                 "SELECT tier FROM user_permissions WHERE discord_id = $1",
-                ctx.author.id
+                (ctx.author.id,)
             )
 
-            if result and result['tier'] in ['admin', 'moderator']:
-                logger.info(f"✅ Admin command authorized ({result['tier']}): {ctx.author}")
+            if result and result[0] in ['admin', 'moderator']:
+                logger.info(f"✅ Admin command authorized ({result[0]}): {ctx.author}")
                 return True
 
             logger.warning(f"⚠️ Unauthorized admin command by {ctx.author} ({ctx.author.id})")
-            await ctx.send("❌ This command requires admin permissions.")
-            return False
+            raise commands.CheckFailure("This command requires admin permissions.")
 
+        except commands.CheckFailure:
+            raise  # Re-raise CheckFailure, don't catch it
         except Exception as e:
             logger.error(f"Error checking admin permissions: {e}")
-            await ctx.send("❌ Permission check failed.")
-            return False
+            raise commands.CheckFailure("Permission check failed.")
 
     return commands.check(predicate)
 
@@ -245,23 +244,23 @@ def is_moderator():
 
         # Check database for any tier
         try:
-            db = ctx.bot.db
+            db = ctx.bot.db_adapter
             result = await db.fetch_one(
                 "SELECT tier FROM user_permissions WHERE discord_id = $1",
-                ctx.author.id
+                (ctx.author.id,)
             )
 
-            if result and result['tier'] in ['admin', 'moderator']:
-                logger.info(f"✅ Moderator command authorized ({result['tier']}): {ctx.author}")
+            if result and result[0] in ['admin', 'moderator']:
+                logger.info(f"✅ Moderator command authorized ({result[0]}): {ctx.author}")
                 return True
 
             logger.warning(f"⚠️ Unauthorized moderator command by {ctx.author} ({ctx.author.id})")
-            await ctx.send("❌ This command requires moderator permissions.")
-            return False
+            raise commands.CheckFailure("This command requires moderator permissions.")
 
+        except commands.CheckFailure:
+            raise  # Re-raise CheckFailure, don't catch it
         except Exception as e:
             logger.error(f"Error checking moderator permissions: {e}")
-            await ctx.send("❌ Permission check failed.")
-            return False
+            raise commands.CheckFailure("Permission check failed.")
 
     return commands.check(predicate)

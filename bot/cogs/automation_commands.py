@@ -139,9 +139,9 @@ class AutomationCommands(commands.Cog):
         except Exception as e:
             logger.error(f"❌ SSH stats command error: {e}")
             await ctx.send(f"❌ Error getting SSH stats: {sanitize_error_message(e)}")
-    
+
+    @is_admin()
     @commands.command(name="start_monitoring")
-    
     async def start_monitoring_command(self, ctx):
         """🟢 Start SSH monitoring"""
         try:
@@ -160,10 +160,9 @@ class AutomationCommands(commands.Cog):
         except Exception as e:
             logger.error(f"❌ Start monitoring error: {e}")
             await ctx.send(f"❌ Error starting monitoring: {sanitize_error_message(e)}")
-    
+
     @is_admin()
     @commands.command(name="stop_monitoring")
-    
     async def stop_monitoring_command(self, ctx):
         """🔴 Stop SSH monitoring"""
         try:
@@ -182,9 +181,9 @@ class AutomationCommands(commands.Cog):
         except Exception as e:
             logger.error(f"❌ Stop monitoring error: {e}")
             await ctx.send(f"❌ Error stopping monitoring: {sanitize_error_message(e)}")
-    
+
+    @is_admin()
     @commands.command(name="metrics_report")
-    
     async def metrics_report_command(self, ctx, hours: int = 24):
         """📊 Generate comprehensive metrics report"""
         try:
@@ -295,6 +294,7 @@ class AutomationCommands(commands.Cog):
             logger.error(f"❌ Metrics report error: {e}", exc_info=True)
             await ctx.send(f"❌ Error generating report: {sanitize_error_message(e)}")
     
+    @is_admin()
     @commands.command(name="metrics_summary")
     async def metrics_summary_command(self, ctx):
         """📊 Quick metrics summary"""
@@ -362,9 +362,9 @@ class AutomationCommands(commands.Cog):
         except Exception as e:
             logger.error(f"❌ Metrics summary error: {e}")
             await ctx.send(f"❌ Error getting summary: {sanitize_error_message(e)}")
-    
+
+    @is_admin()
     @commands.command(name="backup_db")
-    
     async def backup_command(self, ctx):
         """💾 Manually trigger database backup"""
         try:
@@ -389,9 +389,9 @@ class AutomationCommands(commands.Cog):
         except Exception as e:
             logger.error(f"❌ Backup command error: {e}")
             await ctx.send(f"❌ Error creating backup: {sanitize_error_message(e)}")
-    
+
+    @is_admin()
     @commands.command(name="vacuum_db")
-    
     async def vacuum_command(self, ctx):
         """🧹 Optimize database (VACUUM)"""
         try:
@@ -412,6 +412,7 @@ class AutomationCommands(commands.Cog):
             logger.error(f"❌ Vacuum command error: {e}")
             await ctx.send(f"❌ Error optimizing database: {sanitize_error_message(e)}")
     
+    @is_admin()
     @commands.command(name="automation_status")
     async def automation_status_command(self, ctx):
         """📋 Show all automation services status"""

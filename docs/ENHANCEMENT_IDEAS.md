@@ -58,9 +58,10 @@ async def get_player_stats(player_name):
     stats = await db.execute(...)
     stats_cache.set(f"stats_{player_name}", stats)
     return stats
-```
+```yaml
 
 **Benefits:**
+
 - Reduces database queries by 80% during active sessions
 - Faster command response times
 - Lower CPU usage
@@ -107,7 +108,7 @@ async def calculate_player_trend(player_guid, days=30):
             return "📉 Recent struggles"
         else:
             return "➡️ Consistent performance"
-```
+```text
 
 **Command Usage:** `!trend [player] [days]`
 
@@ -149,7 +150,7 @@ class SessionPatternDetector:
         
         # Check tomorrow
         return "Next likely session: Tomorrow evening"
-```
+```yaml
 
 ---
 
@@ -177,10 +178,11 @@ async def update_bot_status(self):
         await self.bot.change_presence(
             activity=discord.Game(f"📊 {total_rounds[0][0]} rounds tracked | !help")
         )
-```
+```text
 
 **Your Actual Implementation:**
 The bot already has this functionality built-in via automation:
+
 - Round 1 ends → `post_round_summary()` posts to STATS_CHANNEL
 - Round 2 ends → `post_map_summary()` posts full session summary
 - This works via SSH monitoring (when enabled) or local file detection
@@ -213,7 +215,7 @@ async def check_achievements(self, player_guid, discord_id=None):
                     color=discord.Color.gold()
                 )
                 await self.stats_channel.send(embed=embed)
-```
+```yaml
 
 ---
 
@@ -264,7 +266,7 @@ async def generate_activity_heatmap(self):
     # Save and return
     plt.savefig('heatmap.png', dpi=100, bbox_inches='tight')
     return 'heatmap.png'
-```
+```yaml
 
 **Command:** `!activity heatmap`
 
@@ -306,7 +308,7 @@ def resilient_command(retries=3, delay=1):
 async def get_player_stats(self, player_name):
     # Database query that might fail
     ...
-```
+```python
 
 ### 8. Async Context Manager for Database
 
@@ -330,7 +332,7 @@ class AsyncDatabase:
 async with AsyncDatabase('bot/etlegacy_production.db') as db:
     async with db.execute("SELECT * FROM rounds") as cursor:
         results = await cursor.fetchall()
-```
+```yaml
 
 ---
 
@@ -402,7 +404,7 @@ async def create_comparison_radar(self, player1_guid, player2_guid):
     plt.tight_layout()
     plt.savefig('comparison.png', dpi=100, bbox_inches='tight')
     return 'comparison.png'
-```
+```javascript
 
 **Command:** `!compare player1 player2`
 
@@ -467,7 +469,7 @@ class BettingPool:
                 self.points[bet['user']] += payout
         
         del self.active_bets[round_id]
-```
+```yaml
 
 ---
 
@@ -488,9 +490,10 @@ CREATE INDEX idx_aliases_guid ON player_aliases(guid);
 CREATE INDEX idx_aliases_alias ON player_aliases(alias);
 CREATE INDEX idx_weapons_session ON weapon_comprehensive_stats(round_id);
 CREATE INDEX idx_weapons_player ON weapon_comprehensive_stats(player_name);
-```
+```yaml
 
 **Performance Impact:**
+
 - Speeds up leaderboard queries by 10x
 - Reduces CPU usage during peak times
 - Makes `!stats` command instant
@@ -535,7 +538,7 @@ async def export_stats(ctx, player=None):
     output.seek(0)
     file = discord.File(fp=output, filename=f"{player}_stats.csv")
     await ctx.send(f"📊 Stats export for {player}", file=file)
-```
+```text
 
 ### Season System
 
@@ -580,21 +583,24 @@ class SeasonManager:
 ## 📚 Implementation Priority
 
 ### High Priority (Immediate Value)
+
 1. ✅ **Round Updates Already Built** - SSH automation posts round summaries automatically
 2. **Database Indexes** - Instant performance boost
 3. **Query Caching** - Reduces load significantly
 4. **Achievement Notifications** - Player engagement
 
 ### Medium Priority (Enhanced Features)
-5. **Player Trends** - Valuable insights
-6. **Activity Heatmap** - Visual engagement
-7. **Comparison Radar** - Fun competitive feature
-8. **CSV Export** - Data portability
+
+1. **Player Trends** - Valuable insights
+2. **Activity Heatmap** - Visual engagement
+3. **Comparison Radar** - Fun competitive feature
+4. **CSV Export** - Data portability
 
 ### Low Priority (Nice to Have)
-9. **Betting System** - Community fun
-10. **Season System** - Long-term engagement
-11. **Pattern Detection** - Predictive features
+
+1. **Betting System** - Community fun
+2. **Season System** - Long-term engagement
+3. **Pattern Detection** - Predictive features
 
 ---
 
@@ -607,6 +613,7 @@ These enhancements would transform your ET:Legacy bot from a statistics tracker 
 ---
 
 **Next Steps:**
+
 1. Test automation (tomorrow's todo)
 2. Implement database indexes (5 minutes)
 3. Add achievement notifications (30 minutes)

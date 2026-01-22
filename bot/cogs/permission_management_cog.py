@@ -56,7 +56,7 @@ class PermissionManagement(commands.Cog):
             return
 
         try:
-            db = self.bot.db
+            db = self.bot.db_adapter
 
             # Check if user already exists
             existing = await db.fetch_one(
@@ -65,7 +65,8 @@ class PermissionManagement(commands.Cog):
             )
 
             if existing:
-                await ctx.send(f"⚠️ {user.mention} is already in the system as **{existing['tier']}**. Use `!admin_promote` to change tier.")
+                existing_tier = existing[0]  # tuple access
+                await ctx.send(f"⚠️ {user.mention} is already in the system as **{existing_tier}**. Use `!admin_promote` to change tier.")
                 return
 
             # Insert into database
@@ -86,7 +87,7 @@ class PermissionManagement(commands.Cog):
                 user.id, 'add', tier, ctx.author.id, reason
             )
 
-            await db.commit()
+            # db_adapter auto-commits
 
             embed = discord.Embed(
                 title="✅ User Added to Whitelist",
@@ -119,7 +120,7 @@ class PermissionManagement(commands.Cog):
             return
 
         try:
-            db = self.bot.db
+            db = self.bot.db_adapter
 
             # Check if user exists
             existing = await db.fetch_one(
@@ -137,29 +138,30 @@ class PermissionManagement(commands.Cog):
                 user.id
             )
 
-            # Log to audit table
+            # Log to audit table - existing[0] is tier (tuple access)
+            old_tier = existing[0]
             await db.execute(
                 """
                 INSERT INTO permission_audit_log (target_discord_id, action, old_tier, changed_by, reason)
                 VALUES ($1, $2, $3, $4, $5)
                 """,
-                user.id, 'remove', existing['tier'], ctx.author.id, reason
+                user.id, 'remove', old_tier, ctx.author.id, reason
             )
 
-            await db.commit()
+            # db_adapter auto-commits
 
             embed = discord.Embed(
                 title="✅ User Removed from Whitelist",
-                description=f"{user.mention} no longer has **{existing['tier']}** permissions.",
+                description=f"{user.mention} no longer has **{old_tier}** permissions.",
                 color=discord.Color.orange(),
                 timestamp=datetime.now()
             )
             embed.add_field(name="Removed By", value=ctx.author.mention, inline=True)
-            embed.add_field(name="Previous Tier", value=existing['tier'].upper(), inline=True)
+            embed.add_field(name="Previous Tier", value=old_tier.upper(), inline=True)
             embed.add_field(name="Reason", value=reason, inline=False)
 
             await ctx.send(embed=embed)
-            logger.info(f"✅ {ctx.author} removed {user} ({existing['tier']}): {reason}")
+            logger.info(f"✅ {ctx.author} removed {user} ({old_tier}): {reason}")
 
         except Exception as e:
             logger.error(f"Error removing admin: {e}", exc_info=True)
@@ -173,7 +175,7 @@ class PermissionManagement(commands.Cog):
         Usage: !admin_list
         """
         try:
-            db = self.bot.db
+            db = self.bot.db_adapter
 
             users = await db.fetch_all(
                 """
@@ -194,9 +196,11 @@ class PermissionManagement(commands.Cog):
                 return
 
             # Group by tier
+            # Query returns: discord_id(0), username(1), tier(2), added_at(3), reason(4)
             tiers = {'root': [], 'admin': [], 'moderator': []}
             for user in users:
-                tiers[user['tier']].append(user)
+                user_tier = user[2]  # tier is at index 2
+                tiers[user_tier].append(user)
 
             embed = discord.Embed(
                 title="🔒 User Permissions",
@@ -211,8 +215,10 @@ class PermissionManagement(commands.Cog):
                 if tier_users:
                     user_list = []
                     for u in tier_users:
-                        user_obj = ctx.guild.get_member(u['discord_id'])
-                        display = user_obj.mention if user_obj else f"`{u['username']}`"
+                        discord_id = u[0]
+                        username = u[1]
+                        user_obj = ctx.guild.get_member(discord_id)
+                        display = user_obj.mention if user_obj else f"`{username}`"
                         user_list.append(f"• {display}")
 
                     embed.add_field(
@@ -236,7 +242,7 @@ class PermissionManagement(commands.Cog):
         Example: !admin_audit 20
         """
         try:
-            db = self.bot.db
+            db = self.bot.db_adapter
 
             logs = await db.fetch_all(
                 """
@@ -259,25 +265,34 @@ class PermissionManagement(commands.Cog):
                 timestamp=datetime.now()
             )
 
+            # Query returns: target_discord_id(0), action(1), old_tier(2), new_tier(3), changed_by(4), changed_at(5), reason(6)
             for log in logs[:10]:  # Show max 10 in embed
-                target = ctx.guild.get_member(log['target_discord_id'])
-                changer = ctx.guild.get_member(log['changed_by'])
+                target_discord_id = log[0]
+                action = log[1]
+                old_tier = log[2]
+                new_tier = log[3]
+                changed_by = log[4]
+                changed_at = log[5]
+                reason = log[6]
 
-                target_name = target.mention if target else f"<@{log['target_discord_id']}>"
-                changer_name = changer.mention if changer else f"<@{log['changed_by']}>"
+                target = ctx.guild.get_member(target_discord_id)
+                changer = ctx.guild.get_member(changed_by)
+
+                target_name = target.mention if target else f"<@{target_discord_id}>"
+                changer_name = changer.mention if changer else f"<@{changed_by}>"
 
                 action_emoji = {
                     'add': '➕',
                     'remove': '➖',
                     'promote': '⬆️',
                     'demote': '⬇️'
-                }.get(log['action'], '📝')
+                }.get(action, '📝')
 
-                tier_change = log['new_tier'] if log['action'] == 'add' else f"{log['old_tier']} → {log['new_tier']}" if log['new_tier'] else log['old_tier']
+                tier_change = new_tier if action == 'add' else f"{old_tier} → {new_tier}" if new_tier else old_tier
 
                 embed.add_field(
-                    name=f"{action_emoji} {log['action'].upper()} - {log['changed_at'].strftime('%Y-%m-%d %H:%M')}",
-                    value=f"**Target:** {target_name}\n**By:** {changer_name}\n**Tier:** {tier_change}\n**Reason:** {log['reason']}",
+                    name=f"{action_emoji} {action.upper()} - {changed_at.strftime('%Y-%m-%d %H:%M')}",
+                    value=f"**Target:** {target_name}\n**By:** {changer_name}\n**Tier:** {tier_change}\n**Reason:** {reason}",
                     inline=False
                 )
 

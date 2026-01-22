@@ -27,6 +27,7 @@
 **Backup Created**: `etlegacy_production.db.backup_20251127_133224` (2.9M)
 
 ### Bug #1: Fixed Unreachable Code ✅
+
 - **File**: `bot/ultimate_bot.py`
 - **Line**: 646-648
 - **Issue**: Success message after exception raise
@@ -35,6 +36,7 @@
 - **Status**: ✅ FIXED
 
 ### Bug #2: Fixed 5 Broken Emoji Encodings ✅
+
 - **File**: `bot/ultimate_bot.py`
 - **Lines**: 62, 213, 313, 853, 894
 - **Issue**: UTF-8 corruption showing `�` instead of emojis
@@ -48,6 +50,7 @@
 - **Status**: ✅ FIXED
 
 ### Bug #3: Moved Import to Module Level ✅
+
 - **File**: `bot/ultimate_bot.py`
 - **Line**: 2398 (removed), 15 (added)
 - **Issue**: `from datetime import datetime, timedelta` inside async function
@@ -56,6 +59,7 @@
 - **Status**: ✅ FIXED
 
 ### Bug #4: Modernized Asyncio Pattern ✅
+
 - **File**: `bot/ultimate_bot.py`
 - **Line**: 696
 - **Issue**: Deprecated `asyncio.get_event_loop()`
@@ -64,6 +68,7 @@
 - **Status**: ✅ FIXED
 
 ### Verification
+
 - ✅ Python syntax check passed
 - ✅ UTF-8 encoding verified
 - ✅ Database backup created
@@ -77,6 +82,7 @@
 **Commit**: d1b9293 - "Week 3-4: Consolidate configuration into BotConfig object"
 
 ### Changes Summary ✅
+
 1. **Enhanced bot/config.py**:
    - Added 20+ new configuration attributes
    - Type hints for all config attributes
@@ -99,6 +105,7 @@
    - Check interval, lookback hours, voice conditional, grace period
 
 ### Configuration Attributes Consolidated ✅
+
 - Logging: `log_level`
 - Discord: `discord_token`, `discord_guild_id`
 - Channels: `stats_channel_id`, `production_channel_id`, `gather_channel_id`, `general_channel_id`, `admin_channels`, `gaming_voice_channels`, `bot_command_channels`
@@ -109,6 +116,7 @@
 - RCON: `rcon_enabled`, `rcon_host`, `rcon_port`, `rcon_password`
 
 ### Success Criteria ✅
+
 - ✅ All config consolidated in BotConfig class
 - ✅ Type hints on all config attributes
 - ✅ Zero os.getenv() calls in bot class (except module-level LOG_LEVEL)
@@ -117,6 +125,7 @@
 - ✅ All tests pass
 
 ### Verification ✅
+
 - ✅ Python syntax check passed
 - ✅ Bot startup successful
 - ✅ All config attributes loaded correctly
@@ -134,12 +143,14 @@
 ### Why Skipped ✅
 
 During Phase A reconnaissance, discovered that:
+
 1. **Production uses PostgreSQL** → Delegates to `postgresql_database_manager.py`
 2. **SQLite path never runs** → User confirmed PostgreSQL-only setup
 3. **5 methods are dormant** → Only used if `database_type == "sqlite"` (never true)
 4. **No value in extraction** → Refactoring unused code doesn't improve production
 
 ### Methods Analyzed (Not Extracted)
+
 - `process_gamestats_file()` - Entry point (has dual path: PostgreSQL vs SQLite)
 - `_import_stats_to_db()` - 151 lines (SQLite only)
 - `_insert_player_stats()` - 233 lines (SQLite only)
@@ -149,12 +160,14 @@ During Phase A reconnaissance, discovered that:
 **Total**: ~503 lines remain in bot (SQLite fallback code)
 
 ### Decision Rationale ✅
+
 - ✅ Focus on production code (not dev/test fallback)
 - ✅ Avoid touching recently-fixed code (6 hours old)
 - ✅ Move to higher-value refactoring (VoiceSessionService)
 - ✅ Pragmatic: Don't extract what you don't use
 
 ### Verification ✅
+
 - ✅ Confirmed: `config.database_type == "postgresql"` in production
 - ✅ Confirmed: PostgreSQL path uses external manager
 - ✅ Confirmed: User does not use SQLite
@@ -170,6 +183,7 @@ During Phase A reconnaissance, discovered that:
 ### Changes Summary ✅
 
 **Phase A - Service Creation**:
+
 1. **Created bot/services/voice_session_service.py** (430 lines):
    - Extracted 6 voice session methods from bot
    - Moved 4 session state variables to service
@@ -178,22 +192,25 @@ During Phase A reconnaissance, discovered that:
 
 **Phase B - Bot Integration**:
 2. **Modified bot/ultimate_bot.py** (-330 net lines):
-   - Added VoiceSessionService import and initialization
-   - Delegated `on_voice_state_update()` to service (72 lines → 2 lines)
-   - Delegated startup voice check in `on_ready()` to service
-   - Removed 6 old voice session methods
-   - Removed 4 session state variables
+
+- Added VoiceSessionService import and initialization
+- Delegated `on_voice_state_update()` to service (72 lines → 2 lines)
+- Delegated startup voice check in `on_ready()` to service
+- Removed 6 old voice session methods
+- Removed 4 session state variables
 
 **Phase C - Testing**:
 3. **Verified Production Deployment**:
-   - Bot restarted successfully at 22:16:56 UTC
-   - VoiceSessionService initialized correctly
-   - Startup voice check executed (0 players detected)
-   - No runtime errors detected
-   - All cogs loaded (13 total)
-   - 57 commands available
+
+- Bot restarted successfully at 22:16:56 UTC
+- VoiceSessionService initialized correctly
+- Startup voice check executed (0 players detected)
+- No runtime errors detected
+- All cogs loaded (13 total)
+- 57 commands available
 
 ### Methods Extracted (6 total) ✅
+
 - `on_voice_state_update()` → `handle_voice_state_change()` (72 lines)
 - `_start_gaming_session()` → `start_session()` (36 lines)
 - `_delayed_session_end()` → `delayed_end()` (29 lines)
@@ -205,18 +222,21 @@ During Phase A reconnaissance, discovered that:
 **Total Removed from Bot**: ~337 lines (including methods and state variables)
 
 ### Session State Moved to Service ✅
+
 - `session_active: bool` → `self.session_active`
 - `session_start_time: Optional[datetime]` → `self.session_start_time`
 - `session_participants: Set[int]` → `self.session_participants`
 - `session_end_timer: Optional[asyncio.Task]` → `self.session_end_timer`
 
 ### Impact ✅
+
 - **Line Reduction**: ultimate_bot.py reduced from 2,546 to ~2,216 lines (13% reduction)
 - **Git Stats**: 338 deletions, 8 additions (Phase B)
 - **Service Lines**: 430 lines in new VoiceSessionService
 - **Production Status**: Deployed and verified ✅
 
 ### Verification ✅
+
 - ✅ Python syntax validation passed
 - ✅ Bot startup successful (22:16:56 UTC)
 - ✅ VoiceSessionService initialized
@@ -235,9 +255,11 @@ During Phase A reconnaissance, discovered that:
 **Impact**: Removes ~600 lines from bot (23%)
 
 ### Objectives
+
 Extract all stats processing logic to dedicated service
 
 ### Methods to Extract (From ultimate_bot.py)
+
 1. `process_gamestats_file()` (96 lines)
 2. `_import_stats_to_db()` (151 lines)
 3. `_insert_player_stats()` (233 lines)
@@ -247,19 +269,23 @@ Extract all stats processing logic to dedicated service
 **Total**: ~600 lines to extract
 
 ### Files to Create
+
 - `bot/services/stats_import_service.py` (NEW)
 - `tests/test_stats_import_service.py` (NEW)
 
 ### Files to Modify
+
 - `bot/ultimate_bot.py` (remove methods, add delegation)
 - `bot/services/__init__.py` (add exports)
 
 ### Integration Points
+
 - Database adapter (pass to service)
 - Parser (C0RNP0RN3StatsParser)
 - Configuration (pass config object)
 
 ### Success Criteria
+
 - ✅ All 5 methods extracted
 - ✅ Bot delegates to service
 - ✅ All imports still work
@@ -278,9 +304,11 @@ Extract all stats processing logic to dedicated service
 **Impact**: Removes ~300 lines from bot (12%)
 
 ### Objectives
+
 Extract voice channel monitoring and session lifecycle
 
 ### Methods to Extract (From ultimate_bot.py)
+
 1. `on_voice_state_update()` (72 lines)
 2. `_start_gaming_session()` (36 lines)
 3. `_end_gaming_session()` (45 lines)
@@ -291,13 +319,16 @@ Extract voice channel monitoring and session lifecycle
 **Total**: ~300 lines to extract
 
 ### Files to Create
+
 - `bot/services/voice_session_service.py` (NEW)
 - `tests/test_voice_session_service.py` (NEW)
 
 ### Files to Modify
+
 - `bot/ultimate_bot.py` (remove methods, add delegation)
 
 ### Success Criteria
+
 - ✅ Voice state changes detected
 - ✅ Session start/end logic works
 - ✅ Delay timer functional
@@ -314,9 +345,11 @@ Extract voice channel monitoring and session lifecycle
 **Impact**: Removes ~300 lines from bot (12%)
 
 ### Objectives
+
 Extract Discord auto-posting logic
 
 ### Methods to Extract (From ultimate_bot.py)
+
 1. `post_round_stats_auto()` (143 lines)
 2. `_check_and_post_map_completion()` (31 lines)
 3. `_post_map_summary()` (94 lines)
@@ -325,14 +358,17 @@ Extract Discord auto-posting logic
 **Total**: ~300 lines to extract
 
 ### Files to Create
+
 - `bot/services/round_publisher_service.py` (NEW)
 - `tests/test_round_publisher_service.py` (NEW)
 
 ### Files to Modify
+
 - `bot/ultimate_bot.py` (remove methods, add delegation)
 - `bot/services/session_embed_builder.py` (potentially enhance)
 
 ### Success Criteria
+
 - ✅ Auto-posting still works
 - ✅ Map summaries correct
 - ✅ Round summaries posted
@@ -347,12 +383,15 @@ Extract Discord auto-posting logic
 **Commits**: 1eea1f4, 4b426d0
 
 ### Summary
+
 Implemented Repository Pattern for file tracking data access.
 After reconnaissance, discovered only 4 database calls in production code
 (vs 27 expected). Implemented minimal FileRepository for business logic query.
 
 ### Reconnaissance Findings
+
 **Analyzed**: 18 database calls total in `ultimate_bot.py`
+
 - **14 calls (78%)**: In SQLite-only methods (already skipped in Week 5-6)
 - **4 calls (22%)**: In production code
   - `validate_database_schema`: 2 calls (infrastructure - kept in bot)
@@ -360,25 +399,29 @@ After reconnaissance, discovered only 4 database calls in production code
   - `cache_refresher`: 1 call (business logic - moved to repository)
 
 **Decision**: Implemented minimal Repository Pattern (Option A)
+
 - Extract only business logic queries
 - Keep infrastructure validation in bot
 - No over-engineering
 
 ### Files Created
+
 - ✅ `bot/repositories/__init__.py` (13 lines)
 - ✅ `bot/repositories/file_repository.py` (61 lines)
 - ✅ `WEEK_11-12_RECONNAISSANCE_REPORT.md` (380 lines)
 
 ### Files Modified
+
 - ✅ `bot/ultimate_bot.py`:
   - Added FileRepository import (line 35)
-  - Initialized file_repository in __init__() (lines 209-211)
+  - Initialized file_repository in **init**() (lines 209-211)
   - Refactored cache_refresher() to use repository (line 1499)
   - Net change: +3 lines (imports/init), -2 lines (simplified query)
 
 ### Implementation Details
 
 **FileRepository**:
+
 - Single method: `get_processed_filenames()`
 - Returns `Set[str]` of successfully processed filenames
 - Handles both SQLite (success = 1) and PostgreSQL (success = true)
@@ -386,6 +429,7 @@ After reconnaissance, discovered only 4 database calls in production code
 - Graceful error handling (returns empty set)
 
 **cache_refresher() Refactor**:
+
 ```python
 # BEFORE (3 lines):
 query = "SELECT filename FROM processed_files WHERE success = 1"
@@ -394,15 +438,17 @@ self.processed_files = {row[0] for row in rows}
 
 # AFTER (1 line):
 self.processed_files = await self.file_repository.get_processed_filenames()
-```
+```python
 
 **Bug Fix** (commit 4b426d0):
+
 - Fixed PostgreSQL boolean compatibility issue
 - PostgreSQL uses BOOLEAN type (true/false), not INTEGER (0/1)
 - Added config parameter to repository for database type detection
 - Query now adapts to database type
 
 ### Success Criteria
+
 - ✅ Business logic queries in repository
 - ✅ Infrastructure queries remain in bot (pragmatic)
 - ✅ All functionality intact
@@ -415,6 +461,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 ## 📊 Project Metrics
 
 ### Starting State (Before Refactoring)
+
 - **File**: `bot/ultimate_bot.py`
 - **Lines**: 2,546
 - **Methods**: 40
@@ -425,6 +472,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 - **Services Existing**: 13
 
 ### Target State (After Refactoring)
+
 - **File**: `bot/ultimate_bot.py`
 - **Lines**: ~800 (69% reduction)
 - **Methods**: ~15-20 (orchestration only)
@@ -436,6 +484,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 - **Repositories**: 3 (new)
 
 ### Final State (After Refactoring)
+
 - **File**: `bot/ultimate_bot.py`
 - **Lines**: 1,733 (down from 2,546)
 - **Lines Removed**: 813 lines (32% reduction) ✅
@@ -451,16 +500,19 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 ## 🗂️ Important Files & Locations
 
 ### Documentation
+
 - **Master Plan**: `~/.claude/plans/rustling-riding-papert.md`
 - **This Progress File**: `REFACTORING_PROGRESS.md`
 - **Recent Session Docs**: Root directory (Nov 26-27 files)
 - **Documentation Review**: `DOCUMENTATION_ACCURACY_REVIEW_2025-11-27.md`
 
 ### Backups
+
 - **Latest Backup**: `etlegacy_production.db.backup_20251127_133224` (2.9M)
 - **Previous Backups**: `etlegacy_production.db.backup_*`
 
 ### Code Files
+
 - **Main Bot**: `bot/ultimate_bot.py` (2,546 lines)
 - **Parser**: `bot/community_stats_parser.py` (1,023 lines)
 - **DB Manager**: `postgresql_database_manager.py` (1,595 lines)
@@ -468,6 +520,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 - **Config**: `bot/config.py`
 
 ### Recent Fixes (Nov 26-27)
+
 1. ✅ Gaming session ID spanning bug (48 days) - FIXED
 2. ✅ Player aliases table empty - FIXED
 3. ✅ R1/R2 match ID linking - FIXED
@@ -479,6 +532,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 ## 🔄 Session Notes
 
 ### 2025-11-27 Session 1: Planning & Bug Fixes
+
 - Created comprehensive 12-week refactoring plan
 - Validated other AI's bug reports (4/5 confirmed)
 - Fixed all 4 confirmed bugs
@@ -487,6 +541,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 - Ready to start Week 3-4 when approved
 
 ### 2025-11-27 Session 2: Configuration Object (Week 3-4)
+
 - ✅ Created database backup (2.9M)
 - ✅ Created feature branch: `refactor/configuration-object`
 - ✅ Enhanced `bot/config.py` with 20+ configuration attributes
@@ -497,6 +552,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 - ✅ Week 3-4 COMPLETE
 
 ### 2025-11-27 Session 3: StatsImportService Reconnaissance (Week 5-6)
+
 - ✅ Phase A reconnaissance completed
 - ✅ Analyzed all 5 methods (~503 lines)
 - ✅ Discovered SQLite-only code path
@@ -506,6 +562,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 - ✅ Week 5-6 SKIPPED (smart decision!)
 
 ### 2025-11-27 Session 4: VoiceSessionService (Week 7-8)
+
 - ✅ Created reconnaissance report: `WEEK_7-8_RECONNAISSANCE_REPORT.md`
 - ✅ **Phase A**: Created `bot/services/voice_session_service.py` (430 lines)
   - Extracted 6 methods from bot
@@ -527,9 +584,11 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 - ✅ Week 7-8 COMPLETE! (13% line reduction)
 
 ### Next Session: RoundPublisherService (Week 9-10)
+
 **When to start**: When user gives green light
 
 **What to do**:
+
 1. Read this PROGRESS.md file first
 2. Check current status above (should show Week 9-10 next)
 3. Review Week 9-10 section for objectives
@@ -545,6 +604,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 ## 📝 Notes & Reminders
 
 ### Important Context
+
 - **Conservative timeline**: 2-3 months (12 weeks)
 - **One phase at a time**: Complete testing before moving on
 - **Feature branches**: Create branch for each phase
@@ -553,6 +613,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 - **Update this file**: After each session/phase
 
 ### Key Design Decisions
+
 - ✅ Bug fixes FIRST before refactoring
 - ✅ Configuration Object as warmup (Week 3-4)
 - ✅ Include Repository Pattern (Week 11-12)
@@ -561,6 +622,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 - ✅ Start easy, build complexity gradually
 
 ### Testing Strategy
+
 - Run full regression after each phase
 - Test in development first
 - Monitor production for 1-2 days
@@ -568,6 +630,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 - Check error logs closely
 
 ### Risk Mitigation
+
 - Feature branch per phase
 - Database backups before changes
 - Comprehensive testing
@@ -579,6 +642,7 @@ self.processed_files = await self.file_repository.get_processed_filenames()
 ## 🎯 Success Criteria (Overall)
 
 When we're done, we should have:
+
 - ✅ Bot reduced from 2,546 → 800 lines (69% reduction)
 - ✅ All bugs fixed (4/4 done!)
 - ✅ Zero direct SQL in bot class
