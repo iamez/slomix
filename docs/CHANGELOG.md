@@ -9,18 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ET:Legacy Game Server Optimization** (Jan 25, 2026)
+  - CPU affinity: Game server pinned to cores 0,1 for better cache locality
+  - UDP buffer optimization: Increased minimum from 4KB to 16KB
+  - Modified startup script: `/home/et/etlegacy-v2.83.1-x86_64/etdaemon.sh`
+  - Created sysctl config: `/etc/sysctl.d/99-etlegacy.conf`
+  - Backups saved to: `/home/et/backups/2026-01-25/`
+  - See: `docs/SESSION_2026-01-25_SERVER_OPTIMIZATION.md`
+
 - **Lua Webhook Real-Time Stats Notification** - Instant round-end notification from game server
-  - New Lua script `stats_discord_webhook.lua` (v1.1.0) runs on ET:Legacy game server
+  - Lua script `stats_discord_webhook.lua` (v1.3.0) runs on ET:Legacy game server
   - Captures accurate round timing at gamestate transition (fixes surrender timing bug)
   - Captures team composition at round end (Axis/Allies player lists)
   - Tracks pause count and duration (new capability)
   - Uses Discord webhook as relay (supports outbound-only architecture)
   - ~3 second latency vs 60-second SSH polling
   - Config: Webhook URL in Lua script, webhook ID in `WEBHOOK_TRIGGER_WHITELIST`
+
+- **Lua Webhook v1.3.0 Timing Enhancements** (Jan 2026)
+  - `Lua_WarmupEnd` field - Unix timestamp when warmup ended (= round start)
+  - `Lua_Pauses_JSON` field - detailed pause event timestamps `[{n,start,end,sec},...]`
+  - Timing legend in webhook embed explaining Playtime vs Warmup vs Wall-clock
+  - Database: `lua_pause_events` JSONB column for queryable pause data
+  - Migration: `tools/migrations/004_add_pause_events.sql`
+
+- **Lua Webhook v1.2.0 Warmup Tracking** (Jan 2026)
+  - `Lua_Warmup` field - warmup phase duration in seconds
+  - `Lua_WarmupStart` field - Unix timestamp when warmup began
+  - Database: `lua_warmup_seconds`, `lua_warmup_start_unix` columns
+  - Migration: `tools/migrations/003_add_warmup_columns.sql`
+
 - **lua_round_teams Database Table** - Stores Lua-captured data separately for cross-reference
   - Team composition (JSONB arrays with guid/name)
   - Accurate timing data for validation against stats files
   - Links to rounds table via `match_id` + `round_number`
+
 - **Timing Comparison Debug Logging** - Shows stats file vs Lua timing for every webhook-processed round
   - Identifies surrender scenarios automatically
   - Logs to bot logs (not visible to users)
@@ -31,11 +54,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Stats files show map time limit on surrender (e.g., 20 min)
   - Lua captures actual end time (e.g., 8 min)
   - Bot overrides broken timing with accurate Lua data
+- **SSHHandler method name** - Fixed `list_files` → `list_remote_files` in webhook file fetch
+- **Webhook username** - Lua script now sends correct username for bot message filtering
+
+### Changed
+
+- **Field naming convention** - All webhook fields now use `Lua_` prefix to distinguish from stats file timing
+  - `Duration` → `Lua_Playtime`
+  - `Start Unix` → `Lua_RoundStart`
+  - `End Unix` → `Lua_RoundEnd`
 
 ### Technical Details
 
-- **New Files**: `vps_scripts/stats_discord_webhook.lua`, `migrations/001_add_timing_metadata_columns.sql`, `migrations/002_add_lua_round_teams_table.sql`, `docs/LUA_WEBHOOK_SETUP.md`
-- **Modified**: `bot/ultimate_bot.py` (+493 lines), `postgresql_database_manager.py` (+7 lines)
+- **New Files**: `vps_scripts/stats_discord_webhook.lua`, `tools/migrations/001_add_timing_metadata_columns.sql`, `tools/migrations/002_add_lua_round_teams_table.sql`, `tools/migrations/003_add_warmup_columns.sql`, `tools/migrations/004_add_pause_events.sql`, `docs/LUA_WEBHOOK_SETUP.md`, `docs/reference/TIMING_DATA_SOURCES.md`
+- **Modified**: `bot/ultimate_bot.py` (+600 lines), `postgresql_database_manager.py` (+7 lines)
 - **Branch**: `feature/lua-webhook-realtime-stats`
 - **Inspiration**: Patterns adapted from Oksii's `game-stats-web.lua` used by competitive ET:Legacy communities
 
