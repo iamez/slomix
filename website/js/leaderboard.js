@@ -197,10 +197,11 @@ export async function loadRecentMatches() {
             const safeMapName = escapeHtml(match.map_name);
             const safeFormat = escapeHtml(match.format || '');
             const safeTimeAgo = escapeHtml(match.time_ago || '');
+            const matchId = match.id || match.round_id;
 
             const html = `
             <div class="glass-card rounded-lg hover:bg-white/5 transition cursor-pointer group border-l-2 ${team1Win ? 'border-l-brand-blue' : team2Win ? 'border-l-brand-rose' : 'border-l-slate-600'}"
-                 onclick="navigateTo('matches')">
+                 data-match-id="${matchId}">
                 <div class="p-3">
                     <!-- Team 1 -->
                     <div class="flex items-center gap-1 text-xs mb-0.5 ${team1Win ? '' : 'opacity-60'}">
@@ -222,6 +223,35 @@ export async function loadRecentMatches() {
             </div>
             `;
             list.insertAdjacentHTML('beforeend', html);
+        });
+
+        // Add click handlers using event delegation
+        list.querySelectorAll('[data-match-id]').forEach(card => {
+            card.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                try {
+                    const matchId = card.dataset.matchId;
+                    console.log('[Recent Matches] Card clicked, matchId:', matchId);
+                    
+                    if (!matchId) {
+                        console.error('[Recent Matches] No matchId in dataset!');
+                        return;
+                    }
+                    
+                    if (typeof window.loadMatchDetails === 'function') {
+                        console.log('[Recent Matches] Calling loadMatchDetails...');
+                        window.loadMatchDetails(parseInt(matchId, 10));
+                    } else {
+                        console.error('[Recent Matches] loadMatchDetails is not available on window!');
+                        console.log('[Recent Matches] window.loadMatchDetails =', window.loadMatchDetails);
+                        alert('Error: Match details function not loaded. Please refresh the page.');
+                    }
+                } catch (err) {
+                    console.error('[Recent Matches] Error in click handler:', err);
+                }
+            });
         });
     } catch (e) {
         console.error('Failed to load matches:', e);

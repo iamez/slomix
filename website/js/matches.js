@@ -241,16 +241,33 @@ export async function loadWeaponsView() {
  * @param {boolean} skipTabs - If true, don't add tab buttons (used when switching tabs)
  */
 export async function loadMatchDetails(matchId, skipTabs = false) {
-    if (!skipTabs) {
-        openModal('modal-match-details');
+    console.log('[loadMatchDetails] Called with ID:', matchId, 'skipTabs:', skipTabs);
+    
+    if (!matchId) {
+        console.error('[loadMatchDetails] No matchId provided!');
+        return;
     }
 
-    const content = document.getElementById('match-modal-content');
-    content.innerHTML = '<div class="text-center py-12"><i data-lucide="loader" class="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4"></i><div class="text-slate-400">Loading match details...</div></div>';
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-
     try {
+        if (!skipTabs) {
+            console.log('[loadMatchDetails] Opening modal...');
+            openModal('modal-match-details');
+            console.log('[loadMatchDetails] Modal should be visible now');
+        }
+
+        const content = document.getElementById('match-modal-content');
+        if (!content) {
+            console.error('[loadMatchDetails] Could not find match-modal-content element!');
+            return;
+        }
+        
+        console.log('[loadMatchDetails] Setting loading state...');
+        content.innerHTML = '<div class="text-center py-12"><i data-lucide="loader" class="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4"></i><div class="text-slate-400">Loading match details...</div></div>';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        console.log('[loadMatchDetails] Fetching match details for ID:', matchId);
         const data = await fetchJSON(`${API_BASE}/stats/matches/${encodeURIComponent(matchId)}`);
+        console.log('[loadMatchDetails] Match data received:', data);
 
         const m = data.match;
         const team1 = data.team1;

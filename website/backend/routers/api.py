@@ -67,65 +67,77 @@ def calculate_player_achievements(kills: int, games: int, kd: float) -> dict:
     # Check kill milestones
     for threshold, achievement in sorted(KILL_MILESTONES.items()):
         if kills >= threshold:
-            unlocked.append({
-                "type": "kills",
-                "threshold": threshold,
-                "emoji": achievement["emoji"],
-                "title": achievement["title"],
-                "color": achievement["color"],
-            })
+            unlocked.append(
+                {
+                    "type": "kills",
+                    "threshold": threshold,
+                    "emoji": achievement["emoji"],
+                    "title": achievement["title"],
+                    "color": achievement["color"],
+                }
+            )
         else:
-            next_achievements.append({
-                "type": "kills",
-                "threshold": threshold,
-                "emoji": achievement["emoji"],
-                "title": achievement["title"],
-                "current": kills,
-                "progress": round(kills / threshold * 100, 1),
-            })
+            next_achievements.append(
+                {
+                    "type": "kills",
+                    "threshold": threshold,
+                    "emoji": achievement["emoji"],
+                    "title": achievement["title"],
+                    "current": kills,
+                    "progress": round(kills / threshold * 100, 1),
+                }
+            )
             break
 
     # Check game milestones
     for threshold, achievement in sorted(GAME_MILESTONES.items()):
         if games >= threshold:
-            unlocked.append({
-                "type": "games",
-                "threshold": threshold,
-                "emoji": achievement["emoji"],
-                "title": achievement["title"],
-                "color": achievement["color"],
-            })
+            unlocked.append(
+                {
+                    "type": "games",
+                    "threshold": threshold,
+                    "emoji": achievement["emoji"],
+                    "title": achievement["title"],
+                    "color": achievement["color"],
+                }
+            )
         else:
-            next_achievements.append({
-                "type": "games",
-                "threshold": threshold,
-                "emoji": achievement["emoji"],
-                "title": achievement["title"],
-                "current": games,
-                "progress": round(games / threshold * 100, 1),
-            })
+            next_achievements.append(
+                {
+                    "type": "games",
+                    "threshold": threshold,
+                    "emoji": achievement["emoji"],
+                    "title": achievement["title"],
+                    "current": games,
+                    "progress": round(games / threshold * 100, 1),
+                }
+            )
             break
 
     # Check K/D milestones (only if player has 20+ games)
     if games >= 20:
         for threshold, achievement in sorted(KD_MILESTONES.items()):
             if kd >= threshold:
-                unlocked.append({
-                    "type": "kd",
-                    "threshold": threshold,
-                    "emoji": achievement["emoji"],
-                    "title": achievement["title"],
-                    "color": achievement["color"],
-                })
+                unlocked.append(
+                    {
+                        "type": "kd",
+                        "threshold": threshold,
+                        "emoji": achievement["emoji"],
+                        "title": achievement["title"],
+                        "color": achievement["color"],
+                    }
+                )
             else:
-                next_achievements.append({
-                    "type": "kd",
-                    "threshold": threshold,
-                    "emoji": achievement["emoji"],
-                    "title": achievement["title"],
-                    "current": round(kd, 2),
-                    "progress": round(kd / threshold * 100, 1),
-                })
+                next_achievements.append(
+                    {
+                        "type": "kd",
+                        "threshold": threshold,
+                        "emoji": achievement["emoji"],
+                        "title": achievement["title"],
+                        "current": round(kd, 2),
+                        "progress": round(kd / threshold * 100, 1),
+                    }
+                )
                 break
 
     # Calculate overall progress
@@ -162,12 +174,17 @@ async def get_diagnostics(db: DatabaseAdapter = Depends(get_db)):
     }
 
     from datetime import datetime
+
     results["timestamp"] = datetime.utcnow().isoformat()
 
     # Tables to check
     tables_to_check = [
         ("rounds", "SELECT COUNT(*) FROM rounds", True),
-        ("player_comprehensive_stats", "SELECT COUNT(*) FROM player_comprehensive_stats", True),
+        (
+            "player_comprehensive_stats",
+            "SELECT COUNT(*) FROM player_comprehensive_stats",
+            True,
+        ),
         ("sessions", "SELECT COUNT(*) FROM sessions", True),
         ("players", "SELECT COUNT(*) FROM players", False),
         ("server_status_history", "SELECT COUNT(*) FROM server_status_history", False),
@@ -180,12 +197,14 @@ async def get_diagnostics(db: DatabaseAdapter = Depends(get_db)):
         for table_name, query, required in tables_to_check:
             try:
                 count = await db.fetch_val(query)
-                results["tables"].append({
-                    "name": table_name,
-                    "status": "ok",
-                    "row_count": count,
-                    "required": required
-                })
+                results["tables"].append(
+                    {
+                        "name": table_name,
+                        "status": "ok",
+                        "row_count": count,
+                        "required": required,
+                    }
+                )
             except Exception as e:
                 error_msg = str(e)
                 status = "error"
@@ -195,27 +214,49 @@ async def get_diagnostics(db: DatabaseAdapter = Depends(get_db)):
                 elif "does not exist" in error_msg.lower():
                     status = "not_found"
                     if required:
-                        results["issues"].append(f"Required table {table_name} not found")
+                        results["issues"].append(
+                            f"Required table {table_name} not found"
+                        )
                     else:
-                        results["warnings"].append(f"Optional table {table_name} not found")
+                        results["warnings"].append(
+                            f"Optional table {table_name} not found"
+                        )
                 else:
-                    results["issues"].append(f"Error checking {table_name}: {error_msg}")
+                    results["issues"].append(
+                        f"Error checking {table_name}: {error_msg}"
+                    )
 
-                results["tables"].append({
-                    "name": table_name,
-                    "status": status,
-                    "error": error_msg,
-                    "required": required
-                })
+                results["tables"].append(
+                    {
+                        "name": table_name,
+                        "status": status,
+                        "error": error_msg,
+                        "required": required,
+                    }
+                )
 
         results["database"]["status"] = "connected"
 
         # Check for critical data
-        rounds_count = next((t["row_count"] for t in results["tables"] if t["name"] == "rounds" and t.get("row_count")), 0)
+        rounds_count = next(
+            (
+                t["row_count"]
+                for t in results["tables"]
+                if t["name"] == "rounds" and t.get("row_count")
+            ),
+            0,
+        )
         if rounds_count == 0:
             results["warnings"].append("No rounds data in database")
 
-        players_count = next((t["row_count"] for t in results["tables"] if t["name"] == "player_comprehensive_stats" and t.get("row_count")), 0)
+        players_count = next(
+            (
+                t["row_count"]
+                for t in results["tables"]
+                if t["name"] == "player_comprehensive_stats" and t.get("row_count")
+            ),
+            0,
+        )
         if players_count == 0:
             results["warnings"].append("No player stats in database")
 
@@ -249,7 +290,7 @@ async def get_live_status(db: DatabaseAdapter = Depends(get_db)):
         "members": [],
         "count": 0,
         "channel_name": "Gaming",
-        "updated_at": None
+        "updated_at": None,
     }
 
     try:
@@ -269,7 +310,7 @@ async def get_live_status(db: DatabaseAdapter = Depends(get_db)):
 
             voice_result = {
                 **status_data,
-                "updated_at": str(updated_at) if updated_at else None
+                "updated_at": str(updated_at) if updated_at else None,
             }
     except Exception as e:
         print(f"Error fetching voice channel status: {e}")
@@ -282,7 +323,10 @@ async def get_live_status(db: DatabaseAdapter = Depends(get_db)):
         "online": server_status.online,
         "hostname": server_status.clean_hostname,
         "map": server_status.map_name,
-        "players": [{"name": p.name, "score": p.score, "ping": p.ping} for p in server_status.players],
+        "players": [
+            {"name": p.name, "score": p.score, "ping": p.ping}
+            for p in server_status.players
+        ],
         "player_count": server_status.player_count,
         "max_players": server_status.max_players,
         "ping_ms": server_status.ping_ms,
@@ -292,16 +336,12 @@ async def get_live_status(db: DatabaseAdapter = Depends(get_db)):
     if server_status.error:
         game_result["error"] = server_status.error
 
-    return {
-        "voice_channel": voice_result,
-        "game_server": game_result
-    }
+    return {"voice_channel": voice_result, "game_server": game_result}
 
 
 @router.get("/server-activity/history")
 async def get_server_activity_history(
-    hours: int = 72,
-    db: DatabaseAdapter = Depends(get_db)
+    hours: int = 72, db: DatabaseAdapter = Depends(get_db)
 ):
     """
     Get historical server activity data for charting.
@@ -342,13 +382,15 @@ async def get_server_activity_history(
         for row in rows:
             recorded_at, player_count, max_players, map_name, online = row
 
-            data_points.append({
-                "timestamp": recorded_at.isoformat() if recorded_at else None,
-                "player_count": player_count,
-                "max_players": max_players,
-                "map": map_name,
-                "online": online,
-            })
+            data_points.append(
+                {
+                    "timestamp": recorded_at.isoformat() if recorded_at else None,
+                    "player_count": player_count,
+                    "max_players": max_players,
+                    "map": map_name,
+                    "online": online,
+                }
+            )
 
             if online:
                 online_count += 1
@@ -359,7 +401,9 @@ async def get_server_activity_history(
 
         total_records = len(rows)
         avg_players = round(total_players / online_count, 1) if online_count > 0 else 0
-        uptime_percent = round((online_count / total_records) * 100, 1) if total_records > 0 else 0
+        uptime_percent = (
+            round((online_count / total_records) * 100, 1) if total_records > 0 else 0
+        )
 
         return {
             "data_points": data_points,
@@ -369,7 +413,7 @@ async def get_server_activity_history(
                 "avg_players": avg_players,
                 "uptime_percent": uptime_percent,
                 "total_records": total_records,
-            }
+            },
         }
 
     except Exception as e:
@@ -383,8 +427,200 @@ async def get_server_activity_history(
                 "uptime_percent": 0,
                 "total_records": 0,
             },
-            "error": str(e)
+            "error": str(e),
         }
+
+
+@router.get("/voice-activity/history")
+async def get_voice_activity_history(
+    hours: int = 720, db: DatabaseAdapter = Depends(get_db)
+):
+    """
+    Get historical voice channel activity data for charting.
+
+    Args:
+        hours: Number of hours of history to fetch (default 720 = 30 days)
+
+    Returns:
+        data_points: Array of voice status records
+        summary: Peak, average, session stats
+    """
+    from datetime import datetime, timedelta
+
+    try:
+        # Calculate time range
+        since = datetime.utcnow() - timedelta(hours=hours)
+
+        # Fetch data points from voice_status_history
+        query = """
+            SELECT
+                recorded_at,
+                member_count,
+                channel_name,
+                members
+            FROM voice_status_history
+            WHERE recorded_at >= $1
+            ORDER BY recorded_at ASC
+        """
+        rows = await db.fetch_all(query, (since,))
+
+        data_points = []
+        total_members = 0
+        peak_members = 0
+        peak_time = None
+        session_count = 0
+        was_empty = True
+
+        for row in rows:
+            recorded_at, member_count, channel_name, members = row
+
+            data_points.append(
+                {
+                    "timestamp": recorded_at.isoformat() if recorded_at else None,
+                    "member_count": member_count,
+                    "channel_name": channel_name,
+                    "members": members if members else [],
+                }
+            )
+
+            total_members += member_count
+            if member_count > peak_members:
+                peak_members = member_count
+                peak_time = recorded_at
+
+            # Count sessions (transitions from 0 to > 0)
+            if was_empty and member_count > 0:
+                session_count += 1
+            was_empty = member_count == 0
+
+        total_records = len(rows)
+        non_empty_records = sum(1 for p in data_points if p["member_count"] > 0)
+        avg_members = (
+            round(total_members / non_empty_records, 1) if non_empty_records > 0 else 0
+        )
+
+        return {
+            "data_points": data_points,
+            "summary": {
+                "peak_members": peak_members,
+                "peak_time": peak_time.isoformat() if peak_time else None,
+                "avg_members": avg_members,
+                "total_sessions": session_count,
+                "total_records": total_records,
+            },
+        }
+
+    except Exception as e:
+        print(f"Error fetching voice activity: {e}")
+        return {
+            "data_points": [],
+            "summary": {
+                "peak_members": 0,
+                "peak_time": None,
+                "avg_members": 0,
+                "total_sessions": 0,
+                "total_records": 0,
+            },
+            "error": str(e),
+        }
+
+
+@router.get("/voice-activity/current")
+async def get_current_voice_activity(db: DatabaseAdapter = Depends(get_db)):
+    """
+    Get detailed current voice channel status with join times.
+
+    Returns detailed information about who is in voice and how long.
+    """
+    import json
+    from datetime import datetime
+
+    try:
+        # First try to get from voice_members table (active members)
+        query = """
+            SELECT 
+                discord_id,
+                member_name,
+                channel_id,
+                channel_name,
+                joined_at
+            FROM voice_members
+            WHERE left_at IS NULL
+            ORDER BY joined_at ASC
+        """
+        rows = await db.fetch_all(query)
+
+        members = []
+        channels = {}
+
+        for row in rows:
+            discord_id, member_name, channel_id, channel_name, joined_at = row
+
+            # Calculate time in voice
+            if joined_at:
+                now = datetime.utcnow()
+                if hasattr(joined_at, "replace"):
+                    # Make naive if timezone-aware
+                    if joined_at.tzinfo is not None:
+                        joined_at = joined_at.replace(tzinfo=None)
+                duration_seconds = int((now - joined_at).total_seconds())
+            else:
+                duration_seconds = 0
+
+            member_info = {
+                "discord_id": discord_id,
+                "name": member_name,
+                "channel_id": channel_id,
+                "channel_name": channel_name or "Gaming",
+                "joined_at": joined_at.isoformat() if joined_at else None,
+                "duration_seconds": duration_seconds,
+            }
+            members.append(member_info)
+
+            # Group by channel
+            if channel_id not in channels:
+                channels[channel_id] = {
+                    "id": channel_id,
+                    "name": channel_name or "Gaming",
+                    "members": [],
+                }
+            channels[channel_id]["members"].append(member_info)
+
+        return {
+            "total_count": len(members),
+            "members": members,
+            "channels": list(channels.values()),
+        }
+
+    except Exception as e:
+        print(f"Error fetching current voice activity: {e}")
+        # Fallback to live_status table
+        try:
+            query = """
+                SELECT status_data, updated_at
+                FROM live_status
+                WHERE status_type = 'voice_channel'
+            """
+            row = await db.fetch_one(query)
+
+            if row:
+                status_data = row[0]
+                if isinstance(status_data, str):
+                    status_data = json.loads(status_data)
+
+                members = status_data.get("members", [])
+                return {
+                    "total_count": len(members),
+                    "members": [
+                        {"name": m.get("name", "Unknown"), "channel_name": "Gaming"}
+                        for m in members
+                    ],
+                    "channels": [],
+                }
+        except:
+            pass
+
+        return {"total_count": 0, "members": [], "channels": [], "error": str(e)}
 
 
 @router.get("/stats/overview")
@@ -509,9 +745,7 @@ async def get_matches(limit: int = 5, db: DatabaseAdapter = Depends(get_db)):
 
 @router.get("/sessions")
 async def get_sessions_list(
-    limit: int = 20,
-    offset: int = 0,
-    db: DatabaseAdapter = Depends(get_db)
+    limit: int = 20, offset: int = 0, db: DatabaseAdapter = Depends(get_db)
 ):
     """
     Get list of all gaming sessions (like !sessions command).
@@ -559,6 +793,7 @@ async def get_sessions_list(
         round_date = row[0]
         # Format time_ago
         from datetime import datetime
+
         if isinstance(round_date, str):
             dt = datetime.strptime(round_date, "%Y-%m-%d")
         else:
@@ -580,17 +815,19 @@ async def get_sessions_list(
         else:
             time_ago = dt.strftime("%b %d, %Y")
 
-        sessions.append({
-            "date": str(round_date),
-            "session_id": row[1],
-            "rounds": row[2],
-            "maps": row[3],
-            "players": row[4],
-            "total_kills": row[5],
-            "maps_played": row[6].split(", ") if row[6] else [],
-            "time_ago": time_ago,
-            "formatted_date": dt.strftime("%A, %B %d, %Y"),
-        })
+        sessions.append(
+            {
+                "date": str(round_date),
+                "session_id": row[1],
+                "rounds": row[2],
+                "maps": row[3],
+                "players": row[4],
+                "total_kills": row[5],
+                "maps_played": row[6].split(", ") if row[6] else [],
+                "time_ago": time_ago,
+                "formatted_date": dt.strftime("%A, %B %d, %Y"),
+            }
+        )
 
     return sessions
 
@@ -605,7 +842,9 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
     stats_service = SessionStatsAggregator(db)
 
     # Get session data
-    sessions, session_ids, session_ids_str, player_count = await data_service.fetch_session_data(date)
+    sessions, session_ids, session_ids_str, player_count = (
+        await data_service.fetch_session_data(date)
+    )
 
     if not sessions:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -617,17 +856,21 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
     leaderboard = []
     if session_ids:
         try:
-            lb_data = await stats_service.get_dpm_leaderboard(session_ids, session_ids_str, 10)
+            lb_data = await stats_service.get_dpm_leaderboard(
+                session_ids, session_ids_str, 10
+            )
             for i, (name, dpm, kills, deaths) in enumerate(lb_data, 1):
                 kd = kills / deaths if deaths > 0 else kills
-                leaderboard.append({
-                    "rank": i,
-                    "name": name,
-                    "dpm": int(dpm),
-                    "kills": kills,
-                    "deaths": deaths,
-                    "kd": round(kd, 2),
-                })
+                leaderboard.append(
+                    {
+                        "rank": i,
+                        "name": name,
+                        "dpm": int(dpm),
+                        "kills": kills,
+                        "deaths": deaths,
+                        "kd": round(kd, 2),
+                    }
+                )
         except Exception as e:
             print(f"Error fetching session leaderboard: {e}")
 
@@ -856,7 +1099,9 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         weapon_row = await db.fetch_one(weapon_query, (player_name,))
         if weapon_row and weapon_row[0]:
             clean_name = weapon_row[0]
-            if clean_name.lower().startswith("ws ") or clean_name.lower().startswith("ws_"):
+            if clean_name.lower().startswith("ws ") or clean_name.lower().startswith(
+                "ws_"
+            ):
                 clean_name = clean_name[3:]
             favorite_weapon = clean_name.replace("_", " ").title()
         else:
@@ -955,9 +1200,7 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
 
 @router.get("/stats/compare")
 async def compare_players(
-    player1: str,
-    player2: str,
-    db: DatabaseAdapter = Depends(get_db)
+    player1: str, player2: str, db: DatabaseAdapter = Depends(get_db)
 ):
     """
     Compare two players side-by-side with radar chart data.
@@ -1010,22 +1253,24 @@ async def compare_players(
         kd = kills / deaths if deaths > 0 else kills
         dpm = damage / time_minutes
 
-        players.append({
-            "name": name,
-            "raw": {
-                "kills": int(kills),
-                "deaths": int(deaths),
-                "damage": int(damage),
-                "games": int(games),
-                "kd": round(kd, 2),
-                "dpm": round(dpm, 1),
-                "revives": int(revives),
-                "headshots": int(headshots),
-                "accuracy": round(accuracy, 1),
-                "gibs": int(gibs),
-                "xp": int(xp),
+        players.append(
+            {
+                "name": name,
+                "raw": {
+                    "kills": int(kills),
+                    "deaths": int(deaths),
+                    "damage": int(damage),
+                    "games": int(games),
+                    "kd": round(kd, 2),
+                    "dpm": round(dpm, 1),
+                    "revives": int(revives),
+                    "headshots": int(headshots),
+                    "accuracy": round(accuracy, 1),
+                    "gibs": int(gibs),
+                    "xp": int(xp),
+                },
             }
-        })
+        )
 
     # Calculate normalized stats for radar chart (0-100 scale)
     # Compare each stat relative to the max between the two players
@@ -1047,15 +1292,9 @@ async def compare_players(
     p1_gibs, p2_gibs = normalize(p1["raw"]["gibs"], p2["raw"]["gibs"])
 
     return {
-        "player1": {
-            **p1,
-            "radar": [p1_kd, p1_dpm, p1_acc, p1_rev, p1_hs, p1_gibs]
-        },
-        "player2": {
-            **p2,
-            "radar": [p2_kd, p2_dpm, p2_acc, p2_rev, p2_hs, p2_gibs]
-        },
-        "radar_labels": radar_labels
+        "player1": {**p1, "radar": [p1_kd, p1_dpm, p1_acc, p1_rev, p1_hs, p1_gibs]},
+        "player2": {**p2, "radar": [p2_kd, p2_dpm, p2_acc, p2_rev, p2_hs, p2_gibs]},
+        "radar_labels": radar_labels,
     }
 
 
@@ -1334,23 +1573,29 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
             axis_wins = row[4] or 0
             total_games = allies_wins + axis_wins
 
-            allies_win_rate = round((allies_wins / total_games * 100), 1) if total_games > 0 else 50
-            axis_win_rate = round((axis_wins / total_games * 100), 1) if total_games > 0 else 50
+            allies_win_rate = (
+                round((allies_wins / total_games * 100), 1) if total_games > 0 else 50
+            )
+            axis_win_rate = (
+                round((axis_wins / total_games * 100), 1) if total_games > 0 else 50
+            )
 
-            maps.append({
-                "name": row[0],
-                "total_rounds": total_rounds,
-                "matches_played": row[2] or total_rounds // 2,
-                "allies_wins": allies_wins,
-                "axis_wins": axis_wins,
-                "allies_win_rate": allies_win_rate,
-                "axis_win_rate": axis_win_rate,
-                "avg_duration": int(row[5]) if row[5] else 0,
-                "total_kills": row[6] or 0,
-                "total_deaths": row[7] or 0,
-                "avg_dpm": round(row[8], 1) if row[8] else 0,
-                "unique_players": row[9] or 0,
-            })
+            maps.append(
+                {
+                    "name": row[0],
+                    "total_rounds": total_rounds,
+                    "matches_played": row[2] or total_rounds // 2,
+                    "allies_wins": allies_wins,
+                    "axis_wins": axis_wins,
+                    "allies_win_rate": allies_win_rate,
+                    "axis_win_rate": axis_win_rate,
+                    "avg_duration": int(row[5]) if row[5] else 0,
+                    "total_kills": row[6] or 0,
+                    "total_deaths": row[7] or 0,
+                    "avg_dpm": round(row[8], 1) if row[8] else 0,
+                    "unique_players": row[9] or 0,
+                }
+            )
 
         return maps
     except Exception as e:
@@ -1430,7 +1675,11 @@ async def get_weapon_stats(
         if total_kills > 0:
             # Note: In ET:Legacy, headshots can exceed kills (tracking all headshots, not just killing shots)
             # We cap hs_rate at 100% for display purposes
-            hs_rate = min(100, round((total_headshots / total_kills * 100), 1)) if total_kills > 0 else 0
+            hs_rate = (
+                min(100, round((total_headshots / total_kills * 100), 1))
+                if total_kills > 0
+                else 0
+            )
 
             # Clean up weapon name (remove "Ws " prefix, "WS_" prefix, underscores)
             clean_name = weapon_name
@@ -1440,13 +1689,15 @@ async def get_weapon_stats(
                 clean_name = clean_name[3:]
             clean_name = clean_name.replace("_", " ").title()
 
-            weapons.append({
-                "name": clean_name,
-                "kills": int(total_kills),
-                "headshots": int(total_headshots),
-                "hs_rate": hs_rate,
-                "accuracy": round(avg_accuracy, 1),
-            })
+            weapons.append(
+                {
+                    "name": clean_name,
+                    "kills": int(total_kills),
+                    "headshots": int(total_headshots),
+                    "hs_rate": hs_rate,
+                    "accuracy": round(avg_accuracy, 1),
+                }
+            )
 
     return weapons
 
@@ -1609,6 +1860,7 @@ async def get_player_matches(
     """
     query = """
         SELECT
+            round_id,
             round_date,
             map_name,
             round_number,
@@ -1621,7 +1873,7 @@ async def get_player_matches(
             accuracy
         FROM player_comprehensive_stats
         WHERE player_name ILIKE $1
-        ORDER BY round_date DESC
+        ORDER BY round_date DESC, round_number DESC
         LIMIT $2
     """
 
@@ -1636,22 +1888,23 @@ async def get_player_matches(
 
     matches = []
     for row in rows:
-        time_played = row[6] or 0
-        dpm = (row[5] / (time_played / 60)) if time_played > 0 else 0
-        kd = row[3] / row[4] if row[4] > 0 else row[3]
+        time_played = row[7] or 0
+        dpm = (row[6] / (time_played / 60)) if time_played > 0 else 0
+        kd = row[4] / row[5] if row[5] > 0 else row[4]
 
         matches.append(
             {
-                "round_date": row[0],
-                "map_name": row[1],
-                "round_number": row[2],
-                "kills": row[3],
-                "deaths": row[4],
-                "damage": row[5],
+                "round_id": row[0],
+                "round_date": row[1],
+                "map_name": row[2],
+                "round_number": row[3],
+                "kills": row[4],
+                "deaths": row[5],
+                "damage": row[6],
                 "time_played": time_played,
-                "team": row[7],
-                "xp": row[8],
-                "accuracy": row[9],
+                "team": row[8],
+                "xp": row[9],
+                "accuracy": row[10],
                 "dpm": round(dpm, 1),
                 "kd": round(kd, 2),
             }
@@ -1714,13 +1967,15 @@ async def get_player_form(
             date_obj = datetime.strptime(date_obj, "%Y-%m-%d")
         label = date_obj.strftime("%b %d")
 
-        sessions.append({
-            "label": label,
-            "date": str(row[1]),
-            "dpm": dpm,
-            "rounds": row[4],
-            "kd": kd,
-        })
+        sessions.append(
+            {
+                "label": label,
+                "date": str(row[1]),
+                "dpm": dpm,
+                "rounds": row[4],
+                "kd": kd,
+            }
+        )
 
     dpms = [s["dpm"] for s in sessions]
     avg_dpm = round(sum(dpms) / len(dpms), 1)
@@ -1783,11 +2038,13 @@ async def get_player_rounds(
         if isinstance(date_obj, str):
             date_obj = datetime.strptime(date_obj, "%Y-%m-%d")
 
-        rounds.append({
-            "label": short_map,
-            "date": str(row[0]),
-            "dpm": dpm,
-        })
+        rounds.append(
+            {
+                "label": short_map,
+                "date": str(row[0]),
+                "dpm": dpm,
+            }
+        )
 
     dpms = [r["dpm"] for r in rounds]
     avg_dpm = round(sum(dpms) / len(dpms), 1)
@@ -1867,11 +2124,21 @@ async def get_session_graph_stats(date: str, db: DatabaseAdapter = Depends(get_d
 
         if name not in player_stats:
             player_stats[name] = {
-                "kills": 0, "deaths": 0, "damage_given": 0, "damage_received": 0,
-                "time_played": 0, "revives": 0, "gibs": 0, "headshots": 0,
-                "accuracy_sum": 0, "accuracy_count": 0, "team_kills": 0,
-                "self_kills": 0, "times_revived": 0, "rounds_played": 0,
-                "seen_rounds": set()  # Track unique round_ids
+                "kills": 0,
+                "deaths": 0,
+                "damage_given": 0,
+                "damage_received": 0,
+                "time_played": 0,
+                "revives": 0,
+                "gibs": 0,
+                "headshots": 0,
+                "accuracy_sum": 0,
+                "accuracy_count": 0,
+                "team_kills": 0,
+                "self_kills": 0,
+                "times_revived": 0,
+                "rounds_played": 0,
+                "seen_rounds": set(),  # Track unique round_ids
             }
             dpm_timeline[name] = []
 
@@ -1900,10 +2167,9 @@ async def get_session_graph_stats(date: str, db: DatabaseAdapter = Depends(get_d
         round_dpm = (damage_given / (time_played / 60)) if time_played > 0 else 0
         # Use shorter map name format for timeline
         short_map = map_name.split("_")[-1][:8] if "_" in map_name else map_name[:8]
-        dpm_timeline[name].append({
-            "label": f"{short_map} R{round_num}",
-            "dpm": round(round_dpm, 1)
-        })
+        dpm_timeline[name].append(
+            {"label": f"{short_map} R{round_num}", "dpm": round(round_dpm, 1)}
+        )
 
     # Calculate derived metrics and build response
     players_data = []
@@ -1920,7 +2186,9 @@ async def get_session_graph_stats(date: str, db: DatabaseAdapter = Depends(get_d
 
         # Damage Efficiency: damage_given / (damage_given + damage_received)
         total_damage = stats["damage_given"] + stats["damage_received"]
-        damage_efficiency = (stats["damage_given"] / total_damage * 100) if total_damage > 0 else 50
+        damage_efficiency = (
+            (stats["damage_given"] / total_damage * 100) if total_damage > 0 else 50
+        )
 
         # Survival Rate: time_alive / total_time (approximated by deaths)
         # Lower deaths = higher survival
@@ -1931,45 +2199,47 @@ async def get_session_graph_stats(date: str, db: DatabaseAdapter = Depends(get_d
         time_denied = (stats["kills"] * 20) / time_minutes  # 20s avg respawn
 
         # Avg accuracy
-        avg_accuracy = stats["accuracy_sum"] / stats["accuracy_count"] if stats["accuracy_count"] > 0 else 0
+        avg_accuracy = (
+            stats["accuracy_sum"] / stats["accuracy_count"]
+            if stats["accuracy_count"] > 0
+            else 0
+        )
 
         # Playstyle classification (8 categories like Discord bot)
         playstyle = classify_playstyle(stats, dpm, kd, avg_accuracy)
 
-        players_data.append({
-            "name": name,
-            "combat_offense": {
-                "kills": stats["kills"],
-                "deaths": stats["deaths"],
-                "damage_given": stats["damage_given"],
-                "kd": round(kd, 2),
-                "dpm": round(dpm, 1)
-            },
-            "combat_defense": {
-                "revives": stats["revives"],
-                "gibs": stats["gibs"],
-                "headshots": stats["headshots"],
-                "times_revived": stats["times_revived"],
-                "team_kills": stats["team_kills"]
-            },
-            "advanced_metrics": {
-                "frag_potential": round(frag_potential, 1),
-                "damage_efficiency": round(damage_efficiency, 1),
-                "survival_rate": round(survival_rate, 1),
-                "time_denied": round(time_denied, 1)
-            },
-            "playstyle": playstyle,
-            "dpm_timeline": dpm_timeline[name]
-        })
+        players_data.append(
+            {
+                "name": name,
+                "combat_offense": {
+                    "kills": stats["kills"],
+                    "deaths": stats["deaths"],
+                    "damage_given": stats["damage_given"],
+                    "kd": round(kd, 2),
+                    "dpm": round(dpm, 1),
+                },
+                "combat_defense": {
+                    "revives": stats["revives"],
+                    "gibs": stats["gibs"],
+                    "headshots": stats["headshots"],
+                    "times_revived": stats["times_revived"],
+                    "team_kills": stats["team_kills"],
+                },
+                "advanced_metrics": {
+                    "frag_potential": round(frag_potential, 1),
+                    "damage_efficiency": round(damage_efficiency, 1),
+                    "survival_rate": round(survival_rate, 1),
+                    "time_denied": round(time_denied, 1),
+                },
+                "playstyle": playstyle,
+                "dpm_timeline": dpm_timeline[name],
+            }
+        )
 
     # Sort by DPM for consistent ordering
     players_data.sort(key=lambda x: x["combat_offense"]["dpm"], reverse=True)
 
-    return {
-        "date": date,
-        "player_count": len(players_data),
-        "players": players_data
-    }
+    return {"date": date, "player_count": len(players_data), "players": players_data}
 
 
 def classify_playstyle(stats: dict, dpm: float, kd: float, accuracy: float) -> dict:
@@ -1990,12 +2260,16 @@ def classify_playstyle(stats: dict, dpm: float, kd: float, accuracy: float) -> d
     return {
         "aggression": min(100, (dpm / 5) * 10),  # High DPM = aggressive
         "precision": min(100, accuracy * 2),  # Accuracy-based
-        "survivability": min(100, max(0, 100 - deaths_pr * 20)),  # Low deaths = high survival
+        "survivability": min(
+            100, max(0, 100 - deaths_pr * 20)
+        ),  # Low deaths = high survival
         "support": min(100, revives_pr * 50),  # Revives indicate support play
         "lethality": min(100, kd * 30),  # K/D ratio
         "brutality": min(100, gibs_pr * 25),  # Gibs show aggression
         "consistency": min(100, rounds * 10),  # More rounds = consistent player
-        "efficiency": min(100, (stats["damage_given"] / max(1, stats["damage_received"])) * 25)
+        "efficiency": min(
+            100, (stats["damage_given"] / max(1, stats["damage_received"])) * 25
+        ),
     }
 
 
@@ -2085,60 +2359,94 @@ AWARD_CATEGORIES = {
         "emoji": "⚔️",
         "name": "Combat",
         "awards": [
-            "Most damage given", "Most damage received", "Most kills per minute",
-            "Most damage per minute", "Best K/D ratio", "Tank/Meatshield (Refuses to die)",
+            "Most damage given",
+            "Most damage received",
+            "Most kills per minute",
+            "Most damage per minute",
+            "Best K/D ratio",
+            "Tank/Meatshield (Refuses to die)",
         ],
     },
     "deaths": {
         "emoji": "💀",
         "name": "Deaths & Mayhem",
         "awards": [
-            "Most deaths", "Most selfkills", "Most teamkills", "Longest death spree",
-            "Most panzer deaths", "Most mortar deaths", "Most MG42 deaths", "Mortarmagnet",
+            "Most deaths",
+            "Most selfkills",
+            "Most teamkills",
+            "Longest death spree",
+            "Most panzer deaths",
+            "Most mortar deaths",
+            "Most MG42 deaths",
+            "Mortarmagnet",
         ],
     },
     "skills": {
         "emoji": "🎯",
         "name": "Skills",
         "awards": [
-            "Most headshot kills", "Most headshots", "Highest light weapons accuracy",
-            "Highest headshot accuracy", "Most light weapon kills", "Most pistol kills",
-            "Most rifle kills", "Most sniper kills", "Most knife kills",
-            "Longest killing spree", "Most multikills", "Most doublekills",
-            "Quickest multikill w/ light weapons", "Most bullets fired",
+            "Most headshot kills",
+            "Most headshots",
+            "Highest light weapons accuracy",
+            "Highest headshot accuracy",
+            "Most light weapon kills",
+            "Most pistol kills",
+            "Most rifle kills",
+            "Most sniper kills",
+            "Most knife kills",
+            "Longest killing spree",
+            "Most multikills",
+            "Most doublekills",
+            "Quickest multikill w/ light weapons",
+            "Most bullets fired",
         ],
     },
     "weapons": {
         "emoji": "🔫",
         "name": "Weapons",
         "awards": [
-            "Most grenade kills", "Most panzer kills", "Most mortar kills",
-            "Most mine kills", "Most air support kills", "Most riflenade kills",
-            "Farthest riflenade kill", "Most MG42 kills",
+            "Most grenade kills",
+            "Most panzer kills",
+            "Most mortar kills",
+            "Most mine kills",
+            "Most air support kills",
+            "Most riflenade kills",
+            "Farthest riflenade kill",
+            "Most MG42 kills",
         ],
     },
     "teamwork": {
         "emoji": "🤝",
         "name": "Teamwork",
         "awards": [
-            "Most revives", "Most revived", "Most kill assists", "Most killsteals",
-            "Most team damage given", "Most team damage received",
+            "Most revives",
+            "Most revived",
+            "Most kill assists",
+            "Most killsteals",
+            "Most team damage given",
+            "Most team damage received",
         ],
     },
     "objectives": {
         "emoji": "🎯",
         "name": "Objectives",
         "awards": [
-            "Most dynamites planted", "Most dynamites defused",
-            "Most objectives stolen", "Most objectives returned", "Most corpse gibs",
+            "Most dynamites planted",
+            "Most dynamites defused",
+            "Most objectives stolen",
+            "Most objectives returned",
+            "Most corpse gibs",
         ],
     },
     "timing": {
         "emoji": "⏱️",
         "name": "Timing",
         "awards": [
-            "Most useful kills (>Half respawn time left)", "Most useless kills",
-            "Full respawn king", "Most playtime denied", "Least time dead (What spawn?)",
+            "Most useful kills (>Half respawn time left)",
+            "Most useless kills",
+            "Full respawn king",
+            "Most playtime denied",
+            "Least time dead (What spawn?)",
         ],
     },
 }
@@ -2180,25 +2488,18 @@ async def get_round_awards(round_id: int, db: DatabaseAdapter = Depends(get_db))
         cat_key, emoji, cat_name = categorize_award(award_name)
 
         if cat_key not in categories:
-            categories[cat_key] = {
-                "emoji": emoji,
-                "name": cat_name,
-                "awards": []
-            }
+            categories[cat_key] = {"emoji": emoji, "name": cat_name, "awards": []}
 
-        categories[cat_key]["awards"].append({
-            "award": award_name,
-            "player": player,
-            "value": value,
-            "numeric": numeric
-        })
+        categories[cat_key]["awards"].append(
+            {"award": award_name, "player": player, "value": value, "numeric": numeric}
+        )
 
     return {
         "round_id": round_id,
         "map_name": round_row[0],
         "round_number": round_row[1],
         "round_date": round_row[2],
-        "categories": categories
+        "categories": categories,
     }
 
 
@@ -2218,9 +2519,8 @@ async def get_round_vs_stats(round_id: int, db: DatabaseAdapter = Depends(get_db
     return {
         "round_id": round_id,
         "stats": [
-            {"player": row[0], "kills": row[1], "deaths": row[2]}
-            for row in rows
-        ]
+            {"player": row[0], "kills": row[1], "deaths": row[2]} for row in rows
+        ],
     }
 
 
@@ -2229,7 +2529,7 @@ async def get_awards_leaderboard(
     limit: int = 20,
     days: int = 0,
     award_type: str = None,
-    db: DatabaseAdapter = Depends(get_db)
+    db: DatabaseAdapter = Depends(get_db),
 ):
     """
     Get leaderboard of players by total awards won.
@@ -2301,22 +2601,17 @@ async def get_awards_leaderboard(
                 "player": row[0],
                 "award_count": row[1],
                 "top_award": row[2],
-                "top_award_count": row[3]
+                "top_award_count": row[3],
             }
             for idx, row in enumerate(rows)
         ],
-        "filters": {
-            "days": days,
-            "award_type": award_type
-        }
+        "filters": {"days": days, "award_type": award_type},
     }
 
 
 @router.get("/players/{identifier}/awards")
 async def get_player_awards(
-    identifier: str,
-    limit: int = 10,
-    db: DatabaseAdapter = Depends(get_db)
+    identifier: str, limit: int = 10, db: DatabaseAdapter = Depends(get_db)
 ):
     """
     Get awards won by a specific player.
@@ -2357,10 +2652,10 @@ async def get_player_awards(
                 "value": row[1],
                 "date": row[2],
                 "map": row[3],
-                "round": row[4]
+                "round": row[4],
             }
             for row in recent_rows
-        ]
+        ],
     }
 
 
@@ -2371,7 +2666,7 @@ async def list_awards(
     player: str = None,
     award_type: str = None,
     days: int = 0,
-    db: DatabaseAdapter = Depends(get_db)
+    db: DatabaseAdapter = Depends(get_db),
 ):
     """
     List all awards with pagination and filters.
@@ -2429,16 +2724,12 @@ async def list_awards(
                 "date": row[3],
                 "map": row[4],
                 "round_number": row[5],
-                "round_id": row[6]
+                "round_id": row[6],
             }
             for row in rows
         ],
         "total": total,
         "limit": limit,
         "offset": offset,
-        "filters": {
-            "player": player,
-            "award_type": award_type,
-            "days": days
-        }
+        "filters": {"player": player, "award_type": award_type, "days": days},
     }

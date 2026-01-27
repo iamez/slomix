@@ -45,7 +45,10 @@ class LastSessionCog(commands.Cog):
         self.data_service = SessionDataService(bot.db_adapter, bot.db_path if hasattr(bot, 'db_path') else None)
         self.stats_aggregator = SessionStatsAggregator(bot.db_adapter)
         self.embed_builder = SessionEmbedBuilder()
-        self.graph_generator = SessionGraphGenerator(bot.db_adapter)
+        self.graph_generator = SessionGraphGenerator(
+            bot.db_adapter,
+            timing_debug_service=getattr(bot, 'timing_debug_service', None)
+        )
         self.view_handlers = SessionViewHandlers(bot.db_adapter, StatsCalculator)
         self.badge_service = PlayerBadgeService(bot.db_adapter)
         self.display_name_service = PlayerDisplayNameService(bot.db_adapter)

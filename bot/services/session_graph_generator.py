@@ -42,8 +42,9 @@ class SessionGraphGenerator:
         'gray': '#95A5A6',
     }
 
-    def __init__(self, db_adapter):
+    def __init__(self, db_adapter, timing_debug_service=None):
         self.db_adapter = db_adapter
+        self.timing_debug_service = timing_debug_service
 
     def _style_axis(self, ax, title: str, title_size: int = 13):
         """Apply beautiful dark theme styling"""
@@ -571,6 +572,14 @@ class SessionGraphGenerator:
             buf5 = await self._generate_timeline_graph(
                 latest_date, session_ids, session_ids_str, names[:16]
             )
+
+            # ═══════════════════════════════════════════════════════════════
+            # POST SESSION TIMING DEBUG (optional)
+            # ═══════════════════════════════════════════════════════════════
+            if self.timing_debug_service and self.timing_debug_service.enabled:
+                await self.timing_debug_service.post_session_timing_comparison(
+                    session_ids=list(session_ids)
+                )
 
             return buf1, buf2, buf3, buf4, buf5
 

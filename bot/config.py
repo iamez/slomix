@@ -112,6 +112,10 @@ class BotConfig:
             if bot_channels_str else []
         )
 
+        # Dev timing comparison channel (for Lua vs Stats file analysis)
+        self.dev_timing_channel_id: int = int(self._get_config('DEV_TIMING_CHANNEL_ID', '0'))
+        self.timing_comparison_enabled: bool = self._get_config('TIMING_COMPARISON_ENABLED', 'true').lower() == 'true'
+
         # Derived channel lists (computed from above)
         self.public_channels: List[int] = [
             ch for ch in [self.production_channel_id, self.gather_channel_id, self.general_channel_id]
@@ -224,6 +228,11 @@ class BotConfig:
         self.proximity_auto_import: bool = self._get_config('PROXIMITY_AUTO_IMPORT', 'true').lower() == 'true'
         self.proximity_debug_log: bool = self._get_config('PROXIMITY_DEBUG_LOG', 'false').lower() == 'true'
         self.proximity_discord_commands: bool = self._get_config('PROXIMITY_DISCORD_COMMANDS', 'false').lower() == 'true'
+
+        # ==================== TIMING DEBUG ====================
+        # Compare stats file timing vs Lua webhook timing for validation
+        self.timing_debug_enabled: bool = self._get_config('TIMING_DEBUG_ENABLED', 'true').lower() == 'true'
+        self.timing_debug_channel_id: int = int(self._get_config('TIMING_DEBUG_CHANNEL_ID', '1424620499975274496'))
 
         logger.info(f"🔧 Configuration loaded: database_type={self.database_type}")
 
