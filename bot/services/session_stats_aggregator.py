@@ -154,9 +154,10 @@ class SessionStatsAggregator:
             return []
 
         # weapon_comprehensive_stats schema: kills, deaths, shots, hits, headshots, accuracy
-        # Returns: player_name, weapon_name, kills, hits, shots, headshots
+        # Returns: player_guid, player_name, weapon_name, kills, hits, shots, headshots
         query = """
             SELECT
+                player_guid,
                 MAX(player_name) as player_name,
                 weapon_name,
                 SUM(kills) AS total_kills,

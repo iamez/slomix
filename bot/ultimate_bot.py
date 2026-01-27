@@ -28,6 +28,8 @@ from bot.config import load_config
 from bot.automation import SSHHandler, FileTracker
 from bot.services.voice_session_service import VoiceSessionService
 from bot.services.round_publisher_service import RoundPublisherService
+from bot.services.timing_debug_service import TimingDebugService
+from bot.services.timing_comparison_service import TimingComparisonService
 from bot.repositories import FileRepository
 
 # WebSocket client for push-based file notifications (optional)
@@ -207,8 +209,19 @@ class UltimateETLegacyBot(commands.Bot):
         self.voice_session_service = VoiceSessionService(self, self.config, self.db_adapter)
         logger.info("✅ Voice session service initialized")
 
+        # ⏱️ Timing Debug Service (compares stats file vs Lua webhook timing)
+        self.timing_debug_service = TimingDebugService(self, self.db_adapter, self.config)
+
+        # 👥 Timing Comparison Service (per-player timing analysis for dev channel)
+        self.timing_comparison_service = TimingComparisonService(self.db_adapter, self)
+        logger.info("✅ Timing comparison service initialized")
+
         # 📊 Round Publisher Service (manages Discord auto-posting of stats)
-        self.round_publisher = RoundPublisherService(self, self.config, self.db_adapter)
+        self.round_publisher = RoundPublisherService(
+            self, self.config, self.db_adapter,
+            timing_debug_service=self.timing_debug_service,
+            timing_comparison_service=self.timing_comparison_service
+        )
         logger.info("✅ Round publisher service initialized")
 
         # 📁 File Repository (data access layer for processed files)
@@ -2614,6 +2627,7 @@ class UltimateETLegacyBot(commands.Bot):
         Team data is stored separately in lua_round_teams table for analysis.
         """
         try:
+            import json  # Used for parsing JSON fields
             embed = message.embeds[0]
 
             # Parse metadata from embed fields
@@ -2623,42 +2637,88 @@ class UltimateETLegacyBot(commands.Bot):
                 metadata[key] = field.value
 
             # Extract structured data
+            # Note: Field names changed in v1.2.0 to use Lua_ prefix for clarity
+            # We support both old and new names for backwards compatibility
             round_metadata = {
                 'map_name': metadata.get('map', 'unknown'),
                 'round_number': int(metadata.get('round', 0)),
                 'winner_team': int(metadata.get('winner', 0)),
                 'defender_team': int(metadata.get('defender', 0)),
-                'end_reason': metadata.get('end reason', 'unknown'),
-                'round_start_unix': int(metadata.get('start unix', 0)),
-                'round_end_unix': int(metadata.get('end unix', 0)),
+                # v1.2.0: renamed fields with Lua_ prefix
+                'end_reason': metadata.get('lua_endreason', metadata.get('end reason', 'unknown')),
+                'round_start_unix': int(metadata.get('lua_roundstart', metadata.get('start unix', 0))),
+                'round_end_unix': int(metadata.get('lua_roundend', metadata.get('end unix', 0))),
             }
 
-            # Parse duration (format: "123 sec")
-            duration_str = metadata.get('duration', '0 sec')
+            # Parse playtime/duration (format: "123 sec")
+            # v1.2.0: renamed from "Duration" to "Lua_Playtime"
+            duration_str = metadata.get('lua_playtime', metadata.get('duration', '0 sec'))
             try:
-                round_metadata['actual_duration_seconds'] = int(duration_str.split()[0])
+                round_metadata['lua_playtime_seconds'] = int(duration_str.split()[0])
+                # Keep old key for backwards compat
+                round_metadata['actual_duration_seconds'] = round_metadata['lua_playtime_seconds']
             except (ValueError, IndexError):
+                round_metadata['lua_playtime_seconds'] = 0
                 round_metadata['actual_duration_seconds'] = 0
 
             # Parse time limit (format: "20 min")
-            time_limit_str = metadata.get('time limit', '0 min')
+            # v1.2.0: renamed from "Time Limit" to "Lua_Timelimit"
+            time_limit_str = metadata.get('lua_timelimit', metadata.get('time limit', '0 min'))
             try:
-                round_metadata['time_limit_minutes'] = int(time_limit_str.split()[0])
+                round_metadata['lua_timelimit_minutes'] = int(time_limit_str.split()[0])
+                round_metadata['time_limit_minutes'] = round_metadata['lua_timelimit_minutes']
             except (ValueError, IndexError):
+                round_metadata['lua_timelimit_minutes'] = 0
                 round_metadata['time_limit_minutes'] = 0
 
             # Parse pauses (format: "2 (30 sec)")
-            pauses_str = metadata.get('pauses', '0 (0 sec)')
+            # v1.2.0: renamed from "Pauses" to "Lua_Pauses"
+            pauses_str = metadata.get('lua_pauses', metadata.get('pauses', '0 (0 sec)'))
             try:
                 parts = pauses_str.split('(')
-                round_metadata['pause_count'] = int(parts[0].strip())
+                round_metadata['lua_pause_count'] = int(parts[0].strip())
+                round_metadata['pause_count'] = round_metadata['lua_pause_count']
                 if len(parts) > 1:
-                    round_metadata['total_pause_seconds'] = int(parts[1].rstrip(' sec)'))
+                    round_metadata['lua_pause_seconds'] = int(parts[1].rstrip(' sec)'))
                 else:
-                    round_metadata['total_pause_seconds'] = 0
+                    round_metadata['lua_pause_seconds'] = 0
+                round_metadata['total_pause_seconds'] = round_metadata['lua_pause_seconds']
             except (ValueError, IndexError):
+                round_metadata['lua_pause_count'] = 0
+                round_metadata['lua_pause_seconds'] = 0
                 round_metadata['pause_count'] = 0
                 round_metadata['total_pause_seconds'] = 0
+
+            # Parse warmup (format: "45 sec") - NEW in v1.2.0
+            warmup_str = metadata.get('lua_warmup', '0 sec')
+            try:
+                round_metadata['lua_warmup_seconds'] = int(warmup_str.split()[0])
+            except (ValueError, IndexError):
+                round_metadata['lua_warmup_seconds'] = 0
+
+            # Parse warmup start timestamp - NEW in v1.2.0
+            round_metadata['lua_warmup_start_unix'] = int(metadata.get('lua_warmupstart', 0))
+
+            # Parse warmup end timestamp (same as round start) - NEW in v1.3.0
+            round_metadata['lua_warmup_end_unix'] = int(metadata.get('lua_warmupend', metadata.get('lua_roundstart', 0)))
+
+            # Parse pause events JSON - NEW in v1.3.0
+            # Format: [{"n":1,"start":unix,"end":unix,"sec":duration}, ...]
+            pause_events_raw = metadata.get('lua_pauses_json', '[]')
+            try:
+                pause_events_json = pause_events_raw.replace('\\"', '"')
+                round_metadata['lua_pause_events'] = json.loads(pause_events_json) if pause_events_json != '[]' else []
+            except json.JSONDecodeError:
+                round_metadata['lua_pause_events'] = []
+
+            # Parse surrender vote info - NEW in v1.4.0
+            round_metadata['surrender_team'] = int(metadata.get('lua_surrenderteam', 0))
+            round_metadata['surrender_caller_guid'] = metadata.get('lua_surrendercaller', '')
+            round_metadata['surrender_caller_name'] = metadata.get('lua_surrendercallername', '')
+
+            # Parse match score - NEW in v1.4.0
+            round_metadata['axis_score'] = int(metadata.get('lua_axisscore', 0))
+            round_metadata['allies_score'] = int(metadata.get('lua_alliesscore', 0))
 
             # Parse team composition from JSON fields (v1.1.0+)
             # Format: [{"guid":"ABC...","name":"PlayerName"}, ...]
@@ -2666,7 +2726,6 @@ class UltimateETLegacyBot(commands.Bot):
             allies_json_raw = metadata.get('allies_json', '[]')
 
             # Unescape the embedded JSON (it was escaped for Discord embed)
-            import json
             try:
                 # Discord embed escapes quotes, we need to unescape
                 axis_json = axis_json_raw.replace('\\"', '"')
@@ -2682,10 +2741,18 @@ class UltimateETLegacyBot(commands.Bot):
             axis_names = metadata.get('axis', '(none)')
             allies_names = metadata.get('allies', '(none)')
 
+            # Log summary including surrender info (v1.4.0)
+            surrender_info = ""
+            if round_metadata['surrender_team'] > 0:
+                team_name = "Axis" if round_metadata['surrender_team'] == 1 else "Allies"
+                caller = round_metadata.get('surrender_caller_name', 'unknown')
+                surrender_info = f", surrender={team_name} (by {caller})"
+
             webhook_logger.info(
                 f"📊 STATS_READY: {round_metadata['map_name']} R{round_metadata['round_number']} "
-                f"(winner={round_metadata['winner_team']}, duration={round_metadata['actual_duration_seconds']}s, "
-                f"pauses={round_metadata['pause_count']})"
+                f"(winner={round_metadata['winner_team']}, playtime={round_metadata['lua_playtime_seconds']}s, "
+                f"warmup={round_metadata['lua_warmup_seconds']}s, pauses={round_metadata['lua_pause_count']}"
+                f"{surrender_info}, score={round_metadata['axis_score']}-{round_metadata['allies_score']})"
             )
             webhook_logger.info(f"   Axis: {axis_names}")
             webhook_logger.info(f"   Allies: {allies_names}")
@@ -2763,19 +2830,30 @@ class UltimateETLegacyBot(commands.Bot):
             lua_version = round_metadata.get('lua_version', 'unknown')
 
             # Insert or update (upsert on conflict)
+            # v1.2.0: Added warmup timing columns (lua_warmup_seconds, lua_warmup_start_unix)
+            # v1.3.0: Added lua_pause_events JSONB column for detailed pause timestamps
+            # v1.4.0: Added surrender tracking and match score columns
             query = """
                 INSERT INTO lua_round_teams (
                     match_id, round_number, axis_players, allies_players,
                     round_start_unix, round_end_unix, actual_duration_seconds,
                     total_pause_seconds, pause_count, end_reason,
                     winner_team, defender_team, map_name, time_limit_minutes,
+                    lua_warmup_seconds, lua_warmup_start_unix,
+                    lua_pause_events,
+                    surrender_team, surrender_caller_guid, surrender_caller_name,
+                    axis_score, allies_score,
                     lua_version
                 ) VALUES (
                     $1, $2, $3::jsonb, $4::jsonb,
                     $5, $6, $7,
                     $8, $9, $10,
                     $11, $12, $13, $14,
-                    $15
+                    $15, $16,
+                    $17::jsonb,
+                    $18, $19, $20,
+                    $21, $22,
+                    $23
                 )
                 ON CONFLICT (match_id, round_number) DO UPDATE SET
                     axis_players = EXCLUDED.axis_players,
@@ -2790,9 +2868,20 @@ class UltimateETLegacyBot(commands.Bot):
                     defender_team = EXCLUDED.defender_team,
                     map_name = EXCLUDED.map_name,
                     time_limit_minutes = EXCLUDED.time_limit_minutes,
+                    lua_warmup_seconds = EXCLUDED.lua_warmup_seconds,
+                    lua_warmup_start_unix = EXCLUDED.lua_warmup_start_unix,
+                    lua_pause_events = EXCLUDED.lua_pause_events,
+                    surrender_team = EXCLUDED.surrender_team,
+                    surrender_caller_guid = EXCLUDED.surrender_caller_guid,
+                    surrender_caller_name = EXCLUDED.surrender_caller_name,
+                    axis_score = EXCLUDED.axis_score,
+                    allies_score = EXCLUDED.allies_score,
                     lua_version = EXCLUDED.lua_version,
                     captured_at = CURRENT_TIMESTAMP
             """
+
+            # Get pause events array (v1.3.0)
+            pause_events = round_metadata.get('lua_pause_events', [])
 
             params = (
                 match_id,
@@ -2809,6 +2898,14 @@ class UltimateETLegacyBot(commands.Bot):
                 round_metadata.get('defender_team'),
                 map_name,
                 round_metadata.get('time_limit_minutes'),
+                round_metadata.get('lua_warmup_seconds', 0),
+                round_metadata.get('lua_warmup_start_unix', 0),
+                json.dumps(pause_events),  # v1.3.0: Pause event timestamps
+                round_metadata.get('surrender_team', 0),  # v1.4.0
+                round_metadata.get('surrender_caller_guid', ''),  # v1.4.0
+                round_metadata.get('surrender_caller_name', ''),  # v1.4.0
+                round_metadata.get('axis_score', 0),  # v1.4.0
+                round_metadata.get('allies_score', 0),  # v1.4.0
                 lua_version,
             )
 
@@ -2845,7 +2942,7 @@ class UltimateETLegacyBot(commands.Bot):
             }
 
             # List files on server to find the matching one
-            files = await SSHHandler.list_files(ssh_config)
+            files = await SSHHandler.list_remote_files(ssh_config)
             if not files:
                 webhook_logger.warning("No files found on server")
                 return

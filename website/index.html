@@ -423,37 +423,51 @@
                         </div>
 
                         <!-- Expanded view (hidden by default) -->
-                        <div id="voice-expanded-content" class="hidden border-t border-white/10 p-4 bg-black/20">
-                            <div class="flex justify-between items-center mb-3">
-                                <span class="text-sm font-bold text-white">Voice Activity</span>
-                                <div class="flex gap-2">
-                                    <button onclick="loadVoiceActivity(24)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">24h</button>
-                                    <button onclick="loadVoiceActivity(72)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">3d</button>
-                                    <button onclick="loadVoiceActivity(168)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">7d</button>
-                                    <button onclick="loadVoiceActivity(720)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-brand-purple/20 text-brand-purple transition active">30d</button>
+                        <div id="voice-expanded-content" class="hidden border-t border-white/10 bg-black/20">
+                            <!-- Current Members Section -->
+                            <div id="voice-current-members" class="p-4 border-b border-white/5">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <i data-lucide="users" class="w-4 h-4 text-brand-purple"></i>
+                                    <span class="text-sm font-bold text-white">Currently in Voice</span>
+                                </div>
+                                <div id="voice-members-detailed" class="space-y-2">
+                                    <div class="text-sm text-slate-500">No one in voice</div>
                                 </div>
                             </div>
-                            <div class="relative">
-                                <canvas id="voice-activity-chart" class="w-full" height="128"></canvas>
-                                <div id="voice-no-data" class="hidden absolute inset-0 flex items-center justify-center">
-                                    <div class="text-center text-slate-500">
-                                        <i data-lucide="bar-chart-2" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
-                                        Collecting activity data...
+
+                            <!-- Activity Chart Section -->
+                            <div class="p-4">
+                                <div class="flex justify-between items-center mb-3">
+                                    <span class="text-sm font-bold text-white">Voice Activity</span>
+                                    <div class="flex gap-1">
+                                        <button onclick="loadVoiceActivity(24)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">24h</button>
+                                        <button onclick="loadVoiceActivity(72)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">3d</button>
+                                        <button onclick="loadVoiceActivity(168)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">7d</button>
+                                        <button onclick="loadVoiceActivity(720)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-brand-purple/20 text-brand-purple transition active">30d</button>
                                     </div>
                                 </div>
-                            </div>
-                            <div id="voice-stats-summary" class="grid grid-cols-3 gap-4 mt-4">
-                                <div class="text-center">
-                                    <div id="stat-peak-members" class="text-xl font-black text-brand-purple">-</div>
-                                    <div class="text-[10px] text-slate-500 uppercase">Peak Members</div>
+                                <div class="relative h-32">
+                                    <canvas id="voice-activity-chart" class="w-full"></canvas>
+                                    <div id="voice-no-data" class="hidden absolute inset-0 flex items-center justify-center">
+                                        <div class="text-center text-slate-500">
+                                            <i data-lucide="bar-chart-2" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                                            <div class="text-sm">Collecting activity data...</div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="text-center">
-                                    <div id="stat-avg-members" class="text-xl font-black text-brand-purple">-</div>
-                                    <div class="text-[10px] text-slate-500 uppercase">Avg Members</div>
-                                </div>
-                                <div class="text-center">
-                                    <div id="stat-total-sessions" class="text-xl font-black text-brand-purple">-</div>
-                                    <div class="text-[10px] text-slate-500 uppercase">Sessions</div>
+                                <div id="voice-stats-summary" class="grid grid-cols-3 gap-4 mt-4">
+                                    <div class="text-center p-2 rounded-lg bg-slate-800/50">
+                                        <div id="stat-peak-members" class="text-xl font-black text-brand-purple">-</div>
+                                        <div class="text-[10px] text-slate-500 uppercase">Peak</div>
+                                    </div>
+                                    <div class="text-center p-2 rounded-lg bg-slate-800/50">
+                                        <div id="stat-avg-members" class="text-xl font-black text-brand-purple">-</div>
+                                        <div class="text-[10px] text-slate-500 uppercase">Average</div>
+                                    </div>
+                                    <div class="text-center p-2 rounded-lg bg-slate-800/50">
+                                        <div id="stat-total-sessions" class="text-xl font-black text-brand-purple">-</div>
+                                        <div class="text-[10px] text-slate-500 uppercase">Sessions</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

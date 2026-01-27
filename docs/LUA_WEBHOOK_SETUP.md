@@ -2,13 +2,17 @@
 
 Real-time round notifications from ET:Legacy game server to Discord bot.
 
+**Current Version:** v1.3.0
+
 ## Overview
 
 This feature allows the game server to instantly notify the bot when rounds complete, providing:
-- **Instant notifications** (~1 second vs 60-second SSH polling)
+- **Instant notifications** (~1-3 seconds vs 60-second SSH polling)
 - **Accurate timing on surrenders** (fixes the surrender duration bug)
-- **Pause tracking** (new capability)
+- **Pause tracking** with individual pause timestamps (v1.3.0)
+- **Warmup duration tracking** (v1.2.0+)
 - **Winner/team detection** from game engine data
+- **Timing legend** explaining Playtime vs Warmup vs Wall-clock (v1.3.0)
 
 ## Architecture
 
@@ -26,24 +30,33 @@ The bot's LAN machine remains outbound-only (no ports exposed). Discord acts as 
 
 ## Setup Steps
 
-### 1. Database Migration (One-Time)
+### 1. Database Migrations (One-Time)
 
-Add the new timing columns to your database:
+Run all migrations in order:
 
 ```bash
 cd /home/samba/share/slomix_discord
-psql -d etlegacy -f migrations/001_add_timing_metadata_columns.sql
+
+# Core timing columns
+psql -d etlegacy -f tools/migrations/001_add_timing_metadata_columns.sql
+
+# Lua round teams table (for webhook data)
+psql -d etlegacy -f tools/migrations/002_add_lua_round_teams_table.sql
+
+# Warmup tracking (v1.2.0+)
+psql -d etlegacy -f tools/migrations/003_add_warmup_columns.sql
+
+# Pause events (v1.3.0+)
+psql -d etlegacy -f tools/migrations/004_add_pause_events.sql
 ```
 
-Or run these manually:
-```sql
-ALTER TABLE rounds ADD COLUMN IF NOT EXISTS round_start_unix BIGINT;
-ALTER TABLE rounds ADD COLUMN IF NOT EXISTS round_end_unix BIGINT;
-ALTER TABLE rounds ADD COLUMN IF NOT EXISTS actual_duration_seconds INTEGER;
-ALTER TABLE rounds ADD COLUMN IF NOT EXISTS total_pause_seconds INTEGER DEFAULT 0;
-ALTER TABLE rounds ADD COLUMN IF NOT EXISTS pause_count INTEGER DEFAULT 0;
-ALTER TABLE rounds ADD COLUMN IF NOT EXISTS end_reason VARCHAR(20);
-```
+**Migrations explained:**
+| Migration | Purpose |
+|-----------|---------|
+| 001 | Timing columns on `rounds` table |
+| 002 | Create `lua_round_teams` table for webhook data |
+| 003 | Add `lua_warmup_seconds`, `lua_warmup_start_unix` columns |
+| 004 | Add `lua_pause_events` JSONB column for pause timestamps |
 
 ### 2. Create Discord Webhook
 
@@ -83,12 +96,35 @@ ALTER TABLE rounds ADD COLUMN IF NOT EXISTS end_reason VARCHAR(20);
 3. Check your Discord control channel - you should see an embed like:
    ```
    Round Complete: supply R1
-   Winner: 2
-   Duration: 847 sec
-   Pauses: 0 (0 sec)
-   End Reason: time_expired
+
+   **Timing Legend:**
+   • Playtime = actual gameplay (pauses excluded)
+   • Warmup = waiting before round
+   • Wall-clock = WarmupStart→RoundEnd
+
+   Lua_Playtime: 847 sec
+   Lua_Warmup: 45 sec
+   Lua_Pauses: 0 (0 sec)
+   Lua_EndReason: time_expired
+   Lua_RoundStart: 1737830400
+   Lua_RoundEnd: 1737831247
+   Lua_WarmupStart: 1737830355
+   Lua_WarmupEnd: 1737830400
    ```
 4. The bot should then fetch the stats file and post to your stats channel
+
+**v1.3.0 Webhook Fields:**
+| Field | Description |
+|-------|-------------|
+| `Lua_Playtime` | Actual gameplay time (pauses excluded) |
+| `Lua_Warmup` | Pre-round warmup duration |
+| `Lua_Pauses` | Count and total duration |
+| `Lua_Pauses_JSON` | Detailed pause timestamps (if pauses occurred) |
+| `Lua_WarmupStart` | When warmup began |
+| `Lua_WarmupEnd` | When warmup ended (= round start) |
+| `Lua_RoundStart` | When gameplay began |
+| `Lua_RoundEnd` | When round ended |
+| `Lua_EndReason` | objective/surrender/time_expired |
 
 ## Troubleshooting
 

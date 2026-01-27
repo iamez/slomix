@@ -329,9 +329,10 @@ export async function loadPlayerRecentMatches(playerName) {
             const kdColor = kd >= 2.0 ? 'text-brand-emerald' : kd >= 1.0 ? 'text-brand-blue' : 'text-brand-rose';
             const safeMapName = escapeHtml(match.map_name);
             const matchDate = new Date(match.round_date).toLocaleDateString();
+            const roundId = match.round_id;
 
             const html = `
-                <div class="glass-card p-4 rounded-lg hover:bg-white/10 transition cursor-pointer" onclick="loadMatchDetails('${match.round_date}')">
+                <div class="glass-card p-4 rounded-lg hover:bg-white/10 transition cursor-pointer" onclick="loadMatchDetails(${roundId})">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-4">
                             <div class="w-12 h-12 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center">

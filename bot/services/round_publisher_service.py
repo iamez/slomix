@@ -27,9 +27,10 @@ class RoundPublisherService:
     3. Build rich Discord embed with ALL players ranked by kills
     4. Post to production channel
     5. Check if map complete → Post aggregate map summary if last round
+    6. Post timing debug comparison if enabled
     """
 
-    def __init__(self, bot, config, db_adapter):
+    def __init__(self, bot, config, db_adapter, timing_debug_service=None, timing_comparison_service=None):
         """
         Initialize round publisher service.
 
@@ -37,10 +38,14 @@ class RoundPublisherService:
             bot: Discord bot instance (for channel access)
             config: BotConfig instance (for production_channel_id)
             db_adapter: DatabaseAdapter instance (for database queries)
+            timing_debug_service: Optional TimingDebugService for timing comparisons
+            timing_comparison_service: Optional TimingComparisonService for per-player timing analysis
         """
         self.bot = bot
         self.config = config
         self.db_adapter = db_adapter
+        self.timing_debug_service = timing_debug_service
+        self.timing_comparison_service = timing_comparison_service
 
         logger.info("✅ RoundPublisherService initialized")
 
@@ -368,6 +373,21 @@ class RoundPublisherService:
 
             # 🗺️ Check if this was the last round for the map → post map summary
             await self._check_and_post_map_completion(round_id, map_name, round_num, channel)
+
+            # ⏱️ Post timing debug comparison (stats file vs Lua webhook)
+            if self.timing_debug_service and self.timing_debug_service.enabled:
+                await self.timing_debug_service.post_round_timing_comparison(
+                    round_id=round_id
+                )
+
+            # 👥 Post per-player timing comparison (dev channel)
+            if (self.timing_comparison_service and
+                self.config.timing_comparison_enabled and
+                self.config.dev_timing_channel_id):
+                await self.timing_comparison_service.post_timing_comparison(
+                    round_id=round_id,
+                    dev_channel_id=self.config.dev_timing_channel_id
+                )
 
             logger.info("=" * 60)
 

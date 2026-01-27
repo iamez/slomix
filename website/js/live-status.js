@@ -404,11 +404,108 @@ export function toggleVoiceDetails() {
     if (voiceExpanded) {
         expandedContent.classList.remove('hidden');
         expandIcon?.classList.add('rotate-180');
-        // Load chart data on first expand
+        // Load detailed members and chart data on expand
+        loadCurrentVoiceMembers();
         loadVoiceActivity(currentVoiceTimeRange);
     } else {
         expandedContent.classList.add('hidden');
         expandIcon?.classList.remove('rotate-180');
+    }
+}
+
+/**
+ * Format duration in seconds to human readable
+ */
+function formatDuration(seconds) {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) {
+        const mins = Math.floor(seconds / 60);
+        return `${mins}m`;
+    }
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+/**
+ * Load detailed current voice members
+ */
+export async function loadCurrentVoiceMembers() {
+    const container = document.getElementById('voice-members-detailed');
+    if (!container) return;
+
+    try {
+        const data = await fetchJSON(`${API_BASE}/voice-activity/current`);
+
+        if (data.total_count === 0) {
+            container.innerHTML = `
+                <div class="flex items-center gap-3 text-slate-500">
+                    <i data-lucide="mic-off" class="w-4 h-4"></i>
+                    <span class="text-sm">No one currently in voice</span>
+                </div>
+            `;
+            lucide.createIcons();
+            return;
+        }
+
+        // Group by channel if we have channel info
+        if (data.channels && data.channels.length > 0) {
+            container.innerHTML = data.channels.map(channel => `
+                <div class="mb-3 last:mb-0">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i data-lucide="hash" class="w-3 h-3 text-slate-500"></i>
+                        <span class="text-xs font-bold text-slate-400 uppercase">${escapeHtml(channel.name)}</span>
+                        <span class="text-xs text-slate-600">(${channel.members.length})</span>
+                    </div>
+                    <div class="space-y-1.5 ml-5">
+                        ${channel.members.map(m => `
+                            <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-6 h-6 rounded-full bg-gradient-to-br from-brand-purple to-brand-blue flex items-center justify-center text-[10px] font-bold text-white">
+                                        ${escapeHtml(m.name.charAt(0).toUpperCase())}
+                                    </div>
+                                    <span class="text-sm font-medium text-white">${escapeHtml(m.name)}</span>
+                                </div>
+                                <div class="flex items-center gap-2 text-xs text-slate-500">
+                                    <i data-lucide="clock" class="w-3 h-3"></i>
+                                    <span>${formatDuration(m.duration_seconds || 0)}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            // Flat list without channel grouping
+            container.innerHTML = `
+                <div class="space-y-1.5">
+                    ${data.members.map(m => `
+                        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition">
+                            <div class="flex items-center gap-2">
+                                <div class="w-6 h-6 rounded-full bg-gradient-to-br from-brand-purple to-brand-blue flex items-center justify-center text-[10px] font-bold text-white">
+                                    ${escapeHtml(m.name.charAt(0).toUpperCase())}
+                                </div>
+                                <span class="text-sm font-medium text-white">${escapeHtml(m.name)}</span>
+                            </div>
+                            ${m.duration_seconds ? `
+                                <div class="flex items-center gap-2 text-xs text-slate-500">
+                                    <i data-lucide="clock" class="w-3 h-3"></i>
+                                    <span>${formatDuration(m.duration_seconds)}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        lucide.createIcons();
+
+    } catch (e) {
+        console.error('Failed to load current voice members:', e);
+        container.innerHTML = `
+            <div class="text-sm text-slate-500">Could not load member details</div>
+        `;
     }
 }
 
@@ -549,9 +646,15 @@ export async function loadVoiceActivity(hours = 720) {
 
     } catch (e) {
         console.error('Failed to load voice activity:', e);
+        // Show no-data state on error
+        const chartContainer = document.getElementById('voice-activity-chart');
+        const noDataDiv = document.getElementById('voice-no-data');
+        if (chartContainer) chartContainer.style.display = 'none';
+        if (noDataDiv) noDataDiv.classList.remove('hidden');
     }
 }
 
 // Expose voice functions to window
 window.toggleVoiceDetails = toggleVoiceDetails;
 window.loadVoiceActivity = loadVoiceActivity;
+window.loadCurrentVoiceMembers = loadCurrentVoiceMembers;

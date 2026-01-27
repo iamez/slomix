@@ -2,18 +2,32 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **📝 Session Memory:** Check `.claude/memories.md` for recent session context, ongoing work, and things to remember across sessions.
+
 ---
 
 # Slomix - ET:Legacy Discord Bot
 
-**Version**: 1.0.4 (Updated: January 22, 2026)
+**Version**: 1.0.5 (Updated: January 24, 2026)
 **Project**: ET:Legacy Statistics Discord Bot
 **Database**: PostgreSQL (primary), SQLite (fallback)
 **Language**: Python 3.11+
 **Discord.py**: Version 2.0+
 **Status**: Production-Ready ✅
 
-## Recent Updates (1.0.4)
+## Recent Updates (1.0.5)
+
+- **Lua Webhook v1.3.0** - Enhanced timing capture from game server
+  - Pause event timestamps (`Lua_Pauses_JSON`) - know exactly when each pause occurred
+  - Warmup end timestamp (`Lua_WarmupEnd`) - when warmup phase ended
+  - Timing legend in Discord embed explaining Playtime vs Warmup vs Wall-clock
+  - Database: `lua_pause_events` JSONB column for queryable pause data
+- **Lua Webhook v1.2.0** - Warmup phase tracking
+  - `Lua_Warmup` - warmup duration in seconds
+  - `Lua_WarmupStart` - Unix timestamp when warmup began
+- **Field Naming Convention** - All webhook fields use `Lua_` prefix to distinguish from stats file
+
+## Previous Updates (1.0.4)
 
 - **Lua Webhook Real-Time Stats** - Instant round notification from game server (~3s vs 60s polling)
 - **Surrender Timing Fix** - Accurate duration captured via Lua (stats files show wrong time on surrender)
@@ -28,6 +42,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - SHA256 file integrity checking on import
 - Cross-field data validation (headshots <= kills, etc.)
 - CLAUDE.md files in all core directories
+
+---
+
+## 🤖 Claude Code Environment
+
+### File Structure
+```
+/CLAUDE.md                    # Symlink → docs/CLAUDE.md (auto-loaded by Claude Code)
+docs/CLAUDE.md                # Main documentation (this file)
+.claude/
+├── settings.json             # Project permissions (gitignored)
+├── settings.local.json       # Local permissions (gitignored)
+└── memories.md               # Session memory (gitignored)
+~/.claude/
+├── settings.json             # Global user settings
+└── mcp.json                  # MCP server configurations
+```
+
+### MCP PostgreSQL Server
+Direct database access via MCP tools (`mcp__db__execute_sql`, `mcp__db__search_objects`):
+```bash
+# Configured via:
+claude mcp add --transport stdio --scope user db -- npx -y @bytebase/dbhub \
+  --dsn "postgresql://etlegacy_user:etlegacy_secure_2025@localhost:5432/etlegacy"
+```
+
+### User Preferences
+- **Model**: Opus (claude-opus-4-5-20251101)
+- **Default Mode**: Plan (requires approval before edits)
+- **Output Style**: Explanatory (educational insights enabled)
+
+### Related Projects
+See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project documentation.
 
 ---
 
@@ -146,17 +193,32 @@ ET:Legacy Game Server → SSH Monitor → Parser → PostgreSQL → Discord Bot 
 
 #### Lua Webhook Real-Time Notification (Jan 2026)
 
-**New system for instant stats notification, fixing surrender timing bug:**
+**Real-time stats notification system, fixing surrender timing bug:**
 
 ```
 Game Server Lua → POST to Discord Webhook → Bot sees message → SSH fetch → Override timing
 ```
 
-- **Lua Script**: `vps_scripts/stats_discord_webhook.lua` (v1.1.0) runs on game server
+- **Lua Script**: `vps_scripts/stats_discord_webhook.lua` (v1.3.0) runs on game server
 - **Trigger**: Gamestate transition PLAYING → INTERMISSION
-- **Data Captured**: Accurate timing, winner, pause count, team composition
+- **Data Captured**: Accurate timing, winner, pause events, warmup duration, team composition
 - **Storage**: `lua_round_teams` table (separate from stats file data)
 - **Purpose**: Fixes surrender timing bug (stats files show full map time on surrender)
+
+**Webhook Fields (v1.3.0):**
+| Field | Description |
+|-------|-------------|
+| `Lua_Playtime` | Actual gameplay (pauses excluded) |
+| `Lua_Warmup` | Pre-round warmup duration |
+| `Lua_Pauses` | Count + total duration |
+| `Lua_Pauses_JSON` | Individual pause timestamps (v1.3.0) |
+| `Lua_WarmupStart` / `Lua_WarmupEnd` | Warmup phase timestamps |
+| `Lua_RoundStart` / `Lua_RoundEnd` | Gameplay timestamps |
+| `Lua_EndReason` | objective/surrender/time_expired |
+
+**Database columns (`lua_round_teams`):**
+- `lua_warmup_seconds`, `lua_warmup_start_unix` (v1.2.0+)
+- `lua_pause_events` JSONB (v1.3.0+)
 
 **Why needed:** Stats files have a bug where surrenders show full map duration (e.g., 20 min) instead of actual played time (e.g., 8 min). Lua captures the exact moment the round ends.
 
@@ -164,6 +226,8 @@ Game Server Lua → POST to Discord Webhook → Bot sees message → SSH fetch �
 - `rounds` table: Stats file data
 - `lua_round_teams` table: Lua webhook data
 - Compare timing to detect/validate surrender scenarios
+
+**See:** `docs/reference/TIMING_DATA_SOURCES.md` for complete timing documentation.
 
 #### Timing Configuration (Dec 2025 Update)
 
@@ -753,9 +817,9 @@ SELECT COUNT(*) FROM processed_files WHERE success = true;
 
 ---
 
-**Version**: 1.0.2
-**Release Date**: December 15, 2025
-**Last Updated**: 2025-12-15
+**Version**: 1.0.5
+**Release Date**: January 24, 2026
+**Last Updated**: 2026-01-26
 **Schema Version**: 2.0
 **Repository Size**: ~50-100 MB (cleaned)
 **Status**: Production-ready, fully documented, maintainable ✅
