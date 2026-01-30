@@ -489,13 +489,29 @@ class SessionEmbedBuilder:
         unique_maps: int,
         team_1_score: int,
         team_2_score: int,
-        hardcoded_teams: bool
+        hardcoded_teams: bool,
+        detection_confidence: str = 'high'
     ) -> discord.Embed:
-        """Build team composition embed with rosters and session info."""
+        """Build team composition embed with rosters and session info.
+
+        Args:
+            detection_confidence: Team detection confidence ('high'/'medium'/'low')
+                - high: All players consistent across session
+                - medium: Mostly consistent with few variations
+                - low: Inconsistent team assignments
+        """
+        # Confidence indicator emoji
+        confidence_emoji = {
+            'high': '✅',
+            'medium': '⚠️',
+            'low': '❌'
+        }.get(detection_confidence, '❓')
+
         embed = discord.Embed(
             title="👥 Team Composition",
             description=(
                 f"Player roster for {team_1_name} vs {team_2_name}\n"
+                f"{confidence_emoji} **Detection Confidence:** {detection_confidence.upper()}\n"
                 "🔄 indicates players who swapped teams during session"
             ),
             color=0x57F287,
