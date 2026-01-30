@@ -291,7 +291,11 @@ class TimingComparisonService:
 
         embed = discord.Embed(
             title=f"📊 TIMING COMPARISON - {map_name} R{round_number}",
-            description=f"**Status:** {status}",
+            description=f"**Status:** {status}\n\n"
+                       f"**Timing Legend:**\n"
+                       f"⏱ **Playtime** = Actual gameplay (pauses excluded)\n"
+                       f"🔥 **Warmup** = Pre-round warmup phase\n"
+                       f"🕐 **Wall-clock** = Total elapsed time (includes pauses + warmup)",
             color=color,
             timestamp=datetime.now()
         )
