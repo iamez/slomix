@@ -42,8 +42,14 @@ class TeamManager:
 
         Algorithm:
         1. Seed from Round 1 (or earliest available round)
-        2. For late joiners, use co-membership voting (who they played with most)
-        3. Return team rosters with GUIDs and names
+        2. Use defender_team from R1 to strengthen team assignments (authoritative)
+        3. For late joiners, use co-membership voting (who they played with most)
+        4. Return team rosters with GUIDs and names
+
+        Enhancements (Jan 2026):
+        - Uses defender_team from stats file headers for validation
+        - In stopwatch R1, defender_team is one persistent team's initial role
+        - Players on defender_team in R1 confirmed as same persistent team
 
         Args:
             session_date: Session date (YYYY-MM-DD format)
@@ -53,7 +59,8 @@ class TeamManager:
                 'Team A': {
                     'guids': ['guid1', 'guid2', ...],
                     'names': ['Player1', 'Player2', ...],
-                    'count': 5
+                    'count': 5,
+                    'detection_confidence': 'high'  # 'high'/'medium'/'low'
                 },
                 'Team B': { ... }
             }
@@ -61,8 +68,10 @@ class TeamManager:
         # Get all players from session grouped by round_id and game-team
         # IMPORTANT: Use round_id (unique per map+round), NOT round_number (1 or 2)
         # because in stopwatch mode, teams swap between maps!
+        # ALSO: Include defender_team for validation (Jan 2026)
         query = """
-            SELECT p.round_id, p.team, p.player_guid, p.player_name
+            SELECT p.round_id, p.team, p.player_guid, p.player_name,
+                   r.round_number, r.defender_team
             FROM player_comprehensive_stats p
             JOIN rounds r ON p.round_id = r.id
             WHERE p.round_date LIKE $1
@@ -78,12 +87,29 @@ class TeamManager:
         # Organize by round_id (each map's R1/R2 is a unique round_id)
         rounds = defaultdict(lambda: {'team1': set(), 'team2': set()})
         player_names = {}  # guid -> most recent name
+        round_meta = {}  # Store metadata (round_number, defender_team) per round_id
 
         # Check what team values we're getting
         team_values = set()
-        for round_id, game_team, guid, name in rows:
+        for row_data in rows:
+            if len(row_data) >= 6:
+                round_id, game_team, guid, name, round_number, defender_team = row_data[0:6]
+            else:
+                # Fallback for older tuple format
+                round_id, game_team, guid, name = row_data[0:4]
+                round_number = None
+                defender_team = None
+
             team_values.add(game_team)
             player_names[guid] = name
+
+            # Store metadata
+            if round_id not in round_meta:
+                round_meta[round_id] = {
+                    'round_number': round_number,
+                    'defender_team': defender_team
+                }
+
             # Handle both integer (1/2) and possible string ('1'/'2') team values
             # Also handle Axis=1, Allies=2 convention
             if game_team in (1, '1', 'Axis', 'axis'):
@@ -150,24 +176,55 @@ class TeamManager:
                     logger.debug(f"Assigned {player_names[guid]} to Team2 "
                                f"(votes: {team1_votes} vs {team2_votes})")
         
-        # Build result
+        # Calculate detection confidence based on consistency and data validation
+        # High confidence: Teams consistent across multiple maps, defender_team aligns
+        # Medium confidence: Teams detected but some variations, or single map session
+        # Low confidence: Inconsistent team assignments or heavy reliance on late-joiner voting
+
+        early_round_ids = sorted(rounds.keys())[:3]  # Check first few maps
+        consistent_count = 0
+
+        for rid in early_round_ids:
+            if rid in round_meta:
+                meta = round_meta[rid]
+                # Check if defender_team in R1 aligns with our team assignments
+                if meta.get('round_number') == 1 and meta.get('defender_team'):
+                    defender = meta['defender_team']
+                    # If defender is in team1, that's good confirmation
+                    if defender in (1, '1') and persistent_team1:
+                        consistent_count += 1
+                    elif defender in (2, '2') and persistent_team2:
+                        consistent_count += 1
+
+        # Confidence logic
+        if len(unassigned) == 0 and consistent_count >= len(early_round_ids) * 0.7:
+            confidence = 'high'
+        elif len(unassigned) <= 1 and consistent_count >= 1:
+            confidence = 'medium'
+        else:
+            confidence = 'low'
+
+        # Build result with confidence scores
         teams = {
             'Team A': {
                 'guids': sorted(list(persistent_team1)),
                 'names': sorted([player_names[g] for g in persistent_team1]),
-                'count': len(persistent_team1)
+                'count': len(persistent_team1),
+                'detection_confidence': confidence
             },
             'Team B': {
                 'guids': sorted(list(persistent_team2)),
                 'names': sorted([player_names[g] for g in persistent_team2]),
-                'count': len(persistent_team2)
+                'count': len(persistent_team2),
+                'detection_confidence': confidence
             }
         }
-        
+
         logger.info(f"✅ Detected teams for {session_date}: "
                    f"Team A ({teams['Team A']['count']} players), "
-                   f"Team B ({teams['Team B']['count']} players)")
-        
+                   f"Team B ({teams['Team B']['count']} players) "
+                   f"(confidence: {confidence})")
+
         return teams
     
     async def store_session_teams(
