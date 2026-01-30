@@ -1,0 +1,224 @@
+================================================================================
+TONIGHT'S WORK - QUICK REFERENCE
+2026-01-30 Session (12+ hours)
+================================================================================
+
+WHAT WE FIXED TONIGHT:
+----------------------
+
+✅ 1. R2 Parser Bug (12 corrupted fields)
+   - Fixed: bot/community_stats_parser.py lines 33-54, 540-563, 641-645
+   - Impact: 1,933 player records with negative values
+   - Fields: headshot_kills, time_dead_minutes, denied_playtime, xp, etc.
+
+✅ 2. Lua Webhook Gamestate Detection
+   - Fixed: vps_scripts/stats_discord_webhook.lua lines 141, 567
+   - Changed: et.GS_PLAYING → 0 (hardcoded constant)
+   - Fixes: "NO LUA DATA" issue
+
+✅ 3. ON CONFLICT Header Data Update
+   - Fixed: postgresql_database_manager.py lines 957-963
+   - Added: winner_team, defender_team to UPDATE clause
+   - Enables: Re-import without losing header data
+
+✅ 4. Auto Team Assignment from R1 Header
+   - Added: postgresql_database_manager.py lines 815-954 (138 new lines)
+   - Function: _auto_assign_teams_from_r1()
+   - Creates: session_teams table entries automatically
+
+✅ 5. Session Score Tracking
+   - Added: bot/services/session_stats_aggregator.py lines 151-213 (59 lines)
+   - Function: calculate_session_scores()
+   - Uses: winner_team from rounds table
+
+✅ 6. Last Session Score Display
+   - Modified: bot/cogs/last_session_cog.py lines 236-246
+   - Shows: Team names and scores in !last_session
+
+✅ 7. Code Review Fixes (3 applied)
+   - Spectator filter (team != 1,2)
+   - Use parsed round_number instead of filename
+   - Logging for unexpected winner_team values
+
+
+WHAT NEEDS TESTING:
+-------------------
+
+⚠️  DATABASE STATE:
+    - 10 rounds from 2026-01-27+ have defender_team=0, winner_team=0
+    - 0 session_teams entries for recent dates
+    - 3 spectator records (team=3) exist
+
+⚠️  RE-IMPORT NEEDED:
+    - Date range: 2026-01-27 to 2026-01-30
+    - Cannot use postgresql_database_manager.py (outdated, will break DB)
+    - Need alternative approach
+
+📋 PRIORITY TESTS (see TOMORROW_CHECKLIST.md for details):
+
+    1. Re-import 2026-01-27 to 2026-01-30 (15 min)
+       - Expected: defender_team/winner_team populated
+       - Expected: session_teams auto-created
+       - Expected: Console shows "Auto-assigned teams"
+
+    2. Test !last_session display (5 min)
+       - Expected: Team names show (not blank)
+       - Expected: Scores show numbers (not 0-0)
+       - Expected: No "⚠️ No team rosters available" warning
+
+    3. Verify R2 fields positive (10 min)
+       - Query: SELECT COUNT(*) FROM player_comprehensive_stats
+                WHERE round_number = 2 AND headshot_kills < 0;
+       - Expected: 0 (no negatives)
+
+    4. Wait for next live game (variable)
+       - Test: Lua webhook fires
+       - Test: Auto-assignment triggers on R1
+       - Test: Timing comparison shows Lua data
+
+
+DOCUMENTATION REFERENCE:
+------------------------
+
+📁 docs/2026-01-30-r2-parser-fix/
+
+  START HERE:
+  → TOMORROW_CHECKLIST.md        - Complete testing guide with SQL queries
+  → reports/MASTER_CODE_REVIEW.md - Full technical analysis + edge cases
+
+  SUPPORTING DOCS:
+  → reports/IMPLEMENTATION_SUMMARY.md   - Feature overview
+  → reports/CODE_REVIEW_FINDINGS.md     - Detailed bug analysis
+  → reports/PARSER_FIX_COMPLETE.md      - R2 parser technical details
+  → reports/LUA_WEBHOOK_FIX.md          - Webhook gamestate fix
+  → reports/EVENING_SESSION_SUMMARY.md  - Tonight's work log
+
+
+GIT STATUS:
+-----------
+
+Branch: feature/lua-webhook-realtime-stats
+Status: 4 commits ahead of origin
+
+Modified files (not committed):
+  ✏️  bot/cogs/last_session_cog.py
+  ✏️  bot/community_stats_parser.py
+  ✏️  bot/services/session_stats_aggregator.py
+  ✏️  bot/ultimate_bot.py
+  ✏️  postgresql_database_manager.py
+  ✏️  vps_scripts/stats_discord_webhook.lua
+
+New docs (not committed):
+  📄 docs/2026-01-30-r2-parser-fix/ (all files)
+
+
+NEXT STEPS:
+-----------
+
+1. ✅ Commit all changes with descriptive message
+2. ⚠️  Find safe way to re-import 2026-01-27 to 2026-01-30
+       (postgresql_database_manager.py is outdated - avoid!)
+3. 🧪 Run tests from TOMORROW_CHECKLIST.md
+4. 🚀 Wait for next live game to test Lua webhook
+5. ✅ If all tests pass, merge to main
+
+
+KNOWN ISSUES FROM CODE REVIEW:
+-------------------------------
+
+🔴 MEDIUM Priority (3 issues):
+
+  1. Spectator Players (team=3)
+     - Impact: May be assigned to Team B
+     - Status: Filter applied, needs re-import to take effect
+
+  2. Midnight Crossover Sessions
+     - Impact: Team lookup may fail across date boundary
+     - Status: gaming_session_id should bridge it, monitor naturally
+
+  3. R0 Warmup Rounds
+     - Impact: Have header data but filtered from calculations
+     - Status: Working as designed, verify no side effects
+
+🟡 LOW Priority (2 issues):
+
+  4. Filename-based R1 Detection
+     - Impact: Relies on string match instead of parsed data
+     - Status: Fixed - now uses parsed round_number
+
+  5. Hardcoded Team Names
+     - Impact: Always shows "Team A" vs "Team B"
+     - Status: Works correctly with session_teams
+
+
+QUICK COMMAND REFERENCE:
+-------------------------
+
+# Check database state
+PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy \
+  -c "SELECT round_date, round_number, defender_team, winner_team FROM rounds WHERE round_date >= '2026-01-27' ORDER BY round_date, round_time LIMIT 20;"
+
+# Check session_teams entries
+PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy \
+  -c "SELECT * FROM session_teams WHERE session_start_date >= '2026-01-27';"
+
+# Check for spectators
+PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy \
+  -c "SELECT COUNT(*), team FROM player_comprehensive_stats WHERE team NOT IN (1,2) GROUP BY team;"
+
+# Check R2 negative values
+PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy \
+  -c "SELECT COUNT(*) FROM player_comprehensive_stats WHERE round_number = 2 AND headshot_kills < 0;"
+
+
+CRITICAL WARNING:
+-----------------
+
+⚠️  DO NOT run postgresql_database_manager.py fix_date_range()
+    - Tool is outdated
+    - Missing tonight's fixes
+    - Will likely break database foreign key constraints
+    - Need alternative re-import approach
+
+    Safe alternatives:
+    1. Manual SQL UPDATE of header data
+    2. Standalone script that only updates rounds table
+    3. Wait for bot to process new files naturally
+
+
+ESTIMATED TESTING TIME:
+------------------------
+
+Active testing: ~35 minutes
+  - Re-import: 15 min
+  - !last_session test: 5 min
+  - R2 validation queries: 10 min
+  - Spectator check: 5 min
+
+Passive testing: Variable
+  - Wait for next live game
+  - Monitor Lua webhook
+  - Verify auto-assignment
+
+Total: ~35 min active + wait for live game
+
+
+SUCCESS CRITERIA:
+-----------------
+
+✅ Re-import completes without errors
+✅ defender_team and winner_team are 1 or 2 (not 0)
+✅ session_teams has entries for each session
+✅ !last_session shows team names and scores
+✅ No "⚠️ No team rosters available" warning
+✅ All R2 fields are positive (no negatives)
+✅ SuperBoyy's test case values match expected
+✅ Spectator check returns empty (or fix verified)
+✅ Live game triggers auto-assignment on R1
+✅ Lua webhook fires during game
+✅ Timing comparison shows Lua data (not "NO LUA DATA")
+
+
+================================================================================
+END OF TODO - READ TOMORROW_CHECKLIST.md FOR DETAILED INSTRUCTIONS
+================================================================================
