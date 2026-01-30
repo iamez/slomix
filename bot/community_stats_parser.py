@@ -525,20 +525,14 @@ class C0RNP0RN3StatsParser:
                     diff_minutes = max(0, r2_time - r1_time)
                     differential_player['objective_stats']['time_played_minutes'] = diff_minutes
                 elif key == 'time_dead_minutes':
-                    # FIX: time_dead_minutes in R2 files is NOT cumulative (ET:Legacy Lua bug)
-                    # The time_dead_ratio in R2 appears to be R2-only, not cumulative
-                    # So we calculate: R2-only_dead = (R2_played - R1_played) * R2_ratio / 100
-
-                    # Get the already-calculated differential time_played
-                    diff_time_played = differential_player['objective_stats'].get('time_played_minutes', 0)
-
-                    # Use R2's ratio (which appears to be R2-only, not cumulative)
-                    r2_ratio = r2_obj.get('time_dead_ratio', 0) or 0
-
-                    # Calculate R2-only time_dead from differential time_played and R2 ratio
-                    r2_only_dead_time = diff_time_played * (r2_ratio / 100.0) if diff_time_played > 0 else 0
-
-                    differential_player['objective_stats']['time_dead_minutes'] = max(0, r2_only_dead_time)
+                    # FIXED (Jan 2026): SuperBoyy identified bug in ratio-based calculation
+                    # R2 stats are cumulative, just like all other fields
+                    # Correct approach: R2-only = R2_cumulative - R1_value
+                    # Old approach was counting R1 time_dead twice (via ratio calculation)
+                    r2_dead = r2_obj.get('time_dead_minutes', 0)
+                    r1_dead = r1_obj.get('time_dead_minutes', 0)
+                    diff_dead = max(0, r2_dead - r1_dead)
+                    differential_player['objective_stats']['time_dead_minutes'] = diff_dead
                 elif key == 'time_dead_ratio':
                     # Skip ratio here - will be recalculated from differential values below
                     pass
