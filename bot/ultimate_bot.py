@@ -30,6 +30,7 @@ from bot.services.voice_session_service import VoiceSessionService
 from bot.services.round_publisher_service import RoundPublisherService
 from bot.services.timing_debug_service import TimingDebugService
 from bot.services.timing_comparison_service import TimingComparisonService
+from bot.core.team_manager import TeamManager
 from bot.repositories import FileRepository
 
 # WebSocket client for push-based file notifications (optional)
@@ -227,6 +228,10 @@ class UltimateETLegacyBot(commands.Bot):
         # 📁 File Repository (data access layer for processed files)
         self.file_repository = FileRepository(self.db_adapter, self.config)
         logger.info("✅ File repository initialized")
+
+        # 👥 Team Manager (auto-detect persistent teams from sessions)
+        self.team_manager = TeamManager(self.db_adapter)
+        logger.info("✅ Team manager initialized")
 
         # 🤖 Automation System Flags (OFF by default for dev/testing)
         self.automation_enabled = self.config.automation_enabled
@@ -430,7 +435,7 @@ class UltimateETLegacyBot(commands.Bot):
 
     async def validate_database_schema(self):
         """
-        ✅ CRITICAL: Validate database has correct unified schema (54 columns)
+        ✅ CRITICAL: Validate database has correct unified schema (55 columns)
         Prevents silent failures if wrong schema is used
         Supports both SQLite and PostgreSQL
         """
@@ -452,7 +457,7 @@ class UltimateETLegacyBot(commands.Bot):
                 columns = await self.db_adapter.fetch_all(query)
                 column_names = [col[0] for col in columns]
 
-            expected_columns = 54
+            expected_columns = 55
             actual_columns = len(column_names)
 
             if actual_columns != expected_columns:
@@ -1220,6 +1225,18 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(f"Failed to apply round metadata override: {e}")
             # Non-fatal - stats were still imported correctly
 
+    async def _trigger_team_detection(self, filename: str):
+        """
+        DEPRECATED: Team detection now happens in _handle_team_tracking()
+        during round import.
+
+        This method is kept for backwards compatibility but does nothing.
+        Teams are now created on R1 and updated with new players on each round.
+        """
+        # No-op - team tracking is now handled by _handle_team_tracking()
+        # which is called during _import_stats_to_db() for every round
+        logger.debug(f"_trigger_team_detection called but handled by new system: {filename}")
+
     async def _import_stats_to_db(self, stats_data, filename):
         """Import parsed stats to database"""
         try:
@@ -1361,8 +1378,17 @@ class UltimateETLegacyBot(commands.Bot):
                     logger.info(f"⏭️  Match summary already exists (ID: {match_summary_id})")
 
             logger.info(
-                f"✅ Imported session {round_id} with "
+                f"✅ Imported round {round_id} with "
                 f"{len(stats_data.get('players', []))} players"
+            )
+
+            # 🎯 TEAM TRACKING: Create/update teams on round import
+            # This happens for every round, not just R2
+            await self._handle_team_tracking(
+                round_id=round_id,
+                round_num=stats_data["round_num"],
+                session_date=date_part,
+                gaming_session_id=gaming_session_id
             )
 
             return round_id
@@ -1370,6 +1396,71 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"❌ Database import failed: {e}")
             raise
+
+    async def _handle_team_tracking(
+        self,
+        round_id: int,
+        round_num: int,
+        session_date: str,
+        gaming_session_id: int
+    ):
+        """
+        Handle team creation and updates after a round is imported.
+
+        Strategy:
+        - On R1: Check if this is a new session. If so, create initial teams.
+        - On all rounds: Check for new players and add to appropriate team.
+
+        This allows tracking as games grow from 3v3 → 4v4 → 6v6.
+
+        Args:
+            round_id: The round ID that was just imported
+            round_num: Round number (1 or 2)
+            session_date: Session date (YYYY-MM-DD)
+            gaming_session_id: The gaming session ID
+        """
+        try:
+            if not hasattr(self, 'team_manager') or self.team_manager is None:
+                logger.debug("TeamManager not initialized, skipping team tracking")
+                return
+
+            # Check if teams exist for this session
+            existing_teams = await self.team_manager.get_session_teams(
+                session_date, auto_detect=False
+            )
+
+            if not existing_teams:
+                # No teams yet - this is likely the first round of a new session
+                if round_num == 1:
+                    logger.info(f"🎯 R1 of new session - creating initial teams...")
+                    await self.team_manager.create_initial_teams_from_round(
+                        round_id=round_id,
+                        session_date=session_date,
+                        gaming_session_id=gaming_session_id
+                    )
+                else:
+                    # R2 came before R1 in import order - detect teams from all data
+                    logger.info(f"🎯 R2 without R1 teams - running full detection...")
+                    teams = await self.team_manager.detect_session_teams(session_date)
+                    if teams:
+                        await self.team_manager.store_session_teams(
+                            session_date, teams, auto_assign_names=True
+                        )
+            else:
+                # Teams exist - check for new players (subs/late joiners)
+                new_players = await self.team_manager.update_teams_from_round(
+                    round_id=round_id,
+                    session_date=session_date,
+                    gaming_session_id=gaming_session_id
+                )
+
+                if new_players.get('added'):
+                    for team_name, players in new_players['added'].items():
+                        logger.info(f"🆕 New players added to {team_name}: {', '.join(players)}")
+
+        except Exception as e:
+            logger.warning(f"⚠️ Team tracking failed (non-fatal): {e}")
+            # Non-fatal - round was still imported successfully
 
     async def _calculate_gaming_session_id(self, round_date: str, round_time: str) -> int:
         """
@@ -1977,6 +2068,10 @@ class UltimateETLegacyBot(commands.Bot):
                                 logger.info(f"📊 Posting to Discord: {result.get('player_count', 0)} players")
                                 await self.round_publisher.publish_round_stats(filename, result)
                                 logger.info(f"✅ Successfully processed and posted: {filename}")
+
+                                # 👥 AUTO-DETECT TEAMS after R2 import (FIX 2026-02-01)
+                                # Trigger team detection when we have both rounds of data
+                                await self._trigger_team_detection(filename)
                             else:
                                 error_msg = result.get('error', 'Unknown error') if result else 'No result'
                                 logger.warning(f"⚠️ Processing failed for {filename}: {error_msg}")

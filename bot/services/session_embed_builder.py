@@ -48,24 +48,38 @@ class SessionEmbedBuilder:
                 desc += f"\n\n🤝 **Match Result: {team_1_score} - {team_2_score} (PERFECT TIE)**"
             else:
                 desc += f"\n\n🏆 **Match Result: {team_1_name} {team_1_score} - {team_2_score} {team_2_name}**"
-            
+
             # Add map-by-map breakdown if available
             if scoring_result and 'maps' in scoring_result:
                 desc += "\n\n**📊 Map Breakdown:**"
                 for map_result in scoring_result['maps']:
-                    map_name = map_result['map']
-                    t1_pts = map_result['team1_points']
-                    t2_pts = map_result['team2_points']
-                    
-                    # Show winner emoji
-                    if t1_pts > t2_pts:
-                        winner_emoji = "🟢"
-                    elif t2_pts > t1_pts:
-                        winner_emoji = "🔴"
+                    map_name = map_result.get('map', 'Unknown')
+
+                    # Support both old format (team1_points) and new format (team_a_points)
+                    t1_pts = map_result.get('team_a_points', map_result.get('team1_points', 0))
+                    t2_pts = map_result.get('team_b_points', map_result.get('team2_points', 0))
+
+                    # Get timing info if available (new format)
+                    t1_time = map_result.get('team_a_time', '')
+                    t2_time = map_result.get('team_b_time', '')
+
+                    # Use provided emoji or calculate based on points
+                    winner_emoji = map_result.get('emoji', '')
+                    if not winner_emoji:
+                        if t1_pts > t2_pts:
+                            winner_emoji = "🟢"
+                        elif t2_pts > t1_pts:
+                            winner_emoji = "🔴"
+                        else:
+                            winner_emoji = "🟡"
+
+                    # Build display string
+                    if t1_time and t2_time:
+                        # New format with timing: "🟢 mp_decoy: puran (8:45) vs sWat (fullhold)"
+                        desc += f"\n{winner_emoji} `{map_name}`: {team_1_name} ({t1_time}) vs {team_2_name} ({t2_time})"
                     else:
-                        winner_emoji = "🟡"
-                    
-                    desc += f"\n{winner_emoji} `{map_name}`: {t1_pts}-{t2_pts}"
+                        # Old format: just points
+                        desc += f"\n{winner_emoji} `{map_name}`: {t1_pts}-{t2_pts}"
 
         embed = discord.Embed(
             title=f"📊 Session Summary: {latest_date}",

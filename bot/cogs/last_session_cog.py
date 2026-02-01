@@ -20,9 +20,9 @@ from discord.ext import commands
 from bot.core.checks import is_public_channel
 from bot.core.database_adapter import ensure_player_name_alias
 from bot.core.utils import sanitize_error_message
-from tools.stopwatch_scoring import StopwatchScoring
 from bot.stats import StatsCalculator
 from bot.services.session_data_service import SessionDataService
+from bot.services.stopwatch_scoring_service import StopwatchScoringService
 from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.session_embed_builder import SessionEmbedBuilder
 from bot.services.session_graph_generator import SessionGraphGenerator
@@ -53,6 +53,7 @@ class LastSessionCog(commands.Cog):
         self.badge_service = PlayerBadgeService(bot.db_adapter)
         self.display_name_service = PlayerDisplayNameService(bot.db_adapter)
         self.endstats_aggregator = EndstatsAggregator(bot.db_adapter)
+        self.scoring_service = StopwatchScoringService(bot.db_adapter)
 
         logger.info("✅ All services initialized successfully")
 
@@ -235,17 +236,52 @@ class LastSessionCog(commands.Cog):
 
             # Phase 2: Get hardcoded teams and team scores
             hardcoded_teams = await self.data_service.get_hardcoded_teams(session_ids)
-            team_1_name, team_2_name, team_1_score, team_2_score, scoring_result = await self.data_service.calculate_team_scores(session_ids)
 
-            # Get team mappings FIRST (needed for proper team stats aggregation)
+            # Get team mappings FIRST (needed for proper team stats aggregation and scoring)
             team_1_name_mapped, team_2_name_mapped, team_1_players_list, team_2_players_list, name_to_team = await self.data_service.build_team_mappings(
                 session_ids, session_ids_str, hardcoded_teams
             )
 
-            # Use mapped team names if available
+            # Try to calculate team-aware stopwatch scoring (MAP wins, not round wins)
+            scoring_result = None
+            if hardcoded_teams and len(hardcoded_teams) >= 2:
+                # Build team_rosters dict for scoring service
+                team_rosters = {}
+                for team_name, players in hardcoded_teams.items():
+                    # Extract GUIDs from player data
+                    guids = []
+                    for p in players:
+                        if isinstance(p, dict) and 'guid' in p:
+                            guids.append(p['guid'])
+                        elif isinstance(p, str):
+                            guids.append(p)
+                    team_rosters[team_name] = guids
+
+                scoring_result = await self.scoring_service.calculate_session_scores_with_teams(
+                    latest_date, session_ids, team_rosters
+                )
+
+            if scoring_result:
+                # Use team-aware map scoring (correct for stopwatch mode)
+                team_1_name = scoring_result.get('team_a_name', 'Team A')
+                team_2_name = scoring_result.get('team_b_name', 'Team B')
+                team_1_score = scoring_result.get('team_a_maps', 0)
+                team_2_score = scoring_result.get('team_b_maps', 0)
+            else:
+                # Fallback to old round-based scoring
+                scores = await self.stats_aggregator.calculate_session_scores(session_ids, session_ids_str, hardcoded_teams)
+                team_1_name = scores['team_a_name']
+                team_2_name = scores['team_b_name']
+                team_1_score = scores['team_a_score']
+                team_2_score = scores['team_b_score']
+                scoring_result = scores
+
+            # Use mapped team names if available and scoring didn't provide them
             if team_1_name_mapped and team_2_name_mapped:
-                team_1_name = team_1_name_mapped
-                team_2_name = team_2_name_mapped
+                if team_1_name in ('Team A', 'Team 1'):
+                    team_1_name = team_1_name_mapped
+                if team_2_name in ('Team B', 'Team 2'):
+                    team_2_name = team_2_name_mapped
 
             # Phase 3: Aggregate all data (now with correct team mappings)
             all_players = await self.stats_aggregator.aggregate_all_player_stats(session_ids, session_ids_str)

@@ -18,11 +18,25 @@ This package contains the foundational components used by cogs and services.
 
 | Module | Purpose |
 |--------|---------|
-| `team_manager.py` | Orchestrates team detection strategies |
+| `team_manager.py` | Orchestrates team detection + real-time tracking |
 | `advanced_team_detector.py` | Multi-strategy detection with confidence |
 | `team_detector_integration.py` | Integration layer for team detection |
 | `substitution_detector.py` | Detects mid-session player swaps |
 | `team_history.py` | Historical team pairing data |
+
+**Real-Time Team Tracking (Feb 2026):**
+
+Teams are now tracked in real-time as rounds are imported:
+
+```text
+R1 of new session → create_initial_teams_from_round()
+                    Side 1 = Team A, Side 2 = Team B
+
+Subsequent rounds → update_teams_from_round()
+                    New players added to appropriate team
+```
+
+This allows tracking games that grow from 3v3 → 4v4 → 6v6.
 
 ### Player & Session
 

@@ -32,7 +32,253 @@ class TeamManager:
             db_adapter: DatabaseAdapter instance (supports both SQLite and PostgreSQL)
         """
         self.db = db_adapter
-        
+
+    # =========================================================================
+    # REAL-TIME TEAM TRACKING (New approach - Feb 2026)
+    # Create teams on R1, track additions on subsequent rounds
+    # =========================================================================
+
+    async def create_initial_teams_from_round(
+        self,
+        round_id: int,
+        session_date: str,
+        gaming_session_id: int
+    ) -> bool:
+        """
+        Create initial team assignments from the first round of a new session.
+
+        Called when R1 of a new gaming session is imported. At this point:
+        - Players haven't swapped sides yet
+        - Side 1 = Team A, Side 2 = Team B (clean split)
+
+        Args:
+            round_id: The round ID that was just imported
+            session_date: Session date (YYYY-MM-DD)
+            gaming_session_id: The gaming session ID
+
+        Returns:
+            True if teams were created successfully
+        """
+        try:
+            # Check if teams already exist for this session
+            existing = await self.db.fetch_one(
+                """
+                SELECT COUNT(*) FROM session_teams
+                WHERE session_start_date LIKE $1 AND map_name = 'ALL'
+                """,
+                (f"{session_date}%",)
+            )
+
+            if existing and existing[0] > 0:
+                logger.debug(f"Teams already exist for session {session_date}, skipping creation")
+                return True
+
+            # Get all players from this round with their sides
+            query = """
+                SELECT player_guid, player_name, team
+                FROM player_comprehensive_stats
+                WHERE round_id = $1
+            """
+            rows = await self.db.fetch_all(query, (round_id,))
+
+            if not rows:
+                logger.warning(f"No players found in round {round_id}")
+                return False
+
+            # Split by side - side 1 = Team A, side 2 = Team B
+            team_a_guids = []
+            team_a_names = []
+            team_b_guids = []
+            team_b_names = []
+
+            for guid, name, side in rows:
+                if side in (1, '1', 'Axis', 'axis'):
+                    team_a_guids.append(guid)
+                    team_a_names.append(name)
+                elif side in (2, '2', 'Allies', 'allies'):
+                    team_b_guids.append(guid)
+                    team_b_names.append(name)
+                else:
+                    logger.warning(f"Unknown side {side} for player {name}")
+
+            if not team_a_guids and not team_b_guids:
+                logger.warning(f"No players assigned to teams in round {round_id}")
+                return False
+
+            # Store teams with default names (will be randomly assigned later)
+            teams = {
+                'Team A': {
+                    'guids': sorted(team_a_guids),
+                    'names': sorted(team_a_names),
+                    'count': len(team_a_guids)
+                },
+                'Team B': {
+                    'guids': sorted(team_b_guids),
+                    'names': sorted(team_b_names),
+                    'count': len(team_b_guids)
+                }
+            }
+
+            # Store in database
+            for team_name, team_data in teams.items():
+                await self.db.execute(
+                    """
+                    INSERT INTO session_teams
+                    (session_start_date, map_name, team_name, player_guids, player_names,
+                     gaming_session_id)
+                    VALUES ($1, 'ALL', $2, $3, $4, $5)
+                    ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
+                        player_guids = EXCLUDED.player_guids,
+                        player_names = EXCLUDED.player_names,
+                        gaming_session_id = EXCLUDED.gaming_session_id
+                    """,
+                    (
+                        session_date,
+                        team_name,
+                        json.dumps(team_data['guids']),
+                        json.dumps(team_data['names']),
+                        gaming_session_id
+                    )
+                )
+
+            # Auto-assign random team names
+            try:
+                team_a_final, team_b_final = await self.assign_random_team_names(session_date, force=True)
+                logger.info(f"🎯 Created teams for session {session_date}: "
+                           f"{team_a_final} ({len(team_a_guids)}p) vs {team_b_final} ({len(team_b_guids)}p)")
+            except Exception as e:
+                logger.warning(f"Could not assign random team names: {e}")
+                logger.info(f"🎯 Created teams for session {session_date}: "
+                           f"Team A ({len(team_a_guids)}p) vs Team B ({len(team_b_guids)}p)")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to create initial teams: {e}", exc_info=True)
+            return False
+
+    async def update_teams_from_round(
+        self,
+        round_id: int,
+        session_date: str,
+        gaming_session_id: int
+    ) -> Dict[str, List[str]]:
+        """
+        Update teams with any new players from a round.
+
+        Called after each round is imported. Checks for new players and adds
+        them to the appropriate team based on which side they're on.
+
+        In stopwatch mode, sides swap between R1 and R2, but within a round,
+        new players joining a side join the same persistent team as existing
+        players on that side.
+
+        Args:
+            round_id: The round ID that was just imported
+            session_date: Session date (YYYY-MM-DD)
+            gaming_session_id: The gaming session ID
+
+        Returns:
+            Dict of new players added: {'Team A': ['player1'], 'Team B': ['player2']}
+        """
+        try:
+            # Get existing teams
+            teams_data = await self.get_session_teams(session_date, auto_detect=False)
+            if not teams_data:
+                logger.debug(f"No teams found for {session_date}, cannot update")
+                return {}
+
+            # Get all GUIDs currently in teams
+            team_names = list(teams_data.keys())
+            all_known_guids = set()
+            team_guid_sets = {}
+
+            for team_name in team_names:
+                guids = set(teams_data[team_name].get('guids', []))
+                team_guid_sets[team_name] = guids
+                all_known_guids.update(guids)
+
+            # Get players from this round
+            query = """
+                SELECT player_guid, player_name, team
+                FROM player_comprehensive_stats
+                WHERE round_id = $1
+            """
+            rows = await self.db.fetch_all(query, (round_id,))
+
+            if not rows:
+                return {}
+
+            # Group round players by side
+            side_players = {1: [], 2: []}
+            for guid, name, side in rows:
+                side_key = 1 if side in (1, '1', 'Axis', 'axis') else 2
+                side_players[side_key].append((guid, name))
+
+            # Find which team is currently on which side
+            # Look at overlap: which team's players are on which side in this round
+            team_to_side = {}
+            for side, players in side_players.items():
+                side_guids = {p[0] for p in players}
+                for team_name, team_guids in team_guid_sets.items():
+                    overlap = len(side_guids & team_guids)
+                    if overlap > 0:
+                        if team_name not in team_to_side or overlap > team_to_side[team_name][1]:
+                            team_to_side[team_name] = (side, overlap)
+
+            # Build side to team mapping
+            side_to_team = {}
+            for team_name, (side, _) in team_to_side.items():
+                if side not in side_to_team:
+                    side_to_team[side] = team_name
+
+            # Find new players and add them to appropriate teams
+            new_players = {'added': {}}
+
+            for side, players in side_players.items():
+                for guid, name in players:
+                    if guid not in all_known_guids:
+                        # New player! Add to the team on this side
+                        target_team = side_to_team.get(side)
+                        if target_team:
+                            # Update the team
+                            team_data = teams_data[target_team]
+                            guids = team_data.get('guids', [])
+                            names = team_data.get('names', [])
+
+                            if guid not in guids:
+                                guids.append(guid)
+                                names.append(name)
+
+                                # Update database
+                                await self.db.execute(
+                                    """
+                                    UPDATE session_teams
+                                    SET player_guids = $1, player_names = $2
+                                    WHERE session_start_date LIKE $3
+                                      AND map_name = 'ALL'
+                                      AND team_name = $4
+                                    """,
+                                    (
+                                        json.dumps(guids),
+                                        json.dumps(names),
+                                        f"{session_date}%",
+                                        target_team
+                                    )
+                                )
+
+                                if target_team not in new_players['added']:
+                                    new_players['added'][target_team] = []
+                                new_players['added'][target_team].append(name)
+
+                                logger.info(f"➕ Added {name} to {target_team} (joined on side {side})")
+
+            return new_players
+
+        except Exception as e:
+            logger.error(f"Failed to update teams from round: {e}", exc_info=True)
+            return {}
+
     async def detect_session_teams(
         self,
         session_date: str
