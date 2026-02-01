@@ -8,14 +8,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Slomix - ET:Legacy Discord Bot
 
-**Version**: 1.0.5 (Updated: January 24, 2026)
+**Version**: 1.0.6 (Updated: February 1, 2026)
 **Project**: ET:Legacy Statistics Discord Bot
 **Database**: PostgreSQL (primary), SQLite (fallback)
 **Language**: Python 3.11+
 **Discord.py**: Version 2.0+
 **Status**: Production-Ready ✅
 
-## Recent Updates (1.0.5)
+## Recent Updates (1.0.6)
+
+- **Map-Based Stopwatch Scoring** - Session scores now count MAP wins (not rounds)
+  - `StopwatchScoringService.calculate_session_scores_with_teams()` for proper team→winner mapping
+  - Full map breakdown with timing in `!last_session` embed
+  - Tie handling: Double fullhold = 1-1 (both teams defended)
+- **Time Dead Calculation Fix** - Fixed ~15 min/session undercount bug
+  - R2 `time_dead_ratio` was wrong (calculated vs cumulative time)
+  - Now uses `time_dead_minutes` directly (correct for both R1 and R2)
+- **Real-Time Team Tracking** - Teams created on R1, updated as players join
+  - R1 import → Create teams (Side 1 = Team A, Side 2 = Team B)
+  - Subsequent rounds → New players added to appropriate team
+  - Supports 3v3 → 4v4 → 6v6 growth with correct team assignment
+  - `session_teams.gaming_session_id` column added for tracking
+
+## Previous Updates (1.0.5)
 
 - **Lua Webhook v1.3.0** - Enhanced timing capture from game server
   - Pause event timestamps (`Lua_Pauses_JSON`) - know exactly when each pause occurred
@@ -817,9 +832,9 @@ SELECT COUNT(*) FROM processed_files WHERE success = true;
 
 ---
 
-**Version**: 1.0.5
-**Release Date**: January 24, 2026
-**Last Updated**: 2026-01-26
+**Version**: 1.0.6
+**Release Date**: February 1, 2026
+**Last Updated**: 2026-02-01
 **Schema Version**: 2.0
 **Repository Size**: ~50-100 MB (cleaned)
 **Status**: Production-ready, fully documented, maintainable ✅

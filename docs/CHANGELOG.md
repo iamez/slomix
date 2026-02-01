@@ -9,6 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Map-Based Stopwatch Scoring** (Feb 1, 2026)
+  - Session scores now count MAP wins, not round wins (correct for stopwatch mode)
+  - `StopwatchScoringService.calculate_session_scores_with_teams()` maps side-winner to persistent team
+  - Full map breakdown with timing in `!last_session` embed
+  - Display format: `🏆 Match Result: puran 3 - 2 sWat` with per-map detail
+  - Tie handling: Double fullhold = 1-1 (both teams defended successfully)
+
+- **Real-Time Team Tracking** (Feb 1, 2026)
+  - Teams created immediately on R1 import (first round of new session)
+  - Side 1 = Team A, Side 2 = Team B (clean split before any swaps)
+  - New players automatically added to teams on subsequent rounds
+  - Supports games growing from 3v3 → 4v4 → 6v6 with proper team assignment
+  - New `TeamManager` methods: `create_initial_teams_from_round()`, `update_teams_from_round()`
+  - Added `_handle_team_tracking()` hook in import pipeline
+  - `gaming_session_id` column added to `session_teams` table
+
+- **Website Frontend Fixes & Enhancements** (Jan 31, 2026)
+  - Fixed critical bugs: map win rates, team sorting (5v1→3v3), match scoring (kills→times), player stats format
+  - Added SVG badge system with 14 badge types (achievements, ranks, special admin badge for Discord ID 231165917604741121)
+  - Added season leaders panel (6 categories: DMG given/received, friendly fire, revives, deaths, longest session)
+  - Added GitHub-style activity calendar widget (90-day summary, ready for Chart.js heatmap)
+  - Implemented inline player details expansion (combat, support, weapons, sprees - no navigation)
+  - Matched Discord !last_session format exactly (K/D/G, DMG↑/↓, REV↑/↓, ACC, HS, Useful, Playtime)
+  - Files modified: 6 (3 backend, 3 frontend), ~900 lines added
+  - New endpoints: `/seasons/current/leaders`, `/rounds/{round_id}/player/{player_guid}/details`
+  - See: `docs/SESSION_2026-01-31_WEBSITE_FRONTEND_FIXES.md`
+
+- **Claude Code Configuration Restoration & Optimization** (Jan 31, 2026)
+  - Recovered from 362 MB config crash (reduced to 1.45 MB)
+  - Restored project settings, MCP PostgreSQL server, and permissions
+  - Created automated upgrade script: `~/claude_settings_improvement_plan.sh`
+  - Added comprehensive documentation:
+    - `docs/SESSION_2026-01-31_CLAUDE_CODE_RESTORATION.md` - Full session report
+    - `docs/reference/CLAUDE_CODE_QUICK_REFERENCE.md` - Daily reference guide
+    - `docs/reports/CLAUDE_SETTINGS_REVIEW_2026-01-31.md` - Settings audit
+    - `docs/reports/CLAUDE_CONFIG_AUDIT_2026-01-31.md` - Config analysis
+    - `docs/SESSION_INDEX.md` - Documentation navigation index
+  - Identified scattered configs across 3 projects (bot/website/proximity)
+  - Scorecard: 7.1/10 (good with room for improvement)
+  - Recommendations: Install GitHub CLI, add filesystem/git MCP servers
+  - Configuration status: Healthy and optimized ✅
+
 - **ET:Legacy Game Server Optimization** (Jan 25, 2026)
   - CPU affinity: Game server pinned to cores 0,1 for better cache locality
   - UDP buffer optimization: Increased minimum from 4KB to 16KB
@@ -49,6 +91,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Logs to bot logs (not visible to users)
 
 ### Fixed
+
+- **Time Dead/Alive Calculation Bug** (Feb 1, 2026)
+  - Fixed bug where R2 rounds used wrong calculation method (`time_played_minutes * time_dead_ratio`)
+  - R2 `time_dead_ratio` is calculated against cumulative time in Lua, but parser stores differential `time_played`
+  - Multiplying them together caused ~15 min/session undercount of death time
+  - Now uses `time_dead_minutes` directly (already correct in database for both R1 and R2)
+  - Files fixed: `session_stats_aggregator.py`, `ssh_monitor.py`
 
 - **Surrender Timing Bug** - Rounds ending early (surrender/objective) now show actual played time instead of full map duration
   - Stats files show map time limit on surrender (e.g., 20 min)

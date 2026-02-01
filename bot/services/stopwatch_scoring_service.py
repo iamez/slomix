@@ -81,8 +81,15 @@ class StopwatchScoringService:
 
         # Determine if each team completed objectives
         # Full hold = actual_time equals or exceeds time_limit
-        r1_completed = (r1_sec > 0) and (r1_sec < limit_sec)
-        r2_completed = (r2_sec > 0) and (r2_sec < limit_sec)
+        # Special case: if time_limit is 0 or not set, treat any positive time as "completed"
+        # (we can't detect fullholds without knowing the time limit)
+        if limit_sec <= 0:
+            # No time limit known - assume completed if they have any time recorded
+            r1_completed = r1_sec > 0
+            r2_completed = r2_sec > 0
+        else:
+            r1_completed = (r1_sec > 0) and (r1_sec < limit_sec)
+            r2_completed = (r2_sec > 0) and (r2_sec < limit_sec)
 
         team1_points = 0
         team2_points = 0
@@ -472,3 +479,251 @@ class StopwatchScoringService:
         except Exception as e:
             logger.error(f"Failed to save session results: {e}", exc_info=True)
             return False
+
+    async def calculate_session_scores_with_teams(
+        self,
+        session_date: str,
+        session_ids: List[int],
+        team_rosters: Dict[str, List[str]]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Calculate map scores and map side-winner to persistent teams.
+
+        This method combines stopwatch scoring with team detection to produce
+        accurate session scores where Team A vs Team B is tracked across
+        side swaps.
+
+        Stopwatch Mode Logic:
+        - Round 1: Team A attacks (as Axis), Team B defends (as Allies)
+        - Round 2: Teams swap sides - Team B attacks (as Axis), Team A defends (as Allies)
+        - Map winner = faster attack time wins (or fullhold gives defender the round)
+
+        Key insight: `defender_team` in R1 tells us which SIDE defended.
+        We need to map that side to persistent team using player GUIDs.
+
+        Args:
+            session_date: Session date (YYYY-MM-DD)
+            session_ids: List of round IDs in this session
+            team_rosters: Dict mapping team_name -> list of player_guids
+                         e.g., {"puran": ["guid1", "guid2"], "sWat": ["guid3", "guid4"]}
+
+        Returns:
+            Dict with team names as keys and map scores, plus detailed breakdown
+        """
+        try:
+            if not team_rosters or len(team_rosters) < 2:
+                logger.debug("Not enough team rosters for team-aware scoring")
+                return None
+
+            # Get team names and GUIDs
+            team_names = list(team_rosters.keys())
+            team_a_name = team_names[0]
+            team_b_name = team_names[1]
+            team_a_guids = set(team_rosters[team_a_name])
+            team_b_guids = set(team_rosters[team_b_name])
+
+            # Fetch rounds with timing data
+            placeholders = ','.join(['$' + str(i+1) for i in range(len(session_ids))])
+            # nosec B608 - safe: parameterized placeholders
+            rounds_query = f"""
+                SELECT r.id, r.map_name, r.gaming_session_id, r.round_number,
+                       r.defender_team, r.winner_team, r.time_limit, r.actual_time,
+                       r.round_date, r.round_time
+                FROM rounds r
+                WHERE r.id IN ({placeholders})
+                AND r.round_status = 'completed'
+                ORDER BY r.gaming_session_id, r.map_name, r.round_number
+            """
+            rows = await self.db.fetch_all(rounds_query, tuple(session_ids))
+
+            if not rows:
+                logger.debug(f"No completed rounds found for session {session_date}")
+                return None
+
+            # Group rounds into map pairs (R1 + R2)
+            maps_dict: Dict[str, Dict] = {}
+            pending_r1: Dict[str, str] = {}
+            map_play_count: Dict[str, int] = {}
+
+            for row in rows:
+                (round_id, map_name, gaming_session_id, round_num,
+                 defender_team, winner_team, time_limit, actual_time,
+                 round_date, round_time) = row
+
+                base_key = f"{gaming_session_id}:{map_name}"
+
+                round_data = {
+                    'round_id': round_id,
+                    'defender_team': defender_team,
+                    'winner_team': winner_team,
+                    'time_limit': time_limit,
+                    'actual_time': actual_time,
+                    'round_date': round_date,
+                    'round_time': round_time
+                }
+
+                if round_num == 1:
+                    if base_key not in map_play_count:
+                        map_play_count[base_key] = 0
+                    map_play_count[base_key] += 1
+                    play_num = map_play_count[base_key]
+
+                    map_key = f"{base_key}:play{play_num}"
+                    maps_dict[map_key] = {
+                        'map_name': map_name,
+                        'gaming_session_id': gaming_session_id,
+                        'round1': round_data,
+                        'round2': None
+                    }
+                    pending_r1[base_key] = map_key
+
+                elif round_num == 2:
+                    if base_key in pending_r1:
+                        map_key = pending_r1[base_key]
+                        if map_key in maps_dict:
+                            maps_dict[map_key]['round2'] = round_data
+                        del pending_r1[base_key]
+
+            # Filter to complete map pairs only
+            complete_maps = [
+                m for m in maps_dict.values()
+                if m['round1'] is not None and m['round2'] is not None
+            ]
+
+            if not complete_maps:
+                logger.debug(f"No complete map pairs for {session_date}")
+                return None
+
+            # For each map, determine which persistent team was attacking in R1
+            # We need to look at player stats to see which team was on which side
+            sample_query = """
+                SELECT player_guid, team
+                FROM player_comprehensive_stats
+                WHERE round_id = $1
+                LIMIT 10
+            """
+
+            # Initialize scores
+            team_a_maps = 0
+            team_b_maps = 0
+            map_results = []
+
+            for map_data in complete_maps:
+                r1 = map_data['round1']
+                r2 = map_data['round2']
+                map_name = map_data['map_name']
+
+                # Get player→side mapping for R1 to determine team→side
+                r1_players = await self.db.fetch_all(sample_query, (r1['round_id'],))
+
+                # Count how many players from each team were on each side in R1
+                team_a_on_side = {1: 0, 2: 0}
+                team_b_on_side = {1: 0, 2: 0}
+
+                for player_guid, side in r1_players:
+                    if player_guid in team_a_guids:
+                        team_a_on_side[side] = team_a_on_side.get(side, 0) + 1
+                    elif player_guid in team_b_guids:
+                        team_b_on_side[side] = team_b_on_side.get(side, 0) + 1
+
+                # Determine which side Team A was on in R1 (majority wins)
+                if team_a_on_side[1] > team_a_on_side[2]:
+                    team_a_r1_side = 1  # Team A was on side 1 (e.g., Axis) in R1
+                else:
+                    team_a_r1_side = 2  # Team A was on side 2 (e.g., Allies) in R1
+
+                # R1 attackers are NOT the defender_team side
+                # defender_team tells us which SIDE defended
+                r1_defender_side = r1.get('defender_team', 2)  # Default Allies defend
+
+                # Was Team A attacking or defending in R1?
+                team_a_attacking_r1 = (team_a_r1_side != r1_defender_side)
+
+                # Calculate map score using stopwatch logic
+                team1_pts, team2_pts, desc = self.calculate_map_score(
+                    r1['time_limit'], r1['actual_time'], r2['actual_time']
+                )
+
+                # team1_pts = R1 attackers' score, team2_pts = R2 attackers' (R1 defenders)
+                # Map back to persistent teams
+                if team_a_attacking_r1:
+                    # Team A attacked R1, so team1_pts goes to Team A
+                    team_a_pts = team1_pts
+                    team_b_pts = team2_pts
+                else:
+                    # Team B attacked R1, so team1_pts goes to Team B
+                    team_a_pts = team2_pts
+                    team_b_pts = team1_pts
+
+                team_a_maps += team_a_pts
+                team_b_maps += team_b_pts
+
+                # Format timing for display
+                r1_time = r1['actual_time'] or "fullhold"
+                r2_time = r2['actual_time'] or "fullhold"
+                limit_sec = self.parse_time_to_seconds(r1['time_limit'])
+                r1_sec = self.parse_time_to_seconds(r1_time) if r1_time != "fullhold" else limit_sec
+                r2_sec = self.parse_time_to_seconds(r2_time) if r2_time != "fullhold" else limit_sec
+
+                # Determine if times are fullholds
+                r1_fullhold = (r1_sec >= limit_sec) if limit_sec > 0 else False
+                r2_fullhold = (r2_sec >= limit_sec) if limit_sec > 0 else False
+
+                # Build timing display
+                if team_a_attacking_r1:
+                    team_a_time = "fullhold" if r1_fullhold else r1['actual_time']
+                    team_b_time = "fullhold" if r2_fullhold else r2['actual_time']
+                else:
+                    team_a_time = "fullhold" if r2_fullhold else r2['actual_time']
+                    team_b_time = "fullhold" if r1_fullhold else r1['actual_time']
+
+                # Determine map winner for emoji
+                if team_a_pts > team_b_pts:
+                    winner = team_a_name
+                    emoji = "🟢"
+                elif team_b_pts > team_a_pts:
+                    winner = team_b_name
+                    emoji = "🔴"
+                else:
+                    winner = "tie"
+                    emoji = "🟡"
+
+                map_results.append({
+                    'map': map_name,
+                    'team_a_points': team_a_pts,
+                    'team_b_points': team_b_pts,
+                    'team_a_time': team_a_time,
+                    'team_b_time': team_b_time,
+                    'winner': winner,
+                    'emoji': emoji,
+                    'description': desc
+                })
+
+            # Build result
+            result = {
+                'team_a_name': team_a_name,
+                'team_b_name': team_b_name,
+                'team_a_maps': team_a_maps,
+                'team_b_maps': team_b_maps,
+                'maps': map_results,
+                'total_maps': len(map_results),
+                # Legacy compatibility
+                team_a_name: team_a_maps,
+                team_b_name: team_b_maps,
+                # Internal fields for save_session_results
+                '_team1_name': team_a_name,
+                '_team2_name': team_b_name,
+                '_team1_score': team_a_maps,
+                '_team2_score': team_b_maps,
+                '_team1_guids': list(team_a_guids),
+                '_team2_guids': list(team_b_guids),
+                '_gaming_session_id': complete_maps[0]['gaming_session_id'] if complete_maps else None,
+                '_session_date': session_date
+            }
+
+            logger.info(f"Calculated team scores: {team_a_name} {team_a_maps} - {team_b_maps} {team_b_name}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error calculating team-aware session scores: {e}", exc_info=True)
+            return None
