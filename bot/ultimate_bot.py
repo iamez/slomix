@@ -638,6 +638,23 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info('✅ Team System Cog loaded (teams, lineup_changes, session_score)')
         except Exception as e:
             logger.error(f'Failed to load Team System Cog: {e}', exc_info=True)
+
+        # 📊 MATCHUP ANALYTICS: Lineup vs lineup statistics
+        try:
+            from bot.cogs.matchup_cog import MatchupCog
+            await self.add_cog(MatchupCog(self))
+            logger.info('✅ Matchup Cog loaded (matchup, synergy, nemesis)')
+        except Exception as e:
+            logger.error(f'Failed to load Matchup Cog: {e}', exc_info=True)
+
+        # 📈 PLAYER ANALYTICS: Consistency, map affinity, playstyle analysis
+        try:
+            from bot.cogs.analytics_cog import AnalyticsCog
+            await self.add_cog(AnalyticsCog(self))
+            logger.info('✅ Analytics Cog loaded (consistency, map_stats, playstyle, awards, fatigue)')
+        except Exception as e:
+            logger.error(f'Failed to load Analytics Cog: {e}', exc_info=True)
+
         # �🎯 FIVEEYES: Load synergy analytics cog (SAFE - disabled by default)
         try:
             await self.load_extension("cogs.synergy_analytics")
