@@ -474,11 +474,96 @@ class StopwatchScoringService:
 
             logger.info(f"Saved session results: {session_date} - "
                        f"{team_1_name} {team_1_score} vs {team_2_score} {team_2_name}")
+
+            # Record matchup for analytics
+            await self._record_matchup_analytics(
+                lineup_a_guids=team_1_guids,
+                lineup_b_guids=team_2_guids,
+                session_date=session_date,
+                gaming_session_id=gaming_session_id,
+                winner='a' if team_1_score > team_2_score else ('b' if team_2_score > team_1_score else None),
+                lineup_a_score=team_1_score,
+                lineup_b_score=team_2_score
+            )
+
             return True
 
         except Exception as e:
             logger.error(f"Failed to save session results: {e}", exc_info=True)
             return False
+
+    async def _record_matchup_analytics(
+        self,
+        lineup_a_guids: List[str],
+        lineup_b_guids: List[str],
+        session_date: str,
+        gaming_session_id: int,
+        winner: Optional[str],
+        lineup_a_score: int,
+        lineup_b_score: int,
+        map_name: Optional[str] = None
+    ):
+        """
+        Record matchup for analytics tracking.
+
+        Args:
+            lineup_a_guids: GUIDs for lineup A
+            lineup_b_guids: GUIDs for lineup B
+            session_date: Session date
+            gaming_session_id: Gaming session ID
+            winner: 'a', 'b', or None for tie
+            lineup_a_score: Score for lineup A
+            lineup_b_score: Score for lineup B
+            map_name: Optional map name
+        """
+        try:
+            from bot.services.matchup_analytics_service import MatchupAnalyticsService
+
+            matchup_service = MatchupAnalyticsService(self.db)
+
+            # Get player stats for this session
+            placeholders = ','.join(['$' + str(i+1) for i in range(1)])
+            query = """
+                SELECT player_guid, MAX(player_name) as name,
+                       SUM(kills) as kills, SUM(deaths) as deaths,
+                       CASE WHEN SUM(time_played_seconds) > 0
+                            THEN (SUM(damage_given) * 60.0) / SUM(time_played_seconds)
+                            ELSE 0 END as dpm,
+                       CASE WHEN SUM(deaths) > 0
+                            THEN SUM(kills)::float / SUM(deaths)
+                            ELSE SUM(kills) END as kd
+                FROM player_comprehensive_stats
+                WHERE round_date LIKE $1
+                  AND round_number IN (1, 2)
+                GROUP BY player_guid
+            """
+            rows = await self.db.fetch_all(query, (f"{session_date}%",))
+
+            player_stats = {}
+            for row in rows:
+                guid, name, kills, deaths, dpm, kd = row
+                player_stats[guid] = {
+                    'name': name,
+                    'kills': int(kills or 0),
+                    'deaths': int(deaths or 0),
+                    'dpm': float(dpm or 0),
+                    'kd': float(kd or 0)
+                }
+
+            await matchup_service.record_matchup(
+                lineup_a_guids=lineup_a_guids,
+                lineup_b_guids=lineup_b_guids,
+                session_date=session_date,
+                gaming_session_id=gaming_session_id,
+                winner_lineup=winner,
+                lineup_a_score=lineup_a_score,
+                lineup_b_score=lineup_b_score,
+                map_name=map_name,
+                player_stats=player_stats
+            )
+
+        except Exception as e:
+            logger.warning(f"Failed to record matchup analytics (non-fatal): {e}")
 
     async def calculate_session_scores_with_teams(
         self,

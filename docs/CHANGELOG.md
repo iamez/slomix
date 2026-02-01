@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Display format: `🏆 Match Result: puran 3 - 2 sWat` with per-map detail
   - Tie handling: Double fullhold = 1-1 (both teams defended successfully)
 
+- **Matchup Analytics System** (Feb 1, 2026)
+  - Track lineup vs lineup statistics across sessions
+  - Commands: `!matchup`, `!synergy`, `!nemesis`
+  - Per-player performance deltas vs baseline
+  - Synergy analysis (performance WITH teammates)
+  - Anti-synergy/nemesis detection (performance AGAINST opponents)
+  - Confidence levels (low/medium/high) based on sample size
+  - Auto-records matchups when session results are saved
+  - Database: `matchup_history` table with JSONB player stats
+
 - **Real-Time Team Tracking** (Feb 1, 2026)
   - Teams created immediately on R1 import (first round of new session)
   - Side 1 = Team A, Side 2 = Team B (clean split before any swaps)
