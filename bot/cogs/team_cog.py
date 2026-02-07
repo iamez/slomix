@@ -25,7 +25,7 @@ class TeamCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db_adapter = bot.db_adapter
-        self.team_manager = TeamManager(bot.db_adapter)
+        self.team_manager = TeamManager(bot.db_adapter, bot.config)
         self.scorer = StopwatchScoringService(bot.db_adapter)
         self.player_formatter = PlayerFormatter(bot.db_adapter)
 
@@ -339,10 +339,33 @@ class TeamCog(commands.Cog):
                 await ctx.send(f"❌ No team data found for {date}.")
                 return
 
-            # Calculate scores (now fully async)
-            scores = await self.scorer.calculate_session_scores(
-                session_date=date
+            # Get session round IDs (R1 + R2 only)
+            rounds = await self.db_adapter.fetch_all(
+                """
+                SELECT id
+                FROM rounds
+                WHERE SUBSTR(round_date, 1, 10) = $1
+                  AND round_number IN (1, 2)
+                  AND (round_status = 'completed' OR round_status IS NULL)
+                ORDER BY round_date, round_time, round_number
+                """,
+                (date,)
             )
+            session_ids = [row[0] for row in rounds] if rounds else []
+            if not session_ids:
+                await ctx.send(f"❌ No round data found for {date}.")
+                return
+
+            # Calculate scores (team-aware map winners)
+            team_rosters = {k: v.get('guids', []) for k, v in teams.items()}
+            scores = await self.scorer.calculate_session_scores_with_teams(
+                date, session_ids, team_rosters
+            )
+            if not scores:
+                # Fallback to legacy scoring if team-aware scoring fails
+                scores = await self.scorer.calculate_session_scores(
+                    session_date=date
+                )
             if not scores:
                 await ctx.send(
                     f"❌ No scoring data found for {date}. "
@@ -355,8 +378,8 @@ class TeamCog(commands.Cog):
             team_a = team_names[0] if len(team_names) > 0 else "Team A"
             team_b = team_names[1] if len(team_names) > 1 else "Team B"
 
-            score_a = scores.get(team_a, 0)
-            score_b = scores.get(team_b, 0)
+            score_a = scores.get(team_a, scores.get('team_a_maps', 0))
+            score_b = scores.get(team_b, scores.get('team_b_maps', 0))
 
             # Determine winner
             if score_a > score_b:
@@ -404,9 +427,9 @@ class TeamCog(commands.Cog):
                 map_text = ""
                 for map_result in maps_list:
                     map_name = map_result.get('map', 'Unknown')
-                    # Points are team1/team2, not named teams
-                    team1_pts = map_result.get('team1_points', 0)
-                    team2_pts = map_result.get('team2_points', 0)
+                    # Prefer team-aware points when available
+                    team1_pts = map_result.get('team_a_points', map_result.get('team1_points', 0))
+                    team2_pts = map_result.get('team_b_points', map_result.get('team2_points', 0))
                     
                     # Determine map winner emoji
                     if team1_pts > team2_pts:

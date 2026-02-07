@@ -80,7 +80,7 @@ class MatchupCog(commands.Cog):
         result = await self.bot.db_adapter.fetch_one(query, (guid,))
         return result[0] if result else guid[:8]
 
-    @commands.command(name="matchup", aliases=["vs", "headtohead", "h2h"])
+    @commands.command(name="matchup", aliases=["vs", "headtohead"])
     @is_public_channel()
     async def matchup_command(self, ctx, *, args: str = None):
         """
@@ -123,34 +123,39 @@ class MatchupCog(commands.Cog):
 
         # Resolve names to GUIDs
         async with ctx.typing():
-            lineup_a_guids = await self._resolve_player_guids(lineup_a_names)
-            lineup_b_guids = await self._resolve_player_guids(lineup_b_names)
+            try:
+                lineup_a_guids = await self._resolve_player_guids(lineup_a_names)
+                lineup_b_guids = await self._resolve_player_guids(lineup_b_names)
 
-            if len(lineup_a_guids) < len(lineup_a_names):
-                missing = len(lineup_a_names) - len(lineup_a_guids)
-                await ctx.send(f"Could not find {missing} player(s) from lineup A")
-                return
+                if len(lineup_a_guids) < len(lineup_a_names):
+                    missing = len(lineup_a_names) - len(lineup_a_guids)
+                    await ctx.send(f"Could not find {missing} player(s) from lineup A")
+                    return
 
-            if len(lineup_b_guids) < len(lineup_b_names):
-                missing = len(lineup_b_names) - len(lineup_b_guids)
-                await ctx.send(f"Could not find {missing} player(s) from lineup B")
-                return
+                if len(lineup_b_guids) < len(lineup_b_names):
+                    missing = len(lineup_b_names) - len(lineup_b_guids)
+                    await ctx.send(f"Could not find {missing} player(s) from lineup B")
+                    return
 
-            # Get matchup stats
-            stats = await self.matchup_service.get_matchup_stats(
-                lineup_a_guids, lineup_b_guids
-            )
-
-            if not stats:
-                await ctx.send(
-                    f"No matchup history found between these lineups.\n"
-                    f"Lineup A: {', '.join(lineup_a_names)}\n"
-                    f"Lineup B: {', '.join(lineup_b_names)}"
+                # Get matchup stats
+                stats = await self.matchup_service.get_matchup_stats(
+                    lineup_a_guids, lineup_b_guids
                 )
-                return
 
-            # Format and send
-            summary = self.matchup_service.format_matchup_summary(stats, perspective='a')
+                if not stats:
+                    await ctx.send(
+                        f"No matchup history found between these lineups.\n"
+                        f"Lineup A: {', '.join(lineup_a_names)}\n"
+                        f"Lineup B: {', '.join(lineup_b_names)}"
+                    )
+                    return
+
+                # Format and send
+                summary = self.matchup_service.format_matchup_summary(stats, perspective='a')
+            except Exception as e:
+                logger.error(f"Error in matchup command: {e}", exc_info=True)
+                await ctx.send(f"Error analyzing matchup: {e}")
+                return
 
             embed = discord.Embed(
                 title="Matchup Statistics",
@@ -174,40 +179,47 @@ class MatchupCog(commands.Cog):
 
             await ctx.send(embed=embed)
 
-    @commands.command(name="synergy")
+    @commands.command(name="duo_perf", aliases=["duoperf", "pair_stats"])
     @is_public_channel()
     async def synergy_command(self, ctx, player1: str = None, player2: str = None):
         """
-        Show synergy between two players when on the same team.
+        Show performance stats when two players are on the same team.
 
-        Usage: !synergy <player1> <player2>
-        Example: !synergy puran sWat
+        Usage: !duo_perf <player1> <player2>
+        Example: !duo_perf puran sWat
+
+        Note: For chemistry/synergy analysis, use !synergy from SynergyAnalytics.
         """
         if not player1 or not player2:
-            await ctx.send("**Usage:** `!synergy player1 player2`\n**Example:** `!synergy puran sWat`")
+            await ctx.send("**Usage:** `!duo_perf player1 player2`\n**Example:** `!duo_perf puran sWat`")
             return
 
         async with ctx.typing():
-            # Resolve to GUIDs
-            guids = await self._resolve_player_guids([player1, player2])
+            try:
+                # Resolve to GUIDs
+                guids = await self._resolve_player_guids([player1, player2])
 
-            if len(guids) < 2:
-                await ctx.send(f"Could not find one or both players: {player1}, {player2}")
+                if len(guids) < 2:
+                    await ctx.send(f"Could not find one or both players: {player1}, {player2}")
+                    return
+
+                # Get synergy stats
+                synergy = await self.matchup_service.get_player_synergy(guids[0], guids[1])
+
+                if not synergy:
+                    await ctx.send(f"Not enough data for synergy between {player1} and {player2}")
+                    return
+
+                # Get player names
+                name1 = await self._get_player_name(guids[0])
+                name2 = await self._get_player_name(guids[1])
+
+                # Format and send
+                summary = self.matchup_service.format_synergy_summary(synergy, name1, name2)
+            except Exception as e:
+                logger.error(f"Error in synergy command: {e}", exc_info=True)
+                await ctx.send(f"Error analyzing synergy: {e}")
                 return
-
-            # Get synergy stats
-            synergy = await self.matchup_service.get_player_synergy(guids[0], guids[1])
-
-            if not synergy:
-                await ctx.send(f"Not enough data for synergy between {player1} and {player2}")
-                return
-
-            # Get player names
-            name1 = await self._get_player_name(guids[0])
-            name2 = await self._get_player_name(guids[1])
-
-            # Format and send
-            summary = self.matchup_service.format_synergy_summary(synergy, name1, name2)
 
             # Color based on synergy
             if synergy['synergy_percent'] > 10:
@@ -242,58 +254,63 @@ class MatchupCog(commands.Cog):
             return
 
         async with ctx.typing():
-            guids = await self._resolve_player_guids([player])
+            try:
+                guids = await self._resolve_player_guids([player])
 
-            if not guids:
-                await ctx.send(f"Could not find player: {player}")
+                if not guids:
+                    await ctx.send(f"Could not find player: {player}")
+                    return
+
+                player_guid = guids[0]
+                player_name = await self._get_player_name(player_guid)
+
+                # Get all unique opponents from matchup history
+                query = """
+                    SELECT DISTINCT jsonb_array_elements_text(
+                        CASE
+                            WHEN lineup_a_guids::text LIKE $1 THEN lineup_b_guids
+                            ELSE lineup_a_guids
+                        END
+                    ) as opponent_guid
+                    FROM matchup_history
+                    WHERE lineup_a_guids::text LIKE $1
+                       OR lineup_b_guids::text LIKE $1
+                """
+                rows = await self.bot.db_adapter.fetch_all(query, (f'%{player_guid}%',))
+
+                if not rows:
+                    await ctx.send(f"No matchup history found for {player_name}")
+                    return
+
+                # Check anti-synergy with each opponent
+                nemeses = []
+                for row in rows:
+                    opponent_guid = row[0]
+                    if not opponent_guid or opponent_guid == player_guid:
+                        continue
+
+                    anti_syn = await self.matchup_service.get_player_anti_synergy(
+                        player_guid, opponent_guid
+                    )
+
+                    if anti_syn and anti_syn['matches_versus'] >= 3:
+                        opponent_name = await self._get_player_name(opponent_guid)
+                        nemeses.append({
+                            'name': opponent_name,
+                            'suppression': anti_syn['suppression_percent'],
+                            'matches': anti_syn['matches_versus']
+                        })
+
+                if not nemeses:
+                    await ctx.send(f"Not enough data to determine nemeses for {player_name}")
+                    return
+
+                # Sort by suppression (most negative = biggest nemesis)
+                nemeses.sort(key=lambda x: x['suppression'])
+            except Exception as e:
+                logger.error(f"Error in nemesis command: {e}", exc_info=True)
+                await ctx.send(f"Error analyzing nemesis: {e}")
                 return
-
-            player_guid = guids[0]
-            player_name = await self._get_player_name(player_guid)
-
-            # Get all unique opponents from matchup history
-            query = """
-                SELECT DISTINCT jsonb_array_elements_text(
-                    CASE
-                        WHEN lineup_a_guids::text LIKE $1 THEN lineup_b_guids
-                        ELSE lineup_a_guids
-                    END
-                ) as opponent_guid
-                FROM matchup_history
-                WHERE lineup_a_guids::text LIKE $1
-                   OR lineup_b_guids::text LIKE $1
-            """
-            rows = await self.bot.db_adapter.fetch_all(query, (f'%{player_guid}%',))
-
-            if not rows:
-                await ctx.send(f"No matchup history found for {player_name}")
-                return
-
-            # Check anti-synergy with each opponent
-            nemeses = []
-            for row in rows:
-                opponent_guid = row[0]
-                if opponent_guid == player_guid:
-                    continue
-
-                anti_syn = await self.matchup_service.get_player_anti_synergy(
-                    player_guid, opponent_guid
-                )
-
-                if anti_syn and anti_syn['matches_versus'] >= 3:
-                    opponent_name = await self._get_player_name(opponent_guid)
-                    nemeses.append({
-                        'name': opponent_name,
-                        'suppression': anti_syn['suppression_percent'],
-                        'matches': anti_syn['matches_versus']
-                    })
-
-            if not nemeses:
-                await ctx.send(f"Not enough data to determine nemeses for {player_name}")
-                return
-
-            # Sort by suppression (most negative = biggest nemesis)
-            nemeses.sort(key=lambda x: x['suppression'])
 
             # Format output
             lines = [f"**{player_name}'s Performance vs Opponents**\n"]

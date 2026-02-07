@@ -14,6 +14,8 @@ This service manages:
 """
 
 import asyncio
+import csv
+import io
 import discord
 import logging
 from datetime import datetime
@@ -37,6 +39,43 @@ class SessionViewHandlers:
         """
         self.db_adapter = db_adapter
         self.stats_calculator = stats_calculator
+
+    @staticmethod
+    def _format_seconds(seconds: float) -> str:
+        """Format seconds as MM:SS (safe for None/float)."""
+        try:
+            total = int(round(seconds or 0))
+        except Exception:
+            total = 0
+        minutes = total // 60
+        secs = total % 60
+        return f"{minutes}:{secs:02d}"
+
+    async def _get_player_stats_columns(self):
+        """Get columns for player_comprehensive_stats (cached)."""
+        if hasattr(self, "_player_stats_columns"):
+            return self._player_stats_columns
+
+        try:
+            cols = await self.db_adapter.fetch_all("PRAGMA table_info(player_comprehensive_stats)")
+            self._player_stats_columns = {c[1] for c in cols}
+            return self._player_stats_columns
+        except Exception:
+            pass
+
+        try:
+            cols = await self.db_adapter.fetch_all(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'player_comprehensive_stats'
+                """
+            )
+            self._player_stats_columns = {c[0] for c in cols}
+            return self._player_stats_columns
+        except Exception:
+            self._player_stats_columns = set()
+            return self._player_stats_columns
 
     async def show_objectives_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show objectives & support stats only"""
@@ -137,7 +176,15 @@ class SessionViewHandlers:
 
     async def show_combat_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show combat-focused stats only"""
-        query = """
+        columns = await self._get_player_stats_columns()
+        has_full_selfkills = "full_selfkills" in columns
+        full_selfkills_select = (
+            "SUM(p.full_selfkills) as full_selfkills"
+            if has_full_selfkills
+            else "0 as full_selfkills"
+        )
+
+        query = f"""
             SELECT MAX(p.player_name) as player_name,
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
@@ -145,9 +192,11 @@ class SessionViewHandlers:
                 SUM(p.damage_received) as damage_received,
                 SUM(p.gibs) as gibs,
                 SUM(p.headshot_kills) as headshot_kills,
+                SUM(p.self_kills) as self_kills,
+                {full_selfkills_select},
                 CASE
-                    WHEN session_total.total_seconds > 0
-                    THEN (SUM(p.damage_given) * 60.0) / session_total.total_seconds
+                    WHEN MAX(session_total.total_seconds) > 0
+                    THEN (SUM(p.damage_given) * 60.0) / MAX(session_total.total_seconds)
                     ELSE 0
                 END as weighted_dpm
             FROM player_comprehensive_stats p
@@ -167,7 +216,7 @@ class SessionViewHandlers:
                   AND (r.round_status = 'completed' OR r.round_status IS NULL)
             ) session_total
             WHERE p.round_id IN ({session_ids_str})
-            GROUP BY p.player_guid, session_total.total_seconds
+            GROUP BY p.player_guid
             ORDER BY kills DESC
         """
         combat_rows = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids) + tuple(session_ids))
@@ -185,7 +234,7 @@ class SessionViewHandlers:
 
         medals = ["🥇", "🥈", "🥉"]
         for i, row in enumerate(combat_rows, 1):
-            name, kills, deaths, dmg_g, dmg_r, gibs, hsk, dpm = row
+            name, kills, deaths, dmg_g, dmg_r, gibs, hsk, self_kills, full_selfkills, dpm = row
             kd = StatsCalculator.calculate_kd(kills, deaths)
         
             player_text = (
@@ -197,6 +246,10 @@ class SessionViewHandlers:
                 player_text += f"🦴 `{gibs} Gibs`"
             if hsk and hsk > 0:
                 player_text += f" • 🎯 `{hsk} Headshot Kills`"
+            if self_kills and self_kills > 0:
+                player_text += f" • ☠️ `{self_kills} SK`"
+            if has_full_selfkills and full_selfkills and full_selfkills > 0:
+                player_text += f" • 💀 `{full_selfkills} FSK`"
 
             embed.add_field(name="\u200b", value=player_text, inline=False)
 
@@ -254,12 +307,22 @@ class SessionViewHandlers:
 
     async def show_support_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
         """Show support activity stats only"""
-        query = """
+        columns = await self._get_player_stats_columns()
+        has_full_selfkills = "full_selfkills" in columns
+        full_selfkills_select = (
+            "SUM(p.full_selfkills) as full_selfkills"
+            if has_full_selfkills
+            else "0 as full_selfkills"
+        )
+
+        query = f"""
             SELECT MAX(p.player_name) as player_name,
                 SUM(p.revives_given) as revives_given,
                 SUM(p.times_revived) as times_revived,
                 SUM(p.kills) as kills,
-                SUM(p.deaths) as deaths
+                SUM(p.deaths) as deaths,
+                SUM(p.self_kills) as self_kills,
+                {full_selfkills_select}
             FROM player_comprehensive_stats p
             WHERE p.round_id IN ({session_ids_str})
             GROUP BY p.player_guid
@@ -278,9 +341,13 @@ class SessionViewHandlers:
             timestamp=datetime.now(),
         )
 
-        for name, revives_given, times_revived, kills, deaths in sup_rows:
+        for name, revives_given, times_revived, kills, deaths, self_kills, full_selfkills in sup_rows:
             txt = f"Revives Given: `{revives_given or 0}` • Times Revived: `{times_revived or 0}`\n"
             txt += f"Kills: `{kills or 0}` • Deaths: `{deaths or 0}`"
+            if self_kills and self_kills > 0:
+                txt += f"\nSelf Kills: `{self_kills}`"
+            if has_full_selfkills and full_selfkills and full_selfkills > 0:
+                txt += f" • Full Selfkills: `{full_selfkills}`"
             embed.add_field(name=f"{name}", value=txt, inline=False)
 
         embed.set_footer(text=f"Round: {latest_date}")
@@ -332,8 +399,8 @@ class SessionViewHandlers:
                 SUM(p.kills) as kills,
                 SUM(p.deaths) as deaths,
                 CASE
-                    WHEN session_total.total_seconds > 0
-                    THEN (SUM(p.damage_given) * 60.0) / session_total.total_seconds
+                    WHEN MAX(session_total.total_seconds) > 0
+                    THEN (SUM(p.damage_given) * 60.0) / MAX(session_total.total_seconds)
                     ELSE 0
                 END as weighted_dpm,
                 SUM(p.damage_given) as total_damage,
@@ -357,7 +424,7 @@ class SessionViewHandlers:
                   AND (r.round_status = 'completed' OR r.round_status IS NULL)
             ) session_total
             WHERE p.round_id IN ({session_ids_str})
-            GROUP BY p.player_guid, session_total.total_seconds
+            GROUP BY p.player_guid
             ORDER BY kills DESC
         """
         top_players = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids) + tuple(session_ids))
@@ -875,3 +942,192 @@ class SessionViewHandlers:
     
         embed.set_footer(text=f"Session: {latest_date}")
         await ctx.send(embed=embed)
+
+    async def show_time_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
+        """Audit time metrics (time played, time dead, denied playtime)."""
+        query = """
+            SELECT MAX(p.clean_name) as player_name,
+                p.player_guid,
+                SUM(COALESCE(p.time_played_seconds, 0)) as time_played_seconds,
+                SUM(COALESCE(p.time_dead_minutes, 0)) * 60 as time_dead_raw_seconds,
+                SUM(
+                    LEAST(
+                        COALESCE(p.time_dead_minutes, 0) * 60,
+                        COALESCE(p.time_played_seconds, 0)
+                    )
+                ) as time_dead_capped_seconds,
+                SUM(COALESCE(p.denied_playtime, 0)) as denied_seconds,
+                AVG(COALESCE(p.time_dead_ratio, 0)) as avg_dead_ratio,
+                COUNT(DISTINCT p.round_id) as rounds_played
+            FROM player_comprehensive_stats p
+            WHERE p.round_id IN ({session_ids_str})
+            GROUP BY p.player_guid
+            ORDER BY time_played_seconds DESC
+        """
+
+        rows = await self.db_adapter.fetch_all(
+            query.format(session_ids_str=session_ids_str),
+            tuple(session_ids)
+        )
+
+        if not rows:
+            await ctx.send("❌ No time data available for latest session")
+            return
+
+        # Build embed
+        embed = discord.Embed(
+            title=f"⏱️ Time Audit - {latest_date}",
+            description=(
+                "Units: time played/dead/denied are seconds (displayed MM:SS). "
+                "Time dead comes from `time_dead_minutes` (Lua), time denied from `denied_playtime`."
+            ),
+            color=discord.Color.blurple(),
+            timestamp=datetime.now()
+        )
+
+        total_played = 0
+        total_dead = 0
+        total_denied = 0
+        cap_hits = 0
+        cap_seconds = 0
+
+        # Limit rows to keep embed size manageable
+        rows = rows[:15]
+
+        lines = []
+        for row in rows:
+            name, _guid, tp, td_raw, td_cap, denied, avg_ratio, rounds = row
+            name = (name or "Unknown")[:16]
+            tp = int(tp or 0)
+            td_raw = int(round(td_raw or 0))
+            td_cap = int(round(td_cap or 0))
+            denied = int(denied or 0)
+            avg_ratio = float(avg_ratio or 0)
+            rounds = int(rounds or 0)
+
+            total_played += tp
+            total_dead += td_cap
+            total_denied += denied
+
+            diff = td_raw - td_cap
+            if diff >= 5:
+                cap_hits += 1
+                cap_seconds += diff
+
+            dead_pct = (td_cap / tp * 100) if tp > 0 else 0
+            denied_pct = (denied / tp * 100) if tp > 0 else 0
+
+            cap_note = f" ⚠️cap-{diff}s" if diff >= 5 else ""
+            ratio_note = f" r{avg_ratio:.1f}%" if avg_ratio > 0 else ""
+
+            lines.append(
+                f"**{name}** ⏱`{self._format_seconds(tp)}` "
+                f"💀`{self._format_seconds(td_cap)}`({dead_pct:.0f}%) "
+                f"⏳`{self._format_seconds(denied)}`({denied_pct:.0f}%)"
+                f"{cap_note}{ratio_note} ({rounds}r)"
+            )
+
+        # Chunk into fields (6 per field)
+        chunk_size = 6
+        for i in range(0, len(lines), chunk_size):
+            chunk = lines[i:i + chunk_size]
+            embed.add_field(
+                name="Players" if i == 0 else "Players (cont.)",
+                value="\n".join(chunk),
+                inline=False
+            )
+
+        # Totals summary
+        total_dead_pct = (total_dead / total_played * 100) if total_played > 0 else 0
+        total_denied_pct = (total_denied / total_played * 100) if total_played > 0 else 0
+        embed.add_field(
+            name="Totals",
+            value=(
+                f"⏱`{self._format_seconds(total_played)}` "
+                f"💀`{self._format_seconds(total_dead)}`({total_dead_pct:.0f}%) "
+                f"⏳`{self._format_seconds(total_denied)}`({total_denied_pct:.0f}%)"
+            ),
+            inline=False
+        )
+
+        if cap_hits > 0:
+            embed.set_footer(
+                text=f"Cap applied for {cap_hits} player(s), {cap_seconds}s trimmed"
+            )
+        else:
+            embed.set_footer(text="No time_dead caps applied")
+
+        await ctx.send(embed=embed)
+
+    async def show_time_raw_export(self, ctx, latest_date: str, session_ids: List, session_ids_str: str):
+        """Export raw Lua timing fields without aggregation/capping."""
+        query = """
+            SELECT r.round_date,
+                r.map_name,
+                r.round_number,
+                p.player_name,
+                p.player_guid,
+                p.time_played_minutes,
+                p.time_dead_minutes,
+                p.time_dead_ratio,
+                p.denied_playtime
+            FROM player_comprehensive_stats p
+            JOIN rounds r ON r.id = p.round_id
+            WHERE p.round_id IN ({session_ids_str})
+            ORDER BY r.round_date, r.map_name, r.round_number, p.player_name
+        """
+
+        rows = await self.db_adapter.fetch_all(
+            query.format(session_ids_str=session_ids_str),
+            tuple(session_ids)
+        )
+
+        if not rows:
+            await ctx.send("❌ No raw time data available for latest session")
+            return
+
+        # Build CSV export (raw Lua values as stored)
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow([
+            "round_date",
+            "map_name",
+            "round_number",
+            "player_name",
+            "player_guid",
+            "time_played_minutes",
+            "time_dead_minutes",
+            "time_dead_ratio",
+            "denied_playtime_seconds"
+        ])
+
+        for row in rows:
+            (round_date, map_name, round_number, player_name, player_guid,
+             time_played_minutes, time_dead_minutes, time_dead_ratio, denied_playtime) = row
+            writer.writerow([
+                round_date,
+                map_name,
+                round_number,
+                player_name,
+                player_guid,
+                float(time_played_minutes or 0),
+                float(time_dead_minutes or 0),
+                float(time_dead_ratio or 0),
+                int(denied_playtime or 0)
+            ])
+
+        buffer.seek(0)
+        filename = f"time_raw_{latest_date}.csv"
+        file = discord.File(fp=io.BytesIO(buffer.getvalue().encode("utf-8")), filename=filename)
+
+        embed = discord.Embed(
+            title=f"⏱️ Raw Time Export - {latest_date}",
+            description=(
+                "Attached CSV contains **raw Lua values** as stored in DB (no aggregation, no caps).\n"
+                "`denied_playtime` is in **seconds**; `time_dead_minutes` is in **minutes**."
+            ),
+            color=discord.Color.gold(),
+            timestamp=datetime.now()
+        )
+        embed.set_footer(text=f"Rows: {len(rows)}")
+        await ctx.send(embed=embed, file=file)

@@ -17,6 +17,11 @@ from datetime import datetime, timedelta
 from typing import Set, Optional, Dict, List
 import logging
 
+from bot.services.session_data_service import SessionDataService
+from bot.services.session_stats_aggregator import SessionStatsAggregator
+from bot.services.session_embed_builder import SessionEmbedBuilder
+from bot.services.stopwatch_scoring_service import StopwatchScoringService
+
 logger = logging.getLogger('VoiceSessionService')
 
 # Phase 3: Import prediction engine
@@ -408,11 +413,73 @@ class VoiceSessionService:
                     round_date = row[0]
                     logger.info(f"📊 Posting auto-summary for {round_date}")
 
-                    # TODO: Use last_session logic to generate embeds
-                    await channel.send(
-                        f"📊 **Session Summary for {round_date}**\n"
-                        "Use `!last_session` for full details!"
-                    )
+                    if getattr(self.config, "enable_voice_auto_summary", False):
+                        try:
+                            data_service = SessionDataService(
+                                self.db_adapter,
+                                self.bot.db_path if hasattr(self.bot, "db_path") else None
+                            )
+                            stats_service = SessionStatsAggregator(self.db_adapter)
+                            embed_builder = SessionEmbedBuilder()
+                            scoring_service = StopwatchScoringService(self.db_adapter)
+
+                            latest_date = await data_service.get_latest_session_date()
+                            sessions, session_ids, session_ids_str, player_count = await data_service.fetch_session_data(
+                                latest_date
+                            )
+                            if sessions:
+                                all_players = await stats_service.aggregate_all_player_stats(
+                                    session_ids, session_ids_str
+                                )
+                                hardcoded_teams = await data_service.get_hardcoded_teams(session_ids)
+                                team_1_name, team_2_name, _, _, _ = await data_service.build_team_mappings(
+                                    session_ids, session_ids_str, hardcoded_teams
+                                )
+                                scoring_result = None
+                                if hardcoded_teams and len(hardcoded_teams) >= 2:
+                                    team_rosters = {
+                                        name: data.get("guids", [])
+                                        for name, data in hardcoded_teams.items()
+                                    }
+                                    scoring_result = await scoring_service.calculate_session_scores_with_teams(
+                                        latest_date, session_ids, team_rosters
+                                    )
+
+                                maps_played = ", ".join(
+                                    sorted({s[1] for s in sessions})
+                                )
+                                embed = await embed_builder.build_session_overview_embed(
+                                    latest_date=latest_date,
+                                    all_players=all_players,
+                                    maps_played=maps_played,
+                                    rounds_played=len(sessions),
+                                    player_count=player_count,
+                                    team_1_name=team_1_name,
+                                    team_2_name=team_2_name,
+                                    team_1_score=scoring_result.get("team_a_maps", 0) if scoring_result else 0,
+                                    team_2_score=scoring_result.get("team_b_maps", 0) if scoring_result else 0,
+                                    hardcoded_teams=bool(hardcoded_teams),
+                                    scoring_result=scoring_result,
+                                    player_badges=None,
+                                    full_selfkills_available=await stats_service.has_full_selfkills_column()
+                                )
+                                await channel.send(embed=embed)
+                            else:
+                                await channel.send(
+                                    f"📊 **Session Summary for {round_date}**\n"
+                                    "Use `!last_session` for full details!"
+                                )
+                        except Exception as summary_error:
+                            logger.warning(f"Auto-summary embed failed: {summary_error}")
+                            await channel.send(
+                                f"📊 **Session Summary for {round_date}**\n"
+                                "Use `!last_session` for full details!"
+                            )
+                    else:
+                        await channel.send(
+                            f"📊 **Session Summary for {round_date}**\n"
+                            "Use `!last_session` for full details!"
+                        )
 
                 logger.info("✅ Session auto-ended successfully")
 

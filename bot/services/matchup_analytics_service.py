@@ -20,8 +20,34 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple, Any
 from datetime import datetime
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
+
+# Simple TTL cache implementation (avoid external dependency)
+class TTLCache:
+    """Simple TTL cache with max size."""
+    def __init__(self, maxsize: int = 500, ttl_seconds: int = 3600):
+        self._cache: Dict[str, Tuple[Any, float]] = {}
+        self._maxsize = maxsize
+        self._ttl = ttl_seconds
+
+    def get(self, key: str) -> Optional[Any]:
+        import time
+        if key in self._cache:
+            value, timestamp = self._cache[key]
+            if time.time() - timestamp < self._ttl:
+                return value
+            del self._cache[key]
+        return None
+
+    def set(self, key: str, value: Any) -> None:
+        import time
+        # Evict oldest if at capacity
+        if len(self._cache) >= self._maxsize:
+            oldest_key = min(self._cache.keys(), key=lambda k: self._cache[k][1])
+            del self._cache[oldest_key]
+        self._cache[key] = (value, time.time())
 
 # Minimum matches required for "high confidence" insights
 MIN_MATCHES_HIGH_CONFIDENCE = 5
@@ -134,7 +160,7 @@ class MatchupAnalyticsService:
             db_adapter: Database adapter for queries
         """
         self.db = db_adapter
-        self._player_baselines: Dict[str, Dict] = {}  # Cache for player baselines
+        self._player_baselines = TTLCache(maxsize=500, ttl_seconds=3600)  # 1 hour TTL
 
     # =========================================================================
     # LINEUP & MATCHUP IDENTIFICATION
@@ -221,8 +247,9 @@ class MatchupAnalyticsService:
         """
         # Check cache first
         cache_key = f"{player_guid}:{days_back}"
-        if cache_key in self._player_baselines:
-            return self._player_baselines[cache_key]
+        cached = self._player_baselines.get(cache_key)
+        if cached is not None:
+            return cached
 
         query = """
             SELECT
@@ -261,7 +288,7 @@ class MatchupAnalyticsService:
             }
 
         # Cache the result
-        self._player_baselines[cache_key] = baseline
+        self._player_baselines.set(cache_key, baseline)
         return baseline
 
     async def get_player_baselines_batch(
@@ -501,6 +528,9 @@ class MatchupAnalyticsService:
                 match_list = player_match_stats[guid]
                 baseline = baselines.get(guid, {})
 
+                if not match_list:
+                    continue
+
                 # Calculate matchup averages
                 avg_kills = sum(m.get('kills', 0) for m in match_list) / len(match_list)
                 avg_deaths = sum(m.get('deaths', 0) for m in match_list) / len(match_list)
@@ -619,22 +649,30 @@ class MatchupAnalyticsService:
             together_stats = []
             for row in rows:
                 if row[0]:
-                    player_stats = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-                    if player_guid in player_stats:
-                        together_stats.append(player_stats[player_guid])
+                    try:
+                        player_stats = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+                        if isinstance(player_stats, dict) and player_guid in player_stats:
+                            together_stats.append(player_stats[player_guid])
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning(f"Invalid JSON in player_stats: {e}")
+                        continue
 
             if not together_stats:
                 return None
 
-            # Calculate averages
-            avg_dpm_together = sum(s.get('dpm', 0) for s in together_stats) / len(together_stats)
-            avg_kd_together = sum(s.get('kd', 0) for s in together_stats) / len(together_stats)
+            # Calculate averages (safe division)
+            count = len(together_stats)
+            avg_dpm_together = sum(s.get('dpm', 0) for s in together_stats) / count if count > 0 else 0
+            avg_kd_together = sum(s.get('kd', 0) for s in together_stats) / count if count > 0 else 0
 
             # Calculate synergy (delta from baseline)
-            dpm_delta = avg_dpm_together - baseline.get('avg_dpm', 0)
-            kd_delta = avg_kd_together - baseline.get('avg_kd', 0)
+            baseline_dpm = baseline.get('avg_dpm', 0)
+            baseline_kd = baseline.get('avg_kd', 0)
+            dpm_delta = avg_dpm_together - baseline_dpm
+            kd_delta = avg_kd_together - baseline_kd
 
-            synergy_percent = (dpm_delta / baseline.get('avg_dpm', 1) * 100) if baseline.get('avg_dpm', 0) > 0 else 0
+            # Safe synergy percent calculation
+            synergy_percent = (dpm_delta / baseline_dpm * 100) if baseline_dpm > 0 else 0
 
             return {
                 'player_guid': player_guid,
@@ -702,18 +740,25 @@ class MatchupAnalyticsService:
             versus_stats = []
             for row in rows:
                 if row[0]:
-                    player_stats = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-                    if player_guid in player_stats:
-                        versus_stats.append(player_stats[player_guid])
+                    try:
+                        player_stats = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+                        if isinstance(player_stats, dict) and player_guid in player_stats:
+                            versus_stats.append(player_stats[player_guid])
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning(f"Invalid JSON in player_stats: {e}")
+                        continue
 
             if not versus_stats:
                 return None
 
-            avg_dpm_versus = sum(s.get('dpm', 0) for s in versus_stats) / len(versus_stats)
-            dpm_delta = avg_dpm_versus - baseline.get('avg_dpm', 0)
+            # Safe division
+            count = len(versus_stats)
+            avg_dpm_versus = sum(s.get('dpm', 0) for s in versus_stats) / count if count > 0 else 0
+            baseline_dpm = baseline.get('avg_dpm', 0)
+            dpm_delta = avg_dpm_versus - baseline_dpm
 
-            # Negative = opponent suppresses this player
-            suppression_percent = (dpm_delta / baseline.get('avg_dpm', 1) * 100) if baseline.get('avg_dpm', 0) > 0 else 0
+            # Negative = opponent suppresses this player (safe division)
+            suppression_percent = (dpm_delta / baseline_dpm * 100) if baseline_dpm > 0 else 0
 
             return {
                 'player_guid': player_guid,

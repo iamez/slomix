@@ -216,6 +216,29 @@ let serverActivityChart = null;
 let serverExpanded = false;
 let currentTimeRange = 720; // Default 30 days
 
+async function updateMonitoringHistoryStatus(kind, historyStatusEl) {
+    if (!historyStatusEl) return;
+    try {
+        const status = await fetchJSON(`${API_BASE}/monitoring/status`);
+        const entry = status?.[kind];
+        if (!entry) return;
+
+        if (entry.count > 0) {
+            const last = entry.last_recorded_at ? formatTimeAgo(new Date(entry.last_recorded_at)) : 'unknown';
+            historyStatusEl.textContent = `History: ${entry.count} samples · last ${last}`;
+            return;
+        }
+
+        if (entry.error) {
+            historyStatusEl.textContent = 'History: unavailable';
+        } else {
+            historyStatusEl.textContent = 'History: no samples yet';
+        }
+    } catch (e) {
+        historyStatusEl.textContent = 'History: unavailable';
+    }
+}
+
 /**
  * Toggle server details expansion
  */
@@ -265,12 +288,17 @@ export async function loadServerActivity(hours = 720) {
         const chartContainer = document.getElementById('server-activity-chart');
         const noDataDiv = document.getElementById('server-no-data');
         const summaryDiv = document.getElementById('server-stats-summary');
+        const historyStatus = document.getElementById('server-history-status');
 
         if (data.data_points.length === 0) {
             // No data yet
             if (chartContainer) chartContainer.style.display = 'none';
             if (noDataDiv) noDataDiv.classList.remove('hidden');
             if (summaryDiv) summaryDiv.classList.add('hidden');
+            if (historyStatus) historyStatus.textContent = 'History: collecting';
+            if (historyStatus) {
+                updateMonitoringHistoryStatus('server', historyStatus);
+            }
             return;
         }
 
@@ -278,6 +306,11 @@ export async function loadServerActivity(hours = 720) {
         if (chartContainer) chartContainer.style.display = 'block';
         if (noDataDiv) noDataDiv.classList.add('hidden');
         if (summaryDiv) summaryDiv.classList.remove('hidden');
+        if (historyStatus) {
+            const lastPoint = data.data_points[data.data_points.length - 1];
+            const lastLabel = lastPoint?.timestamp ? formatTimeAgo(new Date(lastPoint.timestamp)) : 'unknown';
+            historyStatus.textContent = `History: ${data.summary.total_records} samples · last ${lastLabel}`;
+        }
 
         // Update summary stats
         document.getElementById('stat-peak-players').textContent = data.summary.peak_players;
@@ -377,6 +410,8 @@ export async function loadServerActivity(hours = 720) {
 
     } catch (e) {
         console.error('Failed to load server activity:', e);
+        const historyStatus = document.getElementById('server-history-status');
+        if (historyStatus) historyStatus.textContent = 'History: unavailable';
     }
 }
 
@@ -536,12 +571,17 @@ export async function loadVoiceActivity(hours = 720) {
         const chartContainer = document.getElementById('voice-activity-chart');
         const noDataDiv = document.getElementById('voice-no-data');
         const summaryDiv = document.getElementById('voice-stats-summary');
+        const historyStatus = document.getElementById('voice-history-status');
 
         if (data.data_points.length === 0) {
             // No data yet
             if (chartContainer) chartContainer.style.display = 'none';
             if (noDataDiv) noDataDiv.classList.remove('hidden');
             if (summaryDiv) summaryDiv.classList.add('hidden');
+            if (historyStatus) historyStatus.textContent = 'History: collecting';
+            if (historyStatus) {
+                updateMonitoringHistoryStatus('voice', historyStatus);
+            }
             return;
         }
 
@@ -549,6 +589,11 @@ export async function loadVoiceActivity(hours = 720) {
         if (chartContainer) chartContainer.style.display = 'block';
         if (noDataDiv) noDataDiv.classList.add('hidden');
         if (summaryDiv) summaryDiv.classList.remove('hidden');
+        if (historyStatus) {
+            const lastPoint = data.data_points[data.data_points.length - 1];
+            const lastLabel = lastPoint?.timestamp ? formatTimeAgo(new Date(lastPoint.timestamp)) : 'unknown';
+            historyStatus.textContent = `History: ${data.summary.total_records} samples · last ${lastLabel}`;
+        }
 
         // Update summary stats
         document.getElementById('stat-peak-members').textContent = data.summary.peak_members;
@@ -651,6 +696,8 @@ export async function loadVoiceActivity(hours = 720) {
         const noDataDiv = document.getElementById('voice-no-data');
         if (chartContainer) chartContainer.style.display = 'none';
         if (noDataDiv) noDataDiv.classList.remove('hidden');
+        const historyStatus = document.getElementById('voice-history-status');
+        if (historyStatus) historyStatus.textContent = 'History: unavailable';
     }
 }
 

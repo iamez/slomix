@@ -238,13 +238,31 @@ class SessionDataService:
                 f"""
                 SELECT team_name, player_guids, player_names
                 FROM session_teams
-                WHERE session_start_date IN ({date_placeholders}) AND map_name = 'ALL'
+                WHERE SUBSTR(session_start_date, 1, 10) IN ({date_placeholders})
+                  AND map_name = 'ALL'
                 ORDER BY team_name
                 """,  # nosec B608 - parameterized
                 tuple(dates),
             )
 
             if not rows:
+                # Auto-detect teams if missing (best-effort)
+                try:
+                    from bot.core.team_manager import TeamManager
+
+                    session_date = min(dates) if dates else None
+                    if session_date:
+                        logger.info(
+                            f"⚠️ No session_teams found for {session_date}, "
+                            "attempting auto-detect..."
+                        )
+                        team_manager = TeamManager(self.db_adapter)
+                        detected = await team_manager.get_session_teams(
+                            session_date, auto_detect=True
+                        )
+                        return detected if detected else None
+                except Exception as e:
+                    logger.debug(f"Auto-detect teams failed: {e}")
                 return None
 
             teams = {}
@@ -525,8 +543,8 @@ class SessionDataService:
                         )
                         SELECT
                             CASE
-                                WHEN session_total.total_seconds > 0
-                                THEN (SUM(damage_given) * 60.0) / session_total.total_seconds
+                                WHEN MAX(session_total.total_seconds) > 0
+                                THEN (SUM(damage_given) * 60.0) / MAX(session_total.total_seconds)
                                 ELSE 0
                             END as weighted_dpm,
                             SUM(deaths),

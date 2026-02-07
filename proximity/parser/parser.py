@@ -153,14 +153,19 @@ class ProximityParserV4:
         self.player_tracks: List[PlayerTrack] = []  # v4: Full player tracks
         self.kill_heatmap: List[Dict] = []
         self.movement_heatmap: List[Dict] = []
+        self.trade_events: List[Dict] = []
+        self.support_summary: Optional[Dict] = None
         self.metadata = {
             'map_name': '',
             'round_num': 0,
             'crossfire_window': 1000,
             'escape_time': 5000,
             'escape_distance': 300,
-            'position_sample_interval': 1000  # v4: track sample rate
+            'position_sample_interval': 1000,  # v4: track sample rate
+            'round_start_unix': 0,
+            'round_end_unix': 0,
         }
+        self._schema_cache: Dict[tuple, bool] = {}
     
     def find_files(self, session_date: str = None) -> List[str]:
         """Find v3 engagement files"""
@@ -182,6 +187,9 @@ class ProximityParserV4:
         self.player_tracks = []
         self.kill_heatmap = []
         self.movement_heatmap = []
+        self.objective_focus = []
+        self.trade_events = []
+        self.support_summary = None
 
         section = 'header'
 
@@ -211,6 +219,18 @@ class ProximityParserV4:
                     if line.startswith('# position_sample_interval='):
                         self.metadata['position_sample_interval'] = int(line.split('=')[1])
                         continue
+                    if line.startswith('# round_start_unix='):
+                        try:
+                            self.metadata['round_start_unix'] = int(line.split('=')[1])
+                        except ValueError:
+                            self.metadata['round_start_unix'] = 0
+                        continue
+                    if line.startswith('# round_end_unix='):
+                        try:
+                            self.metadata['round_end_unix'] = int(line.split('=')[1])
+                        except ValueError:
+                            self.metadata['round_end_unix'] = 0
+                        continue
 
                     # Section detection
                     if line.startswith('# ENGAGEMENTS'):
@@ -224,6 +244,9 @@ class ProximityParserV4:
                         continue
                     if line.startswith('# MOVEMENT_HEATMAP'):
                         section = 'movement_heatmap'
+                        continue
+                    if line.startswith('# OBJECTIVE_FOCUS'):
+                        section = 'objective_focus'
                         continue
 
                     # Skip other comments
@@ -239,6 +262,8 @@ class ProximityParserV4:
                         self._parse_kill_heatmap_line(line)
                     elif section == 'movement_heatmap':
                         self._parse_movement_heatmap_line(line)
+                    elif section == 'objective_focus':
+                        self._parse_objective_focus_line(line)
 
             self.logger.info(f"Parsed {len(self.engagements)} engagements, {len(self.player_tracks)} tracks from {filepath}")
             return True
@@ -246,6 +271,27 @@ class ProximityParserV4:
         except Exception as e:
             self.logger.error(f"Error parsing {filepath}: {e}")
             return False
+
+    async def _table_has_column(self, table: str, column: str) -> bool:
+        if not self.db_adapter:
+            return False
+        key = (table, column)
+        cached = self._schema_cache.get(key)
+        if cached is not None:
+            return cached
+        query = """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = $1
+              AND column_name = $2
+            LIMIT 1
+        """
+        try:
+            row = await self.db_adapter.fetch_one(query, (table, column))
+            self._schema_cache[key] = bool(row)
+        except Exception:
+            self._schema_cache[key] = False
+        return self._schema_cache[key]
     
     def _parse_engagement_line(self, line: str):
         """Parse engagement data line (semicolon-delimited)"""
@@ -433,6 +479,23 @@ class ProximityParserV4:
                 })
             except ValueError:
                 pass
+
+    def _parse_objective_focus_line(self, line: str):
+        """Parse objective focus line (optional section)"""
+        parts = line.split(';')
+        if len(parts) >= 7:
+            try:
+                self.objective_focus.append({
+                    'guid': parts[0],
+                    'name': parts[1],
+                    'team': parts[2],
+                    'objective': parts[3],
+                    'avg_distance': float(parts[4]),
+                    'time_within_radius_ms': int(parts[5]),
+                    'samples': int(parts[6]),
+                })
+            except ValueError:
+                pass
     
     async def import_file(self, filepath: str, session_date) -> bool:
         """Parse and import to database
@@ -470,6 +533,21 @@ class ProximityParserV4:
             # Import heatmaps
             await self._import_heatmaps()
 
+            # Import objective focus (optional)
+            if self.objective_focus:
+                await self._import_objective_focus(session_date)
+
+            # Compute + import trade events (v1)
+            if self.engagements and self.player_tracks:
+                self._compute_trade_events()
+                await self._import_trade_events(session_date)
+
+            # Compute + import support uptime summary
+            if self.player_tracks:
+                self.support_summary = self._compute_support_uptime()
+                if self.support_summary:
+                    await self._import_support_summary(session_date)
+
             self.logger.info(f"Successfully imported {filepath}")
             return True
 
@@ -479,6 +557,8 @@ class ProximityParserV4:
     
     async def _import_engagements(self, session_date: str):
         """Import engagements to combat_engagement table"""
+        supports_round_start = await self._table_has_column('combat_engagement', 'round_start_unix')
+        supports_round_end = await self._table_has_column('combat_engagement', 'round_end_unix')
         for eng in self.engagements:
             # Serialize for JSONB
             position_path_json = json.dumps(eng.position_path)
@@ -498,50 +578,100 @@ class ProximityParserV4:
             ])
             cf_participants_json = json.dumps(eng.crossfire_participants) if eng.crossfire_participants else None
             
-            query = """
-                INSERT INTO combat_engagement (
-                    session_date, round_number, map_name, engagement_id,
-                    start_time_ms, end_time_ms, duration_ms,
-                    target_guid, target_name, target_team,
-                    outcome, total_damage_taken, killer_guid, killer_name,
-                    position_path, start_x, start_y, start_z, end_x, end_y, end_z,
-                    distance_traveled, attackers, num_attackers,
-                    is_crossfire, crossfire_delay_ms, crossfire_participants
-                ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                    $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
-                )
-                ON CONFLICT (session_date, round_number, engagement_id) DO NOTHING
-            """
-            
-            await self.db_adapter.execute(query, (
-                session_date,
-                self.metadata['round_num'],
-                self.metadata['map_name'],
-                eng.id,
-                eng.start_time,
-                eng.end_time,
-                eng.duration,
-                eng.target_guid,
-                eng.target_name,
-                eng.target_team,
-                eng.outcome,
-                eng.total_damage,
-                eng.killer_guid,
-                eng.killer_name,
-                position_path_json,
-                eng.start_x, eng.start_y, eng.start_z,
-                eng.end_x, eng.end_y, eng.end_z,
-                eng.distance_traveled,
-                attackers_json,
-                eng.num_attackers,
-                eng.is_crossfire,
-                eng.crossfire_delay,
-                cf_participants_json
-            ))
+            if supports_round_start:
+                columns = [
+                    "session_date", "round_number", "round_start_unix",
+                    "map_name", "engagement_id",
+                    "start_time_ms", "end_time_ms", "duration_ms",
+                    "target_guid", "target_name", "target_team",
+                    "outcome", "total_damage_taken", "killer_guid", "killer_name",
+                    "position_path", "start_x", "start_y", "start_z", "end_x", "end_y", "end_z",
+                    "distance_traveled", "attackers", "num_attackers",
+                    "is_crossfire", "crossfire_delay_ms", "crossfire_participants",
+                ]
+                values = [
+                    session_date,
+                    self.metadata['round_num'],
+                    self.metadata.get('round_start_unix', 0),
+                    self.metadata['map_name'],
+                    eng.id,
+                    eng.start_time,
+                    eng.end_time,
+                    eng.duration,
+                    eng.target_guid,
+                    eng.target_name,
+                    eng.target_team,
+                    eng.outcome,
+                    eng.total_damage,
+                    eng.killer_guid,
+                    eng.killer_name,
+                    position_path_json,
+                    eng.start_x, eng.start_y, eng.start_z,
+                    eng.end_x, eng.end_y, eng.end_z,
+                    eng.distance_traveled,
+                    attackers_json,
+                    eng.num_attackers,
+                    eng.is_crossfire,
+                    eng.crossfire_delay,
+                    cf_participants_json,
+                ]
+                if supports_round_end:
+                    columns.insert(3, "round_end_unix")
+                    values.insert(3, self.metadata.get('round_end_unix', 0))
+                placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+                query = f"""
+                    INSERT INTO combat_engagement ({", ".join(columns)})
+                    VALUES ({placeholders})
+                    ON CONFLICT (session_date, round_number, round_start_unix, engagement_id)
+                    DO NOTHING
+                """
+                await self.db_adapter.execute(query, tuple(values))
+            else:
+                query = """
+                    INSERT INTO combat_engagement (
+                        session_date, round_number, map_name, engagement_id,
+                        start_time_ms, end_time_ms, duration_ms,
+                        target_guid, target_name, target_team,
+                        outcome, total_damage_taken, killer_guid, killer_name,
+                        position_path, start_x, start_y, start_z, end_x, end_y, end_z,
+                        distance_traveled, attackers, num_attackers,
+                        is_crossfire, crossfire_delay_ms, crossfire_participants
+                    ) VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+                        $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
+                    )
+                    ON CONFLICT (session_date, round_number, engagement_id) DO NOTHING
+                """
+                await self.db_adapter.execute(query, (
+                    session_date,
+                    self.metadata['round_num'],
+                    self.metadata['map_name'],
+                    eng.id,
+                    eng.start_time,
+                    eng.end_time,
+                    eng.duration,
+                    eng.target_guid,
+                    eng.target_name,
+                    eng.target_team,
+                    eng.outcome,
+                    eng.total_damage,
+                    eng.killer_guid,
+                    eng.killer_name,
+                    position_path_json,
+                    eng.start_x, eng.start_y, eng.start_z,
+                    eng.end_x, eng.end_y, eng.end_z,
+                    eng.distance_traveled,
+                    attackers_json,
+                    eng.num_attackers,
+                    eng.is_crossfire,
+                    eng.crossfire_delay,
+                    cf_participants_json
+                ))
 
     async def _import_player_tracks(self, session_date: str):
         """Import player tracks to player_track table (v4)"""
+        supports_round_start = await self._table_has_column('player_track', 'round_start_unix')
+        supports_round_end = await self._table_has_column('player_track', 'round_end_unix')
         for track in self.player_tracks:
             # Serialize path as JSONB
             path_json = json.dumps([
@@ -567,41 +697,82 @@ class ProximityParserV4:
             avg_speed = track.avg_speed
             sprint_pct = track.sprint_percentage
 
-            query = """
-                INSERT INTO player_track (
-                    session_date, round_number, map_name,
-                    player_guid, player_name, team, player_class,
-                    spawn_time_ms, death_time_ms, duration_ms,
-                    first_move_time_ms, time_to_first_move_ms,
-                    sample_count, path,
-                    total_distance, avg_speed, sprint_percentage
-                ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                    $11, $12, $13, $14, $15, $16, $17
-                )
-                ON CONFLICT (session_date, round_number, player_guid, spawn_time_ms)
-                DO NOTHING
-            """
-
-            await self.db_adapter.execute(query, (
-                session_date,
-                self.metadata['round_num'],
-                self.metadata['map_name'],
-                track.guid,
-                track.name,
-                track.team,
-                track.player_class,
-                track.spawn_time,
-                track.death_time,
-                duration_ms,
-                track.first_move_time,
-                time_to_first_move,
-                track.sample_count,
-                path_json,
-                total_distance,
-                avg_speed,
-                sprint_pct
-            ))
+            if supports_round_start:
+                columns = [
+                    "session_date", "round_number", "round_start_unix",
+                    "map_name",
+                    "player_guid", "player_name", "team", "player_class",
+                    "spawn_time_ms", "death_time_ms", "duration_ms",
+                    "first_move_time_ms", "time_to_first_move_ms",
+                    "sample_count", "path",
+                    "total_distance", "avg_speed", "sprint_percentage",
+                ]
+                values = [
+                    session_date,
+                    self.metadata['round_num'],
+                    self.metadata.get('round_start_unix', 0),
+                    self.metadata['map_name'],
+                    track.guid,
+                    track.name,
+                    track.team,
+                    track.player_class,
+                    track.spawn_time,
+                    track.death_time,
+                    duration_ms,
+                    track.first_move_time,
+                    time_to_first_move,
+                    track.sample_count,
+                    path_json,
+                    total_distance,
+                    avg_speed,
+                    sprint_pct,
+                ]
+                if supports_round_end:
+                    columns.insert(3, "round_end_unix")
+                    values.insert(3, self.metadata.get('round_end_unix', 0))
+                placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+                query = f"""
+                    INSERT INTO player_track ({", ".join(columns)})
+                    VALUES ({placeholders})
+                    ON CONFLICT (session_date, round_number, round_start_unix, player_guid, spawn_time_ms)
+                    DO NOTHING
+                """
+                await self.db_adapter.execute(query, tuple(values))
+            else:
+                query = """
+                    INSERT INTO player_track (
+                        session_date, round_number, map_name,
+                        player_guid, player_name, team, player_class,
+                        spawn_time_ms, death_time_ms, duration_ms,
+                        first_move_time_ms, time_to_first_move_ms,
+                        sample_count, path,
+                        total_distance, avg_speed, sprint_percentage
+                    ) VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                        $11, $12, $13, $14, $15, $16, $17
+                    )
+                    ON CONFLICT (session_date, round_number, player_guid, spawn_time_ms)
+                    DO NOTHING
+                """
+                await self.db_adapter.execute(query, (
+                    session_date,
+                    self.metadata['round_num'],
+                    self.metadata['map_name'],
+                    track.guid,
+                    track.name,
+                    track.team,
+                    track.player_class,
+                    track.spawn_time,
+                    track.death_time,
+                    duration_ms,
+                    track.first_move_time,
+                    time_to_first_move,
+                    track.sample_count,
+                    path_json,
+                    total_distance,
+                    avg_speed,
+                    sprint_pct
+                ))
 
     async def _update_player_stats(self):
         """Update player_teamplay_stats from engagements"""
@@ -848,6 +1019,397 @@ class ProximityParserV4:
                 map_name, cell['grid_x'], cell['grid_y'],
                 cell['traversal'], cell['combat'], cell['escape']
             ))
+
+    async def _import_objective_focus(self, session_date: str):
+        """Import objective focus metrics if table exists"""
+        supports_round_start = await self._table_has_column('proximity_objective_focus', 'round_start_unix')
+        supports_round_end = await self._table_has_column('proximity_objective_focus', 'round_end_unix')
+        for row in self.objective_focus:
+            if supports_round_start:
+                columns = [
+                    "session_date", "round_number", "round_start_unix",
+                    "map_name",
+                    "player_guid", "player_name", "team",
+                    "objective", "avg_distance", "time_within_radius_ms", "samples",
+                ]
+                values = [
+                    session_date,
+                    self.metadata['round_num'],
+                    self.metadata.get('round_start_unix', 0),
+                    self.metadata['map_name'],
+                    row['guid'],
+                    row['name'],
+                    row['team'],
+                    row['objective'],
+                    row['avg_distance'],
+                    row['time_within_radius_ms'],
+                    row['samples'],
+                ]
+                if supports_round_end:
+                    columns.insert(3, "round_end_unix")
+                    values.insert(3, self.metadata.get('round_end_unix', 0))
+                placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+                query = f"""
+                    INSERT INTO proximity_objective_focus ({", ".join(columns)})
+                    VALUES ({placeholders})
+                    ON CONFLICT (session_date, round_number, player_guid) DO UPDATE SET
+                        player_name = EXCLUDED.player_name,
+                        team = EXCLUDED.team,
+                        objective = EXCLUDED.objective,
+                        avg_distance = EXCLUDED.avg_distance,
+                        time_within_radius_ms = EXCLUDED.time_within_radius_ms,
+                        samples = EXCLUDED.samples
+                """
+                await self.db_adapter.execute(query, tuple(values))
+            else:
+                query = """
+                    INSERT INTO proximity_objective_focus (
+                        session_date, round_number, map_name,
+                        player_guid, player_name, team,
+                        objective, avg_distance, time_within_radius_ms, samples
+                    ) VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+                    )
+                    ON CONFLICT (session_date, round_number, player_guid) DO UPDATE SET
+                        player_name = EXCLUDED.player_name,
+                        team = EXCLUDED.team,
+                        objective = EXCLUDED.objective,
+                        avg_distance = EXCLUDED.avg_distance,
+                        time_within_radius_ms = EXCLUDED.time_within_radius_ms,
+                        samples = EXCLUDED.samples
+                """
+                await self.db_adapter.execute(query, (
+                    session_date,
+                    self.metadata['round_num'],
+                    self.metadata['map_name'],
+                    row['guid'],
+                    row['name'],
+                    row['team'],
+                    row['objective'],
+                    row['avg_distance'],
+                    row['time_within_radius_ms'],
+                    row['samples'],
+                ))
+
+    def _distance2d(self, a: Tuple[float, float, float], b: Tuple[float, float, float]) -> float:
+        dx = (a[0] or 0) - (b[0] or 0)
+        dy = (a[1] or 0) - (b[1] or 0)
+        return (dx * dx + dy * dy) ** 0.5
+
+    def _closest_track_point(self, track: PlayerTrack, target_time: int, max_delta_ms: int) -> Optional[PathPoint]:
+        if not track.path:
+            return None
+        closest = None
+        best_delta = None
+        for p in track.path:
+            delta = abs(p.time - target_time)
+            if best_delta is None or delta < best_delta:
+                best_delta = delta
+                closest = p
+        if best_delta is None or best_delta > max_delta_ms:
+            return None
+        return closest
+
+    def _track_for_time(self, tracks: List[PlayerTrack], target_time: int) -> Optional[PlayerTrack]:
+        for track in tracks:
+            if track.spawn_time <= target_time and (track.death_time is None or track.death_time >= target_time):
+                return track
+        return None
+
+    def _merge_intervals(self, intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        if not intervals:
+            return []
+        intervals_sorted = sorted(intervals, key=lambda x: x[0])
+        merged = [intervals_sorted[0]]
+        for start, end in intervals_sorted[1:]:
+            last_start, last_end = merged[-1]
+            if start <= last_end + 1:
+                merged[-1] = (last_start, max(last_end, end))
+            else:
+                merged.append((start, end))
+        return merged
+
+    def _is_in_combat(self, intervals: List[Tuple[int, int]], time_ms: int) -> bool:
+        if not intervals:
+            return False
+        for start, end in intervals:
+            if start <= time_ms <= end:
+                return True
+        return False
+
+    def _compute_support_uptime(self) -> Optional[Dict]:
+        if not self.player_tracks:
+            return None
+
+        support_dist = float(os.getenv("PROXIMITY_SUPPORT_DIST", "600"))
+        combat_recent_ms = int(os.getenv("PROXIMITY_COMBAT_RECENT_MS", "1500"))
+        max_pos_delta = int(os.getenv("PROXIMITY_SUPPORT_POS_DELTA_MS", "1500"))
+
+        combat_intervals_by_guid: Dict[str, List[Tuple[int, int]]] = {}
+
+        for eng in self.engagements:
+            if eng.start_time and eng.end_time:
+                combat_intervals_by_guid.setdefault(eng.target_guid, []).append(
+                    (eng.start_time, eng.end_time + combat_recent_ms)
+                )
+            for attacker in eng.attackers.values():
+                if attacker.first_hit and attacker.last_hit:
+                    combat_intervals_by_guid.setdefault(attacker.guid, []).append(
+                        (attacker.first_hit, attacker.last_hit + combat_recent_ms)
+                    )
+
+        for guid, intervals in list(combat_intervals_by_guid.items()):
+            combat_intervals_by_guid[guid] = self._merge_intervals(intervals)
+
+        tracks = list(self.player_tracks)
+        support_samples = 0
+        total_samples = 0
+
+        for track in tracks:
+            if not track.path:
+                continue
+            for point in track.path:
+                total_samples += 1
+                in_support = False
+                for teammate in tracks:
+                    if teammate.guid == track.guid or teammate.team != track.team:
+                        continue
+                    if not (teammate.spawn_time <= point.time and (teammate.death_time is None or teammate.death_time >= point.time)):
+                        continue
+                    if not self._is_in_combat(combat_intervals_by_guid.get(teammate.guid, []), point.time):
+                        continue
+                    teammate_point = self._closest_track_point(teammate, point.time, max_pos_delta)
+                    if not teammate_point:
+                        continue
+                    dist = self._distance2d((point.x, point.y, point.z), (teammate_point.x, teammate_point.y, teammate_point.z))
+                    if dist <= support_dist:
+                        in_support = True
+                        break
+                if in_support:
+                    support_samples += 1
+
+        if total_samples == 0:
+            return None
+
+        return {
+            "support_samples": support_samples,
+            "total_samples": total_samples,
+            "support_uptime_pct": round(support_samples * 100 / total_samples, 2),
+        }
+
+    def _compute_trade_events(self):
+        if not self.engagements or not self.player_tracks:
+            return
+
+        trade_window_ms = int(os.getenv("PROXIMITY_TRADE_WINDOW_MS", "3000"))
+        trade_dist = float(os.getenv("PROXIMITY_TRADE_DIST", "800"))
+        max_pos_delta = int(os.getenv("PROXIMITY_TRADE_POS_DELTA_MS", "1500"))
+        isolation_dist = float(os.getenv("PROXIMITY_ISOLATION_DIST", "1200"))
+
+        tracks_by_guid: Dict[str, List[PlayerTrack]] = {}
+        for track in self.player_tracks:
+            tracks_by_guid.setdefault(track.guid, []).append(track)
+        for guid in tracks_by_guid:
+            tracks_by_guid[guid].sort(key=lambda t: t.spawn_time)
+
+        engagements_by_target: Dict[str, List[Engagement]] = {}
+        for eng in self.engagements:
+            engagements_by_target.setdefault(eng.target_guid, []).append(eng)
+        for engs in engagements_by_target.values():
+            engs.sort(key=lambda e: e.start_time)
+
+        trade_events = []
+        for eng in self.engagements:
+            if eng.outcome != 'killed' or not eng.killer_guid:
+                continue
+
+            death_time = eng.end_time
+            victim_team = eng.target_team
+            victim_guid = eng.target_guid
+            victim_pos = (eng.end_x, eng.end_y, eng.end_z)
+
+            opportunities = []
+            nearest_teammate_dist = None
+            for guid, tracks in tracks_by_guid.items():
+                if guid == victim_guid:
+                    continue
+                track = self._track_for_time(tracks, death_time)
+                if not track or track.team != victim_team:
+                    continue
+                point = self._closest_track_point(track, death_time, max_pos_delta)
+                if not point:
+                    continue
+                dist = self._distance2d(victim_pos, (point.x, point.y, point.z))
+                if nearest_teammate_dist is None or dist < nearest_teammate_dist:
+                    nearest_teammate_dist = dist
+                if dist <= trade_dist:
+                    opportunities.append({
+                        "guid": track.guid,
+                        "name": track.name,
+                        "distance": round(dist, 1),
+                        "delta_ms": abs(point.time - death_time),
+                    })
+
+            attempts_map: Dict[str, Dict] = {}
+            successes_map: Dict[str, Dict] = {}
+
+            killer_engagements = engagements_by_target.get(eng.killer_guid, [])
+            for k_eng in killer_engagements:
+                for attacker in k_eng.attackers.values():
+                    if attacker.team != victim_team:
+                        continue
+                    if attacker.first_hit < death_time or attacker.first_hit > death_time + trade_window_ms:
+                        continue
+                    existing = attempts_map.get(attacker.guid)
+                    if not existing or attacker.first_hit < existing["first_hit_ms"]:
+                        attempts_map[attacker.guid] = {
+                            "guid": attacker.guid,
+                            "name": attacker.name,
+                            "first_hit_ms": attacker.first_hit,
+                            "damage": attacker.damage,
+                        }
+
+                if k_eng.outcome == 'killed' and death_time <= k_eng.end_time <= death_time + trade_window_ms:
+                    for attacker in k_eng.attackers.values():
+                        if attacker.team != victim_team or not attacker.got_kill:
+                            continue
+                        successes_map[attacker.guid] = {
+                            "guid": attacker.guid,
+                            "name": attacker.name,
+                            "kill_time_ms": k_eng.end_time,
+                        }
+
+            attempts = list(attempts_map.values())
+            successes = list(successes_map.values())
+
+            missed_candidates = []
+            if opportunities and not attempts and not successes:
+                for opp in opportunities:
+                    missed_candidates.append({
+                        "guid": opp["guid"],
+                        "name": opp["name"],
+                        "distance": opp["distance"],
+                        "reason": "no_attempt",
+                    })
+
+            is_isolation = bool(
+                (nearest_teammate_dist is None or nearest_teammate_dist > isolation_dist)
+                and not opportunities
+            )
+
+            trade_events.append({
+                "victim_guid": victim_guid,
+                "victim_name": eng.target_name,
+                "victim_team": victim_team,
+                "killer_guid": eng.killer_guid,
+                "killer_name": eng.killer_name,
+                "death_time_ms": death_time,
+                "trade_window_ms": trade_window_ms,
+                "opportunities": opportunities,
+                "attempts": attempts,
+                "successes": successes,
+                "missed_candidates": missed_candidates,
+                "nearest_teammate_dist": round(nearest_teammate_dist, 1) if nearest_teammate_dist is not None else None,
+                "is_isolation_death": is_isolation,
+            })
+
+        self.trade_events = trade_events
+
+    async def _import_trade_events(self, session_date: str):
+        if not self.trade_events:
+            return
+        if not await self._table_has_column('proximity_trade_event', 'victim_guid'):
+            self.logger.info("proximity_trade_event table not found; skipping trade import")
+            return
+        supports_round_start = await self._table_has_column('proximity_trade_event', 'round_start_unix')
+        supports_round_end = await self._table_has_column('proximity_trade_event', 'round_end_unix')
+        for event in self.trade_events:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "victim_guid", "victim_name", "victim_team",
+                "killer_guid", "killer_name",
+                "death_time_ms", "trade_window_ms",
+                "nearest_teammate_dist", "is_isolation_death",
+                "opportunity_count", "opportunities",
+                "attempt_count", "attempts",
+                "success_count", "successes",
+                "missed_count", "missed_candidates",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                event["victim_guid"],
+                event["victim_name"],
+                event["victim_team"],
+                event["killer_guid"],
+                event["killer_name"],
+                event["death_time_ms"],
+                event["trade_window_ms"],
+                event.get("nearest_teammate_dist"),
+                event.get("is_isolation_death", False),
+                len(event["opportunities"]),
+                json.dumps(event["opportunities"]),
+                len(event["attempts"]),
+                json.dumps(event["attempts"]),
+                len(event["successes"]),
+                json.dumps(event["successes"]),
+                len(event["missed_candidates"]),
+                json.dumps(event["missed_candidates"]),
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_trade_event ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, victim_guid, death_time_ms)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_support_summary(self, session_date: str):
+        if not self.support_summary:
+            return
+        if not await self._table_has_column('proximity_support_summary', 'support_samples'):
+            self.logger.info("proximity_support_summary table not found; skipping support summary import")
+            return
+        supports_round_start = await self._table_has_column('proximity_support_summary', 'round_start_unix')
+        supports_round_end = await self._table_has_column('proximity_support_summary', 'round_end_unix')
+
+        columns = [
+            "session_date", "round_number", "round_start_unix",
+            "map_name",
+            "support_samples", "total_samples", "support_uptime_pct",
+        ]
+        values = [
+            session_date,
+            self.metadata['round_num'],
+            self.metadata.get('round_start_unix', 0),
+            self.metadata['map_name'],
+            self.support_summary["support_samples"],
+            self.support_summary["total_samples"],
+            self.support_summary["support_uptime_pct"],
+        ]
+        if supports_round_end:
+            columns.insert(3, "round_end_unix")
+            values.insert(3, self.metadata.get('round_end_unix', 0))
+
+        placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+        query = f"""
+            INSERT INTO proximity_support_summary ({", ".join(columns)})
+            VALUES ({placeholders})
+            ON CONFLICT (session_date, round_number, round_start_unix)
+            DO UPDATE SET
+                support_samples = EXCLUDED.support_samples,
+                total_samples = EXCLUDED.total_samples,
+                support_uptime_pct = EXCLUDED.support_uptime_pct,
+                computed_at = CURRENT_TIMESTAMP
+        """
+        await self.db_adapter.execute(query, tuple(values))
     
     def get_stats(self) -> Dict:
         """Get summary of parsed data"""

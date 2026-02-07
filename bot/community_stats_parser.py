@@ -30,6 +30,25 @@ logger = logging.getLogger(__name__)
 # To get Round 2-only stats: R2_cumulative - R1 = R2_only
 # =============================================================================
 
+# =============================================================================
+# R2-ONLY FIELDS (Jan 2026 Discovery)
+# These fields in R2 stats files are ALREADY differential (R2-only values).
+# ET:Legacy Lua resets these variables between rounds, so R2 file contains
+# R2-only performance, NOT cumulative R1+R2 totals.
+# DO NOT subtract R1 from these - use R2 value directly!
+# =============================================================================
+R2_ONLY_FIELDS = {
+    'xp',                   # TAB[9] - XP THIS round
+    'death_spree',          # TAB[11] - Death spree THIS round
+    'kill_assists',         # TAB[12] - Kill assists THIS round
+    'headshot_kills',       # TAB[14] - Headshot kills THIS round
+    'objectives_stolen',    # TAB[15] - Objectives stolen THIS round
+    'dynamites_planted',    # TAB[17] - Dynamites planted THIS round
+    'times_revived',        # TAB[19] - Times revived THIS round
+    'useful_kills',         # TAB[27] - Useful kills THIS round
+    'revives_given',        # TAB[37] - Revives given THIS round
+}
+
 # C0RNP0RN3.LUA weapon enumeration (the actual format used)
 C0RNP0RN3_WEAPONS = {
     0: "WS_KNIFE",
@@ -97,22 +116,41 @@ class C0RNP0RN3StatsParser:
 
         self.team_colors = {1: 0xFF4444, 2: 0x4444FF}  # Axis - Red  # Allies - Blue
 
+        # Omni-bot detection (prefix can be overridden via BOT_NAME_REGEX)
+        bot_regex = os.getenv("BOT_NAME_REGEX", r"^\[BOT\]")
+        try:
+            self.bot_name_pattern = re.compile(bot_regex, re.IGNORECASE)
+        except re.error:
+            self.bot_name_pattern = re.compile(r"^\[BOT\]", re.IGNORECASE)
+
     def strip_color_codes(self, text: str) -> str:
         """Remove ET Legacy color codes from text (^0-^9, ^a-^z, etc.)"""
         if not text:
             return ""
         return re.sub(r'\^[0-9a-zA-Z]', '', text)
 
+    def is_bot_name(self, clean_name: str) -> bool:
+        """Detect Omni-bot names via prefix (default: [BOT])"""
+        if not clean_name:
+            return False
+        return bool(self.bot_name_pattern.match(clean_name.strip()))
+
     def parse_time_to_seconds(self, time_str: str) -> int:
         """Convert time string (MM:SS or M:SS) to seconds"""
         try:
-            if ':' in time_str:
-                parts = time_str.split(':')
+            if not time_str:
+                return 0
+            text = str(time_str).strip()
+            if ':' in text:
+                parts = text.split(':')
                 minutes = int(parts[0])
                 seconds = int(parts[1])
                 return minutes * 60 + seconds
-            else:
-                return int(time_str)
+            if '.' in text:
+                # Decimal minutes (e.g., "20.00", "5.25")
+                minutes = float(text)
+                return int(minutes * 60)
+            return int(text)
         except BaseException:
             return 0
 
@@ -488,7 +526,16 @@ class C0RNP0RN3StatsParser:
 
             if not r1_player:
                 # Player only in Round 2, use cumulative stats as-is
-                round_2_only_players.append(r2_player.copy())
+                # Keep raw time fields for validation/logging.
+                r2_copy = r2_player.copy()
+                r2_obj = r2_player.get('objective_stats', {})
+                r2_copy['objective_stats_raw'] = {
+                    'time_played_minutes_r2': r2_obj.get('time_played_minutes', 0),
+                    'time_dead_minutes_r2': r2_obj.get('time_dead_minutes', 0),
+                    'time_dead_ratio_r2': r2_obj.get('time_dead_ratio', 0),
+                    'denied_playtime_r2': r2_obj.get('denied_playtime', 0),
+                }
+                round_2_only_players.append(r2_copy)
                 continue
 
             # Calculate differential for this player
@@ -516,28 +563,23 @@ class C0RNP0RN3StatsParser:
             r1_obj = r1_player.get('objective_stats', {})
 
             # Calculate differential objective stats
+            # CRITICAL FIX (Jan 30, 2026): ET:Legacy has MIXED field behavior!
+            # - Some fields are cumulative (R1+R2 total) - need subtraction
+            # - Some fields are R2-only (already differential) - use directly
             for key in r2_obj:
-                if key == 'time_played_minutes':
-                    # CRITICAL: For time, use R2 cumulative minus R1
-                    # This gives us the time played ONLY in Round 2
+                if key in R2_ONLY_FIELDS:
+                    # These fields are ALREADY R2-only in the stats file
+                    # ET:Legacy Lua resets these variables between rounds
+                    # DO NOT subtract R1 - use R2 value directly!
+                    differential_player['objective_stats'][key] = r2_obj[key]
+                elif key == 'time_played_minutes':
+                    # Time played IS cumulative - subtract R1 to get R2-only
                     r2_time = r2_obj.get('time_played_minutes', 0)
                     r1_time = r1_obj.get('time_played_minutes', 0)
                     diff_minutes = max(0, r2_time - r1_time)
                     differential_player['objective_stats']['time_played_minutes'] = diff_minutes
-                elif key == 'time_dead_minutes':
-                    # FIXED (Jan 2026): SuperBoyy identified bug in ratio-based calculation
-                    # R2 stats are cumulative, just like all other fields
-                    # Correct approach: R2-only = R2_cumulative - R1_value
-                    # Old approach was counting R1 time_dead twice (via ratio calculation)
-                    r2_dead = r2_obj.get('time_dead_minutes', 0)
-                    r1_dead = r1_obj.get('time_dead_minutes', 0)
-                    diff_dead = max(0, r2_dead - r1_dead)
-                    differential_player['objective_stats']['time_dead_minutes'] = diff_dead
-                elif key == 'time_dead_ratio':
-                    # Skip ratio here - will be recalculated from differential values below
-                    pass
                 elif isinstance(r2_obj[key], (int, float)):
-                    # For numeric fields, calculate differential
+                    # Cumulative numeric fields - subtract R1 to get R2-only value
                     differential_player['objective_stats'][key] = max(
                         0, r2_obj.get(key, 0) - r1_obj.get(key, 0)
                     )
@@ -545,9 +587,31 @@ class C0RNP0RN3StatsParser:
                     # For non-numeric, use R2 value
                     differential_player['objective_stats'][key] = r2_obj[key]
 
+            # Preserve raw (cumulative) time fields for validation/logging
+            differential_player['objective_stats_raw'] = {
+                'time_played_minutes_r1': r1_obj.get('time_played_minutes', 0),
+                'time_played_minutes_r2': r2_obj.get('time_played_minutes', 0),
+                'time_dead_minutes_r1': r1_obj.get('time_dead_minutes', 0),
+                'time_dead_minutes_r2': r2_obj.get('time_dead_minutes', 0),
+                'time_dead_ratio_r1': r1_obj.get('time_dead_ratio', 0),
+                'time_dead_ratio_r2': r2_obj.get('time_dead_ratio', 0),
+                'denied_playtime_r1': r1_obj.get('denied_playtime', 0),
+                'denied_playtime_r2': r2_obj.get('denied_playtime', 0),
+            }
+
+            # Recompute time_dead_ratio after differential (avoid ratio subtraction)
+            diff_time_minutes = differential_player['objective_stats'].get('time_played_minutes', 0)
+            diff_dead_minutes = differential_player['objective_stats'].get('time_dead_minutes', 0)
+            if diff_time_minutes and diff_time_minutes > 0:
+                differential_player['objective_stats']['time_dead_ratio'] = round(
+                    (diff_dead_minutes / diff_time_minutes) * 100, 1
+                )
+            else:
+                differential_player['objective_stats']['time_dead_ratio'] = 0.0
+
             # NEW: Calculate time in SECONDS for R2 differential
             # Use time from objective_stats (lua-rounded minutes)
-            diff_minutes = differential_player['objective_stats'].get('time_played_minutes', 0)
+            diff_minutes = diff_time_minutes
             diff_seconds = int(diff_minutes * 60)  # Convert minutes to seconds
 
             differential_player['time_played_seconds'] = diff_seconds
@@ -621,27 +685,24 @@ class C0RNP0RN3StatsParser:
             total_headshots = sum(w.get('headshots', 0) for w in differential_player['weapon_stats'].values())
             differential_player['headshots'] = total_headshots
 
-            # FIX: Calculate time_dead_ratio from already-computed differential values
-            # time_dead_minutes was calculated via subtraction (R2 - R1) in the loop above
             diff_time_minutes = differential_player['objective_stats'].get('time_played_minutes', 0)
             diff_dead_minutes = differential_player['objective_stats'].get('time_dead_minutes', 0)
 
-            # Calculate the ACTUAL ratio for this round's differential stats
-            # ratio = (time_dead / time_played) * 100
-            if diff_time_minutes > 0 and diff_dead_minutes > 0:
-                calculated_ratio = (diff_dead_minutes / diff_time_minutes) * 100.0
-                # Cap at 100% - can't be dead longer than you played
-                differential_player['objective_stats']['time_dead_ratio'] = min(100.0, calculated_ratio)
-            else:
-                differential_player['objective_stats']['time_dead_ratio'] = 0.0
-
-            # [TIME DEBUG] Log Round 2 differential values for debugging time stat issues
+            # [TIME DEBUG] Log Round 2 differential values + raw cumulative for validation
             diff_denied = differential_player['objective_stats'].get('denied_playtime', 0)
-            logger.info(f"[TIME DEBUG] {player_name} R2 DIFFERENTIAL: "
-                f"time_played_min={diff_time_minutes:.2f}, "
-                f"time_dead_ratio={differential_player['objective_stats'].get('time_dead_ratio', 0):.1f}%, "
-                f"time_dead_min={diff_dead_minutes:.2f}, "
-                f"denied_playtime_sec={diff_denied}")
+            raw = differential_player.get('objective_stats_raw', {})
+            logger.info(
+                f"[TIME DEBUG] {player_name} R2 DIFF: "
+                f"played={diff_time_minutes:.2f}m dead={diff_dead_minutes:.2f}m "
+                f"ratio={differential_player['objective_stats'].get('time_dead_ratio', 0):.1f}% "
+                f"denied={diff_denied}s | "
+                f"RAW R1: played={raw.get('time_played_minutes_r1', 0):.2f}m "
+                f"dead={raw.get('time_dead_minutes_r1', 0):.2f}m "
+                f"ratio={raw.get('time_dead_ratio_r1', 0):.1f}% denied={raw.get('denied_playtime_r1', 0)}s | "
+                f"RAW R2: played={raw.get('time_played_minutes_r2', 0):.2f}m "
+                f"dead={raw.get('time_dead_minutes_r2', 0):.2f}m "
+                f"ratio={raw.get('time_dead_ratio_r2', 0):.1f}% denied={raw.get('denied_playtime_r2', 0)}s"
+            )
 
             round_2_only_players.append(differential_player)
 
@@ -649,10 +710,13 @@ class C0RNP0RN3StatsParser:
         mvp = self.calculate_mvp(round_2_only_players)
 
         # Return Round 2-only result with proper metadata
+        # NOTE: We keep winner_team for R2 to support header-based scoring.
         return {
             'success': True,
             'map_name': round_2_cumulative_data['map_name'],
             'round_num': 2,  # Always Round 2
+            'defender_team': round_2_cumulative_data['defender_team'],
+            'winner_team': round_2_cumulative_data.get('winner_team', 0),
             'map_time': round_2_cumulative_data['map_time'],
             'actual_time': round_2_cumulative_data['actual_time'],
             'round_outcome': round_2_cumulative_data['round_outcome'],
@@ -705,6 +769,11 @@ class C0RNP0RN3StatsParser:
                     if player_data:
                         players.append(player_data)
 
+            # Bot/human counts (for bot-only session labeling)
+            bot_player_count = sum(1 for p in players if p.get('is_bot'))
+            human_player_count = max(0, len(players) - bot_player_count)
+            is_bot_round = bot_player_count > 0 and human_player_count == 0
+
             # Calculate time in SECONDS (primary storage format)
             if actual_playtime_seconds is not None:
                 # NEW FORMAT: Use exact seconds from header field 9
@@ -756,6 +825,9 @@ class C0RNP0RN3StatsParser:
                 'players': players,
                 'mvp': mvp,
                 'total_players': len(players),
+                'bot_player_count': bot_player_count,
+                'human_player_count': human_player_count,
+                'is_bot_round': is_bot_round,
                 'timestamp': datetime.now().isoformat(),
             }
 
@@ -774,6 +846,7 @@ class C0RNP0RN3StatsParser:
             guid = parts[0]
             raw_name = parts[1]
             clean_name = self.strip_color_codes(raw_name)
+            is_bot = self.is_bot_name(clean_name)
             rounds = int(parts[2]) if parts[2].isdigit() else 0
             team = int(parts[3]) if parts[3].isdigit() else 0
             stats_section = parts[4]
@@ -946,6 +1019,7 @@ class C0RNP0RN3StatsParser:
                 'clean_name': clean_name,  # ✅ FIXED: Use clean_name
                 'name': clean_name,  # Keep both for compatibility
                 'raw_name': raw_name,
+                'is_bot': is_bot,
                 'team': team,
                 'rounds': rounds,
                 'kills': total_kills,

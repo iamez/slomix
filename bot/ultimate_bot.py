@@ -194,6 +194,13 @@ class UltimateETLegacyBot(commands.Bot):
         self.current_session = None
         self.processed_files = set()
         self.processed_endstats_files = set()  # In-memory set to prevent race conditions
+        self.processed_gametimes_files = set()
+        self.gametimes_index_path = None
+        self.endstats_retry_counts = {}
+        self.endstats_retry_tasks = {}
+        self.endstats_retry_max_attempts = 5
+        self.endstats_retry_base_delay = 5
+        self.endstats_retry_max_delay = 60
         self.auto_link_enabled = True
         self.gather_queue = {"3v3": [], "6v6": []}
 
@@ -206,9 +213,17 @@ class UltimateETLegacyBot(commands.Bot):
         )
         logger.info("✅ Core systems initialized (cache, seasons, achievements, file_tracker)")
 
+        # Gametimes fallback tracking (Lua webhook JSON files)
+        self._load_gametimes_index()
+
         # 🎙️ Voice Session Service (manages gaming session detection)
         self.voice_session_service = VoiceSessionService(self, self.config, self.db_adapter)
         logger.info("✅ Voice session service initialized")
+
+        # 📊 Activity Monitoring Service (server + voice history for website)
+        self.monitoring_enabled = self.config.monitoring_enabled
+        self.monitoring_service = None
+        self._monitoring_started = False
 
         # ⏱️ Timing Debug Service (compares stats file vs Lua webhook timing)
         self.timing_debug_service = TimingDebugService(self, self.db_adapter, self.config)
@@ -230,7 +245,7 @@ class UltimateETLegacyBot(commands.Bot):
         logger.info("✅ File repository initialized")
 
         # 👥 Team Manager (auto-detect persistent teams from sessions)
-        self.team_manager = TeamManager(self.db_adapter)
+        self.team_manager = TeamManager(self.db_adapter, self.config)
         logger.info("✅ Team manager initialized")
 
         # 🤖 Automation System Flags (OFF by default for dev/testing)
@@ -424,6 +439,8 @@ class UltimateETLegacyBot(commands.Bot):
         🔌 Clean up database connections and close bot gracefully
         """
         try:
+            if self.monitoring_service and self._monitoring_started:
+                await self.monitoring_service.stop()
             if hasattr(self, 'db_adapter'):
                 await self.db_adapter.close()
                 logger.info("✅ Database adapter closed successfully")
@@ -457,13 +474,13 @@ class UltimateETLegacyBot(commands.Bot):
                 columns = await self.db_adapter.fetch_all(query)
                 column_names = [col[0] for col in columns]
 
-            expected_columns = 55
+            expected_columns = {55, 56}  # 56 includes optional full_selfkills
             actual_columns = len(column_names)
 
-            if actual_columns != expected_columns:
+            if actual_columns not in expected_columns:
                 error_msg = (
                     f"❌ DATABASE SCHEMA MISMATCH!\n"
-                    f"Expected: {expected_columns} columns (UNIFIED)\n"
+                    f"Expected: {sorted(expected_columns)} columns (UNIFIED)\n"
                     f"Found: {actual_columns} columns\n\n"
                     f"Schema: {'SPLIT (deprecated)' if actual_columns == 35 else 'UNKNOWN'}\n\n"
                     f"Solution:\n"
@@ -499,6 +516,42 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"❌ Schema validation failed: {e}")
             raise
+
+    def _load_gametimes_index(self) -> None:
+        """Load processed gametimes filenames from local index (best-effort)."""
+        if not self.config.gametimes_enabled:
+            return
+        local_dir = self.config.gametimes_local_path
+        if not local_dir:
+            return
+        os.makedirs(local_dir, exist_ok=True)
+        index_path = os.path.join(local_dir, ".processed_gametimes.txt")
+        self.gametimes_index_path = index_path
+        if not os.path.exists(index_path):
+            return
+        try:
+            with open(index_path, "r", encoding="utf-8") as handle:
+                for line in handle:
+                    filename = line.strip()
+                    if filename:
+                        self.processed_gametimes_files.add(filename)
+            logger.info(
+                f"📁 Loaded {len(self.processed_gametimes_files)} processed gametimes entries"
+            )
+        except Exception as e:
+            logger.debug(f"Gametime index load failed: {e}")
+
+    def _mark_gametime_processed(self, filename: str) -> None:
+        if not filename or filename in self.processed_gametimes_files:
+            return
+        self.processed_gametimes_files.add(filename)
+        if not self.gametimes_index_path:
+            return
+        try:
+            with open(self.gametimes_index_path, "a", encoding="utf-8") as handle:
+                handle.write(f"{filename}\n")
+        except Exception as e:
+            logger.debug(f"Gametime index update failed: {e}")
 
     async def send_with_delay(self, ctx, *args, delay=0.5, **kwargs):
         """✅ Send message with rate limit delay"""
@@ -785,6 +838,17 @@ class UltimateETLegacyBot(commands.Bot):
         else:
             logger.debug("📡 WebSocket push disabled (using SSH polling)")
 
+        # 🎯 Proximity Tracker Cog (optional, isolated)
+        try:
+            if self.config.proximity_enabled or self.config.proximity_discord_commands:
+                from bot.cogs.proximity_cog import ProximityCog
+                await self.add_cog(ProximityCog(self))
+                logger.info("✅ Proximity Cog loaded")
+            else:
+                logger.info("⏭️ Proximity Cog not enabled")
+        except Exception as e:
+            logger.warning(f"⚠️ Proximity Cog failed to load: {e}")
+
         logger.info("✅ Ultimate Bot initialization complete!")
         logger.info(
             f"📋 Commands available: {[cmd.name for cmd in self.commands]}"
@@ -1005,6 +1069,17 @@ class UltimateETLegacyBot(commands.Bot):
                 )
                 stats_data = parser.parse_stats_file(local_path)
 
+                # Resolve round_id for live posting (Postgres path)
+                resolved_round_id = None
+                if stats_data and not stats_data.get("error"):
+                    round_meta = {
+                        "map_name": stats_data.get("map_name") or stats_data.get("map"),
+                        "round_number": stats_data.get("round_num") or stats_data.get("round_number") or stats_data.get("round"),
+                    }
+                    resolved_round_id = await self._resolve_round_id_for_metadata(
+                        filename, round_meta
+                    )
+
                 # Mark as processed (with SHA256 hash for integrity verification)
                 try:
                     await self.file_tracker.mark_processed(
@@ -1022,9 +1097,13 @@ class UltimateETLegacyBot(commands.Bot):
                 if override_metadata:
                     await self._apply_round_metadata_override(filename, override_metadata)
 
+                # Live achievements: announce new milestones (non-blocking)
+                if stats_data:
+                    asyncio.create_task(self._post_live_achievements(stats_data))
+
                 return {
                     "success": True,
-                    "round_id": None,  # Database manager doesn't return round_id
+                    "round_id": resolved_round_id,
                     "player_count": len(stats_data.get("players", [])) if stats_data else 0,
                     "error": None,
                     "stats_data": stats_data if stats_data else {},
@@ -1060,6 +1139,10 @@ class UltimateETLegacyBot(commands.Bot):
                 # Reset error tracking on success
                 self.reset_error_tracking("file_processing")
 
+                # Live achievements: announce new milestones (non-blocking)
+                if stats_data:
+                    asyncio.create_task(self._post_live_achievements(stats_data))
+
                 return {
                     "success": True,
                     "round_id": round_id,
@@ -1086,6 +1169,108 @@ class UltimateETLegacyBot(commands.Bot):
                 "stats_data": None,
             }
 
+    async def _resolve_round_id_for_metadata(self, filename: str | None, metadata: dict):
+        """
+        Resolve round_id using shared round_linker logic.
+        This avoids mismatches between stats filenames, Lua timestamps, and endstats.
+        """
+        try:
+            from datetime import datetime
+            import re
+            from bot.core.round_linker import resolve_round_id
+
+            map_name = metadata.get('map_name') or metadata.get('map')
+            round_number = metadata.get('round_number') or metadata.get('round')
+            round_date = metadata.get('round_date')
+            round_time = metadata.get('round_time')
+
+            if (not map_name or not round_number) and filename:
+                match = re.match(
+                    r'^(\d{4}-\d{2}-\d{2})-(\d{6})-(.+)-round-(\d+)\.txt$',
+                    filename
+                )
+                if match:
+                    round_date = round_date or match.group(1)
+                    round_time = round_time or match.group(2)
+                    map_name = map_name or match.group(3)
+                    round_number = round_number or int(match.group(4))
+
+            if not map_name or not round_number:
+                return None
+
+            try:
+                round_number = int(round_number)
+            except (TypeError, ValueError):
+                return None
+
+            target_dt = None
+            try:
+                round_end_unix = int(metadata.get('round_end_unix', 0) or 0)
+            except (TypeError, ValueError):
+                round_end_unix = 0
+            try:
+                round_start_unix = int(metadata.get('round_start_unix', 0) or 0)
+            except (TypeError, ValueError):
+                round_start_unix = 0
+
+            if round_end_unix:
+                target_dt = datetime.fromtimestamp(round_end_unix)
+            elif round_start_unix:
+                target_dt = datetime.fromtimestamp(round_start_unix)
+
+            window_minutes = getattr(self.config, "round_match_window_minutes", 45)
+            return await resolve_round_id(
+                self.db_adapter,
+                map_name,
+                round_number,
+                target_dt=target_dt,
+                round_date=round_date,
+                round_time=round_time,
+                window_minutes=window_minutes,
+            )
+        except Exception as e:
+            logger.debug(f"Round ID resolve failed: {e}")
+            return None
+
+    async def _post_live_achievements(self, stats_data: dict) -> None:
+        """
+        Post achievement unlocks live after a round is imported.
+
+        Uses parsed stats data to collect GUIDs, then checks lifetime
+        milestones via AchievementSystem and posts any new unlocks.
+        """
+        try:
+            if not stats_data:
+                return
+
+            players = stats_data.get("players", [])
+            if not players:
+                return
+
+            channel_id = (
+                self.config.production_channel_id
+                or self.config.general_channel_id
+                or 0
+            )
+            if not channel_id:
+                return
+
+            channel = self.get_channel(channel_id)
+            if not channel:
+                return
+
+            guids = {p.get("guid") for p in players if p.get("guid")}
+            if not guids:
+                return
+
+            for guid in guids:
+                await self.achievements.check_player_achievements(
+                    guid, channel=channel
+                )
+
+        except Exception as e:
+            logger.error(f"Live achievement posting failed: {e}", exc_info=True)
+
     async def _apply_round_metadata_override(self, filename: str, metadata: dict):
         """
         Update a round's timing data with accurate values from Lua webhook.
@@ -1106,31 +1291,10 @@ class UltimateETLegacyBot(commands.Bot):
                 - end_reason
         """
         try:
-            # Extract match_id and round_number from filename
-            # Format: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
-            import re
-            match = re.match(r'^(\d{4}-\d{2}-\d{2}-\d{6})-.*-round-(\d+)\.txt$', filename)
-            if not match:
-                logger.warning(f"Could not parse filename for metadata override: {filename}")
+            round_id = await self._resolve_round_id_for_metadata(filename, metadata)
+            if not round_id:
+                logger.warning(f"Could not resolve round_id for metadata override: {filename}")
                 return
-
-            match_id = match.group(1)
-            round_number = int(match.group(2))
-
-            # Find the round by match_id + round_number (the unique key)
-            find_query = """
-                SELECT id FROM rounds
-                WHERE match_id = $1 AND round_number = $2
-                ORDER BY id DESC
-                LIMIT 1
-            """
-            result = await self.db_adapter.fetch_one(find_query, (match_id, round_number))
-
-            if not result:
-                logger.warning(f"Could not find round for metadata override: {filename}")
-                return
-
-            round_id = result[0]
 
             # DEBUG LOGGING: Compare Lua timing vs stats file timing
             # This helps verify the surrender fix is working correctly
@@ -1238,9 +1402,124 @@ class UltimateETLegacyBot(commands.Bot):
                 f"pauses={metadata.get('pause_count')}"
             )
 
+            # Link Lua rows to this round_id when possible
+            await self._link_lua_round_teams(round_id, metadata)
+
         except Exception as e:
             logger.warning(f"Failed to apply round metadata override: {e}")
             # Non-fatal - stats were still imported correctly
+
+    async def _link_lua_round_teams(self, round_id: int, metadata: dict) -> None:
+        """
+        Link lua_round_teams rows to a round_id using map + round + time proximity.
+        """
+        try:
+            if not await self._has_lua_round_teams_round_id():
+                return
+
+            map_name = metadata.get('map_name')
+            round_number = metadata.get('round_number')
+            if not map_name or not round_number:
+                return
+
+            try:
+                round_number = int(round_number)
+            except (TypeError, ValueError):
+                return
+
+            target_unix = metadata.get('round_end_unix') or metadata.get('round_start_unix')
+            try:
+                target_unix = int(target_unix)
+            except (TypeError, ValueError):
+                target_unix = 0
+
+            if not target_unix:
+                return
+
+            window_seconds = getattr(self.config, "round_match_window_minutes", 45) * 60
+            candidates_query = """
+                SELECT id, round_end_unix, round_start_unix
+                FROM lua_round_teams
+                WHERE round_id IS NULL
+                  AND map_name = ?
+                  AND round_number = ?
+                  AND (
+                        (round_end_unix IS NOT NULL AND ABS(round_end_unix - ?) <= ?)
+                     OR (round_start_unix IS NOT NULL AND ABS(round_start_unix - ?) <= ?)
+                  )
+                ORDER BY captured_at DESC
+                LIMIT 10
+            """
+            rows = await self.db_adapter.fetch_all(
+                candidates_query,
+                (map_name, round_number, target_unix, window_seconds, target_unix, window_seconds),
+            )
+            if not rows:
+                return
+
+            # Pick the closest candidate to avoid linking multiple rows
+            best_id = None
+            best_diff = None
+            for row in rows:
+                lua_id, round_end_unix, round_start_unix = row
+                diffs = []
+                if round_end_unix:
+                    diffs.append(abs(int(round_end_unix) - target_unix))
+                if round_start_unix:
+                    diffs.append(abs(int(round_start_unix) - target_unix))
+                if not diffs:
+                    continue
+                diff = min(diffs)
+                if best_diff is None or diff < best_diff:
+                    best_diff = diff
+                    best_id = lua_id
+
+            if best_id is None:
+                return
+
+            await self.db_adapter.execute(
+                "UPDATE lua_round_teams SET round_id = ? WHERE id = ?",
+                (round_id, best_id),
+            )
+        except Exception as e:
+            logger.debug(f"Lua round link failed: {e}")
+
+    async def _has_lua_round_teams_round_id(self) -> bool:
+        """
+        Check if lua_round_teams.round_id exists (cached).
+        """
+        if hasattr(self, "_lua_round_teams_has_round_id"):
+            return bool(self._lua_round_teams_has_round_id)
+
+        try:
+            result = await self.db_adapter.fetch_one(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'lua_round_teams' AND column_name = 'round_id'"
+            )
+            self._lua_round_teams_has_round_id = bool(result)
+        except Exception:
+            self._lua_round_teams_has_round_id = False
+        return bool(self._lua_round_teams_has_round_id)
+
+    async def _has_lua_spawn_stats_table(self) -> bool:
+        """
+        Check if lua_spawn_stats table exists (cached).
+        """
+        if hasattr(self, "_lua_spawn_stats_exists"):
+            return bool(self._lua_spawn_stats_exists)
+        try:
+            result = await self.db_adapter.fetch_val(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = 'lua_spawn_stats'
+                )
+                """
+            )
+            self._lua_spawn_stats_exists = bool(result)
+        except Exception:
+            self._lua_spawn_stats_exists = False
+        return bool(self._lua_spawn_stats_exists)
 
     async def _trigger_team_detection(self, filename: str):
         """
@@ -1261,6 +1540,26 @@ class UltimateETLegacyBot(commands.Bot):
                 f"📊 Importing {len(stats_data.get('players', []))} "
                 f"players to database..."
             )
+
+            # Cache player_comprehensive_stats columns for optional fields
+            if not hasattr(self, "_player_stats_columns"):
+                try:
+                    if self.config.database_type == "sqlite":
+                        cols = await self.db_adapter.fetch_all(
+                            "PRAGMA table_info(player_comprehensive_stats)"
+                        )
+                        self._player_stats_columns = {c[1] for c in cols}
+                    else:
+                        cols = await self.db_adapter.fetch_all(
+                            """
+                            SELECT column_name
+                            FROM information_schema.columns
+                            WHERE table_name = 'player_comprehensive_stats'
+                            """
+                        )
+                        self._player_stats_columns = {c[0] for c in cols}
+                except Exception:
+                    self._player_stats_columns = set()
 
             # Extract date from filename: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
             timestamp = "-".join(filename.split("-")[:4])  # Full timestamp YYYY-MM-DD-HHMMSS
@@ -1310,26 +1609,102 @@ class UltimateETLegacyBot(commands.Bot):
             # Calculate gaming_session_id (60-minute gap logic)
             gaming_session_id = await self._calculate_gaming_session_id(date_part, round_time)
 
-            # Insert new round
-            insert_round_query = """
+            # Discover rounds table columns once (cache)
+            if not hasattr(self, "_rounds_columns"):
+                try:
+                    if self.config.database_type == 'sqlite':
+                        cols = await self.db_adapter.fetch_all("PRAGMA table_info(rounds)")
+                        self._rounds_columns = {c[1] for c in cols}
+                    else:
+                        cols = await self.db_adapter.fetch_all(
+                            """
+                            SELECT column_name
+                            FROM information_schema.columns
+                            WHERE table_name = 'rounds'
+                            """
+                        )
+                        self._rounds_columns = {c[0] for c in cols}
+                except Exception:
+                    self._rounds_columns = set()
+
+            defender_team = stats_data.get("defender_team", 0)
+            winner_team = stats_data.get("winner_team", 0)
+            round_outcome = stats_data.get("round_outcome", "")
+
+            # If R2 header data missing, inherit from latest R1 of same map/session
+            if (
+                stats_data.get("round_num") == 2
+                and (defender_team == 0 or winner_team == 0)
+                and ("defender_team" in self._rounds_columns or "winner_team" in self._rounds_columns)
+            ):
+                try:
+                    fallback = await self.db_adapter.fetch_one(
+                        """
+                        SELECT defender_team, winner_team
+                        FROM rounds
+                        WHERE map_name = ?
+                          AND round_number = 1
+                          AND gaming_session_id = ?
+                        ORDER BY round_date DESC,
+                                 CAST(REPLACE(round_time, ':', '') AS INTEGER) DESC
+                        LIMIT 1
+                        """,
+                        (stats_data["map_name"], gaming_session_id)
+                    )
+                    if fallback:
+                        fallback_def, fallback_win = fallback
+                        if defender_team == 0:
+                            defender_team = fallback_def or 0
+                        if winner_team == 0:
+                            winner_team = fallback_win or 0
+                except Exception:
+                    pass
+
+            # Insert new round (include optional columns if present)
+            insert_cols = [
+                "round_date", "round_time", "match_id", "map_name", "round_number",
+                "time_limit", "actual_time", "gaming_session_id"
+            ]
+            insert_vals = [
+                date_part,
+                round_time,
+                match_id,
+                stats_data["map_name"],
+                stats_data["round_num"],
+                stats_data.get("map_time", ""),
+                stats_data.get("actual_time", ""),
+                gaming_session_id,
+            ]
+
+            if "defender_team" in self._rounds_columns:
+                insert_cols.append("defender_team")
+                insert_vals.append(defender_team)
+            if "winner_team" in self._rounds_columns:
+                insert_cols.append("winner_team")
+                insert_vals.append(winner_team)
+            if "round_outcome" in self._rounds_columns:
+                insert_cols.append("round_outcome")
+                insert_vals.append(round_outcome)
+            if "is_bot_round" in self._rounds_columns:
+                insert_cols.append("is_bot_round")
+                insert_vals.append(bool(stats_data.get("is_bot_round", False)))
+            if "bot_player_count" in self._rounds_columns:
+                insert_cols.append("bot_player_count")
+                insert_vals.append(int(stats_data.get("bot_player_count", 0) or 0))
+            if "human_player_count" in self._rounds_columns:
+                insert_cols.append("human_player_count")
+                insert_vals.append(int(stats_data.get("human_player_count", 0) or 0))
+
+            placeholders = ", ".join(["?"] * len(insert_cols))
+            insert_round_query = f"""
                 INSERT INTO rounds (
-                    round_date, round_time, match_id, map_name, round_number,
-                    time_limit, actual_time, gaming_session_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    {", ".join(insert_cols)}
+                ) VALUES ({placeholders})
                 RETURNING id
             """
             round_id = await self.db_adapter.fetch_val(
                 insert_round_query,
-                (
-                    date_part,
-                    round_time,
-                    match_id,
-                    stats_data["map_name"],
-                    stats_data["round_num"],
-                    stats_data.get("map_time", ""),
-                    stats_data.get("actual_time", ""),
-                    gaming_session_id,
-                ),
+                tuple(insert_vals),
             )
 
             # Insert player stats
@@ -1356,28 +1731,48 @@ class UltimateETLegacyBot(commands.Bot):
 
                 if not existing_summary:
                     # Insert match summary as round_number = 0 (use same gaming_session_id as the rounds)
-                    insert_summary_query = """
+                    summary_cols = [
+                        "round_date", "round_time", "match_id", "map_name", "round_number",
+                        "time_limit", "actual_time", "winner_team", "defender_team",
+                        "round_outcome", "gaming_session_id"
+                    ]
+                    summary_vals = [
+                        date_part,
+                        round_time,
+                        match_id,
+                        match_summary["map_name"],
+                        0,  # round_number = 0 for match summary
+                        match_summary.get("map_time", ""),
+                        match_summary.get("actual_time", ""),
+                        match_summary.get("winner_team", 0),
+                        match_summary.get("defender_team", 0),
+                        match_summary.get("round_outcome", ""),
+                        gaming_session_id,
+                    ]
+                    if "is_bot_round" in self._rounds_columns:
+                        summary_cols.append("is_bot_round")
+                        summary_vals.append(bool(match_summary.get("is_bot_round", False)))
+                    if "bot_player_count" in self._rounds_columns:
+                        summary_cols.append("bot_player_count")
+                        summary_vals.append(int(match_summary.get("bot_player_count", 0) or 0))
+                    if "human_player_count" in self._rounds_columns:
+                        bot_count = match_summary.get("bot_player_count", 0) or 0
+                        human_count = match_summary.get("human_player_count", 0) or max(
+                            0, len(match_summary.get("players", [])) - bot_count
+                        )
+                        summary_cols.append("human_player_count")
+                        summary_vals.append(int(human_count))
+
+                    summary_placeholders = ", ".join(["?"] * len(summary_cols))
+                    insert_summary_query = f"""
                         INSERT INTO rounds (
-                            round_date, round_time, match_id, map_name, round_number,
-                            time_limit, actual_time, winner_team, defender_team, round_outcome, gaming_session_id
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            {", ".join(summary_cols)}
+                        ) VALUES ({summary_placeholders})
                         RETURNING id
                     """
                     match_summary_id = await self.db_adapter.fetch_val(
                         insert_summary_query,
-                        (
-                            date_part,
-                            round_time,
-                            match_id,
-                            match_summary["map_name"],
-                            0,  # round_number = 0 for match summary
-                            match_summary.get("map_time", ""),
-                            match_summary.get("actual_time", ""),
-                            match_summary.get("winner_team", 0),
-                            match_summary.get("defender_team", 0),
-                            match_summary.get("round_outcome", ""),
-                            gaming_session_id,  # Same session as R1/R2
-                        ),
+                        tuple(summary_vals),
                     )
 
                     # Insert match summary player stats
@@ -1590,16 +1985,29 @@ class UltimateETLegacyBot(commands.Bot):
         )
         accuracy = player.get("accuracy", 0.0)
 
-        # Time dead
+        # Time dead (use Lua-provided minutes when available)
         # time_dead_ratio from parser may be provided as either a fraction (0.75)
-        # or a percentage (75). Normalize to percentage and compute minutes.
-        raw_td = obj_stats.get("time_dead_ratio", 0) or 0
-        if raw_td <= 1:
-            td_percent = raw_td * 100.0
+        # or a percentage (75). Normalize to percentage for storage.
+        raw_td_ratio = obj_stats.get("time_dead_ratio", 0) or 0
+        if raw_td_ratio <= 1 and raw_td_ratio > 0:
+            td_percent = raw_td_ratio * 100.0
         else:
-            td_percent = float(raw_td)
+            td_percent = float(raw_td_ratio)
 
-        time_dead_minutes = time_minutes * (td_percent / 100.0)
+        # Prefer Lua's time_dead_minutes (R2-only field, already correct)
+        raw_dead_minutes = obj_stats.get("time_dead_minutes", 0) or 0
+
+        # Use Lua time_played_minutes if available for ratio fallback
+        lua_time_minutes = obj_stats.get("time_played_minutes", 0) or 0
+        time_minutes_for_ratio = lua_time_minutes if lua_time_minutes > 0 else time_minutes
+
+        if (raw_dead_minutes <= 0) and td_percent > 0 and time_minutes_for_ratio > 0:
+            raw_dead_minutes = time_minutes_for_ratio * (td_percent / 100.0)
+
+        if (td_percent <= 0) and raw_dead_minutes > 0 and time_minutes_for_ratio > 0:
+            td_percent = (raw_dead_minutes / time_minutes_for_ratio) * 100.0
+
+        time_dead_minutes = raw_dead_minutes
         time_dead_mins = time_dead_minutes
         time_dead_ratio = td_percent
 
@@ -1713,6 +2121,16 @@ class UltimateETLegacyBot(commands.Bot):
             )
         """
         player_stats_id = await self.db_adapter.execute(query, values)
+
+        # Optional: store full_selfkills if column exists
+        if "full_selfkills" in getattr(self, "_player_stats_columns", set()):
+            try:
+                await self.db_adapter.execute(
+                    "UPDATE player_comprehensive_stats SET full_selfkills = ? WHERE round_id = ? AND player_guid = ?",
+                    (obj_stats.get("full_selfkills", 0), round_id, player.get("guid", "UNKNOWN"))
+                )
+            except Exception as e:
+                logger.debug(f"Failed to update full_selfkills: {e}")
 
         # Insert weapon stats into weapon_comprehensive_stats if available
         try:
@@ -2039,8 +2457,15 @@ class UltimateETLegacyBot(commands.Bot):
             # Check each file
             new_files_count = 0
             for filename in remote_files:
-                # Check if already processed (4-layer check)
-                if await self.file_tracker.should_process_file(filename):
+                is_endstats = filename.endswith('-endstats.txt')
+
+                if is_endstats:
+                    should_process = await self._should_process_endstats_file(filename)
+                else:
+                    # Check if already processed (4-layer check)
+                    should_process = await self.file_tracker.should_process_file(filename)
+
+                if should_process:
                     new_files_count += 1
                     logger.info("=" * 60)
                     logger.info(f"📥 NEW FILE DETECTED: {filename}")
@@ -2068,7 +2493,7 @@ class UltimateETLegacyBot(commands.Bot):
                         process_start = time.time()
 
                         # Route endstats files to dedicated processor
-                        if filename.endswith('-endstats.txt'):
+                        if is_endstats:
                             logger.info(f"🏆 Detected endstats file, using endstats processor")
                             await self._process_endstats_file(local_path, filename)
                             process_time = time.time() - process_start
@@ -2095,6 +2520,9 @@ class UltimateETLegacyBot(commands.Bot):
                                 logger.warning(f"⚠️ Skipping Discord post")
                     else:
                         logger.error(f"❌ Download failed for {filename}")
+
+            # Process Lua gametimes fallback files (JSON) if enabled
+            await self._process_remote_gametimes_files()
 
             if new_files_count == 0:
                 logger.debug(f"✅ All {len(remote_files)} files already processed")
@@ -2540,6 +2968,43 @@ class UltimateETLegacyBot(commands.Bot):
         logger.debug(f"✅ Endstats filename validated: {filename}")
         return True
 
+    async def _should_process_endstats_file(self, filename: str) -> bool:
+        """
+        Decide whether an endstats file should be processed.
+
+        Uses processed_endstats_files for dedupe and applies startup lookback
+        to avoid reprocessing very old files after a restart.
+        """
+        if not self._validate_endstats_filename(filename):
+            return False
+
+        # Startup lookback (mirrors FileTracker behavior, but endstats-specific)
+        try:
+            datetime_str = filename[:17]  # YYYY-MM-DD-HHMMSS
+            file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d-%H%M%S")
+            lookback_hours = getattr(self.config, 'STARTUP_LOOKBACK_HOURS', 168)
+            cutoff_time = self.bot_startup_time - timedelta(hours=lookback_hours)
+
+            if file_datetime < cutoff_time:
+                logger.debug(
+                    f"⏭️ Endstats {filename} older than lookback window "
+                    f"({lookback_hours}h before startup) - skipping"
+                )
+                return False
+        except ValueError:
+            logger.warning(f"⚠️ Could not parse datetime from endstats filename: {filename}")
+
+        if filename in self.processed_endstats_files:
+            return False
+
+        check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+        result = await self.db_adapter.fetch_one(check_query, (filename,))
+        if result:
+            self.processed_endstats_files.add(filename)
+            return False
+
+        return True
+
     async def _handle_webhook_trigger(self, message) -> bool:
         """
         Handle webhook trigger messages from VPS.
@@ -2549,13 +3014,32 @@ class UltimateETLegacyBot(commands.Bot):
 
         Returns True if message was handled as webhook trigger.
         """
+        def _debug_webhook(note: str):
+            if not getattr(message, "webhook_id", None):
+                return
+            try:
+                content = message.content or ""
+                if len(content) > 160:
+                    content = content[:157] + "..."
+                author = getattr(getattr(message, "author", None), "name", "unknown")
+                embed_count = len(message.embeds) if getattr(message, "embeds", None) else 0
+                webhook_logger.debug(
+                    f"[WEBHOOK DEBUG] {note} | "
+                    f"channel={message.channel.id} webhook_id={message.webhook_id} "
+                    f"user={author} embeds={embed_count} content={content!r}"
+                )
+            except Exception:
+                pass
+
         # Check if webhook trigger is configured
         trigger_channel_id = self.config.webhook_trigger_channel_id
         if not trigger_channel_id:
+            _debug_webhook("ignored: trigger channel not configured")
             return False
 
         # Check if message is in the trigger channel
         if message.channel.id != trigger_channel_id:
+            _debug_webhook("ignored: channel mismatch")
             return False
 
         # Check if message is from a webhook (webhooks have webhook_id)
@@ -2566,6 +3050,7 @@ class UltimateETLegacyBot(commands.Bot):
         webhook_whitelist = self.config.webhook_trigger_whitelist
         if not webhook_whitelist:
             webhook_logger.error("⚠️ Webhook trigger disabled: WEBHOOK_TRIGGER_WHITELIST not configured")
+            _debug_webhook("ignored: whitelist missing")
             return False
 
         if str(message.webhook_id) not in webhook_whitelist:
@@ -2573,16 +3058,19 @@ class UltimateETLegacyBot(commands.Bot):
                 f"🚨 SECURITY: Unauthorized webhook {message.webhook_id} "
                 f"attempted trigger in channel {message.channel.id}"
             )
+            _debug_webhook("ignored: webhook not in whitelist")
             return False
 
         # Check username (additional layer)
         expected_username = self.config.webhook_trigger_username
         if expected_username and message.author.name != expected_username:
             webhook_logger.warning(f"🚨 Username mismatch: {message.author.name}")
+            _debug_webhook(f"ignored: username mismatch (expected={expected_username})")
             return False
 
         # HIGH: Rate limit check
         if not self._check_webhook_rate_limit(message.webhook_id):
+            _debug_webhook("ignored: rate limited")
             return False
 
         # ===== NEW: Handle STATS_READY webhook with embedded metadata =====
@@ -2590,10 +3078,12 @@ class UltimateETLegacyBot(commands.Bot):
         if message.content and message.content.strip() == "STATS_READY":
             if message.embeds:
                 webhook_logger.info("📥 Received STATS_READY webhook with metadata")
+                _debug_webhook("accepted: STATS_READY with embeds")
                 asyncio.create_task(self._process_stats_ready_webhook(message))
                 return True
             else:
                 webhook_logger.warning("STATS_READY webhook received but no embeds found")
+                _debug_webhook("ignored: STATS_READY missing embeds")
                 return False
 
         # ===== EXISTING: Handle filename-based webhook trigger =====
@@ -2608,6 +3098,7 @@ class UltimateETLegacyBot(commands.Bot):
 
         if not filename:
             webhook_logger.debug("No filename found in webhook message")
+            _debug_webhook("ignored: no filename in content")
             return False
 
         # CRITICAL: Validate filename for security
@@ -2724,6 +3215,144 @@ class UltimateETLegacyBot(commands.Bot):
             # Track for admin alerts
             await self.track_error("webhook_processing", str(e), max_consecutive=3)
 
+    def _fields_to_metadata_map(self, fields) -> dict:
+        metadata = {}
+        for field in fields or []:
+            name = getattr(field, "name", None)
+            value = getattr(field, "value", None)
+            if name is None and isinstance(field, dict):
+                name = field.get("name")
+                value = field.get("value")
+            if not name:
+                continue
+            metadata[str(name).lower()] = "" if value is None else str(value)
+        return metadata
+
+    def _parse_spawn_stats_from_metadata(self, metadata: dict) -> list:
+        """
+        Parse spawn stats JSON from Lua metadata fields.
+        Accepts multiple key variants for compatibility.
+        """
+        import json as _json
+        raw = (
+            metadata.get("lua_spawnstats_json")
+            or metadata.get("lua_spawn_stats_json")
+            or metadata.get("spawn_stats")
+        )
+        if not raw:
+            return []
+        try:
+            text = str(raw).replace('\\"', '"')
+            return _json.loads(text) if text else []
+        except _json.JSONDecodeError:
+            return []
+
+    def _parse_lua_version_from_footer(self, footer_text: str | None) -> str | None:
+        if not footer_text:
+            return None
+        match = re.search(r"v(\d+\.\d+\.\d+)", footer_text)
+        return match.group(1) if match else None
+
+    def _build_round_metadata_from_map(
+        self,
+        metadata: dict,
+        footer_text: str | None = None,
+    ) -> dict:
+        import json as _json
+
+        round_metadata = {
+            "map_name": metadata.get("map", "unknown"),
+            "round_number": int(metadata.get("round", 0) or 0),
+            "winner_team": int(metadata.get("winner", 0) or 0),
+            "defender_team": int(metadata.get("defender", 0) or 0),
+            # v1.2.0: renamed fields with Lua_ prefix
+            "end_reason": metadata.get("lua_endreason", metadata.get("end reason", "unknown")),
+            "round_start_unix": int(metadata.get("lua_roundstart", metadata.get("start unix", 0)) or 0),
+            "round_end_unix": int(metadata.get("lua_roundend", metadata.get("end unix", 0)) or 0),
+        }
+
+        duration_str = metadata.get("lua_playtime", metadata.get("duration", "0 sec"))
+        try:
+            round_metadata["lua_playtime_seconds"] = int(str(duration_str).split()[0])
+            round_metadata["actual_duration_seconds"] = round_metadata["lua_playtime_seconds"]
+        except (ValueError, IndexError):
+            round_metadata["lua_playtime_seconds"] = 0
+            round_metadata["actual_duration_seconds"] = 0
+
+        time_limit_str = metadata.get("lua_timelimit", metadata.get("time limit", "0 min"))
+        try:
+            round_metadata["lua_timelimit_minutes"] = int(str(time_limit_str).split()[0])
+            round_metadata["time_limit_minutes"] = round_metadata["lua_timelimit_minutes"]
+        except (ValueError, IndexError):
+            round_metadata["lua_timelimit_minutes"] = 0
+            round_metadata["time_limit_minutes"] = 0
+
+        pauses_str = metadata.get("lua_pauses", metadata.get("pauses", "0 (0 sec)"))
+        try:
+            parts = str(pauses_str).split("(")
+            round_metadata["lua_pause_count"] = int(parts[0].strip())
+            round_metadata["pause_count"] = round_metadata["lua_pause_count"]
+            if len(parts) > 1:
+                round_metadata["lua_pause_seconds"] = int(parts[1].rstrip(" sec)"))
+            else:
+                round_metadata["lua_pause_seconds"] = 0
+            round_metadata["total_pause_seconds"] = round_metadata["lua_pause_seconds"]
+        except (ValueError, IndexError):
+            round_metadata["lua_pause_count"] = 0
+            round_metadata["lua_pause_seconds"] = 0
+            round_metadata["pause_count"] = 0
+            round_metadata["total_pause_seconds"] = 0
+
+        warmup_str = metadata.get("lua_warmup", "0 sec")
+        try:
+            round_metadata["lua_warmup_seconds"] = int(str(warmup_str).split()[0])
+        except (ValueError, IndexError):
+            round_metadata["lua_warmup_seconds"] = 0
+
+        round_metadata["lua_warmup_start_unix"] = int(metadata.get("lua_warmupstart", 0) or 0)
+        round_metadata["lua_warmup_end_unix"] = int(
+            metadata.get("lua_warmupend", metadata.get("lua_roundstart", 0)) or 0
+        )
+
+        pause_events_raw = metadata.get("lua_pauses_json", "[]")
+        try:
+            pause_events_json = str(pause_events_raw).replace('\\"', '"')
+            round_metadata["lua_pause_events"] = (
+                _json.loads(pause_events_json) if pause_events_json != "[]" else []
+            )
+        except _json.JSONDecodeError:
+            round_metadata["lua_pause_events"] = []
+
+        round_metadata["surrender_team"] = int(metadata.get("lua_surrenderteam", 0) or 0)
+        round_metadata["surrender_caller_guid"] = metadata.get("lua_surrendercaller", "")
+        round_metadata["surrender_caller_name"] = metadata.get("lua_surrendercallername", "")
+
+        round_metadata["axis_score"] = int(metadata.get("lua_axisscore", 0) or 0)
+        round_metadata["allies_score"] = int(metadata.get("lua_alliesscore", 0) or 0)
+
+        axis_json_raw = metadata.get("axis_json", "[]")
+        allies_json_raw = metadata.get("allies_json", "[]")
+
+        try:
+            axis_json = str(axis_json_raw).replace('\\"', '"')
+            allies_json = str(allies_json_raw).replace('\\"', '"')
+            round_metadata["axis_players"] = (
+                _json.loads(axis_json) if axis_json != "[]" else []
+            )
+            round_metadata["allies_players"] = (
+                _json.loads(allies_json) if allies_json != "[]" else []
+            )
+        except _json.JSONDecodeError as e:
+            webhook_logger.warning(f"Failed to parse team JSON: {e}")
+            round_metadata["axis_players"] = []
+            round_metadata["allies_players"] = []
+
+        lua_version = self._parse_lua_version_from_footer(footer_text)
+        if lua_version:
+            round_metadata["lua_version"] = lua_version
+
+        return round_metadata
+
     async def _process_stats_ready_webhook(self, message):
         """
         Process STATS_READY webhook from Lua script with embedded metadata.
@@ -2739,119 +3368,29 @@ class UltimateETLegacyBot(commands.Bot):
         Team data is stored separately in lua_round_teams table for analysis.
         """
         try:
-            import json  # Used for parsing JSON fields
             embed = message.embeds[0]
 
-            # Parse metadata from embed fields
-            metadata = {}
-            for field in embed.fields:
-                key = field.name.lower()
-                metadata[key] = field.value
+            metadata = self._fields_to_metadata_map(embed.fields)
+            footer_text = None
+            if embed.footer and embed.footer.text:
+                footer_text = embed.footer.text
+            round_metadata = self._build_round_metadata_from_map(metadata, footer_text=footer_text)
 
-            # Extract structured data
-            # Note: Field names changed in v1.2.0 to use Lua_ prefix for clarity
-            # We support both old and new names for backwards compatibility
-            round_metadata = {
-                'map_name': metadata.get('map', 'unknown'),
-                'round_number': int(metadata.get('round', 0)),
-                'winner_team': int(metadata.get('winner', 0)),
-                'defender_team': int(metadata.get('defender', 0)),
-                # v1.2.0: renamed fields with Lua_ prefix
-                'end_reason': metadata.get('lua_endreason', metadata.get('end reason', 'unknown')),
-                'round_start_unix': int(metadata.get('lua_roundstart', metadata.get('start unix', 0))),
-                'round_end_unix': int(metadata.get('lua_roundend', metadata.get('end unix', 0))),
-            }
-
-            # Parse playtime/duration (format: "123 sec")
-            # v1.2.0: renamed from "Duration" to "Lua_Playtime"
-            duration_str = metadata.get('lua_playtime', metadata.get('duration', '0 sec'))
-            try:
-                round_metadata['lua_playtime_seconds'] = int(duration_str.split()[0])
-                # Keep old key for backwards compat
-                round_metadata['actual_duration_seconds'] = round_metadata['lua_playtime_seconds']
-            except (ValueError, IndexError):
-                round_metadata['lua_playtime_seconds'] = 0
-                round_metadata['actual_duration_seconds'] = 0
-
-            # Parse time limit (format: "20 min")
-            # v1.2.0: renamed from "Time Limit" to "Lua_Timelimit"
-            time_limit_str = metadata.get('lua_timelimit', metadata.get('time limit', '0 min'))
-            try:
-                round_metadata['lua_timelimit_minutes'] = int(time_limit_str.split()[0])
-                round_metadata['time_limit_minutes'] = round_metadata['lua_timelimit_minutes']
-            except (ValueError, IndexError):
-                round_metadata['lua_timelimit_minutes'] = 0
-                round_metadata['time_limit_minutes'] = 0
-
-            # Parse pauses (format: "2 (30 sec)")
-            # v1.2.0: renamed from "Pauses" to "Lua_Pauses"
-            pauses_str = metadata.get('lua_pauses', metadata.get('pauses', '0 (0 sec)'))
-            try:
-                parts = pauses_str.split('(')
-                round_metadata['lua_pause_count'] = int(parts[0].strip())
-                round_metadata['pause_count'] = round_metadata['lua_pause_count']
-                if len(parts) > 1:
-                    round_metadata['lua_pause_seconds'] = int(parts[1].rstrip(' sec)'))
-                else:
-                    round_metadata['lua_pause_seconds'] = 0
-                round_metadata['total_pause_seconds'] = round_metadata['lua_pause_seconds']
-            except (ValueError, IndexError):
-                round_metadata['lua_pause_count'] = 0
-                round_metadata['lua_pause_seconds'] = 0
-                round_metadata['pause_count'] = 0
-                round_metadata['total_pause_seconds'] = 0
-
-            # Parse warmup (format: "45 sec") - NEW in v1.2.0
-            warmup_str = metadata.get('lua_warmup', '0 sec')
-            try:
-                round_metadata['lua_warmup_seconds'] = int(warmup_str.split()[0])
-            except (ValueError, IndexError):
-                round_metadata['lua_warmup_seconds'] = 0
-
-            # Parse warmup start timestamp - NEW in v1.2.0
-            round_metadata['lua_warmup_start_unix'] = int(metadata.get('lua_warmupstart', 0))
-
-            # Parse warmup end timestamp (same as round start) - NEW in v1.3.0
-            round_metadata['lua_warmup_end_unix'] = int(metadata.get('lua_warmupend', metadata.get('lua_roundstart', 0)))
-
-            # Parse pause events JSON - NEW in v1.3.0
-            # Format: [{"n":1,"start":unix,"end":unix,"sec":duration}, ...]
-            pause_events_raw = metadata.get('lua_pauses_json', '[]')
-            try:
-                pause_events_json = pause_events_raw.replace('\\"', '"')
-                round_metadata['lua_pause_events'] = json.loads(pause_events_json) if pause_events_json != '[]' else []
-            except json.JSONDecodeError:
-                round_metadata['lua_pause_events'] = []
-
-            # Parse surrender vote info - NEW in v1.4.0
-            round_metadata['surrender_team'] = int(metadata.get('lua_surrenderteam', 0))
-            round_metadata['surrender_caller_guid'] = metadata.get('lua_surrendercaller', '')
-            round_metadata['surrender_caller_name'] = metadata.get('lua_surrendercallername', '')
-
-            # Parse match score - NEW in v1.4.0
-            round_metadata['axis_score'] = int(metadata.get('lua_axisscore', 0))
-            round_metadata['allies_score'] = int(metadata.get('lua_alliesscore', 0))
-
-            # Parse team composition from JSON fields (v1.1.0+)
-            # Format: [{"guid":"ABC...","name":"PlayerName"}, ...]
-            axis_json_raw = metadata.get('axis_json', '[]')
-            allies_json_raw = metadata.get('allies_json', '[]')
-
-            # Unescape the embedded JSON (it was escaped for Discord embed)
-            try:
-                # Discord embed escapes quotes, we need to unescape
-                axis_json = axis_json_raw.replace('\\"', '"')
-                allies_json = allies_json_raw.replace('\\"', '"')
-                round_metadata['axis_players'] = json.loads(axis_json) if axis_json != '[]' else []
-                round_metadata['allies_players'] = json.loads(allies_json) if allies_json != '[]' else []
-            except json.JSONDecodeError as e:
-                webhook_logger.warning(f"Failed to parse team JSON: {e}")
-                round_metadata['axis_players'] = []
-                round_metadata['allies_players'] = []
+            if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", 0) == 0:
+                webhook_logger.warning("STATS_READY webhook missing map/round metadata; skipping")
+                return
 
             # Human-readable team names (for logging)
             axis_names = metadata.get('axis', '(none)')
             allies_names = metadata.get('allies', '(none)')
+            if (axis_names in {"(none)", ""}) and round_metadata.get("axis_players"):
+                axis_names = ", ".join(
+                    p.get("name", "") for p in round_metadata.get("axis_players", []) if p.get("name")
+                )
+            if (allies_names in {"(none)", ""}) and round_metadata.get("allies_players"):
+                allies_names = ", ".join(
+                    p.get("name", "") for p in round_metadata.get("allies_players", []) if p.get("name")
+                )
 
             # Log summary including surrender info (v1.4.0)
             surrender_info = ""
@@ -2871,6 +3410,11 @@ class UltimateETLegacyBot(commands.Bot):
 
             # Store team data in lua_round_teams table (separate from stats file data)
             await self._store_lua_round_teams(round_metadata)
+
+            # Store spawn stats if present (Lua v1.6.0+)
+            spawn_stats = self._parse_spawn_stats_from_metadata(metadata)
+            if spawn_stats:
+                await self._store_lua_spawn_stats(round_metadata, spawn_stats)
 
             # Store metadata for the processing step to use
             # Key by map + round for lookup
@@ -2901,6 +3445,195 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             webhook_logger.error(f"❌ Error processing STATS_READY webhook: {e}", exc_info=True)
             await self.track_error("stats_ready_webhook", str(e), max_consecutive=3)
+
+    def _extract_gametime_timestamp(self, filename: str) -> int | None:
+        match = re.match(r"^gametime-.*-R\d+-(\d+)\.json$", filename)
+        if not match:
+            return None
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return None
+
+    async def _process_gametimes_file(self, local_path: str, filename: str) -> bool:
+        """
+        Process a gametimes JSON fallback file (Lua webhook payload stored locally).
+        """
+        try:
+            with open(local_path, "r", encoding="utf-8") as handle:
+                gametime_data = json.load(handle)
+        except Exception as e:
+            webhook_logger.error(f"❌ Failed to read gametime file {filename}: {e}")
+            return False
+
+        payload = gametime_data.get("payload")
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except json.JSONDecodeError as e:
+                webhook_logger.error(f"❌ Gametime payload JSON decode failed: {e}")
+                return False
+
+        if not isinstance(payload, dict):
+            webhook_logger.error("❌ Gametime payload missing or invalid")
+            return False
+
+        embeds = payload.get("embeds") or []
+        if not embeds:
+            webhook_logger.warning(f"⚠️ Gametime payload has no embeds: {filename}")
+            return False
+
+        embed = embeds[0] or {}
+        metadata = self._fields_to_metadata_map(embed.get("fields", []))
+        footer_text = None
+        footer = embed.get("footer") if isinstance(embed, dict) else None
+        if isinstance(footer, dict):
+            footer_text = footer.get("text")
+
+        round_metadata = self._build_round_metadata_from_map(metadata, footer_text=footer_text)
+
+        meta = gametime_data.get("meta") or {}
+        if round_metadata.get("map_name") == "unknown" and meta.get("map"):
+            round_metadata["map_name"] = meta.get("map")
+        if round_metadata.get("round_number", 0) == 0 and meta.get("round"):
+            round_metadata["round_number"] = int(meta.get("round"))
+        if round_metadata.get("round_end_unix", 0) == 0 and meta.get("round_end_unix"):
+            round_metadata["round_end_unix"] = int(meta.get("round_end_unix"))
+        spawn_stats_meta = meta.get("spawn_stats")
+        if isinstance(spawn_stats_meta, str):
+            try:
+                spawn_stats_meta = json.loads(spawn_stats_meta)
+            except json.JSONDecodeError:
+                spawn_stats_meta = []
+        if not isinstance(spawn_stats_meta, list):
+            spawn_stats_meta = []
+
+        if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", 0) == 0:
+            webhook_logger.warning(f"⚠️ Gametime file missing map/round metadata: {filename}")
+            return False
+
+        axis_players = round_metadata.get("axis_players", [])
+        allies_players = round_metadata.get("allies_players", [])
+        axis_names = metadata.get("axis", "") or ", ".join(
+            [p.get("name", "") for p in axis_players if p.get("name")]
+        )
+        allies_names = metadata.get("allies", "") or ", ".join(
+            [p.get("name", "") for p in allies_players if p.get("name")]
+        )
+
+        webhook_logger.info(
+            f"📁 GAMETIME: {round_metadata['map_name']} R{round_metadata['round_number']} "
+            f"(winner={round_metadata.get('winner_team')}, playtime={round_metadata.get('lua_playtime_seconds')}s, "
+            f"warmup={round_metadata.get('lua_warmup_seconds')}s, pauses={round_metadata.get('lua_pause_count')})"
+        )
+        if axis_names:
+            webhook_logger.info(f"   Axis: {axis_names}")
+        if allies_names:
+            webhook_logger.info(f"   Allies: {allies_names}")
+
+        await self._store_lua_round_teams(round_metadata)
+        if spawn_stats_meta:
+            await self._store_lua_spawn_stats(round_metadata, spawn_stats_meta)
+
+        metadata_key = f"{round_metadata['map_name']}_R{round_metadata['round_number']}"
+        if not hasattr(self, "_pending_round_metadata"):
+            self._pending_round_metadata = {}
+        self._pending_round_metadata[metadata_key] = round_metadata
+
+        # Attempt to fetch the matching stats file using the Lua timing data
+        if self.ssh_enabled:
+            webhook_logger.info(
+                f"🔍 Gametime trigger: searching stats for {round_metadata['map_name']} "
+                f"R{round_metadata['round_number']}"
+            )
+            await self._fetch_latest_stats_file(round_metadata, None)
+
+        return True
+
+    async def _process_remote_gametimes_files(self) -> None:
+        if not self.config.gametimes_enabled:
+            return
+        if not self.ssh_enabled:
+            return
+
+        ssh_config = {
+            "host": self.config.ssh_host,
+            "port": self.config.ssh_port,
+            "user": self.config.ssh_user,
+            "key_path": self.config.ssh_key_path,
+            "remote_path": self.config.gametimes_remote_path,
+        }
+
+        if not all([
+            ssh_config["host"],
+            ssh_config["user"],
+            ssh_config["key_path"],
+            ssh_config["remote_path"],
+        ]):
+            if not hasattr(self, "_gametimes_config_logged"):
+                self._gametimes_config_logged = True
+                logger.warning(
+                    "⚠️ Gametimes SSH config incomplete - skipping gametimes ingestion\n"
+                    f"   Host: {ssh_config['host']}\n"
+                    f"   User: {ssh_config['user']}\n"
+                    f"   Key: {ssh_config['key_path']}\n"
+                    f"   Path: {ssh_config['remote_path']}"
+                )
+            return
+
+        files = await SSHHandler.list_remote_files(
+            ssh_config,
+            extensions=[".json"],
+            exclude_suffixes=None,
+        )
+        if not files:
+            return
+
+        cutoff = None
+        if self.config.gametimes_startup_lookback_hours > 0:
+            cutoff = datetime.now().timestamp() - (self.config.gametimes_startup_lookback_hours * 3600)
+
+        gametime_files = [f for f in files if f.startswith("gametime-") and f.endswith(".json")]
+        if not gametime_files:
+            return
+
+        webhook_logger.debug(
+            f"📂 Gametimes files on server: {len(gametime_files)}"
+        )
+
+        new_files = [
+            f for f in gametime_files
+            if f not in self.processed_gametimes_files
+        ]
+        if not new_files:
+            return
+
+        webhook_logger.info(
+            f"📥 New gametimes files detected: {len(new_files)}"
+        )
+
+        for filename in sorted(new_files):
+            ts = self._extract_gametime_timestamp(filename)
+            if cutoff and ts and ts < cutoff:
+                self._mark_gametime_processed(filename)
+                continue
+
+            webhook_logger.info(f"📥 Downloading gametime file: {filename}")
+            local_path = await SSHHandler.download_file(
+                ssh_config,
+                filename,
+                self.config.gametimes_local_path,
+            )
+
+            if not local_path:
+                webhook_logger.warning(f"❌ Failed to download gametime file: {filename}")
+                continue
+
+            success = await self._process_gametimes_file(local_path, filename)
+            if success:
+                self._mark_gametime_processed(filename)
+            else:
+                webhook_logger.warning(f"⚠️ Gametime file processing failed: {filename}")
 
     async def _store_lua_round_teams(self, round_metadata: dict):
         """
@@ -2934,6 +3667,9 @@ class UltimateETLegacyBot(commands.Bot):
             timestamp = datetime.fromtimestamp(round_end)
             match_id = timestamp.strftime('%Y-%m-%d-%H%M%S')
 
+            # Try to resolve round_id for direct linking (may be None if stats not imported yet)
+            round_id = await self._resolve_round_id_for_metadata(None, round_metadata)
+
             # Serialize team data as JSON
             axis_players = round_metadata.get('axis_players', [])
             allies_players = round_metadata.get('allies_players', [])
@@ -2945,52 +3681,102 @@ class UltimateETLegacyBot(commands.Bot):
             # v1.2.0: Added warmup timing columns (lua_warmup_seconds, lua_warmup_start_unix)
             # v1.3.0: Added lua_pause_events JSONB column for detailed pause timestamps
             # v1.4.0: Added surrender tracking and match score columns
-            query = """
-                INSERT INTO lua_round_teams (
-                    match_id, round_number, axis_players, allies_players,
-                    round_start_unix, round_end_unix, actual_duration_seconds,
-                    total_pause_seconds, pause_count, end_reason,
-                    winner_team, defender_team, map_name, time_limit_minutes,
-                    lua_warmup_seconds, lua_warmup_start_unix,
-                    lua_pause_events,
-                    surrender_team, surrender_caller_guid, surrender_caller_name,
-                    axis_score, allies_score,
-                    lua_version
-                ) VALUES (
-                    $1, $2, $3::jsonb, $4::jsonb,
-                    $5, $6, $7,
-                    $8, $9, $10,
-                    $11, $12, $13, $14,
-                    $15, $16,
-                    $17::jsonb,
-                    $18, $19, $20,
-                    $21, $22,
-                    $23
-                )
-                ON CONFLICT (match_id, round_number) DO UPDATE SET
-                    axis_players = EXCLUDED.axis_players,
-                    allies_players = EXCLUDED.allies_players,
-                    round_start_unix = EXCLUDED.round_start_unix,
-                    round_end_unix = EXCLUDED.round_end_unix,
-                    actual_duration_seconds = EXCLUDED.actual_duration_seconds,
-                    total_pause_seconds = EXCLUDED.total_pause_seconds,
-                    pause_count = EXCLUDED.pause_count,
-                    end_reason = EXCLUDED.end_reason,
-                    winner_team = EXCLUDED.winner_team,
-                    defender_team = EXCLUDED.defender_team,
-                    map_name = EXCLUDED.map_name,
-                    time_limit_minutes = EXCLUDED.time_limit_minutes,
-                    lua_warmup_seconds = EXCLUDED.lua_warmup_seconds,
-                    lua_warmup_start_unix = EXCLUDED.lua_warmup_start_unix,
-                    lua_pause_events = EXCLUDED.lua_pause_events,
-                    surrender_team = EXCLUDED.surrender_team,
-                    surrender_caller_guid = EXCLUDED.surrender_caller_guid,
-                    surrender_caller_name = EXCLUDED.surrender_caller_name,
-                    axis_score = EXCLUDED.axis_score,
-                    allies_score = EXCLUDED.allies_score,
-                    lua_version = EXCLUDED.lua_version,
-                    captured_at = CURRENT_TIMESTAMP
-            """
+            has_round_id = await self._has_lua_round_teams_round_id()
+            if has_round_id:
+                query = """
+                    INSERT INTO lua_round_teams (
+                        match_id, round_number, round_id, axis_players, allies_players,
+                        round_start_unix, round_end_unix, actual_duration_seconds,
+                        total_pause_seconds, pause_count, end_reason,
+                        winner_team, defender_team, map_name, time_limit_minutes,
+                        lua_warmup_seconds, lua_warmup_start_unix,
+                        lua_pause_events,
+                        surrender_team, surrender_caller_guid, surrender_caller_name,
+                        axis_score, allies_score,
+                        lua_version
+                    ) VALUES (
+                        $1, $2, $3, $4::jsonb, $5::jsonb,
+                        $6, $7, $8,
+                        $9, $10, $11,
+                        $12, $13, $14, $15,
+                        $16, $17,
+                        $18::jsonb,
+                        $19, $20, $21,
+                        $22, $23,
+                        $24
+                    )
+                    ON CONFLICT (match_id, round_number) DO UPDATE SET
+                        axis_players = EXCLUDED.axis_players,
+                        allies_players = EXCLUDED.allies_players,
+                        round_id = COALESCE(EXCLUDED.round_id, lua_round_teams.round_id),
+                        round_start_unix = EXCLUDED.round_start_unix,
+                        round_end_unix = EXCLUDED.round_end_unix,
+                        actual_duration_seconds = EXCLUDED.actual_duration_seconds,
+                        total_pause_seconds = EXCLUDED.total_pause_seconds,
+                        pause_count = EXCLUDED.pause_count,
+                        end_reason = EXCLUDED.end_reason,
+                        winner_team = EXCLUDED.winner_team,
+                        defender_team = EXCLUDED.defender_team,
+                        map_name = EXCLUDED.map_name,
+                        time_limit_minutes = EXCLUDED.time_limit_minutes,
+                        lua_warmup_seconds = EXCLUDED.lua_warmup_seconds,
+                        lua_warmup_start_unix = EXCLUDED.lua_warmup_start_unix,
+                        lua_pause_events = EXCLUDED.lua_pause_events,
+                        surrender_team = EXCLUDED.surrender_team,
+                        surrender_caller_guid = EXCLUDED.surrender_caller_guid,
+                        surrender_caller_name = EXCLUDED.surrender_caller_name,
+                        axis_score = EXCLUDED.axis_score,
+                        allies_score = EXCLUDED.allies_score,
+                        lua_version = EXCLUDED.lua_version,
+                        captured_at = CURRENT_TIMESTAMP
+                """
+            else:
+                query = """
+                    INSERT INTO lua_round_teams (
+                        match_id, round_number, axis_players, allies_players,
+                        round_start_unix, round_end_unix, actual_duration_seconds,
+                        total_pause_seconds, pause_count, end_reason,
+                        winner_team, defender_team, map_name, time_limit_minutes,
+                        lua_warmup_seconds, lua_warmup_start_unix,
+                        lua_pause_events,
+                        surrender_team, surrender_caller_guid, surrender_caller_name,
+                        axis_score, allies_score,
+                        lua_version
+                    ) VALUES (
+                        $1, $2, $3::jsonb, $4::jsonb,
+                        $5, $6, $7,
+                        $8, $9, $10,
+                        $11, $12, $13, $14,
+                        $15, $16,
+                        $17::jsonb,
+                        $18, $19, $20,
+                        $21, $22,
+                        $23
+                    )
+                    ON CONFLICT (match_id, round_number) DO UPDATE SET
+                        axis_players = EXCLUDED.axis_players,
+                        allies_players = EXCLUDED.allies_players,
+                        round_start_unix = EXCLUDED.round_start_unix,
+                        round_end_unix = EXCLUDED.round_end_unix,
+                        actual_duration_seconds = EXCLUDED.actual_duration_seconds,
+                        total_pause_seconds = EXCLUDED.total_pause_seconds,
+                        pause_count = EXCLUDED.pause_count,
+                        end_reason = EXCLUDED.end_reason,
+                        winner_team = EXCLUDED.winner_team,
+                        defender_team = EXCLUDED.defender_team,
+                        map_name = EXCLUDED.map_name,
+                        time_limit_minutes = EXCLUDED.time_limit_minutes,
+                        lua_warmup_seconds = EXCLUDED.lua_warmup_seconds,
+                        lua_warmup_start_unix = EXCLUDED.lua_warmup_start_unix,
+                        lua_pause_events = EXCLUDED.lua_pause_events,
+                        surrender_team = EXCLUDED.surrender_team,
+                        surrender_caller_guid = EXCLUDED.surrender_caller_guid,
+                        surrender_caller_name = EXCLUDED.surrender_caller_name,
+                        axis_score = EXCLUDED.axis_score,
+                        allies_score = EXCLUDED.allies_score,
+                        lua_version = EXCLUDED.lua_version,
+                        captured_at = CURRENT_TIMESTAMP
+                """
 
             # Get pause events array (v1.3.0)
             pause_events = round_metadata.get('lua_pause_events', [])
@@ -2998,27 +3784,55 @@ class UltimateETLegacyBot(commands.Bot):
             params = (
                 match_id,
                 round_number,
-                json.dumps(axis_players),
-                json.dumps(allies_players),
-                round_metadata.get('round_start_unix'),
-                round_metadata.get('round_end_unix'),
-                round_metadata.get('actual_duration_seconds'),
-                round_metadata.get('total_pause_seconds', 0),
-                round_metadata.get('pause_count', 0),
-                round_metadata.get('end_reason'),
-                round_metadata.get('winner_team'),
-                round_metadata.get('defender_team'),
-                map_name,
-                round_metadata.get('time_limit_minutes'),
-                round_metadata.get('lua_warmup_seconds', 0),
-                round_metadata.get('lua_warmup_start_unix', 0),
-                json.dumps(pause_events),  # v1.3.0: Pause event timestamps
-                round_metadata.get('surrender_team', 0),  # v1.4.0
-                round_metadata.get('surrender_caller_guid', ''),  # v1.4.0
-                round_metadata.get('surrender_caller_name', ''),  # v1.4.0
-                round_metadata.get('axis_score', 0),  # v1.4.0
-                round_metadata.get('allies_score', 0),  # v1.4.0
-                lua_version,
+                *((
+                    (
+                        round_id,
+                        json.dumps(axis_players),
+                        json.dumps(allies_players),
+                        round_metadata.get('round_start_unix'),
+                        round_metadata.get('round_end_unix'),
+                        round_metadata.get('actual_duration_seconds'),
+                        round_metadata.get('total_pause_seconds', 0),
+                        round_metadata.get('pause_count', 0),
+                        round_metadata.get('end_reason'),
+                        round_metadata.get('winner_team'),
+                        round_metadata.get('defender_team'),
+                        map_name,
+                        round_metadata.get('time_limit_minutes'),
+                        round_metadata.get('lua_warmup_seconds', 0),
+                        round_metadata.get('lua_warmup_start_unix', 0),
+                        json.dumps(pause_events),  # v1.3.0: Pause event timestamps
+                        round_metadata.get('surrender_team', 0),  # v1.4.0
+                        round_metadata.get('surrender_caller_guid', ''),  # v1.4.0
+                        round_metadata.get('surrender_caller_name', ''),  # v1.4.0
+                        round_metadata.get('axis_score', 0),  # v1.4.0
+                        round_metadata.get('allies_score', 0),  # v1.4.0
+                        lua_version,
+                    ) if has_round_id else
+                    (
+                        json.dumps(axis_players),
+                        json.dumps(allies_players),
+                        round_metadata.get('round_start_unix'),
+                        round_metadata.get('round_end_unix'),
+                        round_metadata.get('actual_duration_seconds'),
+                        round_metadata.get('total_pause_seconds', 0),
+                        round_metadata.get('pause_count', 0),
+                        round_metadata.get('end_reason'),
+                        round_metadata.get('winner_team'),
+                        round_metadata.get('defender_team'),
+                        map_name,
+                        round_metadata.get('time_limit_minutes'),
+                        round_metadata.get('lua_warmup_seconds', 0),
+                        round_metadata.get('lua_warmup_start_unix', 0),
+                        json.dumps(pause_events),  # v1.3.0: Pause event timestamps
+                        round_metadata.get('surrender_team', 0),  # v1.4.0
+                        round_metadata.get('surrender_caller_guid', ''),  # v1.4.0
+                        round_metadata.get('surrender_caller_name', ''),  # v1.4.0
+                        round_metadata.get('axis_score', 0),  # v1.4.0
+                        round_metadata.get('allies_score', 0),  # v1.4.0
+                        lua_version,
+                    )
+                ),)
             )
 
             await self.db_adapter.execute(query, params)
@@ -3035,6 +3849,93 @@ class UltimateETLegacyBot(commands.Bot):
             # This could fail if table doesn't exist (migration not run)
             webhook_logger.warning(f"⚠️ Could not store Lua team data: {e}")
 
+    async def _store_lua_spawn_stats(self, round_metadata: dict, spawn_stats: list) -> None:
+        """
+        Store per-player spawn/death timing stats captured by Lua webhook.
+
+        Expected spawn_stats format (list of dicts):
+          {guid, name, spawns, deaths, dead_seconds, avg_respawn, max_respawn}
+        """
+        import json
+        if not spawn_stats:
+            return
+        try:
+            if not await self._has_lua_spawn_stats_table():
+                webhook_logger.warning("⚠️ lua_spawn_stats table missing (migration not run).")
+                return
+
+            from datetime import datetime
+            round_end = round_metadata.get('round_end_unix', 0)
+            map_name = round_metadata.get('map_name', 'unknown')
+            round_number = round_metadata.get('round_number', 0)
+
+            if round_end == 0:
+                webhook_logger.warning("Cannot store spawn stats: missing round_end_unix")
+                return
+
+            timestamp = datetime.fromtimestamp(round_end)
+            match_id = timestamp.strftime('%Y-%m-%d-%H%M%S')
+            round_id = await self._resolve_round_id_for_metadata(None, round_metadata)
+
+            query = """
+                INSERT INTO lua_spawn_stats (
+                    match_id, round_number, round_id, map_name, round_end_unix,
+                    player_guid, player_name,
+                    spawn_count, death_count, dead_seconds,
+                    avg_respawn_seconds, max_respawn_seconds
+                ) VALUES (
+                    $1, $2, $3, $4, $5,
+                    $6, $7,
+                    $8, $9, $10,
+                    $11, $12
+                )
+                ON CONFLICT (match_id, round_number, player_guid) DO UPDATE SET
+                    round_id = COALESCE(EXCLUDED.round_id, lua_spawn_stats.round_id),
+                    player_name = EXCLUDED.player_name,
+                    spawn_count = EXCLUDED.spawn_count,
+                    death_count = EXCLUDED.death_count,
+                    dead_seconds = EXCLUDED.dead_seconds,
+                    avg_respawn_seconds = EXCLUDED.avg_respawn_seconds,
+                    max_respawn_seconds = EXCLUDED.max_respawn_seconds,
+                    captured_at = CURRENT_TIMESTAMP
+            """
+
+            for entry in spawn_stats:
+                guid = (entry.get("guid") or "")[:32]
+                name = entry.get("name") or "unknown"
+                spawns = int(entry.get("spawns") or 0)
+                deaths = int(entry.get("deaths") or 0)
+                dead_seconds = int(entry.get("dead_seconds") or 0)
+                avg_respawn = int(entry.get("avg_respawn") or 0)
+                max_respawn = int(entry.get("max_respawn") or 0)
+
+                if not guid:
+                    continue
+
+                params = (
+                    match_id,
+                    round_number,
+                    round_id,
+                    map_name,
+                    round_end,
+                    guid,
+                    name,
+                    spawns,
+                    deaths,
+                    dead_seconds,
+                    avg_respawn,
+                    max_respawn,
+                )
+                await self.db_adapter.execute(query, params)
+
+            webhook_logger.info(
+                f"💾 Stored Lua spawn stats: {match_id} R{round_number} "
+                f"(players: {len(spawn_stats)})"
+            )
+
+        except Exception as e:
+            webhook_logger.warning(f"⚠️ Could not store Lua spawn stats: {e}")
+
     async def _fetch_latest_stats_file(self, round_metadata: dict, trigger_message):
         """
         Fetch the latest stats file from game server after receiving STATS_READY.
@@ -3043,6 +3944,8 @@ class UltimateETLegacyBot(commands.Bot):
         """
         try:
             from bot.automation.ssh_handler import SSHHandler
+            import re
+            from datetime import datetime
 
             # Build SSH config
             ssh_config = {
@@ -3074,9 +3977,45 @@ class UltimateETLegacyBot(commands.Bot):
                 webhook_logger.warning(f"No matching file found for {map_name} R{round_num}")
                 return
 
-            # Get the most recent matching file
-            matching_files.sort(reverse=True)  # Newest first (by filename timestamp)
-            filename = matching_files[0]
+            def _extract_timestamp(filename: str) -> int | None:
+                # Expect: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+                match = re.match(r'^(\d{4}-\d{2}-\d{2})-(\d{6})-.*-round-\d+\.txt$', filename)
+                if not match:
+                    return None
+                date_str, time_str = match.groups()
+                try:
+                    dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H%M%S")
+                    return int(dt.timestamp())
+                except ValueError:
+                    return None
+
+            # Choose the closest file to the Lua round_end_unix time if available
+            best_file = None
+            best_diff = None
+            if target_time:
+                for f in matching_files:
+                    file_ts = _extract_timestamp(f)
+                    if file_ts is None:
+                        continue
+                    diff = abs(file_ts - target_time)
+                    if best_diff is None or diff < best_diff:
+                        best_diff = diff
+                        best_file = f
+
+            if best_file:
+                filename = best_file
+                webhook_logger.info(
+                    f"📥 Selected closest file: {filename} (Δ {best_diff}s)"
+                )
+                if best_diff is not None and best_diff > 1800:
+                    webhook_logger.warning(
+                        f"⚠️ Closest file is >30 minutes away from webhook timestamp (Δ {best_diff}s)"
+                    )
+            else:
+                # Fallback: use most recent matching file
+                matching_files.sort(reverse=True)  # Newest first (by filename timestamp)
+                filename = matching_files[0]
+                webhook_logger.info(f"📥 Selected newest file (fallback): {filename}")
 
             webhook_logger.info(f"📥 Found matching file: {filename}")
 
@@ -3116,6 +4055,201 @@ class UltimateETLegacyBot(commands.Bot):
 
         except Exception as e:
             webhook_logger.error(f"❌ Error fetching stats file: {e}", exc_info=True)
+
+    def _get_endstats_retry_delay(self, attempt: int) -> int:
+        delay = self.endstats_retry_base_delay * (2 ** (attempt - 1))
+        return min(delay, self.endstats_retry_max_delay)
+
+    def _clear_endstats_retry_state(self, filename: str) -> None:
+        self.endstats_retry_counts.pop(filename, None)
+        task = self.endstats_retry_tasks.pop(filename, None)
+        if task and not task.done():
+            task.cancel()
+
+    async def _schedule_endstats_retry(
+        self,
+        filename: str,
+        local_path: str,
+        endstats_data: dict,
+        trigger_message,
+    ) -> None:
+        existing = self.endstats_retry_tasks.get(filename)
+        if existing and not existing.done():
+            webhook_logger.debug(f"⏳ Retry already scheduled for endstats: {filename}")
+            return
+
+        attempt = self.endstats_retry_counts.get(filename, 0) + 1
+        self.endstats_retry_counts[filename] = attempt
+
+        if attempt > self.endstats_retry_max_attempts:
+            webhook_logger.error(
+                f"❌ Endstats retry limit reached ({self.endstats_retry_max_attempts}) for {filename}"
+            )
+            self.processed_endstats_files.discard(filename)
+            self._clear_endstats_retry_state(filename)
+            try:
+                if trigger_message:
+                    await trigger_message.add_reaction('⚠️')
+            except Exception:
+                pass
+            return
+
+        delay = self._get_endstats_retry_delay(attempt)
+        webhook_logger.warning(
+            f"⏳ Scheduling endstats retry {attempt}/{self.endstats_retry_max_attempts} "
+            f"in {delay}s for {filename}"
+        )
+
+        async def _retry():
+            await asyncio.sleep(delay)
+            await self._retry_webhook_endstats_link(
+                filename, local_path, endstats_data, trigger_message
+            )
+
+        self.endstats_retry_tasks[filename] = asyncio.create_task(_retry())
+
+    async def _retry_webhook_endstats_link(
+        self,
+        filename: str,
+        local_path: str,
+        endstats_data: dict,
+        trigger_message,
+    ) -> None:
+        try:
+            # If already processed in DB, stop retrying
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            result = await self.db_adapter.fetch_one(check_query, (filename,))
+            if result:
+                webhook_logger.info(f"✅ Endstats already processed during retry: {filename}")
+                self._clear_endstats_retry_state(filename)
+                return
+
+            metadata = endstats_data.get('metadata') or {}
+            round_date = metadata.get('date')
+            map_name = metadata.get('map_name')
+            round_number = metadata.get('round_number')
+            round_time = metadata.get('time')
+
+            if not (round_date and map_name and round_number):
+                webhook_logger.error(f"❌ Missing metadata for endstats retry: {filename}")
+                self.processed_endstats_files.discard(filename)
+                self._clear_endstats_retry_state(filename)
+                return
+
+            round_meta = {
+                'map_name': map_name,
+                'round_number': round_number,
+                'round_date': round_date,
+                'round_time': round_time,
+            }
+            stats_filename = filename.replace("-endstats.txt", ".txt")
+            round_id = await self._resolve_round_id_for_metadata(stats_filename, round_meta)
+
+            if not round_id:
+                await self._schedule_endstats_retry(
+                    filename, local_path, endstats_data, trigger_message
+                )
+                return
+            await self._store_endstats_and_publish(
+                filename,
+                endstats_data,
+                round_id,
+                round_date,
+                map_name,
+                round_number,
+                webhook_logger,
+            )
+
+            self._clear_endstats_retry_state(filename)
+
+            try:
+                if trigger_message:
+                    await trigger_message.delete()
+                    webhook_logger.debug("🗑️ Deleted endstats trigger message (retry)")
+            except Exception as e:
+                webhook_logger.debug(f"Could not delete trigger message: {e}")
+
+        except Exception as e:
+            webhook_logger.error(f"❌ Error during endstats retry: {e}", exc_info=True)
+            self._clear_endstats_retry_state(filename)
+
+    async def _store_endstats_and_publish(
+        self,
+        filename: str,
+        endstats_data: dict,
+        round_id: int,
+        round_date: str,
+        map_name: str,
+        round_number: int,
+        log,
+    ) -> None:
+        awards = endstats_data.get('awards', [])
+        vs_stats = endstats_data.get('vs_stats', [])
+
+        # Store awards in database
+        for award in awards:
+            player_guid = None
+            alias_query = """
+                SELECT guid FROM player_aliases
+                WHERE alias = $1
+                ORDER BY last_seen DESC LIMIT 1
+            """
+            alias_result = await self.db_adapter.fetch_one(alias_query, (award['player'],))
+            if alias_result:
+                player_guid = alias_result[0]
+
+            insert_query = """
+                INSERT INTO round_awards
+                (round_id, round_date, map_name, round_number, award_name,
+                 player_name, player_guid, award_value, award_value_numeric)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            """
+            await self.db_adapter.execute(insert_query, (
+                round_id, round_date, map_name, round_number,
+                award['name'], award['player'], player_guid,
+                award['value'], award.get('numeric')
+            ))
+
+        log.info(f"✅ Stored {len(awards)} awards")
+
+        # Store VS stats in database
+        for vs in vs_stats:
+            player_guid = None
+            alias_query = """
+                SELECT guid FROM player_aliases
+                WHERE alias = $1
+                ORDER BY last_seen DESC LIMIT 1
+            """
+            alias_result = await self.db_adapter.fetch_one(alias_query, (vs['player'],))
+            if alias_result:
+                player_guid = alias_result[0]
+
+            insert_query = """
+                INSERT INTO round_vs_stats
+                (round_id, round_date, map_name, round_number,
+                 player_name, player_guid, kills, deaths)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            """
+            await self.db_adapter.execute(insert_query, (
+                round_id, round_date, map_name, round_number,
+                vs['player'], player_guid, vs['kills'], vs['deaths']
+            ))
+
+        log.info(f"✅ Stored {len(vs_stats)} VS stats")
+
+        # Mark file as processed
+        processed_query = """
+            INSERT INTO processed_endstats_files (filename, round_id, success)
+            VALUES ($1, $2, TRUE)
+        """
+        await self.db_adapter.execute(processed_query, (filename, round_id))
+
+        # Post endstats embed to production channel
+        await self.round_publisher.publish_endstats(
+            filename, endstats_data, round_id, map_name, round_number
+        )
+
+        log.info(f"✅ Successfully processed endstats: {filename}")
 
     async def _process_endstats_file(self, local_path: str, filename: str):
         """
@@ -3163,28 +4297,23 @@ class UltimateETLegacyBot(commands.Bot):
                 f"📊 Parsed endstats: {len(awards)} awards, {len(vs_stats)} VS stats"
             )
 
-            # Find the matching round in the database
-            # Use flexible lookup by date + map + round_number to handle timestamp mismatches
-            # (endstats file timestamp can differ by 1-2 seconds from main stats file)
-            # Also constrain to rounds created in last 30 minutes to avoid matching
-            # a previous play of the same map (e.g., playing supply twice in a row)
-            round_date = metadata['date']
-            map_name = metadata['map_name']
-            round_number = metadata['round_number']
+            # Find matching round using shared resolver (avoids timestamp mismatch)
+            round_date = metadata.get('date')
+            map_name = metadata.get('map_name')
+            round_number = metadata.get('round_number')
+            round_time = metadata.get('time')
 
-            round_query = """
-                SELECT id, round_date, map_name FROM rounds
-                WHERE round_date = $1
-                  AND map_name = $2
-                  AND round_number = $3
-                  AND created_at > NOW() - INTERVAL '30 minutes'
-                ORDER BY created_at DESC LIMIT 1
-            """
-            round_result = await self.db_adapter.fetch_one(
-                round_query, (round_date, map_name, round_number)
-            )
+            round_meta = {
+                'map_name': map_name,
+                'round_number': round_number,
+                'round_date': round_date,
+                'round_time': round_time,
+            }
 
-            if not round_result:
+            stats_filename = filename.replace("-endstats.txt", ".txt")
+            round_id = await self._resolve_round_id_for_metadata(stats_filename, round_meta)
+
+            if not round_id:
                 logger.warning(
                     f"⏳ Round not found yet for endstats {filename}. "
                     f"Main stats file may not be processed yet. Will retry next poll."
@@ -3193,77 +4322,17 @@ class UltimateETLegacyBot(commands.Bot):
                 self.processed_endstats_files.discard(filename)
                 return
 
-            round_id = round_result[0]
-            # round_date already set from metadata
-            # map_name already set from metadata
-
             logger.info(f"✅ Linked to round_id={round_id}")
 
-            # Store awards in database
-            for award in awards:
-                # Try to find player GUID from aliases
-                player_guid = None
-                alias_query = """
-                    SELECT guid FROM player_aliases
-                    WHERE alias = $1
-                    ORDER BY last_seen DESC LIMIT 1
-                """
-                alias_result = await self.db_adapter.fetch_one(alias_query, (award['player'],))
-                if alias_result:
-                    player_guid = alias_result[0]
-
-                insert_query = """
-                    INSERT INTO round_awards
-                    (round_id, round_date, map_name, round_number, award_name,
-                     player_name, player_guid, award_value, award_value_numeric)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                """
-                await self.db_adapter.execute(insert_query, (
-                    round_id, round_date, map_name, round_number,
-                    award['name'], award['player'], player_guid,
-                    award['value'], award.get('numeric')
-                ))
-
-            logger.info(f"✅ Stored {len(awards)} awards")
-
-            # Store VS stats in database
-            for vs in vs_stats:
-                player_guid = None
-                alias_query = """
-                    SELECT guid FROM player_aliases
-                    WHERE alias = $1
-                    ORDER BY last_seen DESC LIMIT 1
-                """
-                alias_result = await self.db_adapter.fetch_one(alias_query, (vs['player'],))
-                if alias_result:
-                    player_guid = alias_result[0]
-
-                insert_query = """
-                    INSERT INTO round_vs_stats
-                    (round_id, round_date, map_name, round_number,
-                     player_name, player_guid, kills, deaths)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                """
-                await self.db_adapter.execute(insert_query, (
-                    round_id, round_date, map_name, round_number,
-                    vs['player'], player_guid, vs['kills'], vs['deaths']
-                ))
-
-            logger.info(f"✅ Stored {len(vs_stats)} VS stats")
-
-            # Mark file as processed
-            processed_query = """
-                INSERT INTO processed_endstats_files (filename, round_id, success)
-                VALUES ($1, $2, TRUE)
-            """
-            await self.db_adapter.execute(processed_query, (filename, round_id))
-
-            # Post endstats embed to production channel
-            await self.round_publisher.publish_endstats(
-                filename, endstats_data, round_id, map_name, round_number
+            await self._store_endstats_and_publish(
+                filename,
+                endstats_data,
+                round_id,
+                round_date,
+                map_name,
+                round_number,
+                logger,
             )
-
-            logger.info(f"✅ Successfully processed endstats: {filename}")
 
         except Exception as e:
             logger.error(f"❌ Error processing endstats file: {e}", exc_info=True)
@@ -3355,111 +4424,46 @@ class UltimateETLegacyBot(commands.Bot):
                 f"📊 Parsed endstats: {len(awards)} awards, {len(vs_stats)} VS stats"
             )
 
-            # Find the matching round in the database
-            # Use flexible lookup by date + map + round_number to handle timestamp mismatches
-            # (endstats file timestamp can differ by 1-2 seconds from main stats file)
-            # Also constrain to rounds created in last 30 minutes to avoid matching
-            # a previous play of the same map (e.g., playing supply twice in a row)
-            round_date = metadata['date']
-            map_name = metadata['map_name']
-            round_number = metadata['round_number']
+            # Find matching round using shared resolver (avoids timestamp mismatch)
+            round_date = metadata.get('date')
+            map_name = metadata.get('map_name')
+            round_number = metadata.get('round_number')
+            round_time = metadata.get('time')
 
-            round_query = """
-                SELECT id, round_date, map_name FROM rounds
-                WHERE round_date = $1
-                  AND map_name = $2
-                  AND round_number = $3
-                  AND created_at > NOW() - INTERVAL '30 minutes'
-                ORDER BY created_at DESC LIMIT 1
-            """
-            round_result = await self.db_adapter.fetch_one(
-                round_query, (round_date, map_name, round_number)
-            )
+            round_meta = {
+                'map_name': map_name,
+                'round_number': round_number,
+                'round_date': round_date,
+                'round_time': round_time,
+            }
+            stats_filename = filename.replace("-endstats.txt", ".txt")
+            round_id = await self._resolve_round_id_for_metadata(stats_filename, round_meta)
 
-            if not round_result:
+            if not round_id:
                 webhook_logger.warning(
                     f"⏳ Round not found yet for endstats {filename}. "
-                    f"Main stats file may not be processed yet. Will retry via polling."
+                    f"Main stats file may not be processed yet. Scheduling retry."
                 )
-                # Remove from in-memory set to allow retry via polling fallback
-                self.processed_endstats_files.discard(filename)
                 try:
                     await trigger_message.add_reaction('⏳')
                 except Exception:
                     pass
+                await self._schedule_endstats_retry(
+                    filename, local_path, endstats_data, trigger_message
+                )
                 return
-
-            round_id = round_result[0]
-            # round_date already set from metadata
-            # map_name already set from metadata
 
             webhook_logger.info(f"✅ Linked to round_id={round_id}")
 
-            # Store awards in database
-            for award in awards:
-                # Try to find player GUID from aliases
-                player_guid = None
-                alias_query = """
-                    SELECT guid FROM player_aliases
-                    WHERE alias = $1
-                    ORDER BY last_seen DESC LIMIT 1
-                """
-                alias_result = await self.db_adapter.fetch_one(alias_query, (award['player'],))
-                if alias_result:
-                    player_guid = alias_result[0]
-
-                insert_query = """
-                    INSERT INTO round_awards
-                    (round_id, round_date, map_name, round_number, award_name,
-                     player_name, player_guid, award_value, award_value_numeric)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                """
-                await self.db_adapter.execute(insert_query, (
-                    round_id, round_date, map_name, round_number,
-                    award['name'], award['player'], player_guid,
-                    award['value'], award.get('numeric')
-                ))
-
-            webhook_logger.info(f"✅ Stored {len(awards)} awards")
-
-            # Store VS stats in database
-            for vs in vs_stats:
-                player_guid = None
-                alias_query = """
-                    SELECT guid FROM player_aliases
-                    WHERE alias = $1
-                    ORDER BY last_seen DESC LIMIT 1
-                """
-                alias_result = await self.db_adapter.fetch_one(alias_query, (vs['player'],))
-                if alias_result:
-                    player_guid = alias_result[0]
-
-                insert_query = """
-                    INSERT INTO round_vs_stats
-                    (round_id, round_date, map_name, round_number,
-                     player_name, player_guid, kills, deaths)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                """
-                await self.db_adapter.execute(insert_query, (
-                    round_id, round_date, map_name, round_number,
-                    vs['player'], player_guid, vs['kills'], vs['deaths']
-                ))
-
-            webhook_logger.info(f"✅ Stored {len(vs_stats)} VS stats")
-
-            # Mark file as processed
-            processed_query = """
-                INSERT INTO processed_endstats_files (filename, round_id, success)
-                VALUES ($1, $2, TRUE)
-            """
-            await self.db_adapter.execute(processed_query, (filename, round_id))
-
-            # Post endstats embed to production channel
-            await self.round_publisher.publish_endstats(
-                filename, endstats_data, round_id, map_name, round_number
+            await self._store_endstats_and_publish(
+                filename,
+                endstats_data,
+                round_id,
+                round_date,
+                map_name,
+                round_number,
+                webhook_logger,
             )
-
-            webhook_logger.info(f"✅ Successfully processed endstats: {filename}")
 
             # Delete the trigger message
             try:
@@ -3544,6 +4548,21 @@ class UltimateETLegacyBot(commands.Bot):
 
         # 🆕 AUTO-DETECT ACTIVE GAMING SESSION ON STARTUP
         await self.voice_session_service.check_startup_voice_state()
+
+        # 📊 Start monitoring service (server + voice history)
+        if self.monitoring_enabled:
+            try:
+                if self.monitoring_service is None:
+                    from bot.services.monitoring_service import MonitoringService
+                    self.monitoring_service = MonitoringService(
+                        self, self.db_adapter, self.config
+                    )
+                if not self._monitoring_started:
+                    await self.monitoring_service.start()
+                    self._monitoring_started = True
+                    logger.info("✅ Monitoring service started")
+            except Exception as e:
+                logger.error(f"⚠️ Monitoring service failed to start: {e}", exc_info=True)
 
     async def on_command(self, ctx):
         """Track command execution start"""

@@ -38,6 +38,8 @@ Lines starting with `#` are comments/metadata.
 # escape_time=5000
 # escape_distance=300
 # position_sample_interval=500
+# round_start_unix=1704870000
+# round_end_unix=1704870720
 ```yaml
 
 | Field | Description |
@@ -48,6 +50,8 @@ Lines starting with `#` are comments/metadata.
 | `escape_time` | Time without damage to trigger escape (ms) |
 | `escape_distance` | Distance required to confirm escape (units) |
 | `position_sample_interval` | How often positions are sampled (ms) |
+| `round_start_unix` | Round start timestamp (unix) |
+| `round_end_unix` | Round end timestamp (unix) |
 
 ---
 
@@ -232,6 +236,22 @@ Example:
 ```text
 # MOVEMENT_HEATMAP
 # grid_x;grid_y;traversal;combat;escape
+
+---
+
+## 6. OBJECTIVE_FOCUS Section (Optional)
+
+```text
+# OBJECTIVE_FOCUS
+# guid;name;team;objective;avg_distance;time_within_radius_ms;samples
+```
+
+| Field | Description |
+|-------|-------------|
+| `objective` | Most frequent nearest objective name |
+| `avg_distance` | Average distance to nearest objective (units) |
+| `time_within_radius_ms` | Time spent within objective radius (ms) |
+| `samples` | Sample count used for averages |
 ```yaml
 
 ### Fields

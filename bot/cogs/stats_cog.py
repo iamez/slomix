@@ -952,7 +952,7 @@ class StatsCog(commands.Cog, name="Stats"):
             name="🖥️ **Server Control** (10)",
             value=(
                 "`!server_status` `!server_start` `!server_stop`\n"
-                "`!server_restart` `!maps` `!addmap`\n"
+                "`!server_restart` `!list_maps` `!addmap`\n"
                 "`!changemap` `!rcon` `!kick` `!say`"
             ),
             inline=True,
@@ -1275,7 +1275,7 @@ class StatsCog(commands.Cog, name="Stats"):
             inline=False,
         )
         embed.add_field(
-            name="`!maps`",
+            name="`!list_maps`",
             value="List available maps\n└ Aliases: `!map_list`, `!listmaps`",
             inline=False,
         )

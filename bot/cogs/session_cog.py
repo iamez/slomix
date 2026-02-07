@@ -192,9 +192,98 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     await self.view_handlers.show_maps_view(ctx, target_date, sessions, session_ids, session_ids_str, player_count)
                 return
 
-            # Graphs view - TODO: Implement show_graphs_view in SessionViewHandlers
+            # Graphs view (handled by SessionGraphGenerator)
             if subcommand and subcommand.lower() in ("graphs", "graph"):
-                await ctx.send("📊 Graphs view is not yet implemented for date-specific sessions.\n💡 Try `!last_session graphs` for the most recent session's graphs.")
+                result = await self.graph_generator.generate_performance_graphs(
+                    target_date, session_ids, session_ids_str
+                )
+                offense_img, defense_img, metrics_img, playstyle_img, timeline_img = result
+
+                if offense_img and defense_img and metrics_img and playstyle_img:
+                    # Image 1: Combat Stats (Offense)
+                    file1 = discord.File(
+                        offense_img,
+                        filename=f"session_{target_date}_offense.png"
+                    )
+                    embed1 = discord.Embed(
+                        title=f"COMBAT STATS (OFFENSE)  -  {target_date}",
+                        description=f"Kills/Deaths, Damage, K/D, DPM - Top players across {total_maps} maps",
+                        color=0x5865F2,
+                        timestamp=datetime.now()
+                    )
+                    embed1.set_image(
+                        url=f"attachment://session_{target_date}_offense.png"
+                    )
+                    await ctx.send(embed=embed1, file=file1)
+
+                    # Image 2: Combat Stats (Defense/Support)
+                    file2 = discord.File(
+                        defense_img,
+                        filename=f"session_{target_date}_defense.png"
+                    )
+                    embed2 = discord.Embed(
+                        title=f"COMBAT STATS (DEFENSE/SUPPORT)  -  {target_date}",
+                        description="Revives, Time Alive/Dead, Gibs, Headshots",
+                        color=0x57F287,
+                        timestamp=datetime.now()
+                    )
+                    embed2.set_image(
+                        url=f"attachment://session_{target_date}_defense.png"
+                    )
+                    await ctx.send(embed=embed2, file=file2)
+
+                    # Image 3: Advanced Metrics
+                    file3 = discord.File(
+                        metrics_img,
+                        filename=f"session_{target_date}_metrics.png"
+                    )
+                    embed3 = discord.Embed(
+                        title=f"ADVANCED METRICS  -  {target_date}",
+                        description="FragPotential, Damage Efficiency, Denied Playtime, Survival Rate, Useful Kills, Self Kills, Full Selfkills",
+                        color=0xE74C3C,
+                        timestamp=datetime.now()
+                    )
+                    embed3.set_image(
+                        url=f"attachment://session_{target_date}_metrics.png"
+                    )
+                    await ctx.send(embed=embed3, file=file3)
+
+                    # Image 4: Playstyle Analysis
+                    file4 = discord.File(
+                        playstyle_img,
+                        filename=f"session_{target_date}_playstyle.png"
+                    )
+                    embed4 = discord.Embed(
+                        title=f"PLAYSTYLE ANALYSIS  -  {target_date}",
+                        description="Player playstyles based on combat metrics",
+                        color=0x9B59B6,
+                        timestamp=datetime.now()
+                    )
+                    embed4.set_image(
+                        url=f"attachment://session_{target_date}_playstyle.png"
+                    )
+                    await ctx.send(embed=embed4, file=file4)
+
+                    # Image 5: Performance Timeline (optional)
+                    if timeline_img:
+                        file5 = discord.File(
+                            timeline_img,
+                            filename=f"session_{target_date}_timeline.png"
+                        )
+                        embed5 = discord.Embed(
+                            title=f"DPM TIMELINE  -  {target_date}",
+                            description="DPM evolution across rounds - Performance trends",
+                            color=0xF39C12,
+                            timestamp=datetime.now()
+                        )
+                        embed5.set_image(
+                            url=f"attachment://session_{target_date}_timeline.png"
+                        )
+                        await ctx.send(embed=embed5, file=file5)
+                else:
+                    await ctx.send(
+                        "Could not generate performance graphs for this session"
+                    )
                 return
 
             # Step 4: Default view - Overview (improved version of original)

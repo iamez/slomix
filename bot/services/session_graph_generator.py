@@ -4,7 +4,7 @@ Session Graph Generator - Creates beautiful performance graphs
 This service generates 5 themed graph images:
 1. Combat Stats (Offense) - Kills/Deaths grouped, Damage grouped, K/D, DPM
 2. Combat Stats (Defense/Support) - Revives grouped, Time grouped, Gibs, Headshots
-3. Advanced Metrics - FragPotential, Damage Efficiency, Denied Playtime, Survival Rate
+3. Advanced Metrics - FragPotential, Damage Efficiency, Denied Playtime, Survival Rate, Useful Kills, Self Kills, Full Selfkills
 4. Playstyle Analysis - Player Playstyles + Legend
 5. DPM Timeline - Performance evolution over rounds
 """
@@ -45,6 +45,32 @@ class SessionGraphGenerator:
     def __init__(self, db_adapter, timing_debug_service=None):
         self.db_adapter = db_adapter
         self.timing_debug_service = timing_debug_service
+
+    async def _get_player_stats_columns(self):
+        """Get columns for player_comprehensive_stats (cached)."""
+        if hasattr(self, "_player_stats_columns"):
+            return self._player_stats_columns
+
+        try:
+            cols = await self.db_adapter.fetch_all("PRAGMA table_info(player_comprehensive_stats)")
+            self._player_stats_columns = {c[1] for c in cols}
+            return self._player_stats_columns
+        except Exception:
+            pass
+
+        try:
+            cols = await self.db_adapter.fetch_all(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'player_comprehensive_stats'
+                """
+            )
+            self._player_stats_columns = {c[0] for c in cols}
+            return self._player_stats_columns
+        except Exception:
+            self._player_stats_columns = set()
+            return self._player_stats_columns
 
     def _style_axis(self, ax, title: str, title_size: int = 13):
         """Apply beautiful dark theme styling"""
@@ -109,11 +135,13 @@ class SessionGraphGenerator:
             - Gibs
             - Headshots
             
-        Image 3: ADVANCED METRICS - 2x2
+        Image 3: ADVANCED METRICS - 3x2
             - FragPotential
             - Damage Efficiency
             - Denied Playtime
             - Survival Rate
+            - Useful Kills (UK)
+            - Self Kills vs Full Selfkills
             
         Image 4: PLAYSTYLE ANALYSIS
             - Player Playstyles (horizontal bars - full width)
@@ -127,6 +155,13 @@ class SessionGraphGenerator:
         """
         try:
             # Comprehensive query with all needed stats
+            columns = await self._get_player_stats_columns()
+            has_full_selfkills = "full_selfkills" in columns
+            full_selfkills_select = (
+                "SUM(COALESCE(p.full_selfkills, 0)) as full_selfkills"
+                if has_full_selfkills
+                else "0 as full_selfkills"
+            )
             placeholders = ','.join(['?' for _ in session_ids])
             query = f"""
                 SELECT MAX(p.player_name) as player_name,
@@ -153,6 +188,9 @@ class SessionGraphGenerator:
                        SUM(p.gibs) as gibs,
                        SUM(COALESCE(p.headshots, p.headshot_kills, 0)) as headshots,
                        SUM(COALESCE(p.denied_playtime, 0)) as denied_playtime,
+                       SUM(COALESCE(p.most_useful_kills, 0)) as useful_kills,
+                       SUM(COALESCE(p.self_kills, 0)) as self_kills,
+                       {full_selfkills_select},
                        p.player_guid,
                        COUNT(DISTINCT p.round_id) as rounds_played
                 FROM player_comprehensive_stats p
@@ -170,7 +208,7 @@ class SessionGraphGenerator:
 
             # Extract all data arrays (keep full names for matching)
             # Handle None names - use player_guid as fallback
-            names = [(p[0] or p[13] or f"Player_{i}") for i, p in enumerate(top_players)]
+            names = [(p[0] or p[16] or f"Player_{i}") for i, p in enumerate(top_players)]
             display_names = [str(n)[:12] for n in names]
             kills = [p[1] or 0 for p in top_players]
             deaths = [p[2] or 0 for p in top_players]
@@ -185,7 +223,10 @@ class SessionGraphGenerator:
             gibs = [p[10] or 0 for p in top_players]
             headshots = [p[11] or 0 for p in top_players]
             denied_playtime_sec = [p[12] or 0 for p in top_players]
-            rounds_played = [p[14] or 1 for p in top_players]
+            useful_kills = [p[13] or 0 for p in top_players]
+            self_kills = [p[14] or 0 for p in top_players]
+            full_selfkills = [p[15] or 0 for p in top_players]
+            rounds_played = [p[17] or 1 for p in top_players]
             
             # Calculate denied playtime as percentage of total time played
             denied_playtime_pct = [
@@ -249,7 +290,8 @@ class SessionGraphGenerator:
                 fp = FragPotentialCalculator.calculate_frag_potential(
                     damage_given=damage_given[i],
                     time_played_seconds=time_played_sec[i],
-                    time_dead_ratio=time_dead_ratio_calc
+                    time_dead_ratio=time_dead_ratio_calc,
+                    time_dead_minutes=time_dead_minutes[i]
                 )
                 frag_potentials.append(fp)
 
@@ -262,6 +304,7 @@ class SessionGraphGenerator:
                     damage_received=damage_received[i],
                     time_played_seconds=time_played_sec[i],
                     time_dead_ratio=time_dead_ratio_calc,
+                    time_dead_minutes=time_dead_minutes[i],
                     revives_given=revives_given[i],
                     headshot_kills=headshots[i],
                     objectives_completed=0,
@@ -414,9 +457,9 @@ class SessionGraphGenerator:
             plt.close(fig2)
 
             # ═══════════════════════════════════════════════════════════════
-            # IMAGE 3: ADVANCED METRICS - 2x2
+            # IMAGE 3: ADVANCED METRICS - 3x2
             # ═══════════════════════════════════════════════════════════════
-            fig3, axes3 = plt.subplots(2, 2, figsize=(14, 10))
+            fig3, axes3 = plt.subplots(3, 2, figsize=(14, 14))
             fig3.patch.set_facecolor(self.COLORS['bg_dark'])
             fig3.suptitle(
                 f"ADVANCED METRICS  -  {latest_date}",
@@ -480,6 +523,30 @@ class SessionGraphGenerator:
             axes3[1, 1].set_xticks(x)
             axes3[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
             self._add_bar_labels(axes3[1, 1], bars, survival_rate, fmt="{:.0f}%")
+
+            # Useful Kills (UK)
+            bars = axes3[2, 0].bar(x, useful_kills, color=self.COLORS['teal'],
+                                    edgecolor='white', linewidth=0.5)
+            self._style_axis(axes3[2, 0], "USEFUL KILLS (UK)")
+            axes3[2, 0].set_xticks(x)
+            axes3[2, 0].set_xticklabels(display_names, rotation=45, ha="right")
+            self._add_bar_labels(axes3[2, 0], bars, useful_kills)
+
+            # Self Kills vs Full Selfkills
+            bar_width = 0.35
+            bars1 = axes3[2, 1].bar(x - bar_width/2, self_kills, bar_width,
+                                     color=self.COLORS['gray'], label='Self Kills',
+                                     edgecolor='white', linewidth=0.5)
+            bars2 = axes3[2, 1].bar(x + bar_width/2, full_selfkills, bar_width,
+                                     color=self.COLORS['red'], label='Full Selfkills',
+                                     edgecolor='white', linewidth=0.5)
+            self._style_axis(axes3[2, 1], "SELF KILLS vs FULL SELFKILLS")
+            axes3[2, 1].set_xticks(x)
+            axes3[2, 1].set_xticklabels(display_names, rotation=45, ha="right")
+            axes3[2, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                               edgecolor='white', labelcolor='white')
+            self._add_grouped_bar_labels(axes3[2, 1], bars1, bars2,
+                                         self_kills, full_selfkills)
 
             plt.tight_layout(rect=(0, 0, 1, 0.96))
             buf3 = io.BytesIO()

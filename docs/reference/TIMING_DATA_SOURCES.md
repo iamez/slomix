@@ -14,6 +14,28 @@ This document clarifies the different sources of timing data in the Slomix syste
 
 ---
 
+## Spawn Tracking (v1.6.0+)
+
+**Script:** `stats_discord_webhook.lua` (Slomix custom)
+
+**Purpose:** Independent dead-time validation using death→spawn intervals.
+
+**What is captured (per player, per round):**
+- `spawn_count`
+- `death_count`
+- `dead_seconds` (sum of death→spawn gaps, plus end-of-round tail if still dead)
+- `avg_respawn_seconds`
+- `max_respawn_seconds`
+
+**Storage:**
+| Location | Type |
+|----------|------|
+| `gametime-*.json` | `meta.spawn_stats` (full per-player list) |
+| `lua_spawn_stats` | DB table (ingested by bot) |
+
+**Note:** This does **not** replace `time_dead_minutes` from stats files; it provides a
+second source to validate or identify mismatches.
+
 ## Stats File Timing (oksii lua / c0rnp0rn)
 
 **Script:** `oksii-game-stats-web.lua` (runs on game server, writes JSON stats)

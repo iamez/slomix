@@ -71,6 +71,8 @@ class PlayerMetrics:
     # Time stats (in seconds)
     time_played_seconds: int
     time_dead_ratio: float  # Percentage (0-100)
+    time_dead_seconds: float = 0.0
+    time_dead_minutes: float = 0.0
     
     # Calculated time
     time_alive_seconds: float = 0.0
@@ -99,8 +101,25 @@ class PlayerMetrics:
     
     def calculate_metrics(self):
         """Calculate all derived metrics"""
-        # Time alive calculation
-        time_dead_seconds = (self.time_dead_ratio / 100.0) * self.time_played_seconds
+        # Time alive calculation (prefer raw minutes/seconds over ratio)
+        time_dead_seconds = 0.0
+        if self.time_dead_seconds and self.time_dead_seconds > 0:
+            time_dead_seconds = float(self.time_dead_seconds)
+        elif self.time_dead_minutes and self.time_dead_minutes > 0:
+            time_dead_seconds = float(self.time_dead_minutes) * 60.0
+        elif self.time_dead_ratio and self.time_played_seconds > 0:
+            time_dead_seconds = (self.time_dead_ratio / 100.0) * self.time_played_seconds
+
+        # Clamp to sane bounds
+        if time_dead_seconds < 0:
+            time_dead_seconds = 0.0
+        if self.time_played_seconds > 0 and time_dead_seconds > self.time_played_seconds:
+            time_dead_seconds = float(self.time_played_seconds)
+
+        # If we had raw dead time, recompute ratio for consistency
+        if self.time_played_seconds > 0 and (self.time_dead_seconds or self.time_dead_minutes):
+            self.time_dead_ratio = (time_dead_seconds / self.time_played_seconds) * 100.0
+
         self.time_alive_seconds = max(1, self.time_played_seconds - time_dead_seconds)
         
         # FragPotential: DPM while alive
@@ -162,7 +181,9 @@ class FragPotentialCalculator:
         cls,
         damage_given: int,
         time_played_seconds: int,
-        time_dead_ratio: float
+        time_dead_ratio: float = 0.0,
+        time_dead_seconds: float = None,
+        time_dead_minutes: float = None,
     ) -> float:
         """
         Calculate FragPotential for a player
@@ -178,14 +199,29 @@ class FragPotentialCalculator:
         if time_played_seconds <= 0:
             return 0.0
         
-        # Validate time_dead_ratio - game server can report buggy values > 100%
-        # If ratio is invalid (> 100%) or extremely high (> 95%), return 0
-        # because we can't calculate meaningful FP with < 5% alive time
-        if time_dead_ratio > 95 or time_dead_ratio < 0:
-            return 0.0
-        
+        # Prefer raw dead time when available (minutes/seconds)
+        td_seconds = None
+        if time_dead_seconds is not None and time_dead_seconds > 0:
+            td_seconds = float(time_dead_seconds)
+        elif time_dead_minutes is not None and time_dead_minutes > 0:
+            td_seconds = float(time_dead_minutes) * 60.0
+
+        # Fall back to ratio when raw values aren't provided
+        if td_seconds is None:
+            # Validate time_dead_ratio - game server can report buggy values > 100%
+            # If ratio is invalid (> 100%) or extremely high (> 95%), return 0
+            # because we can't calculate meaningful FP with < 5% alive time
+            if time_dead_ratio > 95 or time_dead_ratio < 0:
+                return 0.0
+            td_seconds = (time_dead_ratio / 100.0) * time_played_seconds
+
+        if td_seconds < 0:
+            td_seconds = 0.0
+        if td_seconds > time_played_seconds and time_played_seconds > 0:
+            td_seconds = float(time_played_seconds)
+
         # Calculate time alive
-        time_dead_seconds = (time_dead_ratio / 100.0) * time_played_seconds
+        time_dead_seconds = td_seconds
         time_alive_seconds = max(1, time_played_seconds - time_dead_seconds)
         
         # FragPotential = DPM while alive
@@ -354,7 +390,7 @@ class FragPotentialCalculator:
                 SUM(p.damage_given) as damage_given,
                 SUM(p.damage_received) as damage_received,
                 SUM(p.time_played_seconds) as time_played,
-                AVG(p.time_dead_ratio) as time_dead_ratio,
+                SUM(COALESCE(p.time_dead_minutes, 0)) as time_dead_minutes,
                 SUM(p.revives_given) as revives,
                 SUM(p.headshot_kills) as headshots,
                 SUM(p.objectives_completed) as obj_completed,
@@ -384,6 +420,15 @@ class FragPotentialCalculator:
         # Build PlayerMetrics for each player
         players = []
         for row in rows:
+            time_played_seconds = row[6] or 0
+            time_dead_minutes = row[7] or 0
+            time_dead_seconds = time_dead_minutes * 60.0
+            time_dead_ratio = (
+                (time_dead_seconds / time_played_seconds) * 100.0
+                if time_played_seconds > 0
+                else 0.0
+            )
+
             metrics = PlayerMetrics(
                 player_name=row[0] or "Unknown",
                 player_guid=row[1] or "",
@@ -391,8 +436,10 @@ class FragPotentialCalculator:
                 deaths=row[3] or 0,
                 damage_given=row[4] or 0,
                 damage_received=row[5] or 0,
-                time_played_seconds=row[6] or 0,
-                time_dead_ratio=row[7] or 0.0,
+                time_played_seconds=time_played_seconds,
+                time_dead_ratio=time_dead_ratio,
+                time_dead_seconds=time_dead_seconds,
+                time_dead_minutes=time_dead_minutes,
                 revives_given=row[8] or 0,
                 headshot_kills=row[9] or 0,
                 objectives_completed=row[10] or 0,
