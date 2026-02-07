@@ -67,15 +67,20 @@ class AnalyticsCog(commands.Cog):
             return
 
         async with ctx.typing():
-            guid = await self._resolve_player_guid(player)
-            if not guid:
-                await ctx.send(f"Could not find player: {player}")
-                return
+            try:
+                guid = await self._resolve_player_guid(player)
+                if not guid:
+                    await ctx.send(f"Could not find player: {player}")
+                    return
 
-            stats = await self.analytics.get_consistency_score(guid)
+                stats = await self.analytics.get_consistency_score(guid)
 
-            if not stats:
-                await ctx.send(f"Not enough data for {player} (need 10+ rounds)")
+                if not stats:
+                    await ctx.send(f"Not enough data for {player} (need 10+ rounds)")
+                    return
+            except Exception as e:
+                logger.error(f"Error in consistency command: {e}", exc_info=True)
+                await ctx.send(f"Error analyzing consistency: {e}")
                 return
 
             # Color based on consistency
@@ -102,7 +107,7 @@ class AnalyticsCog(commands.Cog):
 
             await ctx.send(embed=embed)
 
-    @commands.command(name="map_stats", aliases=["maps", "mapstats"])
+    @commands.command(name="map_stats", aliases=["mapstats"])
     @is_public_channel()
     async def map_stats_command(self, ctx, *, player: str = None):
         """
@@ -117,15 +122,20 @@ class AnalyticsCog(commands.Cog):
             return
 
         async with ctx.typing():
-            guid = await self._resolve_player_guid(player)
-            if not guid:
-                await ctx.send(f"Could not find player: {player}")
-                return
+            try:
+                guid = await self._resolve_player_guid(player)
+                if not guid:
+                    await ctx.send(f"Could not find player: {player}")
+                    return
 
-            stats = await self.analytics.get_map_affinity(guid)
+                stats = await self.analytics.get_map_affinity(guid)
 
-            if not stats:
-                await ctx.send(f"Not enough map data for {player}")
+                if not stats:
+                    await ctx.send(f"Not enough map data for {player}")
+                    return
+            except Exception as e:
+                logger.error(f"Error in map_stats command: {e}", exc_info=True)
+                await ctx.send(f"Error analyzing map stats: {e}")
                 return
 
             embed = discord.Embed(
@@ -162,15 +172,20 @@ class AnalyticsCog(commands.Cog):
             return
 
         async with ctx.typing():
-            guid = await self._resolve_player_guid(player)
-            if not guid:
-                await ctx.send(f"Could not find player: {player}")
-                return
+            try:
+                guid = await self._resolve_player_guid(player)
+                if not guid:
+                    await ctx.send(f"Could not find player: {player}")
+                    return
 
-            stats = await self.analytics.get_playstyle_preference(guid)
+                stats = await self.analytics.get_playstyle_preference(guid)
 
-            if not stats:
-                await ctx.send(f"Not enough data for {player} (need 10+ rounds)")
+                if not stats:
+                    await ctx.send(f"Not enough data for {player} (need 10+ rounds)")
+                    return
+            except Exception as e:
+                logger.error(f"Error in playstyle command: {e}", exc_info=True)
+                await ctx.send(f"Error analyzing playstyle: {e}")
                 return
 
             # Color based on preference
@@ -208,25 +223,30 @@ class AnalyticsCog(commands.Cog):
         Usage: !awards
         """
         async with ctx.typing():
-            # Get latest session
-            from bot.services.session_data_service import SessionDataService
-            data_service = SessionDataService(self.bot.db_adapter, None)
+            try:
+                # Get latest session
+                from bot.services.session_data_service import SessionDataService
+                data_service = SessionDataService(self.bot.db_adapter, None)
 
-            latest_date = await data_service.get_latest_session_date()
-            if not latest_date:
-                await ctx.send("No sessions found")
-                return
+                latest_date = await data_service.get_latest_session_date()
+                if not latest_date:
+                    await ctx.send("No sessions found")
+                    return
 
-            _, session_ids, _, _ = await data_service.fetch_session_data(latest_date)
+                _, session_ids, _, _ = await data_service.fetch_session_data(latest_date)
 
-            if not session_ids:
-                await ctx.send("No rounds found for latest session")
-                return
+                if not session_ids:
+                    await ctx.send("No rounds found for latest session")
+                    return
 
-            awards = await self.analytics.get_session_fun_awards(session_ids)
+                awards = await self.analytics.get_session_fun_awards(session_ids)
 
-            if not awards:
-                await ctx.send("No awards earned this session")
+                if not awards:
+                    await ctx.send("No awards earned this session")
+                    return
+            except Exception as e:
+                logger.error(f"Error in awards command: {e}", exc_info=True)
+                await ctx.send(f"Error generating awards: {e}")
                 return
 
             embed = discord.Embed(
@@ -252,31 +272,36 @@ class AnalyticsCog(commands.Cog):
             return
 
         async with ctx.typing():
-            guid = await self._resolve_player_guid(player)
-            if not guid:
-                await ctx.send(f"Could not find player: {player}")
-                return
+            try:
+                guid = await self._resolve_player_guid(player)
+                if not guid:
+                    await ctx.send(f"Could not find player: {player}")
+                    return
 
-            # Get latest gaming session for this player
-            query = """
-                SELECT DISTINCT r.gaming_session_id
-                FROM player_comprehensive_stats p
-                JOIN rounds r ON p.round_id = r.id
-                WHERE p.player_guid = $1
-                ORDER BY r.gaming_session_id DESC
-                LIMIT 1
-            """
-            result = await self.bot.db_adapter.fetch_one(query, (guid,))
+                # Get latest gaming session for this player
+                query = """
+                    SELECT DISTINCT r.gaming_session_id
+                    FROM player_comprehensive_stats p
+                    JOIN rounds r ON p.round_id = r.id
+                    WHERE p.player_guid = $1
+                    ORDER BY r.gaming_session_id DESC
+                    LIMIT 1
+                """
+                result = await self.bot.db_adapter.fetch_one(query, (guid,))
 
-            if not result:
-                await ctx.send(f"No session data for {player}")
-                return
+                if not result:
+                    await ctx.send(f"No session data for {player}")
+                    return
 
-            gaming_session_id = result[0]
-            stats = await self.analytics.get_session_fatigue(guid, gaming_session_id)
+                gaming_session_id = result[0]
+                stats = await self.analytics.get_session_fatigue(guid, gaming_session_id)
 
-            if not stats:
-                await ctx.send(f"Not enough rounds in session for fatigue analysis (need 6+)")
+                if not stats:
+                    await ctx.send(f"Not enough rounds in session for fatigue analysis (need 6+)")
+                    return
+            except Exception as e:
+                logger.error(f"Error in fatigue command: {e}", exc_info=True)
+                await ctx.send(f"Error analyzing fatigue: {e}")
                 return
 
             # Color based on trend

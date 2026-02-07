@@ -38,11 +38,23 @@ class SessionEmbedBuilder:
         team_2_score: int,
         hardcoded_teams: bool,
         scoring_result: Optional[Dict] = None,
-        player_badges: Optional[Dict[str, str]] = None
+        player_badges: Optional[Dict[str, str]] = None,
+        full_selfkills_available: bool = True,
+        bot_session_summary: Optional[Dict[str, Any]] = None
     ) -> discord.Embed:
         """Build main session overview embed with all players and match score."""
         # Build description with match score
         desc = f"**{player_count} players** • **{rounds_played} rounds** • **Maps**: {maps_played}"
+
+        # Optional bot-only / mixed session label
+        if bot_session_summary:
+            bot_rounds = bot_session_summary.get("bot_rounds", 0)
+            total_rounds = bot_session_summary.get("total_rounds", 0)
+            bot_only = bot_session_summary.get("bot_only", False)
+            if bot_only and total_rounds > 0:
+                desc += f"\n🤖 **BOT-ONLY SESSION** • Rounds: {bot_rounds}/{total_rounds}"
+            elif bot_rounds > 0 and total_rounds > 0:
+                desc += f"\n🤖 **Mixed Session** • Bot rounds: {bot_rounds}/{total_rounds}"
         if hardcoded_teams and team_1_score + team_2_score > 0:
             if team_1_score == team_2_score:
                 desc += f"\n\n🤝 **Match Result: {team_1_score} - {team_2_score} (PERFECT TIE)**"
@@ -54,6 +66,13 @@ class SessionEmbedBuilder:
                 desc += "\n\n**📊 Map Breakdown:**"
                 for map_result in scoring_result['maps']:
                     map_name = map_result.get('map', 'Unknown')
+                    counted = map_result.get('counted', True)
+                    note = map_result.get('note') or map_result.get('description', '').strip()
+
+                    if not counted:
+                        reason = note or "Not counted"
+                        desc += f"\n⚪ `{map_name}`: {reason}"
+                        continue
 
                     # Support both old format (team1_points) and new format (team_a_points)
                     t1_pts = map_result.get('team_a_points', map_result.get('team1_points', 0))
@@ -103,6 +122,8 @@ class SessionEmbedBuilder:
                 total_gibs, total_revives_given, total_times_revived, total_damage_received, total_damage_given = player[12:17]
                 total_useful_kills, total_double_kills, total_triple_kills, total_quad_kills = player[17:21]
                 total_multi_kills, total_mega_kills = player[21:23]
+                total_self_kills = player[23] if len(player) > 23 else 0
+                total_full_selfkills = player[24] if len(player) > 24 else 0
 
                 # Handle NULL values
                 kills = kills or 0
@@ -205,7 +226,8 @@ class SessionEmbedBuilder:
 
                 # Line 3: Support/meta stats (UK, revives, times, multikills)
                 field_text += (
-                    f"   {total_useful_kills} UK • {total_revives_given}↑/{total_times_revived}↓ • "
+                    f"   {total_useful_kills} UK • {total_self_kills} SK • {total_full_selfkills} FSK • "
+                    f"{total_revives_given}↑/{total_times_revived}↓ • "
                     f"⏱{time_display} 💀{time_dead_display}({dead_pct:.0f}%) ⏳{time_denied_display}({denied_pct:.0f}%){multikills_display}\n\n"
                 )
             
@@ -217,7 +239,10 @@ class SessionEmbedBuilder:
             
             embed.add_field(name=field_name, value=field_text.rstrip(), inline=False)
 
-        embed.set_footer(text=f"Round: {latest_date}")
+        footer = f"Round: {latest_date}"
+        if not full_selfkills_available:
+            footer += " • FSK unavailable (missing column)"
+        embed.set_footer(text=footer)
         return embed
 
     def _build_endstats_section(

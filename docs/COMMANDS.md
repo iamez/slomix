@@ -4,6 +4,28 @@ This document lists the Discord bot commands found in the repository, their alia
 
 ---
 
+## Analytics cog (`bot/cogs/analytics_cog.py`) - NEW v1.0.6
+
+| Command | Aliases | Description |
+|---|---|---|
+| `consistency` | `reliable`, `variance` | Show player's performance reliability score (0-100) |
+| `map_stats` | `mapstats` | Show player's performance by map vs their baseline |
+| `playstyle` | `style`, `role` | Analyze attack vs defense preference |
+| `awards` | `fun_stats`, `funstats` | Show fun awards for latest session (zombie, glass cannon, etc.) |
+| `fatigue` | (none) | Show if player fatigued during their latest session |
+
+---
+
+## Matchup cog (`bot/cogs/matchup_cog.py`) - NEW v1.0.6
+
+| Command | Aliases | Description |
+|---|---|---|
+| `matchup` | `vs`, `headtohead`, `h2h` | Show matchup stats between two lineups |
+| `duo_perf` | `duoperf`, `pair_stats` | Show performance when two players are on same team |
+| `nemesis` | (none) | Show which opponent counters a player most |
+
+---
+
 ## Core commands (defined in `bot/ultimate_bot.py`)
 
 | Command | Aliases | Description |
@@ -51,7 +73,7 @@ This document lists the Discord bot commands found in the repository, their alia
 | `server_start` | `start`, `srv_start` | Start the game server |
 | `server_stop` | `stop`, `srv_stop` | Stop the server |
 | `server_restart` | `restart`, `srv_restart` | Restart the server |
-| `map_list` | `maps`, `listmaps` | List available maps |
+| `list_maps` | `map_list`, `listmaps` | List available maps |
 | `map_add` | `addmap`, `upload_map` | Upload/add a map |
 | `map_change` | `changemap`, `map` | Change current map |
 | `map_delete` | `deletemap`, `remove_map` | Delete a map |

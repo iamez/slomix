@@ -234,7 +234,7 @@ class PlayerAnalyticsService:
         """
         try:
             query = """
-                SELECT player_name, map_name,
+                SELECT MAX(player_name) as player_name, map_name,
                        AVG(dpm) as avg_dpm,
                        COUNT(*) as rounds,
                        SUM(kills) as total_kills,
@@ -244,7 +244,7 @@ class PlayerAnalyticsService:
                   AND round_date >= (CURRENT_DATE - $2 * INTERVAL '1 day')::text
                   AND round_number IN (1, 2)
                   AND time_played_seconds > 60
-                GROUP BY player_name, map_name
+                GROUP BY player_guid, map_name
                 HAVING COUNT(*) >= $3
                 ORDER BY avg_dpm DESC
             """
@@ -281,13 +281,15 @@ class PlayerAnalyticsService:
 
                 delta_percent = ((avg_dpm - overall_dpm) / overall_dpm * 100) if overall_dpm > 0 else 0
 
+                kills_val = int(kills or 0)
+                deaths_val = int(deaths or 0)
                 stats.map_stats[map_name] = {
                     'dpm': avg_dpm,
                     'delta_percent': delta_percent,
                     'rounds': int(rounds),
-                    'kills': int(kills or 0),
-                    'deaths': int(deaths or 0),
-                    'kd': int(kills or 0) / int(deaths) if deaths else int(kills or 0)
+                    'kills': kills_val,
+                    'deaths': deaths_val,
+                    'kd': kills_val / max(deaths_val, 1)  # Consistent float return
                 }
 
                 if delta_percent > best_delta:
@@ -547,6 +549,7 @@ class PlayerAnalyticsService:
             awards = []
 
             # Convert to dicts for easier processing
+            # Each row: guid, name, revived, revives, gibs, hs_kills, hs, planted, defused, spree, useful, kills, deaths, dpm, damage, received
             players = []
             for row in rows:
                 players.append({
@@ -567,6 +570,11 @@ class PlayerAnalyticsService:
                     'damage': int(row[14] or 0),
                     'received': int(row[15] or 0)
                 })
+
+            # Safety check: need at least 1 player for awards
+            if not players:
+                logger.debug("No qualifying players for awards (all <120s played)")
+                return []
 
             # 1. Zombie Mode - Most times revived
             zombie = max(players, key=lambda p: p['revived'])
@@ -654,14 +662,16 @@ class PlayerAnalyticsService:
                     description=f"Best killing spree: {streaker['spree']} kills"
                 ))
 
-            # 8. Glass Cannon - High DPM but also high deaths
+            # 8. Glass Cannon - High DPM but also high deaths (dies more than kills)
             for p in players:
-                if p['deaths'] > 0:
-                    p['glass_score'] = p['dpm'] * (p['deaths'] / max(p['kills'], 1))
+                # Glass cannon = high damage output, high risk (more deaths than kills)
+                if p['deaths'] > 0 and p['kills'] > 0:
+                    death_ratio = p['deaths'] / p['kills']
+                    p['glass_score'] = p['dpm'] * death_ratio if death_ratio >= 1.0 else 0
                 else:
                     p['glass_score'] = 0
-            glass = max(players, key=lambda p: p['glass_score'])
-            if glass['dpm'] >= 150 and glass['deaths'] >= glass['kills']:
+            glass = max(players, key=lambda p: p['glass_score']) if players else None
+            if glass and glass['dpm'] >= 150 and glass['deaths'] >= glass['kills']:
                 awards.append(FunAward(
                     award_name="Glass Cannon",
                     emoji="💥",

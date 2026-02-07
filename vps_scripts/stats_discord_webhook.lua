@@ -65,7 +65,7 @@
 ]]--
 
 local modname = "stats_discord_webhook"
-local version = "1.4.2"
+local version = "1.6.0"
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -85,7 +85,23 @@ local configuration = {
     -- Delay before sending webhook (seconds)
     -- NOTE: Set to 0 because ET:Legacy reloads lua scripts during map transitions,
     -- which resets all state variables. Any delay risks losing the webhook.
-    send_delay_seconds = 0
+    send_delay_seconds = 0,
+
+    -- Optional local gametimes output (for fallback + auditing)
+    gametimes_enabled = true,
+    gametimes_dir = "/home/et/.etlegacy/legacy/gametimes",  -- absolute path to align with bot
+    gametimes_write_on_failure_only = false,
+
+    -- Spawn/death tracking (Oksii-inspired validation)
+    spawn_tracking_enabled = true,
+    spawn_check_interval_ms = 500,  -- throttle per-frame scanning
+
+    -- Curl retry behavior (borrowed from Oksii)
+    curl_connect_timeout = 2,
+    curl_max_time = 10,
+    curl_retry = 3,
+    curl_retry_delay = 1,
+    curl_retry_max_time = 15
 }
 
 -- ============================================================================
@@ -94,6 +110,7 @@ local configuration = {
 
 local round_start_unix = 0
 local round_end_unix = 0
+local round_end_ms = 0
 local pause_start_time = 0
 local pause_start_unix = 0       -- Unix timestamp when current pause started (v1.3.0)
 local total_pause_seconds = 0
@@ -103,6 +120,10 @@ local last_gamestate = -1
 local last_frame_time = 0
 local scheduled_send_time = 0
 local send_pending = false
+local round_started = false
+local intermission_handled = false
+local send_in_progress = false
+local last_sent_signature = ""
 
 -- Warmup/intermission timing (v1.2.0)
 local warmup_start_unix = 0      -- When warmup phase began
@@ -114,6 +135,12 @@ local axis_players_json = "[]"
 local allies_players_json = "[]"
 local axis_names = ""
 local allies_names = ""
+
+-- Spawn/death tracking (per round)
+local spawn_stats = {}
+local client_guid_cache = {}
+local client_name_cache = {}
+local last_spawn_check_time = 0
 
 -- Surrender vote tracking (v1.4.0)
 local surrender_vote = {
@@ -133,13 +160,12 @@ local match_score = {
 }
 
 -- ET:Legacy gamestate constants
--- NOTE: Use et.GS_* constants from the ET:Legacy API, not hardcoded values!
--- Other scripts (c0rnp0rn7.lua, endstats.lua) use et.GS_INTERMISSION etc.
--- Hardcoded values may not match the actual engine values.
-local GS_WARMUP = et.GS_WARMUP or 0
-local GS_WARMUP_COUNTDOWN = et.GS_WARMUP_COUNTDOWN or 1
-local GS_PLAYING = et.GS_PLAYING or 2
-local GS_INTERMISSION = et.GS_INTERMISSION or 3
+-- Note: et.GS_PLAYING = 0 exists in the API (confirmed in official docs)
+-- Using explicit constants for clarity and fallback safety
+local GS_WARMUP = et.GS_WARMUP or -1         -- Warmup state
+local GS_WARMUP_COUNTDOWN = et.GS_WARMUP_COUNTDOWN  -- Warmup countdown
+local GS_PLAYING = et.GS_PLAYING or 0        -- Playing state (value is 0)
+local GS_INTERMISSION = et.GS_INTERMISSION or 3  -- Intermission state
 
 -- Connection state
 local CON_CONNECTED = 2
@@ -159,11 +185,214 @@ local function log(msg)
     end
 end
 
+local last_gentity_error_time = 0
+
+local function safe_gentity_get(clientNum, field)
+    local ok, value = pcall(et.gentity_get, clientNum, field)
+    if ok then
+        return value
+    end
+    local now = (et.trap_Milliseconds and et.trap_Milliseconds()) or (os.time() * 1000)
+    if now - last_gentity_error_time > 5000 then
+        log(string.format("gentity_get failed client=%d field=%s err=%s", clientNum, field, tostring(value)))
+        last_gentity_error_time = now
+    end
+    return nil
+end
+
+local function get_max_clients()
+    local max_clients = tonumber(et.trap_Cvar_Get("sv_maxclients")) or 0
+    if max_clients <= 0 or max_clients > 64 then
+        max_clients = 64
+    end
+    return max_clients
+end
+
+local function strip_color_codes(text)
+    if not text then return "" end
+    return tostring(text):gsub("%^[0-9a-zA-Z]", "")
+end
+
+local function shell_escape(str)
+    return "'" .. tostring(str or ""):gsub("'", "'\"'\"'") .. "'"
+end
+
+local function json_escape(str)
+    return tostring(str or ""):gsub("\\", "\\\\"):gsub('"', '\\"')
+end
+
+local function get_gametimes_dir()
+    local dir = configuration.gametimes_dir or "gametimes"
+    if dir:sub(1, 1) == "/" then
+        return dir
+    end
+    local fs_basepath = et.trap_Cvar_Get("fs_basepath")
+    local fs_game = et.trap_Cvar_Get("fs_game")
+    if fs_basepath and fs_game then
+        return string.format("%s/%s/%s", fs_basepath, fs_game, dir)
+    end
+    return dir
+end
+
+local function ensure_dir(path)
+    if not path or path == "" then
+        return false
+    end
+    local ok = os.execute(string.format("mkdir -p %s", shell_escape(path)))
+    if configuration.debug then
+        log(string.format("ensure_dir: %s (ok=%s)", path, tostring(ok)))
+    end
+    return true
+end
+
+local function log_runtime_paths()
+    local fs_basepath = et.trap_Cvar_Get("fs_basepath") or ""
+    local fs_homepath = et.trap_Cvar_Get("fs_homepath") or ""
+    local fs_game = et.trap_Cvar_Get("fs_game") or ""
+    local resolved_gametimes = get_gametimes_dir()
+    log(string.format("fs_basepath=%s fs_homepath=%s fs_game=%s", fs_basepath, fs_homepath, fs_game))
+    log(string.format("gametimes_enabled=%s gametimes_dir=%s resolved=%s",
+        tostring(configuration.gametimes_enabled),
+        tostring(configuration.gametimes_dir),
+        tostring(resolved_gametimes)))
+end
+
+local function write_gametime_file(payload_json, meta)
+    if not configuration.gametimes_enabled then
+        return false
+    end
+
+    local dir = get_gametimes_dir()
+    ensure_dir(dir)
+
+    local safe_map = (meta.mapname or "unknown"):gsub("[^%w_%-]", "_")
+    local ts = (meta.round_end_unix and meta.round_end_unix > 0) and meta.round_end_unix or os.time()
+    local server_ip = et.trap_Cvar_Get("net_ip") or ""
+    local server_port = et.trap_Cvar_Get("net_port") or ""
+    local match_id = tostring(ts)
+    local filename = string.format("%s/gametime-%s-R%d-%d.json", dir, safe_map, meta.round or 0, ts)
+
+    log(string.format("Writing gametime file: %s", filename))
+    local f, err = io.open(filename, "w")
+    if not f then
+        log(string.format("Failed to write gametime file: %s", err or "unknown error"))
+        return false
+    end
+    local spawn_stats_json = meta.spawn_stats_json or "[]"
+    local meta_json = string.format(
+        '{"map":"%s","round":%d,"round_start_unix":%d,"round_end_unix":%d,"actual_duration_seconds":%d,"warmup_seconds":%d,"pause_seconds":%d,"pause_count":%d,"server_ip":"%s","server_port":"%s","match_id":"%s","spawn_stats":%s}',
+        json_escape(meta.mapname or "unknown"),
+        tonumber(meta.round or 0),
+        tonumber(meta.round_start_unix or 0),
+        tonumber(ts),
+        tonumber(meta.actual_duration_seconds or 0),
+        tonumber(meta.warmup_seconds or 0),
+        tonumber(meta.pause_seconds or 0),
+        tonumber(meta.pause_count or 0),
+        json_escape(server_ip),
+        json_escape(server_port),
+        json_escape(match_id),
+        spawn_stats_json
+    )
+    local gametime_payload = string.format('{"meta":%s,"payload":%s}', meta_json, payload_json)
+    f:write(gametime_payload)
+    f:close()
+    log(string.format("Gametime file written: %s", filename))
+    return true
+end
+
+local function execute_curl_async(payload_json)
+    if not payload_json or payload_json == "" then
+        return false, "empty payload"
+    end
+
+    local temp_file = os.tmpname() .. ".json"
+    local f, err = io.open(temp_file, "w")
+    if not f then
+        return false, "Failed to create temp file: " .. (err or "unknown")
+    end
+    f:write(payload_json)
+    f:close()
+
+    local curl_cmd = string.format(
+        "curl -s -X POST -H 'Content-Type: application/json' --data-binary @%s %s " ..
+        "--compressed --connect-timeout %d --max-time %d --retry %d --retry-delay %d --retry-max-time %d " ..
+        "> /dev/null 2>&1 &",
+        shell_escape(temp_file),
+        shell_escape(configuration.discord_webhook_url),
+        configuration.curl_connect_timeout,
+        configuration.curl_max_time,
+        configuration.curl_retry,
+        configuration.curl_retry_delay,
+        configuration.curl_retry_max_time
+    )
+
+    local ok, exit_type, exit_code = os.execute(curl_cmd)
+    os.execute(string.format("sleep 15 && rm -f %s &", shell_escape(temp_file)))
+
+    if ok ~= true and ok ~= 0 then
+        return false, string.format("curl failed (exit_type=%s exit_code=%s)", tostring(exit_type), tostring(exit_code))
+    end
+    return true, "curl started"
+end
+
 local function Info_ValueForKey(info, key)
     if not info or not key then return nil end
     local pattern = "\\" .. key .. "\\([^\\]*)"
     local value = string.match(info, pattern)
     return value
+end
+
+local function get_client_guid(clientNum)
+    local userinfo = et.trap_GetUserinfo(clientNum)
+    if not userinfo or userinfo == "" then
+        return ""
+    end
+
+    local guid = Info_ValueForKey(userinfo, "cl_guid")
+    if guid and guid ~= "" then
+        return guid
+    end
+
+    guid = Info_ValueForKey(userinfo, "guid")
+    if guid and guid ~= "" then
+        return guid
+    end
+
+    return ""
+end
+
+local function get_client_name(clientNum)
+    local name = safe_gentity_get(clientNum, "pers.netname") or "unknown"
+    return strip_color_codes(name)
+end
+
+local function ensure_spawn_entry(guid, name)
+    if not guid or guid == "" then return nil end
+    if not spawn_stats[guid] then
+        spawn_stats[guid] = {
+            guid = guid:sub(1, 32),
+            name = name or "unknown",
+            spawn_count = 0,
+            death_count = 0,
+            dead_time_ms = 0,
+            max_dead_ms = 0,
+            last_death_ms = 0,
+            last_spawn_ms = 0,
+        }
+    else
+        if name and name ~= "" then
+            spawn_stats[guid].name = name
+        end
+    end
+    return spawn_stats[guid]
+end
+
+local function reset_spawn_tracking()
+    spawn_stats = {}
+    client_guid_cache = {}
+    client_name_cache = {}
+    last_spawn_check_time = 0
 end
 
 -- ============================================================================
@@ -174,13 +403,14 @@ local function collect_team_data()
     local axis_players = {}
     local allies_players = {}
 
-    for clientNum = 0, 63 do  -- ET:Legacy max 64 players
+    local max_clients = get_max_clients()
+    for clientNum = 0, max_clients - 1 do
         -- Check if player is connected
-        local connected = et.gentity_get(clientNum, "pers.connected")
+        local connected = safe_gentity_get(clientNum, "pers.connected")
         if connected == CON_CONNECTED then
-            local guid = et.gentity_get(clientNum, "pers.cl_guid") or ""
-            local name = et.gentity_get(clientNum, "pers.netname") or "unknown"
-            local team = tonumber(et.gentity_get(clientNum, "sess.sessionTeam")) or 0
+            local guid = get_client_guid(clientNum)
+            local name = safe_gentity_get(clientNum, "pers.netname") or "unknown"
+            local team = tonumber(safe_gentity_get(clientNum, "sess.sessionTeam")) or 0
 
             -- Clean the name (remove color codes for cleaner display)
             local clean_name = name:gsub("%^[0-9]", "")
@@ -228,6 +458,134 @@ local function format_player_json(players)
         table.insert(parts, string.format('{"guid":"%s","name":"%s"}', safe_guid, safe_name))
     end
     return "[" .. table.concat(parts, ",") .. "]"
+end
+
+-- ============================================================================
+-- SPAWN TRACKING (Oksii-inspired)
+-- ============================================================================
+
+local function track_spawns(levelTime)
+    if not configuration.spawn_tracking_enabled then
+        return
+    end
+    if last_spawn_check_time > 0 then
+        local delta = levelTime - last_spawn_check_time
+        if delta < (configuration.spawn_check_interval_ms or 500) then
+            return
+        end
+    end
+    last_spawn_check_time = levelTime
+
+    local max_clients = get_max_clients()
+    for clientNum = 0, max_clients - 1 do
+        local connected = safe_gentity_get(clientNum, "pers.connected")
+        if connected == CON_CONNECTED then
+            local team = tonumber(safe_gentity_get(clientNum, "sess.sessionTeam")) or 0
+            if team == TEAM_AXIS or team == TEAM_ALLIES then
+                local guid = client_guid_cache[clientNum]
+                if not guid or guid == "" then
+                    guid = get_client_guid(clientNum)
+                    client_guid_cache[clientNum] = guid
+                end
+                if guid and guid ~= "" then
+                    local name = client_name_cache[clientNum]
+                    if not name or name == "" then
+                        name = get_client_name(clientNum)
+                        client_name_cache[clientNum] = name
+                    end
+                    local entry = ensure_spawn_entry(guid, name)
+                    if entry then
+                        local spawn_ms = tonumber(safe_gentity_get(clientNum, "pers.lastSpawnTime")) or 0
+                        if spawn_ms > 0 and spawn_ms ~= entry.last_spawn_ms then
+                            entry.spawn_count = entry.spawn_count + 1
+                            if entry.last_death_ms > 0 and spawn_ms >= entry.last_death_ms then
+                                local dead_ms = spawn_ms - entry.last_death_ms
+                                if dead_ms >= 0 then
+                                    entry.dead_time_ms = entry.dead_time_ms + dead_ms
+                                    if dead_ms > (entry.max_dead_ms or 0) then
+                                        entry.max_dead_ms = dead_ms
+                                    end
+                                end
+                                entry.last_death_ms = 0
+                            end
+                            entry.last_spawn_ms = spawn_ms
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function build_spawn_stats()
+    local list = {}
+    local total_spawns = 0
+    local total_deaths = 0
+    local total_dead_seconds = 0
+    local max_respawn_seconds = 0
+    local tracked = 0
+
+    for guid, entry in pairs(spawn_stats) do
+        if entry.spawn_count > 0 or entry.death_count > 0 then
+            tracked = tracked + 1
+            local dead_ms = entry.dead_time_ms or 0
+            if entry.last_death_ms and entry.last_death_ms > 0 and round_end_ms > entry.last_death_ms then
+                dead_ms = dead_ms + (round_end_ms - entry.last_death_ms)
+            end
+            local dead_seconds = math.floor(dead_ms / 1000)
+            local avg_respawn = 0
+            if entry.death_count and entry.death_count > 0 then
+                avg_respawn = math.floor(dead_seconds / entry.death_count)
+            end
+            local max_respawn = math.floor((entry.max_dead_ms or 0) / 1000)
+
+            total_spawns = total_spawns + (entry.spawn_count or 0)
+            total_deaths = total_deaths + (entry.death_count or 0)
+            total_dead_seconds = total_dead_seconds + dead_seconds
+            if max_respawn > max_respawn_seconds then
+                max_respawn_seconds = max_respawn
+            end
+
+            table.insert(list, {
+                guid = entry.guid,
+                name = entry.name or "unknown",
+                spawns = entry.spawn_count or 0,
+                deaths = entry.death_count or 0,
+                dead_seconds = dead_seconds,
+                avg_respawn = avg_respawn,
+                max_respawn = max_respawn
+            })
+        end
+    end
+
+    local avg_respawn_seconds = 0
+    if total_deaths > 0 then
+        avg_respawn_seconds = math.floor(total_dead_seconds / total_deaths)
+    end
+
+    local summary = string.format("Players:%d | Spawns:%d | AvgRespawn:%ds | MaxRespawn:%ds",
+        tracked, total_spawns, avg_respawn_seconds, max_respawn_seconds)
+
+    -- Build JSON array
+    if #list == 0 then
+        return "[]", summary
+    end
+
+    local parts = {}
+    for _, s in ipairs(list) do
+        table.insert(parts, string.format(
+            '{"guid":"%s","name":"%s","spawns":%d,"deaths":%d,"dead_seconds":%d,"avg_respawn":%d,"max_respawn":%d}',
+            json_escape(s.guid),
+            json_escape(s.name),
+            s.spawns,
+            s.deaths,
+            s.dead_seconds,
+            s.avg_respawn,
+            s.max_respawn
+        ))
+    end
+
+    return "[" .. table.concat(parts, ",") .. "]", summary
 end
 
 local function format_pause_events_json()
@@ -391,17 +749,40 @@ local function send_webhook()
         return
     end
 
+    if send_in_progress then
+        log("Webhook send already in progress, skipping")
+        return
+    end
+    send_in_progress = true
+
     local mapname = get_mapname()
     local round = get_current_round()
     local winner = get_winner_team()
     local defender = get_defender_team()
     local actual_duration = round_end_unix - round_start_unix - total_pause_seconds
+    if actual_duration < 0 then
+        actual_duration = 0
+    end
     local end_reason = get_end_reason()
     local time_limit = get_time_limit()
     local surrendering_team = get_surrender_team()
 
+    -- Deduplicate sends (same map/round/end_time)
+    local signature = nil
+    if round_end_unix and round_end_unix > 0 then
+        signature = string.format("%s:%d:%d", mapname, round, round_end_unix)
+        if signature == last_sent_signature then
+            log(string.format("Duplicate webhook detected (%s), skipping", signature))
+            send_in_progress = false
+            return
+        end
+    end
+
     -- Update match score based on winner
     update_match_score(winner)
+
+    -- Spawn tracking summary + JSON (per-player)
+    local spawn_stats_json, spawn_summary = build_spawn_stats()
 
     -- Build the Discord embed JSON
     -- Using embed fields for structured data that the bot can parse
@@ -425,7 +806,7 @@ local function send_webhook()
         "content": "STATS_READY",
         "embeds": [{
             "title": "Round Complete: %s R%d",
-            "description": "**Timing Legend:**\n• Playtime = actual gameplay (pauses excluded)\n• Warmup = waiting before round\n• Wall-clock = WarmupStart→RoundEnd",
+            "description": "Timing: Playtime (no pauses) · Warmup · Wall-clock",
             "color": 3447003,
             "fields": [
                 {"name": "Map", "value": "%s", "inline": true},
@@ -438,7 +819,6 @@ local function send_webhook()
                 {"name": "Lua_EndReason", "value": "%s", "inline": true},
                 {"name": "Lua_Warmup", "value": "%d sec", "inline": true},
                 {"name": "Lua_WarmupStart", "value": "%d", "inline": true},
-                {"name": "Lua_WarmupEnd", "value": "%d", "inline": true},
                 {"name": "Lua_RoundStart", "value": "%d", "inline": true},
                 {"name": "Lua_RoundEnd", "value": "%d", "inline": true},
                 {"name": "Lua_SurrenderTeam", "value": "%d", "inline": true},
@@ -446,11 +826,10 @@ local function send_webhook()
                 {"name": "Lua_SurrenderCallerName", "value": "%s", "inline": true},
                 {"name": "Lua_AxisScore", "value": "%d", "inline": true},
                 {"name": "Lua_AlliesScore", "value": "%d", "inline": true},
-                {"name": "Axis", "value": "%s", "inline": false},
-                {"name": "Allies", "value": "%s", "inline": false},
                 {"name": "Axis_JSON", "value": "%s", "inline": false},
                 {"name": "Allies_JSON", "value": "%s", "inline": false},
-                {"name": "Lua_Pauses_JSON", "value": "%s", "inline": false}
+                {"name": "Lua_Pauses_JSON", "value": "%s", "inline": false},
+                {"name": "Lua_SpawnSummary", "value": "%s", "inline": false}
             ],
             "footer": {"text": "Slomix Lua Webhook v%s"}
         }]
@@ -460,28 +839,18 @@ local function send_webhook()
         actual_duration, time_limit,  -- second row
         pause_count, total_pause_seconds, end_reason,  -- third row
         warmup_seconds,  -- warmup duration
-        warmup_start_unix, round_start_unix,  -- WarmupStart, WarmupEnd (=RoundStart)
+        warmup_start_unix,  -- WarmupStart
         round_start_unix, round_end_unix,  -- RoundStart, RoundEnd
         surrendering_team,  -- Which team surrendered (v1.4.0)
         surrender_vote.caller_guid,  -- GUID of surrender caller (v1.4.0)
         safe_surrender_name,  -- Name of surrender caller (v1.4.0)
         match_score.axis_wins,  -- Axis round wins (v1.4.0)
         match_score.allies_wins,  -- Allies round wins (v1.4.0)
-        axis_names, allies_names,  -- human-readable team lists
         axis_players_json:gsub('"', '\\"'),  -- JSON escaped for embedding
         allies_players_json:gsub('"', '\\"'),  -- JSON escaped for embedding
         pause_events_json:gsub('"', '\\"'),  -- Pause events JSON (v1.3.0)
+        spawn_summary:gsub('"', '\\"'),
         version  -- footer
-    )
-
-    -- Escape single quotes in payload for shell command
-    payload = payload:gsub("'", "'\\''")
-
-    -- Execute curl asynchronously (& at end) to avoid blocking game server
-    local curl_cmd = string.format(
-        "curl -s -X POST -H 'Content-Type: application/json' -d '%s' '%s' > /dev/null 2>&1 &",
-        payload,
-        configuration.discord_webhook_url
     )
 
     log(string.format("Sending webhook for %s R%d (winner=%d, playtime=%ds, warmup=%ds, pauses=%d, reason=%s)",
@@ -496,8 +865,35 @@ local function send_webhook()
     end
     log(string.format("Axis: %s", axis_names))
     log(string.format("Allies: %s", allies_names))
+    log(string.format("Spawn summary: %s", spawn_summary))
 
-    os.execute(curl_cmd)
+    local ok, msg = execute_curl_async(payload)
+    if not ok then
+        log(string.format("Webhook send failed: %s", msg or "unknown error"))
+    else
+        log(string.format("Webhook send started: %s", msg or "ok"))
+    end
+
+    local wrote = false
+    if configuration.gametimes_enabled and (not configuration.gametimes_write_on_failure_only or not ok) then
+        wrote = write_gametime_file(payload, {
+            mapname = mapname,
+            round = round,
+            round_end_unix = round_end_unix,
+            round_start_unix = round_start_unix,
+            actual_duration_seconds = actual_duration,
+            warmup_seconds = warmup_seconds,
+            pause_seconds = total_pause_seconds,
+            pause_count = pause_count,
+            spawn_stats_json = spawn_stats_json
+        })
+    end
+
+    if signature and (ok or wrote) then
+        last_sent_signature = signature
+    end
+
+    send_in_progress = false
 
     et.G_Print(string.format("[%s] Sent round notification: %s R%d (Axis: %d, Allies: %d players) Score: %d-%d\n",
         modname, mapname, round,
@@ -534,6 +930,7 @@ local function handle_gamestate_change(new_gamestate)
     -- Round started (transition to PLAYING)
     if new_gamestate == GS_PLAYING and old_gamestate ~= GS_PLAYING then
         round_start_unix = os.time()
+        round_end_ms = 0
 
         -- Check for new map and reset score if needed (v1.4.0)
         reset_match_score_if_new_map()
@@ -555,38 +952,13 @@ local function handle_gamestate_change(new_gamestate)
         allies_players_json = "[]"
         axis_names = ""
         allies_names = ""
+        reset_spawn_tracking()
         reset_surrender_vote()   -- Reset surrender vote for new round (v1.4.0)
         log(string.format("Round started at %d", round_start_unix))
     end
 
-    -- Round ended (transition to INTERMISSION)
-    -- This is the CRITICAL moment - captures accurate end time even on surrender!
-    if new_gamestate == GS_INTERMISSION and old_gamestate == GS_PLAYING then
-        round_end_unix = os.time()
-        log(string.format("Round ended at %d (duration: %d sec)",
-            round_end_unix, round_end_unix - round_start_unix))
-
-        -- Collect team data NOW before players disconnect
-        local axis, allies = collect_team_data()
-        axis_players_json = format_player_json(axis)
-        allies_players_json = format_player_json(allies)
-        axis_names = format_player_names(axis)
-        allies_names = format_player_names(allies)
-
-        log(string.format("Teams captured - Axis: %d, Allies: %d", #axis, #allies))
-
-        -- Send webhook immediately or schedule for later
-        -- NOTE: Immediate send (delay=0) recommended because ET:Legacy reloads
-        -- lua scripts during map transitions, resetting all state variables.
-        if configuration.send_delay_seconds <= 0 then
-            -- Send immediately
-            send_webhook()
-        else
-            -- Schedule for later (may not work if scripts reload)
-            scheduled_send_time = et.trap_Milliseconds() + (configuration.send_delay_seconds * 1000)
-            send_pending = true
-        end
-    end
+    -- Round end is handled in et_RunFrame with an intermission flag
+    -- (mirrors c0rnp0rn7.lua pattern for reliability).
 end
 
 -- ============================================================================
@@ -642,6 +1014,7 @@ function et_InitGame(levelTime, randomSeed, restart)
     last_gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
     last_frame_time = levelTime
     map_load_unix = os.time()
+    reset_spawn_tracking()
 
     -- Check for new map and reset score if needed (v1.4.0)
     reset_match_score_if_new_map()
@@ -662,6 +1035,8 @@ function et_InitGame(levelTime, randomSeed, restart)
     et.G_Print(string.format("[%s] v%s loaded - Discord webhook with surrender tracking\n",
         modname, version))
 
+    log_runtime_paths()
+
     if configuration.discord_webhook_url == "REPLACE_WITH_YOUR_WEBHOOK_URL" then
         et.G_Print(string.format("[%s] WARNING: Webhook URL not configured!\n", modname))
     end
@@ -672,9 +1047,68 @@ function et_RunFrame(levelTime)
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate"))
     handle_gamestate_change(gamestate)
 
+    -- Fallback: detect round start reliably (even if gamestate transition is missed)
+    if gamestate == GS_PLAYING and not round_started then
+        round_start_unix = os.time()
+        round_end_ms = 0
+
+        if warmup_start_unix > 0 then
+            warmup_seconds = round_start_unix - warmup_start_unix
+            log(string.format("Warmup ended, duration: %d sec (fallback)", warmup_seconds))
+        else
+            warmup_seconds = 0
+        end
+
+        total_pause_seconds = 0
+        pause_count = 0
+        pause_events = {}
+        pause_start_unix = 0
+        send_pending = false
+        axis_players_json = "[]"
+        allies_players_json = "[]"
+        axis_names = ""
+        allies_names = ""
+        reset_spawn_tracking()
+        reset_surrender_vote()
+        intermission_handled = false
+        round_started = true
+        log(string.format("Round started at %d (fallback)", round_start_unix))
+    elseif gamestate ~= GS_PLAYING then
+        round_started = false
+    end
+
+    -- Round ended (intermission reached) - use same pattern as c0rnp0rn7.lua
+    if gamestate == GS_INTERMISSION and not intermission_handled then
+        round_end_unix = os.time()
+        round_end_ms = et.trap_Milliseconds()
+        log(string.format("Round ended at %d (duration: %d sec)",
+            round_end_unix, round_end_unix - round_start_unix))
+
+        -- Collect team data NOW before players disconnect
+        local axis, allies = collect_team_data()
+        axis_players_json = format_player_json(axis)
+        allies_players_json = format_player_json(allies)
+        axis_names = format_player_names(axis)
+        allies_names = format_player_names(allies)
+
+        log(string.format("Teams captured - Axis: %d, Allies: %d", #axis, #allies))
+
+        if configuration.send_delay_seconds <= 0 then
+            send_webhook()
+        else
+            scheduled_send_time = et.trap_Milliseconds() + (configuration.send_delay_seconds * 1000)
+            send_pending = true
+        end
+
+        intermission_handled = true
+    elseif gamestate ~= GS_INTERMISSION then
+        intermission_handled = false
+    end
+
     -- Detect pauses (optional feature)
     if gamestate == GS_PLAYING then
         detect_pause(levelTime)
+        track_spawns(levelTime)
     end
 
     -- Send scheduled webhook
@@ -682,6 +1116,55 @@ function et_RunFrame(levelTime)
         send_pending = false
         send_webhook()
     end
+end
+
+-- ============================================================================
+-- SPAWN TRACKING CALLBACKS
+-- ============================================================================
+
+function et_ClientUserinfoChanged(clientNum)
+    if not configuration.spawn_tracking_enabled then
+        return 0
+    end
+    local guid = get_client_guid(clientNum)
+    if not guid or guid == "" then
+        return 0
+    end
+    local name = get_client_name(clientNum)
+    client_guid_cache[clientNum] = guid
+    client_name_cache[clientNum] = name
+    ensure_spawn_entry(guid, name)
+    return 0
+end
+
+function et_Obituary(target, attacker, meansOfDeath)
+    if not configuration.spawn_tracking_enabled then
+        return 0
+    end
+    local connected = safe_gentity_get(target, "pers.connected")
+    if connected ~= CON_CONNECTED then
+        return 0
+    end
+    local team = tonumber(safe_gentity_get(target, "sess.sessionTeam")) or 0
+    if team ~= TEAM_AXIS and team ~= TEAM_ALLIES then
+        return 0
+    end
+    local guid = client_guid_cache[target] or get_client_guid(target)
+    if not guid or guid == "" then
+        return 0
+    end
+    client_guid_cache[target] = guid
+    local name = client_name_cache[target] or get_client_name(target)
+    client_name_cache[target] = name
+    local entry = ensure_spawn_entry(guid, name)
+    if entry then
+        local death_ms = et.trap_Milliseconds()
+        if death_ms and death_ms > 0 then
+            entry.death_count = entry.death_count + 1
+            entry.last_death_ms = death_ms
+        end
+    end
+    return 0
 end
 
 -- ============================================================================
@@ -700,15 +1183,15 @@ function et_ClientCommand(clientNum, command)
         if vote_type == "surrender" then
             -- Validate client before accessing gentity fields
             -- This prevents errors when spectators or invalid clients call votes
-            local connected = et.gentity_get(clientNum, "pers.connected")
+            local connected = safe_gentity_get(clientNum, "pers.connected")
             if connected ~= CON_CONNECTED then
                 return 0  -- Invalid client, skip tracking
             end
 
             -- Capture who called the surrender vote
-            local guid = et.gentity_get(clientNum, "pers.cl_guid") or ""
-            local name = et.gentity_get(clientNum, "pers.netname") or "unknown"
-            local team = tonumber(et.gentity_get(clientNum, "sess.sessionTeam")) or 0
+            local guid = get_client_guid(clientNum)
+            local name = safe_gentity_get(clientNum, "pers.netname") or "unknown"
+            local team = tonumber(safe_gentity_get(clientNum, "sess.sessionTeam")) or 0
 
             -- Clean the name (remove color codes)
             local clean_name = name:gsub("%^[0-9]", "")

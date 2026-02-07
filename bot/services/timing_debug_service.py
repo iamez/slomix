@@ -11,9 +11,10 @@ are working correctly by comparing against the "official" stats file timing.
 """
 
 import discord
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
-from typing import List, Optional, Tuple
+import re
+from typing import List, Optional, Tuple, Any, Dict
 
 logger = logging.getLogger('TimingDebugService')
 
@@ -63,17 +64,202 @@ class TimingDebugService:
             return None
 
         try:
-            parts = time_str.strip().split(':')
+            text = str(time_str).strip()
+            parts = text.split(':')
             if len(parts) == 2:
-                # MM:SS format
                 return int(parts[0]) * 60 + int(parts[1])
-            elif len(parts) == 3:
-                # HH:MM:SS format
+            if len(parts) == 3:
                 return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
-            else:
-                return None
+            if '.' in text:
+                minutes = float(text)
+                return int(minutes * 60)
+            return int(float(text))
         except (ValueError, AttributeError):
             return None
+
+    def _parse_round_datetime(self, round_date: str, round_time: str) -> Optional[datetime]:
+        """Parse round date/time from multiple known formats."""
+        date_str = str(round_date).strip() if round_date is not None else ""
+        time_str = str(round_time).strip() if round_time is not None else ""
+
+        if re.match(r"^\d{4}-\d{2}-\d{2}-\d{6}$", date_str):
+            try:
+                return datetime.strptime(date_str, "%Y-%m-%d-%H%M%S")
+            except ValueError:
+                pass
+
+        if re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$", date_str):
+            try:
+                return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                pass
+
+        if time_str and ":" in time_str:
+            try:
+                return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                pass
+
+        if time_str and re.match(r"^\d{6}$", time_str):
+            try:
+                return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H%M%S")
+            except ValueError:
+                pass
+
+        return None
+
+    async def _fetch_lua_data(
+        self,
+        round_id: Optional[int],
+        map_name: str,
+        round_number: int,
+        round_date: str,
+        round_time: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Fetch Lua webhook timing data with fuzzy match.
+        """
+        if round_id:
+            direct_query = """
+                SELECT id, match_id, round_number, map_name,
+                       round_start_unix, round_end_unix, actual_duration_seconds,
+                       total_pause_seconds, pause_count, end_reason,
+                       winner_team, defender_team, time_limit_minutes,
+                       lua_warmup_seconds, lua_warmup_start_unix,
+                       lua_pause_events,
+                       surrender_team, surrender_caller_name,
+                       axis_score, allies_score,
+                       captured_at
+                FROM lua_round_teams
+                WHERE round_id = $1
+                ORDER BY captured_at DESC
+                LIMIT 1
+            """
+            row = await self.db_adapter.fetch_one(direct_query, (round_id,))
+            if row:
+                (id_, match_id, rn, mn, start_unix, end_unix, duration,
+                 pause_sec, pause_count, end_reason, winner, defender, timelimit,
+                 warmup_sec, warmup_start, pause_events,
+                 surr_team, surr_caller, axis_score, allies_score, captured_at) = row
+
+                return {
+                    'lua_id': id_,
+                    'match_id': match_id,
+                    'round_number': rn,
+                    'map_name': mn,
+                    'round_start_unix': start_unix,
+                    'round_end_unix': end_unix,
+                    'lua_duration_seconds': duration,
+                    'total_pause_seconds': pause_sec or 0,
+                    'pause_count': pause_count or 0,
+                    'end_reason': end_reason,
+                    'winner_team': winner,
+                    'defender_team': defender,
+                    'time_limit_minutes': timelimit,
+                    'warmup_seconds': warmup_sec or 0,
+                    'warmup_start_unix': warmup_start,
+                    'surrender_team': surr_team,
+                    'surrender_caller': surr_caller,
+                    'axis_score': axis_score,
+                    'allies_score': allies_score,
+                    'captured_at': captured_at,
+                    'match_confidence': 'direct'
+                }
+
+        round_datetime = self._parse_round_datetime(round_date, round_time)
+        if not round_datetime:
+            logger.warning(f"Could not parse round datetime: {round_date} {round_time}")
+            return None
+
+        query = """
+            SELECT id, match_id, round_number, map_name,
+                   round_start_unix, round_end_unix, actual_duration_seconds,
+                   total_pause_seconds, pause_count, end_reason,
+                   winner_team, defender_team, time_limit_minutes,
+                   lua_warmup_seconds, lua_warmup_start_unix,
+                   lua_pause_events,
+                   surrender_team, surrender_caller_name,
+                   axis_score, allies_score,
+                   captured_at
+            FROM lua_round_teams
+            WHERE map_name = $1
+              AND round_number = $2
+            ORDER BY captured_at DESC
+            LIMIT 5
+        """
+
+        try:
+            rows = await self.db_adapter.fetch_all(query, (map_name, round_number))
+        except Exception as e:
+            logger.warning(f"Could not query lua_round_teams: {e}")
+            return None
+
+        if not rows:
+            return None
+
+        best_match = None
+        min_diff = timedelta(hours=24)
+
+        for row in rows:
+            (id_, match_id, rn, mn, start_unix, end_unix, duration,
+             pause_sec, pause_count, end_reason, winner, defender, timelimit,
+             warmup_sec, warmup_start, pause_events,
+             surr_team, surr_caller, axis_score, allies_score, captured_at) = row
+
+            candidates = []
+            if end_unix:
+                try:
+                    candidates.append(datetime.fromtimestamp(end_unix))
+                except (OSError, ValueError, TypeError):
+                    pass
+            if start_unix:
+                try:
+                    candidates.append(datetime.fromtimestamp(start_unix))
+                except (OSError, ValueError, TypeError):
+                    pass
+            if captured_at:
+                if isinstance(captured_at, str):
+                    try:
+                        captured_dt = datetime.fromisoformat(captured_at.replace('Z', '+00:00'))
+                        candidates.append(captured_dt.replace(tzinfo=None))
+                    except ValueError:
+                        pass
+                else:
+                    candidates.append(captured_at.replace(tzinfo=None) if captured_at.tzinfo else captured_at)
+
+            if not candidates:
+                continue
+
+            best_candidate = min(candidates, key=lambda dt: abs(dt - round_datetime))
+            time_diff = abs(best_candidate - round_datetime)
+
+            if time_diff < min_diff and time_diff < timedelta(minutes=30):
+                min_diff = time_diff
+                best_match = {
+                    'lua_id': id_,
+                    'match_id': match_id,
+                    'round_number': rn,
+                    'map_name': mn,
+                    'round_start_unix': start_unix,
+                    'round_end_unix': end_unix,
+                    'lua_duration_seconds': duration,
+                    'total_pause_seconds': pause_sec or 0,
+                    'pause_count': pause_count or 0,
+                    'end_reason': end_reason,
+                    'winner_team': winner,
+                    'defender_team': defender,
+                    'time_limit_minutes': timelimit,
+                    'warmup_seconds': warmup_sec or 0,
+                    'warmup_start_unix': warmup_start,
+                    'surrender_team': surr_team,
+                    'surrender_caller': surr_caller,
+                    'axis_score': axis_score,
+                    'allies_score': allies_score,
+                    'captured_at': captured_at,
+                    'match_confidence': 'high' if time_diff < timedelta(minutes=10) else 'medium'
+                }
+
+        return best_match
 
     def _get_diff_color(self, diff_seconds: Optional[int]) -> discord.Color:
         """
@@ -129,27 +315,18 @@ class TimingDebugService:
             return
 
         try:
-            # Query both tables for timing data
+            # Query rounds table (Lua matched separately to avoid match_id mismatch)
             query = """
                 SELECT
                     r.id,
                     r.match_id,
                     r.round_number,
                     r.map_name,
+                    r.round_date,
+                    r.round_time,
                     r.time_limit,
-                    r.actual_time,
-                    l.actual_duration_seconds as lua_duration,
-                    l.total_pause_seconds as lua_pauses,
-                    l.pause_count as lua_pause_count,
-                    l.end_reason as lua_end_reason,
-                    l.surrender_team,
-                    l.surrender_caller_name,
-                    l.axis_score,
-                    l.allies_score
+                    r.actual_time
                 FROM rounds r
-                LEFT JOIN lua_round_teams l
-                    ON r.match_id = l.match_id
-                    AND r.round_number = l.round_number
                 WHERE r.id = $1
             """
             row = await self.db_adapter.fetch_one(query, (round_id,))
@@ -159,9 +336,22 @@ class TimingDebugService:
                 return
 
             # Unpack results
-            _, db_match_id, db_round_num, map_name, time_limit, actual_time, \
-                lua_duration, lua_pauses, lua_pause_count, lua_end_reason, \
-                surrender_team, surrender_caller_name, axis_score, allies_score = row
+            _, db_match_id, db_round_num, map_name, round_date, round_time, time_limit, actual_time = row
+
+            lua_data = await self._fetch_lua_data(round_id, map_name, db_round_num, round_date, round_time)
+            lua_duration = lua_data.get('lua_duration_seconds') if lua_data else None
+            lua_start_unix = lua_data.get('round_start_unix') if lua_data else None
+            lua_end_unix = lua_data.get('round_end_unix') if lua_data else None
+            lua_pauses = lua_data.get('total_pause_seconds') if lua_data else None
+            lua_pause_count = lua_data.get('pause_count') if lua_data else None
+            lua_end_reason = lua_data.get('end_reason') if lua_data else None
+            surrender_team = lua_data.get('surrender_team') if lua_data else None
+            surrender_caller_name = lua_data.get('surrender_caller') if lua_data else None
+            axis_score = lua_data.get('axis_score') if lua_data else None
+            allies_score = lua_data.get('allies_score') if lua_data else None
+            lua_warmup_seconds = lua_data.get('warmup_seconds') if lua_data else None
+            lua_warmup_start_unix = lua_data.get('warmup_start_unix') if lua_data else None
+            match_confidence = lua_data.get('match_confidence') if lua_data else None
 
             # Parse stats file time to seconds
             stats_duration = self._parse_time_to_seconds(actual_time)
@@ -170,6 +360,13 @@ class TimingDebugService:
             diff_seconds = None
             if stats_duration is not None and lua_duration is not None:
                 diff_seconds = abs(stats_duration - lua_duration)
+
+            # Filename timestamp (round_date/round_time) as 3rd timing anchor
+            file_dt = self._parse_round_datetime(round_date, round_time)
+            file_unix = int(file_dt.timestamp()) if file_dt else None
+            file_vs_lua_diff = None
+            if file_unix and lua_end_unix:
+                file_vs_lua_diff = abs(file_unix - int(lua_end_unix))
 
             # Determine embed color
             embed_color = self._get_diff_color(diff_seconds)
@@ -204,8 +401,19 @@ class TimingDebugService:
                 elif lua_pauses == 0:
                     lua_value += f"\n**Pauses:** None"
 
+                if lua_start_unix and lua_end_unix:
+                    wall_clock = int(lua_end_unix) - int(lua_start_unix)
+                    lua_value += f"\n**Wall-clock:** {wall_clock} sec (start→end)"
+                if lua_warmup_start_unix and lua_end_unix:
+                    warmup_wall = int(lua_end_unix) - int(lua_warmup_start_unix)
+                    lua_value += f"\n**Wall-clock+Warmup:** {warmup_wall} sec"
+                if lua_warmup_seconds:
+                    lua_value += f"\n**Warmup:** {lua_warmup_seconds} sec"
+
                 if lua_end_reason:
                     lua_value += f"\n**End Reason:** {lua_end_reason}"
+                if match_confidence:
+                    lua_value += f"\n**Match:** {match_confidence}"
 
                 # Surrender info (v1.4.0)
                 if surrender_team and surrender_team > 0:
@@ -223,6 +431,21 @@ class TimingDebugService:
             embed.add_field(
                 name="🔧 Lua Webhook (ours)",
                 value=lua_value,
+                inline=False
+            )
+
+            # Filename timestamp section (3rd source)
+            if file_dt and file_unix:
+                file_value = f"**Timestamp:** {file_dt.isoformat(sep=' ', timespec='seconds')}"
+                file_value += f"\n**Unix:** {file_unix}"
+                if file_vs_lua_diff is not None:
+                    file_value += f"\n**Diff vs Lua end:** {file_vs_lua_diff} sec"
+            else:
+                file_value = "⚠️ Could not parse round_date/round_time"
+
+            embed.add_field(
+                name="🧭 Filename Timestamp (round_date/round_time)",
+                value=file_value,
                 inline=False
             )
 
@@ -249,6 +472,11 @@ class TimingDebugService:
                     remaining_diff = diff_seconds - lua_pauses
                     if abs(remaining_diff) < 5:
                         analysis_parts.append(f"**Pauses explain diff:** ✅ ({lua_pauses}s pauses)")
+                if file_vs_lua_diff is not None:
+                    if file_vs_lua_diff < 90:
+                        analysis_parts.append("**File timestamp alignment:** ✅")
+                    else:
+                        analysis_parts.append(f"**File timestamp alignment:** ⚠️ {file_vs_lua_diff}s off")
             else:
                 if lua_duration is None:
                     analysis_parts.append("**Status:** Cannot compare - no Lua data")

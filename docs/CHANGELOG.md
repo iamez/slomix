@@ -5,7 +5,36 @@ All notable changes to the ET:Legacy Stats Bot project will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.6] - 2026-02-01
+
+### Player Analytics System (Phase 1)
+
+New commands for advanced player performance analysis:
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `!consistency <player>` | `!reliable`, `!variance` | Performance reliability score (0-100) |
+| `!map_stats <player>` | `!mapstats` | Per-map performance vs player baseline |
+| `!playstyle <player>` | `!style`, `!role` | Attack vs defense preference analysis |
+| `!awards` | `!fun_stats`, `!funstats` | Fun session awards (zombie, glass cannon, etc.) |
+| `!fatigue <player>` | - | Session performance trend (early vs late) |
+
+- New files: `bot/cogs/analytics_cog.py`, `bot/services/player_analytics_service.py`
+
+### Matchup Analytics System
+
+New commands for lineup vs lineup statistics:
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `!matchup A vs B` | `!vs`, `!h2h`, `!headtohead` | Lineup vs lineup historical stats |
+| `!duo_perf p1 p2` | `!duoperf`, `!pair_stats` | Performance when two players on same team |
+| `!nemesis <player>` | - | Which opponent counters this player most |
+
+- New files: `bot/cogs/matchup_cog.py`, `bot/services/matchup_analytics_service.py`
+- Database: `matchup_history` table with JSONB player stats
+- Auto-records matchups when session results are saved
+- Confidence levels based on sample size
 
 ### Added
 

@@ -13,6 +13,7 @@ import json
 import logging
 import sys
 import os
+from datetime import datetime, timedelta
 from typing import Dict
 
 # Add project root to path for imports
@@ -40,59 +41,177 @@ class MonitoringService:
         self.bot = bot
         self.db = db_adapter
         self.config = config
-        self.recording_task = None
+        self.server_task = None
+        self.voice_task = None
+        self.cleanup_task = None
 
         # Server config
         self.server_host = getattr(config, "server_host", "puran.hehe.si")
         self.server_port = int(getattr(config, "server_port", 27960))
-        self.record_interval = 600  # 10 minutes
+        self.server_interval = int(
+            getattr(config, "monitoring_server_interval_seconds", 300)
+        )
+        self.voice_interval = int(
+            getattr(config, "monitoring_voice_interval_seconds", 60)
+        )
+        # Data retention: delete records older than this many days (default 30)
+        self.retention_days = int(
+            getattr(config, "monitoring_retention_days", 30)
+        )
 
         logger.info(
             f"📊 Monitoring service initialized: {self.server_host}:{self.server_port}"
         )
 
     async def start(self):
-        """Start monitoring background task"""
-        if self.recording_task is None:
-            self.recording_task = asyncio.create_task(self._recording_loop())
-            logger.info(
-                f"📊 Monitoring service started (interval: {self.record_interval}s)"
+        """Start monitoring background tasks"""
+        await self._ensure_history_tables()
+        if self.server_task is None:
+            self.server_task = asyncio.create_task(self._server_loop())
+        if self.voice_task is None:
+            self.voice_task = asyncio.create_task(self._voice_loop())
+        if self.cleanup_task is None:
+            self.cleanup_task = asyncio.create_task(self._cleanup_loop())
+        logger.info(
+            "📊 Monitoring service started "
+            f"(server: {self.server_interval}s, voice: {self.voice_interval}s, "
+            f"retention: {self.retention_days} days)"
+        )
+        # Fire an immediate snapshot so history populates quickly
+        asyncio.create_task(self._record_server_status())
+        asyncio.create_task(self._record_voice_status())
+
+    async def _ensure_history_tables(self):
+        """Create history tables if they don't exist yet."""
+        try:
+            await self.db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS server_status_history (
+                    id SERIAL PRIMARY KEY,
+                    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    player_count INTEGER DEFAULT 0,
+                    max_players INTEGER DEFAULT 0,
+                    map_name TEXT,
+                    hostname TEXT,
+                    players JSONB,
+                    ping_ms INTEGER DEFAULT 0,
+                    online BOOLEAN DEFAULT FALSE
+                )
+                """
             )
+            await self.db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS voice_status_history (
+                    id SERIAL PRIMARY KEY,
+                    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    member_count INTEGER DEFAULT 0,
+                    channel_id BIGINT,
+                    channel_name TEXT,
+                    members JSONB,
+                    first_joiner_id BIGINT,
+                    first_joiner_name TEXT
+                )
+                """
+            )
+            await self.db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_server_status_history_recorded_at
+                ON server_status_history(recorded_at)
+                """
+            )
+            await self.db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_voice_status_history_recorded_at
+                ON voice_status_history(recorded_at)
+                """
+            )
+        except Exception as e:
+            logger.error(f"Failed to ensure history tables: {e}", exc_info=True)
 
     async def stop(self):
-        """Stop monitoring background task"""
-        if self.recording_task:
-            self.recording_task.cancel()
-            try:
-                await self.recording_task
-            except asyncio.CancelledError:
-                pass
-            logger.info("📊 Monitoring service stopped")
+        """Stop monitoring background tasks"""
+        for task in [self.server_task, self.voice_task, self.cleanup_task]:
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        logger.info("📊 Monitoring service stopped")
 
-    async def _recording_loop(self):
-        """Main recording loop - runs every 10 minutes"""
-        # Wait a bit before first recording (let bot fully start)
-        await asyncio.sleep(30)
-
+    async def _server_loop(self):
+        """Server status loop"""
+        await asyncio.sleep(15)
         while True:
             try:
-                # Record both server and voice status
                 await self._record_server_status()
-                await self._record_voice_status()
-
-                # Wait for next interval
-                await asyncio.sleep(self.record_interval)
-
+                await asyncio.sleep(self.server_interval)
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Monitoring loop error: {e}", exc_info=True)
-                await asyncio.sleep(60)  # Wait 1 min before retry on error
+                logger.error(f"Server monitoring loop error: {e}", exc_info=True)
+                await asyncio.sleep(60)
+
+    async def _voice_loop(self):
+        """Voice status loop"""
+        await asyncio.sleep(20)
+        while True:
+            try:
+                await self._record_voice_status()
+                await asyncio.sleep(self.voice_interval)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Voice monitoring loop error: {e}", exc_info=True)
+                await asyncio.sleep(60)
+
+    async def _cleanup_loop(self):
+        """Cleanup old history records daily"""
+        # Wait 1 hour before first cleanup (let bot stabilize)
+        await asyncio.sleep(3600)
+        while True:
+            try:
+                await self._cleanup_old_records()
+                # Run cleanup once per day
+                await asyncio.sleep(86400)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Cleanup loop error: {e}", exc_info=True)
+                await asyncio.sleep(3600)
+
+    async def _cleanup_old_records(self):
+        """Delete history records older than retention_days"""
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=self.retention_days)
+
+            # Delete old server records
+            result1 = await self.db.execute(
+                "DELETE FROM server_status_history WHERE recorded_at < $1",
+                (cutoff,)
+            )
+
+            # Delete old voice records
+            result2 = await self.db.execute(
+                "DELETE FROM voice_status_history WHERE recorded_at < $1",
+                (cutoff,)
+            )
+
+            logger.info(
+                f"📊 Cleanup: removed records older than {self.retention_days} days "
+                f"(cutoff: {cutoff.isoformat()})"
+            )
+        except Exception as e:
+            logger.error(f"Failed to cleanup old records: {e}")
 
     async def _record_server_status(self):
         """Record game server status via UDP query"""
         try:
-            status = query_game_server(self.server_host, self.server_port)
+            # Run blocking UDP query in thread pool to avoid blocking event loop
+            loop = asyncio.get_event_loop()
+            status = await loop.run_in_executor(
+                None, query_game_server, self.server_host, self.server_port
+            )
 
             await self.db.execute(
                 """

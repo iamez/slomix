@@ -4,16 +4,12 @@ Async Stopwatch Scoring Service
 Calculates Stopwatch mode scores using async PostgreSQL adapter.
 Replacement for tools/stopwatch_scoring.py (sync SQLite version).
 
-Correct Stopwatch scoring (independent round scoring):
+        Stopwatch scoring (map-winner, Superboyy-aligned):
 - Each map has two rounds with a shared time limit.
-- Round 1: Team1 attacks vs Team2 defends.
-  - If attackers complete under time limit → Team1 gets 1 point
-  - If time runs out (fullhold) → Team2 gets 1 point
-- Round 2: Team2 attacks vs Team1 defends.
-  - If attackers complete under time limit → Team2 gets 1 point
-  - If time runs out (fullhold) → Team1 gets 1 point
+        - Prefer R2 header winner side (map winner) when available.
+        - If header winner is missing, fall back to time comparison.
 
-Map score = sum of the two round results (0, 1, or 2 points per team).
+Map score = 1 point to the map winner (0-0 for tie).
 """
 
 import json
@@ -40,12 +36,16 @@ class StopwatchScoringService:
         if not time_str:
             return 0
         try:
-            if ':' in str(time_str):
-                parts = str(time_str).split(':')
+            text = str(time_str).strip()
+            if ':' in text:
+                parts = text.split(':')
                 minutes = int(parts[0])
                 seconds = int(parts[1])
                 return minutes * 60 + seconds
-            return int(float(time_str))
+            if '.' in text:
+                minutes = float(text)
+                return int(minutes * 60)
+            return int(float(text))
         except (ValueError, IndexError):
             return 0
 
@@ -56,14 +56,14 @@ class StopwatchScoringService:
         round2_actual_time: str
     ) -> Tuple[int, int, str]:
         """
-        Calculate map score using proper competitive stopwatch logic.
+        Calculate map score using map-winner scoring.
 
-        Stopwatch scoring rules:
-        - Each map awards 1 point to the winner (not per-round)
-        - R1 attackers set the benchmark time
-        - R2 attackers must beat the benchmark to win
-        - Full hold = attackers fail to complete before time limit
-        - Double full hold = 0-0, no one wins the map
+        Stopwatch scoring rules (map winner):
+        - Team1 = Round 1 attackers
+        - Team2 = Round 2 attackers
+        - If both complete, faster time wins (tie goes to Team1)
+        - If only one completes, that team wins
+        - If neither completes or time is unknown, map is a tie
 
         Args:
             round1_time_limit: Max map time (MM:SS)
@@ -79,65 +79,49 @@ class StopwatchScoringService:
         r1_sec = self.parse_time_to_seconds(round1_actual_time)
         r2_sec = self.parse_time_to_seconds(round2_actual_time)
 
-        # Determine if each team completed objectives
-        # Full hold = actual_time equals or exceeds time_limit
-        # Special case: if time_limit is 0 or not set, treat any positive time as "completed"
-        # (we can't detect fullholds without knowing the time limit)
+        # Determine completion outcomes
         if limit_sec <= 0:
-            # No time limit known - assume completed if they have any time recorded
-            r1_completed = r1_sec > 0
-            r2_completed = r2_sec > 0
+            # No time limit known - treat any positive time as completion
+            r1_attackers_succeed = r1_sec > 0
+            r2_attackers_succeed = r2_sec > 0
         else:
-            r1_completed = (r1_sec > 0) and (r1_sec < limit_sec)
-            r2_completed = (r2_sec > 0) and (r2_sec < limit_sec)
+            r1_attackers_succeed = (r1_sec > 0) and (r1_sec < limit_sec)
+            r2_attackers_succeed = (r2_sec > 0) and (r2_sec < limit_sec)
 
         team1_points = 0
         team2_points = 0
 
-        # Apply stopwatch logic
-        if r1_completed and r2_completed:
-            # Both teams completed - faster team wins
-            if r2_sec < r1_sec:
-                # R2 attackers were faster - Team 2 wins map
-                team2_points = 1
-                description = (
-                    f"R1: {round1_actual_time}, R2: {round2_actual_time} "
-                    f"(Team2 faster by {r1_sec - r2_sec}s)"
-                )
-            elif r1_sec < r2_sec:
-                # R1 attackers were faster - Team 1 wins map
+        # Map winner logic
+        if r1_attackers_succeed and r2_attackers_succeed:
+            # Both teams completed; faster time wins (tie -> Team1)
+            if r1_sec <= r2_sec:
                 team1_points = 1
-                description = (
-                    f"R1: {round1_actual_time}, R2: {round2_actual_time} "
-                    f"(Team1 faster by {r2_sec - r1_sec}s)"
+                desc = (
+                    f"Map win: R1 attackers {round1_actual_time} "
+                    f"vs {round2_actual_time}"
                 )
             else:
-                # Exact same time - tie (rare)
-                description = f"R1: {round1_actual_time}, R2: {round2_actual_time} (exact tie!)"
-
-        elif r1_completed and not r2_completed:
-            # R1 completed, R2 full hold - Team 1 wins
+                team2_points = 1
+                desc = (
+                    f"Map win: R2 attackers {round2_actual_time} "
+                    f"vs {round1_actual_time}"
+                )
+        elif r1_attackers_succeed and not r2_attackers_succeed:
             team1_points = 1
-            description = (
-                f"R1: {round1_actual_time}, R2: fullhold "
-                f"(Team1 wins - Team2 failed to beat benchmark)"
+            desc = (
+                f"Map win: R1 attackers set time {round1_actual_time} "
+                f"(R2 fullhold)"
             )
-
-        elif not r1_completed and r2_completed:
-            # R1 full hold, R2 completed - Team 2 wins
+        elif r2_attackers_succeed and not r1_attackers_succeed:
             team2_points = 1
-            description = (
-                f"R1: fullhold, R2: {round2_actual_time} "
-                f"(Team2 wins - completed after Team1 fullhold)"
+            desc = (
+                f"Map win: R2 attackers completed {round2_actual_time} "
+                f"(R1 fullhold)"
             )
-
         else:
-            # Double full hold - both teams defended successfully = 1-1
-            team1_points = 1  # Team 1 defended in R2 (fullhold)
-            team2_points = 1  # Team 2 defended in R1 (fullhold)
-            description = "Double fullhold (1-1, both teams defended)"
+            desc = "Map tie: no completion or time data"
 
-        return (team1_points, team2_points, description)
+        return (team1_points, team2_points, desc)
 
     async def calculate_session_scores(
         self,
@@ -176,7 +160,10 @@ class StopwatchScoringService:
                     FROM rounds
                     WHERE id IN ({placeholders})
                     AND round_status = 'completed'
-                    ORDER BY gaming_session_id, map_name, round_number
+                    ORDER BY gaming_session_id,
+                             round_date,
+                             CAST(REPLACE(round_time, ':', '') AS INTEGER),
+                             round_number
                 """
                 rows = await self.db.fetch_all(rounds_query, tuple(session_ids))
             else:
@@ -187,7 +174,10 @@ class StopwatchScoringService:
                     FROM rounds
                     WHERE SUBSTRING(round_date, 1, 10) = $1
                     AND round_status = 'completed'
-                    ORDER BY gaming_session_id, map_name, round_number
+                    ORDER BY gaming_session_id,
+                             round_date,
+                             CAST(REPLACE(round_time, ':', '') AS INTEGER),
+                             round_number
                 """
                 rows = await self.db.fetch_all(rounds_query, (session_date,))
 
@@ -578,10 +568,14 @@ class StopwatchScoringService:
         accurate session scores where Team A vs Team B is tracked across
         side swaps.
 
-        Stopwatch Mode Logic:
+        Stopwatch Mode Logic (map-winner):
         - Round 1: Team A attacks (as Axis), Team B defends (as Allies)
         - Round 2: Teams swap sides - Team B attacks (as Axis), Team A defends (as Allies)
-        - Map winner = faster attack time wins (or fullhold gives defender the round)
+        - Map winner by time:
+          - Both complete → faster time wins (tie goes to R1 attackers)
+          - Only one completes → that team wins
+          - Neither completes/unknown → tie
+        - Map points = 1 point to map winner (0-0 for tie)
 
         Key insight: `defender_team` in R1 tells us which SIDE defended.
         We need to map that side to persistent team using player GUIDs.
@@ -617,7 +611,10 @@ class StopwatchScoringService:
                 FROM rounds r
                 WHERE r.id IN ({placeholders})
                 AND r.round_status = 'completed'
-                ORDER BY r.gaming_session_id, r.map_name, r.round_number
+                ORDER BY r.gaming_session_id,
+                         r.round_date,
+                         CAST(REPLACE(r.round_time, ':', '') AS INTEGER),
+                         r.round_number
             """
             rows = await self.db.fetch_all(rounds_query, tuple(session_ids))
 
@@ -669,14 +666,18 @@ class StopwatchScoringService:
                             maps_dict[map_key]['round2'] = round_data
                         del pending_r1[base_key]
 
-            # Filter to complete map pairs only
+            # Separate complete and incomplete map pairs
             complete_maps = [
                 m for m in maps_dict.values()
                 if m['round1'] is not None and m['round2'] is not None
             ]
+            incomplete_maps = [
+                m for m in maps_dict.values()
+                if m['round1'] is not None and m['round2'] is None
+            ]
 
-            if not complete_maps:
-                logger.debug(f"No complete map pairs for {session_date}")
+            if not complete_maps and not incomplete_maps:
+                logger.debug(f"No map data found for {session_date}")
                 return None
 
             # For each map, determine which persistent team was attacking in R1
@@ -685,7 +686,6 @@ class StopwatchScoringService:
                 SELECT player_guid, team
                 FROM player_comprehensive_stats
                 WHERE round_id = $1
-                LIMIT 10
             """
 
             # Initialize scores
@@ -705,40 +705,140 @@ class StopwatchScoringService:
                 team_a_on_side = {1: 0, 2: 0}
                 team_b_on_side = {1: 0, 2: 0}
 
+                def _normalize_side(value):
+                    if value in (1, '1', 'Axis', 'axis'):
+                        return 1
+                    if value in (2, '2', 'Allies', 'allies'):
+                        return 2
+                    return None
+
                 for player_guid, side in r1_players:
+                    side_key = _normalize_side(side)
+                    if side_key is None:
+                        continue
                     if player_guid in team_a_guids:
-                        team_a_on_side[side] = team_a_on_side.get(side, 0) + 1
+                        team_a_on_side[side_key] = team_a_on_side.get(side_key, 0) + 1
                     elif player_guid in team_b_guids:
-                        team_b_on_side[side] = team_b_on_side.get(side, 0) + 1
+                        team_b_on_side[side_key] = team_b_on_side.get(side_key, 0) + 1
 
                 # Determine which side Team A was on in R1 (majority wins)
+                ambiguous_team_sides = False
+                team_a_r1_side = None
                 if team_a_on_side[1] > team_a_on_side[2]:
-                    team_a_r1_side = 1  # Team A was on side 1 (e.g., Axis) in R1
+                    team_a_r1_side = 1
+                elif team_a_on_side[2] > team_a_on_side[1]:
+                    team_a_r1_side = 2
                 else:
-                    team_a_r1_side = 2  # Team A was on side 2 (e.g., Allies) in R1
+                    # Tie or no Team A players: use Team B as inverse if possible
+                    if team_b_on_side[1] > team_b_on_side[2]:
+                        team_a_r1_side = 2
+                    elif team_b_on_side[2] > team_b_on_side[1]:
+                        team_a_r1_side = 1
+                    else:
+                        ambiguous_team_sides = True
+
+                def _infer_defender_side_from_winner(r1_data):
+                    """Infer defender side using winner_team + time (fallback when header is stale)."""
+                    winner_side = r1_data.get('winner_team')
+                    if winner_side not in (1, 2):
+                        return None
+
+                    limit_sec = self.parse_time_to_seconds(r1_data.get('time_limit'))
+                    actual_sec = self.parse_time_to_seconds(r1_data.get('actual_time'))
+                    if limit_sec <= 0 or actual_sec <= 0:
+                        return None
+
+                    attackers_succeed = actual_sec < limit_sec
+                    if attackers_succeed:
+                        return 2 if winner_side == 1 else 1
+                    return winner_side
 
                 # R1 attackers are NOT the defender_team side
                 # defender_team tells us which SIDE defended
-                r1_defender_side = r1.get('defender_team', 2)  # Default Allies defend
+                r1_defender_side = r1.get('defender_team', 2)
+                inferred_defender_side = _infer_defender_side_from_winner(r1)
+
+                if r1_defender_side not in (1, 2):
+                    r1_defender_side = inferred_defender_side or 2  # Default Allies defend
+                elif inferred_defender_side and inferred_defender_side != r1_defender_side:
+                    logger.warning(
+                        f"Defender side mismatch for {map_name} (R1). "
+                        f"Header={r1_defender_side}, inferred={inferred_defender_side}; "
+                        "using inferred value."
+                    )
+                    r1_defender_side = inferred_defender_side
+
+                if ambiguous_team_sides:
+                    # Cannot infer team sides reliably; skip scoring this map
+                    map_results.append({
+                        'map': map_name,
+                        'team_a_points': 0,
+                        'team_b_points': 0,
+                        'team_a_time': '',
+                        'team_b_time': '',
+                        'winner': 'tie',
+                        'emoji': '⚪',
+                        'description': 'Unscored: team sides ambiguous',
+                        'winner_side': r2.get('winner_team'),
+                        'team_a_r1_side': None,
+                        'team_a_r2_side': None,
+                        'r1_defender_side': r1.get('defender_team'),
+                        'scoring_source': 'ambiguous',
+                        'counted': False,
+                        'note': 'Unscored: team sides ambiguous'
+                    })
+                    logger.debug(
+                        "[SCORING DEBUG] %s | ambiguous sides; skipping score",
+                        map_name
+                    )
+                    continue
+
+                if team_a_r1_side is None:
+                    # Fall back using defender side if team counts were inconclusive
+                    if team_a_on_side.get(r1_defender_side, 0) > team_b_on_side.get(r1_defender_side, 0):
+                        team_a_r1_side = r1_defender_side
+                    elif team_b_on_side.get(r1_defender_side, 0) > team_a_on_side.get(r1_defender_side, 0):
+                        team_a_r1_side = 1 if r1_defender_side == 2 else 2
+                    else:
+                        # Final fallback
+                        team_a_r1_side = 1
 
                 # Was Team A attacking or defending in R1?
                 team_a_attacking_r1 = (team_a_r1_side != r1_defender_side)
 
-                # Calculate map score using stopwatch logic
-                team1_pts, team2_pts, desc = self.calculate_map_score(
-                    r1['time_limit'], r1['actual_time'], r2['actual_time']
-                )
+                team_a_pts = 0
+                team_b_pts = 0
+                desc = "Map tie: no completion or time data"
+                scoring_source = "time"
 
-                # team1_pts = R1 attackers' score, team2_pts = R2 attackers' (R1 defenders)
-                # Map back to persistent teams
-                if team_a_attacking_r1:
-                    # Team A attacked R1, so team1_pts goes to Team A
-                    team_a_pts = team1_pts
-                    team_b_pts = team2_pts
+                # Prefer header winner side from R2 (map winner in stopwatch)
+                winner_side = r2.get('winner_team')
+                if winner_side in (1, 2) and team_a_r1_side in (1, 2):
+                    team_a_r2_side = 2 if team_a_r1_side == 1 else 1
+                    if winner_side == team_a_r2_side:
+                        team_a_pts = 1
+                        desc = f"Map win: side {winner_side} (R2 winner)"
+                    else:
+                        team_b_pts = 1
+                        desc = f"Map win: side {winner_side} (R2 winner)"
+                    scoring_source = "header"
                 else:
-                    # Team B attacked R1, so team1_pts goes to Team B
-                    team_a_pts = team2_pts
-                    team_b_pts = team1_pts
+                    # Fallback to time-based scoring
+                    team1_pts, team2_pts, desc = self.calculate_map_score(
+                        r1['time_limit'], r1['actual_time'], r2['actual_time']
+                    )
+
+                    # team1_pts = R1 attackers' score, team2_pts = R2 attackers' (R1 defenders)
+                    # Map back to persistent teams
+                    if team_a_attacking_r1:
+                        # Team A attacked R1, so team1_pts goes to Team A
+                        team_a_pts = team1_pts
+                        team_b_pts = team2_pts
+                    else:
+                        # Team B attacked R1, so team1_pts goes to Team B
+                        team_a_pts = team2_pts
+                        team_b_pts = team1_pts
+                    scoring_source = "time"
 
                 team_a_maps += team_a_pts
                 team_b_maps += team_b_pts
@@ -781,7 +881,48 @@ class StopwatchScoringService:
                     'team_b_time': team_b_time,
                     'winner': winner,
                     'emoji': emoji,
-                    'description': desc
+                    'description': desc,
+                    'winner_side': winner_side,
+                    'team_a_r1_side': team_a_r1_side,
+                    'team_a_r2_side': 2 if team_a_r1_side == 1 else 1,
+                    'r1_defender_side': r1_defender_side,
+                    'scoring_source': scoring_source,
+                    'counted': True
+                })
+
+                logger.debug(
+                    "[SCORING DEBUG] %s | winner_side=%s | teamA_r1_side=%s teamA_r2_side=%s | "
+                    "r1_def=%s | teamA_pts=%s teamB_pts=%s | source=%s",
+                    map_name,
+                    winner_side,
+                    team_a_r1_side,
+                    2 if team_a_r1_side == 1 else 1,
+                    r1_defender_side,
+                    team_a_pts,
+                    team_b_pts,
+                    scoring_source
+                )
+
+            # Add incomplete maps as not-counted entries (R1 only)
+            for map_data in incomplete_maps:
+                r1 = map_data['round1']
+                map_name = map_data['map_name']
+                map_results.append({
+                    'map': map_name,
+                    'team_a_points': 0,
+                    'team_b_points': 0,
+                    'team_a_time': '',
+                    'team_b_time': '',
+                    'winner': 'tie',
+                    'emoji': '⚪',
+                    'description': 'R1 only (not counted)',
+                    'winner_side': None,
+                    'team_a_r1_side': None,
+                    'team_a_r2_side': None,
+                    'r1_defender_side': r1.get('defender_team'),
+                    'scoring_source': 'incomplete',
+                    'counted': False,
+                    'note': 'R1 only (not counted)'
                 })
 
             # Build result

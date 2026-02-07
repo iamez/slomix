@@ -40,7 +40,7 @@ class DatabaseAdapter(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, query: str, params: Optional[Tuple] = None):
+    async def execute(self, query: str, params: Optional[Tuple] = None, *extra):
         """Execute a query without returning results."""
         pass
 
@@ -181,10 +181,21 @@ class PostgreSQLAdapter(DatabaseAdapter):
         finally:
             await self.pool.release(conn)
 
-    async def execute(self, query: str, params: Optional[Tuple] = None):
+    async def execute(self, query: str, params: Optional[Tuple] = None, *extra):
         """Execute query on PostgreSQL."""
         # Translate ? placeholders to $1, $2, etc.
+        if extra:
+            if params is None:
+                params = extra
+            elif isinstance(params, (list, tuple)):
+                params = tuple(params) + tuple(extra)
+            else:
+                params = (params,) + tuple(extra)
+        elif params is not None and not isinstance(params, (list, tuple)):
+            params = (params,)
+
         query = self._translate_placeholders(query)
+        params = self._normalize_params(params)
 
         async with self.connection() as conn:
             await conn.execute(query, *(params or ()))
@@ -193,6 +204,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         """Fetch single row from PostgreSQL."""
         # Translate ? placeholders to $1, $2, etc.
         query = self._translate_placeholders(query)
+        params = self._normalize_params(params)
 
         async with self.connection() as conn:
             row = await conn.fetchrow(query, *(params or ()))
@@ -202,6 +214,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         """Fetch all rows from PostgreSQL."""
         # Translate ? placeholders to $1, $2, etc.
         query = self._translate_placeholders(query)
+        params = self._normalize_params(params)
 
         async with self.connection() as conn:
             rows = await conn.fetch(query, *(params or ()))
@@ -211,9 +224,17 @@ class PostgreSQLAdapter(DatabaseAdapter):
         """Fetch single value from PostgreSQL."""
         # Translate ? placeholders to $1, $2, etc.
         query = self._translate_placeholders(query)
+        params = self._normalize_params(params)
 
         async with self.connection() as conn:
             return await conn.fetchval(query, *(params or ()))
+
+    def _normalize_params(self, params: Optional[Tuple]) -> Optional[Tuple]:
+        """
+        Normalize query params for asyncpg.
+        Keep native date/datetime objects intact so asyncpg can bind them correctly.
+        """
+        return params
 
     def _translate_placeholders(self, query: str) -> str:
         """

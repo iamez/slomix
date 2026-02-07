@@ -401,6 +401,7 @@ class PostgreSQLDatabaseManager:
                     team_damage_received INTEGER DEFAULT 0,
                     gibs INTEGER DEFAULT 0,
                     self_kills INTEGER DEFAULT 0,
+                    full_selfkills INTEGER DEFAULT 0,
                     team_kills INTEGER DEFAULT 0,
                     team_gibs INTEGER DEFAULT 0,
                     headshot_kills INTEGER DEFAULT 0,
@@ -585,6 +586,49 @@ class PostgreSQLDatabaseManager:
                     ADD COLUMN times_seen INTEGER DEFAULT 1
                 """)
                 logger.info("   ✅ Added 'times_seen' column")
+
+            # Migration 3: Add full_selfkills column if missing
+            has_full_selfkills = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns
+                    WHERE table_name = 'player_comprehensive_stats'
+                    AND column_name = 'full_selfkills'
+                )
+            """)
+            if not has_full_selfkills:
+                logger.info("   ➕ Adding 'full_selfkills' column to player_comprehensive_stats...")
+                await conn.execute("""
+                    ALTER TABLE player_comprehensive_stats
+                    ADD COLUMN full_selfkills INTEGER DEFAULT 0
+                """)
+                logger.info("   ✅ Added 'full_selfkills' column")
+
+            # Migration 4: Add round_id to lua_round_teams if missing
+            has_lua_table = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'lua_round_teams'
+                )
+            """)
+            if has_lua_table:
+                has_round_id = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns
+                        WHERE table_name = 'lua_round_teams'
+                        AND column_name = 'round_id'
+                    )
+                """)
+                if not has_round_id:
+                    logger.info("   ➕ Adding 'round_id' column to lua_round_teams...")
+                    await conn.execute("""
+                        ALTER TABLE lua_round_teams
+                        ADD COLUMN round_id INTEGER
+                    """)
+                    await conn.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_lua_round_teams_round_id
+                        ON lua_round_teams(round_id)
+                    """)
+                    logger.info("   ✅ Added 'round_id' column to lua_round_teams")
             
             logger.info("   ✅ Schema migrations complete!")
     
@@ -796,6 +840,12 @@ class PostgreSQLDatabaseManager:
             else:
                 await self.mark_file_processed(filename, success=True, error_msg=f"WARN: {validation_msg}")
 
+            # 🆕 AUTO-TEAM ASSIGNMENT: If this is Round 1, auto-assign teams from header data
+            round_num = parsed_data.get('round_num', parsed_data.get('round_number', 0))
+            if round_num == 1:
+                logger.debug(f"🎯 Round 1 detected (round_number={round_num}), attempting auto-team assignment for {file_date}")
+                await self._auto_assign_teams_from_r1(round_id, file_date)
+
             return True, f"Processed: {player_count} players, {weapon_count} weapons{' (WITH WARNINGS)' if not validation_passed else ''}"
         
         except Exception as e:
@@ -806,7 +856,152 @@ class PostgreSQLDatabaseManager:
             log_stats_import(filename, error=error_msg, duration=duration)
             await self.mark_file_processed(filename, success=False, error_msg=error_msg)
             return False, error_msg
-    
+
+    async def _auto_assign_teams_from_r1(self, round_id: int, session_date: str) -> bool:
+        """
+        Auto-assign teams to session using Round 1 header data.
+
+        Algorithm:
+        1. Get defender_team from Round 1 (which side defended in R1)
+        2. Query all players and their team assignments (axis=1, allies=2)
+        3. Players on defender side = Team A (defenders)
+        4. Players on opposite side = Team B (attackers)
+        5. Store in session_teams table with auto-generated names
+
+        Args:
+            round_id: The Round 1 round_id
+            session_date: Session date (YYYY-MM-DD)
+
+        Returns:
+            True if teams were assigned, False if skipped/failed
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                # Get defender_team and verify this is Round 1
+                round_info = await conn.fetchrow(
+                    """
+                    SELECT defender_team, winner_team, round_number, gaming_session_id
+                    FROM rounds
+                    WHERE id = $1
+                    """,
+                    round_id
+                )
+
+                if not round_info:
+                    logger.debug(f"Round {round_id} not found for auto-team assignment")
+                    return False
+
+                # Only process Round 1
+                if round_info['round_number'] != 1:
+                    logger.debug(f"Round {round_id} is R{round_info['round_number']}, skipping auto-team")
+                    return False
+
+                defender_team = round_info['defender_team']
+                gaming_session_id = round_info['gaming_session_id']
+
+                # If defender_team is 0 (not set), skip
+                if defender_team == 0:
+                    logger.debug(f"Round {round_id} has no defender_team, skipping auto-team")
+                    return False
+
+                # Check if teams already assigned for this session
+                existing = await conn.fetchval(
+                    """
+                    SELECT COUNT(*) FROM session_teams
+                    WHERE session_start_date LIKE $1
+                    """,
+                    f"{session_date}%"
+                )
+
+                if existing > 0:
+                    logger.debug(f"Session {session_date} already has teams assigned")
+                    return False
+
+                # Query all players from R1 and their team (axis=1, allies=2)
+                players = await conn.fetch(
+                    """
+                    SELECT player_guid, player_name, team
+                    FROM player_comprehensive_stats
+                    WHERE round_id = $1
+                    ORDER BY team, player_name
+                    """,
+                    round_id
+                )
+
+                if not players:
+                    logger.debug(f"No players found for round {round_id}")
+                    return False
+
+                # Split into two teams based on defender_team
+                team_a_players = []  # Defenders in R1
+                team_b_players = []  # Attackers in R1
+
+                for player in players:
+                    if player['team'] == defender_team:
+                        team_a_players.append(player)
+                    elif player['team'] in (1, 2) and player['team'] != defender_team:
+                        team_b_players.append(player)
+                    else:
+                        # Skip spectators (team=0) or other invalid teams (team=3, etc.)
+                        logger.debug(f"Skipping non-team player {player['player_name']} (team={player['team']})")
+
+                # Need at least one player per team
+                if not team_a_players or not team_b_players:
+                    logger.warning(
+                        f"Unbalanced teams in R1 (round_id={round_id}): "
+                        f"{len(team_a_players)} defenders vs {len(team_b_players)} attackers"
+                    )
+                    return False
+
+                # Extract GUIDs and names
+                team_a_guids = [p['player_guid'] for p in team_a_players]
+                team_a_names = [p['player_name'] for p in team_a_players]
+                team_b_guids = [p['player_guid'] for p in team_b_players]
+                team_b_names = [p['player_name'] for p in team_b_players]
+
+                # Insert into session_teams
+                async with conn.transaction():
+                    # Delete any existing entries (safety)
+                    await conn.execute(
+                        """
+                        DELETE FROM session_teams
+                        WHERE session_start_date LIKE $1
+                        """,
+                        f"{session_date}%"
+                    )
+
+                    # Insert Team A (defenders)
+                    # JSONB columns require JSON strings, not Python lists
+                    import json
+                    await conn.execute(
+                        """
+                        INSERT INTO session_teams
+                        (session_start_date, map_name, team_name, player_guids, player_names, created_at)
+                        VALUES ($1, 'ALL', 'Team A', $2::jsonb, $3::jsonb, $4)
+                        """,
+                        session_date, json.dumps(team_a_guids), json.dumps(team_a_names), datetime.now()
+                    )
+
+                    # Insert Team B (attackers)
+                    await conn.execute(
+                        """
+                        INSERT INTO session_teams
+                        (session_start_date, map_name, team_name, player_guids, player_names, created_at)
+                        VALUES ($1, 'ALL', 'Team B', $2::jsonb, $3::jsonb, $4)
+                        """,
+                        session_date, json.dumps(team_b_guids), json.dumps(team_b_names), datetime.now()
+                    )
+
+                logger.info(
+                    f"✅ Auto-assigned teams for session {session_date}: "
+                    f"Team A ({len(team_a_guids)} defenders) vs Team B ({len(team_b_guids)} attackers)"
+                )
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to auto-assign teams for round {round_id}: {e}", exc_info=True)
+            return False
+
     async def _validate_round_data(self, conn, round_id: int,
                                    expected_players: int, expected_weapons: int,
                                    expected_kills: int, expected_deaths: int,
@@ -958,7 +1153,9 @@ class PostgreSQLDatabaseManager:
                     round_date = EXCLUDED.round_date,
                     round_time = EXCLUDED.round_time,
                     gaming_session_id = EXCLUDED.gaming_session_id,
-                    round_status = EXCLUDED.round_status
+                    round_status = EXCLUDED.round_status,
+                    winner_team = EXCLUDED.winner_team,
+                    defender_team = EXCLUDED.defender_team
                 RETURNING id
                 """,
                 file_date, round_time, match_id, map_name, round_number,
@@ -1135,6 +1332,45 @@ class PostgreSQLDatabaseManager:
                 # The parser already handles R2 differential calculation correctly
                 time_dead_ratio = float(obj_stats.get('time_dead_ratio', 0) or 0)
                 time_dead_minutes = float(obj_stats.get('time_dead_minutes', 0) or 0)
+
+                # 🧪 Timing validation (raw Lua minutes vs derived minutes)
+                # Note: time_minutes here is derived from time_played_seconds (round duration).
+                raw_time_minutes = float(obj_stats.get('time_played_minutes', 0) or 0)
+                if raw_time_minutes > 0:
+                    time_diff = abs(raw_time_minutes - time_minutes)
+                    if time_diff > 0.2:
+                        logger.warning(
+                            f"[TIME VALIDATION] {clean_name} time_played_minutes mismatch: "
+                            f"raw={raw_time_minutes:.2f}m vs derived={time_minutes:.2f}m "
+                            f"(diff {time_diff:.2f}m) round_id={round_id}"
+                        )
+
+                    ratio_from_raw = (time_dead_minutes / raw_time_minutes) * 100 if raw_time_minutes > 0 else 0
+                    ratio_diff = abs(ratio_from_raw - time_dead_ratio)
+                    if time_dead_ratio > 0 and ratio_diff > 5:
+                        logger.warning(
+                            f"[TIME VALIDATION] {clean_name} time_dead_ratio mismatch: "
+                            f"raw_ratio={time_dead_ratio:.1f}% vs derived={ratio_from_raw:.1f}% "
+                            f"(diff {ratio_diff:.1f}%) round_id={round_id}"
+                        )
+
+                if time_dead_minutes <= 0 and time_dead_ratio > 0:
+                    logger.warning(
+                        f"[TIME VALIDATION] {clean_name} ratio>0 but time_dead_minutes=0 "
+                        f"(ratio={time_dead_ratio:.1f}%) round_id={round_id}"
+                    )
+                if time_dead_minutes > 0 and time_dead_ratio == 0:
+                    logger.warning(
+                        f"[TIME VALIDATION] {clean_name} time_dead_minutes>0 but ratio=0 "
+                        f"(dead={time_dead_minutes:.2f}m) round_id={round_id}"
+                    )
+
+                denied_playtime = float(obj_stats.get('denied_playtime', 0) or 0)
+                if time_seconds > 0 and denied_playtime > time_seconds + 1:
+                    logger.warning(
+                        f"[TIME VALIDATION] {clean_name} denied_playtime > time_played: "
+                        f"denied={denied_playtime:.0f}s played={time_seconds:.0f}s round_id={round_id}"
+                    )
                 
                 # Sanity check: cap ratio at 100% (can't be dead longer than played)
                 if time_dead_ratio > 100.0:
@@ -1149,7 +1385,7 @@ class PostgreSQLDatabaseManager:
                         player_guid, player_name, clean_name, team,
                         kills, deaths, damage_given, damage_received,
                         team_damage_given, team_damage_received,
-                        gibs, self_kills, team_kills, team_gibs, headshot_kills, headshots,
+                        gibs, self_kills, full_selfkills, team_kills, team_gibs, headshot_kills, headshots,
                         time_played_seconds, time_played_minutes,
                         time_dead_minutes, time_dead_ratio,
                         xp, kd_ratio, dpm, efficiency,
@@ -1169,7 +1405,7 @@ class PostgreSQLDatabaseManager:
                         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
                         $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
                         $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
-                        $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52
+                        $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53
                     )
                     ON CONFLICT (round_id, player_guid) DO UPDATE SET
                         kills = EXCLUDED.kills,
@@ -1186,6 +1422,7 @@ class PostgreSQLDatabaseManager:
                     obj_stats.get('team_damage_received', 0),
                     obj_stats.get('gibs', 0),
                     obj_stats.get('self_kills', 0),
+                    obj_stats.get('full_selfkills', 0),
                     obj_stats.get('team_kills', 0),
                     obj_stats.get('team_gibs', 0),
                     obj_stats.get('headshot_kills', 0),  # ✅ TAB field 14 - actual headshot kills
@@ -1466,43 +1703,108 @@ class PostgreSQLDatabaseManager:
     async def fix_date_range(self, start_date: str, end_date: str) -> bool:
         """
         Surgical fix: Re-import specific date range
-        
+
         Deletes data in range, then re-imports those files.
-        
+
+        IMPORTANT: Deletes child records BEFORE parent records to avoid
+        foreign key constraint violations.
+
         Args:
             start_date: Start date (YYYY-MM-DD)
             end_date: End date (YYYY-MM-DD)
-        
+
         Returns:
             True if successful
         """
         logger.info("=" * 70)
         logger.info(f"🔧 DATE RANGE FIX: {start_date} to {end_date}")
         logger.info("=" * 70)
-        
+
         try:
             # Delete existing data in range
             async with self.pool.acquire() as conn:
                 async with conn.transaction():
-                    # Delete from processed_files first
-                    await conn.execute(
-                        "DELETE FROM processed_files WHERE filename >= $1 AND filename <= $2",
-                        f"{start_date}%", f"{end_date}%"
+                    # STEP 1: Get affected round IDs
+                    logger.info(f"🔍 Finding rounds in date range...")
+                    round_ids = await conn.fetch(
+                        "SELECT id FROM rounds WHERE round_date >= $1 AND round_date <= $2",
+                        start_date, end_date
                     )
-                    
-                    # Delete rounds in range (cascade will handle related data)
-                    result = await conn.execute(
+
+                    if not round_ids:
+                        logger.info("ℹ️  No rounds found in date range")
+                        return False
+
+                    ids = [r['id'] for r in round_ids]
+                    logger.info(f"📊 Found {len(ids)} rounds to delete")
+
+                    # STEP 2: Delete CHILD records first (order matters!)
+                    logger.info(f"🗑️  Deleting child records...")
+
+                    # Delete weapon stats
+                    weapon_result = await conn.execute(
+                        "DELETE FROM weapon_comprehensive_stats WHERE round_id = ANY($1)",
+                        ids
+                    )
+                    logger.info(f"   ✓ weapon_comprehensive_stats: {weapon_result}")
+
+                    # Delete player stats
+                    player_result = await conn.execute(
+                        "DELETE FROM player_comprehensive_stats WHERE round_id = ANY($1)",
+                        ids
+                    )
+                    logger.info(f"   ✓ player_comprehensive_stats: {player_result}")
+
+                    # Delete lua round teams (uses match_id instead of round_id)
+                    # Get match_ids from rounds table
+                    match_ids = await conn.fetch(
+                        "SELECT DISTINCT match_id FROM rounds WHERE id = ANY($1)",
+                        ids
+                    )
+                    if match_ids:
+                        match_id_list = [r['match_id'] for r in match_ids]
+                        lua_result = await conn.execute(
+                            "DELETE FROM lua_round_teams WHERE match_id = ANY($1)",
+                            match_id_list
+                        )
+                        logger.info(f"   ✓ lua_round_teams: {lua_result}")
+                    else:
+                        logger.info(f"   ✓ lua_round_teams: (no matches to delete)")
+
+                    # Delete round awards
+                    awards_result = await conn.execute(
+                        "DELETE FROM round_awards WHERE round_id = ANY($1)",
+                        ids
+                    )
+                    logger.info(f"   ✓ round_awards: {awards_result}")
+
+                    # STEP 3: Now safe to delete PARENT rounds
+                    logger.info(f"🗑️  Deleting parent rounds...")
+                    rounds_result = await conn.execute(
                         "DELETE FROM rounds WHERE round_date >= $1 AND round_date <= $2",
                         start_date, end_date
                     )
-                    logger.info(f"🗑️  Deleted existing data: {result}")
-            
+                    logger.info(f"   ✓ rounds: {rounds_result}")
+
+                    # STEP 4: Delete processed_files to allow re-import
+                    logger.info(f"🗑️  Clearing processed_files...")
+                    processed_result = await conn.execute(
+                        "DELETE FROM processed_files WHERE filename >= $1 AND filename <= $2",
+                        f"{start_date}%", f"{end_date}%"
+                    )
+                    logger.info(f"   ✓ processed_files: {processed_result}")
+
+                    logger.info("✅ Deletion complete!")
+
             # Re-import files in range
+            logger.info(f"📥 Re-importing files from {start_date} to {end_date}...")
             await self.import_all_files(start_date=start_date, end_date=end_date)
-            
+
+            logger.info("=" * 70)
             logger.info("✅ Date range fix complete!")
+            logger.info("=" * 70)
             return True
-            
+
         except Exception as e:
             logger.error(f"❌ Date range fix failed: {e}")
             return False

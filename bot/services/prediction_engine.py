@@ -12,6 +12,7 @@ Phase 3: Competitive Analytics
 
 import logging
 import json
+import os
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 
@@ -376,6 +377,11 @@ class PredictionEngine:
         try:
             rows = await self.db.fetch_all(query, (cutoff,))
 
+            use_results_lookup = os.getenv(
+                "ENABLE_H2H_RESULTS_LOOKUP", "false"
+            ).lower() == "true"
+            results_cache: Dict[str, Optional[Dict]] = {}
+
             # Find sessions with significant overlap
             # Group by session_date to match teams
             sessions_by_date = {}
@@ -407,11 +413,26 @@ class PredictionEngine:
                 # Need >50% overlap to count as same team
                 if overlap_1a > 0.5 and overlap_2b > 0.5:
                     # Team 1 = Team A, Team 2 = Team B
-                    # TODO: Get actual winner from session results (Phase 4)
                     total_matches += 1
+                    if use_results_lookup:
+                        winner = await self._get_session_winner_from_results(
+                            session_date, team_a_set, team_b_set, results_cache
+                        )
+                        if winner == "A":
+                            team_a_wins += 1
+                        elif winner == "B":
+                            team_b_wins += 1
                 elif overlap_1b > 0.5 and overlap_2a > 0.5:
                     # Team 1 = Team B, Team 2 = Team A
                     total_matches += 1
+                    if use_results_lookup:
+                        winner = await self._get_session_winner_from_results(
+                            session_date, team_b_set, team_a_set, results_cache
+                        )
+                        if winner == "A":
+                            team_b_wins += 1
+                        elif winner == "B":
+                            team_a_wins += 1
 
             # Not enough H2H data
             if total_matches < self.MIN_H2H_MATCHES:
@@ -425,13 +446,15 @@ class PredictionEngine:
                 }
 
             # Calculate score
-            # NOTE: Without session_results table, we can't determine winner yet
-            # This will be completed in Phase 4
-            score = 0.5  # Neutral until we have results
+            # If results lookup is disabled or unavailable, remain neutral
+            if not use_results_lookup or (team_a_wins + team_b_wins) == 0:
+                score = 0.5
+            else:
+                score = team_a_wins / max(team_a_wins + team_b_wins, 1)
 
             return {
                 'score': score,
-                'details': f'Found {total_matches} H2H matches (results tracking in Phase 4)',
+                'details': f'Found {total_matches} H2H matches',
                 'matches': total_matches,
                 'team_a_wins': team_a_wins,
                 'team_b_wins': team_b_wins,
@@ -446,6 +469,71 @@ class PredictionEngine:
                 'matches': 0,
                 'confidence': 'low'
             }
+
+    async def _get_session_winner_from_results(
+        self,
+        session_date: str,
+        team_a_set: set,
+        team_b_set: set,
+        cache: Dict[str, Optional[str]],
+    ) -> Optional[str]:
+        """
+        Resolve winner for a session_date using session_results (if available).
+
+        Returns:
+            "A" if Team A won, "B" if Team B won, None if tie/unknown.
+        """
+        if session_date in cache:
+            return cache[session_date]
+
+        try:
+            row = await self.db.fetch_one(
+                """
+                SELECT team_1_guids, team_2_guids, winning_team
+                FROM session_results
+                WHERE session_date LIKE $1
+                  AND map_name = 'ALL'
+                ORDER BY updated_at DESC NULLS LAST
+                LIMIT 1
+                """,
+                (f"{session_date}%",),
+            )
+        except Exception as e:
+            logger.debug(f"Session results lookup failed for {session_date}: {e}")
+            cache[session_date] = None
+            return None
+
+        if not row:
+            cache[session_date] = None
+            return None
+
+        team_1_guids_json, team_2_guids_json, winning_team = row
+        try:
+            team_1_guids = set(json.loads(team_1_guids_json or "[]"))
+            team_2_guids = set(json.loads(team_2_guids_json or "[]"))
+        except Exception:
+            cache[session_date] = None
+            return None
+
+        # Determine which stored team corresponds to current Team A/B
+        overlap_1a = len(team_1_guids & team_a_set) / max(len(team_a_set), 1)
+        overlap_1b = len(team_1_guids & team_b_set) / max(len(team_b_set), 1)
+
+        if overlap_1a >= overlap_1b:
+            team1_label = "A"
+            team2_label = "B"
+        else:
+            team1_label = "B"
+            team2_label = "A"
+
+        if winning_team == 1:
+            cache[session_date] = team1_label
+        elif winning_team == 2:
+            cache[session_date] = team2_label
+        else:
+            cache[session_date] = None
+
+        return cache[session_date]
 
     async def _analyze_recent_form(
         self,

@@ -14,6 +14,7 @@ across the entire session regardless of which side they play on.
 
 import json
 import logging
+import os
 from typing import Dict, List, Tuple, Optional, Set, Any
 from datetime import datetime
 from collections import defaultdict
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 class TeamManager:
     """Manages team detection, tracking, and statistics"""
 
-    def __init__(self, db_adapter):
+    def __init__(self, db_adapter, config=None):
         """
         Initialize TeamManager with async database adapter.
 
@@ -32,6 +33,63 @@ class TeamManager:
             db_adapter: DatabaseAdapter instance (supports both SQLite and PostgreSQL)
         """
         self.db = db_adapter
+        self._session_teams_columns = None
+        if config is not None:
+            self.enable_map_performance = getattr(
+                config, "enable_team_map_performance", False
+            )
+        else:
+            self.enable_map_performance = (
+                os.getenv("ENABLE_TEAM_MAP_PERFORMANCE", "false").lower() == "true"
+            )
+
+    async def _ensure_session_teams_table(self) -> None:
+        """
+        Ensure session_teams table exists (safe no-op if already present).
+        """
+        await self.db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS session_teams (
+                session_start_date TEXT NOT NULL,
+                map_name TEXT NOT NULL,
+                team_name TEXT NOT NULL,
+                player_guids TEXT,
+                player_names TEXT,
+                gaming_session_id INTEGER,
+                color INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (session_start_date, map_name, team_name)
+            )
+            """
+        )
+
+    async def _get_session_teams_columns(self) -> Set[str]:
+        """
+        Fetch session_teams column names (cached).
+        """
+        if self._session_teams_columns is not None:
+            return self._session_teams_columns
+
+        try:
+            rows = await self.db.fetch_all(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'session_teams'
+                """
+            )
+            self._session_teams_columns = {row[0] for row in rows}
+        except Exception:
+            # If schema inspection fails, fall back to minimal known columns.
+            self._session_teams_columns = {
+                "session_start_date",
+                "map_name",
+                "team_name",
+                "player_guids",
+                "player_names",
+            }
+
+        return self._session_teams_columns
 
     # =========================================================================
     # REAL-TIME TEAM TRACKING (New approach - Feb 2026)
@@ -60,6 +118,9 @@ class TeamManager:
             True if teams were created successfully
         """
         try:
+            await self._ensure_session_teams_table()
+            columns = await self._get_session_teams_columns()
+
             # Check if teams already exist for this session
             existing = await self.db.fetch_one(
                 """
@@ -121,24 +182,38 @@ class TeamManager:
 
             # Store in database
             for team_name, team_data in teams.items():
+                insert_cols = [
+                    "session_start_date",
+                    "map_name",
+                    "team_name",
+                    "player_guids",
+                    "player_names",
+                ]
+                insert_vals = [
+                    session_date,
+                    "ALL",
+                    team_name,
+                    json.dumps(team_data["guids"]),
+                    json.dumps(team_data["names"]),
+                ]
+
+                if "gaming_session_id" in columns:
+                    insert_cols.append("gaming_session_id")
+                    insert_vals.append(gaming_session_id)
+
+                placeholders = ", ".join(["?"] * len(insert_cols))
+                update_fields = ["player_guids = EXCLUDED.player_guids", "player_names = EXCLUDED.player_names"]
+                if "gaming_session_id" in columns:
+                    update_fields.append("gaming_session_id = EXCLUDED.gaming_session_id")
+
                 await self.db.execute(
-                    """
-                    INSERT INTO session_teams
-                    (session_start_date, map_name, team_name, player_guids, player_names,
-                     gaming_session_id)
-                    VALUES ($1, 'ALL', $2, $3, $4, $5)
+                    f"""
+                    INSERT INTO session_teams ({", ".join(insert_cols)})
+                    VALUES ({placeholders})
                     ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
-                        player_guids = EXCLUDED.player_guids,
-                        player_names = EXCLUDED.player_names,
-                        gaming_session_id = EXCLUDED.gaming_session_id
+                        {", ".join(update_fields)}
                     """,
-                    (
-                        session_date,
-                        team_name,
-                        json.dumps(team_data['guids']),
-                        json.dumps(team_data['names']),
-                        gaming_session_id
-                    )
+                    tuple(insert_vals)
                 )
 
             # Auto-assign random team names
@@ -182,6 +257,8 @@ class TeamManager:
             Dict of new players added: {'Team A': ['player1'], 'Team B': ['player2']}
         """
         try:
+            await self._ensure_session_teams_table()
+
             # Get existing teams
             teams_data = await self.get_session_teams(session_date, auto_detect=False)
             if not teams_data:
@@ -212,7 +289,13 @@ class TeamManager:
             # Group round players by side
             side_players = {1: [], 2: []}
             for guid, name, side in rows:
-                side_key = 1 if side in (1, '1', 'Axis', 'axis') else 2
+                if side in (1, '1', 'Axis', 'axis'):
+                    side_key = 1
+                elif side in (2, '2', 'Allies', 'allies'):
+                    side_key = 2
+                else:
+                    # Ignore spectators/unknown teams
+                    continue
                 side_players[side_key].append((guid, name))
 
             # Find which team is currently on which side
@@ -317,12 +400,12 @@ class TeamManager:
         # ALSO: Include defender_team for validation (Jan 2026)
         query = """
             SELECT p.round_id, p.team, p.player_guid, p.player_name,
-                   r.round_number, r.defender_team
+                   r.round_number, r.defender_team, r.round_date, r.round_time
             FROM player_comprehensive_stats p
             JOIN rounds r ON p.round_id = r.id
             WHERE p.round_date LIKE $1
               AND p.round_number IN (1, 2)
-            ORDER BY p.round_id, p.team
+            ORDER BY r.round_date, r.round_time, p.round_id, p.team
         """
         rows = await self.db.fetch_all(query, (f"{session_date}%",))
 
@@ -333,18 +416,20 @@ class TeamManager:
         # Organize by round_id (each map's R1/R2 is a unique round_id)
         rounds = defaultdict(lambda: {'team1': set(), 'team2': set()})
         player_names = {}  # guid -> most recent name
-        round_meta = {}  # Store metadata (round_number, defender_team) per round_id
+        round_meta = {}  # Store metadata (round_number, defender_team, round_date, round_time) per round_id
 
         # Check what team values we're getting
         team_values = set()
         for row_data in rows:
-            if len(row_data) >= 6:
-                round_id, game_team, guid, name, round_number, defender_team = row_data[0:6]
+            if len(row_data) >= 8:
+                round_id, game_team, guid, name, round_number, defender_team, round_date, round_time = row_data[0:8]
             else:
                 # Fallback for older tuple format
                 round_id, game_team, guid, name = row_data[0:4]
                 round_number = None
                 defender_team = None
+                round_date = ""
+                round_time = ""
 
             team_values.add(game_team)
             player_names[guid] = name
@@ -353,7 +438,9 @@ class TeamManager:
             if round_id not in round_meta:
                 round_meta[round_id] = {
                     'round_number': round_number,
-                    'defender_team': defender_team
+                    'defender_team': defender_team,
+                    'round_date': round_date,
+                    'round_time': round_time
                 }
 
             # Handle both integer (1/2) and possible string ('1'/'2') team values
@@ -370,9 +457,33 @@ class TeamManager:
 
         logger.info(f"Team values found in data: {team_values}, {len(rounds)} unique rounds")
         
-        # Seed from earliest round_id (first map's R1)
+        # Seed from earliest Round 1 (prefer actual Round 1 by timestamp)
         # This gives us the initial team composition before any stopwatch swaps
-        earliest_round_id = min(rounds.keys())
+        def _normalize_time(t):
+            if not t:
+                return "000000"
+            return str(t).replace(":", "").zfill(6)
+
+        r1_candidates = [
+            rid for rid, meta in round_meta.items()
+            if meta.get('round_number') == 1
+        ]
+        if r1_candidates:
+            earliest_round_id = min(
+                r1_candidates,
+                key=lambda rid: (
+                    round_meta[rid].get('round_date', ''),
+                    _normalize_time(round_meta[rid].get('round_time', ''))
+                )
+            )
+        else:
+            earliest_round_id = min(
+                rounds.keys(),
+                key=lambda rid: (
+                    round_meta.get(rid, {}).get('round_date', ''),
+                    _normalize_time(round_meta.get(rid, {}).get('round_time', ''))
+                )
+            )
         persistent_team1 = set(rounds[earliest_round_id]['team1'])
         persistent_team2 = set(rounds[earliest_round_id]['team2'])
 
@@ -490,6 +601,8 @@ class TeamManager:
         Returns:
             True if successful
         """
+        await self._ensure_session_teams_table()
+
         # Delete existing entries for this session
         await self.db.execute(
             "DELETE FROM session_teams WHERE session_start_date LIKE $1 AND map_name = 'ALL'",
@@ -540,6 +653,8 @@ class TeamManager:
         Returns:
             Team data dictionary
         """
+        await self._ensure_session_teams_table()
+
         # Try to get from database
         rows = await self.db.fetch_all(
             """
@@ -764,9 +879,77 @@ class TeamManager:
                 ...
             }
         """
-        # This will integrate with StopwatchScoring
-        # TODO: Implement
-        pass
+        if not getattr(self, "enable_map_performance", False):
+            # Feature flag: disabled by default
+            logger.info("Map performance disabled (enable_map_performance=False)")
+            return {}
+
+        try:
+            from bot.services.stopwatch_scoring_service import StopwatchScoringService
+
+            # Get round IDs for this session date
+            rows = await self.db.fetch_all(
+                """
+                SELECT id
+                FROM rounds
+                WHERE SUBSTRING(round_date, 1, 10) = $1
+                  AND round_number IN (1, 2)
+                  AND (round_status IN ('completed', 'cancelled', 'substitution') OR round_status IS NULL)
+                ORDER BY round_date, CAST(REPLACE(round_time, ':', '') AS INTEGER)
+                """,
+                (session_date,),
+            )
+
+            session_ids = [row[0] for row in rows]
+            if not session_ids:
+                return {}
+
+            # Load hardcoded teams for this session
+            team_rows = await self.db.fetch_all(
+                """
+                SELECT team_name, player_guids
+                FROM session_teams
+                WHERE SUBSTRING(session_start_date, 1, 10) = $1
+                  AND map_name = 'ALL'
+                ORDER BY team_name
+                """,
+                (session_date,),
+            )
+
+            if not team_rows or len(team_rows) < 2:
+                return {}
+
+            team_rosters = {}
+            for team_name, guids_json in team_rows:
+                team_rosters[team_name] = json.loads(guids_json) if guids_json else []
+
+            scoring_service = StopwatchScoringService(self.db)
+            scoring_result = await scoring_service.calculate_session_scores_with_teams(
+                session_date, session_ids, team_rosters
+            )
+
+            if not scoring_result or 'maps' not in scoring_result:
+                return {}
+
+            team_a_name = scoring_result.get('team_a_name', 'Team A')
+            team_b_name = scoring_result.get('team_b_name', 'Team B')
+
+            map_perf: Dict[str, Dict] = {}
+            for map_result in scoring_result['maps']:
+                map_name = map_result.get('map', 'Unknown')
+                if map_name not in map_perf:
+                    map_perf[map_name] = {
+                        team_a_name: {'points': 0},
+                        team_b_name: {'points': 0}
+                    }
+                map_perf[map_name][team_a_name]['points'] += map_result.get('team_a_points', 0)
+                map_perf[map_name][team_b_name]['points'] += map_result.get('team_b_points', 0)
+
+            return map_perf
+
+        except Exception as e:
+            logger.warning(f"Map performance calculation failed: {e}")
+            return {}
 
     # =========================================================================
     # TEAM POOL & RANDOM ASSIGNMENT
@@ -830,6 +1013,8 @@ class TeamManager:
             (team_a_name, team_b_name)
         """
         import random
+        await self._ensure_session_teams_table()
+        columns = await self._get_session_teams_columns()
 
         # Check if session already has custom team names
         if not force:
@@ -864,22 +1049,36 @@ class TeamManager:
             return (team_a_name, team_b_name)
 
         # Update the team names and colors
-        await self.db.execute(
-            """
-            UPDATE session_teams
-            SET team_name = $1, color = $2
-            WHERE session_start_date LIKE $3 AND map_name = 'ALL' AND team_name = 'Team A'
-            """,
-            (team_a_name, team_a_color, f"{session_date}%")
-        )
+        set_fields_a = ["team_name = ?"]
+        params_a = [team_a_name]
+        if "color" in columns:
+            set_fields_a.append("color = ?")
+            params_a.append(team_a_color)
+        params_a.append(f"{session_date}%")
 
         await self.db.execute(
-            """
+            f"""
             UPDATE session_teams
-            SET team_name = $1, color = $2
-            WHERE session_start_date LIKE $3 AND map_name = 'ALL' AND team_name = 'Team B'
+            SET {", ".join(set_fields_a)}
+            WHERE session_start_date LIKE ? AND map_name = 'ALL' AND team_name = 'Team A'
             """,
-            (team_b_name, team_b_color, f"{session_date}%")
+            tuple(params_a)
+        )
+
+        set_fields_b = ["team_name = ?"]
+        params_b = [team_b_name]
+        if "color" in columns:
+            set_fields_b.append("color = ?")
+            params_b.append(team_b_color)
+        params_b.append(f"{session_date}%")
+
+        await self.db.execute(
+            f"""
+            UPDATE session_teams
+            SET {", ".join(set_fields_b)}
+            WHERE session_start_date LIKE ? AND map_name = 'ALL' AND team_name = 'Team B'
+            """,
+            tuple(params_b)
         )
 
         logger.info(f"✅ Assigned random teams: {team_a_name} vs {team_b_name}")

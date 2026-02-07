@@ -110,6 +110,20 @@ class RoundPublisherService:
             db_winner_team = round_info[2] if round_info else winner_team
             db_round_outcome = round_info[3] if round_info else round_outcome
 
+            # If Lua override metadata is available, prefer corrected playtime for display
+            override_metadata = result.get('override_metadata') or {}
+            lua_duration = (
+                override_metadata.get('actual_duration_seconds')
+                or override_metadata.get('lua_playtime_seconds')
+                or 0
+            )
+            corrected_time = None
+            if lua_duration and int(lua_duration) > 0:
+                mins = int(lua_duration) // 60
+                secs = int(lua_duration) % 60
+                corrected_time = f"{mins}:{secs:02d}"
+                actual_time = corrected_time
+
             # Get player stats (expanded to include multikills and time denied)
             players_query = """
                 SELECT
@@ -169,9 +183,11 @@ class RoundPublisherService:
 
             # Add time information (limit vs actual)
             if time_limit and actual_time and time_limit != 'Unknown' and actual_time != 'Unknown':
-                description_parts.append(f"⏱️ **Time:** {actual_time} / {time_limit}")
+                time_note = " (Lua)" if corrected_time else ""
+                description_parts.append(f"⏱️ **Time:** {actual_time} / {time_limit}{time_note}")
             elif actual_time and actual_time != 'Unknown':
-                description_parts.append(f"⏱️ **Duration:** {actual_time}")
+                time_note = " (Lua)" if corrected_time else ""
+                description_parts.append(f"⏱️ **Duration:** {actual_time}{time_note}")
 
             # Add round outcome - use DB values if available
             outcome_to_show = db_round_outcome if db_round_outcome else round_outcome

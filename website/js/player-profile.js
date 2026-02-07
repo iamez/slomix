@@ -30,23 +30,25 @@ export function setLoadMatchDetails(fn) {
 /**
  * Load player profile page
  */
-export async function loadPlayerProfile(playerName) {
+export async function loadPlayerProfile(playerIdentifier) {
     if (navigateToFn) navigateToFn('profile');
-    console.log('📋 Loading profile for:', playerName);
+    console.log('📋 Loading profile for:', playerIdentifier);
 
     // Reset UI
     const profileName = document.getElementById('profile-name');
     const profileInitials = document.getElementById('profile-initials');
-    if (profileName) profileName.textContent = playerName;
-    if (profileInitials) profileInitials.textContent = playerName.substring(0, 2).toUpperCase();
+    if (profileName) profileName.textContent = playerIdentifier;
+    if (profileInitials) profileInitials.textContent = playerIdentifier.substring(0, 2).toUpperCase();
 
     try {
-        const data = await fetchJSON(`${API_BASE}/stats/player/${encodeURIComponent(playerName)}`);
+        const data = await fetchJSON(`${API_BASE}/stats/player/${encodeURIComponent(playerIdentifier)}`);
         console.log('📋 Profile data received:', data);
         const stats = data.stats;
+        const resolvedId = data.guid || playerIdentifier;
 
         // Update Header
         if (profileName) profileName.textContent = data.name;
+        if (profileInitials) profileInitials.textContent = data.name.substring(0, 2).toUpperCase();
 
         const profilePlaytime = document.getElementById('profile-playtime');
         const profileSeen = document.getElementById('profile-seen');
@@ -115,8 +117,8 @@ export async function loadPlayerProfile(playerName) {
         }
 
         // Load recent matches and form chart
-        loadPlayerRecentMatches(playerName);
-        loadPlayerFormChart(playerName);
+        loadPlayerRecentMatches(resolvedId);
+        loadPlayerFormChart(resolvedId);
 
     } catch (e) {
         console.error('Failed to load profile:', e);
@@ -128,20 +130,20 @@ export async function loadPlayerProfile(playerName) {
 /**
  * Load both player charts
  */
-export async function loadPlayerFormChart(playerName) {
-    loadSessionChart(playerName);
-    loadRoundChart(playerName);
+export async function loadPlayerFormChart(playerIdentifier) {
+    loadSessionChart(playerIdentifier);
+    loadRoundChart(playerIdentifier);
 }
 
 /**
  * Session DPM chart - form over gaming sessions
  */
-export async function loadSessionChart(playerName) {
+export async function loadSessionChart(playerIdentifier) {
     const canvas = document.getElementById('sessionChart');
     if (!canvas) return;
 
     try {
-        const data = await fetchJSON(`${API_BASE}/stats/player/${encodeURIComponent(playerName)}/form?limit=15`);
+        const data = await fetchJSON(`${API_BASE}/stats/player/${encodeURIComponent(playerIdentifier)}/form?limit=15`);
 
         if (!data.sessions || data.sessions.length === 0) {
             const ctx = canvas.getContext('2d');
@@ -225,12 +227,12 @@ export async function loadSessionChart(playerName) {
 /**
  * Round DPM chart - individual map performance
  */
-export async function loadRoundChart(playerName) {
+export async function loadRoundChart(playerIdentifier) {
     const canvas = document.getElementById('roundChart');
     if (!canvas) return;
 
     try {
-        const data = await fetchJSON(`${API_BASE}/stats/player/${encodeURIComponent(playerName)}/rounds?limit=30`);
+        const data = await fetchJSON(`${API_BASE}/stats/player/${encodeURIComponent(playerIdentifier)}/rounds?limit=30`);
 
         if (!data.rounds || data.rounds.length === 0) {
             const ctx = canvas.getContext('2d');
@@ -303,8 +305,8 @@ export async function loadRoundChart(playerName) {
 /**
  * Load recent matches for a player
  */
-export async function loadPlayerRecentMatches(playerName) {
-    console.log('📋 Loading recent matches for:', playerName);
+export async function loadPlayerRecentMatches(playerIdentifier) {
+    console.log('📋 Loading recent matches for:', playerIdentifier);
     const container = document.getElementById('profile-recent-matches');
     if (!container) {
         console.error('❌ profile-recent-matches container not found!');
@@ -315,7 +317,7 @@ export async function loadPlayerRecentMatches(playerName) {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
     try {
-        const matches = await fetchJSON(`${API_BASE}/player/${encodeURIComponent(playerName)}/matches?limit=10`);
+        const matches = await fetchJSON(`${API_BASE}/player/${encodeURIComponent(playerIdentifier)}/matches?limit=10`);
 
         if (matches.length === 0) {
             container.innerHTML = '<div class="text-center py-4 text-slate-500">No recent matches found</div>';

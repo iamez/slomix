@@ -633,6 +633,7 @@ class SSHMonitor:
                     p.headshot_kills,
                     p.time_played_seconds,
                     p.time_dead_ratio,
+                    p.time_dead_minutes,
                     p.denied_playtime,
                     p.most_useful_kills,
                     p.revives_given,
@@ -691,8 +692,9 @@ class SSHMonitor:
 
             for i, player_data in enumerate(data['top_players']):
                 # Unpack comprehensive player data
+                # FIX (2026-02-01): Added time_dead_minutes for accurate time dead calculation
                 (name, player_guid, kills, deaths, gibs, dmg_given, dmg_recv, acc,
-                 total_hs, hsk, time_played, time_dead_ratio, denied, useful_kills,
+                 total_hs, hsk, time_played, time_dead_ratio, time_dead_minutes, denied, useful_kills,
                  revives, times_revived, double, triple, quad, multi, mega) = player_data
 
                 # Use display name if available
@@ -707,6 +709,7 @@ class SSHMonitor:
                 total_hs = total_hs or 0
                 time_played = time_played or 0
                 time_dead_ratio = time_dead_ratio or 0
+                time_dead_minutes = time_dead_minutes or 0
                 denied = denied or 0
                 useful_kills = useful_kills or 0
                 revives = revives or 0
@@ -724,7 +727,9 @@ class SSHMonitor:
                 seconds = int(time_played % 60)
                 time_display = f"{minutes}:{seconds:02d}"
 
-                time_dead = int(time_played * time_dead_ratio / 100.0)
+                # FIX (2026-02-01): Use time_dead_minutes directly instead of ratio calculation
+                # The ratio in R2 files is calculated against cumulative time, causing errors
+                time_dead = int(min(time_dead_minutes * 60, time_played))  # Convert to seconds, cap at time_played
                 dead_minutes = int(time_dead // 60)
                 dead_seconds = int(time_dead % 60)
                 time_dead_display = f"{dead_minutes}:{dead_seconds:02d}"
@@ -871,6 +876,7 @@ class SSHMonitor:
                     headshot_kills,
                     time_played_seconds,
                     time_dead_ratio,
+                    time_dead_minutes,
                     denied_playtime,
                     most_useful_kills,
                     revives_given,
@@ -949,8 +955,9 @@ class SSHMonitor:
 
             for i, player_data in enumerate(data['top_players']):
                 # Unpack comprehensive player data
+                # FIX (2026-02-01): Added time_dead_minutes for accurate time dead calculation
                 (name, player_guid, kills, deaths, gibs, dmg_given, dmg_recv, acc,
-                 total_hs, hsk, time_played, time_dead_ratio, denied, useful_kills,
+                 total_hs, hsk, time_played, time_dead_ratio, time_dead_minutes, denied, useful_kills,
                  revives, times_revived, double, triple, quad, multi, mega) = player_data
 
                 # Use display name if available
@@ -965,6 +972,7 @@ class SSHMonitor:
                 total_hs = total_hs or 0
                 time_played = time_played or 0
                 time_dead_ratio = time_dead_ratio or 0
+                time_dead_minutes = time_dead_minutes or 0
                 denied = denied or 0
                 useful_kills = useful_kills or 0
                 revives = revives or 0
@@ -982,7 +990,9 @@ class SSHMonitor:
                 seconds = int(time_played % 60)
                 time_display = f"{minutes}:{seconds:02d}"
 
-                time_dead = int(time_played * time_dead_ratio / 100.0)
+                # FIX (2026-02-01): Use time_dead_minutes directly instead of ratio calculation
+                # The ratio in R2 files is calculated against cumulative time, causing errors
+                time_dead = int(min(time_dead_minutes * 60, time_played))  # Convert to seconds, cap at time_played
                 dead_minutes = int(time_dead // 60)
                 dead_seconds = int(time_dead % 60)
                 time_dead_display = f"{dead_minutes}:{dead_seconds:02d}"
