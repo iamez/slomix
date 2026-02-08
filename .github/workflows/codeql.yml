@@ -54,9 +54,3 @@ jobs:
         upload: true
         wait-for-processing: false
 
-    - name: Upload results to code scanning
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: results.sarif
-        wait-for-processing: true
