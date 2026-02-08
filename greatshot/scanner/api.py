@@ -201,6 +201,52 @@ def _normalize_timeline(
     return timeline
 
 
+def _extract_player_stats(
+    match_stats: List[Dict[str, Any]],
+    timeline: List[DemoEvent],
+) -> Dict[str, Dict[str, Any]]:
+    """Extract per-player performance stats from matchStats and timeline events."""
+    stats: Dict[str, Dict[str, Any]] = {}
+
+    # Seed from matchStats playerStats (UDT may include kills/deaths/etc.)
+    primary = match_stats[0] if match_stats else {}
+    for row in primary.get("playerStats", []) or []:
+        name = _canonical_name(row.get("cleanName"))
+        if name == "unknown":
+            continue
+        entry = stats.setdefault(name, {"kills": 0, "deaths": 0, "damage_given": 0, "accuracy": None})
+        for field in ("kills", "deaths", "damage_given", "damage_received"):
+            if field in row:
+                entry[field] = int(row[field])
+        if "accuracy" in row:
+            entry["accuracy"] = row["accuracy"]
+
+    # Compute from timeline to fill gaps or override zero values
+    kills_by: Dict[str, int] = defaultdict(int)
+    deaths_by: Dict[str, int] = defaultdict(int)
+    headshots_by: Dict[str, int] = defaultdict(int)
+    for event in timeline:
+        if event.type != "kill":
+            continue
+        if event.attacker and event.attacker != "world":
+            kills_by[event.attacker] += 1
+            if event.hit_region == "head":
+                headshots_by[event.attacker] += 1
+        if event.victim:
+            deaths_by[event.victim] += 1
+
+    for name in set(list(kills_by) + list(deaths_by)):
+        entry = stats.setdefault(name, {"kills": 0, "deaths": 0, "damage_given": 0, "accuracy": None})
+        # Use timeline-derived counts if matchStats didn't provide them
+        if entry["kills"] == 0 and kills_by.get(name, 0) > 0:
+            entry["kills"] = kills_by[name]
+        if entry["deaths"] == 0 and deaths_by.get(name, 0) > 0:
+            entry["deaths"] = deaths_by[name]
+        entry.setdefault("headshots", headshots_by.get(name, 0))
+
+    return stats
+
+
 def _summarize_stats(timeline: Iterable[DemoEvent], players: List[Dict[str, Any]]) -> Dict[str, Any]:
     timeline = list(timeline)
     kill_count = 0
@@ -289,6 +335,7 @@ def analyze_demo(
         timeline = timeline[:max_events]
 
     stats = _summarize_stats(timeline, players)
+    player_stats = _extract_player_stats(match_stats, timeline)
 
     rounds = []
     for item in match_stats:
@@ -328,7 +375,11 @@ def analyze_demo(
     }
 
     highlight_dicts = [
-        item.to_dict() for item in detect_highlights([event.to_dict() for event in timeline])
+        item.to_dict()
+        for item in detect_highlights(
+            [event.to_dict() for event in timeline],
+            player_stats=player_stats,
+        )
     ]
     highlights = [
         Highlight(
@@ -360,4 +411,5 @@ def analyze_demo(
             },
             "timeout_seconds": timeout_seconds,
         },
+        player_stats=player_stats,
     )
