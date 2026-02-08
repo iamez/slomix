@@ -22,7 +22,7 @@ import socket
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 
 import discord
 import paramiko

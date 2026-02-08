@@ -18,7 +18,6 @@ import sys
 import logging
 import re
 from datetime import datetime
-from typing import List
 from pathlib import Path
 import json
 

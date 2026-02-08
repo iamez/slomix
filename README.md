@@ -3,7 +3,7 @@
 > **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Version](https://img.shields.io/badge/version-1.0.7-blue)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.8-blue)](docs/CHANGELOG.md)
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_14-336791)](https://www.postgresql.org/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
@@ -16,7 +16,21 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ## 🔥 Recent Updates (February 2026)
 
-### **🎬 v1.0.7: Greatshot Demo Pipeline & Database Overhaul (February 8, 2026)** 🆕
+### **🎬 v1.0.8: Greatshot Highlight Enrichment & Database Cross-Reference (February 8, 2026)** 🆕
+
+**Richer fragmovie scout data with ET:Legacy stats database integration!**
+
+- 🎯 **Enriched Highlight Metadata** — Kill sequences (victim, weapon, HS per kill), weapon usage breakdowns, kill timing rhythm (avg/fastest gaps)
+- 👤 **Player Match Stats** — Attacker's overall performance (kills, deaths, KDR, accuracy, damage) attached to each highlight
+- 🔗 **Database Cross-Reference** — Auto-match demos to rounds by map/duration/winner/scores (confidence scoring)
+- 📊 **Stats Validation** — Side-by-side comparison of demo kills vs DB stats for data health
+- 🎨 **Scout-Friendly UI** — Kill sequences, weapon badges, rhythm stats, DB crossref panel in frontend
+- 📝 **Enhanced Reports** — Victims, weapons, timing rhythm in text reports
+- 🔧 **New Service** — `greatshot_crossref.py` with round matching + DB enrichment
+
+---
+
+### **🎬 v1.0.7: Greatshot Demo Pipeline & Database Overhaul (February 8, 2026)**
 
 **Demo upload, analysis, highlight detection, and clip extraction — now integrated!**
 

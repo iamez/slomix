@@ -104,11 +104,17 @@ class SensitiveDataFilter(logging.Filter):
 
         if hasattr(record, 'args') and record.args:
             if isinstance(record.args, dict):
-                record.args = {k: self._redact(str(v)) for k, v in record.args.items()}
+                record.args = {k: self._redact_value(v) for k, v in record.args.items()}
             elif isinstance(record.args, tuple):
-                record.args = tuple(self._redact(str(arg)) for arg in record.args)
+                record.args = tuple(self._redact_value(arg) for arg in record.args)
 
         return True
+
+    def _redact_value(self, value: Any) -> Any:
+        """Redact sensitive data only from string values, preserving type of others."""
+        if isinstance(value, str):
+            return self._redact(value)
+        return value
 
     def _redact(self, text: str) -> str:
         """Apply all redaction patterns to text."""
@@ -266,6 +272,7 @@ def setup_logging(
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("asyncpg").setLevel(logging.WARNING)
+    logging.getLogger("multipart").setLevel(logging.WARNING)
 
     return root_logger
 

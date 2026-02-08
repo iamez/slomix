@@ -5297,7 +5297,9 @@ async def list_awards(
         param_idx += 1
 
     if days > 0:
-        where_clauses.append(f"ra.created_at >= NOW() - INTERVAL '{days} days'")
+        where_clauses.append(f"ra.created_at >= NOW() - (${param_idx} * INTERVAL '1 day')")
+        params.append(days)
+        param_idx += 1
 
     where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
