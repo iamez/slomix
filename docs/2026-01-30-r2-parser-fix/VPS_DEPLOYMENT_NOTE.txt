@@ -1,0 +1,67 @@
+================================================================================
+VPS DEPLOYMENT REQUIRED - Lua Webhook Fix
+================================================================================
+
+FILE: vps_scripts/stats_discord_webhook.lua (GITIGNORED)
+
+CHANGES MADE:
+-------------
+
+Lines 141, 567: Hardcoded gamestate constant
+
+OLD CODE:
+    if et.GS_PLAYING then
+
+NEW CODE:
+    if 0 then  -- GS_PLAYING constant (et.GS_PLAYING doesn't exist)
+
+REASON:
+-------
+ET:Legacy Lua API doesn't expose et.GS_PLAYING constant.
+The actual value is 0 for PLAYING gamestate.
+This fix enables the webhook to properly detect round end events.
+
+DEPLOYMENT STEPS:
+-----------------
+
+1. SSH to game server:
+   ssh -p 48101 -i ~/.ssh/etlegacy_bot et@puran.hehe.si
+
+2. Backup current file:
+   cp /home/et/.etlegacy/legacy/stats_discord_webhook.lua \
+      /home/et/.etlegacy/legacy/stats_discord_webhook.lua.backup.$(date +%Y%m%d)
+
+3. Upload new file:
+   scp -P 48101 -i ~/.ssh/etlegacy_bot \
+       vps_scripts/stats_discord_webhook.lua \
+       et@puran.hehe.si:/home/et/.etlegacy/legacy/
+
+4. Verify deployment:
+   ssh -p 48101 -i ~/.ssh/etlegacy_bot et@puran.hehe.si \
+       "grep 'if 0 then.*GS_PLAYING' /home/et/.etlegacy/legacy/stats_discord_webhook.lua"
+
+5. Monitor logs after next round:
+   ssh -p 48101 -i ~/.ssh/etlegacy_bot et@puran.hehe.si \
+       "tail -f /home/et/.etlegacy/legacy/etconsole.log | grep stats_discord_webhook"
+
+EXPECTED RESULT:
+----------------
+After round ends, should see in console log:
+  [stats_discord_webhook] Round ended at <unix_timestamp>
+  [stats_discord_webhook] Sent round notification to Discord
+
+In Discord webhook channel (1424620499975274496):
+  Should see "STATS_READY" message with Lua_Playtime, Lua_Warmup, etc.
+
+TESTING:
+--------
+After deployment, check bot logs for:
+  - "Lua round data stored successfully"
+  - NO "NO LUA DATA" messages in timing comparison
+
+STATUS:
+-------
+⚠️  NOT YET DEPLOYED - Manual deployment required
+    File is gitignored, cannot be committed to repository
+
+================================================================================

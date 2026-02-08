@@ -70,6 +70,13 @@ Modern, responsive web frontend for the ET:Legacy stats tracking system. Built w
 - **Coming Soon placeholders** for Clips & Configs
 - No broken API calls
 
+#### Proximity (Prototype)
+
+- Dedicated Proximity Intelligence view (placeholder UI)
+- Hooks for future proximity analytics pipeline
+- Safe fallback when proximity API is not connected
+- Prototype banner system labels partial-data views via `data-prototype` attributes
+
 ---
 
 ### ✅ Modals & Interactions
@@ -127,6 +134,11 @@ Modern, responsive web frontend for the ET:Legacy stats tracking system. Built w
 | `GET /api/player/search` | Player name autocomplete |
 | `POST /api/player/link` | Link Discord to player alias |
 | `GET /api/predictions/recent` | Match predictions |
+| `GET /api/proximity/summary` | **Prototype** - Proximity analytics summary |
+| `GET /api/proximity/engagements` | **Prototype** - Timeline buckets |
+| `GET /api/proximity/hotzones` | **Prototype** - Heatmap bins |
+| `GET /api/proximity/duos` | **Prototype** - Synergy duos |
+| `GET /api/proximity/events` | **Prototype** - Raw proximity events |
 | `GET /auth/login` | Discord OAuth redirect |
 | `GET /auth/callback` | OAuth callback |
 | `GET /auth/me` | Current user info |

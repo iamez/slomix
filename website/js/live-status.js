@@ -9,6 +9,16 @@ import { API_BASE, fetchJSON, escapeHtml, formatTimeAgo } from './utils.js';
 const LIVE_POLL_INTERVAL = 10000; // 10 seconds
 let liveSessionInterval = null;
 
+function refreshLucideIcons() {
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
+}
+
+function hasChartJs() {
+    return typeof Chart !== 'undefined';
+}
+
 /**
  * Load game server and voice channel status
  */
@@ -74,7 +84,7 @@ export async function loadLiveStatus() {
                 serverBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400';
 
                 const hostname = escapeHtml(server.hostname) || 'Game Server';
-                const errorMsg = server.error || 'Server is not responding';
+                const errorMsg = escapeHtml(server.error || 'Server is not responding');
                 serverDetails.innerHTML = `
                     <span class="text-slate-400">${hostname}</span>
                     <span class="text-slate-500 mx-1">·</span>
@@ -216,6 +226,29 @@ let serverActivityChart = null;
 let serverExpanded = false;
 let currentTimeRange = 720; // Default 30 days
 
+async function updateMonitoringHistoryStatus(kind, historyStatusEl) {
+    if (!historyStatusEl) return;
+    try {
+        const status = await fetchJSON(`${API_BASE}/monitoring/status`);
+        const entry = status?.[kind];
+        if (!entry) return;
+
+        if (entry.count > 0) {
+            const last = entry.last_recorded_at ? formatTimeAgo(new Date(entry.last_recorded_at)) : 'unknown';
+            historyStatusEl.textContent = `History: ${entry.count} samples · last ${last}`;
+            return;
+        }
+
+        if (entry.error) {
+            historyStatusEl.textContent = 'History: unavailable';
+        } else {
+            historyStatusEl.textContent = 'History: no samples yet';
+        }
+    } catch (e) {
+        historyStatusEl.textContent = 'History: unavailable';
+    }
+}
+
 /**
  * Toggle server details expansion
  */
@@ -265,12 +298,17 @@ export async function loadServerActivity(hours = 720) {
         const chartContainer = document.getElementById('server-activity-chart');
         const noDataDiv = document.getElementById('server-no-data');
         const summaryDiv = document.getElementById('server-stats-summary');
+        const historyStatus = document.getElementById('server-history-status');
 
         if (data.data_points.length === 0) {
             // No data yet
             if (chartContainer) chartContainer.style.display = 'none';
             if (noDataDiv) noDataDiv.classList.remove('hidden');
             if (summaryDiv) summaryDiv.classList.add('hidden');
+            if (historyStatus) historyStatus.textContent = 'History: collecting';
+            if (historyStatus) {
+                updateMonitoringHistoryStatus('server', historyStatus);
+            }
             return;
         }
 
@@ -278,6 +316,11 @@ export async function loadServerActivity(hours = 720) {
         if (chartContainer) chartContainer.style.display = 'block';
         if (noDataDiv) noDataDiv.classList.add('hidden');
         if (summaryDiv) summaryDiv.classList.remove('hidden');
+        if (historyStatus) {
+            const lastPoint = data.data_points[data.data_points.length - 1];
+            const lastLabel = lastPoint?.timestamp ? formatTimeAgo(new Date(lastPoint.timestamp)) : 'unknown';
+            historyStatus.textContent = `History: ${data.summary.total_records} samples · last ${lastLabel}`;
+        }
 
         // Update summary stats
         document.getElementById('stat-peak-players').textContent = data.summary.peak_players;
@@ -297,6 +340,11 @@ export async function loadServerActivity(hours = 720) {
         });
 
         const playerCounts = data.data_points.map(p => p.player_count);
+
+        if (!hasChartJs()) {
+            if (historyStatus) historyStatus.textContent = 'History: chart library unavailable';
+            return;
+        }
 
         // Destroy existing chart
         if (serverActivityChart) {
@@ -377,6 +425,8 @@ export async function loadServerActivity(hours = 720) {
 
     } catch (e) {
         console.error('Failed to load server activity:', e);
+        const historyStatus = document.getElementById('server-history-status');
+        if (historyStatus) historyStatus.textContent = 'History: unavailable';
     }
 }
 
@@ -404,11 +454,129 @@ export function toggleVoiceDetails() {
     if (voiceExpanded) {
         expandedContent.classList.remove('hidden');
         expandIcon?.classList.add('rotate-180');
-        // Load chart data on first expand
+        // Load detailed members and chart data on expand
+        loadCurrentVoiceMembers();
         loadVoiceActivity(currentVoiceTimeRange);
     } else {
         expandedContent.classList.add('hidden');
         expandIcon?.classList.remove('rotate-180');
+    }
+}
+
+/**
+ * Format duration in seconds to human readable
+ */
+function formatDuration(seconds) {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) {
+        const mins = Math.floor(seconds / 60);
+        return `${mins}m`;
+    }
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+/**
+ * Load detailed current voice members
+ */
+export async function loadCurrentVoiceMembers() {
+    const container = document.getElementById('voice-members-detailed');
+    if (!container) return;
+
+    try {
+        const data = await fetchJSON(`${API_BASE}/voice-activity/current`);
+        container.innerHTML = '';
+
+        if (data.total_count === 0) {
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-3 text-slate-500';
+            row.innerHTML = '<i data-lucide="mic-off" class="w-4 h-4"></i><span class="text-sm">No one currently in voice</span>';
+            container.appendChild(row);
+            refreshLucideIcons();
+            return;
+        }
+
+        const makeMemberRow = (member) => {
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition';
+
+            const left = document.createElement('div');
+            left.className = 'flex items-center gap-2';
+
+            const avatar = document.createElement('div');
+            avatar.className = 'w-6 h-6 rounded-full bg-gradient-to-br from-brand-purple to-brand-blue flex items-center justify-center text-[10px] font-bold text-white';
+            const memberName = String(member?.name || 'U');
+            avatar.textContent = memberName.charAt(0).toUpperCase();
+
+            const nameEl = document.createElement('span');
+            nameEl.className = 'text-sm font-medium text-white';
+            nameEl.textContent = memberName;
+
+            left.appendChild(avatar);
+            left.appendChild(nameEl);
+            row.appendChild(left);
+
+            if (member?.duration_seconds) {
+                const right = document.createElement('div');
+                right.className = 'flex items-center gap-2 text-xs text-slate-500';
+                right.innerHTML = '<i data-lucide="clock" class="w-3 h-3"></i>';
+                const duration = document.createElement('span');
+                duration.textContent = formatDuration(member.duration_seconds);
+                right.appendChild(duration);
+                row.appendChild(right);
+            }
+
+            return row;
+        };
+
+        // Group by channel if we have channel info
+        if (data.channels && data.channels.length > 0) {
+            for (const channel of data.channels) {
+                const channelWrap = document.createElement('div');
+                channelWrap.className = 'mb-3 last:mb-0';
+
+                const header = document.createElement('div');
+                header.className = 'flex items-center gap-2 mb-2';
+                header.innerHTML = '<i data-lucide="hash" class="w-3 h-3 text-slate-500"></i>';
+
+                const nameEl = document.createElement('span');
+                nameEl.className = 'text-xs font-bold text-slate-400 uppercase';
+                nameEl.textContent = String(channel?.name || '');
+                const countEl = document.createElement('span');
+                countEl.className = 'text-xs text-slate-600';
+                countEl.textContent = `(${Array.isArray(channel?.members) ? channel.members.length : 0})`;
+                header.appendChild(nameEl);
+                header.appendChild(countEl);
+
+                const membersWrap = document.createElement('div');
+                membersWrap.className = 'space-y-1.5 ml-5';
+                for (const member of (channel.members || [])) {
+                    membersWrap.appendChild(makeMemberRow(member));
+                }
+
+                channelWrap.appendChild(header);
+                channelWrap.appendChild(membersWrap);
+                container.appendChild(channelWrap);
+            }
+        } else {
+            const membersWrap = document.createElement('div');
+            membersWrap.className = 'space-y-1.5';
+            for (const member of (data.members || [])) {
+                membersWrap.appendChild(makeMemberRow(member));
+            }
+            container.appendChild(membersWrap);
+        }
+
+        refreshLucideIcons();
+
+    } catch (e) {
+        console.error('Failed to load current voice members:', e);
+        container.textContent = '';
+        const msg = document.createElement('div');
+        msg.className = 'text-sm text-slate-500';
+        msg.textContent = 'Could not load member details';
+        container.appendChild(msg);
     }
 }
 
@@ -439,12 +607,17 @@ export async function loadVoiceActivity(hours = 720) {
         const chartContainer = document.getElementById('voice-activity-chart');
         const noDataDiv = document.getElementById('voice-no-data');
         const summaryDiv = document.getElementById('voice-stats-summary');
+        const historyStatus = document.getElementById('voice-history-status');
 
         if (data.data_points.length === 0) {
             // No data yet
             if (chartContainer) chartContainer.style.display = 'none';
             if (noDataDiv) noDataDiv.classList.remove('hidden');
             if (summaryDiv) summaryDiv.classList.add('hidden');
+            if (historyStatus) historyStatus.textContent = 'History: collecting';
+            if (historyStatus) {
+                updateMonitoringHistoryStatus('voice', historyStatus);
+            }
             return;
         }
 
@@ -452,6 +625,11 @@ export async function loadVoiceActivity(hours = 720) {
         if (chartContainer) chartContainer.style.display = 'block';
         if (noDataDiv) noDataDiv.classList.add('hidden');
         if (summaryDiv) summaryDiv.classList.remove('hidden');
+        if (historyStatus) {
+            const lastPoint = data.data_points[data.data_points.length - 1];
+            const lastLabel = lastPoint?.timestamp ? formatTimeAgo(new Date(lastPoint.timestamp)) : 'unknown';
+            historyStatus.textContent = `History: ${data.summary.total_records} samples · last ${lastLabel}`;
+        }
 
         // Update summary stats
         document.getElementById('stat-peak-members').textContent = data.summary.peak_members;
@@ -471,6 +649,11 @@ export async function loadVoiceActivity(hours = 720) {
         });
 
         const memberCounts = data.data_points.map(p => p.member_count);
+
+        if (!hasChartJs()) {
+            if (historyStatus) historyStatus.textContent = 'History: chart library unavailable';
+            return;
+        }
 
         // Destroy existing chart
         if (voiceActivityChart) {
@@ -549,9 +732,17 @@ export async function loadVoiceActivity(hours = 720) {
 
     } catch (e) {
         console.error('Failed to load voice activity:', e);
+        // Show no-data state on error
+        const chartContainer = document.getElementById('voice-activity-chart');
+        const noDataDiv = document.getElementById('voice-no-data');
+        if (chartContainer) chartContainer.style.display = 'none';
+        if (noDataDiv) noDataDiv.classList.remove('hidden');
+        const historyStatus = document.getElementById('voice-history-status');
+        if (historyStatus) historyStatus.textContent = 'History: unavailable';
     }
 }
 
 // Expose voice functions to window
 window.toggleVoiceDetails = toggleVoiceDetails;
 window.loadVoiceActivity = loadVoiceActivity;
+window.loadCurrentVoiceMembers = loadCurrentVoiceMembers;

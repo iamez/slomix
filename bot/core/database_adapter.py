@@ -2,6 +2,7 @@
 Database Abstraction Layer for PostgreSQL
 Simplified to PostgreSQL-only (SQLite support removed)
 """
+import asyncio
 import logging
 from typing import Any, Optional, List, Tuple
 from abc import ABC, abstractmethod
@@ -39,7 +40,7 @@ class DatabaseAdapter(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, query: str, params: Optional[Tuple] = None):
+    async def execute(self, query: str, params: Optional[Tuple] = None, *extra):
         """Execute a query without returning results."""
         pass
 
@@ -67,7 +68,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
     """PostgreSQL database adapter using asyncpg connection pooling."""
 
     def __init__(self, host: str, port: int, database: str, user: str, password: str,
-                 min_pool_size: int = 2, max_pool_size: int = 10,
+                 min_pool_size: int = 5, max_pool_size: int = 20,
                  ssl_mode: str = 'disable', ssl_cert: str = '', ssl_key: str = '', ssl_root_cert: str = ''):
         """
         Initialize PostgreSQL adapter.
@@ -78,8 +79,8 @@ class PostgreSQLAdapter(DatabaseAdapter):
             database: Database name
             user: Database user
             password: Database password
-            min_pool_size: Minimum pool connections (default 2, reduced from 5)
-            max_pool_size: Maximum pool connections (default 10, reduced from 20)
+            min_pool_size: Minimum pool connections (default 5 for 14 cogs + tasks)
+            max_pool_size: Maximum pool connections (default 20 for concurrent load)
             ssl_mode: SSL mode (disable, require, verify-ca, verify-full)
             ssl_cert: Path to client certificate file
             ssl_key: Path to client private key file
@@ -102,6 +103,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         self.ssl_key = ssl_key
         self.ssl_root_cert = ssl_root_cert
         self.pool = None
+        self._pool_lock = asyncio.Lock()  # Prevents race condition on pool init
 
         ssl_status = "SSL disabled" if ssl_mode == 'disable' else f"SSL mode: {ssl_mode}"
         logger.info(f"📦 PostgreSQL Adapter initialized: {host}:{port}/{database} ({ssl_status})")
@@ -149,7 +151,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 ssl=ssl_context,
                 min_size=self.min_pool_size,
                 max_size=self.max_pool_size,
-                command_timeout=60
+                command_timeout=120  # 2 minutes for complex aggregation queries
             )
             logger.info(f"✅ PostgreSQL pool created: {self.host}:{self.port}/{self.database}")
             logger.info(f"   Pool size: {self.min_pool_size}-{self.max_pool_size} connections")
@@ -167,8 +169,11 @@ class PostgreSQLAdapter(DatabaseAdapter):
     @asynccontextmanager
     async def connection(self):
         """Provide PostgreSQL connection from pool."""
+        # Thread-safe pool initialization with double-check locking
         if not self.pool:
-            await self.connect()
+            async with self._pool_lock:
+                if not self.pool:  # Double-check after acquiring lock
+                    await self.connect()
 
         conn = await self.pool.acquire()
         try:
@@ -176,10 +181,21 @@ class PostgreSQLAdapter(DatabaseAdapter):
         finally:
             await self.pool.release(conn)
 
-    async def execute(self, query: str, params: Optional[Tuple] = None):
+    async def execute(self, query: str, params: Optional[Tuple] = None, *extra):
         """Execute query on PostgreSQL."""
         # Translate ? placeholders to $1, $2, etc.
+        if extra:
+            if params is None:
+                params = extra
+            elif isinstance(params, (list, tuple)):
+                params = tuple(params) + tuple(extra)
+            else:
+                params = (params,) + tuple(extra)
+        elif params is not None and not isinstance(params, (list, tuple)):
+            params = (params,)
+
         query = self._translate_placeholders(query)
+        params = self._normalize_params(params)
 
         async with self.connection() as conn:
             await conn.execute(query, *(params or ()))
@@ -188,6 +204,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         """Fetch single row from PostgreSQL."""
         # Translate ? placeholders to $1, $2, etc.
         query = self._translate_placeholders(query)
+        params = self._normalize_params(params)
 
         async with self.connection() as conn:
             row = await conn.fetchrow(query, *(params or ()))
@@ -197,6 +214,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         """Fetch all rows from PostgreSQL."""
         # Translate ? placeholders to $1, $2, etc.
         query = self._translate_placeholders(query)
+        params = self._normalize_params(params)
 
         async with self.connection() as conn:
             rows = await conn.fetch(query, *(params or ()))
@@ -206,9 +224,17 @@ class PostgreSQLAdapter(DatabaseAdapter):
         """Fetch single value from PostgreSQL."""
         # Translate ? placeholders to $1, $2, etc.
         query = self._translate_placeholders(query)
+        params = self._normalize_params(params)
 
         async with self.connection() as conn:
             return await conn.fetchval(query, *(params or ()))
+
+    def _normalize_params(self, params: Optional[Tuple]) -> Optional[Tuple]:
+        """
+        Normalize query params for asyncpg.
+        Keep native date/datetime objects intact so asyncpg can bind them correctly.
+        """
+        return params
 
     def _translate_placeholders(self, query: str) -> str:
         """
@@ -279,8 +305,8 @@ def create_adapter(db_type: str = 'postgresql', **kwargs) -> DatabaseAdapter:
         database=kwargs['database'],
         user=kwargs['user'],
         password=kwargs['password'],
-        min_pool_size=kwargs.get('min_pool_size', 2),  # Reduced from 5 (small scale)
-        max_pool_size=kwargs.get('max_pool_size', 10)  # Reduced from 20 (small scale)
+        min_pool_size=kwargs.get('min_pool_size', 5),   # 5 for 14 cogs + tasks
+        max_pool_size=kwargs.get('max_pool_size', 20)   # 20 for concurrent load
     )
 
 

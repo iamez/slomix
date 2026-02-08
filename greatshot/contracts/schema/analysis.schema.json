@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://slomix.gg/schemas/demo-analysis-v1.json",
+  "title": "ETLegacyDemoAnalysis",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "metadata",
+    "players",
+    "stats",
+    "timeline",
+    "highlights",
+    "warnings",
+    "parser"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "players": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "stats": {
+      "type": "object"
+    },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["t_ms", "type"],
+        "properties": {
+          "t_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "highlights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "player", "start_ms", "end_ms", "score", "explanation"],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "player": {
+            "type": "string"
+          },
+          "start_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "score": {
+            "type": "number"
+          },
+          "explanation": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "parser": {
+      "type": "object"
+    }
+  }
+}

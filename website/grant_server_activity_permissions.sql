@@ -10,6 +10,12 @@ GRANT SELECT ON TABLE voice_status_history TO website_readonly;
 -- Grant SELECT on voice_members table (if it exists)
 GRANT SELECT ON TABLE voice_members TO website_readonly;
 
+-- Grant SELECT on lua_round_teams table (if it exists)
+GRANT SELECT ON TABLE lua_round_teams TO website_readonly;
+
+-- Grant SELECT on lua_spawn_stats table (if it exists)
+GRANT SELECT ON TABLE lua_spawn_stats TO website_readonly;
+
 \echo ''
 \echo '=================================================='
 \echo 'Permissions granted successfully!'
@@ -18,4 +24,6 @@ GRANT SELECT ON TABLE voice_members TO website_readonly;
 \echo '  - server_status_history'
 \echo '  - voice_status_history'
 \echo '  - voice_members'
+\echo '  - lua_round_teams'
+\echo '  - lua_spawn_stats'
 \echo '=================================================='

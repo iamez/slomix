@@ -86,12 +86,12 @@ def setup_logging(log_level=logging.INFO):
     root_logger.addHandler(console_handler)
 
     # ==================== MAIN BOT LOG FILE ====================
-    # Rotating file handler - 10MB per file, keep 5 backups
+    # Rotating file handler - 50MB per file, keep 3 backups (max 200MB)
     bot_log_file = LOGS_DIR / "bot.log"
     bot_file_handler = logging.handlers.RotatingFileHandler(
         bot_log_file,
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5,
+        maxBytes=50 * 1024 * 1024,  # 50MB (increased from 10MB to reduce rotation frequency)
+        backupCount=3,  # Keep 3 backups (reduced from 5, compression recommended)
         encoding='utf-8'
     )
     bot_file_handler.setLevel(logging.INFO)
@@ -103,8 +103,8 @@ def setup_logging(log_level=logging.INFO):
     error_log_file = LOGS_DIR / "errors.log"
     error_file_handler = logging.handlers.RotatingFileHandler(
         error_log_file,
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
+        maxBytes=50 * 1024 * 1024,  # 50MB (increased from 10MB)
+        backupCount=3,  # Keep 3 backups (reduced from 5)
         encoding='utf-8'
     )
     error_file_handler.setLevel(logging.WARNING)  # Changed from ERROR to WARNING
@@ -117,8 +117,8 @@ def setup_logging(log_level=logging.INFO):
     command_log_file = LOGS_DIR / "commands.log"
     command_file_handler = logging.handlers.RotatingFileHandler(
         command_log_file,
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
+        maxBytes=50 * 1024 * 1024,  # 50MB
+        backupCount=3,  # Keep 3 backups
         encoding='utf-8'
     )
     command_file_handler.setLevel(logging.INFO)
@@ -131,8 +131,8 @@ def setup_logging(log_level=logging.INFO):
     db_log_file = LOGS_DIR / "database.log"
     db_file_handler = logging.handlers.RotatingFileHandler(
         db_log_file,
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
+        maxBytes=50 * 1024 * 1024,  # 50MB
+        backupCount=3,  # Keep 3 backups
         encoding='utf-8'
     )
     db_file_handler.setLevel(logging.DEBUG)
@@ -145,8 +145,8 @@ def setup_logging(log_level=logging.INFO):
     webhook_log_file = LOGS_DIR / "webhook.log"
     webhook_file_handler = logging.handlers.RotatingFileHandler(
         webhook_log_file,
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
+        maxBytes=50 * 1024 * 1024,  # 50MB
+        backupCount=3,  # Keep 3 backups
         encoding='utf-8'
     )
     webhook_file_handler.setLevel(logging.DEBUG)
@@ -167,7 +167,7 @@ def setup_logging(log_level=logging.INFO):
     logger.info(f"Logging system initialized - Level: {logging.getLevelName(log_level)}")
     logger.info(f"Log directory: {LOGS_DIR.absolute()}")
     logger.info("Log files: bot.log, errors.log (WARNING+), commands.log, database.log, webhook.log")
-    logger.info("Rotation: 10MB per file, 5 backups each (max 50MB per log type)")
+    logger.info("Rotation: 50MB per file, 3 backups each (max 200MB per log type)")
     logger.info("=" * 80)
 
     return root_logger

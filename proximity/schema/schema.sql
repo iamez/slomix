@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS combat_engagement (
     -- Session context
     session_date DATE NOT NULL,
     round_number INTEGER NOT NULL,
+    round_start_unix INTEGER DEFAULT 0,
+    round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
     engagement_id INTEGER NOT NULL,  -- unique within round
     
@@ -57,7 +59,7 @@ CREATE TABLE IF NOT EXISTS combat_engagement (
     
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    UNIQUE(session_date, round_number, engagement_id)
+    UNIQUE(session_date, round_number, round_start_unix, engagement_id)
 );
 
 -- ===== PLAYER TEAMPLAY STATS =====
@@ -179,6 +181,8 @@ CREATE TABLE IF NOT EXISTS player_track (
     -- Session context
     session_date DATE NOT NULL,
     round_number INTEGER NOT NULL,
+    round_start_unix INTEGER DEFAULT 0,
+    round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
 
     -- Player info
@@ -209,7 +213,7 @@ CREATE TABLE IF NOT EXISTS player_track (
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    UNIQUE(session_date, round_number, player_guid, spawn_time_ms)
+    UNIQUE(session_date, round_number, round_start_unix, player_guid, spawn_time_ms)
 );
 
 -- ===== INDEXES =====
@@ -378,6 +382,101 @@ BEGIN
     -- Note: Attacker stats are updated by the Python parser since it needs to iterate JSON
 END;
 $$ LANGUAGE plpgsql;
+
+-- ===== OBJECTIVE FOCUS (OPTIONAL) =====
+-- Per-player focus on closest objective during the round
+CREATE TABLE IF NOT EXISTS proximity_objective_focus (
+    id SERIAL PRIMARY KEY,
+
+    session_date DATE NOT NULL,
+    round_number INTEGER NOT NULL,
+    round_start_unix INTEGER DEFAULT 0,
+    round_end_unix INTEGER DEFAULT 0,
+    map_name VARCHAR(64) NOT NULL,
+
+    player_guid VARCHAR(32) NOT NULL,
+    player_name VARCHAR(64) NOT NULL,
+    team VARCHAR(10) NOT NULL,
+
+    objective VARCHAR(64) NOT NULL,
+    avg_distance REAL NOT NULL,
+    time_within_radius_ms INTEGER NOT NULL,
+    samples INTEGER NOT NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(session_date, round_number, player_guid)
+);
+
+-- ===== TRADE EVENTS (v1) =====
+-- Per-death trade opportunities/attempts/successes
+CREATE TABLE IF NOT EXISTS proximity_trade_event (
+    id SERIAL PRIMARY KEY,
+
+    session_date DATE NOT NULL,
+    round_number INTEGER NOT NULL,
+    round_start_unix INTEGER DEFAULT 0,
+    round_end_unix INTEGER DEFAULT 0,
+    map_name VARCHAR(64) NOT NULL,
+
+    victim_guid VARCHAR(32) NOT NULL,
+    victim_name VARCHAR(64) NOT NULL,
+    victim_team VARCHAR(10) NOT NULL,
+
+    killer_guid VARCHAR(32),
+    killer_name VARCHAR(64),
+
+    death_time_ms INTEGER NOT NULL,
+    trade_window_ms INTEGER NOT NULL,
+
+    opportunity_count INTEGER DEFAULT 0,
+    opportunities JSONB NOT NULL DEFAULT '[]',
+
+    attempt_count INTEGER DEFAULT 0,
+    attempts JSONB NOT NULL DEFAULT '[]',
+
+    success_count INTEGER DEFAULT 0,
+    successes JSONB NOT NULL DEFAULT '[]',
+
+    missed_count INTEGER DEFAULT 0,
+    missed_candidates JSONB NOT NULL DEFAULT '[]',
+
+    nearest_teammate_dist REAL,
+    is_isolation_death BOOLEAN DEFAULT FALSE,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(session_date, round_number, round_start_unix, victim_guid, death_time_ms)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trade_event_session
+    ON proximity_trade_event(session_date, round_number);
+CREATE INDEX IF NOT EXISTS idx_trade_event_victim
+    ON proximity_trade_event(victim_guid);
+CREATE INDEX IF NOT EXISTS idx_trade_event_killer
+    ON proximity_trade_event(killer_guid);
+
+-- ===== SUPPORT SUMMARY (v1) =====
+CREATE TABLE IF NOT EXISTS proximity_support_summary (
+    id SERIAL PRIMARY KEY,
+
+    session_date DATE NOT NULL,
+    round_number INTEGER NOT NULL,
+    round_start_unix INTEGER DEFAULT 0,
+    round_end_unix INTEGER DEFAULT 0,
+    map_name VARCHAR(64) NOT NULL,
+
+    support_samples INTEGER NOT NULL DEFAULT 0,
+    total_samples INTEGER NOT NULL DEFAULT 0,
+    support_uptime_pct REAL,
+
+    computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(session_date, round_number, round_start_unix)
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_summary_session
+    ON proximity_support_summary(session_date, round_number);
 
 -- ===== SAMPLE QUERIES =====
 

@@ -1,0 +1,415 @@
+{
+  "maps": {
+    "Karsiah_te2": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "adlernest": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "battery": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "braundorf_b4": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "bremen_b2": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "bremen_b3": [
+      {
+        "name": "truck_escape",
+        "type": "escort",
+        "x": -3143,
+        "y": -589,
+        "z": 128
+      }
+    ],
+    "default": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "dubrovnik_final": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "erdenberg_t1": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "erdenberg_t2": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "et_beach": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "et_ice": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "et_ufo_final": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "etl_adlernest": [
+      {
+        "name": "documents",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "etl_frostbite": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "etl_ice": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "etl_sp_delivery": [
+      {
+        "name": "deliveries",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "etl_supply": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "frostbite": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "fueldump": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "goldrush": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "karsiah_te2": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "mp_sillyctf": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "mp_sub_rc1": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "oasis": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "pha_chateau": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "radar": [
+      {
+        "name": "radar_parts",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "railgun": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "reactor_final": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "sp_delivery_te": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "supply": [
+      {
+        "name": "crane_controls",
+        "type": "misc",
+        "x": 656,
+        "y": -1360,
+        "z": 372
+      },
+      {
+        "name": "truck_escape",
+        "type": "escort",
+        "x": 2720,
+        "y": 1376,
+        "z": 192
+      }
+    ],
+    "supplydepot2": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "sw_battery": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "sw_goldrush_te": [
+      {
+        "name": "tank_breakout",
+        "type": "escort",
+        "x": 1860,
+        "y": -80,
+        "z": -96
+      },
+      {
+        "name": "truck_escape",
+        "type": "escort",
+        "x": -3310,
+        "y": -1060,
+        "z": -31
+      }
+    ],
+    "sw_oasis_b3": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "tc_base": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "te_escape2": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "the_station": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "warbell": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ],
+    "wolken1_b1": [
+      {
+        "name": "todo_objective",
+        "note": "TODO: add coordinates",
+        "type": "objective",
+        "x": null,
+        "y": null,
+        "z": null
+      }
+    ]
+  }
+}

@@ -1,233 +1,230 @@
 # Changelog
 
-All notable changes to the ET:Legacy Stats Bot project will be documented in this file.
+All notable changes to Slomix are documented here.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+---
+
+## [1.0.8] - 2026-02-08
 
 ### Added
 
-- Nothing yet
+- **Greatshot highlight metadata enrichment** - Richer fragmovie scout data
+  - Kill sequences with victim, weapon, headshot per kill
+  - Victims list, weapons_used dict, headshot_weapons dict
+  - Kill timing rhythm: kill_gaps_ms, avg_kill_gap_ms, fastest_kill_gap_ms
+  - Attacker match stats (kills, deaths, KDR, damage, accuracy) on each highlight
+  - New file: `greatshot/highlights/detectors.py` with 3 enrichment helpers
+
+- **Player stats extraction from demos** - Match-level performance data
+  - Extract player_stats from UDT matchStats.playerStats
+  - Fallback to timeline-derived kills/deaths when UDT data unavailable
+  - player_stats field added to AnalysisResult output
+  - Files: `greatshot/scanner/api.py`, `greatshot/contracts/types.py`
+
+- **Database cross-reference system** - Match demos to ET:Legacy stats rounds
+  - NEW: `website/backend/services/greatshot_crossref.py`
+  - Match by map (exact), duration (±5s), winner, scores
+  - Confidence scoring: 30% map + 30% duration + 20% winner + 20% scores
+  - Auto-crossref after analysis, store matched_round_id in metadata_json
+  - Enrich with 16-field player stats from player_comprehensive_stats
+  - Side-by-side comparison (demo kills vs DB kills/deaths/KDR/DPM)
+  - GET /api/greatshot/{demo_id}/crossref endpoint
+  - Files: `website/backend/routers/greatshot.py`, `website/backend/services/greatshot_jobs.py`
+
+- **Frontend highlight detail expansion** - Rich scout-friendly UI
+  - Kill sequence display (timestamp, victim, weapon, HS indicator)
+  - Weapon badges with headshot weapon highlighting
+  - Kill rhythm visualization (avg/fastest gap stats)
+  - Attacker's overall match stats display
+  - Database crossref panel: matched round, confidence, stats comparison table
+  - Files: `website/js/greatshot.js`, `website/index.html`
+
+- **Enhanced text reports** - Richer highlight metadata in reports
+  - Show victims, weapons, kill rhythm in highlight listings
+  - Player stats summary section (top 16 by kills)
+  - File: `greatshot/scanner/report.py`
+
+### Changed
+
+- Highlight detection now passes player_stats for attacker_stats enrichment
+- AnalysisResult.to_dict() now includes player_stats when available
+- Greatshot jobs auto-crossref demos with ≥50% confidence
+
+---
+
+## [1.0.6] - 2026-02-07
+
+### Added
+
+- **Player analytics commands** - `!consistency`, `!map_stats`, `!playstyle`, `!awards`, `!fatigue`
+  - New files: `bot/cogs/analytics_cog.py`, `bot/services/player_analytics_service.py`
+
+- **Matchup analytics system** - `!matchup A vs B`, `!duo_perf`, `!nemesis`
+  - Lineup vs lineup historical stats with confidence levels
+  - Auto-records matchups when session results are saved
+  - New files: `bot/cogs/matchup_cog.py`, `bot/services/matchup_analytics_service.py`
+  - Database: `matchup_history` table with JSONB player stats
+
+- **Map-based stopwatch scoring**
+  - Session scores now count MAP wins, not round wins
+  - `StopwatchScoringService.calculate_session_scores_with_teams()` for proper team-to-winner mapping
+  - Full map breakdown with timing in `!last_session` embed
+  - Tie handling: double fullhold = 1-1 (both teams defended)
+
+- **Real-time team tracking**
+  - Teams created on R1 import, updated as players join subsequent rounds
+  - Supports 3v3 -> 4v4 -> 6v6 growth with correct team assignment
+  - `gaming_session_id` column added to `session_teams` table
+
+- **Lua webhook v1.6.0** - spawn/death tracking, safe gentity access (crash fix)
+- **Proximity tracker v3** - crossfire detection, trade kill support
+- **Endstats pagination view** - paginated round awards display
+- **Round linker** - cross-references R1/R2 data with Lua webhook data
+- **Server control cog** - RCON, server status, map management, player list
+- **Website SPA overhaul** - sessions, matches, player profiles, leaderboards, admin panel, badges, proximity, season stats pages
+
+### Fixed
+
+- **Time dead calculation** - R2 `time_dead_ratio` was calculated against cumulative time; now uses `time_dead_minutes` directly (fixed ~15 min/session undercount)
+- **GROUP BY player_name** in `player_analytics_service.py` - changed to `GROUP BY player_guid` with `MAX(player_name)` to prevent duplicate entries on name changes
+- **Division by zero guard** in `matchup_analytics_service.py` - empty match list check before averaging
+- **Surrender timing** - Lua webhook captures actual played time instead of full map duration from stats files
+
+### Changed
+
+- Lua webhook fields use `Lua_` prefix to distinguish from stats file data
+- Website auth improvements and live-status updates
+- API router and service layer updates for website
+
+---
+
+## [1.0.5] - 2026-01-25
+
+### Added
+
+- **Lua webhook v1.3.0** - pause event timestamps (`Lua_Pauses_JSON`), warmup end timestamp (`Lua_WarmupEnd`), timing legend in Discord embed
+  - Database: `lua_pause_events` JSONB column
+
+- **Lua webhook v1.2.0** - warmup phase tracking (`Lua_Warmup`, `Lua_WarmupStart`)
+  - Database: `lua_warmup_seconds`, `lua_warmup_start_unix` columns
+
+- **ET:Legacy server optimization** - CPU affinity, UDP buffer tuning
+
+---
+
+## [1.0.4] - 2026-01-22
+
+### Added
+
+- **Lua webhook real-time stats** - instant round notification from game server (~3s vs 60s SSH polling)
+  - `stats_discord_webhook.lua` v1.1.0 on game server
+  - Captures accurate timing, winner, team composition at round end
+  - `lua_round_teams` table for cross-reference with stats file data
+  - Debug timing logs comparing stats file vs Lua timing
+
+### Fixed
+
+- **Surrender timing bug** - stats files show full map duration on surrender; Lua captures actual played time
+- **SSHHandler method name** - `list_files` -> `list_remote_files` in webhook file fetch
+
+---
+
+## [1.0.3] - 2026-01-14
+
+### Added
+
+- **EndStats processing** - parses `-endstats.txt` files for round awards and player VS stats
+- **7 award categories** - Combat, Deaths & Mayhem, Skills, Weapons, Teamwork, Objectives, Timing
+- **VS stats tracking** - player-vs-player kill/death records per round
+- **Discord follow-up embeds** - awards posted automatically after round stats
+- **3 new tables** - `round_awards`, `round_vs_stats`, `processed_endstats_files`
 
 ---
 
 ## [1.0.2] - 2025-12-04
 
-### December 2025 Feature Release - Real-Time Push & Voice Logging
-
 ### Added
 
-- **WebSocket Real-Time Push System** - Instant file detection from VPS via WebSocket (replaces 60s SSH polling)
-  - `vps_ws_notifier.py` - VPS-side file watcher that pushes notifications to bot
-  - Bot receives instant alerts when new stats files are written
-  - Config: `WS_ENABLED`, `WS_HOST`, `WS_PORT`, `WS_AUTH_TOKEN`
-- **Voice Session Logging** - Track player voice channel activity for gaming sessions
-  - Logs join/leave events for configured gaming voice channels
-  - Config: `ENABLE_VOICE_LOGGING=true`
-- **Round Publisher Service** - Auto-post rich Discord embeds after each round
-  - Shows ALL players ranked by kills with comprehensive stats
-  - Compact 2-line format: Name on line 1, all stats on line 2-3
-  - Stats include: K/D/G, DPM, damage dealt/received, accuracy, headshots, revives, team damage, time played/dead/denied, multikills
-  - Map completion summaries posted after Round 2
-- **Team Suggestion Commands** - AI-powered team balancing
-  - `!suggest_teams` - Suggest balanced teams from voice channel players
-  - `!balance_teams` - Alias for suggest_teams
-  - Uses historical player stats to optimize team balance
-- **FiveEyes Synergy Analytics Framework** - Infrastructure for player synergy tracking (disabled by default)
-  - `fiveeyes_config.json` - Configuration for synergy analytics
-  - Synergy calculation and team optimization algorithms ready for future activation
-
-### Changed
-
-- **SSH Monitoring Now Optional** - WebSocket push is preferred method for instant file detection
-- **Round Stats Format Enhanced** - New compact 2-line format with all stats including multikills and time denied
-- **Player Chunk Size Increased** - Bumped from 5 to 8 players per embed field (typical games don't split across fields)
+- **WebSocket real-time push** - VPS notifies bot instantly when new stats files are written
+- **Voice session logging** - track player voice channel activity
+- **Round publisher service** - auto-post rich Discord embeds with all player stats after each round
+- **Team suggestion commands** - `!suggest_teams`, `!balance_teams` for AI-powered team balancing
 
 ### Fixed
 
-- **SQL Nosec Comment Bug** - Fixed `# nosec B608` comment appearing inside SQL query string causing PostgreSQL syntax errors
-- **Command Alias Conflicts** - Resolved `balance_teams` and `suggest_teams` alias conflicts between team_builder and synergy_analytics cogs
-- **Channel Check Decorators** - Removed `@is_public_channel()` from team commands that was blocking execution
-- **Critical SQL Placeholder Bugs** - Fixed 12 queries using `{placeholders}` in regular strings instead of f-strings (would silently fail)
-- **Kill Thief Typo** - Fixed `kill_thie` → `kill_thief` in session_embed_builder.py (would cause KeyError)
-- **Foreign Key Constraint Mapping** - Fixed empty string `''` to `'f'` in validate_vps_schema.py
-- **Unused Variables** - Removed unused `ph`, `placeholder`, `heapq` variables
-- **Redundant Imports** - Removed duplicate `datetime` imports in ultimate_bot.py
-
-### Technical Details
-
-- **New Files**: `bot/services/round_publisher_service.py`, `bot/services/voice_session_service.py`, `tools/vps_ws_notifier.py`
-- **Config Additions**: WebSocket settings (`WS_*`), voice logging (`ENABLE_VOICE_LOGGING`)
-- **Branch**: Merged from `feature/websocket-push-voice-logging` (PR #22)
+- SQL nosec comment appearing inside query string causing PostgreSQL syntax errors
+- Command alias conflicts between team_builder and synergy_analytics cogs
+- 12 queries using `{placeholders}` in regular strings instead of f-strings
+- `kill_thie` -> `kill_thief` typo in session_embed_builder.py
 
 ---
 
 ## [1.0.1] - 2025-12-01
 
-### December 2025 Maintenance Release - Critical Bug Fixes
-
 ### Fixed
 
-- **CRITICAL: SSHMonitor Race Condition** - Fixed live Discord posting not working due to race condition between SSHMonitor service and endstats_monitor task. Both were running simultaneously causing files to be marked "processed" before Discord posting could occur. Solution: Disabled SSHMonitor auto-start; endstats_monitor now handles SSH + DB import + Discord posting.
-- **Channel Permission Checks** - `is_public_channel()` and `is_admin_channel()` decorators now silently return `False` instead of raising exceptions and sending error messages. Bot no longer announces "wrong channel" to users.
-- **on_message Channel Filtering** - Fixed bot responding to commands in wrong channels. Now properly uses `public_channels` config as fallback when `bot_command_channels` is not set.
-- **Website HTML Corruption** - Fixed `website/index.html` structure that was corrupted (duplicate opening tags, malformed document structure).
-- **Website JS Duplicate Functions** - Fixed `website/js/app.js` with duplicate `loadLeaderboard()` function declarations and broken `loadMatches()` function.
-- **Website SQL Injection** - Added `escape_like_pattern()` function to `website/backend/routers/api.py` to prevent SQL injection via search patterns.
-
-### Changed
-
-- SSHMonitor service is now initialized but NOT auto-started on bot startup
-- SSHMonitor remains available for manual control via `!automation` commands
-- endstats_monitor task loop is now the sole handler for: SSH connection, file download, database import, and Discord posting
-
-### Technical Details
-
-- **Root Cause**: Two monitoring systems (SSHMonitor + endstats_monitor) were competing for the same files. SSHMonitor downloaded files first, marking them as "processed" in local filesystem. When endstats_monitor ran, `should_process_file()` check #3 ("does file exist locally?") returned True, skipping the file before Discord posting could occur.
-- **Files Modified**: `bot/ultimate_bot.py`, `bot/core/checks.py`, `bot/services/automation/ssh_monitor.py`, `website/index.html`, `website/js/app.js`, `website/backend/routers/api.py`
+- **SSHMonitor race condition** - two monitoring systems competed for files, causing live Discord posting to fail. Disabled SSHMonitor auto-start; `endstats_monitor` now handles SSH + DB import + Discord posting as single system.
+- **Channel permission checks** - silently return `False` instead of raising exceptions and sending error messages
+- **on_message channel filtering** - uses `public_channels` config as fallback when `bot_command_channels` not set
+- **Website HTML corruption** - fixed malformed document structure in `index.html`
+- **Website JS duplicate functions** - fixed duplicate `loadLeaderboard()` declarations
+- **Website SQL injection** - added `escape_like_pattern()` to API router
 
 ---
 
 ## [1.0.0] - 2025-11-20
 
-### Version 1.0 Release - Production Ready
-
 ### Added
 
-- Achievement badge system for players (medic, engineer, sharpshooter, rambo, objective specialist)
+- Achievement badge system (medic, engineer, sharpshooter, rambo, objective specialist)
 - Custom display name system for linked Discord accounts
-- `!set_display_name` command to set personalized display names
-- `!achievements` command to view available achievement badges
-- Exact value labels on all performance graphs for better readability
-- Badge stacking support for players with multiple achievements
-
-### Changed
-
-- **BREAKING**: Auto-posting now shows ALL players with comprehensive stats (not just top performers)
-- Improved !last_session output format with achievement badges displayed next to player names
-- Enhanced session statistics display with two-line player format for better readability
-- Updated achievement badges to appear in !last_session player listings
+- Exact value labels on performance graphs
+- Auto-posting shows all players with comprehensive stats
 
 ### Fixed
 
-- Critical bug in !list_players command that caused crashes
-- Codacy static analysis warnings for code quality
-- Various production bugs and edge cases
+- Critical bug in `!list_players` command
+- Codacy static analysis warnings
 
-## [2.0.0] - 2025-11-18
+---
 
-### Major Release - Production-Ready System
+## [0.9.0] - 2025-11-18
+
+Major production release. Migrated from SQLite to PostgreSQL.
 
 ### Added
 
-- **6-Layer Data Validation System** - Comprehensive data integrity with ACID guarantees
-- **Full Automation Suite** - Zero-touch operation with SSH monitoring
-- **Voice-Conditional SSH Monitoring** - Resource-efficient monitoring based on voice channel activity
-- **Gaming Session Grouping** - Automatic 60-minute gap detection for session tracking
-- **Round 2 Differential Calculation** - Accurate team-swap stat calculation
-- **PostgreSQL Migration** - Complete migration from SQLite to PostgreSQL 18.0
-- **Interactive Linking System** - React-based player account linking
-- **Comprehensive Leaderboards** - 11 different ranking categories
-- **Session Analytics** - Detailed session summaries and statistics
-- **Alias Tracking** - Automatic player name consolidation
-- **Structured Logging** - Comprehensive logging system with separate log files
-- **Connection Pooling** - High-performance async database operations
-- **TTL-based Caching** - 300-second cache for improved performance
-
-### Changed
-
-- **DPM Calculations** - Now use actual playtime instead of round duration for accuracy
-- **Leaderboard Queries** - Fixed stat inflation by properly filtering R0 warmup rounds
-- **Session Detection** - Improved gaming session boundary detection
-- **Startup Optimization** - SSH monitor now only checks last 24 hours on startup (not all 3,766+ files)
-- **File Filtering** - Automatically excludes `_ws.txt` and unwanted files
-- **Voice Detection** - Enhanced voice channel monitoring with grace periods
+- **6-layer data validation** - file integrity, duplicate prevention, schema validation, cross-field checks, transaction safety, DB constraints
+- **Full automation** - SSH monitoring, auto-download, auto-import, auto-post
+- **Voice-conditional SSH monitoring** - only checks when players in voice channels
+- **Gaming session grouping** - 60-minute gap detection
+- **Round 2 differential calculation** - subtracts R1 from cumulative R2 stats
+- **PostgreSQL migration** - from SQLite to PostgreSQL 14
+- **AI match predictions** - 4-factor algorithm (H2H, form, map performance, substitutions)
+- **11 leaderboard categories** - K/D, DPM, accuracy, headshots, efficiency, etc.
+- **Interactive account linking** - react with emojis to link Discord to game stats
+- **Connection pooling** - asyncpg for high-performance async queries
+- **TTL-based caching** - 5-minute cache for query results
 
 ### Fixed
 
-- **Security**: Rate limiting, Discord intents, database SSL support
-- **Performance**: Fixed !lp command unbounded query (critical optimization)
-- **Data Integrity**: R0/R1/R2 filtering across all queries
-- **Memory Leaks**: Fixed async blocking and resource cleanup
-- **PostgreSQL Compatibility**: Fixed boolean type errors and parameter mismatches
-- **Shell Injection**: Proper command sanitization with shlex.quote()
-- **Voice Detection Bug**: Fixed 31% file loss issue
-- **Team Aggregation**: Fixed DPM and stat calculations
-- **Session Commands**: Fixed !last_session and !session queries
-- **Sync Commands**: Fixed !sync_month and !sync_week errors
+- DPM calculations now use actual playtime instead of round duration
+- Leaderboard queries properly filter R0 warmup rounds
+- SSH monitor only checks last 24h on startup (not all historical files)
+- Rate limiting, shell injection prevention, database SSL support
 
-### Security
+---
 
-- Added rate limiting to prevent abuse
-- Implemented secure temp file handling
-- Added command sanitization for shell commands
-- Fixed SQL injection warnings in link_cog.py
-- Added database SSL support
-- Proper Discord intents configuration
-
-## [1.0.0] - 2025-10-15
-
-### Initial Production Release
+## [0.1.0] - 2025-10-15
 
 ### Added
 
-- Basic Discord bot functionality
+- Initial release with basic Discord bot functionality
 - SQLite database support
 - Manual stats file import
-- Player statistics commands (!stats, !compare)
+- Player statistics commands (`!stats`, `!compare`)
 - Basic leaderboard system
 - Round and session tracking
-- Player linking system
-
-### Features
-
-- 53+ statistics tracked per player
-- K/D ratio, DPM, accuracy calculations
-- Weapon statistics breakdown
-- Map-specific statistics
-- Basic automation support
-
----
-
-## Version History Summary
-
-- **v2.0.0** (2025-11-18): Major production release with PostgreSQL, full automation, and 6-layer validation
-- **v1.0.0** (2025-10-15): Initial production release with basic features
-
----
-
-## Upgrade Notes
-
-### Upgrading to 2.0.0
-
-1. **Database Migration Required**: Run `postgresql_database_manager.py` to migrate from SQLite to PostgreSQL
-2. **Configuration Changes**: Update `.env` file with PostgreSQL credentials
-3. **New Dependencies**: Install updated requirements with `pip install -r requirements.txt`
-4. **Automation Setup**: Configure SSH settings for automation features
-5. **Voice Monitoring**: Add `GAMING_VOICE_CHANNELS` to `.env` for voice-conditional monitoring
-
-### Breaking Changes in 2.0.0
-
-- SQLite is no longer the primary database (PostgreSQL required)
-- Database schema changes require migration
-- Some command outputs have changed format
-- Automation configuration moved to `.env` file
-
----
-
-## Contribution Guidelines
-
-When adding entries to this changelog:
-
-1. **Group changes** into Added, Changed, Deprecated, Removed, Fixed, and Security sections
-2. **Use present tense** for consistency ("Add feature" not "Added feature")
-3. **Be specific** - include command names, file names, or feature names
-4. **Link to issues/PRs** when relevant
-5. **Update [Unreleased]** section for ongoing development
-6. **Create new version** section when releasing
-
----
-
-**Note**: This CHANGELOG was started on 2025-11-18. Prior changes were retroactively documented from git history.
+- 53+ statistics tracked per player per round

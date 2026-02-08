@@ -1,0 +1,46 @@
+# Claude CLI Ignore File
+# Prevents Claude from scanning large/unnecessary directories
+
+# Logs - Can grow to GB sizes
+logs/
+*.log
+
+# Backups and Database Files
+backups/
+*.db
+*.sql
+
+# Python Virtual Environments
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node Modules
+node_modules/
+
+# Coverage Reports
+htmlcov/
+.coverage
+coverage.xml
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Large Data Directories
+local_stats/
+
+# Git Directory (Claude doesn't need to scan this)
+.git/
+
+# IDE Directories
+.vscode/
+.idea/
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
