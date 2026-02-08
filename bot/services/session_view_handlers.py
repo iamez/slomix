@@ -96,13 +96,13 @@ class SessionViewHandlers:
 
         # Also fetch revives GIVEN per player
         rev_query = """
-            SELECT clean_name, SUM(revives_given) as revives_given
+            SELECT player_guid, MAX(clean_name) as clean_name, SUM(revives_given) as revives_given
             FROM player_comprehensive_stats
             WHERE round_id IN ({session_ids_str})
-            GROUP BY clean_name
+            GROUP BY player_guid
         """
         rev_rows = await self.db_adapter.fetch_all(rev_query.format(session_ids_str=session_ids_str), tuple(session_ids))
-        revives_map = {r[0]: (r[1] or 0) for r in rev_rows}
+        revives_map = {r[1]: (r[2] or 0) for r in rev_rows}  # r[1] is clean_name, r[2] is revives_given
 
         # Aggregate per-player across rounds
         player_objectives = {}

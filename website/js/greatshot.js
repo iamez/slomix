@@ -2,7 +2,7 @@
  * Greatshot upload + analysis frontend module.
  */
 
-import { API_BASE, escapeHtml } from './utils.js';
+import { API_BASE, escapeHtml, escapeJsString } from './utils.js';
 
 let currentDetailId = null;
 let cachedGreatshotItems = [];
@@ -115,7 +115,7 @@ function renderDemosList(items) {
         return `
             <button
                 class="glass-card p-4 rounded-xl border border-white/10 text-left hover:border-brand-cyan/40 transition w-full"
-                onclick="navigateToGreatshotDemo('${escapeHtml(item.id)}')">
+                onclick="navigateToGreatshotDemo('${escapeJsString(item.id)}')">
                 <div class="flex items-center justify-between gap-3">
                     <div class="text-sm font-bold text-white truncate">${escapeHtml(item.filename || item.id)}</div>
                     <span class="text-[10px] font-bold px-2 py-1 rounded border ${status.classes}">${status.label}</span>
@@ -148,7 +148,7 @@ function renderHighlightsHub(items) {
             <div class="text-slate-200">${escapeHtml(item.filename || item.id)}</div>
             <div class="flex items-center gap-3 text-xs">
                 <span class="text-brand-amber">${Number(item.highlight_count || 0)} highlights</span>
-                <button onclick="navigateToGreatshotDemo('${escapeHtml(item.id)}')"
+                <button onclick="navigateToGreatshotDemo('${escapeJsString(item.id)}')"
                     class="px-2 py-1 rounded border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition">
                     Open
                 </button>
@@ -172,7 +172,7 @@ function renderClipsHub(items) {
             <div class="text-slate-200">${escapeHtml(item.filename || item.id)}</div>
             <div class="flex items-center gap-3 text-xs">
                 <span class="text-slate-400">${Number(item.highlight_count || 0)} clip windows</span>
-                <button onclick="navigateToGreatshotDemo('${escapeHtml(item.id)}')"
+                <button onclick="navigateToGreatshotDemo('${escapeJsString(item.id)}')"
                     class="px-2 py-1 rounded border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition">
                     Manage Clips
                 </button>
@@ -197,7 +197,7 @@ function renderRendersHub(items) {
             <div class="flex items-center gap-3 text-xs">
                 <span class="text-brand-emerald">${Number(item.rendered_count || 0)} rendered</span>
                 <span class="text-slate-400">${Number(item.render_job_count || 0)} total jobs</span>
-                <button onclick="navigateToGreatshotDemo('${escapeHtml(item.id)}')"
+                <button onclick="navigateToGreatshotDemo('${escapeJsString(item.id)}')"
                     class="px-2 py-1 rounded border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition">
                     Open
                 </button>
@@ -378,7 +378,7 @@ function renderHighlights(demoId, highlights, roundStartMs = 0) {
                     <div class="flex items-center gap-2 flex-shrink-0">
                         ${clipLink}
                         <button class="px-3 py-2 rounded-lg text-xs font-bold border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition"
-                            onclick="queueHighlightRender('${escapeHtml(demoId)}','${escapeHtml(item.id)}')">
+                            onclick="queueHighlightRender('${escapeJsString(demoId)}','${escapeJsString(item.id)}')">
                             Render
                         </button>
                     </div>

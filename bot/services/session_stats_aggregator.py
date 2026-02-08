@@ -286,6 +286,11 @@ class SessionStatsAggregator:
 
     async def get_dpm_leaderboard(self, session_ids: List, session_ids_str: str, limit: int = 10):
         """Get DPM leaderboard based on individual player playtime"""
+        # Validate limit is a safe integer to prevent SQL injection
+        limit = int(limit)  # Raises ValueError if not convertible
+        if limit < 1 or limit > 1000:
+            raise ValueError(f"Limit must be between 1 and 1000, got {limit}")
+
         query = """
             SELECT MAX(player_name) as player_name,
                 CASE

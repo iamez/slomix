@@ -2280,9 +2280,6 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"❌ Failed to update alias for {guid}/{alias}: {e}")
 
-
-            logger.error(f"❌ Failed to post map summary: {e}")
-
     # NOTE: File tracking methods moved to bot/automation/file_tracker.py
     # - FileTracker.should_process_file()
     # - FileTracker.mark_processed()

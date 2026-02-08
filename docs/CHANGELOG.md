@@ -6,6 +6,73 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.0.9] - 2026-02-08
+
+### Security Fixes
+
+- **CRITICAL: Added admin permission decorators** - Server control commands now require admin channel
+  - `rcon`, `map_add`, `map_change`, `map_delete`, `kick`, `say` commands protected
+  - File: `bot/cogs/server_control.py`
+
+- **CRITICAL: Fixed file integrity verification crash** - Runtime AttributeError on every file check
+  - Changed `tuple.get()` to index access `[0]`
+  - File: `bot/automation/file_tracker.py`
+
+- **HIGH: Fixed player GUID grouping** - Eliminated duplicate player entries in leaderboards
+  - Changed 14 SQL queries from `GROUP BY player_name` to `GROUP BY player_guid`
+  - Each player now appears once regardless of name changes
+  - Files: `bot/cogs/leaderboard_cog.py`, `bot/services/session_view_handlers.py`
+
+- **HIGH: Fixed XSS in website onclick handlers** - JavaScript context injection vulnerability
+  - Changed `escapeHtml()` to `escapeJsString()` in 6 onclick attributes
+  - Files: `website/js/awards.js`, `website/js/greatshot.js`
+
+- **MEDIUM: Fixed SSH resource leak** - Connections not closed on exceptions
+  - Added try/finally blocks to ensure cleanup
+  - File: `bot/automation/ssh_handler.py`
+
+- **MEDIUM: Sanitized error messages** - Database details no longer leaked to Discord
+  - Added `sanitize_error_message()` to 8 error handlers
+  - Files: `bot/cogs/matchup_cog.py`, `bot/cogs/analytics_cog.py`
+
+- **MEDIUM: Fixed SQL limit injection** - Unvalidated limit parameter
+  - Added validation (1-1000 range) with ValueError on invalid input
+  - File: `bot/services/session_stats_aggregator.py`
+
+### Added
+
+- **Secrets management system** - Password rotation and generation tool
+  - New tool: `tools/secrets_manager.py`
+  - Generate passwords in format: `thunder-mountain-eagle1337`
+  - Rotate database passwords, Discord tokens, SSH keys
+  - Audit codebase for hardcoded secrets
+  - Documentation: `docs/SECRETS_MANAGEMENT.md`
+  - **Status**: Ready to use, NOT activated (passwords unchanged)
+
+- **Security audit documentation**
+  - Complete fix report: `docs/SECURITY_FIXES_2026-02-08.md`
+  - Lists all 9 critical/high fixes applied
+  - Testing recommendations and deployment checklist
+
+### Changed
+
+- **Admin channel configuration** - Added documentation to `.env.example`
+  - Production: 822036093775249438
+  - Bot-dev: 1424620551300710511, 1424620499975274496
+
+### Fixed
+
+- **Orphaned error log statement** - Removed misleading "Failed to post map summary" message
+  - File: `bot/ultimate_bot.py` line 2284
+
+### Documentation
+
+- Added comprehensive security audit report
+- Added secrets management usage guide
+- Updated .env.example with admin channel IDs
+
+---
+
 ## [1.0.8] - 2026-02-08
 
 ### Added
