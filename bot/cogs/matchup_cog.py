@@ -16,6 +16,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.utils import sanitize_error_message
 from bot.services.matchup_analytics_service import MatchupAnalyticsService
 
 logger = logging.getLogger("bot.cogs.matchup")
@@ -154,7 +155,7 @@ class MatchupCog(commands.Cog):
                 summary = self.matchup_service.format_matchup_summary(stats, perspective='a')
             except Exception as e:
                 logger.error(f"Error in matchup command: {e}", exc_info=True)
-                await ctx.send(f"Error analyzing matchup: {e}")
+                await ctx.send(f"Error analyzing matchup: {sanitize_error_message(e)}")
                 return
 
             embed = discord.Embed(
@@ -218,7 +219,7 @@ class MatchupCog(commands.Cog):
                 summary = self.matchup_service.format_synergy_summary(synergy, name1, name2)
             except Exception as e:
                 logger.error(f"Error in synergy command: {e}", exc_info=True)
-                await ctx.send(f"Error analyzing synergy: {e}")
+                await ctx.send(f"Error analyzing synergy: {sanitize_error_message(e)}")
                 return
 
             # Color based on synergy
@@ -309,7 +310,7 @@ class MatchupCog(commands.Cog):
                 nemeses.sort(key=lambda x: x['suppression'])
             except Exception as e:
                 logger.error(f"Error in nemesis command: {e}", exc_info=True)
-                await ctx.send(f"Error analyzing nemesis: {e}")
+                await ctx.send(f"Error analyzing nemesis: {sanitize_error_message(e)}")
                 return
 
             # Format output

@@ -320,11 +320,11 @@ class FileTracker:
 
             result = await self.db_adapter.fetch_one(query, (filename,))
 
-            if not result or not result.get('file_hash'):
+            if not result or not result[0]:
                 # No stored hash - can't verify, but not an error
                 return True, "No stored hash for comparison (new file or legacy import)"
 
-            stored_hash = result['file_hash']
+            stored_hash = result[0]  # First column: file_hash
             current_hash = calculate_file_hash(file_path)
 
             if stored_hash == current_hash:
