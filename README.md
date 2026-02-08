@@ -1,253 +1,338 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.7-blue?style=for-the-badge" alt="Version">
-  <img src="https://img.shields.io/badge/python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/PostgreSQL-14-336791?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL">
-  <img src="https://img.shields.io/badge/discord.py-2.0+-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord.py">
-  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI">
-</p>
+# 🎮 Slomix - ET:Legacy Competitive Stats Platform
 
-<h1 align="center">Slomix</h1>
+> **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
-<p align="center">
-  <strong>A love letter to competitive ET:Legacy, written in Python and PostgreSQL.</strong>
-</p>
+[![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
+[![Version](https://img.shields.io/badge/version-1.0.7-blue)](docs/CHANGELOG.md)
+[![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_14-336791)](https://www.postgresql.org/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
+[![Data Integrity](https://img.shields.io/badge/data%20integrity-6%20layers-blue)](docs/SAFETY_VALIDATION_SYSTEMS.md)
+[![Discord.py](https://img.shields.io/badge/discord.py-2.0+-5865F2)](https://discordpy.readthedocs.io/)
 
-<p align="center">
-  Discord bot. Web dashboard. Demo highlight scanner. Real-time game telemetry.<br>
-  Built by players, for players &mdash; because every frag deserves to be remembered.
-</p>
+A **production-grade** Discord bot + web dashboard + demo analysis pipeline with **6-layer data validation**, **real-time Lua telemetry**, **AI match predictions**, and **demo highlight detection** for ET:Legacy game servers.
 
 ---
 
-## The Story
+## 🔥 Recent Updates (February 2026)
 
-It started the way most side projects do: *"I just want to see who had the best K/D last night."*
+### **🎬 v1.0.7: Greatshot Demo Pipeline & Database Overhaul (February 8, 2026)** 🆕
 
-Thirteen months later, there are **131,000+ kills** tracked across **1,657 rounds** and **87 gaming sessions**. The system parses stats files, cross-references them with real-time Lua telemetry from the game server, detects highlights in demo recordings, and tells you exactly who dominated &mdash; and who got dominated &mdash; in every session since January 2025.
+**Demo upload, analysis, highlight detection, and clip extraction — now integrated!**
 
-What was once a single Python script reading a text file is now a platform with **37 database tables**, **~99 Discord commands**, a full web dashboard, an AI match prediction engine, and a demo analysis pipeline that can find your triple headshot from last Tuesday.
+- 🎬 **Greatshot Pipeline** — Upload `.dm_84` demos via the website, auto-analyze with highlight detection
+- 🔍 **Highlight Detection** — Multi-kills, killing sprees, quick headshot chains, aim moments
+- ✂️ **Clip Extraction** — Cut highlight clips from demos at exact timestamps via UDT_cutter
+- 🎥 **Render Queue** — Pipeline ready for video rendering (configurable render backend)
+- 🛠️ **UDT Parser Built from Source** — ET:Legacy protocol 84 support via [ryzyk-krzysiek's fork](https://github.com/mightycow/uberdemotools/pull/2), 3 compilation fixes applied
+- 🗄️ **4 New Tables** — `greatshot_demos`, `greatshot_analysis`, `greatshot_highlights`, `greatshot_renders`
+- 🔧 **Database Manager Overhaul** — Schema creation now covers all 37 tables (was 7), rebuild wipes 20 tables in FK-safe order (was 7), 4 new column migrations
 
-This is Slomix.
+**Origin:** Based on [mittermichal/greatshot-web](https://github.com/mittermichal/greatshot-web) by **Kimi**. We reverse-engineered his architecture, adapted the scanner/highlight/cutter/renderer pipeline to our codebase, wired it into our PostgreSQL database, integrated it with the website's auth system and background job workers, and built the UDT parser from source with ET:Legacy protocol support. The highlight detection algorithms and pipeline design are his — we made them talk to our database and our website. Big thanks to Kimi! 🙏
 
 ---
 
-## What It Does
+### **📊 v1.0.6: Analytics, Matchups & Website Overhaul (February 1, 2026)**
 
+- 📊 **Player Analytics Commands** — `!consistency`, `!map_stats`, `!playstyle`, `!awards`, `!fatigue`
+- ⚔️ **Matchup Analytics** — `!matchup A vs B`, `!duo_perf`, `!nemesis` — lineup vs lineup stats with confidence scoring
+- 🏆 **Map-Based Stopwatch Scoring** — Session scores now count MAP wins (not round wins), with full map breakdown + timing
+- 👥 **Real-Time Team Tracking** — Teams created on R1, grow dynamically as players join (3v3 → 4v4 → 6v6)
+- 🌐 **Website SPA Overhaul** — Sessions, matches, profiles, leaderboards, admin, badges, proximity, season stats pages
+- 🎮 **Server Control Cog** — RCON, server status, map management, player list
+- 🔫 **Lua Webhook v1.6.0** — Spawn/death tracking, safe gentity access (crash fix)
+- 🔴 **Proximity Tracker v3** — Crossfire detection, trade kill support
+
+### **⏱️ v1.0.5: Lua Webhook Enhancements (January 25, 2026)**
+
+- ⏸️ **Lua Webhook v1.3.0** — Pause event timestamps (`Lua_Pauses_JSON`), warmup end tracking, timing legend in Discord embed
+- 🔥 **Lua Webhook v1.2.0** — Warmup phase tracking (`Lua_Warmup`, `Lua_WarmupStart`)
+
+### **🚀 v1.0.4: Real-Time Lua Webhook (January 22, 2026)**
+
+- ⚡ **Instant Round Notifications** — Lua webhook fires ~3s after round end (vs 60s SSH polling)
+- 🏳️ **Surrender Timing Fix** — Stats files show full map duration on surrender; Lua captures actual played time
+- 👥 **Team Composition Capture** — Axis/Allies player lists at round end
+- ⏸️ **Pause Tracking** — Game pause detection and timing
+- 🗄️ **`lua_round_teams` Table** — Separate storage for Lua-captured data, cross-referenced with stats files
+
+### **🏅 v1.0.3: EndStats & Awards System (January 14, 2026)**
+
+- 🏅 **EndStats Processing** — Parses `-endstats.txt` files for round awards and player VS stats
+- 🎖️ **7 Award Categories** — Combat, Deaths & Mayhem, Skills, Weapons, Teamwork, Objectives, Timing
+- 📊 **VS Stats Tracking** — Player-vs-player kill/death records per round
+- 💬 **Discord Follow-Up Embeds** — Awards posted automatically after round stats
+- 🗄️ **3 New Tables** — `round_awards`, `round_vs_stats`, `processed_endstats_files`
+
+**[📖 Full Changelog](docs/CHANGELOG.md)**
+
+---
+
+## ✨ What Makes This Special
+
+- 🔒 **6-Layer Data Integrity** — Transaction safety, ACID guarantees, per-insert verification
+- 🤖 **Full Automation** — SSH monitoring, auto-download, auto-import, auto-post (60s cycle)
+- ⚡ **Real-Time Lua Telemetry** — Game server webhook fires ~3s after round end
+- 🧮 **Differential Calculation** — Smart Round 2 stats (subtracts Round 1 for accurate team-swap metrics)
+- 📊 **53+ Statistics** — K/D, DPM, accuracy, efficiency, headshots, damage, playtime, and more
+- 🔮 **AI Match Predictions** — 4-factor algorithm (H2H, form, map performance, substitutions)
+- 🎬 **Demo Highlight Scanner** — Upload demos, detect multi-kills/sprees, cut clips
+- 🏆 **EndStats Awards** — Post-round awards with 7 categories
+- 🌐 **Web Dashboard** — FastAPI + vanilla JS SPA with auth, profiles, leaderboards, admin panel
+
+**[📊 Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation](docs/SAFETY_VALIDATION_SYSTEMS.md)** | **[📖 Changelog](docs/CHANGELOG.md)**
+
+---
+
+## 📈 Production Numbers
+
+| Metric | Value |
+|--------|-------|
+| **Kills Tracked** | 131,648 |
+| **Headshots Recorded** | 149,022 |
+| **Damage Dealt** | 26 million |
+| **Revives Given** | 4,725 |
+| **Rounds Parsed** | 1,657 |
+| **Gaming Sessions** | 87 |
+| **Unique Players** | 32 |
+| **Stats Per Player Per Round** | 53+ fields |
+| **Discord Commands** | ~99 across 21 cogs |
+| **Database Tables** | 37 |
+| **Data Span** | Jan 2025 — Feb 2026 (13 months) |
+
+---
+
+## 🔮 Ecosystem
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                       SLOMIX ECOSYSTEM                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
+│  │  DISCORD    │  │   WEB       │  │  GREATSHOT  │            │
+│  │  BOT        │  │   DASHBOARD │  │  SCANNER    │            │
+│  │  (Python)   │  │  (FastAPI)  │  │  (UDT+Py)   │            │
+│  │  ✅ PROD    │  │  ✅ PROD    │  │  🔶 NEW     │            │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘            │
+│         │                │                │                    │
+│  ┌──────┴──────┐         │         ┌──────┴──────┐            │
+│  │ LUA WEBHOOK │         │         │  PROXIMITY  │            │
+│  │ (Real-time) │         │         │  TRACKER    │            │
+│  │  ✅ PROD    │         │         │  🔶 PROTO   │            │
+│  └──────┬──────┘         │         └──────┬──────┘            │
+│         │                │                │                    │
+│         └────────────────┼────────────────┘                    │
+│                          │                                     │
+│                  ┌───────▼───────┐                             │
+│                  │  PostgreSQL   │                             │
+│                  │  37 Tables    │                             │
+│                  └───────────────┘                             │
+└─────────────────────────────────────────────────────────────────┘
 ```
-                         ET:Legacy Game Server
-                        /         |          \
-                       /          |           \
-              Stats Files    Lua Telemetry    Demo Files (.dm_84)
-                  |               |                |
-             SSH Monitor     Discord Webhook    Web Upload
-              (60s poll)      (~3s real-time)       |
-                  |               |            Greatshot
-                  v               v            Scanner
-               Parser ──> PostgreSQL <──────────┘
-              (53+ fields     (37 tables)
-               per player)      |
-                  |        _____|_____
-                  |       |           |
-                  v       v           v
-             Discord Bot        Web Dashboard
-            (~99 commands)    (FastAPI + JS SPA)
+
+| Project | Status | Description |
+|---------|--------|-------------|
+| **Discord Bot** (this repo) | ✅ Production | ~99 commands, 21 cogs, full automation, AI predictions |
+| **Website** (`/website/`) | ✅ Production | FastAPI + JS SPA: profiles, sessions, leaderboards, admin, greatshot |
+| **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, surrender timing fix, team capture |
+| **Greatshot** (`/greatshot/`) | 🔶 New | Demo upload, highlight detection, clip extraction, render pipeline |
+| **Proximity** (`/proximity/`) | 🔶 Prototype | Lua combat engagement & heatmap tracking |
+
+---
+
+## 🏗️ System Architecture
+
+### **Data Pipeline Overview**
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                    ET:Legacy Game Server (VPS)                   │
+│  Stats files (.txt)  |  Lua telemetry  |  Demo files (.dm_84)  │
+└──────┬───────────────┼─────────────────┼────────────────────────┘
+       │               │                 │
+       │ SSH/SFTP      │ Discord         │ Web Upload
+       │ (60s poll)    │ Webhook (~3s)   │
+       ▼               ▼                 ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│ Layer 1-2:   │ │ Lua Webhook  │ │ Greatshot    │
+│ Download &   │ │ Processing   │ │ Scanner      │
+│ Dedup Check  │ │ (timing,     │ │ (UDT_json    │
+│              │ │  teams,      │ │  → highlights │
+│              │ │  pauses)     │ │  → clips)    │
+└──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+       │               │                 │
+       ▼               ▼                 ▼
+┌──────────────────────────────────────────────────┐
+│  Layer 3-4: Parser Validation & Differential     │
+│  ✓ R2 differential  ✓ Cross-field checks         │
+│  ✓ Time-gap matching  ✓ 7-check pre-insert       │
+└──────────────────────┬───────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────────┐
+│  Layer 5-6: PostgreSQL (ACID) + Constraints      │
+│  ✓ Transaction safety  ✓ FK/NOT NULL/UNIQUE      │
+│  37 tables  |  53+ columns per player per round  │
+└──────────────────────┬───────────────────────────┘
+                       │
+              ┌────────┼────────┐
+              ▼        ▼        ▼
+         Discord    Website   Background
+          Bot       Dashboard  Workers
+        (~99 cmds) (FastAPI)  (Analysis,
+                              Render)
 ```
 
-### Discord Bot (production)
-
-The heart of the system. 21 cogs, 99 commands, always watching.
-
-- **Session stats** &mdash; `!last_session` renders a full gaming session: per-player stats, map-based stopwatch scores, team compositions, timing breakdowns
-- **Player analytics** &mdash; `!stats`, `!consistency`, `!map_stats`, `!playstyle`, `!fatigue` &mdash; deep dives into how you play and how you're trending
-- **Leaderboards** &mdash; 11 categories: DPM, K/D, accuracy, headshots, revives, efficiency, and more
-- **Matchup analytics** &mdash; `!matchup sWat vs S*F`, `!duo_perf`, `!nemesis` &mdash; lineup vs lineup history with confidence scoring
-- **Match predictions** &mdash; AI-powered win probability when teams split into voice channels, based on historical matchup data, recent form, map performance, and substitution impact
-- **Achievements** &mdash; badge system for lifetime milestones (medic, sharpshooter, engineer, rambo, objective specialist)
-- **Server control** &mdash; RCON commands, live player list, map management
-- **Full automation** &mdash; SSH monitoring, voice channel detection, auto-posting round stats the moment they happen
-
-### Web Dashboard (production)
-
-FastAPI backend serving a vanilla JS single-page app. Player profiles, session browser, leaderboards, season stats, live server status, admin panel, proximity heatmaps, and now &mdash; greatshot.
-
-### Greatshot &mdash; Demo Highlight Scanner (new)
-
-This one deserves its own section.
-
-**Greatshot** is a demo analysis pipeline that scans ET:Legacy `.dm_84` recordings, detects highlight-worthy moments, and prepares them for clip extraction and rendering.
-
-Upload a demo through the website. The system will:
-1. **Parse** it using [UberDemoTools](https://github.com/mightycow/uberdemotools) (ET:Legacy protocol 84 support via [ryzyk-krzysiek's PR](https://github.com/mightycow/uberdemotools/pull/2))
-2. **Normalize** the raw parser output into a unified event timeline (kills, chats, team changes)
-3. **Detect highlights** &mdash; multi-kills, killing sprees, quick headshot chains, aim moments
-4. **Cut clips** from the demo file at the exact timestamps
-5. **Queue renders** for video output (pipeline ready, render backend configurable)
-
-The original greatshot was developed by **[Kimi (mittermichal)](https://github.com/mittermichal/greatshot-web)** as a standalone demo analysis tool. We reverse-engineered his architecture, adapted the scanner/highlight/cutter/renderer pipeline to our codebase, wired it into our PostgreSQL database (4 new tables), integrated it with the website's auth system and background job workers, built the UDT parser from source with ET:Legacy protocol support (3 compilation fixes required), and gave it a home inside our existing infrastructure. The highlight detection algorithms, event normalization patterns, and pipeline design philosophy are Kimi's &mdash; we just made them talk to our database and our website.
-
-Thank you, Kimi. Seriously.
-
-### Proximity Tracker (prototype)
-
-Lua mod running on the game server that tracks real-time combat engagements &mdash; who fought who, at what range, crossfires, trade kills. Data feeds into 8 database tables and the website's proximity visualization page.
+**Processing Speed:** ~3 seconds per file (download → parse → validate → insert → Discord post)
 
 ---
 
-## By The Numbers
+## 🔒 Data Integrity & Safety Systems
 
-These are live production numbers, not demo data:
+### **6 Layers of Protection**
 
-| | |
-|---|---|
-| **131,648** kills tracked | **149,022** headshots recorded |
-| **26 million** damage dealt | **4,725** revives given |
-| **1,657** rounds parsed | **87** gaming sessions |
-| **32** unique players | **37** database tables |
-| **~99** Discord commands | **21** command modules (cogs) |
-| **53+** stats per player per round | **13 months** of data (Jan 2025 &mdash; Feb 2026) |
+| Layer | Component | What It Protects | Blocking? |
+|-------|-----------|------------------|-----------|
+| **1** | File Transfer | Download corruption, empty files | ✅ Yes |
+| **2** | Duplicate Prevention | Re-processing, bot restarts | ✅ Yes |
+| **3** | Parser Validation | Invalid types, impossible stats, R2 differential | ✅ Yes |
+| **4** | 7-Check Validation | Aggregate mismatches, data loss | ⚠️ No (warns) |
+| **5** | Per-Insert Verification | Silent corruption, type conversion | ✅ Yes |
+| **6** | PostgreSQL Constraints | NOT NULL, negative values, orphans | ✅ Yes |
 
----
+**Result:** Every data point verified at **multiple checkpoints** before commit.
 
-## The Data Pipeline
+**[📖 Full Documentation: SAFETY_VALIDATION_SYSTEMS.md](docs/SAFETY_VALIDATION_SYSTEMS.md)**
 
-This is the part we're most proud of. Six layers of validation, zero data loss.
+### **Round 2 Differential Calculation**
 
-### 1. Stats File Parsing
+ET:Legacy Round 2 stats files show **cumulative totals** (R1 + R2), not per-round performance. The parser automatically:
 
-ET:Legacy writes a stats file after every round. The parser extracts 53+ fields per player: kills, deaths, headshots, damage, accuracy, revives, objectives, time played, and much more.
+1. ✅ Detects Round 2 files by filename
+2. ✅ Searches for matching Round 1 file (same map, <60min gap)
+3. ✅ Rejects old Round 1 files (different session)
+4. ✅ Calculates differential: `R2_actual = R2_cumulative - R1`
 
-**The Round 2 problem:** ET:Legacy Round 2 stats files contain *cumulative* totals (R1 + R2), not R2-only performance. The parser automatically finds the matching Round 1 file, validates the time gap (must be <60 minutes), and calculates the differential. This happens transparently on every import.
+```text
+Round 1 (21:31): Player vid = 20 kills
+Round 2 (23:41): Stats file = 42 kills (cumulative)
+         ❌ REJECTED: 21:31 Round 1 (135.9 min gap - different session)
+         ✅ MATCHED: 23:41 Round 1 (5.8 min gap - same session)
+         Result: vid Round 2 stats = 22 kills (42 - 20)
+```
 
-### 2. Lua Webhook (real-time)
+**[📖 Full Documentation: ROUND_2_PIPELINE_EXPLAINED.txt](docs/ROUND_2_PIPELINE_EXPLAINED.txt)**
 
-A Lua script on the game server fires a Discord webhook the instant a round ends (~3 seconds vs 60-second SSH polling). It captures:
-- Accurate round timing (fixes the surrender timing bug where stats files show full map duration)
-- Team compositions at round end
-- Pause events with timestamps
-- Warmup duration
-- Surrender detection
-
-Both data sources are stored separately (`rounds` table + `lua_round_teams` table) and cross-referenced for validation.
-
-### 3. Stopwatch Scoring
+### **Stopwatch Scoring**
 
 ET:Legacy stopwatch maps have two rounds where teams swap attack/defense. Slomix:
-- Tracks persistent teams across side-swaps
-- Scores by **map wins** (faster attack wins), not individual rounds
-- Handles fullholds, double fullholds (1-1 tie), surrenders
-- Grows teams dynamically as players join (3v3 &rarr; 4v4 &rarr; 6v6)
 
-### 4. Six-Layer Validation
-
-Every stats file import passes through:
-1. **File integrity** &mdash; SHA256 hash stored and verified
-2. **Duplicate prevention** &mdash; filename + round_time unique constraint
-3. **Schema validation** &mdash; 53-column check on bot startup
-4. **Cross-field validation** &mdash; headshots <= kills, time_dead <= time_played, etc.
-5. **Transaction safety** &mdash; atomic commits, rollback on any failure
-6. **Database constraints** &mdash; foreign keys, NOT NULL, type enforcement
+- ✅ Tracks persistent teams across side-swaps using `session_teams`
+- ✅ Scores by **map wins** (faster attack time wins), not individual rounds
+- ✅ Handles fullholds, double fullholds (1-1 tie), and surrenders
+- ✅ Grows teams dynamically as players join (3v3 → 4v4 → 6v6)
 
 ---
 
-## Architecture
+## 🌟 Features
 
-### Key Files
+### **🎬 Greatshot — Demo Highlight Scanner** 🆕
 
-| File | What it does |
-|------|-------------|
-| `bot/ultimate_bot.py` | Main entry point. SSH monitor loop, 21 cog loader, event handlers |
-| `bot/community_stats_parser.py` | Stats parser with R2 differential calculation |
-| `postgresql_database_manager.py` | All DB operations: create, import, rebuild, validate, wipe |
-| `bot/core/database_adapter.py` | Async PostgreSQL adapter with connection pooling |
-| `bot/cogs/` | 21 command modules (session stats, leaderboards, analytics, predictions, admin...) |
-| `bot/services/` | Business logic: scoring, predictions, graphs, matchups, badges |
-| `website/backend/main.py` | FastAPI app with auth, API routers, greatshot job workers |
-| `greatshot/` | Demo scanner, highlight detection, clip cutter, render pipeline |
-| `proximity/` | Combat engagement tracker (Lua + Python + 8 DB tables) |
-| `vps_scripts/stats_discord_webhook.lua` | Game server Lua script (v1.6.0) |
+Upload ET:Legacy `.dm_84` demo files through the website. The system will:
 
-### Project Structure
+1. 📤 **Upload** — Secure upload with extension/MIME/header validation, SHA256 hash
+2. 🔍 **Parse** — [UberDemoTools](https://github.com/mightycow/uberdemotools) extracts kills, chats, team changes into unified event timeline
+3. 🎯 **Detect** — Multi-kill chains, killing sprees, quick headshot sequences, aim moments
+4. ✂️ **Cut** — Extract highlight clips from the demo at exact timestamps
+5. 🎥 **Render** — Queue video renders (pipeline ready, configurable backend)
 
-```
-slomix/
-├── bot/                          # Discord bot
-│   ├── ultimate_bot.py           # Entry point + SSH monitor
-│   ├── community_stats_parser.py # Stats file parser
-│   ├── cogs/                     # 21 command modules
-│   ├── core/                     # Team detection, achievements, cache, adapters
-│   └── services/                 # Analytics, scoring, predictions, graphs
-├── website/                      # Web dashboard
-│   ├── backend/                  # FastAPI routers, services, greatshot workers
-│   ├── js/                       # SPA frontend modules
-│   └── assets/                   # Map SVGs, icons
-├── greatshot/                    # Demo analysis pipeline
-│   ├── scanner/                  # UDT parser adapter + demo header sniffing
-│   ├── highlights/               # Multi-kill, spree, headshot chain detectors
-│   ├── cutter/                   # UDT_cutter wrapper for clip extraction
-│   ├── renderer/                 # Video render interface
-│   ├── contracts/                # Shared types, profiles, game-specific mappings
-│   └── worker/                   # Background job runner
-├── proximity/                    # Combat engagement tracker
-│   ├── lua/                      # Game server Lua mod
-│   ├── parser/                   # Engagement data parser
-│   └── schema/                   # Database schema
-├── bin/                          # Compiled binaries (UDT_json, UDT_cutter)
-├── vps_scripts/                  # Game server scripts
-├── docs/                         # Documentation (30+ files)
-├── tests/                        # Test suite
-├── postgresql_database_manager.py # The one database tool to rule them all
-└── install.sh                    # Automated VPS installer
-```
+**All results stored in PostgreSQL** — analysis JSON, highlight metadata, clip paths, render status. Full API for listing, detail views, and downloads.
+
+**Based on [greatshot-web](https://github.com/mittermichal/greatshot-web) by Kimi (mittermichal).** We adapted his scanner/highlight/cutter/renderer architecture, integrated it with our auth system and PostgreSQL schema, and built UDT from source with [ET:Legacy protocol 84 support](https://github.com/mightycow/uberdemotools/pull/2).
 
 ---
 
-## Quick Start
+### **🔮 AI Match Predictions**
 
-### Prerequisites
+- 🤖 **Automatic Detection** — Detects when players split into team voice channels (3v3, 4v4, 5v5, 6v6)
+- 🧠 **4-Factor Algorithm** — H2H (40%), Recent Form (25%), Map Performance (20%), Substitutions (15%)
+- 🎯 **Confidence Scoring** — High/Medium/Low based on historical data quality
+- 📊 **Real-Time Probability** — Live win probability with sigmoid scaling
+
+**Commands:** `!predictions`, `!prediction_stats`, `!my_predictions`, `!prediction_trends`, `!prediction_leaderboard`, `!map_predictions`
+
+---
+
+### **📊 Player Analytics**
+
+- 📊 **53+ Statistics Tracked** — K/D, DPM, accuracy, efficiency, headshots, damage, playtime
+- 🎯 **Smart Player Lookup** — `!stats vid` or `!stats @discord_user`
+- 🔗 **Interactive Linking** — React with emojis to link Discord account to game stats
+- 📈 **Deep Dives** — `!consistency`, `!map_stats`, `!playstyle`, `!fatigue`
+- ⚔️ **Matchup Analytics** — `!matchup A vs B`, `!duo_perf`, `!nemesis`
+- 🏆 **Achievement System** — Dynamic badges for medics, engineers, sharpshooters, rambo, objective specialists
+- 🎨 **Custom Display Names** — Linked players can set personalized names
+
+### **🏆 Leaderboard System**
+
+- 🥇 **11 Categories** — K/D, DPM, accuracy, headshots, efficiency, revives, and more
+- 📈 **Dynamic Rankings** — Real-time updates as games are played
+- 🎮 **Minimum Thresholds** — Prevents stat padding (min 10 rounds, 300 damage, etc.)
+
+### **⚡ Real-Time Lua Webhook**
+
+- 🔔 **Instant Notifications** — ~3s after round end (vs 60s SSH polling)
+- 🏳️ **Surrender Timing Fix** — Stats files show wrong duration on surrender; Lua captures actual played time
+- 👥 **Team Composition** — Axis/Allies player lists at round end
+- ⏸️ **Pause Tracking** — Pause events with timestamps, warmup duration
+- 🔄 **Cross-Reference** — Both data sources stored separately for validation
+
+### **🤖 Full Automation**
+
+- 🎙️ **Voice Detection** — Monitors gaming voice channels (6+ users = auto-start)
+- 🔄 **SSH Monitoring** — Checks VPS every 60 seconds for new files
+- 📥 **Auto-Download** — SFTP transfer with integrity verification
+- 🤖 **Auto-Import** — Parse → Validate → Database (6-layer safety)
+- 📢 **Auto-Post** — Round summaries posted to Discord automatically
+- 🏁 **Session Summaries** — Auto-posted when players leave voice
+- 💤 **Voice-Conditional** — Only checks SSH when players are in voice channels
+
+---
+
+## 🚀 Quick Start
+
+### **Prerequisites**
 
 - Python 3.11+
 - PostgreSQL 12+
-- Discord bot token
+- Discord Bot Token
 - (Optional) SSH access to ET:Legacy game server
 
-### Install
+### **Installation**
 
 ```bash
+# Clone & install
 git clone https://github.com/iamez/slomix.git
 cd slomix
 pip install -r requirements.txt
+
+# Configure
 cp .env.example .env
-# Edit .env with your Discord token, DB credentials, SSH settings
-```
+nano .env  # Set DISCORD_BOT_TOKEN, DB credentials, SSH settings
 
-### Setup Database
+# Setup database (all 37 tables)
+python postgresql_database_manager.py  # Option 1: Create fresh
 
-```bash
-python postgresql_database_manager.py
-# Option 1: Create fresh database (all 37 tables)
-# Option 2: Import stats files from local_stats/
-# Option 3: Full rebuild (wipe + re-import)
-# Option 5: Validate database integrity (7 checks)
-```
-
-### Run
-
-```bash
-# Discord bot
+# Run
 python -m bot.ultimate_bot
-
-# Website (separate process)
-cd website && uvicorn backend.main:app --host 0.0.0.0 --port 8000
-
-# Or use the automated installer for full VPS setup
-sudo ./install.sh --full --auto
 ```
 
----
+**Automated installer:** `sudo ./install.sh --full --auto` (PostgreSQL + systemd + bot)
 
-## Configuration
+**Website:** `cd website && uvicorn backend.main:app --host 0.0.0.0 --port 8000`
 
-All settings via `.env`:
+### **Configuration**
 
 ```env
 # Required
@@ -270,7 +355,7 @@ AUTOMATION_ENABLED=true
 GAMING_VOICE_CHANNELS=channel_id_1,channel_id_2
 
 # Website
-SESSION_SECRET=<generate with: python -c 'import secrets; print(secrets.token_urlsafe(32))'>
+SESSION_SECRET=<python -c 'import secrets; print(secrets.token_urlsafe(32))'>
 
 # Greatshot (optional)
 GREATSHOT_UDT_JSON_BIN=/path/to/UDT_json
@@ -282,93 +367,241 @@ See `.env.example` for all options.
 
 ---
 
-## Commands at a Glance
+## 📋 Commands
 
-### Player Stats
-`!stats <player>` &middot; `!compare <p1> <p2>` &middot; `!consistency` &middot; `!map_stats` &middot; `!playstyle` &middot; `!fatigue`
+### **🎯 Player Stats**
+`!stats <player>` · `!stats @user` · `!compare <p1> <p2>` · `!consistency` · `!map_stats` · `!playstyle` · `!fatigue`
 
-### Sessions & Scoring
-`!last_session` &middot; `!last_session graphs` &middot; `!sessions` &middot; `!awards`
+### **🏆 Leaderboards**
+`!top_dpm` · `!top_kd` · `!top_accuracy` · `!top_efficiency` · + 7 more categories
 
-### Leaderboards
-`!top_dpm` &middot; `!top_kd` &middot; `!top_accuracy` &middot; `!top_efficiency` &middot; + 7 more
+### **📊 Sessions & Scoring**
+`!last_session` · `!last_session graphs` · `!sessions` · `!awards` · `!last_round`
 
-### Matchups & Predictions
-`!matchup A vs B` &middot; `!duo_perf p1 p2` &middot; `!nemesis` &middot; `!predictions` &middot; `!prediction_stats`
+### **⚔️ Matchups & Predictions**
+`!matchup A vs B` · `!duo_perf p1 p2` · `!nemesis` · `!predictions` · `!prediction_stats` · `!prediction_trends` · `!prediction_leaderboard`
 
-### Account Linking
-`!link` &middot; `!unlink` &middot; `!whoami` &middot; `!set_display_name`
+### **🔗 Account Management**
+`!link` · `!unlink` · `!whoami` · `!set_display_name` · `!achievements`
 
-### Server Control
-`!server_status` &middot; `!rcon <cmd>` &middot; `!players` &middot; `!map <name>`
+### **🎮 Server Control**
+`!server_status` · `!rcon <cmd>` · `!players` · `!map <name>`
 
-### Admin
-`!sync_all` &middot; `!sync_historical` &middot; `!rebuild_sessions` &middot; `!health`
+### **🔧 Admin**
+`!sync_all` · `!sync_historical` · `!rebuild_sessions` · `!health` · `!suggest_teams`
 
-Full reference: **[docs/COMMANDS.md](docs/COMMANDS.md)**
-
----
-
-## Version History
-
-### v1.0.7 (Feb 2026)
-- **Greatshot integration** &mdash; demo upload, analysis, highlight detection, clip extraction via website
-- **Database manager overhaul** &mdash; schema creation now covers all 37 tables (was 7), rebuild wipes all game data tables (was 7), 4 new column migrations
-- **UDT parser built from source** with ET:Legacy protocol 84 support
-
-### v1.0.6 (Feb 2026)
-- **Player analytics** &mdash; consistency, map stats, playstyle, fatigue analysis
-- **Matchup system** &mdash; lineup vs lineup historical tracking with confidence scoring
-- **Map-based stopwatch scoring** &mdash; session scores count map wins, not rounds
-- **Real-time team tracking** &mdash; teams grow dynamically as players join
-- **Website SPA overhaul** &mdash; sessions, matches, profiles, leaderboards, admin, badges, proximity, season stats
-
-### v1.0.5 (Jan 2026)
-- **Lua webhook v1.3.0** &mdash; pause timestamps, warmup tracking, timing legend
-
-### v1.0.4 (Jan 2026)
-- **Lua webhook** &mdash; real-time round notifications (~3s), surrender timing fix, team composition capture
-
-### v1.0.3 (Jan 2026)
-- **EndStats processing** &mdash; round awards, player VS stats, 7 award categories
-
-### v1.0.0 (Nov 2025)
-- Production release. 63 commands, 6-layer validation, PostgreSQL, full automation, achievements.
-
-Full changelog: **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
+**[📖 Full Command Reference: docs/COMMANDS.md](docs/COMMANDS.md)**
 
 ---
 
-## Documentation
+## 📁 Project Structure
 
-| Document | What you'll find |
-|----------|-----------------|
-| **[CHANGELOG.md](docs/CHANGELOG.md)** | Every version, every fix, every feature |
-| **[COMMANDS.md](docs/COMMANDS.md)** | All ~99 bot commands with usage |
-| **[DATA_PIPELINE.md](docs/DATA_PIPELINE.md)** | How data flows from game server to Discord |
-| **[SAFETY_VALIDATION_SYSTEMS.md](docs/SAFETY_VALIDATION_SYSTEMS.md)** | The 6-layer validation system in detail |
-| **[TIMING_DATA_SOURCES.md](docs/reference/TIMING_DATA_SOURCES.md)** | Stats file vs Lua timing &mdash; why we need both |
-| **[CLAUDE.md](docs/CLAUDE.md)** | Full technical reference (the AI reads this) |
+```text
+slomix/
+├── 📊 bot/                          # Discord bot
+│   ├── ultimate_bot.py              # Entry point + SSH monitor loop
+│   ├── community_stats_parser.py    # Stats parser with R2 differential
+│   ├── endstats_parser.py           # EndStats awards parser
+│   ├── cogs/                        # 21 command modules
+│   │   ├── last_session_cog.py      # Session stats & summaries
+│   │   ├── leaderboard_cog.py       # Rankings
+│   │   ├── analytics_cog.py         # Player analytics
+│   │   ├── matchup_cog.py           # Matchup analytics
+│   │   ├── predictions_cog.py       # AI predictions (7 commands)
+│   │   ├── admin_predictions_cog.py # Prediction admin (5 commands)
+│   │   ├── server_control_cog.py    # RCON, status, map management
+│   │   └── ... (14 more cogs)
+│   ├── core/                        # Team detection, achievements, cache
+│   └── services/                    # Analytics, scoring, predictions, graphs
+│
+├── 🎬 greatshot/                    # Demo analysis pipeline (NEW)
+│   ├── scanner/                     # UDT parser adapter + demo sniffing
+│   ├── highlights/                  # Multi-kill, spree, headshot detectors
+│   ├── cutter/                      # UDT_cutter wrapper for clip extraction
+│   ├── renderer/                    # Video render interface
+│   ├── contracts/                   # Shared types, profiles, game mappings
+│   └── worker/                      # Background job runner
+│
+├── 🌐 website/                      # Web dashboard
+│   ├── backend/                     # FastAPI routers, services, greatshot workers
+│   │   ├── routers/                 # api, auth, predictions, greatshot
+│   │   └── services/                # greatshot_store, greatshot_jobs
+│   ├── js/                          # SPA frontend modules
+│   └── index.html                   # Main SPA entry point
+│
+├── 🎯 proximity/                    # Combat engagement tracker
+│   ├── lua/                         # Game server Lua mod
+│   ├── parser/                      # Engagement data parser
+│   └── schema/                      # Database schema
+│
+├── 🔧 bin/                          # Compiled binaries (UDT_json, UDT_cutter)
+├── 📜 vps_scripts/                  # Game server Lua scripts
+├── 📚 docs/                         # Documentation (30+ files)
+├── 🧪 tests/                        # Test suite
+├── postgresql_database_manager.py   # ALL database operations (one tool to rule them all)
+└── install.sh                       # Automated VPS installer
+```
+
+**Key Files:**
+
+| File | Purpose |
+|------|---------|
+| `bot/ultimate_bot.py` | Main entry point, SSH monitor, 21 cog loader |
+| `bot/community_stats_parser.py` | R1/R2 differential parser (53+ fields) |
+| `postgresql_database_manager.py` | All DB operations: create, import, rebuild, validate |
+| `bot/core/database_adapter.py` | Async PostgreSQL adapter with connection pooling |
+| `bot/services/prediction_engine.py` | AI match prediction engine (4-factor algorithm) |
+| `website/backend/main.py` | FastAPI app with auth, routers, greatshot job workers |
+| `greatshot/scanner/api.py` | Demo analysis entry point (UDT → events → highlights) |
+| `vps_scripts/stats_discord_webhook.lua` | Game server Lua script (v1.6.0) |
 
 ---
 
-## Acknowledgments
+## 🗄️ Database Schema
 
-This project wouldn't exist without the people who keep ET:Legacy alive and the tools they build.
+### **PostgreSQL — 37 Tables**
 
-- **[x0rnn](https://github.com/x0rnn)** &mdash; for `gamestats.lua` and the endstats system that generates the stats files this entire platform is built on
-- **[Kimi (mittermichal)](https://github.com/mittermichal/greatshot-web)** &mdash; for developing Greatshot, the demo analysis tool whose architecture we studied, adapted, and integrated into our system. The highlight detection, event normalization, and pipeline design are his work. We built the bridge; he built the engine.
-- **[ryzyk-krzysiek](https://github.com/mightycow/uberdemotools/pull/2)** &mdash; for adding ET:Legacy protocol 84/284 support to UberDemoTools, making demo parsing possible for our game
-- **[mightycow](https://github.com/mightycow/uberdemotools)** &mdash; for UberDemoTools itself
-- **[ET:Legacy](https://www.etlegacy.com/)** team &mdash; for keeping the game alive after 22 years
-- **[discord.py](https://github.com/Rapptz/discord.py)** and **[asyncpg](https://github.com/MagicStack/asyncpg)** &mdash; the async foundations everything runs on
+```sql
+-- Core Tables (7)
+rounds                          -- Round metadata, gaming_session_id, match_id
+player_comprehensive_stats      -- 53 columns per player per round
+weapon_comprehensive_stats      -- Per-weapon breakdown
+processed_files                 -- File tracking with SHA256 hash
+player_links                    -- Discord ↔ game account links
+player_aliases                  -- Name change tracking
+session_teams                   -- Persistent team assignments
+
+-- Lua Webhook (2)
+lua_round_teams                 -- Real-time data from game server Lua
+lua_spawn_stats                 -- Per-player spawn/death timing
+
+-- Round Detail (3)
+round_awards                    -- EndStats awards (7 categories)
+round_vs_stats                  -- Player VS player kill/death records
+processed_endstats_files        -- EndStats file tracking
+
+-- Competitive Analytics (3)
+match_predictions               -- AI predictions (35 columns, 6 indexes)
+session_results                 -- Session outcomes with team compositions
+map_performance                 -- Player per-map rolling averages
+
+-- Permission & Team Config (3)
+user_permissions                -- 3-tier permission system
+permission_audit_log            -- Permission change audit trail
+team_pool                       -- Team names (sWat, S*F, etc.)
+
+-- Matchup (1)
+matchup_history                 -- Lineup vs lineup analytics (JSONB)
+
+-- Greatshot (4) 🆕
+greatshot_demos                 -- Uploaded demo files with status tracking
+greatshot_analysis              -- Parsed analysis (metadata, stats, events)
+greatshot_highlights            -- Detected highlights with scores
+greatshot_renders               -- Video render jobs and output paths
+
+-- Website (4)
+server_status_history           -- Server status snapshots
+voice_members / voice_status_history -- Voice channel tracking
+live_status                     -- Real-time server state
+
+-- Proximity (8)
+combat_engagement               -- Combat encounter tracking
+crossfire_pairs                 -- Crossfire detection
+player_teamplay_stats           -- Teamplay metrics
+player_track                    -- Movement data
+proximity_* / map_*_heatmap     -- Heatmap data
+```
+
+**Gaming Session ID:** Automatically calculated — 60-minute gap between rounds = new session.
 
 ---
 
-<p align="center">
-  <strong>Maintainer:</strong> <a href="https://github.com/iamez">@iamez</a> &middot; <strong>License:</strong> Private
-</p>
+## 🛠️ Development
 
-<p align="center">
-  <em>Built with late nights, too much coffee, and the belief that a 22-year-old game still deserves world-class tooling.</em>
-</p>
+### **Database Operations**
+
+```bash
+python postgresql_database_manager.py
+# 1 - Create fresh database (all 37 tables + indexes + seed data)
+# 2 - Import all files from local_stats/
+# 3 - Rebuild from scratch (wipes game data + re-imports)
+# 4 - Fix specific date range
+# 5 - Validate database (7-check validation)
+# 6 - Quick test (10 files)
+```
+
+⚠️ **IMPORTANT:** Never create new import/database scripts. This is the **ONLY** tool for database operations.
+
+### **Running Tests**
+
+```bash
+# Parser test
+python bot/community_stats_parser.py local_stats/sample-round-1.txt
+
+# Database validation
+python postgresql_database_manager.py  # Option 5
+
+# Greatshot tests
+pytest tests/test_greatshot_highlights.py
+pytest tests/test_greatshot_scanner_golden.py
+
+# Discord bot health
+!ping    # Latency
+!health  # System health check
+```
+
+---
+
+## 📚 Documentation Index
+
+### **Getting Started**
+- [docs/DEPLOYMENT_CHECKLIST.md](docs/DEPLOYMENT_CHECKLIST.md) — Deployment guide
+- [docs/FRESH_INSTALL_GUIDE.md](docs/FRESH_INSTALL_GUIDE.md) — Fresh installation
+
+### **Architecture & Data**
+- [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md) — Complete data pipeline
+- [docs/SAFETY_VALIDATION_SYSTEMS.md](docs/SAFETY_VALIDATION_SYSTEMS.md) — 6-layer validation
+- [docs/ROUND_2_PIPELINE_EXPLAINED.txt](docs/ROUND_2_PIPELINE_EXPLAINED.txt) — Differential calculation
+- [docs/reference/TIMING_DATA_SOURCES.md](docs/reference/TIMING_DATA_SOURCES.md) — Stats file vs Lua timing
+
+### **Reference**
+- [docs/COMMANDS.md](docs/COMMANDS.md) — All ~99 bot commands
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) — Version history
+- [docs/CLAUDE.md](docs/CLAUDE.md) — Full technical reference
+
+---
+
+## 🙏 Acknowledgments
+
+**Built With:**
+
+- [discord.py](https://github.com/Rapptz/discord.py) — Discord API wrapper
+- [asyncpg](https://github.com/MagicStack/asyncpg) — PostgreSQL async driver
+- [FastAPI](https://fastapi.tiangolo.com/) — Web framework
+- [PostgreSQL](https://www.postgresql.org/) — Production database
+- [UberDemoTools](https://github.com/mightycow/uberdemotools) — Demo parser
+
+**Special Thanks:**
+
+- **[x0rnn (c0rn)](https://github.com/x0rnn)** — for `gamestats.lua` and the endstats system that generates the stats files this entire platform is built on
+- **[Kimi (mittermichal)](https://github.com/mittermichal/greatshot-web)** — for developing Greatshot, the demo analysis tool whose architecture we studied, adapted, and integrated into our system. The highlight detection, event normalization, and pipeline design are his work. We built the bridge; he built the engine.
+- **[ryzyk-krzysiek](https://github.com/mightycow/uberdemotools/pull/2)** — for adding ET:Legacy protocol 84/284 support to UberDemoTools
+- **[mightycow](https://github.com/mightycow/uberdemotools)** — for UberDemoTools itself
+- **[ET:Legacy](https://www.etlegacy.com/)** team — for keeping the game alive after 22 years
+
+---
+
+## 📞 Contact
+
+**Project Maintainer:** [@iamez](https://github.com/iamez)
+**Repository:** [github.com/iamez/slomix](https://github.com/iamez/slomix)
+
+---
+
+<div align="center">
+
+**⭐ Star this repo if it helped you!**
+
+Built with ❤️ for the ET:Legacy community
+
+</div>
