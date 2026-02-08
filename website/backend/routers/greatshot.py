@@ -437,25 +437,8 @@ async def get_crossref(demo_id: str, request: Request, db=Depends(get_db)):
     if not metadata:
         return {"matched": False, "reason": "No metadata available for cross-reference"}
 
-    match = await find_matching_round(metadata, db)
-    if not match:
-        return {"matched": False, "reason": "No matching round found in database"}
-
-    round_id = match["round_id"]
-    db_stats = await enrich_with_db_stats(round_id, db)
-
-    # Get demo player_stats from analysis
-    analysis_row = await db.fetch_one(
-        "SELECT stats_json FROM greatshot_analysis WHERE demo_id = $1",
-        (demo_id,),
-    )
+    # Get demo player_stats BEFORE matching (used for validation)
     demo_player_stats = {}
-    if analysis_row:
-        stats_data = _parse_json_field(analysis_row[0]) or {}
-        # player_stats stored in the analysis output (via player_stats key in the full analysis JSON)
-        # But stats_json only has summary stats. Let's check metadata_json for player_stats.
-
-    # Try to get player_stats from the full analysis JSON file
     analysis_path_row = await db.fetch_one(
         "SELECT analysis_json_path FROM greatshot_demos WHERE id = $1",
         (demo_id,),
@@ -471,6 +454,14 @@ async def get_crossref(demo_id: str, request: Request, db=Depends(get_db)):
                     demo_player_stats = full_analysis.get("player_stats") or {}
         except Exception:
             pass
+
+    # Pass player stats to matching function for validation
+    match = await find_matching_round(metadata, db, demo_player_stats=demo_player_stats)
+    if not match:
+        return {"matched": False, "reason": "No matching round found in database"}
+
+    round_id = match["round_id"]
+    db_stats = await enrich_with_db_stats(round_id, db)
 
     comparison = await build_comparison(demo_player_stats, db_stats)
 
