@@ -92,13 +92,13 @@ async def find_matching_round(
         confidence += 30.0
         match_details.append("map")
 
-        # Duration match (±5s tolerance)
+        # Duration match (±30s tolerance to account for warmup/pauses)
         if duration_s > 0 and db_duration:
             diff = abs(duration_s - float(db_duration))
-            if diff <= 5:
+            if diff <= 30:  # Increased from 5s - demos may include warmup
                 confidence += 30.0
                 match_details.append(f"duration (diff={diff:.1f}s)")
-            elif diff <= 15:
+            elif diff <= 60:  # Increased from 15s
                 confidence += 15.0
                 match_details.append(f"duration-approx (diff={diff:.1f}s)")
 
