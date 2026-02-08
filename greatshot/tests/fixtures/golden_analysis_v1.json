@@ -1,0 +1,187 @@
+{
+  "highlights": [
+    {
+      "end_ms": 9000,
+      "explanation": "3 kills in 4.00s",
+      "meta": {
+        "headshots": 0,
+        "kill_count": 3,
+        "window_ms": 4000
+      },
+      "player": "PlayerOne",
+      "score": 30.0,
+      "start_ms": 5000,
+      "type": "multi_kill"
+    },
+    {
+      "end_ms": 9000,
+      "explanation": "3 kills in 4.00s",
+      "meta": {
+        "headshots": 0,
+        "kill_count": 3,
+        "window_ms": 8000
+      },
+      "player": "PlayerOne",
+      "score": 30.0,
+      "start_ms": 5000,
+      "type": "burst_multi_kill"
+    },
+    {
+      "end_ms": 7400,
+      "explanation": "2 kills in 2.40s",
+      "meta": {
+        "headshots": 0,
+        "kill_count": 2,
+        "window_ms": 4000
+      },
+      "player": "PlayerOne",
+      "score": 20.0,
+      "start_ms": 5000,
+      "type": "multi_kill"
+    }
+  ],
+  "metadata": {
+    "duration_ms": 30000,
+    "end_ms": 31000,
+    "extension": ".dm_84",
+    "file_size_bytes": 136,
+    "filename": "gold.dm_84",
+    "gametype": "Stopwatch",
+    "gametype_short": "SW",
+    "header": {
+      "first_message_size": 64,
+      "sequence": 1
+    },
+    "map": "etl_goldrush",
+    "mod": "Legacy",
+    "mod_version": "v2.83.1",
+    "profile": "etlegacy_main",
+    "profile_name": "ET:Legacy Main",
+    "rounds": [
+      {
+        "duration_ms": 30000,
+        "end_ms": 31000,
+        "first_place_score": 2,
+        "second_place_score": 1,
+        "start_ms": 1000,
+        "winner": "allies"
+      }
+    ],
+    "start_ms": 1000
+  },
+  "parser": {
+    "name": "UDT_json",
+    "raw_sections": {
+      "chat": 1,
+      "game_states": 1,
+      "match_stats": 1,
+      "obituaries": 3
+    },
+    "timeout_seconds": 60
+  },
+  "players": [
+    {
+      "client_num": 1,
+      "first_seen_ms": 1000,
+      "last_seen_ms": 31000,
+      "name": "PlayerOne",
+      "name_history": [
+        "PlayerOne"
+      ],
+      "team_history": [
+        {
+          "end_ms": 31000,
+          "start_ms": 1000,
+          "team": "allies"
+        }
+      ],
+      "teams": [
+        "allies"
+      ]
+    },
+    {
+      "client_num": 2,
+      "first_seen_ms": 1000,
+      "last_seen_ms": 31000,
+      "name": "PlayerTwo",
+      "name_history": [
+        "PlayerTwo"
+      ],
+      "team_history": [
+        {
+          "end_ms": 31000,
+          "start_ms": 1000,
+          "team": "axis"
+        }
+      ],
+      "teams": [
+        "axis"
+      ]
+    }
+  ],
+  "schema_version": "1.0.0",
+  "stats": {
+    "chat_count": 1,
+    "event_count": 4,
+    "headshot_count": 0,
+    "kill_count": 3,
+    "player_count": 2,
+    "top_killers": [
+      {
+        "kills": 3,
+        "player": "PlayerOne"
+      }
+    ]
+  },
+  "timeline": [
+    {
+      "attacker": "PlayerOne",
+      "message": "go go",
+      "meta": {
+        "team_chat": false
+      },
+      "t_ms": 2000,
+      "type": "chat"
+    },
+    {
+      "attacker": "PlayerOne",
+      "meta": {
+        "attacker_team": "allies",
+        "raw_weapon": "MP40",
+        "victim_team": "axis"
+      },
+      "t_ms": 5000,
+      "team": "allies",
+      "type": "kill",
+      "victim": "PlayerTwo",
+      "weapon": "mp40"
+    },
+    {
+      "attacker": "PlayerOne",
+      "meta": {
+        "attacker_team": "allies",
+        "raw_weapon": "THOMPSON",
+        "victim_team": "axis"
+      },
+      "t_ms": 7400,
+      "team": "allies",
+      "type": "kill",
+      "victim": "PlayerTwo",
+      "weapon": "thompson"
+    },
+    {
+      "attacker": "PlayerOne",
+      "meta": {
+        "attacker_team": "allies",
+        "raw_weapon": "THOMPSON",
+        "victim_team": "axis"
+      },
+      "t_ms": 9000,
+      "team": "allies",
+      "type": "kill",
+      "victim": "PlayerTwo",
+      "weapon": "thompson"
+    }
+  ],
+  "warnings": []
+}

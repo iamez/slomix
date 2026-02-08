@@ -3,6 +3,26 @@
  * @module badges
  */
 
+function getConfiguredAdminIds() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+        return new Set();
+    }
+
+    const fromWindow = Array.isArray(window.__SLOMIX_APP_CONFIG?.adminDiscordIds)
+        ? window.__SLOMIX_APP_CONFIG.adminDiscordIds
+        : [];
+    const fromMeta = document
+        .querySelector('meta[name="slomix-admin-discord-ids"]')
+        ?.getAttribute('content')
+        ?.split(',')
+        .map((id) => id.trim())
+        .filter(Boolean) || [];
+
+    return new Set([...fromWindow, ...fromMeta].map((id) => String(id)));
+}
+
+const ADMIN_DISCORD_IDS = getConfiguredAdminIds();
+
 // Badge configuration with SVG icons
 const BADGE_CONFIG = {
     // Special user badges
@@ -123,8 +143,8 @@ const BADGE_CONFIG = {
 export function getBadgesForPlayer(stats, discordId = null) {
     const badges = [];
 
-    // Special admin badge for seareal
-    if (discordId === '231165917604741121') {
+    // Special admin badge for configured owner/admin IDs
+    if (discordId && ADMIN_DISCORD_IDS.has(String(discordId))) {
         badges.push({
             ...BADGE_CONFIG.admin,
             key: 'admin'

@@ -3,7 +3,7 @@
  * @module season-stats
  */
 
-import { API_BASE, fetchJSON, escapeHtml, formatNumber } from './utils.js';
+import { API_BASE, fetchJSON, formatNumber } from './utils.js';
 
 function formatDuration(seconds) {
     const total = Number(seconds || 0);
@@ -24,6 +24,7 @@ export async function loadSeasonLeaders() {
         const data = await fetchJSON(`${API_BASE}/seasons/current/leaders`);
         const container = document.getElementById('season-leaders-panel');
         if (!container) return;
+        container.innerHTML = '';
 
         const leaders = data.leaders;
 
@@ -47,48 +48,71 @@ export async function loadSeasonLeaders() {
 
         const renderRow = (item) => {
             const payload = leaders?.[item.key];
-            if (!payload || !payload.player) return '';
-            return `
-                <div class="flex items-center justify-between">
-                    <span class="text-slate-400 flex items-center gap-2">
-                        <span>${item.emoji}</span>
-                        <span>${item.label}</span>
-                    </span>
-                    <span class="font-bold text-white">
-                        ${escapeHtml(payload.player)}
-                        <span class="text-slate-400">(${item.format(payload.value)})</span>
-                    </span>
-                </div>
-            `;
+            if (!payload || !payload.player) return null;
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between';
+            const labelWrap = document.createElement('span');
+            labelWrap.className = 'text-slate-400 flex items-center gap-2';
+            const emoji = document.createElement('span');
+            emoji.textContent = item.emoji;
+            const label = document.createElement('span');
+            label.textContent = item.label;
+            labelWrap.appendChild(emoji);
+            labelWrap.appendChild(label);
+
+            const valueWrap = document.createElement('span');
+            valueWrap.className = 'font-bold text-white';
+            valueWrap.textContent = payload.player;
+            const valueSub = document.createElement('span');
+            valueSub.className = 'text-slate-400';
+            valueSub.textContent = ` (${item.format(payload.value)})`;
+            valueWrap.appendChild(valueSub);
+
+            row.appendChild(labelWrap);
+            row.appendChild(valueWrap);
+            return row;
         };
 
-        const primaryRows = primary.map(renderRow).filter(Boolean).join('');
-        const extraRows = extras.map(renderRow).filter(Boolean).join('');
+        const panel = document.createElement('div');
+        panel.className = 'space-y-3 text-sm';
+        const primaryRows = primary.map(renderRow).filter(Boolean);
+        const extraRows = extras.map(renderRow).filter(Boolean);
         const longest = leaders?.longest_session;
-        const longestRow = longest && longest.rounds
-            ? `
-                <div class="flex items-center justify-between">
-                    <span class="text-slate-400 flex items-center gap-2">
-                        <span>🏁</span>
-                        <span>Longest Session</span>
-                    </span>
-                    <span class="font-bold text-white">
-                        ${longest.date ? escapeHtml(longest.date) : 'N/A'}
-                        <span class="text-slate-400">(${longest.rounds} rounds)</span>
-                    </span>
-                </div>
-              `
-            : '';
+        if (primaryRows.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'text-slate-500';
+            empty.textContent = 'No season leaders yet.';
+            panel.appendChild(empty);
+        } else {
+            primaryRows.forEach((row) => panel.appendChild(row));
+        }
 
-        const html = `
-            <div class="space-y-3 text-sm">
-                ${primaryRows || '<div class="text-slate-500">No season leaders yet.</div>'}
-                ${extraRows ? `<div class="border-t border-white/5 pt-3 space-y-2">${extraRows}</div>` : ''}
-                ${longestRow ? `<div class="border-t border-white/5 pt-3">${longestRow}</div>` : ''}
-            </div>
-        `;
+        if (extraRows.length > 0) {
+            const extraWrap = document.createElement('div');
+            extraWrap.className = 'border-t border-white/5 pt-3 space-y-2';
+            extraRows.forEach((row) => extraWrap.appendChild(row));
+            panel.appendChild(extraWrap);
+        }
 
-        container.innerHTML = html;
+        if (longest && longest.rounds) {
+            const longestWrap = document.createElement('div');
+            longestWrap.className = 'border-t border-white/5 pt-3';
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between';
+            row.innerHTML = '<span class="text-slate-400 flex items-center gap-2"><span>🏁</span><span>Longest Session</span></span>';
+            const value = document.createElement('span');
+            value.className = 'font-bold text-white';
+            value.textContent = longest.date || 'N/A';
+            const rounds = document.createElement('span');
+            rounds.className = 'text-slate-400';
+            rounds.textContent = ` (${longest.rounds} rounds)`;
+            value.appendChild(rounds);
+            row.appendChild(value);
+            longestWrap.appendChild(row);
+            panel.appendChild(longestWrap);
+        }
+
+        container.appendChild(panel);
     } catch (e) {
         console.error('Failed to load season leaders:', e);
     }
@@ -137,37 +161,47 @@ export async function loadActivityCalendar() {
         if (!container) return;
 
         // Create a simple heatmap using CSS grid
-        const html = `
-            <div class="text-xs text-slate-500 mb-2">Last ${data?.days || 90} days</div>
-            <div id="activity-grid" class="text-xs text-slate-400">Loading calendar...</div>
-        `;
-
-        container.innerHTML = html;
+        container.innerHTML = '';
+        const heading = document.createElement('div');
+        heading.className = 'text-xs text-slate-500 mb-2';
+        heading.textContent = `Last ${data?.days || 90} days`;
+        const grid = document.createElement('div');
+        grid.id = 'activity-grid';
+        grid.className = 'text-xs text-slate-400';
+        grid.textContent = 'Loading calendar...';
+        container.appendChild(heading);
+        container.appendChild(grid);
 
         // If we have Chart.js, render a proper heatmap
         // For now, show a simple text-based summary
         if (data && data.activity) {
-            const grid = document.getElementById('activity-grid');
             const totalRounds = Object.values(data.activity).reduce((a, b) => a + b, 0);
             const daysActive = Object.keys(data.activity).length;
 
             const windowDays = data.days || 90;
-            grid.innerHTML = `
-                <div class="space-y-2">
-                    <div class="flex justify-between">
-                        <span>Total Rounds:</span>
-                        <span class="font-bold text-white">${totalRounds}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span>Days Active:</span>
-                        <span class="font-bold text-white">${daysActive}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span>Avg Rounds/Day:</span>
-                        <span class="font-bold text-white">${(totalRounds / windowDays).toFixed(1)}</span>
-                    </div>
-                </div>
-            `;
+            if (grid) {
+                grid.innerHTML = '';
+                const summary = document.createElement('div');
+                summary.className = 'space-y-2';
+                const rows = [
+                    ['Total Rounds', String(totalRounds)],
+                    ['Days Active', String(daysActive)],
+                    ['Avg Rounds/Day', (totalRounds / windowDays).toFixed(1)],
+                ];
+                rows.forEach(([label, value]) => {
+                    const row = document.createElement('div');
+                    row.className = 'flex justify-between';
+                    const left = document.createElement('span');
+                    left.textContent = label + ':';
+                    const right = document.createElement('span');
+                    right.className = 'font-bold text-white';
+                    right.textContent = value;
+                    row.appendChild(left);
+                    row.appendChild(right);
+                    summary.appendChild(row);
+                });
+                grid.appendChild(summary);
+            }
         }
     } catch (e) {
         console.error('Failed to load activity calendar:', e);

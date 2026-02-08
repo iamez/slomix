@@ -1,0 +1,94 @@
+{
+  "gameStates": [
+    {
+      "demoTakerClientNumber": 1,
+      "demoTakerCleanName": "PlayerOne",
+      "startTime": 1000,
+      "endTime": 31000,
+      "players": [
+        {
+          "clientNumber": 1,
+          "cleanName": "PlayerOne",
+          "team": "allies",
+          "startTime": 1000,
+          "endTime": 31000
+        },
+        {
+          "clientNumber": 2,
+          "cleanName": "PlayerTwo",
+          "team": "axis",
+          "startTime": 1000,
+          "endTime": 31000
+        }
+      ],
+      "configStringValues": {
+        "fs_game": "legacy",
+        "gamename": "legacy",
+        "mapname": "etl_goldrush",
+        "g_gametype": "3",
+        "mod_version": "v2.83.1"
+      }
+    }
+  ],
+  "chat": [
+    {
+      "serverTime": 2000,
+      "teamChat": false,
+      "cleanPlayerName": "PlayerOne",
+      "cleanMessage": "go go"
+    }
+  ],
+  "obituaries": [
+    {
+      "serverTime": 5000,
+      "attackerCleanName": "PlayerOne",
+      "attackerTeam": "allies",
+      "targetCleanName": "PlayerTwo",
+      "targetTeam": "axis",
+      "causeOfDeath": "MP40"
+    },
+    {
+      "serverTime": 7400,
+      "attackerCleanName": "PlayerOne",
+      "attackerTeam": "allies",
+      "targetCleanName": "PlayerTwo",
+      "targetTeam": "axis",
+      "causeOfDeath": "THOMPSON"
+    },
+    {
+      "serverTime": 9000,
+      "attackerCleanName": "PlayerOne",
+      "attackerTeam": "allies",
+      "targetCleanName": "PlayerTwo",
+      "targetTeam": "axis",
+      "causeOfDeath": "THOMPSON"
+    }
+  ],
+  "matchStats": [
+    {
+      "startTime": 1000,
+      "endTime": 31000,
+      "duration": 30000,
+      "winner": "allies",
+      "mod": "Legacy",
+      "modVersion": "v2.83.1",
+      "gameType": "Stopwatch",
+      "gameTypeShort": "SW",
+      "map": "etl_goldrush",
+      "firstPlaceScore": 2,
+      "secondPlaceScore": 1,
+      "playerStats": [
+        {
+          "clientNumber": 1,
+          "cleanName": "PlayerOne",
+          "team": "allies"
+        },
+        {
+          "clientNumber": 2,
+          "cleanName": "PlayerTwo",
+          "team": "axis"
+        }
+      ]
+    }
+  ]
+}

@@ -62,6 +62,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
         self.last_scan_time = None
         self.import_count = 0
         self.error_count = 0
+        self._startup_scan_completed = False
 
         # Check if proximity is enabled
         self.enabled = getattr(bot.config, 'proximity_enabled', False)
@@ -86,9 +87,13 @@ class ProximityCog(commands.Cog, name="Proximity"):
 
         # Load processed remote index (best-effort)
         self._load_remote_index()
+        self._load_local_index()
 
     def _remote_index_path(self) -> str:
         return os.path.join(self.local_dir, ".processed_proximity.txt")
+
+    def _local_index_path(self) -> str:
+        return os.path.join(self.local_dir, ".processed_proximity_local.txt")
 
     def _load_remote_index(self) -> None:
         index_path = self._remote_index_path()
@@ -112,6 +117,29 @@ class ProximityCog(commands.Cog, name="Proximity"):
                 handle.write(f"{filename}\n")
         except Exception as e:
             logger.debug(f"Proximity index update failed: {e}")
+
+    def _load_local_index(self) -> None:
+        index_path = self._local_index_path()
+        if not os.path.exists(index_path):
+            return
+        try:
+            with open(index_path, "r", encoding="utf-8") as handle:
+                for line in handle:
+                    filename = line.strip()
+                    if filename:
+                        self.processed_engagement_files.add(filename)
+        except Exception as e:
+            logger.debug(f"Proximity local index load failed: {e}")
+
+    def _mark_local_processed(self, filename: str) -> None:
+        if not filename or filename in self.processed_engagement_files:
+            return
+        self.processed_engagement_files.add(filename)
+        try:
+            with open(self._local_index_path(), "a", encoding="utf-8") as handle:
+                handle.write(f"{filename}\n")
+        except Exception as e:
+            logger.debug(f"Proximity local index update failed: {e}")
 
     def _extract_timestamp(self, filename: str) -> int | None:
         match = re.match(r"^(\d{4}-\d{2}-\d{2})-(\d{6})-.*_engagements\.txt$", filename)
@@ -233,20 +261,38 @@ class ProximityCog(commands.Cog, name="Proximity"):
 
             engagement_files = list(stats_path.glob("*_engagements.txt"))
 
+            # On startup, respect lookback to avoid replaying stale local files.
+            startup_cutoff = None
+            if (
+                not force
+                and not self._startup_scan_completed
+                and self.lookback_hours
+                and self.lookback_hours > 0
+            ):
+                startup_cutoff = int(datetime.now().timestamp() - (self.lookback_hours * 3600))
+
             new_files = [
                 f for f in engagement_files
-                if str(f) not in self.processed_engagement_files
+                if f.name not in self.processed_engagement_files
             ]
 
             if new_files and self.debug_log:
                 logger.info(f"🎯 Found {len(new_files)} new engagement files")
 
-            for filepath in new_files:
+            for filepath in sorted(new_files, key=lambda p: p.name):
+                if startup_cutoff is not None:
+                    ts = self._extract_timestamp(filepath.name)
+                    if ts and ts < startup_cutoff:
+                        self._mark_local_processed(filepath.name)
+                        continue
                 await self._import_engagement_file(filepath)
 
         except Exception as e:
             self.error_count += 1
             logger.error(f"Error in engagement scan: {e}", exc_info=True)
+        finally:
+            if not self._startup_scan_completed:
+                self._startup_scan_completed = True
 
     @tasks.loop(minutes=5)
     async def scan_engagement_files(self):
@@ -287,7 +333,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
             success = await parser.import_file(str(filepath), session_date)
 
             if success:
-                self.processed_engagement_files.add(str(filepath))
+                self._mark_local_processed(filepath.name)
                 self.import_count += 1
 
                 stats = parser.get_stats()

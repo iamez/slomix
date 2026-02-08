@@ -124,6 +124,26 @@ class RoundPublisherService:
                 corrected_time = f"{mins}:{secs:02d}"
                 actual_time = corrected_time
 
+            # Sanity cap: orphan R2 files may have cumulative server time
+            # (e.g., 79:20 for a 12:00 map). Cap to time_limit for display.
+            if not corrected_time and actual_time and time_limit:
+                if actual_time != 'Unknown' and time_limit != 'Unknown':
+                    try:
+                        def _time_to_seconds(t):
+                            parts = t.split(':')
+                            return int(parts[0]) * 60 + int(parts[1]) if len(parts) == 2 else 0
+                        actual_sec = _time_to_seconds(actual_time)
+                        limit_sec = _time_to_seconds(time_limit)
+                        if limit_sec > 0 and actual_sec > limit_sec:
+                            raw_time = actual_time
+                            actual_time = time_limit
+                            logger.warning(
+                                f"[TIMING] Capped display actual_time to {time_limit} "
+                                f"(raw was {raw_time}, exceeded time_limit)"
+                            )
+                    except (ValueError, TypeError, IndexError):
+                        pass
+
             # Get player stats (expanded to include multikills and time denied)
             players_query = """
                 SELECT

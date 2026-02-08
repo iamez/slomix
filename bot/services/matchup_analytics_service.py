@@ -179,11 +179,11 @@ class MatchupAnalyticsService:
             player_guids: List of player GUIDs
 
         Returns:
-            MD5 hash of the sorted GUIDs (first 12 chars for readability)
+            SHA-256 hash of the sorted GUIDs (first 12 chars for readability)
         """
         sorted_guids = sorted(player_guids)
         lineup_string = '|'.join(sorted_guids)
-        full_hash = hashlib.md5(lineup_string.encode()).hexdigest()
+        full_hash = hashlib.sha256(lineup_string.encode()).hexdigest()
         return full_hash[:12]  # First 12 chars is enough for uniqueness
 
     @staticmethod

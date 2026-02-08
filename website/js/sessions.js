@@ -29,6 +29,10 @@ const MAP_IMAGE_MAP = {
 const AXIS_ICON = "assets/icons/axis.svg";
 const ALLIES_ICON = "assets/icons/allies.svg";
 
+function hasChartJs() {
+    return typeof Chart !== 'undefined';
+}
+
 function normalizeMapKey(mapName) {
     const raw = (mapName || '').toString().trim().toLowerCase();
     if (!raw) return '';
@@ -383,6 +387,11 @@ export function renderSessionDetails(data) {
 
     // Initialize Charts
     setTimeout(() => {
+        if (!hasChartJs()) {
+            console.warn('Chart.js is unavailable, skipping session charts.');
+            return;
+        }
+
         // Map Chart
         const ctxMap = document.getElementById('sessionMapChart');
         if (ctxMap) {
@@ -795,6 +804,10 @@ export function renderSessionDetails(data) {
 }
 
 async function loadSessionGraphExtras(date, data) {
+    if (!hasChartJs()) {
+        return;
+    }
+
     let graphData = null;
     try {
         const sessionId = data && data.gaming_session_id ? `?gaming_session_id=${data.gaming_session_id}` : '';
@@ -1072,15 +1085,15 @@ export async function loadSessionMVP(sessionDate) {
 
         const mvp = leaderboard[0];
         const safeName = escapeHtml(mvp.name);
-        const jsName = escapeJsString(mvp.name);
         const initials = escapeHtml(mvp.name.substring(0, 2).toUpperCase());
+        const profileName = String(mvp.name || '');
 
         widget.innerHTML = `
             <h3 class="font-bold text-white mb-2">Session MVP</h3>
-            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-brand-gold to-brand-amber mx-auto flex items-center justify-center text-2xl font-black text-white shadow-[0_0_30px_rgba(251,191,36,0.4)] mb-4 animate-pulse-slow cursor-pointer" onclick="loadPlayerProfile('${jsName}')">
+            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-brand-gold to-brand-amber mx-auto flex items-center justify-center text-2xl font-black text-white shadow-[0_0_30px_rgba(251,191,36,0.4)] mb-4 animate-pulse-slow cursor-pointer" data-mvp-profile="1">
                 ${initials}
             </div>
-            <p class="font-bold text-white mb-1 cursor-pointer hover:text-brand-gold transition" onclick="loadPlayerProfile('${jsName}')">${safeName}</p>
+            <p class="font-bold text-white mb-1 cursor-pointer hover:text-brand-gold transition" data-mvp-profile="1">${safeName}</p>
             <div class="flex items-center justify-center gap-3 text-xs">
                 <span class="text-slate-400">DPM: <span class="font-bold text-brand-emerald">${mvp.dpm}</span></span>
                 <span class="text-slate-600">•</span>
@@ -1090,6 +1103,13 @@ export async function loadSessionMVP(sessionDate) {
                 Top Performer
             </div>
         `;
+        widget.querySelectorAll('[data-mvp-profile="1"]').forEach((node) => {
+            node.addEventListener('click', () => {
+                if (typeof window.loadPlayerProfile === 'function' && profileName) {
+                    window.loadPlayerProfile(profileName);
+                }
+            });
+        });
         if (typeof lucide !== 'undefined') lucide.createIcons();
 
     } catch (e) {
@@ -1819,6 +1839,10 @@ function renderSessionGraph(date, tab) {
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
     
+    if (!hasChartJs()) {
+        return;
+    }
+
     // Create chart
     sessionGraphCharts[date] = new Chart(ctx, {
         type: config.type,

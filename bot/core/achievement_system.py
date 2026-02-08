@@ -18,6 +18,7 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Set
 import discord
+from bot.services.player_display_name_service import PlayerDisplayNameService
 from bot.core.database_adapter import ensure_player_name_alias
 
 logger = logging.getLogger(__name__)
@@ -158,16 +159,16 @@ class AchievementSystem:
 
             kills, deaths, games, kd_ratio = stats
 
+            # Use proper name resolution service (works for all players)
+            display_name_service = PlayerDisplayNameService(self.bot.db_adapter)
+            player_name = await display_name_service.get_display_name(player_guid)
+
+            # Still need discord_id for @mention in achievement embed
             link = await self.bot.db_adapter.fetch_one(
-                """
-                SELECT discord_id, player_name FROM player_links
-                WHERE player_guid = ?
-                """,
+                "SELECT discord_id FROM player_links WHERE player_guid = ?",
                 (player_guid,),
             )
-
             discord_id = link[0] if link else None
-            player_name = link[1] if link else "Unknown Player"
 
             # Check kill milestones
             for threshold, achievement in self.KILL_MILESTONES.items():

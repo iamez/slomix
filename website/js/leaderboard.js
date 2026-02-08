@@ -3,7 +3,7 @@
  * @module leaderboard
  */
 
-import { API_BASE, fetchJSON, escapeHtml, escapeJsString, formatNumber } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, formatNumber } from './utils.js';
 
 // Leaderboard state (match UI defaults: Games + Season)
 let currentLbStat = 'games';
@@ -55,10 +55,8 @@ export async function loadLeaderboard() {
             if (currentLbStat === 'kd') valueClass = 'text-brand-blue font-bold';
 
             const displayName = row.name || row.guid || 'Unknown';
-            const safeName = escapeHtml(displayName);
             const profileId = row.guid || row.name || 'unknown';
-            const jsName = escapeJsString(profileId);
-            const safeInitials = escapeHtml(displayName.substring(0, 2).toUpperCase());
+            const initials = displayName.substring(0, 2).toUpperCase();
             let valueText = row.value;
             if (currentLbStat === 'accuracy') {
                 valueText = `${Number(row.value || 0).toFixed(1)}%`;
@@ -69,24 +67,56 @@ export async function loadLeaderboard() {
             } else {
                 valueText = formatNumber(row.value || 0);
             }
-            const html = `
-                <tr class="hover:bg-white/5 transition group">
-                    <td class="px-6 py-4 font-mono text-slate-500">#${row.rank}</td>
-                    <td class="px-6 py-4">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400 group-hover:text-white group-hover:bg-brand-blue transition">
-                                ${safeInitials}
-                            </div>
-                            <span class="font-bold text-white cursor-pointer hover:underline" onclick="loadPlayerProfile('${jsName}')">${safeName}</span>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 text-right font-mono ${valueClass}">${valueText}</td>
-                    <td class="px-6 py-4 text-right text-slate-400">${row.rounds}</td>
-                    <td class="px-6 py-4 text-right text-slate-400">${row.kills}</td>
-                    <td class="px-6 py-4 text-right font-mono text-slate-300">${row.kd}</td>
-                </tr>
-            `;
-            tbody.insertAdjacentHTML('beforeend', html);
+
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-white/5 transition group';
+
+            const tdRank = document.createElement('td');
+            tdRank.className = 'px-6 py-4 font-mono text-slate-500';
+            tdRank.textContent = `#${row.rank}`;
+
+            const tdPlayer = document.createElement('td');
+            tdPlayer.className = 'px-6 py-4';
+            const playerWrap = document.createElement('div');
+            playerWrap.className = 'flex items-center gap-3';
+            const avatar = document.createElement('div');
+            avatar.className = 'w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400 group-hover:text-white group-hover:bg-brand-blue transition';
+            avatar.textContent = initials;
+            const nameEl = document.createElement('span');
+            nameEl.className = 'font-bold text-white cursor-pointer hover:underline';
+            nameEl.textContent = displayName;
+            nameEl.addEventListener('click', () => {
+                if (typeof window.loadPlayerProfile === 'function') {
+                    window.loadPlayerProfile(profileId);
+                }
+            });
+            playerWrap.appendChild(avatar);
+            playerWrap.appendChild(nameEl);
+            tdPlayer.appendChild(playerWrap);
+
+            const tdValue = document.createElement('td');
+            tdValue.className = `px-6 py-4 text-right font-mono ${valueClass}`;
+            tdValue.textContent = String(valueText);
+
+            const tdRounds = document.createElement('td');
+            tdRounds.className = 'px-6 py-4 text-right text-slate-400';
+            tdRounds.textContent = String(row.rounds ?? 0);
+
+            const tdKills = document.createElement('td');
+            tdKills.className = 'px-6 py-4 text-right text-slate-400';
+            tdKills.textContent = String(row.kills ?? 0);
+
+            const tdKd = document.createElement('td');
+            tdKd.className = 'px-6 py-4 text-right font-mono text-slate-300';
+            tdKd.textContent = String(row.kd ?? 0);
+
+            tr.appendChild(tdRank);
+            tr.appendChild(tdPlayer);
+            tr.appendChild(tdValue);
+            tr.appendChild(tdRounds);
+            tr.appendChild(tdKills);
+            tr.appendChild(tdKd);
+            tbody.appendChild(tr);
         });
 
     } catch (e) {
@@ -168,60 +198,92 @@ export async function loadQuickLeaders() {
 
         list.innerHTML = '';
         if (data.errors && data.errors.length > 0) {
-            const safeErrors = data.errors.map(err => escapeHtml(err)).join('<br>');
-            list.insertAdjacentHTML(
-                'beforeend',
-                `<div class="text-[10px] text-brand-rose/80 uppercase tracking-[0.2em]">Data source errors</div>
-                 <div class="text-xs text-slate-500">${safeErrors}</div>`
-            );
+            const title = document.createElement('div');
+            title.className = 'text-[10px] text-brand-rose/80 uppercase tracking-[0.2em]';
+            title.textContent = 'Data source errors';
+            list.appendChild(title);
+
+            const errors = document.createElement('div');
+            errors.className = 'text-xs text-slate-500';
+            errors.textContent = data.errors.join(' | ');
+            list.appendChild(errors);
         }
 
         const renderRow = (player, index, valueLabel, valueColor = 'text-brand-emerald') => {
             const rankColor = index === 0 ? 'text-brand-gold' : index === 1 ? 'text-slate-400' : 'text-brand-rose';
-            const displayName = player.name || player.guid || 'Unknown';
-            const safeInitials = escapeHtml(displayName.substring(0, 2).toUpperCase());
-            const safeName = escapeHtml(displayName);
-            const profileId = player.guid || player.name || 'unknown';
-            const jsName = escapeJsString(profileId);
+            const displayName = String(player.name || player.guid || 'Unknown');
+            const profileId = String(player.guid || player.name || 'unknown');
             const valueText = valueLabel === 'XP'
                 ? `${formatNumber(player.value)} XP`
                 : `${Math.round(player.value)} DPM`;
 
-            return `
-                <div class="flex items-center justify-between group cursor-pointer" onclick="loadPlayerProfile('${jsName}')">
-                    <div class="flex items-center gap-3">
-                        <div class="font-mono font-bold ${rankColor} text-sm">${player.rank}</div>
-                        <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">${safeInitials}</div>
-                        <div class="text-sm font-bold text-white group-hover:text-brand-blue transition">${safeName}</div>
-                    </div>
-                    <div class="text-sm font-mono font-bold ${valueColor}">${valueText}</div>
-                </div>
-            `;
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between group cursor-pointer';
+            row.addEventListener('click', () => {
+                if (typeof window.loadPlayerProfile === 'function') {
+                    window.loadPlayerProfile(profileId);
+                }
+            });
+
+            const left = document.createElement('div');
+            left.className = 'flex items-center gap-3';
+
+            const rank = document.createElement('div');
+            rank.className = `font-mono font-bold ${rankColor} text-sm`;
+            rank.textContent = String(player.rank ?? index + 1);
+
+            const initials = document.createElement('div');
+            initials.className = 'w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400';
+            initials.textContent = displayName.substring(0, 2).toUpperCase();
+
+            const name = document.createElement('div');
+            name.className = 'text-sm font-bold text-white group-hover:text-brand-blue transition';
+            name.textContent = displayName;
+
+            left.appendChild(rank);
+            left.appendChild(initials);
+            left.appendChild(name);
+
+            const value = document.createElement('div');
+            value.className = `text-sm font-mono font-bold ${valueColor}`;
+            value.textContent = valueText;
+
+            row.appendChild(left);
+            row.appendChild(value);
+            return row;
         };
 
         const xpLeaders = data.xp || [];
         const dpmLeaders = data.dpm_sessions || [];
         const windowLabel = data.window_days ? `${data.window_days}d` : '7d';
 
-        list.insertAdjacentHTML('beforeend', `
-            <div class="text-[10px] uppercase tracking-[0.3em] text-slate-500">Top XP (${windowLabel})</div>
-        `);
+        const xpTitle = document.createElement('div');
+        xpTitle.className = 'text-[10px] uppercase tracking-[0.3em] text-slate-500';
+        xpTitle.textContent = `Top XP (${windowLabel})`;
+        list.appendChild(xpTitle);
         if (xpLeaders.length === 0) {
-            list.insertAdjacentHTML('beforeend', '<div class="text-xs text-slate-500">No XP data yet</div>');
+            const empty = document.createElement('div');
+            empty.className = 'text-xs text-slate-500';
+            empty.textContent = 'No XP data yet';
+            list.appendChild(empty);
         } else {
             xpLeaders.forEach((player, index) => {
-                list.insertAdjacentHTML('beforeend', renderRow(player, index, 'XP', 'text-brand-amber'));
+                list.appendChild(renderRow(player, index, 'XP', 'text-brand-amber'));
             });
         }
 
-        list.insertAdjacentHTML('beforeend', `
-            <div class="text-[10px] uppercase tracking-[0.3em] text-slate-500 mt-3">Top DPM/Session (${windowLabel})</div>
-        `);
+        const dpmTitle = document.createElement('div');
+        dpmTitle.className = 'text-[10px] uppercase tracking-[0.3em] text-slate-500 mt-3';
+        dpmTitle.textContent = `Top DPM/Session (${windowLabel})`;
+        list.appendChild(dpmTitle);
         if (dpmLeaders.length === 0) {
-            list.insertAdjacentHTML('beforeend', '<div class="text-xs text-slate-500">No DPM data yet</div>');
+            const empty = document.createElement('div');
+            empty.className = 'text-xs text-slate-500';
+            empty.textContent = 'No DPM data yet';
+            list.appendChild(empty);
         } else {
             dpmLeaders.forEach((player, index) => {
-                list.insertAdjacentHTML('beforeend', renderRow(player, index, 'DPM', 'text-brand-emerald'));
+                list.appendChild(renderRow(player, index, 'DPM', 'text-brand-emerald'));
             });
         }
     } catch (e) {

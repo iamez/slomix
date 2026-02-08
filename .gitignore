@@ -200,6 +200,17 @@ check_before_commit.sh
 /opusreview/
 /vps_scripts/
 
+# Demo files (binary recordings, never commit)
+*.dm_84
+*.tv_84
+
+# Compiled binaries
+/bin/
+
+# Local data directories
+/local_proximity/
+/data/
+
 # Root junk files
 nohup.out
 =*
@@ -269,6 +280,7 @@ bot/README_AUTOMATION.md
 tools/*
 !tools/__init__.py
 !tools/stopwatch_scoring.py
+!tools/schema_postgresql.sql
 
 # ============================================
 # DOCS ARCHIVE (historical, not needed)

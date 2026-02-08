@@ -9,6 +9,16 @@ import { API_BASE, fetchJSON, escapeHtml, formatTimeAgo } from './utils.js';
 const LIVE_POLL_INTERVAL = 10000; // 10 seconds
 let liveSessionInterval = null;
 
+function refreshLucideIcons() {
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
+}
+
+function hasChartJs() {
+    return typeof Chart !== 'undefined';
+}
+
 /**
  * Load game server and voice channel status
  */
@@ -331,6 +341,11 @@ export async function loadServerActivity(hours = 720) {
 
         const playerCounts = data.data_points.map(p => p.player_count);
 
+        if (!hasChartJs()) {
+            if (historyStatus) historyStatus.textContent = 'History: chart library unavailable';
+            return;
+        }
+
         // Destroy existing chart
         if (serverActivityChart) {
             serverActivityChart.destroy();
@@ -471,76 +486,97 @@ export async function loadCurrentVoiceMembers() {
 
     try {
         const data = await fetchJSON(`${API_BASE}/voice-activity/current`);
+        container.innerHTML = '';
 
         if (data.total_count === 0) {
-            container.innerHTML = `
-                <div class="flex items-center gap-3 text-slate-500">
-                    <i data-lucide="mic-off" class="w-4 h-4"></i>
-                    <span class="text-sm">No one currently in voice</span>
-                </div>
-            `;
-            lucide.createIcons();
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-3 text-slate-500';
+            row.innerHTML = '<i data-lucide="mic-off" class="w-4 h-4"></i><span class="text-sm">No one currently in voice</span>';
+            container.appendChild(row);
+            refreshLucideIcons();
             return;
         }
 
+        const makeMemberRow = (member) => {
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition';
+
+            const left = document.createElement('div');
+            left.className = 'flex items-center gap-2';
+
+            const avatar = document.createElement('div');
+            avatar.className = 'w-6 h-6 rounded-full bg-gradient-to-br from-brand-purple to-brand-blue flex items-center justify-center text-[10px] font-bold text-white';
+            const memberName = String(member?.name || 'U');
+            avatar.textContent = memberName.charAt(0).toUpperCase();
+
+            const nameEl = document.createElement('span');
+            nameEl.className = 'text-sm font-medium text-white';
+            nameEl.textContent = memberName;
+
+            left.appendChild(avatar);
+            left.appendChild(nameEl);
+            row.appendChild(left);
+
+            if (member?.duration_seconds) {
+                const right = document.createElement('div');
+                right.className = 'flex items-center gap-2 text-xs text-slate-500';
+                right.innerHTML = '<i data-lucide="clock" class="w-3 h-3"></i>';
+                const duration = document.createElement('span');
+                duration.textContent = formatDuration(member.duration_seconds);
+                right.appendChild(duration);
+                row.appendChild(right);
+            }
+
+            return row;
+        };
+
         // Group by channel if we have channel info
         if (data.channels && data.channels.length > 0) {
-            container.innerHTML = data.channels.map(channel => `
-                <div class="mb-3 last:mb-0">
-                    <div class="flex items-center gap-2 mb-2">
-                        <i data-lucide="hash" class="w-3 h-3 text-slate-500"></i>
-                        <span class="text-xs font-bold text-slate-400 uppercase">${escapeHtml(channel.name)}</span>
-                        <span class="text-xs text-slate-600">(${channel.members.length})</span>
-                    </div>
-                    <div class="space-y-1.5 ml-5">
-                        ${channel.members.map(m => `
-                            <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-6 h-6 rounded-full bg-gradient-to-br from-brand-purple to-brand-blue flex items-center justify-center text-[10px] font-bold text-white">
-                                        ${escapeHtml(m.name.charAt(0).toUpperCase())}
-                                    </div>
-                                    <span class="text-sm font-medium text-white">${escapeHtml(m.name)}</span>
-                                </div>
-                                <div class="flex items-center gap-2 text-xs text-slate-500">
-                                    <i data-lucide="clock" class="w-3 h-3"></i>
-                                    <span>${formatDuration(m.duration_seconds || 0)}</span>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `).join('');
+            for (const channel of data.channels) {
+                const channelWrap = document.createElement('div');
+                channelWrap.className = 'mb-3 last:mb-0';
+
+                const header = document.createElement('div');
+                header.className = 'flex items-center gap-2 mb-2';
+                header.innerHTML = '<i data-lucide="hash" class="w-3 h-3 text-slate-500"></i>';
+
+                const nameEl = document.createElement('span');
+                nameEl.className = 'text-xs font-bold text-slate-400 uppercase';
+                nameEl.textContent = String(channel?.name || '');
+                const countEl = document.createElement('span');
+                countEl.className = 'text-xs text-slate-600';
+                countEl.textContent = `(${Array.isArray(channel?.members) ? channel.members.length : 0})`;
+                header.appendChild(nameEl);
+                header.appendChild(countEl);
+
+                const membersWrap = document.createElement('div');
+                membersWrap.className = 'space-y-1.5 ml-5';
+                for (const member of (channel.members || [])) {
+                    membersWrap.appendChild(makeMemberRow(member));
+                }
+
+                channelWrap.appendChild(header);
+                channelWrap.appendChild(membersWrap);
+                container.appendChild(channelWrap);
+            }
         } else {
-            // Flat list without channel grouping
-            container.innerHTML = `
-                <div class="space-y-1.5">
-                    ${data.members.map(m => `
-                        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition">
-                            <div class="flex items-center gap-2">
-                                <div class="w-6 h-6 rounded-full bg-gradient-to-br from-brand-purple to-brand-blue flex items-center justify-center text-[10px] font-bold text-white">
-                                    ${escapeHtml(m.name.charAt(0).toUpperCase())}
-                                </div>
-                                <span class="text-sm font-medium text-white">${escapeHtml(m.name)}</span>
-                            </div>
-                            ${m.duration_seconds ? `
-                                <div class="flex items-center gap-2 text-xs text-slate-500">
-                                    <i data-lucide="clock" class="w-3 h-3"></i>
-                                    <span>${formatDuration(m.duration_seconds)}</span>
-                                </div>
-                            ` : ''}
-                        </div>
-                    `).join('')}
-                </div>
-            `;
+            const membersWrap = document.createElement('div');
+            membersWrap.className = 'space-y-1.5';
+            for (const member of (data.members || [])) {
+                membersWrap.appendChild(makeMemberRow(member));
+            }
+            container.appendChild(membersWrap);
         }
 
-        lucide.createIcons();
+        refreshLucideIcons();
 
     } catch (e) {
         console.error('Failed to load current voice members:', e);
-        container.innerHTML = `
-            <div class="text-sm text-slate-500">Could not load member details</div>
-        `;
+        container.textContent = '';
+        const msg = document.createElement('div');
+        msg.className = 'text-sm text-slate-500';
+        msg.textContent = 'Could not load member details';
+        container.appendChild(msg);
     }
 }
 
@@ -613,6 +649,11 @@ export async function loadVoiceActivity(hours = 720) {
         });
 
         const memberCounts = data.data_points.map(p => p.member_count);
+
+        if (!hasChartJs()) {
+            if (historyStatus) historyStatus.textContent = 'History: chart library unavailable';
+            return;
+        }
 
         // Destroy existing chart
         if (voiceActivityChart) {

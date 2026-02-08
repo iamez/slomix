@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""CLI entrypoint: scan ET:Legacy demo into JSON + TXT artifacts."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from greatshot.scanner.api import analyze_demo
+from greatshot.scanner.report import build_text_report
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Analyze ET:Legacy demo files")
+    parser.add_argument("input_demo", help="Path to input demo file (e.g., *.dm_84)")
+    parser.add_argument(
+        "--json-out",
+        help="Path to write analysis JSON (default: <input>.analysis.json)",
+    )
+    parser.add_argument(
+        "--txt-out",
+        help="Path to write report TXT (default: <input>.report.txt)",
+    )
+    parser.add_argument("--timeout", type=int, default=None, help="Scanner timeout seconds")
+    parser.add_argument("--max-output-bytes", type=int, default=None, help="Max parser output bytes")
+    parser.add_argument("--max-events", type=int, default=None, help="Max normalized events")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    input_path = Path(args.input_demo).resolve()
+
+    if not input_path.exists():
+        print(f"Error: input demo not found: {input_path}", file=sys.stderr)
+        return 2
+
+    json_out = Path(args.json_out).resolve() if args.json_out else input_path.with_suffix(input_path.suffix + ".analysis.json")
+    txt_out = Path(args.txt_out).resolve() if args.txt_out else input_path.with_suffix(input_path.suffix + ".report.txt")
+
+    options = {}
+    if args.timeout is not None:
+        options["timeout_seconds"] = args.timeout
+    if args.max_output_bytes is not None:
+        options["max_output_bytes"] = args.max_output_bytes
+    if args.max_events is not None:
+        options["max_events"] = args.max_events
+
+    try:
+        result = analyze_demo(input_path, scanner_options=options)
+    except Exception as exc:
+        print(f"Error: scan failed: {exc}", file=sys.stderr)
+        return 1
+
+    payload = result.to_dict()
+    report_txt = build_text_report(payload)
+
+    json_out.parent.mkdir(parents=True, exist_ok=True)
+    txt_out.parent.mkdir(parents=True, exist_ok=True)
+
+    json_out.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    txt_out.write_text(report_txt, encoding="utf-8")
+
+    print(str(json_out))
+    print(str(txt_out))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

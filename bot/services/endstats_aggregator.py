@@ -203,11 +203,33 @@ class EndstatsAggregator:
         Returns:
             Formatted string (e.g., "3.2K", "52%", "2:30")
         """
+        name_lc = award_name.lower()
+
+        # Accuracy awards: show as percentage
+        if "accuracy" in name_lc:
+            return f"{value:.0f}%"
+
+        # Time-related awards: show as m:ss
+        if "time" in name_lc or "spawn" in name_lc:
+            minutes = int(value // 60)
+            seconds = int(value % 60)
+            return f"{minutes}:{seconds:02d}"
+
+        # Ratio awards
+        if "ratio" in name_lc:
+            return f"{value:.2f}"
+
         # Damage-related awards: show in K format
-        if "damage" in award_name.lower():
+        if "damage" in name_lc:
             if value >= 1000:
                 return f"{value/1000:.1f}K"
-        return f"{int(value)}"
+
+        # Default formatting
+        if value >= 1000:
+            return f"{value/1000:.1f}K"
+        if value == int(value):
+            return str(int(value))
+        return f"{value:.1f}"
 
     def build_round_awards_display(
         self,
@@ -284,27 +306,6 @@ class EndstatsAggregator:
                     return "\n".join(lines)
 
         return "\n".join(lines)
-
-        # Accuracy awards: show as percentage
-        if "accuracy" in award_name.lower():
-            return f"{value:.0f}%"
-
-        # Time-related awards: show as m:ss
-        if "time" in award_name.lower() or "spawn" in award_name.lower():
-            minutes = int(value // 60)
-            seconds = int(value % 60)
-            return f"{minutes}:{seconds:02d}"
-
-        # Ratio awards
-        if "ratio" in award_name.lower():
-            return f"{value:.2f}"
-
-        # Default: integer or float based on value
-        if value >= 1000:
-            return f"{value/1000:.1f}K"
-        if value == int(value):
-            return str(int(value))
-        return f"{value:.1f}"
 
     async def aggregate_session_endstats(
         self, session_ids: List[int], session_ids_str: str

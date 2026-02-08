@@ -12,7 +12,7 @@ This cog handles the !last_session command by delegating to specialized services
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import discord
 from discord.ext import commands

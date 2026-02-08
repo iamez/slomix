@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="slomix-admin-discord-ids" content="231165917604741121">
     <title>Slomix | The Ultimate ET:Legacy Platform</title>
 
     <!-- Reactor Fonts -->
@@ -12,7 +13,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -1164,9 +1165,9 @@
     </style>
 
     <!-- Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@0.563.0/dist/umd/lucide.min.js"></script>
     <!-- Charts -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 
 <body class="bg-slate-950 text-slate-300 font-sans min-h-screen flex flex-col bg-hero-pattern bg-fixed">
@@ -1191,24 +1192,41 @@
             <div class="hidden md:flex items-center gap-1">
                 <button id="link-home" onclick="navigateTo('home')"
                     class="nav-link active px-4 py-2 rounded-lg text-sm font-bold">Home</button>
-                <button id="link-sessions" onclick="navigateTo('sessions')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Sessions</button>
-                <button id="link-leaderboards" onclick="navigateTo('leaderboards')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Leaderboards</button>
-                <button id="link-maps" onclick="navigateTo('maps')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Maps</button>
-                <button id="link-weapons" onclick="navigateTo('weapons')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Weapons</button>
+
+                <div class="relative">
+                    <button
+                        id="link-stats"
+                        class="nav-link px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1"
+                        data-nav-menu-toggle
+                        aria-haspopup="true"
+                        aria-expanded="false"
+                        aria-controls="nav-stats-menu">
+                        Stats
+                        <i data-lucide="chevron-down" class="w-4 h-4 pointer-events-none"></i>
+                    </button>
+                    <div id="nav-stats-menu" role="menu"
+                        class="hidden absolute top-12 left-0 min-w-[240px] glass-panel rounded-xl border border-white/10 p-2 shadow-2xl z-50">
+                        <button id="link-sessions-stats" role="menuitem" tabindex="-1" onclick="navigateTo('sessions')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Sessions</button>
+                        <button id="link-leaderboards" role="menuitem" tabindex="-1" onclick="navigateTo('leaderboards')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Leaderboards</button>
+                        <button id="link-maps" role="menuitem" tabindex="-1" onclick="navigateTo('maps')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Maps</button>
+                        <button id="link-weapons" role="menuitem" tabindex="-1" onclick="navigateTo('weapons')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Weapons</button>
+                        <button id="link-records" role="menuitem" tabindex="-1" onclick="navigateTo('records')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Records</button>
+                        <button id="link-awards" role="menuitem" tabindex="-1" onclick="navigateTo('awards')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Achievements</button>
+                    </div>
+                </div>
+
                 <button id="link-proximity" onclick="navigateTo('proximity')"
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Proximity</button>
-                <button id="link-records" onclick="navigateTo('records')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Records</button>
-                <button id="link-awards" onclick="navigateTo('awards')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Awards</button>
-                <button id="link-profile" onclick="navigateTo('profile')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Profile</button>
-                <button id="link-admin" onclick="navigateTo('admin')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Admin Panel</button>
+                <button id="link-greatshot" onclick="navigateTo('greatshot')"
+                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Greatshot</button>
+                <button id="link-sessions" onclick="navigateTo('sessions')"
+                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Sessions</button>
             </div>
 
             <!-- Right Side: Auth -->
@@ -1230,6 +1248,10 @@
 
                 <!-- User Profile (Hidden by default) -->
                 <div id="auth-user" class="hidden items-center gap-3">
+                    <button id="link-admin" onclick="navigateTo('admin')"
+                        class="hidden nav-link px-3 py-1 rounded-lg text-xs font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">
+                        Admin
+                    </button>
                     <button class="relative text-slate-400 hover:text-white transition" aria-label="Notifications">
                         <i data-lucide="bell" class="w-5 h-5"></i>
                         <span class="absolute -top-1 -right-1 w-2 h-2 bg-brand-rose rounded-full"></span>
@@ -1854,11 +1876,39 @@
                     <span>Prototype mode: waiting for proximity data ingestion.</span>
                 </div>
 
+                <div class="glass-panel p-4 rounded-xl mb-8">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="text-sm font-bold text-slate-300">Scope</div>
+                        <button id="proximity-reset-scope" class="text-xs px-3 py-1 rounded-md border border-white/10 text-slate-400 hover:text-white hover:border-brand-cyan/40 transition">Reset</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                        <div>
+                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500" for="proximity-session-select">Session</label>
+                            <select id="proximity-session-select" class="mt-1 w-full rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-cyan/60">
+                                <option value="">Loading sessions...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500" for="proximity-map-select">Map</label>
+                            <select id="proximity-map-select" class="mt-1 w-full rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-cyan/60">
+                                <option value="">All maps</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500" for="proximity-round-select">Round</label>
+                            <select id="proximity-round-select" class="mt-1 w-full rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-cyan/60">
+                                <option value="">All rounds</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="proximity-scope-caption" class="text-xs text-slate-500 mt-3">All proximity data in current window.</div>
+                </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div class="glass-card p-6 rounded-xl border-l-4 border-brand-cyan">
                         <div class="text-xs font-bold text-slate-500 uppercase">Engagements</div>
                         <div id="proximity-total-engagements" class="text-3xl font-black text-white mt-2">--</div>
-                        <div class="text-xs text-slate-500 mt-1">Last 30 days</div>
+                        <div id="proximity-window-label" class="text-xs text-slate-500 mt-1">Last 30 days</div>
                     </div>
                     <div class="glass-card p-6 rounded-xl border-l-4 border-brand-emerald">
                         <div class="text-xs font-bold text-slate-500 uppercase">Avg Distance</div>
@@ -2093,6 +2143,163 @@
                         </div>
                         <div id="proximity-event-stats" class="flex flex-wrap gap-2 mt-3 text-[10px] text-slate-400"></div>
                         <div id="proximity-event-details" class="text-xs text-slate-400 mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GREATSHOT VIEW -->
+        <div id="view-greatshot" class="view-section">
+            <div class="max-w-7xl mx-auto px-6 py-12">
+                <div class="text-center mb-10">
+                    <h1 class="text-4xl font-black text-white mb-3">Greatshot</h1>
+                    <p class="text-slate-400 max-w-2xl mx-auto">
+                        Unified ET:Legacy demo workflow with upload, scan, highlights, clip extraction, and render tracking.
+                    </p>
+                </div>
+
+                <div class="glass-panel rounded-2xl p-4 md:p-5 mb-6">
+                    <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="Greatshot sections">
+                        <button id="greatshot-tab-demos" data-greatshot-tab="demos" role="tab" aria-selected="true"
+                            class="px-4 py-2 rounded-lg text-sm font-bold border border-brand-cyan/40 text-brand-cyan bg-brand-cyan/10">
+                            Demos
+                        </button>
+                        <button id="greatshot-tab-highlights" data-greatshot-tab="highlights" role="tab" aria-selected="false"
+                            class="px-4 py-2 rounded-lg text-sm font-bold border border-white/10 text-slate-300 hover:text-white hover:border-brand-cyan/40 transition">
+                            Highlights
+                        </button>
+                        <button id="greatshot-tab-clips" data-greatshot-tab="clips" role="tab" aria-selected="false"
+                            class="px-4 py-2 rounded-lg text-sm font-bold border border-white/10 text-slate-300 hover:text-white hover:border-brand-cyan/40 transition">
+                            Clips
+                        </button>
+                        <button id="greatshot-tab-renders" data-greatshot-tab="renders" role="tab" aria-selected="false"
+                            class="px-4 py-2 rounded-lg text-sm font-bold border border-white/10 text-slate-300 hover:text-white hover:border-brand-cyan/40 transition">
+                            Renders
+                        </button>
+                    </div>
+                </div>
+
+                <div id="greatshot-panel-demos" data-greatshot-panel="demos">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="glass-panel rounded-2xl p-6">
+                            <h2 class="text-lg font-black text-white mb-4">Upload Demo</h2>
+                            <form id="demo-upload-form" class="space-y-4" enctype="multipart/form-data">
+                                <div>
+                                    <label for="demo-upload-file" class="text-xs font-bold uppercase tracking-wide text-slate-500">File (.dm_84)</label>
+                                    <input id="demo-upload-file" name="file" type="file" accept=".dm_84"
+                                        class="mt-2 w-full rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-brand-cyan/60"
+                                        required>
+                                </div>
+                                <button id="demo-upload-submit" type="submit"
+                                    class="w-full px-4 py-2 rounded-lg bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan font-bold hover:bg-brand-cyan/30 transition">
+                                    Upload + Scan
+                                </button>
+                                <div id="demo-upload-status" class="text-xs text-slate-400 min-h-[1.25rem]"></div>
+                                <div class="text-[11px] text-slate-500">
+                                    Allowed extension: <code>.dm_84</code>. Uploads are stored outside web root and processed asynchronously.
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="lg:col-span-2">
+                            <div class="flex items-center justify-between mb-4">
+                                <h2 class="text-lg font-black text-white">My Recent Demos</h2>
+                                <button onclick="navigateTo('greatshot', true, { section: 'demos' })" class="text-xs px-3 py-1 rounded-md border border-white/10 text-slate-400 hover:text-white hover:border-brand-cyan/40 transition">
+                                    Refresh
+                                </button>
+                            </div>
+                            <div id="demos-list" class="space-y-3">
+                                <div class="glass-card p-6 rounded-xl text-slate-500">Loading demos...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="greatshot-panel-highlights" data-greatshot-panel="highlights" class="hidden">
+                    <div class="glass-panel rounded-2xl p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-lg font-black text-white">Highlights</h2>
+                            <button onclick="navigateTo('greatshot', true, { section: 'highlights' })"
+                                class="text-xs px-3 py-1 rounded-md border border-white/10 text-slate-400 hover:text-white hover:border-brand-cyan/40 transition">
+                                Refresh
+                            </button>
+                        </div>
+                        <div id="greatshot-highlights-hub" class="space-y-3 text-sm text-slate-300">
+                            Loading highlight summary...
+                        </div>
+                    </div>
+                </div>
+
+                <div id="greatshot-panel-clips" data-greatshot-panel="clips" class="hidden">
+                    <div class="glass-panel rounded-2xl p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-lg font-black text-white">Clips</h2>
+                            <button onclick="navigateTo('greatshot', true, { section: 'clips' })"
+                                class="text-xs px-3 py-1 rounded-md border border-white/10 text-slate-400 hover:text-white hover:border-brand-cyan/40 transition">
+                                Refresh
+                            </button>
+                        </div>
+                        <div id="greatshot-clips-hub" class="space-y-3 text-sm text-slate-300">
+                            Loading clip summary...
+                        </div>
+                    </div>
+                </div>
+
+                <div id="greatshot-panel-renders" data-greatshot-panel="renders" class="hidden">
+                    <div class="glass-panel rounded-2xl p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-lg font-black text-white">Renders</h2>
+                            <button onclick="navigateTo('greatshot', true, { section: 'renders' })"
+                                class="text-xs px-3 py-1 rounded-md border border-white/10 text-slate-400 hover:text-white hover:border-brand-cyan/40 transition">
+                                Refresh
+                            </button>
+                        </div>
+                        <div id="greatshot-renders-hub" class="space-y-3 text-sm text-slate-300">
+                            Loading render summary...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GREATSHOT DEMO DETAIL VIEW -->
+        <div id="view-greatshot-demo" class="view-section">
+            <div class="max-w-7xl mx-auto px-6 py-12">
+                <div class="flex items-center justify-between mb-6">
+                    <button onclick="navigateTo('greatshot', true, { section: 'demos' })" class="px-3 py-2 rounded-lg border border-white/10 text-slate-300 hover:text-white hover:border-brand-cyan/40 transition text-xs font-bold">
+                        ← Back to Greatshot
+                    </button>
+                    <div id="demo-detail-status" class="px-3 py-1 rounded-md text-xs font-bold border border-white/10 text-slate-300">--</div>
+                </div>
+
+                <div class="glass-panel rounded-2xl p-6">
+                    <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+                        <h1 id="demo-detail-title" class="text-2xl md:text-3xl font-black text-white">Demo Detail</h1>
+                        <div id="demo-detail-downloads" class="flex flex-wrap gap-2"></div>
+                    </div>
+                    <div id="demo-detail-error" class="hidden text-sm text-brand-rose mb-4"></div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="glass-card p-4 rounded-xl">
+                            <div class="text-xs font-bold uppercase text-slate-500 mb-2">Metadata</div>
+                            <div id="demo-detail-meta" class="space-y-1 text-sm text-slate-300"></div>
+                        </div>
+
+                        <div class="glass-card p-4 rounded-xl lg:col-span-2">
+                            <div class="text-xs font-bold uppercase text-slate-500 mb-2">Highlights</div>
+                            <div id="demo-detail-highlights" class="space-y-3"></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                        <div class="glass-card p-4 rounded-xl">
+                            <div class="text-xs font-bold uppercase text-slate-500 mb-2">Render Jobs</div>
+                            <div id="demo-detail-renders" class="space-y-2"></div>
+                        </div>
+                        <div class="glass-card p-4 rounded-xl">
+                            <div class="text-xs font-bold uppercase text-slate-500 mb-2">Timeline Preview</div>
+                            <div id="demo-detail-timeline" class="max-h-[420px] overflow-y-auto pr-1"></div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1591,9 +1591,17 @@ function et_RunFrame(levelTime)
         end
         tracker.player_tracks = {}
 
-        -- Close all active engagements as round_end
-        for target_slot, engagement in pairs(tracker.engagements) do
-            closeEngagement(engagement, "round_end", nil)
+        -- Close all active engagements as round_end.
+        -- Iterate over a stable key list because closeEngagement mutates tracker.engagements.
+        local active_targets = {}
+        for target_slot, _ in pairs(tracker.engagements) do
+            table.insert(active_targets, target_slot)
+        end
+        for _, target_slot in ipairs(active_targets) do
+            local engagement = tracker.engagements[target_slot]
+            if engagement then
+                closeEngagement(engagement, "round_end", nil)
+            end
         end
         if config.output_delay_ms and config.output_delay_ms > 0 then
             tracker.output_pending = true
