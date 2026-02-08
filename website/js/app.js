@@ -22,6 +22,11 @@ import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
 import { loadProximityView } from './proximity.js';
 import { loadAdminPanelView } from './admin-panel.js';
+import {
+    initGreatshotModule,
+    loadGreatshotView,
+    loadGreatshotDemoDetail,
+} from './greatshot.js';
 import './compare.js'; // Self-registers to window
 import { getBadgesForPlayer, renderBadges, renderBadge } from './badges.js';
 import { loadSeasonLeaders, loadActivityCalendar, loadSeasonSummary } from './season-stats.js';
@@ -57,6 +62,94 @@ const PROTOTYPE_TONE_STYLES = {
     }
 };
 
+function parseHashRoute() {
+    const cleanHash = window.location.hash.replace(/^#\/?/, '');
+    if (!cleanHash) return { viewId: 'home', params: {} };
+
+    const segments = cleanHash.split('/').filter(Boolean);
+    if (segments[0] === 'greatshot') {
+        if (segments[1] === 'demo' && segments[2]) {
+            return {
+                viewId: 'greatshot-demo',
+                params: { demoId: decodeURIComponent(segments[2]) }
+            };
+        }
+        const section = ['demos', 'highlights', 'clips', 'renders'].includes(segments[1] || '')
+            ? segments[1]
+            : 'demos';
+        return {
+            viewId: 'greatshot',
+            params: { section }
+        };
+    }
+
+    return { viewId: segments[0] || 'home', params: {} };
+}
+
+function initNavDropdowns() {
+    const toggles = document.querySelectorAll('[data-nav-menu-toggle]');
+
+    const closeMenu = (toggle, menu) => {
+        toggle.setAttribute('aria-expanded', 'false');
+        menu.classList.add('hidden');
+        menu.querySelectorAll('[role="menuitem"]').forEach((item) => {
+            item.tabIndex = -1;
+        });
+    };
+
+    const openMenu = (toggle, menu) => {
+        toggle.setAttribute('aria-expanded', 'true');
+        menu.classList.remove('hidden');
+        menu.querySelectorAll('[role="menuitem"]').forEach((item) => {
+            item.tabIndex = 0;
+        });
+    };
+
+    const closeAll = () => {
+        toggles.forEach((toggle) => {
+            const menuId = toggle.getAttribute('aria-controls');
+            const menu = menuId ? document.getElementById(menuId) : null;
+            if (menu) closeMenu(toggle, menu);
+        });
+    };
+
+    toggles.forEach((toggle) => {
+        const menuId = toggle.getAttribute('aria-controls');
+        const menu = menuId ? document.getElementById(menuId) : null;
+        if (!menu) return;
+
+        closeMenu(toggle, menu);
+
+        toggle.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const isOpen = toggle.getAttribute('aria-expanded') === 'true';
+            closeAll();
+            if (!isOpen) {
+                openMenu(toggle, menu);
+                const first = menu.querySelector('[role="menuitem"]');
+                if (first) first.focus();
+            }
+        });
+
+        toggle.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                openMenu(toggle, menu);
+                const first = menu.querySelector('[role="menuitem"]');
+                if (first) first.focus();
+            } else if (event.key === 'Escape') {
+                closeMenu(toggle, menu);
+                toggle.focus();
+            }
+        });
+    });
+
+    document.addEventListener('click', closeAll);
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeAll();
+    });
+}
+
 function renderPrototypeBanner(viewElement) {
     if (!viewElement) return;
 
@@ -76,24 +169,37 @@ function renderPrototypeBanner(viewElement) {
     const toneKey = viewElement.dataset.prototypeTone || 'amber';
     const tone = PROTOTYPE_TONE_STYLES[toneKey] || PROTOTYPE_TONE_STYLES.amber;
 
-    const bannerHtml = `
-        <div class="prototype-banner glass-panel ${tone.border} ${tone.bg} border px-4 py-3 rounded-xl mb-6">
-            <div class="flex items-start gap-3">
-                <div class="${tone.text} mt-0.5">
-                    <i data-lucide="${tone.icon}" class="w-4 h-4"></i>
-                </div>
-                <div>
-                    <div class="text-[11px] font-bold uppercase ${tone.text} tracking-widest">${escapeHtml(title)}</div>
-                    <div class="text-sm text-slate-300 mt-1">${escapeHtml(message)}</div>
-                </div>
-            </div>
-        </div>
-    `;
+    const banner = document.createElement('div');
+    banner.className = `prototype-banner glass-panel ${tone.border} ${tone.bg} border px-4 py-3 rounded-xl mb-6`;
+
+    const row = document.createElement('div');
+    row.className = 'flex items-start gap-3';
+
+    const iconWrap = document.createElement('div');
+    iconWrap.className = `${tone.text} mt-0.5`;
+    const icon = document.createElement('i');
+    icon.className = 'w-4 h-4';
+    icon.setAttribute('data-lucide', tone.icon);
+    iconWrap.appendChild(icon);
+
+    const textWrap = document.createElement('div');
+    const titleEl = document.createElement('div');
+    titleEl.className = `text-[11px] font-bold uppercase ${tone.text} tracking-widest`;
+    titleEl.textContent = title;
+    const messageEl = document.createElement('div');
+    messageEl.className = 'text-sm text-slate-300 mt-1';
+    messageEl.textContent = message;
+    textWrap.appendChild(titleEl);
+    textWrap.appendChild(messageEl);
+
+    row.appendChild(iconWrap);
+    row.appendChild(textWrap);
+    banner.appendChild(row);
 
     if (existing) {
-        existing.outerHTML = bannerHtml;
+        existing.replaceWith(banner);
     } else {
-        slot.insertAdjacentHTML('beforeend', bannerHtml);
+        slot.appendChild(banner);
     }
 
     if (typeof lucide !== 'undefined') {
@@ -104,7 +210,7 @@ function renderPrototypeBanner(viewElement) {
 /**
  * Navigate to a view section
  */
-export function navigateTo(viewId, updateHistory = true) {
+export function navigateTo(viewId, updateHistory = true, params = {}) {
     console.log('Navigating to:', viewId);
 
     // Hide all views
@@ -126,13 +232,34 @@ export function navigateTo(viewId, updateHistory = true) {
 
     // Update Nav Links
     document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-    const link = document.getElementById(`link-${viewId}`);
-    if (link) link.classList.add('active');
+    const navKey = viewId === 'greatshot-demo' ? 'greatshot' : viewId;
+    const statsViews = new Set(['leaderboards', 'maps', 'weapons', 'records', 'awards']);
+    const activeKeys = [`link-${navKey}`];
+    if (statsViews.has(viewId)) {
+        activeKeys.push('link-stats');
+    }
+    activeKeys.forEach((id) => {
+        const link = document.getElementById(id);
+        if (link) link.classList.add('active');
+    });
 
     // Update URL hash
     if (updateHistory) {
-        const hash = viewId === 'home' ? '' : `#/${viewId}`;
-        window.location.hash = hash;
+        let hash = '';
+        if (viewId === 'greatshot-demo' && params.demoId) {
+            hash = `#/greatshot/demo/${encodeURIComponent(params.demoId)}`;
+        } else if (viewId === 'greatshot') {
+            const section = ['demos', 'highlights', 'clips', 'renders'].includes(params.section)
+                ? params.section
+                : 'demos';
+            hash = `#/greatshot/${section}`;
+        } else if (viewId !== 'home') {
+            hash = `#/${viewId}`;
+        }
+        if (window.location.hash !== hash) {
+            window.location.hash = hash;
+            return;
+        }
     }
 
     // Scroll to top
@@ -157,6 +284,12 @@ export function navigateTo(viewId, updateHistory = true) {
         loadAwardsView();
     } else if (viewId === 'proximity') {
         loadProximityView();
+    } else if (viewId === 'greatshot') {
+        loadGreatshotView(params.section || 'demos');
+    } else if (viewId === 'greatshot-demo') {
+        if (params.demoId) {
+            loadGreatshotDemoDetail(params.demoId);
+        }
     } else if (viewId === 'admin') {
         loadAdminPanelView();
     }
@@ -183,10 +316,9 @@ window.toggleSeasonDetails = toggleSeasonDetails;
 // BROWSER HISTORY
 // ============================================================================
 
-window.addEventListener('popstate', () => {
-    const hash = window.location.hash.replace('#/', '');
-    const viewId = hash || 'home';
-    navigateTo(viewId, false);
+window.addEventListener('hashchange', () => {
+    const route = parseHashRoute();
+    navigateTo(route.viewId, false, route.params);
 });
 
 // ============================================================================
@@ -283,6 +415,8 @@ async function loadPredictions() {
  */
 async function initApp() {
     console.log('🚀 Slomix App Initializing...');
+    initNavDropdowns();
+    initGreatshotModule();
 
     // Prototype banner for initial view
     const activeView = document.querySelector('.view-section.active');
@@ -334,9 +468,9 @@ async function initApp() {
     setInterval(loadLiveStatus, 30000);
 
     // Handle initial URL hash
-    const hash = window.location.hash.replace('#/', '');
-    if (hash && hash !== 'home') {
-        navigateTo(hash, false);
+    const route = parseHashRoute();
+    if (route.viewId && route.viewId !== 'home') {
+        navigateTo(route.viewId, false, route.params);
     }
 
     console.log('✅ Slomix App Ready');

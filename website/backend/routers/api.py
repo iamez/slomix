@@ -1,8 +1,10 @@
 import os
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import math
 import json
+from collections import defaultdict
+from itertools import combinations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from website.backend.dependencies import get_db
@@ -5780,6 +5782,386 @@ def _proximity_stub_meta(range_days: int) -> dict:
     }
 
 
+def _parse_iso_date(value: Optional[str]) -> Optional[Any]:
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid session_date format. Use YYYY-MM-DD.",
+        )
+
+
+def _build_proximity_where_clause(
+    range_days: int,
+    session_date: Optional[str],
+    map_name: Optional[str],
+    round_number: Optional[int],
+    round_start_unix: Optional[int],
+    alias: Optional[str] = None,
+) -> Tuple[str, List[Any], Dict[str, Any]]:
+    prefix = f"{alias}." if alias else ""
+    params: List[Any] = []
+    clauses: List[str] = []
+
+    parsed_session_date = _parse_iso_date(session_date)
+    normalized_map = (map_name or "").strip() or None
+
+    if round_number is not None and round_number < 0:
+        raise HTTPException(status_code=400, detail="round_number must be >= 0")
+    if round_start_unix is not None and round_start_unix < 0:
+        raise HTTPException(status_code=400, detail="round_start_unix must be >= 0")
+
+    if parsed_session_date is not None:
+        params.append(parsed_session_date)
+        clauses.append(f"{prefix}session_date = ${len(params)}")
+    else:
+        safe_range = max(1, min(int(range_days or 30), 3650))
+        since = datetime.utcnow().date() - timedelta(days=safe_range)
+        params.append(since)
+        clauses.append(f"{prefix}session_date >= ${len(params)}")
+
+    if normalized_map is not None:
+        params.append(normalized_map)
+        clauses.append(f"{prefix}map_name = ${len(params)}")
+
+    if round_number is not None:
+        params.append(int(round_number))
+        clauses.append(f"{prefix}round_number = ${len(params)}")
+
+    if round_start_unix is not None and int(round_start_unix) > 0:
+        params.append(int(round_start_unix))
+        clauses.append(f"{prefix}round_start_unix = ${len(params)}")
+
+    scope = {
+        "session_date": parsed_session_date.isoformat() if parsed_session_date else None,
+        "map_name": normalized_map,
+        "round_number": int(round_number) if round_number is not None else None,
+        "round_start_unix": int(round_start_unix)
+        if round_start_unix is not None and int(round_start_unix) > 0
+        else None,
+    }
+    return "WHERE " + " AND ".join(clauses), params, scope
+
+
+def _iter_attackers(attackers_raw: Any) -> List[Dict[str, Any]]:
+    parsed = _parse_json_field(attackers_raw)
+    if isinstance(parsed, list):
+        return [item for item in parsed if isinstance(item, dict)]
+    if isinstance(parsed, dict):
+        return [item for item in parsed.values() if isinstance(item, dict)]
+    return []
+
+
+def _to_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "y")
+    return False
+
+
+def _short_guid(guid: str) -> str:
+    token = str(guid or "").strip()
+    return token[:8] if token else "unknown"
+
+
+def _resolve_name_for_guid(
+    guid: str,
+    guid_name_map: Optional[Dict[str, str]] = None,
+    local_map: Optional[Dict[str, str]] = None,
+) -> str:
+    token = str(guid or "").strip()
+    if not token:
+        return "unknown"
+    if local_map and token in local_map and local_map[token]:
+        return str(local_map[token])
+    if guid_name_map and token in guid_name_map and guid_name_map[token]:
+        return str(guid_name_map[token])
+    return f"#{_short_guid(token)}"
+
+
+async def _load_scoped_guid_name_map(
+    db: DatabaseAdapter,
+    where_sql: str,
+    params: tuple,
+) -> Dict[str, str]:
+    """
+    Build guid -> display name mapping for the active scope.
+    Uses player_track (same scope columns as combat_engagement).
+    """
+    try:
+        rows = await db.fetch_all(
+            "SELECT player_guid, MAX(player_name) AS player_name "
+            f"FROM player_track {where_sql} "
+            "GROUP BY player_guid",
+            params,
+        )
+        return {
+            str(row[0]): str(row[1])
+            for row in rows
+            if row and row[0] and row[1]
+        }
+    except Exception:
+        return {}
+
+
+def _compute_scoped_duos(
+    engagement_rows: List[Any],
+    limit: int,
+    guid_name_map: Optional[Dict[str, str]] = None,
+) -> List[Dict[str, Any]]:
+    pair_stats: Dict[Tuple[str, str], Dict[str, float]] = {}
+
+    for row in engagement_rows:
+        attackers_raw, participants_raw, crossfire_delay_ms, outcome = row
+        attackers = _iter_attackers(attackers_raw)
+
+        guid_to_name: Dict[str, str] = {}
+        fallback_names: List[str] = []
+        for attacker in attackers:
+            guid = str(attacker.get("guid") or "").strip()
+            name = str(attacker.get("name") or guid or "").strip()
+            if not name:
+                continue
+            fallback_names.append(name)
+            if guid:
+                guid_to_name[guid] = name
+
+        participants = _parse_json_field(participants_raw) or []
+        names: List[str] = []
+        participant_guids: List[str] = []
+        if isinstance(participants, list) and participants:
+            for guid in participants:
+                guid_str = str(guid or "").strip()
+                if not guid_str:
+                    continue
+                participant_guids.append(guid_str)
+                mapped = _resolve_name_for_guid(guid_str, guid_name_map, guid_to_name)
+                if mapped:
+                    names.append(mapped)
+
+        if len(names) < 2:
+            names = fallback_names
+
+        if len(names) < 2 and len(participant_guids) >= 2:
+            names = [_resolve_name_for_guid(guid, guid_name_map, guid_to_name) for guid in participant_guids]
+
+        unique_names = sorted({name for name in names if name})
+        if len(unique_names) < 2:
+            continue
+
+        for p1, p2 in combinations(unique_names, 2):
+            key = (p1, p2)
+            if key not in pair_stats:
+                pair_stats[key] = {
+                    "crossfire_count": 0,
+                    "crossfire_kills": 0,
+                    "delay_sum": 0.0,
+                    "delay_count": 0,
+                }
+            pair_stats[key]["crossfire_count"] += 1
+            if str(outcome or "").lower() == "killed":
+                pair_stats[key]["crossfire_kills"] += 1
+            if crossfire_delay_ms is not None:
+                pair_stats[key]["delay_sum"] += float(crossfire_delay_ms)
+                pair_stats[key]["delay_count"] += 1
+
+    sorted_pairs = sorted(
+        pair_stats.items(),
+        key=lambda item: (
+            item[1]["crossfire_kills"],
+            item[1]["crossfire_count"],
+        ),
+        reverse=True,
+    )
+
+    return [
+        {
+            "player1": pair[0],
+            "player2": pair[1],
+            "crossfire_kills": int(stats["crossfire_kills"]),
+            "crossfire_count": int(stats["crossfire_count"]),
+            "avg_delay_ms": round(stats["delay_sum"] / stats["delay_count"], 1)
+            if stats["delay_count"]
+            else None,
+        }
+        for pair, stats in sorted_pairs[: max(1, min(limit, 50))]
+    ]
+
+
+def _compute_scoped_teamplay(
+    engagement_rows: List[Any],
+    limit: int,
+    guid_name_map: Optional[Dict[str, str]] = None,
+) -> Dict[str, List[Dict[str, Any]]]:
+    stats: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "guid": None,
+            "name": "Unknown",
+            "crossfire_participations": 0,
+            "crossfire_kills": 0,
+            "crossfire_final_blows": 0,
+            "crossfire_delay_sum": 0.0,
+            "crossfire_delay_count": 0,
+            "times_focused": 0,
+            "focus_escapes": 0,
+        }
+    )
+
+    def ensure_player(guid: Optional[str], name: Optional[str]) -> str:
+        key = (guid or name or "unknown").strip() or "unknown"
+        entry = stats[key]
+        entry["guid"] = guid or key
+        if name:
+            entry["name"] = name
+        return key
+
+    for row in engagement_rows:
+        (
+            target_guid,
+            target_name,
+            outcome,
+            num_attackers,
+            is_crossfire,
+            crossfire_delay_ms,
+            attackers_raw,
+            participants_raw,
+        ) = row
+
+        target_key = ensure_player(
+            str(target_guid) if target_guid is not None else None,
+            str(target_name) if target_name is not None else None,
+        )
+        target_stats = stats[target_key]
+        if int(num_attackers or 0) >= 2:
+            target_stats["times_focused"] += 1
+            if str(outcome or "").lower() == "escaped":
+                target_stats["focus_escapes"] += 1
+
+        if not is_crossfire:
+            continue
+
+        attackers = _iter_attackers(attackers_raw)
+        attacker_by_guid = {
+            str(attacker.get("guid") or "").strip(): attacker
+            for attacker in attackers
+            if str(attacker.get("guid") or "").strip()
+        }
+
+        participant_guids = set()
+        parsed_participants = _parse_json_field(participants_raw) or []
+        if isinstance(parsed_participants, list):
+            participant_guids = {
+                str(guid).strip()
+                for guid in parsed_participants
+                if str(guid).strip()
+            }
+
+        if participant_guids:
+            for guid in participant_guids:
+                attacker = attacker_by_guid.get(guid, {})
+                name = str(attacker.get("name") or _resolve_name_for_guid(guid, guid_name_map) or guid).strip() or "Unknown"
+                player_key = ensure_player(guid, name)
+                player_stats = stats[player_key]
+                player_stats["crossfire_participations"] += 1
+                if str(outcome or "").lower() == "killed":
+                    player_stats["crossfire_kills"] += 1
+                if attacker and _to_bool(attacker.get("got_kill")):
+                    player_stats["crossfire_final_blows"] += 1
+                if crossfire_delay_ms is not None:
+                    player_stats["crossfire_delay_sum"] += float(crossfire_delay_ms)
+                    player_stats["crossfire_delay_count"] += 1
+        else:
+            for attacker in attackers:
+                guid = str(attacker.get("guid") or "").strip()
+                name = str(attacker.get("name") or guid or "").strip() or "Unknown"
+                player_key = ensure_player(guid or None, name)
+                player_stats = stats[player_key]
+                player_stats["crossfire_participations"] += 1
+                if str(outcome or "").lower() == "killed":
+                    player_stats["crossfire_kills"] += 1
+                if _to_bool(attacker.get("got_kill")):
+                    player_stats["crossfire_final_blows"] += 1
+                if crossfire_delay_ms is not None:
+                    player_stats["crossfire_delay_sum"] += float(crossfire_delay_ms)
+                    player_stats["crossfire_delay_count"] += 1
+
+    normalized = []
+    for values in stats.values():
+        delays = values["crossfire_delay_count"]
+        avg_delay = values["crossfire_delay_sum"] / delays if delays else None
+        normalized.append(
+            {
+                "guid": values["guid"],
+                "name": values["name"],
+                "crossfire_kills": int(values["crossfire_kills"]),
+                "crossfire_participations": int(values["crossfire_participations"]),
+                "crossfire_final_blows": int(values["crossfire_final_blows"]),
+                "avg_delay_ms": round(avg_delay, 1) if avg_delay is not None else None,
+                "times_focused": int(values["times_focused"]),
+                "focus_escapes": int(values["focus_escapes"]),
+            }
+        )
+
+    normalized = [row for row in normalized if row["guid"] and row["name"]]
+
+    crossfire_rows = sorted(
+        [row for row in normalized if row["crossfire_participations"] > 0],
+        key=lambda row: (row["crossfire_kills"], row["crossfire_participations"]),
+        reverse=True,
+    )[: max(1, min(limit, 25))]
+
+    sync_rows = sorted(
+        [row for row in normalized if row["avg_delay_ms"] is not None],
+        key=lambda row: (row["avg_delay_ms"], -row["crossfire_kills"]),
+    )[: max(1, min(limit, 25))]
+
+    focus_rows = sorted(
+        [row for row in normalized if row["times_focused"] > 0],
+        key=lambda row: (
+            (row["focus_escapes"] / row["times_focused"]) if row["times_focused"] else 0,
+            row["times_focused"],
+        ),
+        reverse=True,
+    )[: max(1, min(limit, 25))]
+
+    return {
+        "crossfire_kills": [
+            {
+                **row,
+                "kill_rate_pct": round(
+                    (row["crossfire_kills"] * 100.0) / row["crossfire_participations"],
+                    1,
+                )
+                if row["crossfire_participations"]
+                else None,
+            }
+            for row in crossfire_rows
+        ],
+        "sync": sync_rows,
+        "focus_survival": [
+            {
+                **row,
+                "survival_rate_pct": round(
+                    (row["focus_escapes"] * 100.0) / row["times_focused"],
+                    1,
+                )
+                if row["times_focused"]
+                else None,
+            }
+            for row in focus_rows
+        ],
+    }
+
+
 def _normalize_angle(delta: float) -> float:
     """Normalize angle delta to [-pi, pi]."""
     while delta > math.pi:
@@ -5894,14 +6276,179 @@ def _compute_strafe_metrics(path: List[Dict[str, Any]], min_step: float = 5.0, a
     }
 
 
-@router.get("/proximity/summary")
-async def get_proximity_summary(range_days: int = 30, db: DatabaseAdapter = Depends(get_db)):
+@router.get("/proximity/scopes")
+async def get_proximity_scopes(
+    range_days: int = 60,
+    db: DatabaseAdapter = Depends(get_db),
+):
     """
-    Summary for proximity analytics.
-    Uses combat_engagement + crossfire_pairs + map_kill_heatmap tables when available.
+    Discover session -> map -> round hierarchy from scoped proximity rows.
     """
     payload = _proximity_stub_meta(range_days)
-    since = datetime.utcnow().date() - timedelta(days=range_days)
+    safe_range = max(1, min(int(range_days or 60), 3650))
+    since = datetime.utcnow().date() - timedelta(days=safe_range)
+
+    try:
+        rows = await db.fetch_all(
+            """
+            SELECT session_date, map_name, round_number, round_start_unix, round_end_unix,
+                   COUNT(*) AS engagements
+            FROM combat_engagement
+            WHERE session_date >= $1
+            GROUP BY session_date, map_name, round_number, round_start_unix, round_end_unix
+            ORDER BY session_date DESC, map_name ASC, round_number ASC, round_start_unix ASC
+            """,
+            (since,),
+        )
+
+        sessions_by_date: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            session_date_val = row[0]
+            map_name_val = str(row[1] or "unknown")
+            round_number_val = int(row[2] or 0)
+            round_start_val = int(row[3] or 0)
+            round_end_val = int(row[4] or 0)
+            engagements = int(row[5] or 0)
+
+            session_key = (
+                session_date_val.isoformat()
+                if hasattr(session_date_val, "isoformat")
+                else str(session_date_val)
+            )
+            session_entry = sessions_by_date.setdefault(
+                session_key,
+                {
+                    "session_date": session_key,
+                    "engagements": 0,
+                    "_maps": {},
+                },
+            )
+            session_entry["engagements"] += engagements
+
+            map_entry = session_entry["_maps"].setdefault(
+                map_name_val,
+                {
+                    "map_name": map_name_val,
+                    "engagements": 0,
+                    "rounds": [],
+                    "_first_round_start": None,
+                },
+            )
+            map_entry["engagements"] += engagements
+            map_entry["rounds"].append(
+                {
+                    "round_number": round_number_val,
+                    "round_start_unix": round_start_val if round_start_val > 0 else None,
+                    "round_end_unix": round_end_val if round_end_val > 0 else None,
+                    "engagements": engagements,
+                }
+            )
+            if round_start_val > 0:
+                first = map_entry["_first_round_start"]
+                if first is None or round_start_val < first:
+                    map_entry["_first_round_start"] = round_start_val
+
+        sessions: List[Dict[str, Any]] = []
+        for session in sorted(
+            sessions_by_date.values(),
+            key=lambda item: item["session_date"],
+            reverse=True,
+        ):
+            maps = []
+            for map_item in session["_maps"].values():
+                rounds_sorted = sorted(
+                    map_item["rounds"],
+                    key=lambda r: (
+                        r["round_start_unix"] if r["round_start_unix"] is not None else 10**12,
+                        r["round_number"],
+                    ),
+                )
+                maps.append(
+                    {
+                        "map_name": map_item["map_name"],
+                        "engagements": map_item["engagements"],
+                        "round_count": len(rounds_sorted),
+                        "rounds": rounds_sorted,
+                        "_first_round_start": map_item["_first_round_start"],
+                    }
+                )
+
+            maps_sorted = sorted(
+                maps,
+                key=lambda m: (
+                    m["_first_round_start"] if m["_first_round_start"] is not None else 10**12,
+                    m["map_name"],
+                ),
+            )
+            for item in maps_sorted:
+                item.pop("_first_round_start", None)
+
+            sessions.append(
+                {
+                    "session_date": session["session_date"],
+                    "engagements": session["engagements"],
+                    "map_count": len(maps_sorted),
+                    "round_count": sum(map_item["round_count"] for map_item in maps_sorted),
+                    "maps": maps_sorted,
+                }
+            )
+
+        default_scope = {
+            "session_date": sessions[0]["session_date"] if sessions else None,
+            "map_name": None,
+            "round_number": None,
+            "round_start_unix": None,
+        }
+
+        payload.update(
+            {
+                "status": "ok" if sessions else "prototype",
+                "ready": bool(sessions),
+                "message": None if sessions else payload["message"],
+                "sessions": sessions,
+                "scope": default_scope,
+            }
+        )
+    except Exception as e:
+        payload.update(
+            {
+                "status": "error",
+                "ready": False,
+                "message": f"Proximity query failed: {e}",
+                "sessions": [],
+                "scope": {
+                    "session_date": None,
+                    "map_name": None,
+                    "round_number": None,
+                    "round_start_unix": None,
+                },
+            }
+        )
+    return payload
+
+
+@router.get("/proximity/summary")
+async def get_proximity_summary(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Summary for proximity analytics scoped by session/map/round filters.
+    """
+    payload = _proximity_stub_meta(range_days)
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days,
+        session_date,
+        map_name,
+        round_number,
+        round_start_unix,
+    )
+    query_params = tuple(params)
+
     try:
         engagement_row = await db.fetch_one(
             "SELECT COUNT(*) AS total_engagements, "
@@ -5911,8 +6458,8 @@ async def get_proximity_summary(range_days: int = 30, db: DatabaseAdapter = Depe
             "SUM(CASE WHEN is_crossfire THEN 1 ELSE 0 END) AS crossfire_events, "
             "SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes, "
             "SUM(CASE WHEN outcome = 'killed' THEN 1 ELSE 0 END) AS kills "
-            "FROM combat_engagement WHERE session_date >= $1",
-            (since,),
+            f"FROM combat_engagement {where_sql}",
+            query_params,
         )
         total_engagements = engagement_row[0] if engagement_row else 0
         avg_distance = engagement_row[1] if engagement_row else None
@@ -5924,15 +6471,26 @@ async def get_proximity_summary(range_days: int = 30, db: DatabaseAdapter = Depe
 
         sample_rounds = await db.fetch_val(
             "SELECT COUNT(DISTINCT (session_date, round_number, round_start_unix)) "
-            "FROM combat_engagement WHERE session_date >= $1",
-            (since,)
+            f"FROM combat_engagement {where_sql}",
+            query_params,
         )
-        top_duos = await db.fetch_all(
-            "SELECT player1_name, player2_name, crossfire_kills, crossfire_count, avg_delay_ms "
-            "FROM crossfire_pairs ORDER BY crossfire_kills DESC, crossfire_count DESC NULLS LAST LIMIT 10"
-        )
+
         hotzones = await db.fetch_val(
-            "SELECT COUNT(*) FROM map_kill_heatmap WHERE total_kills > 0"
+            """
+            SELECT COUNT(*)
+            FROM (
+                SELECT FLOOR(COALESCE(end_x, start_x) / 256.0)::int AS grid_x,
+                       FLOOR(COALESCE(end_y, start_y) / 256.0)::int AS grid_y
+                FROM combat_engagement
+            """
+            + f" {where_sql} "
+            + """
+                  AND COALESCE(end_x, start_x) IS NOT NULL
+                  AND COALESCE(end_y, start_y) IS NOT NULL
+                GROUP BY 1, 2
+            ) hz
+            """,
+            query_params,
         )
 
         track_row = None
@@ -5944,44 +6502,56 @@ async def get_proximity_summary(range_days: int = 30, db: DatabaseAdapter = Depe
                 "AVG(avg_speed) AS avg_speed, "
                 "AVG(sprint_percentage) AS avg_sprint_pct, "
                 "AVG(time_to_first_move_ms) AS avg_time_to_first_move_ms "
-                "FROM player_track WHERE session_date >= $1",
-                (since,),
+                f"FROM player_track {where_sql}",
+                query_params,
             )
         except Exception:
             track_row = None
+
+        duo_rows = await db.fetch_all(
+            "SELECT attackers, crossfire_participants, crossfire_delay_ms, outcome "
+            f"FROM combat_engagement {where_sql} "
+            "AND is_crossfire = TRUE "
+            "ORDER BY session_date DESC, round_start_unix DESC, start_time_ms DESC "
+            "LIMIT 5000",
+            query_params,
+        )
+        guid_name_map = await _load_scoped_guid_name_map(db, where_sql, query_params)
+        top_duos = _compute_scoped_duos(duo_rows, 10, guid_name_map=guid_name_map)
 
         payload.update(
             {
                 "status": "ok" if (total_engagements or 0) > 0 else "prototype",
                 "ready": (total_engagements or 0) > 0,
                 "message": None if (total_engagements or 0) > 0 else payload["message"],
+                "scope": scope,
                 "total_engagements": int(total_engagements or 0),
-                "avg_distance_m": round(avg_distance or 0, 1) if avg_distance else None,
+                "avg_distance_m": round(avg_distance, 1) if avg_distance is not None else None,
                 "crossfire_events": int(crossfire_events or 0),
                 "hotzones": int(hotzones or 0),
-                "avg_duration_ms": round(avg_duration or 0, 0) if avg_duration else None,
-                "avg_attackers": round(avg_attackers or 0, 2) if avg_attackers else None,
+                "avg_duration_ms": round(avg_duration, 0) if avg_duration is not None else None,
+                "avg_attackers": round(avg_attackers, 2) if avg_attackers is not None else None,
                 "escape_rate_pct": round((escapes or 0) * 100 / total_engagements, 1)
-                if total_engagements else None,
+                if total_engagements
+                else None,
                 "kill_rate_pct": round((kills or 0) * 100 / total_engagements, 1)
-                if total_engagements else None,
+                if total_engagements
+                else None,
                 "unique_players": int(track_row[1]) if track_row else None,
-                "avg_track_distance_m": round(track_row[2], 1) if track_row and track_row[2] is not None else None,
-                "avg_speed": round(track_row[3], 2) if track_row and track_row[3] is not None else None,
-                "avg_sprint_pct": round(track_row[4], 1) if track_row and track_row[4] is not None else None,
+                "avg_track_distance_m": round(track_row[2], 1)
+                if track_row and track_row[2] is not None
+                else None,
+                "avg_speed": round(track_row[3], 2)
+                if track_row and track_row[3] is not None
+                else None,
+                "avg_sprint_pct": round(track_row[4], 1)
+                if track_row and track_row[4] is not None
+                else None,
                 "avg_time_to_first_move_ms": round(track_row[5], 0)
-                if track_row and track_row[5] is not None else None,
+                if track_row and track_row[5] is not None
+                else None,
                 "sample_rounds": int(sample_rounds or 0),
-                "top_duos": [
-                    {
-                        "player1": row[0],
-                        "player2": row[1],
-                        "crossfire_kills": row[2] or 0,
-                        "crossfire_count": row[3] or 0,
-                        "avg_delay_ms": round(row[4], 1) if row[4] is not None else None,
-                    }
-                    for row in top_duos
-                ],
+                "top_duos": top_duos,
             }
         )
     except Exception as e:
@@ -5990,6 +6560,7 @@ async def get_proximity_summary(range_days: int = 30, db: DatabaseAdapter = Depe
                 "status": "error",
                 "ready": False,
                 "message": f"Proximity query failed: {e}",
+                "scope": scope,
                 "total_engagements": None,
                 "avg_distance_m": None,
                 "crossfire_events": None,
@@ -6002,25 +6573,40 @@ async def get_proximity_summary(range_days: int = 30, db: DatabaseAdapter = Depe
 
 
 @router.get("/proximity/engagements")
-async def get_proximity_engagements(range_days: int = 30, db: DatabaseAdapter = Depends(get_db)):
+async def get_proximity_engagements(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
     """
     Engagement timeline buckets.
     """
     payload = _proximity_stub_meta(range_days)
-    since = datetime.utcnow().date() - timedelta(days=range_days)
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days,
+        session_date,
+        map_name,
+        round_number,
+        round_start_unix,
+    )
+    query_params = tuple(params)
     try:
         rows = await db.fetch_all(
             "SELECT session_date, COUNT(*) AS engagements, "
             "SUM(CASE WHEN is_crossfire THEN 1 ELSE 0 END) AS crossfires "
-            "FROM combat_engagement WHERE session_date >= $1 "
+            f"FROM combat_engagement {where_sql} "
             "GROUP BY session_date ORDER BY session_date",
-            (since,)
+            query_params,
         )
         payload.update(
             {
                 "status": "ok" if rows else "prototype",
                 "ready": bool(rows),
                 "message": None if rows else payload["message"],
+                "scope": scope,
                 "buckets": [
                     {
                         "date": row[0].isoformat(),
@@ -6032,125 +6618,239 @@ async def get_proximity_engagements(range_days: int = 30, db: DatabaseAdapter = 
             }
         )
     except Exception as e:
-        payload.update({"status": "error", "ready": False, "message": f"Proximity query failed: {e}", "buckets": []})
+        payload.update(
+            {
+                "status": "error",
+                "ready": False,
+                "message": f"Proximity query failed: {e}",
+                "scope": scope,
+                "buckets": [],
+            }
+        )
     return payload
 
 
 @router.get("/proximity/hotzones")
 async def get_proximity_hotzones(
-    range_days: int = 30, map_name: Optional[str] = None, db: DatabaseAdapter = Depends(get_db)
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
 ):
     """
-    Hotzone bins for a map (from map_kill_heatmap).
+    Hotzone bins generated from scoped combat engagements.
     """
     payload = _proximity_stub_meta(range_days)
+    normalized_map = (map_name or "").strip() or None
+
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days,
+        session_date,
+        None,
+        round_number,
+        round_start_unix,
+        alias="e",
+    )
+    scope["map_name"] = normalized_map
+    query_params = tuple(params)
+
     try:
-        selected_map = map_name
+        selected_map = normalized_map
         if not selected_map:
             selected_map = await db.fetch_val(
-                "SELECT map_name FROM map_kill_heatmap ORDER BY total_kills DESC NULLS LAST LIMIT 1"
+                "SELECT e.map_name "
+                f"FROM combat_engagement e {where_sql} "
+                "GROUP BY e.map_name "
+                "ORDER BY COUNT(*) DESC NULLS LAST "
+                "LIMIT 1",
+                query_params,
             )
+
         if not selected_map:
-            payload.update({"map_name": map_name, "hotzones": [], "ready": False})
+            payload.update(
+                {
+                    "status": "prototype",
+                    "ready": False,
+                    "scope": scope,
+                    "map_name": None,
+                    "hotzones": [],
+                }
+            )
             return payload
 
+        scoped_params = list(params)
+        scoped_params.append(selected_map)
+        map_filter = f"{where_sql} AND e.map_name = ${len(scoped_params)}"
+
         rows = await db.fetch_all(
-            "SELECT grid_x, grid_y, total_kills, total_deaths FROM map_kill_heatmap "
-            "WHERE map_name = $1 AND total_kills > 0 ORDER BY total_kills DESC LIMIT 200",
-            (selected_map,),
+            """
+            SELECT FLOOR(COALESCE(e.end_x, e.start_x) / 256.0)::int AS grid_x,
+                   FLOOR(COALESCE(e.end_y, e.start_y) / 256.0)::int AS grid_y,
+                   SUM(CASE WHEN e.outcome = 'killed' THEN 1 ELSE 0 END) AS kills,
+                   COUNT(*) AS total_events
+            FROM combat_engagement e
+            """
+            + f" {map_filter} "
+            + """
+              AND COALESCE(e.end_x, e.start_x) IS NOT NULL
+              AND COALESCE(e.end_y, e.start_y) IS NOT NULL
+            GROUP BY 1, 2
+            ORDER BY kills DESC, total_events DESC
+            LIMIT 200
+            """,
+            tuple(scoped_params),
         )
+
+        scope["map_name"] = selected_map
         payload.update(
             {
                 "status": "ok" if rows else "prototype",
                 "ready": bool(rows),
                 "message": None if rows else payload["message"],
+                "scope": scope,
+                "source": "combat_engagement",
                 "map_name": selected_map,
                 "hotzones": [
                     {
                         "grid_x": row[0],
                         "grid_y": row[1],
-                        "kills": row[2] or 0,
-                        "deaths": row[3] or 0,
+                        "kills": int(row[2] or 0),
+                        "deaths": max(int(row[3] or 0) - int(row[2] or 0), 0),
                     }
                     for row in rows
                 ],
             }
         )
     except Exception as e:
-        payload.update({"status": "error", "ready": False, "message": f"Proximity query failed: {e}", "map_name": map_name, "hotzones": []})
+        payload.update(
+            {
+                "status": "error",
+                "ready": False,
+                "message": f"Proximity query failed: {e}",
+                "scope": scope,
+                "map_name": normalized_map,
+                "hotzones": [],
+            }
+        )
     return payload
 
 
 @router.get("/proximity/duos")
-async def get_proximity_duos(range_days: int = 30, limit: int = 10, db: DatabaseAdapter = Depends(get_db)):
+async def get_proximity_duos(
+    range_days: int = 30,
+    limit: int = 10,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
     """
-    Duo synergy list from crossfire_pairs.
+    Duo synergy list computed from scoped combat engagements.
     """
     payload = _proximity_stub_meta(range_days)
+    safe_limit = max(1, min(int(limit or 10), 50))
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days,
+        session_date,
+        map_name,
+        round_number,
+        round_start_unix,
+    )
+    query_params = tuple(params)
+
     try:
+        guid_name_map = await _load_scoped_guid_name_map(db, where_sql, query_params)
         rows = await db.fetch_all(
-            "SELECT player1_name, player2_name, crossfire_kills, crossfire_count, avg_delay_ms "
-            "FROM crossfire_pairs ORDER BY crossfire_kills DESC, crossfire_count DESC NULLS LAST LIMIT $1",
-            (limit,),
+            "SELECT attackers, crossfire_participants, crossfire_delay_ms, outcome "
+            f"FROM combat_engagement {where_sql} "
+            "AND is_crossfire = TRUE "
+            "ORDER BY session_date DESC, round_start_unix DESC, start_time_ms DESC "
+            "LIMIT 5000",
+            query_params,
         )
+        duos = _compute_scoped_duos(rows, safe_limit, guid_name_map=guid_name_map)
         payload.update(
             {
-                "status": "ok" if rows else "prototype",
-                "ready": bool(rows),
-                "message": None if rows else payload["message"],
-                "limit": limit,
-                "duos": [
-                    {
-                        "player1": row[0],
-                        "player2": row[1],
-                        "crossfire_kills": row[2] or 0,
-                        "crossfire_count": row[3] or 0,
-                        "avg_delay_ms": round(row[4], 1) if row[4] is not None else None,
-                    }
-                    for row in rows
-                ],
+                "status": "ok" if duos else "prototype",
+                "ready": bool(duos),
+                "message": None if duos else payload["message"],
+                "scope": scope,
+                "limit": safe_limit,
+                "duos": duos,
             }
         )
     except Exception as e:
-        payload.update({"status": "error", "ready": False, "message": f"Proximity query failed: {e}", "limit": limit, "duos": []})
+        payload.update(
+            {
+                "status": "error",
+                "ready": False,
+                "message": f"Proximity query failed: {e}",
+                "scope": scope,
+                "limit": safe_limit,
+                "duos": [],
+            }
+        )
     return payload
 
 
 @router.get("/proximity/movers")
-async def get_proximity_movers(range_days: int = 30, limit: int = 5, db: DatabaseAdapter = Depends(get_db)):
+async def get_proximity_movers(
+    range_days: int = 30,
+    limit: int = 5,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
     """
-    Movement and reaction leaders from player_track.
+    Movement and reaction leaders from scoped player_track rows.
     """
     payload = _proximity_stub_meta(range_days)
-    since = datetime.utcnow().date() - timedelta(days=range_days)
+    safe_limit = max(1, min(int(limit or 5), 25))
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days,
+        session_date,
+        map_name,
+        round_number,
+        round_start_unix,
+    )
+
     try:
+        base_params = list(params)
+        limit_placeholder = len(base_params) + 1
+        query_params = tuple(base_params + [safe_limit])
+
         distance_rows = await db.fetch_all(
             "SELECT player_guid, player_name, SUM(total_distance) AS total_distance, COUNT(*) AS tracks "
-            "FROM player_track WHERE session_date >= $1 "
+            f"FROM player_track {where_sql} "
             "GROUP BY player_guid, player_name "
-            "ORDER BY total_distance DESC NULLS LAST LIMIT $2",
-            (since, limit),
+            f"ORDER BY total_distance DESC NULLS LAST LIMIT ${limit_placeholder}",
+            query_params,
         )
         sprint_rows = await db.fetch_all(
             "SELECT player_guid, player_name, AVG(sprint_percentage) AS sprint_pct, COUNT(*) AS tracks "
-            "FROM player_track WHERE session_date >= $1 "
+            f"FROM player_track {where_sql} "
             "GROUP BY player_guid, player_name "
-            "ORDER BY sprint_pct DESC NULLS LAST LIMIT $2",
-            (since, limit),
+            f"ORDER BY sprint_pct DESC NULLS LAST LIMIT ${limit_placeholder}",
+            query_params,
         )
         reaction_rows = await db.fetch_all(
             "SELECT player_guid, player_name, AVG(time_to_first_move_ms) AS reaction_ms, COUNT(*) AS tracks "
-            "FROM player_track WHERE session_date >= $1 AND time_to_first_move_ms IS NOT NULL "
+            f"FROM player_track {where_sql} AND time_to_first_move_ms IS NOT NULL "
             "GROUP BY player_guid, player_name "
-            "ORDER BY reaction_ms ASC NULLS LAST LIMIT $2",
-            (since, limit),
+            f"ORDER BY reaction_ms ASC NULLS LAST LIMIT ${limit_placeholder}",
+            query_params,
         )
         survival_rows = await db.fetch_all(
             "SELECT player_guid, player_name, AVG(duration_ms) AS duration_ms, COUNT(*) AS tracks "
-            "FROM player_track WHERE session_date >= $1 AND duration_ms IS NOT NULL "
+            f"FROM player_track {where_sql} AND duration_ms IS NOT NULL "
             "GROUP BY player_guid, player_name "
-            "ORDER BY duration_ms DESC NULLS LAST LIMIT $2",
-            (since, limit),
+            f"ORDER BY duration_ms DESC NULLS LAST LIMIT ${limit_placeholder}",
+            query_params,
         )
 
         ready = bool(distance_rows or sprint_rows or reaction_rows or survival_rows)
@@ -6159,7 +6859,8 @@ async def get_proximity_movers(range_days: int = 30, limit: int = 5, db: Databas
                 "status": "ok" if ready else "prototype",
                 "ready": ready,
                 "message": None if ready else payload["message"],
-                "limit": limit,
+                "scope": scope,
+                "limit": safe_limit,
                 "distance": [
                     {
                         "guid": row[0],
@@ -6204,7 +6905,8 @@ async def get_proximity_movers(range_days: int = 30, limit: int = 5, db: Databas
                 "status": "error",
                 "ready": False,
                 "message": f"Proximity query failed: {e}",
-                "limit": limit,
+                "scope": scope,
+                "limit": safe_limit,
                 "distance": [],
                 "sprint": [],
                 "reaction": [],
@@ -6215,71 +6917,56 @@ async def get_proximity_movers(range_days: int = 30, limit: int = 5, db: Databas
 
 
 @router.get("/proximity/teamplay")
-async def get_proximity_teamplay(limit: int = 5, db: DatabaseAdapter = Depends(get_db)):
+async def get_proximity_teamplay(
+    range_days: int = 30,
+    limit: int = 5,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
     """
-    Teamplay leaders from aggregated player_teamplay_stats.
+    Teamplay leaders computed from scoped combat engagements.
     """
-    payload = _proximity_stub_meta(0)
+    payload = _proximity_stub_meta(range_days)
+    safe_limit = max(1, min(int(limit or 5), 25))
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days,
+        session_date,
+        map_name,
+        round_number,
+        round_start_unix,
+    )
+
     try:
-        crossfire_rows = await db.fetch_all(
-            "SELECT player_guid, player_name, crossfire_kills, crossfire_participations, avg_crossfire_delay_ms "
-            "FROM player_teamplay_stats "
-            "ORDER BY crossfire_kills DESC NULLS LAST LIMIT $1",
-            (limit,),
-        )
-        sync_rows = await db.fetch_all(
-            "SELECT player_guid, player_name, avg_crossfire_delay_ms, crossfire_kills "
-            "FROM player_teamplay_stats "
-            "WHERE avg_crossfire_delay_ms IS NOT NULL "
-            "ORDER BY avg_crossfire_delay_ms ASC NULLS LAST LIMIT $1",
-            (limit,),
-        )
-        focus_rows = await db.fetch_all(
-            "SELECT player_guid, player_name, focus_escapes, times_focused "
-            "FROM player_teamplay_stats "
-            "WHERE times_focused > 0 "
-            "ORDER BY (focus_escapes::float / NULLIF(times_focused, 0)) DESC NULLS LAST LIMIT $1",
-            (limit,),
+        guid_name_map = await _load_scoped_guid_name_map(db, where_sql, tuple(params))
+        scoped_params = list(params)
+        scoped_params.append(6000)
+        rows = await db.fetch_all(
+            "SELECT target_guid, target_name, outcome, num_attackers, is_crossfire, "
+            "crossfire_delay_ms, attackers, crossfire_participants "
+            f"FROM combat_engagement {where_sql} "
+            "ORDER BY session_date DESC, round_start_unix DESC, start_time_ms DESC "
+            f"LIMIT ${len(scoped_params)}",
+            tuple(scoped_params),
         )
 
-        ready = bool(crossfire_rows or sync_rows or focus_rows)
+        computed = _compute_scoped_teamplay(rows, safe_limit, guid_name_map=guid_name_map)
+        ready = bool(
+            computed["crossfire_kills"] or computed["sync"] or computed["focus_survival"]
+        )
         payload.update(
             {
                 "status": "ok" if ready else "prototype",
                 "ready": ready,
                 "message": None if ready else payload["message"],
-                "scope": "all_time",
-                "limit": limit,
-                "crossfire_kills": [
-                    {
-                        "guid": row[0],
-                        "name": row[1],
-                        "crossfire_kills": int(row[2] or 0),
-                        "crossfire_participations": int(row[3] or 0),
-                        "kill_rate_pct": round((row[2] or 0) * 100 / row[3], 1) if row[3] else None,
-                        "avg_delay_ms": round(row[4], 1) if row[4] is not None else None,
-                    }
-                    for row in crossfire_rows
-                ],
-                "sync": [
-                    {
-                        "guid": row[0],
-                        "name": row[1],
-                        "avg_delay_ms": round(row[2], 1) if row[2] is not None else None,
-                        "crossfire_kills": int(row[3] or 0),
-                    }
-                    for row in sync_rows
-                ],
-                "focus_survival": [
-                    {
-                        "guid": row[0],
-                        "name": row[1],
-                        "focus_escapes": int(row[2] or 0),
-                        "times_focused": int(row[3] or 0),
-                        "survival_rate_pct": round((row[2] or 0) * 100 / row[3], 1) if row[3] else None,
-                    }
-                    for row in focus_rows
-                ],
+                "scope": scope,
+                "limit": safe_limit,
+                "sampled_engagements": len(rows),
+                "crossfire_kills": computed["crossfire_kills"],
+                "sync": computed["sync"],
+                "focus_survival": computed["focus_survival"],
             }
         )
     except Exception as e:
@@ -6288,8 +6975,8 @@ async def get_proximity_teamplay(limit: int = 5, db: DatabaseAdapter = Depends(g
                 "status": "error",
                 "ready": False,
                 "message": f"Proximity query failed: {e}",
-                "scope": "all_time",
-                "limit": limit,
+                "scope": scope,
+                "limit": safe_limit,
                 "crossfire_kills": [],
                 "sync": [],
                 "focus_survival": [],
@@ -6299,12 +6986,26 @@ async def get_proximity_teamplay(limit: int = 5, db: DatabaseAdapter = Depends(g
 
 
 @router.get("/proximity/trades/summary")
-async def get_proximity_trades_summary(range_days: int = 30, db: DatabaseAdapter = Depends(get_db)):
+async def get_proximity_trades_summary(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
     """
-    Trade summary for proximity analytics (v1).
+    Trade summary for scoped proximity analytics.
     """
     payload = _proximity_stub_meta(range_days)
-    since = datetime.utcnow().date() - timedelta(days=range_days)
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days,
+        session_date,
+        map_name,
+        round_number,
+        round_start_unix,
+    )
+    query_params = tuple(params)
     try:
         row = await db.fetch_one(
             "SELECT COUNT(*) AS events, "
@@ -6313,15 +7014,15 @@ async def get_proximity_trades_summary(range_days: int = 30, db: DatabaseAdapter
             "SUM(success_count) AS successes, "
             "SUM(missed_count) AS missed, "
             "SUM(CASE WHEN is_isolation_death THEN 1 ELSE 0 END) AS isolation_deaths "
-            "FROM proximity_trade_event WHERE session_date >= $1",
-            (since,),
+            f"FROM proximity_trade_event {where_sql}",
+            query_params,
         )
         events = row[0] if row else 0
         support_row = await db.fetch_one(
             "SELECT SUM(support_samples) AS support_samples, "
             "SUM(total_samples) AS total_samples "
-            "FROM proximity_support_summary WHERE session_date >= $1",
-            (since,),
+            f"FROM proximity_support_summary {where_sql}",
+            query_params,
         )
         support_samples = support_row[0] if support_row else None
         total_samples = support_row[1] if support_row else None
@@ -6333,6 +7034,7 @@ async def get_proximity_trades_summary(range_days: int = 30, db: DatabaseAdapter
                 "status": "ok" if (events or 0) > 0 else "prototype",
                 "ready": (events or 0) > 0,
                 "message": None if (events or 0) > 0 else payload["message"],
+                "scope": scope,
                 "events": int(events or 0),
                 "trade_opportunities": int(row[1] or 0) if row else 0,
                 "trade_attempts": int(row[2] or 0) if row else 0,
@@ -6348,6 +7050,7 @@ async def get_proximity_trades_summary(range_days: int = 30, db: DatabaseAdapter
                 "status": "error",
                 "ready": False,
                 "message": f"Proximity query failed: {e}",
+                "scope": scope,
                 "events": 0,
                 "trade_opportunities": 0,
                 "trade_attempts": 0,
@@ -6361,12 +7064,32 @@ async def get_proximity_trades_summary(range_days: int = 30, db: DatabaseAdapter
 
 
 @router.get("/proximity/trades/events")
-async def get_proximity_trade_events(range_days: int = 30, limit: int = 50, db: DatabaseAdapter = Depends(get_db)):
+async def get_proximity_trade_events(
+    range_days: int = 30,
+    limit: int = 50,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
     """
-    Latest trade events (v1).
+    Latest trade events (scoped).
     """
     payload = _proximity_stub_meta(range_days)
-    since = datetime.utcnow().date() - timedelta(days=range_days)
+    safe_limit = max(1, min(int(limit or 50), 250))
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days,
+        session_date,
+        map_name,
+        round_number,
+        round_start_unix,
+        alias="e",
+    )
+    scoped_params = list(params)
+    scoped_params.append(safe_limit)
+    limit_placeholder = len(scoped_params)
+
     try:
         rows = await db.fetch_all(
             """
@@ -6385,18 +7108,19 @@ async def get_proximity_trade_events(range_days: int = 30, limit: int = 50, db: 
                 ORDER BY ABS(r.round_start_unix - e.round_start_unix)
                 LIMIT 1
             ) r ON true
-            WHERE e.session_date >= $1
-            ORDER BY e.session_date DESC, e.round_number DESC, e.death_time_ms DESC
-            LIMIT $2
-            """,
-            (since, limit),
+            """
+            + f" {where_sql} "
+            + "ORDER BY e.session_date DESC, e.round_number DESC, e.death_time_ms DESC "
+            + f"LIMIT ${limit_placeholder}",
+            tuple(scoped_params),
         )
         payload.update(
             {
                 "status": "ok" if rows else "prototype",
                 "ready": bool(rows),
                 "message": None if rows else payload["message"],
-                "limit": limit,
+                "scope": scope,
+                "limit": safe_limit,
                 "events": [
                     {
                         "date": row[0].isoformat(),
@@ -6411,7 +7135,15 @@ async def get_proximity_trade_events(range_days: int = 30, limit: int = 50, db: 
                         "round_id": row[9],
                         "round_date": row[10],
                         "round_time": row[11],
-                        "outcome": "trade_success" if (row[7] or 0) > 0 else "trade_attempt" if (row[6] or 0) > 0 else "missed_candidate" if (row[8] or 0) > 0 else "trade_event"
+                        "outcome": (
+                            "trade_success"
+                            if (row[7] or 0) > 0
+                            else "trade_attempt"
+                            if (row[6] or 0) > 0
+                            else "missed_candidate"
+                            if (row[8] or 0) > 0
+                            else "trade_event"
+                        ),
                     }
                     for row in rows
                 ],
@@ -6423,7 +7155,8 @@ async def get_proximity_trade_events(range_days: int = 30, limit: int = 50, db: 
                 "status": "error",
                 "ready": False,
                 "message": f"Proximity query failed: {e}",
-                "limit": limit,
+                "scope": scope,
+                "limit": safe_limit,
                 "events": [],
             }
         )
@@ -6431,12 +7164,31 @@ async def get_proximity_trade_events(range_days: int = 30, limit: int = 50, db: 
 
 
 @router.get("/proximity/events")
-async def get_proximity_events(range_days: int = 30, limit: int = 250, db: DatabaseAdapter = Depends(get_db)):
+async def get_proximity_events(
+    range_days: int = 30,
+    limit: int = 250,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
     """
-    Raw proximity engagement events (latest first).
+    Raw proximity engagement events (latest first, scoped).
     """
     payload = _proximity_stub_meta(range_days)
-    since = datetime.utcnow().date() - timedelta(days=range_days)
+    safe_limit = max(1, min(int(limit or 250), 1000))
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days,
+        session_date,
+        map_name,
+        round_number,
+        round_start_unix,
+        alias="e",
+    )
+    scoped_params = list(params)
+    scoped_params.append(safe_limit)
+    limit_placeholder = len(scoped_params)
     try:
         rows = await db.fetch_all(
             """
@@ -6456,18 +7208,19 @@ async def get_proximity_events(range_days: int = 30, limit: int = 250, db: Datab
                 ORDER BY ABS(r.round_start_unix - e.round_start_unix)
                 LIMIT 1
             ) r ON true
-            WHERE e.session_date >= $1
-            ORDER BY e.session_date DESC, e.round_number DESC, e.start_time_ms DESC
-            LIMIT $2
-            """,
-            (since, limit),
+            """
+            + f" {where_sql} "
+            + "ORDER BY e.session_date DESC, e.round_number DESC, e.start_time_ms DESC "
+            + f"LIMIT ${limit_placeholder}",
+            tuple(scoped_params),
         )
         payload.update(
             {
                 "status": "ok" if rows else "prototype",
                 "ready": bool(rows),
                 "message": None if rows else payload["message"],
-                "limit": limit,
+                "scope": scope,
+                "limit": safe_limit,
                 "events": [
                     {
                         "id": row[0],
@@ -6489,7 +7242,16 @@ async def get_proximity_events(range_days: int = 30, limit: int = 250, db: Datab
             }
         )
     except Exception as e:
-        payload.update({"status": "error", "ready": False, "message": f"Proximity query failed: {e}", "limit": limit, "events": []})
+        payload.update(
+            {
+                "status": "error",
+                "ready": False,
+                "message": f"Proximity query failed: {e}",
+                "scope": scope,
+                "limit": safe_limit,
+                "events": [],
+            }
+        )
     return payload
 
 

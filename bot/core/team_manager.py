@@ -182,39 +182,44 @@ class TeamManager:
 
             # Store in database
             for team_name, team_data in teams.items():
-                insert_cols = [
-                    "session_start_date",
-                    "map_name",
-                    "team_name",
-                    "player_guids",
-                    "player_names",
-                ]
-                insert_vals = [
-                    session_date,
-                    "ALL",
-                    team_name,
-                    json.dumps(team_data["guids"]),
-                    json.dumps(team_data["names"]),
-                ]
-
                 if "gaming_session_id" in columns:
-                    insert_cols.append("gaming_session_id")
-                    insert_vals.append(gaming_session_id)
-
-                placeholders = ", ".join(["?"] * len(insert_cols))
-                update_fields = ["player_guids = EXCLUDED.player_guids", "player_names = EXCLUDED.player_names"]
-                if "gaming_session_id" in columns:
-                    update_fields.append("gaming_session_id = EXCLUDED.gaming_session_id")
-
-                await self.db.execute(
-                    f"""
-                    INSERT INTO session_teams ({", ".join(insert_cols)})
-                    VALUES ({placeholders})
-                    ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
-                        {", ".join(update_fields)}
-                    """,
-                    tuple(insert_vals)
-                )
+                    await self.db.execute(
+                        """
+                        INSERT INTO session_teams
+                        (session_start_date, map_name, team_name, player_guids, player_names, gaming_session_id)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
+                            player_guids = EXCLUDED.player_guids,
+                            player_names = EXCLUDED.player_names,
+                            gaming_session_id = EXCLUDED.gaming_session_id
+                        """,
+                        (
+                            session_date,
+                            "ALL",
+                            team_name,
+                            json.dumps(team_data["guids"]),
+                            json.dumps(team_data["names"]),
+                            gaming_session_id,
+                        ),
+                    )
+                else:
+                    await self.db.execute(
+                        """
+                        INSERT INTO session_teams
+                        (session_start_date, map_name, team_name, player_guids, player_names)
+                        VALUES ($1, $2, $3, $4, $5)
+                        ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
+                            player_guids = EXCLUDED.player_guids,
+                            player_names = EXCLUDED.player_names
+                        """,
+                        (
+                            session_date,
+                            "ALL",
+                            team_name,
+                            json.dumps(team_data["guids"]),
+                            json.dumps(team_data["names"]),
+                        ),
+                    )
 
             # Auto-assign random team names
             try:

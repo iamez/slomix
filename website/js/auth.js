@@ -8,6 +8,28 @@ import { AUTH_BASE, fetchJSON, escapeHtml } from './utils.js';
 // Will be set by app.js
 let loadPlayerProfileFn = null;
 
+function getAdminDiscordIds() {
+    const meta = document.querySelector('meta[name="slomix-admin-discord-ids"]');
+    if (!meta?.content) return [];
+    return meta.content
+        .split(',')
+        .map(id => id.trim())
+        .filter(Boolean);
+}
+
+function updateAdminButton(user) {
+    const adminButton = document.getElementById('link-admin');
+    if (!adminButton) return;
+
+    const isAdmin = getAdminDiscordIds().includes(String(user?.id || ''));
+    if (isAdmin) {
+        adminButton.classList.remove('hidden');
+    } else {
+        adminButton.classList.add('hidden');
+        adminButton.classList.remove('active');
+    }
+}
+
 /**
  * Set the loadPlayerProfile function reference (to avoid circular imports)
  */
@@ -41,6 +63,8 @@ export async function checkLoginStatus() {
             navAvatar.textContent = displayName.substring(0, 2).toUpperCase();
         }
 
+        updateAdminButton(user);
+
         // Check Link
         if (!user.linked_player) {
             openModal('modal-link-player');
@@ -56,6 +80,7 @@ export async function checkLoginStatus() {
             userEl.classList.add('hidden');
             userEl.classList.remove('flex');
         }
+        updateAdminButton(null);
     }
 }
 

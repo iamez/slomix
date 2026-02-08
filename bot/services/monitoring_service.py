@@ -14,7 +14,7 @@ import logging
 import sys
 import os
 from datetime import datetime, timedelta
-from typing import Dict
+from typing import Dict, Optional
 
 # Add project root to path for imports
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
@@ -44,6 +44,7 @@ class MonitoringService:
         self.server_task = None
         self.voice_task = None
         self.cleanup_task = None
+        self._db_user: Optional[str] = None
 
         # Server config
         self.server_host = getattr(config, "server_host", "puran.hehe.si")
@@ -83,50 +84,165 @@ class MonitoringService:
 
     async def _ensure_history_tables(self):
         """Create history tables if they don't exist yet."""
+        await self._ensure_table(
+            "server_status_history table",
+            """
+            CREATE TABLE IF NOT EXISTS server_status_history (
+                id SERIAL PRIMARY KEY,
+                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                player_count INTEGER DEFAULT 0,
+                max_players INTEGER DEFAULT 0,
+                map_name TEXT,
+                hostname TEXT,
+                players JSONB,
+                ping_ms INTEGER DEFAULT 0,
+                online BOOLEAN DEFAULT FALSE
+            )
+            """,
+        )
+        await self._ensure_table(
+            "voice_status_history table",
+            """
+            CREATE TABLE IF NOT EXISTS voice_status_history (
+                id SERIAL PRIMARY KEY,
+                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                member_count INTEGER DEFAULT 0,
+                channel_id BIGINT,
+                channel_name TEXT,
+                members JSONB,
+                first_joiner_id BIGINT,
+                first_joiner_name TEXT
+            )
+            """,
+        )
+
+        # Avoid CREATE INDEX IF NOT EXISTS on tables owned by another role.
+        # PostgreSQL still checks table ownership even if the index already exists.
+        await self._ensure_index(
+            table_name="server_status_history",
+            index_name="idx_server_status_history_recorded_at",
+            index_expr="recorded_at",
+        )
+        await self._ensure_index(
+            table_name="voice_status_history",
+            index_name="idx_voice_status_history_recorded_at",
+            index_expr="recorded_at",
+        )
+
+    async def _ensure_table(self, step_name: str, query: str) -> None:
+        try:
+            await self.db.execute(query)
+        except Exception as e:
+            if self._is_insufficient_privilege_error(e):
+                logger.warning(
+                    "Skipping monitoring DDL for %s due to insufficient DB privileges: %s",
+                    step_name,
+                    e,
+                )
+                return
+            logger.error(f"Failed to ensure {step_name}: {e}", exc_info=True)
+
+    async def _ensure_index(
+        self,
+        table_name: str,
+        index_name: str,
+        index_expr: str,
+    ) -> None:
+        if not await self._table_exists(table_name):
+            logger.warning(
+                "Skipping monitoring DDL for %s index: table does not exist",
+                table_name,
+            )
+            return
+
+        if await self._index_exists(table_name, index_name):
+            return
+
+        owner = await self._table_owner(table_name)
+        db_user = await self._current_db_user()
+        if owner and db_user and owner != db_user:
+            logger.warning(
+                "Skipping monitoring DDL for %s index because table owner is %s (current role: %s)",
+                table_name,
+                owner,
+                db_user,
+            )
+            return
+
         try:
             await self.db.execute(
-                """
-                CREATE TABLE IF NOT EXISTS server_status_history (
-                    id SERIAL PRIMARY KEY,
-                    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    player_count INTEGER DEFAULT 0,
-                    max_players INTEGER DEFAULT 0,
-                    map_name TEXT,
-                    hostname TEXT,
-                    players JSONB,
-                    ping_ms INTEGER DEFAULT 0,
-                    online BOOLEAN DEFAULT FALSE
-                )
-                """
-            )
-            await self.db.execute(
-                """
-                CREATE TABLE IF NOT EXISTS voice_status_history (
-                    id SERIAL PRIMARY KEY,
-                    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    member_count INTEGER DEFAULT 0,
-                    channel_id BIGINT,
-                    channel_name TEXT,
-                    members JSONB,
-                    first_joiner_id BIGINT,
-                    first_joiner_name TEXT
-                )
-                """
-            )
-            await self.db.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_server_status_history_recorded_at
-                ON server_status_history(recorded_at)
-                """
-            )
-            await self.db.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_voice_status_history_recorded_at
-                ON voice_status_history(recorded_at)
-                """
+                f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name}({index_expr})"
             )
         except Exception as e:
-            logger.error(f"Failed to ensure history tables: {e}", exc_info=True)
+            if self._is_insufficient_privilege_error(e):
+                logger.warning(
+                    "Skipping monitoring DDL for %s index due to insufficient DB privileges: %s",
+                    table_name,
+                    e,
+                )
+                return
+            logger.error(f"Failed to ensure {table_name} index {index_name}: {e}", exc_info=True)
+
+    async def _table_exists(self, table_name: str) -> bool:
+        query = """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = $1
+            LIMIT 1
+        """
+        try:
+            row = await self.db.fetch_one(query, (table_name,))
+            return bool(row)
+        except Exception:
+            return False
+
+    async def _index_exists(self, table_name: str, index_name: str) -> bool:
+        query = """
+            SELECT 1
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND tablename = $1
+              AND indexname = $2
+            LIMIT 1
+        """
+        try:
+            row = await self.db.fetch_one(query, (table_name, index_name))
+            return bool(row)
+        except Exception:
+            return False
+
+    async def _table_owner(self, table_name: str) -> Optional[str]:
+        query = """
+            SELECT tableowner
+            FROM pg_tables
+            WHERE schemaname = 'public' AND tablename = $1
+            LIMIT 1
+        """
+        try:
+            row = await self.db.fetch_one(query, (table_name,))
+            return str(row[0]) if row and row[0] else None
+        except Exception:
+            return None
+
+    async def _current_db_user(self) -> Optional[str]:
+        if self._db_user:
+            return self._db_user
+        try:
+            row = await self.db.fetch_one("SELECT current_user")
+            if row and row[0]:
+                self._db_user = str(row[0])
+        except Exception:
+            return None
+        return self._db_user
+
+    @staticmethod
+    def _is_insufficient_privilege_error(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return (
+            "insufficientprivilege" in exc.__class__.__name__.lower()
+            or "must be owner of table" in msg
+            or "permission denied" in msg
+        )
 
     async def stop(self):
         """Stop monitoring background tasks"""
@@ -182,27 +298,29 @@ class MonitoringService:
 
     async def _cleanup_old_records(self):
         """Delete history records older than retention_days"""
+        cutoff = datetime.utcnow() - timedelta(days=self.retention_days)
+        await self._cleanup_table("server_status_history", cutoff)
+        await self._cleanup_table("voice_status_history", cutoff)
+        logger.info(
+            f"📊 Cleanup: checked monitoring retention for {self.retention_days} days "
+            f"(cutoff: {cutoff.isoformat()})"
+        )
+
+    async def _cleanup_table(self, table_name: str, cutoff: datetime) -> None:
         try:
-            cutoff = datetime.utcnow() - timedelta(days=self.retention_days)
-
-            # Delete old server records
-            result1 = await self.db.execute(
-                "DELETE FROM server_status_history WHERE recorded_at < $1",
-                (cutoff,)
-            )
-
-            # Delete old voice records
-            result2 = await self.db.execute(
-                "DELETE FROM voice_status_history WHERE recorded_at < $1",
-                (cutoff,)
-            )
-
-            logger.info(
-                f"📊 Cleanup: removed records older than {self.retention_days} days "
-                f"(cutoff: {cutoff.isoformat()})"
+            await self.db.execute(
+                f"DELETE FROM {table_name} WHERE recorded_at < $1",
+                (cutoff,),
             )
         except Exception as e:
-            logger.error(f"Failed to cleanup old records: {e}")
+            if self._is_insufficient_privilege_error(e):
+                logger.warning(
+                    "Skipping monitoring cleanup for %s due to insufficient DB privileges: %s",
+                    table_name,
+                    e,
+                )
+                return
+            logger.error(f"Failed to cleanup {table_name}: {e}")
 
     async def _record_server_status(self):
         """Record game server status via UDP query"""

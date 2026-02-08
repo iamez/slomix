@@ -335,26 +335,29 @@ class PostgreSQLDatabaseManager:
             raise RuntimeError(error_msg)
     
     async def _create_schema_if_missing(self):
-        """Create database schema if it doesn't exist"""
+        """Create database schema if it doesn't exist (uses IF NOT EXISTS for all tables)"""
         async with self.pool.acquire() as conn:
-            # Check if rounds table exists
+            # Check if rounds table exists to determine fresh vs existing DB
             exists = await conn.fetchval("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
                     AND table_name = 'rounds'
                 )
             """)
-            
+
             if exists:
-                logger.info("   ✅ Schema already exists")
-                return
-            
-            logger.info("🏗️  Creating database schema...")
-            
+                logger.info("   ✅ Core schema already exists, checking for missing tables...")
+            else:
+                logger.info("🏗️  Creating database schema...")
+
+            # =====================================================================
+            # CORE TABLES (1-7) - Original schema
+            # =====================================================================
+
             # 1. Rounds table
             await conn.execute('''
-                CREATE TABLE rounds (
+                CREATE TABLE IF NOT EXISTS rounds (
                     id SERIAL PRIMARY KEY,
                     match_id TEXT,
                     round_number INTEGER,
@@ -376,14 +379,18 @@ class PostgreSQLDatabaseManager:
                     total_pause_seconds INTEGER DEFAULT 0,
                     pause_count INTEGER DEFAULT 0,
                     end_reason VARCHAR(20),
+                    -- Bot round detection (migration 008)
+                    is_bot_round BOOLEAN DEFAULT FALSE,
+                    bot_player_count INTEGER DEFAULT 0,
+                    human_player_count INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(match_id, round_number)
                 )
             ''')
-            
+
             # 2. Player comprehensive stats
             await conn.execute('''
-                CREATE TABLE player_comprehensive_stats (
+                CREATE TABLE IF NOT EXISTS player_comprehensive_stats (
                     id SERIAL PRIMARY KEY,
                     round_id INTEGER NOT NULL,
                     round_date TEXT NOT NULL,
@@ -443,10 +450,10 @@ class PostgreSQLDatabaseManager:
                     UNIQUE(round_id, player_guid)
                 )
             ''')
-            
+
             # 3. Weapon comprehensive stats
             await conn.execute('''
-                CREATE TABLE weapon_comprehensive_stats (
+                CREATE TABLE IF NOT EXISTS weapon_comprehensive_stats (
                     id SERIAL PRIMARY KEY,
                     round_id INTEGER NOT NULL,
                     round_date TEXT NOT NULL,
@@ -466,10 +473,10 @@ class PostgreSQLDatabaseManager:
                     UNIQUE(round_id, player_guid, weapon_name)
                 )
             ''')
-            
+
             # 4. Processed files tracking
             await conn.execute('''
-                CREATE TABLE processed_files (
+                CREATE TABLE IF NOT EXISTS processed_files (
                     id SERIAL PRIMARY KEY,
                     filename TEXT UNIQUE NOT NULL,
                     file_hash TEXT,
@@ -478,36 +485,41 @@ class PostgreSQLDatabaseManager:
                     processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            
+
             # 5. Session teams
             await conn.execute('''
-                CREATE TABLE session_teams (
+                CREATE TABLE IF NOT EXISTS session_teams (
                     id SERIAL PRIMARY KEY,
                     session_start_date TEXT NOT NULL,
                     map_name TEXT NOT NULL,
                     team_name TEXT NOT NULL,
                     player_guids JSONB,
                     player_names JSONB,
+                    color INTEGER,
+                    gaming_session_id INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(session_start_date, map_name, team_name)
                 )
             ''')
-            
+
             # 6. Player links (Discord integration)
             await conn.execute('''
-                CREATE TABLE player_links (
+                CREATE TABLE IF NOT EXISTS player_links (
                     id SERIAL PRIMARY KEY,
                     player_guid TEXT UNIQUE NOT NULL,
                     discord_id BIGINT UNIQUE NOT NULL,
                     discord_username TEXT,
                     player_name TEXT,
+                    display_name TEXT,
+                    display_name_source TEXT DEFAULT 'auto',
+                    display_name_updated_at TIMESTAMP,
                     linked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            
+
             # 7. Player aliases
             await conn.execute('''
-                CREATE TABLE player_aliases (
+                CREATE TABLE IF NOT EXISTS player_aliases (
                     id SERIAL PRIMARY KEY,
                     guid TEXT NOT NULL,
                     alias TEXT NOT NULL,
@@ -517,16 +529,456 @@ class PostgreSQLDatabaseManager:
                     UNIQUE(guid, alias)
                 )
             ''')
-            
-            # Create indexes
-            await conn.execute('CREATE INDEX idx_rounds_date ON rounds(round_date)')
-            await conn.execute('CREATE INDEX idx_rounds_status ON rounds(round_status)')
-            await conn.execute('CREATE INDEX idx_rounds_gaming_session ON rounds(gaming_session_id, map_name, round_number, round_status)')
-            await conn.execute('CREATE INDEX idx_player_stats_round ON player_comprehensive_stats(round_id)')
-            await conn.execute('CREATE INDEX idx_player_stats_guid ON player_comprehensive_stats(player_guid)')
-            await conn.execute('CREATE INDEX idx_weapon_stats_round ON weapon_comprehensive_stats(round_id)')
-            await conn.execute('CREATE INDEX idx_processed_files_filename ON processed_files(filename)')
-            
+
+            # =====================================================================
+            # LUA WEBHOOK TABLES (8-9)
+            # =====================================================================
+
+            # 8. Lua round teams - Real-time webhook data from game server
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS lua_round_teams (
+                    id SERIAL PRIMARY KEY,
+                    match_id VARCHAR(64) NOT NULL,
+                    round_number INTEGER NOT NULL,
+                    axis_players JSONB DEFAULT '[]'::jsonb,
+                    allies_players JSONB DEFAULT '[]'::jsonb,
+                    round_start_unix BIGINT,
+                    round_end_unix BIGINT,
+                    actual_duration_seconds INTEGER,
+                    total_pause_seconds INTEGER DEFAULT 0,
+                    pause_count INTEGER DEFAULT 0,
+                    end_reason VARCHAR(20),
+                    winner_team INTEGER,
+                    defender_team INTEGER,
+                    map_name VARCHAR(64),
+                    time_limit_minutes INTEGER,
+                    captured_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    lua_version VARCHAR(16),
+                    lua_warmup_seconds INTEGER DEFAULT 0,
+                    lua_warmup_start_unix BIGINT DEFAULT 0,
+                    lua_pause_events JSONB DEFAULT '[]'::jsonb,
+                    surrender_caller_guid VARCHAR(64),
+                    surrender_caller_name VARCHAR(64),
+                    surrender_team INTEGER DEFAULT 0,
+                    axis_score INTEGER DEFAULT 0,
+                    allies_score INTEGER DEFAULT 0,
+                    round_id INTEGER,
+                    UNIQUE(match_id, round_number)
+                )
+            ''')
+
+            # 9. Lua spawn stats - Per-player spawn/death timing from Lua
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS lua_spawn_stats (
+                    id SERIAL PRIMARY KEY,
+                    match_id VARCHAR(64) NOT NULL,
+                    round_number INTEGER NOT NULL,
+                    round_id INTEGER,
+                    map_name VARCHAR(64),
+                    round_end_unix BIGINT,
+                    player_guid VARCHAR(32),
+                    player_name VARCHAR(64),
+                    spawn_count INTEGER DEFAULT 0,
+                    death_count INTEGER DEFAULT 0,
+                    dead_seconds INTEGER DEFAULT 0,
+                    avg_respawn_seconds INTEGER DEFAULT 0,
+                    max_respawn_seconds INTEGER DEFAULT 0,
+                    captured_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(match_id, round_number, player_guid)
+                )
+            ''')
+
+            # =====================================================================
+            # ROUND DETAIL TABLES (10-12)
+            # =====================================================================
+
+            # 10. Round awards - End-of-round awards
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS round_awards (
+                    id SERIAL PRIMARY KEY,
+                    round_id INTEGER NOT NULL,
+                    round_date TEXT NOT NULL,
+                    map_name TEXT NOT NULL,
+                    round_number INTEGER NOT NULL,
+                    award_name TEXT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    player_guid TEXT,
+                    award_value TEXT NOT NULL,
+                    award_value_numeric REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE
+                )
+            ''')
+
+            # 11. Round vs stats - Player vs player kills/deaths
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS round_vs_stats (
+                    id SERIAL PRIMARY KEY,
+                    round_id INTEGER NOT NULL,
+                    round_date TEXT NOT NULL,
+                    map_name TEXT NOT NULL,
+                    round_number INTEGER NOT NULL,
+                    player_name TEXT NOT NULL,
+                    player_guid TEXT,
+                    kills INTEGER NOT NULL DEFAULT 0,
+                    deaths INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE
+                )
+            ''')
+
+            # 12. Processed endstats files - Endstats file tracking
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS processed_endstats_files (
+                    id SERIAL PRIMARY KEY,
+                    filename TEXT UNIQUE NOT NULL,
+                    round_id INTEGER,
+                    success BOOLEAN DEFAULT TRUE,
+                    error_message TEXT,
+                    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE SET NULL
+                )
+            ''')
+
+            # =====================================================================
+            # COMPETITIVE ANALYTICS TABLES (13-15)
+            # =====================================================================
+
+            # 13. Match predictions - Automated match predictions
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS match_predictions (
+                    id SERIAL PRIMARY KEY,
+                    prediction_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    session_date TEXT NOT NULL,
+                    map_name TEXT,
+                    format TEXT NOT NULL,
+                    team_a_channel_id BIGINT NOT NULL,
+                    team_b_channel_id BIGINT NOT NULL,
+                    team_a_guids TEXT NOT NULL,
+                    team_b_guids TEXT NOT NULL,
+                    team_a_discord_ids TEXT NOT NULL,
+                    team_b_discord_ids TEXT NOT NULL,
+                    team_a_win_probability REAL NOT NULL,
+                    team_b_win_probability REAL NOT NULL,
+                    confidence TEXT NOT NULL,
+                    confidence_score REAL NOT NULL,
+                    h2h_score REAL NOT NULL,
+                    form_score REAL NOT NULL,
+                    map_score REAL NOT NULL,
+                    subs_score REAL NOT NULL,
+                    weighted_score REAL NOT NULL,
+                    key_insight TEXT NOT NULL,
+                    h2h_details TEXT,
+                    form_details TEXT,
+                    map_details TEXT,
+                    subs_details TEXT,
+                    actual_winner INTEGER,
+                    team_a_actual_score INTEGER,
+                    team_b_actual_score INTEGER,
+                    prediction_correct BOOLEAN,
+                    prediction_accuracy REAL,
+                    discord_message_id BIGINT,
+                    discord_channel_id BIGINT,
+                    guid_coverage REAL NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            # 14. Session results - Aggregated match outcomes
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS session_results (
+                    id SERIAL PRIMARY KEY,
+                    session_date TEXT NOT NULL,
+                    map_name TEXT NOT NULL,
+                    gaming_session_id INTEGER,
+                    team_1_guids TEXT NOT NULL,
+                    team_2_guids TEXT NOT NULL,
+                    team_1_names TEXT NOT NULL,
+                    team_2_names TEXT NOT NULL,
+                    format TEXT NOT NULL,
+                    total_rounds INTEGER NOT NULL,
+                    team_1_score INTEGER NOT NULL DEFAULT 0,
+                    team_2_score INTEGER NOT NULL DEFAULT 0,
+                    winning_team INTEGER NOT NULL,
+                    round_details TEXT,
+                    round_numbers TEXT NOT NULL,
+                    session_start TIMESTAMP NOT NULL,
+                    session_end TIMESTAMP,
+                    duration_minutes INTEGER,
+                    team_1_total_kills INTEGER DEFAULT 0,
+                    team_1_total_deaths INTEGER DEFAULT 0,
+                    team_1_total_damage INTEGER DEFAULT 0,
+                    team_2_total_kills INTEGER DEFAULT 0,
+                    team_2_total_deaths INTEGER DEFAULT 0,
+                    team_2_total_damage INTEGER DEFAULT 0,
+                    had_substitutions BOOLEAN DEFAULT FALSE,
+                    substitution_details TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    team_1_name TEXT,
+                    team_2_name TEXT,
+                    UNIQUE(session_date, map_name, gaming_session_id)
+                )
+            ''')
+
+            # 15. Map performance - Player per-map rolling averages
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS map_performance (
+                    id SERIAL PRIMARY KEY,
+                    player_guid TEXT NOT NULL,
+                    map_name TEXT NOT NULL,
+                    matches_played INTEGER NOT NULL DEFAULT 0,
+                    total_rounds INTEGER NOT NULL DEFAULT 0,
+                    wins INTEGER NOT NULL DEFAULT 0,
+                    losses INTEGER NOT NULL DEFAULT 0,
+                    win_rate REAL NOT NULL DEFAULT 0.0,
+                    avg_kills REAL NOT NULL DEFAULT 0.0,
+                    avg_deaths REAL NOT NULL DEFAULT 0.0,
+                    avg_kd_ratio REAL NOT NULL DEFAULT 0.0,
+                    avg_dpm REAL NOT NULL DEFAULT 0.0,
+                    avg_efficiency REAL NOT NULL DEFAULT 0.0,
+                    last_match_date TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(player_guid, map_name)
+                )
+            ''')
+
+            # =====================================================================
+            # PERMISSION & TEAM MANAGEMENT TABLES (16-19)
+            # =====================================================================
+
+            # 16. User permissions - 3-tier permission system
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS user_permissions (
+                    id SERIAL PRIMARY KEY,
+                    discord_id BIGINT NOT NULL UNIQUE,
+                    username VARCHAR(255),
+                    tier VARCHAR(50) NOT NULL CHECK (tier IN ('root', 'admin', 'moderator')),
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    added_by BIGINT,
+                    reason TEXT
+                )
+            ''')
+
+            # 17. Permission audit log - Permission change audit trail
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS permission_audit_log (
+                    id SERIAL PRIMARY KEY,
+                    target_discord_id BIGINT NOT NULL,
+                    action VARCHAR(50) NOT NULL CHECK (action IN ('add', 'remove', 'promote', 'demote')),
+                    old_tier VARCHAR(50),
+                    new_tier VARCHAR(50),
+                    changed_by BIGINT NOT NULL,
+                    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    reason TEXT
+                )
+            ''')
+
+            # 18. Team pool - Team names for assignment
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS team_pool (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT UNIQUE NOT NULL,
+                    display_name TEXT,
+                    color INTEGER,
+                    active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            # 19. Matchup history - Lineup vs lineup analytics
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS matchup_history (
+                    id SERIAL PRIMARY KEY,
+                    matchup_id TEXT NOT NULL,
+                    lineup_a_hash TEXT NOT NULL,
+                    lineup_b_hash TEXT NOT NULL,
+                    lineup_a_guids JSONB NOT NULL,
+                    lineup_b_guids JSONB NOT NULL,
+                    session_date TEXT NOT NULL,
+                    gaming_session_id INTEGER NOT NULL,
+                    winner_lineup_hash TEXT,
+                    lineup_a_score INTEGER DEFAULT 0,
+                    lineup_b_score INTEGER DEFAULT 0,
+                    map_name TEXT,
+                    player_stats JSONB,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(session_date, gaming_session_id, matchup_id)
+                )
+            ''')
+
+            # =====================================================================
+            # GREATSHOT DEMO PIPELINE TABLES (20-23)
+            # =====================================================================
+
+            # 20. Greatshot demos - Uploaded demo files
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS greatshot_demos (
+                    id TEXT PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    original_filename TEXT NOT NULL,
+                    stored_path TEXT NOT NULL,
+                    extension TEXT NOT NULL,
+                    file_size_bytes BIGINT NOT NULL,
+                    content_hash_sha256 TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'uploaded',
+                    error TEXT,
+                    metadata_json JSONB,
+                    warnings_json JSONB,
+                    analysis_json_path TEXT,
+                    report_txt_path TEXT,
+                    processing_started_at TIMESTAMP,
+                    processing_finished_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            # 21. Greatshot analysis - Demo analysis results
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS greatshot_analysis (
+                    demo_id TEXT PRIMARY KEY REFERENCES greatshot_demos(id) ON DELETE CASCADE,
+                    metadata_json JSONB NOT NULL,
+                    stats_json JSONB NOT NULL,
+                    events_json JSONB NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            # 22. Greatshot highlights - Extracted highlight clips
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS greatshot_highlights (
+                    id TEXT PRIMARY KEY,
+                    demo_id TEXT NOT NULL REFERENCES greatshot_demos(id) ON DELETE CASCADE,
+                    type TEXT NOT NULL,
+                    player TEXT,
+                    start_ms INTEGER NOT NULL,
+                    end_ms INTEGER NOT NULL,
+                    score DOUBLE PRECISION NOT NULL,
+                    meta_json JSONB,
+                    clip_demo_path TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            # 23. Greatshot renders - Rendered video clips
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS greatshot_renders (
+                    id TEXT PRIMARY KEY,
+                    highlight_id TEXT NOT NULL REFERENCES greatshot_highlights(id) ON DELETE CASCADE,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    mp4_path TEXT,
+                    error TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            # =====================================================================
+            # INDEXES - All tables (IF NOT EXISTS for idempotency)
+            # =====================================================================
+
+            # Core table indexes
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_rounds_date ON rounds(round_date)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_rounds_status ON rounds(round_status)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_rounds_gaming_session ON rounds(gaming_session_id, map_name, round_number, round_status)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_player_stats_round ON player_comprehensive_stats(round_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_player_stats_guid ON player_comprehensive_stats(player_guid)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_weapon_stats_round ON weapon_comprehensive_stats(round_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_processed_files_filename ON processed_files(filename)')
+
+            # Lua webhook indexes
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_lua_round_teams_match_id ON lua_round_teams(match_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_lua_round_teams_captured_at ON lua_round_teams(captured_at)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_lua_round_teams_round_id ON lua_round_teams(round_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_lua_round_teams_surrender ON lua_round_teams(surrender_team) WHERE surrender_team > 0')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_lua_spawn_stats_match_id ON lua_spawn_stats(match_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_lua_spawn_stats_round_id ON lua_spawn_stats(round_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_lua_spawn_stats_round_end ON lua_spawn_stats(round_end_unix)')
+
+            # Round detail indexes
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_round_awards_round ON round_awards(round_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_round_awards_player ON round_awards(player_guid)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_round_awards_name ON round_awards(award_name)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_round_vs_stats_round ON round_vs_stats(round_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_round_vs_stats_player ON round_vs_stats(player_guid)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_processed_endstats_filename ON processed_endstats_files(filename)')
+
+            # Predictions indexes
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_predictions_session_date ON match_predictions(session_date)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_predictions_prediction_time ON match_predictions(prediction_time DESC)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_predictions_format ON match_predictions(format)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_predictions_confidence ON match_predictions(confidence)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_predictions_discord_msg ON match_predictions(discord_message_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_predictions_outcome ON match_predictions(actual_winner) WHERE actual_winner IS NOT NULL')
+
+            # Session results indexes
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_session_results_date ON session_results(session_date DESC)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_session_results_map ON session_results(map_name)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_session_results_format ON session_results(format)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_session_results_gaming_session ON session_results(gaming_session_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_session_results_winner ON session_results(winning_team)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_session_results_teams ON session_results(team_1_guids, team_2_guids)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_session_results_team1_name ON session_results(team_1_name)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_session_results_team2_name ON session_results(team_2_name)')
+
+            # Map performance indexes
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_map_performance_guid ON map_performance(player_guid)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_map_performance_map ON map_performance(map_name)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_map_performance_winrate ON map_performance(win_rate DESC)')
+
+            # Permission indexes
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_user_permissions_discord_id ON user_permissions(discord_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_user_permissions_tier ON user_permissions(tier)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_audit_target ON permission_audit_log(target_discord_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_audit_changed_by ON permission_audit_log(changed_by)')
+
+            # Team pool indexes
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_team_pool_active ON team_pool(active) WHERE active = true')
+
+            # Matchup history indexes
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_matchup_history_matchup_id ON matchup_history(matchup_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_matchup_history_session_date ON matchup_history(session_date)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_matchup_history_map ON matchup_history(map_name)')
+
+            # Greatshot indexes
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_greatshot_demos_user_created_at ON greatshot_demos(user_id, created_at DESC)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_greatshot_demos_status ON greatshot_demos(status)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_greatshot_highlights_demo_id ON greatshot_highlights(demo_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_greatshot_renders_highlight ON greatshot_renders(highlight_id)')
+
+            # =====================================================================
+            # SEED DATA (only inserted if tables are empty)
+            # =====================================================================
+
+            # Seed team_pool with default teams
+            team_count = await conn.fetchval("SELECT COUNT(*) FROM team_pool")
+            if team_count == 0:
+                await conn.execute('''
+                    INSERT INTO team_pool (name, display_name, color, active) VALUES
+                    ('sWat', 'sWat', 3447003, TRUE),
+                    ('S*F', 'S*F', 15158332, TRUE),
+                    ('madDogz', 'madDogz', 15105570, TRUE),
+                    ('slomix', 'slomix', 10181046, TRUE),
+                    ('puran', 'puran', 3066993, TRUE),
+                    ('insAne', 'insAne', 15844367, TRUE),
+                    ('allbad', 'allbad', 9807270, TRUE)
+                    ON CONFLICT (name) DO NOTHING
+                ''')
+                logger.info("   ✅ Seeded team_pool with default teams")
+
+            # Seed root user permission
+            perm_count = await conn.fetchval("SELECT COUNT(*) FROM user_permissions")
+            if perm_count == 0:
+                await conn.execute('''
+                    INSERT INTO user_permissions (discord_id, username, tier, added_by, reason) VALUES
+                    (231165917604741121, 'seareal', 'root', 231165917604741121, 'System initialization - Bot owner')
+                    ON CONFLICT (discord_id) DO NOTHING
+                ''')
+                logger.info("   ✅ Seeded root user permission")
+
             logger.info("   ✅ Schema created successfully!")
     
     async def _migrate_schema_if_needed(self):
@@ -629,24 +1081,126 @@ class PostgreSQLDatabaseManager:
                         ON lua_round_teams(round_id)
                     """)
                     logger.info("   ✅ Added 'round_id' column to lua_round_teams")
-            
+
+            # Migration 5: Add display_name columns to player_links
+            has_player_links = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'player_links'
+                )
+            """)
+            if has_player_links:
+                has_display_name = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns
+                        WHERE table_name = 'player_links'
+                        AND column_name = 'display_name'
+                    )
+                """)
+                if not has_display_name:
+                    logger.info("   ➕ Adding display_name columns to player_links...")
+                    await conn.execute("ALTER TABLE player_links ADD COLUMN display_name TEXT")
+                    await conn.execute("ALTER TABLE player_links ADD COLUMN display_name_source TEXT DEFAULT 'auto'")
+                    await conn.execute("ALTER TABLE player_links ADD COLUMN display_name_updated_at TIMESTAMP")
+                    logger.info("   ✅ Added display_name columns to player_links")
+
+            # Migration 6: Add color column to session_teams
+            has_session_teams = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'session_teams'
+                )
+            """)
+            if has_session_teams:
+                has_color = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns
+                        WHERE table_name = 'session_teams'
+                        AND column_name = 'color'
+                    )
+                """)
+                if not has_color:
+                    logger.info("   ➕ Adding 'color' column to session_teams...")
+                    await conn.execute("ALTER TABLE session_teams ADD COLUMN color INTEGER")
+                    logger.info("   ✅ Added 'color' column to session_teams")
+
+            # Migration 7: Add gaming_session_id column to session_teams
+            if has_session_teams:
+                has_gaming_session_id = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns
+                        WHERE table_name = 'session_teams'
+                        AND column_name = 'gaming_session_id'
+                    )
+                """)
+                if not has_gaming_session_id:
+                    logger.info("   ➕ Adding 'gaming_session_id' column to session_teams...")
+                    await conn.execute("ALTER TABLE session_teams ADD COLUMN gaming_session_id INTEGER")
+                    logger.info("   ✅ Added 'gaming_session_id' column to session_teams")
+
+            # Migration 8: Add bot round flag columns to rounds
+            has_rounds = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'rounds'
+                )
+            """)
+            if has_rounds:
+                has_is_bot_round = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns
+                        WHERE table_name = 'rounds'
+                        AND column_name = 'is_bot_round'
+                    )
+                """)
+                if not has_is_bot_round:
+                    logger.info("   ➕ Adding bot round flag columns to rounds...")
+                    await conn.execute("ALTER TABLE rounds ADD COLUMN is_bot_round BOOLEAN DEFAULT FALSE")
+                    await conn.execute("ALTER TABLE rounds ADD COLUMN bot_player_count INTEGER DEFAULT 0")
+                    await conn.execute("ALTER TABLE rounds ADD COLUMN human_player_count INTEGER DEFAULT 0")
+                    logger.info("   ✅ Added bot round flag columns to rounds")
+
             logger.info("   ✅ Schema migrations complete!")
     
     async def _wipe_all_tables(self):
         """
-        Wipe all data from tables (keeps schema)
+        Wipe all game data from tables (keeps schema).
+
+        Order matters: children before parents to respect FK constraints.
+        Config tables (user_permissions, permission_audit_log, team_pool) are
+        NOT wiped — they contain admin config, not game data.
 
         Raises:
             RuntimeError: If any tables fail to wipe, indicating database is in inconsistent state
         """
         tables = [
+            # Children of rounds (FK or CASCADE)
             'weapon_comprehensive_stats',
             'player_comprehensive_stats',
-            'processed_files',
+            'round_awards',
+            'round_vs_stats',
+            'processed_endstats_files',
+            # Greatshot pipeline (children before parents)
+            'greatshot_renders',
+            'greatshot_highlights',
+            'greatshot_analysis',
+            'greatshot_demos',
+            # Lua data (no FK, uses match_id)
+            'lua_round_teams',
+            'lua_spawn_stats',
+            # Session/prediction data
+            'match_predictions',
+            'session_results',
+            'matchup_history',
+            'map_performance',
             'session_teams',
+            # Player data
             'player_links',
             'player_aliases',
-            'rounds'
+            # Tracking
+            'processed_files',
+            # Parent table last
+            'rounds',
         ]
 
         failed_tables = []
@@ -654,6 +1208,16 @@ class PostgreSQLDatabaseManager:
         async with self.pool.acquire() as conn:
             for table in tables:
                 try:
+                    # Check if table exists before trying to wipe
+                    table_exists = await conn.fetchval("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables
+                            WHERE table_schema = 'public' AND table_name = $1
+                        )
+                    """, table)
+                    if not table_exists:
+                        logger.info(f"   ⏭️  Skipped {table} (does not exist)")
+                        continue
                     await conn.execute(f"DELETE FROM {table}")
                     logger.info(f"   ✅ Wiped {table}")
                 except Exception as e:
@@ -908,9 +1472,9 @@ class PostgreSQLDatabaseManager:
                 existing = await conn.fetchval(
                     """
                     SELECT COUNT(*) FROM session_teams
-                    WHERE session_start_date LIKE $1
+                    WHERE session_start_date LIKE ($1 || '%')
                     """,
-                    f"{session_date}%"
+                    session_date
                 )
 
                 if existing > 0:
@@ -965,9 +1529,9 @@ class PostgreSQLDatabaseManager:
                     await conn.execute(
                         """
                         DELETE FROM session_teams
-                        WHERE session_start_date LIKE $1
+                        WHERE session_start_date LIKE ($1 || '%')
                         """,
-                        f"{session_date}%"
+                        session_date
                     )
 
                     # Insert Team A (defenders)
@@ -1789,8 +2353,13 @@ class PostgreSQLDatabaseManager:
                     # STEP 4: Delete processed_files to allow re-import
                     logger.info(f"🗑️  Clearing processed_files...")
                     processed_result = await conn.execute(
-                        "DELETE FROM processed_files WHERE filename >= $1 AND filename <= $2",
-                        f"{start_date}%", f"{end_date}%"
+                        """
+                        DELETE FROM processed_files
+                        WHERE SUBSTRING(filename FROM 1 FOR 10) >= $1
+                          AND SUBSTRING(filename FROM 1 FOR 10) <= $2
+                        """,
+                        start_date,
+                        end_date,
                     )
                     logger.info(f"   ✓ processed_files: {processed_result}")
 

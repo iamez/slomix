@@ -839,11 +839,15 @@ class UltimateETLegacyBot(commands.Bot):
             logger.debug("📡 WebSocket push disabled (using SSH polling)")
 
         # 🎯 Proximity Tracker Cog (optional, isolated)
+        # NOTE: It is already loaded above via load_extension("cogs.proximity_cog").
+        # Keep this as a no-op guard so startup does not create duplicate cog instances.
         try:
-            if self.config.proximity_enabled or self.config.proximity_discord_commands:
+            if self.get_cog("Proximity") is not None:
+                logger.info("⏭️ Proximity Cog already loaded via extension")
+            elif self.config.proximity_enabled or self.config.proximity_discord_commands:
                 from bot.cogs.proximity_cog import ProximityCog
                 await self.add_cog(ProximityCog(self))
-                logger.info("✅ Proximity Cog loaded")
+                logger.info("✅ Proximity Cog loaded (fallback)")
             else:
                 logger.info("⏭️ Proximity Cog not enabled")
         except Exception as e:
@@ -2456,7 +2460,7 @@ class UltimateETLegacyBot(commands.Bot):
 
             # Check each file
             new_files_count = 0
-            for filename in remote_files:
+            for filename in sorted(remote_files):
                 is_endstats = filename.endswith('-endstats.txt')
 
                 if is_endstats:

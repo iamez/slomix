@@ -3,8 +3,19 @@
  * @module matches
  */
 
-import { API_BASE, fetchJSON, escapeHtml, escapeJsString, formatStopwatchTime } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, formatStopwatchTime } from './utils.js';
 import { openModal } from './auth.js';
+
+function formatClockTime(seconds) {
+    const value = Number(seconds || 0);
+    const mins = Math.floor(value / 60);
+    const secs = Math.max(0, Math.floor(value % 60));
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function safeDomIdPart(value) {
+    return String(value ?? '').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
 
 /**
  * Load matches grid view
@@ -52,7 +63,7 @@ export async function loadMatchesView(filter = 'all') {
 
             const html = `
             <div class="glass-panel rounded-xl hover:bg-white/5 transition cursor-pointer group border-l-4 ${team1Win ? 'border-l-brand-blue' : team2Win ? 'border-l-brand-rose' : 'border-l-slate-600'}"
-                 onclick="loadMatchDetails(${match.id})">
+                 data-match-id="${Number(match.id) || 0}">
                 <div class="p-4">
                     <div class="flex items-center gap-2 mb-1 ${team1Win ? '' : 'opacity-70'}">
                         ${team1Win ? '<span class="text-brand-gold text-sm">🏆</span>' : ''}
@@ -70,7 +81,15 @@ export async function loadMatchesView(filter = 'all') {
                 </div>
             </div>
             `;
-            grid.insertAdjacentHTML('beforeend', html);
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = html.trim();
+            const card = wrapper.firstElementChild;
+            if (card) {
+                card.addEventListener('click', () => {
+                    loadMatchDetails(Number(match.id) || 0);
+                });
+                grid.appendChild(card);
+            }
         });
     } catch (e) {
         console.error('Failed to load matches:', e);
@@ -605,20 +624,13 @@ export async function loadMatchDetails(matchId, skipTabs = false) {
                 const isTop = index === 0;
                 const rowBg = isTop ? 'bg-brand-gold/5' : '';
                 const safeName = escapeHtml(player.name);
-                const jsName = escapeJsString(player.name);
                 const kdColor = player.kd >= 2.0 ? 'text-brand-emerald' : player.kd >= 1.0 ? 'text-white' : 'text-brand-rose';
-
-                // Format time (seconds to MM:SS)
-                const formatTime = (seconds) => {
-                    const mins = Math.floor(seconds / 60);
-                    const secs = seconds % 60;
-                    return `${mins}:${secs.toString().padStart(2, '0')}`;
-                };
-
-                const rowId = `player-row-${matchId}-${player.player_guid}`;
+                const encodedGuid = encodeURIComponent(String(player.player_guid || ''));
+                const rowId = `player-row-${matchId}-${index}`;
                 html += `
                     <tr id="${rowId}" class="border-b border-white/5 hover:bg-white/5 transition cursor-pointer ${rowBg}"
-                        onclick="togglePlayerDetails(${matchId}, '${player.player_guid}', document.getElementById('${rowId}'))">
+                        data-round-id="${Number(matchId) || 0}"
+                        data-player-guid="${encodedGuid}">
                         <td class="py-2 px-3">
                             <div class="flex items-center gap-2">
                                 ${isTop ? '<span class="text-brand-gold">🏆</span>' : ''}
@@ -633,7 +645,7 @@ export async function loadMatchDetails(matchId, skipTabs = false) {
                         <td class="text-right py-2 px-2 font-mono text-slate-300">${player.headshots}</td>
                         <td class="text-right py-2 px-2 font-mono text-brand-emerald">${player.useful_kills || 0}</td>
                         <td class="text-right py-2 px-2 font-mono text-brand-emerald">${player.revives_given || 0}/${player.times_revived || 0}</td>
-                        <td class="text-right py-2 px-2 font-mono text-slate-400">${formatTime(player.time_played || 0)}</td>
+                        <td class="text-right py-2 px-2 font-mono text-slate-400">${formatClockTime(player.time_played || 0)}</td>
                     </tr>
                 `;
             });
@@ -648,6 +660,20 @@ export async function loadMatchDetails(matchId, skipTabs = false) {
 
         html += '</div>';
         content.innerHTML = html;
+        content.querySelectorAll('tr[data-player-guid][data-round-id]').forEach((row) => {
+            row.addEventListener('click', () => {
+                const roundId = Number(row.getAttribute('data-round-id') || 0);
+                const playerGuidRaw = row.getAttribute('data-player-guid') || '';
+                let playerGuid = '';
+                try {
+                    playerGuid = decodeURIComponent(playerGuidRaw);
+                } catch {
+                    playerGuid = playerGuidRaw;
+                }
+                if (!roundId || !playerGuid) return;
+                togglePlayerDetails(roundId, playerGuid, row);
+            });
+        });
         if (typeof lucide !== 'undefined') lucide.createIcons();
 
     } catch (e) {
@@ -773,7 +799,7 @@ function switchMatchTab(roundId, tab) {
  * Toggle expanded player details inline
  */
 async function togglePlayerDetails(roundId, playerGuid, rowElement) {
-    const detailsId = `details-${roundId}-${playerGuid}`;
+    const detailsId = `details-${safeDomIdPart(roundId)}-${safeDomIdPart(playerGuid)}`;
     const existingRow = document.getElementById(detailsId);
 
     // If already expanded, collapse it
@@ -791,14 +817,15 @@ async function togglePlayerDetails(roundId, playerGuid, rowElement) {
         detailsRow.id = detailsId;
         detailsRow.className = 'bg-slate-800/30 border-b border-white/10';
 
-        const weaponRows = data.weapons.map(w => `
+        const weapons = Array.isArray(data.weapons) ? data.weapons : [];
+        const weaponRows = weapons.map(w => `
             <tr class="border-b border-white/5">
                 <td class="py-1 px-2 text-slate-300">${escapeHtml(w.weapon_name)}</td>
-                <td class="text-right py-1 px-2 font-mono text-white">${w.kills}</td>
-                <td class="text-right py-1 px-2 font-mono text-slate-400">${w.deaths}</td>
-                <td class="text-right py-1 px-2 font-mono text-brand-rose">${w.headshots || 0}</td>
-                <td class="text-right py-1 px-2 font-mono ${w.accuracy >= 30 ? 'text-brand-emerald' : 'text-slate-300'}">${w.accuracy}%</td>
-                <td class="text-right py-1 px-2 font-mono text-slate-400">${w.hits}/${w.shots}</td>
+                <td class="text-right py-1 px-2 font-mono text-white">${Number(w.kills || 0)}</td>
+                <td class="text-right py-1 px-2 font-mono text-slate-400">${Number(w.deaths || 0)}</td>
+                <td class="text-right py-1 px-2 font-mono text-brand-rose">${Number(w.headshots || 0)}</td>
+                <td class="text-right py-1 px-2 font-mono ${Number(w.accuracy || 0) >= 30 ? 'text-brand-emerald' : 'text-slate-300'}">${Number(w.accuracy || 0)}%</td>
+                <td class="text-right py-1 px-2 font-mono text-slate-400">${Number(w.hits || 0)}/${Number(w.shots || 0)}</td>
             </tr>
         `).join('');
 
@@ -908,11 +935,11 @@ async function togglePlayerDetails(roundId, playerGuid, rowElement) {
                             <div class="grid grid-cols-2 gap-2 text-xs">
                                 <div class="flex justify-between">
                                     <span class="text-slate-400">Playtime:</span>
-                                    <span class="font-mono text-white">${formatTime(data.time.time_played)}</span>
+                                    <span class="font-mono text-white">${formatClockTime(data.time.time_played)}</span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-slate-400">Time Dead:</span>
-                                    <span class="font-mono text-slate-400">${formatTime(data.time.time_dead)}</span>
+                                    <span class="font-mono text-slate-400">${formatClockTime(data.time.time_dead)}</span>
                                 </div>
                             </div>
                         </div>
@@ -925,8 +952,8 @@ async function togglePlayerDetails(roundId, playerGuid, rowElement) {
                             <div class="space-y-1 text-xs">
                                 ${data.sprees.map(s => `
                                     <div class="flex justify-between">
-                                        <span class="text-slate-400">${s.spree_type}:</span>
-                                        <span class="font-mono text-brand-gold">${s.count}x</span>
+                                        <span class="text-slate-400">${escapeHtml(s.spree_type)}:</span>
+                                        <span class="font-mono text-brand-gold">${Number(s.count || 0)}x</span>
                                     </div>
                                 `).join('')}
                             </div>

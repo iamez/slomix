@@ -7,6 +7,171 @@ import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js';
 
 const DEFAULT_RANGE_DAYS = 30;
 const DEFAULT_EVENTS_LIMIT = 20;
+const DEFAULT_SCOPE_RANGE_DAYS = 365;
+
+const proximityScopeState = {
+    sessions: [],
+    sessionDate: null,
+    mapName: null,
+    roundNumber: null,
+    roundStartUnix: null,
+};
+
+let proximityViewLoadPromise = null;
+let proximityScopedLoadId = 0;
+
+function formatDateLabel(value) {
+    if (!value) return '--';
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function getSelectedSession() {
+    if (!proximityScopeState.sessionDate) return null;
+    return proximityScopeState.sessions.find((s) => s.session_date === proximityScopeState.sessionDate) || null;
+}
+
+function getSelectedMap() {
+    const session = getSelectedSession();
+    if (!session || !proximityScopeState.mapName) return null;
+    return (session.maps || []).find((m) => m.map_name === proximityScopeState.mapName) || null;
+}
+
+function getScopeDescription() {
+    const parts = [];
+    if (proximityScopeState.sessionDate) {
+        parts.push(`Session ${formatDateLabel(proximityScopeState.sessionDate)}`);
+    }
+    if (proximityScopeState.mapName) {
+        parts.push(`Map ${stripEtColors(proximityScopeState.mapName)}`);
+    }
+    if (proximityScopeState.roundNumber != null) {
+        parts.push(`Round ${proximityScopeState.roundNumber}`);
+    }
+    if (parts.length === 0) {
+        return `Last ${DEFAULT_RANGE_DAYS}d window`;
+    }
+    return parts.join(' • ');
+}
+
+function buildScopeParams({ includeRange = true, extra = {} } = {}) {
+    const params = new URLSearchParams();
+    if (includeRange) params.set('range_days', String(DEFAULT_RANGE_DAYS));
+    if (proximityScopeState.sessionDate) params.set('session_date', proximityScopeState.sessionDate);
+    if (proximityScopeState.mapName) params.set('map_name', proximityScopeState.mapName);
+    if (proximityScopeState.roundNumber != null) params.set('round_number', String(proximityScopeState.roundNumber));
+    if (proximityScopeState.roundStartUnix != null) params.set('round_start_unix', String(proximityScopeState.roundStartUnix));
+    Object.entries(extra).forEach(([key, value]) => {
+        if (value != null && value !== '') params.set(key, String(value));
+    });
+    return params;
+}
+
+function scopedUrl(path, options = {}) {
+    const params = buildScopeParams(options);
+    return `${API_BASE}${path}?${params.toString()}`;
+}
+
+function setSelectOptions(selectEl, options, selectedValue = '') {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    options.forEach((opt) => {
+        const optionEl = new Option(opt.label, opt.value);
+        if (String(opt.value) === String(selectedValue ?? '')) optionEl.selected = true;
+        selectEl.add(optionEl);
+    });
+}
+
+function ensureValidScopeSelection() {
+    const sessionExists = proximityScopeState.sessions.some((s) => s.session_date === proximityScopeState.sessionDate);
+    if (!sessionExists) {
+        proximityScopeState.sessionDate = proximityScopeState.sessions[0]?.session_date || null;
+        proximityScopeState.mapName = null;
+        proximityScopeState.roundNumber = null;
+        proximityScopeState.roundStartUnix = null;
+    }
+
+    const selectedSession = getSelectedSession();
+    const maps = selectedSession?.maps || [];
+    if (!proximityScopeState.mapName || !maps.some((m) => m.map_name === proximityScopeState.mapName)) {
+        proximityScopeState.mapName = null;
+        proximityScopeState.roundNumber = null;
+        proximityScopeState.roundStartUnix = null;
+    }
+
+    const selectedMap = getSelectedMap();
+    const rounds = selectedMap?.rounds || [];
+    const roundExists = rounds.some((r) => (
+        Number(r.round_number) === Number(proximityScopeState.roundNumber)
+        && Number(r.round_start_unix || 0) === Number(proximityScopeState.roundStartUnix || 0)
+    ));
+    if (!roundExists) {
+        proximityScopeState.roundNumber = null;
+        proximityScopeState.roundStartUnix = null;
+    }
+}
+
+function updateScopeUIText() {
+    setText('proximity-scope-caption', getScopeDescription());
+    setText('proximity-window-label', getScopeDescription());
+}
+
+function renderScopeSelectors() {
+    const sessionSelect = document.getElementById('proximity-session-select');
+    const mapSelect = document.getElementById('proximity-map-select');
+    const roundSelect = document.getElementById('proximity-round-select');
+
+    ensureValidScopeSelection();
+
+    const sessionOptions = proximityScopeState.sessions.length
+        ? proximityScopeState.sessions.map((session) => ({
+            value: session.session_date,
+            label: `${formatDateLabel(session.session_date)} (${formatNumber(session.engagements || 0)} ev)`,
+        }))
+        : [{ value: '', label: 'No sessions available' }];
+    setSelectOptions(sessionSelect, sessionOptions, proximityScopeState.sessionDate || '');
+
+    const selectedSession = getSelectedSession();
+    const mapOptions = [{ value: '', label: 'All maps' }];
+    if (selectedSession) {
+        (selectedSession.maps || []).forEach((map) => {
+            mapOptions.push({
+                value: map.map_name,
+                label: `${stripEtColors(map.map_name)} (${formatNumber(map.engagements || 0)} ev)`,
+            });
+        });
+    }
+    setSelectOptions(mapSelect, mapOptions, proximityScopeState.mapName || '');
+
+    const selectedMap = getSelectedMap();
+    const roundOptions = [{ value: '', label: 'All rounds' }];
+    if (selectedMap) {
+        (selectedMap.rounds || []).forEach((round) => {
+            let start = '';
+            if (round.round_start_unix) {
+                const stamp = new Date(Number(round.round_start_unix) * 1000);
+                if (!Number.isNaN(stamp.getTime())) {
+                    start = ` • ${stamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                }
+            }
+            roundOptions.push({
+                value: `${round.round_number}|${round.round_start_unix || 0}`,
+                label: `R${round.round_number}${start} (${formatNumber(round.engagements || 0)} ev)`,
+            });
+        });
+    }
+    const selectedRoundValue = proximityScopeState.roundNumber != null
+        ? `${proximityScopeState.roundNumber}|${proximityScopeState.roundStartUnix || 0}`
+        : '';
+    setSelectOptions(roundSelect, roundOptions, selectedRoundValue);
+
+    if (sessionSelect) sessionSelect.disabled = proximityScopeState.sessions.length === 0;
+    if (mapSelect) mapSelect.disabled = !selectedSession;
+    if (roundSelect) roundSelect.disabled = !selectedMap;
+
+    updateScopeUIText();
+}
 
 function setText(id, value) {
     const el = document.getElementById(id);
@@ -156,15 +321,21 @@ function renderDuos(duos) {
 
 function renderTimeline(buckets) {
     const container = document.getElementById('proximity-timeline');
-    const empty = document.getElementById('proximity-timeline-empty');
     if (!container) return;
 
     if (!buckets || buckets.length === 0) {
-        if (empty) empty.classList.remove('hidden');
+        container.innerHTML = `
+            <div class="h-full w-full flex items-center justify-center text-slate-500">
+                <div class="text-center">
+                    <i data-lucide="activity" class="w-8 h-8 mx-auto mb-2 text-slate-600"></i>
+                    <div class="text-sm font-bold text-slate-400">Timeline offline</div>
+                    <div class="text-xs text-slate-600">Awaiting proximity events stream</div>
+                </div>
+            </div>
+        `;
         return;
     }
 
-    if (empty) empty.classList.add('hidden');
     const max = Math.max(...buckets.map(b => b.engagements || 0), 1);
     container.innerHTML = buckets.map((b) => {
         const height = Math.max(6, Math.round((b.engagements / max) * 120));
@@ -507,15 +678,7 @@ function renderSummary(data) {
     renderDuos(data.top_duos || []);
 }
 
-export async function loadProximityView() {
-    const stateEl = document.getElementById('proximity-state');
-    if (stateEl) {
-        stateEl.innerHTML = `
-            <i data-lucide="clock" class="w-4 h-4 text-brand-cyan"></i>
-            <span>Prototype mode: waiting for proximity data ingestion.</span>
-        `;
-    }
-
+function resetProximityValues() {
     setText('proximity-total-engagements', '--');
     setText('proximity-avg-distance', '--');
     setText('proximity-crossfire', '--');
@@ -530,11 +693,76 @@ export async function loadProximityView() {
     setText('proximity-trade-missed', '--');
     setText('proximity-support-uptime', '--');
     setText('proximity-isolation-deaths', '--');
+    setText('proximity-window-label', `Last ${DEFAULT_RANGE_DAYS}d window`);
+    setText('proximity-scope-caption', `Last ${DEFAULT_RANGE_DAYS}d window`);
+
+    renderTimeline([]);
+    renderHeatmap({ hotzones: [] });
+    renderEventList([]);
+    renderTradeEvents([]);
+    renderDuos([]);
+    renderLeaderList('proximity-distance-leaders', [], () => '--');
+    renderLeaderList('proximity-sprint-leaders', [], () => '--');
+    renderLeaderList('proximity-reaction-leaders', [], () => '--');
+    renderLeaderList('proximity-survival-leaders', [], () => '--');
+    renderLeaderList('proximity-crossfire-leaders', [], () => '--');
+    renderLeaderList('proximity-sync-leaders', [], () => '--');
+    renderLeaderList('proximity-focus-leaders', [], () => '--');
+
+    const meta = document.getElementById('proximity-event-meta');
+    const details = document.getElementById('proximity-event-details');
+    const stats = document.getElementById('proximity-event-stats');
+    const canvas = document.getElementById('proximity-event-canvas');
+    const empty = document.getElementById('proximity-event-empty');
+    if (meta) meta.textContent = 'Select an event';
+    if (details) details.textContent = '';
+    if (stats) stats.innerHTML = '';
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            const width = canvas.clientWidth || 600;
+            const height = canvas.clientHeight || 260;
+            ctx.clearRect(0, 0, width, height);
+        }
+    }
+    if (empty) empty.classList.remove('hidden');
+}
+
+async function loadScopeHierarchy() {
+    try {
+        const data = await fetchJSON(`${API_BASE}/proximity/scopes?range_days=${DEFAULT_SCOPE_RANGE_DAYS}`);
+        proximityScopeState.sessions = Array.isArray(data?.sessions) ? data.sessions : [];
+        if (!proximityScopeState.sessionDate) {
+            proximityScopeState.sessionDate = data?.scope?.session_date || proximityScopeState.sessions[0]?.session_date || null;
+        }
+    } catch {
+        proximityScopeState.sessions = [];
+        proximityScopeState.sessionDate = null;
+        proximityScopeState.mapName = null;
+        proximityScopeState.roundNumber = null;
+        proximityScopeState.roundStartUnix = null;
+    }
+    renderScopeSelectors();
+}
+
+async function loadScopedProximityData() {
+    const loadId = ++proximityScopedLoadId;
+    resetProximityValues();
+    const stateEl = document.getElementById('proximity-state');
+    updateScopeUIText();
+
+    if (stateEl) {
+        stateEl.innerHTML = `
+            <i data-lucide="clock" class="w-4 h-4 text-brand-cyan"></i>
+            <span>Loading scoped proximity data...</span>
+        `;
+    }
 
     try {
-        const data = await fetchJSON(`${API_BASE}/proximity/summary?range_days=${DEFAULT_RANGE_DAYS}`);
+        const data = await fetchJSON(scopedUrl('/proximity/summary'));
+        if (loadId !== proximityScopedLoadId) return;
         renderSummary(data);
-        const ready = data?.ready === true || data?.status === 'ready';
+        const ready = data?.ready === true || data?.status === 'ok' || data?.status === 'ready';
         if (!ready) {
             if (stateEl) {
                 const message = data?.message || 'Prototype mode: proximity data not ready yet.';
@@ -547,7 +775,7 @@ export async function loadProximityView() {
             const rounds = data.sample_rounds != null ? formatNumber(data.sample_rounds) : 'n/a';
             stateEl.innerHTML = `
                 <i data-lucide="activity" class="w-4 h-4 text-brand-emerald"></i>
-                <span>Live proximity snapshot • ${rounds} rounds analyzed • ${DEFAULT_RANGE_DAYS}d window</span>
+                <span>Live proximity snapshot • ${rounds} rounds analyzed • ${escapeHtml(getScopeDescription())}</span>
             `;
         }
 
@@ -561,14 +789,15 @@ export async function loadProximityView() {
                 tradesSummaryRes,
                 tradesEventsRes
             ] = await Promise.allSettled([
-                fetchJSON(`${API_BASE}/proximity/engagements?range_days=${DEFAULT_RANGE_DAYS}`),
-                fetchJSON(`${API_BASE}/proximity/hotzones?range_days=${DEFAULT_RANGE_DAYS}`),
-                fetchJSON(`${API_BASE}/proximity/movers?range_days=${DEFAULT_RANGE_DAYS}`),
-                fetchJSON(`${API_BASE}/proximity/teamplay?limit=6`),
-                fetchJSON(`${API_BASE}/proximity/events?range_days=${DEFAULT_RANGE_DAYS}&limit=${DEFAULT_EVENTS_LIMIT}`),
-                fetchJSON(`${API_BASE}/proximity/trades/summary?range_days=${DEFAULT_RANGE_DAYS}`),
-                fetchJSON(`${API_BASE}/proximity/trades/events?range_days=${DEFAULT_RANGE_DAYS}&limit=10`)
+                fetchJSON(scopedUrl('/proximity/engagements')),
+                fetchJSON(scopedUrl('/proximity/hotzones')),
+                fetchJSON(scopedUrl('/proximity/movers')),
+                fetchJSON(scopedUrl('/proximity/teamplay', { extra: { limit: 6 } })),
+                fetchJSON(scopedUrl('/proximity/events', { extra: { limit: DEFAULT_EVENTS_LIMIT } })),
+                fetchJSON(scopedUrl('/proximity/trades/summary')),
+                fetchJSON(scopedUrl('/proximity/trades/events', { extra: { limit: 10 } }))
             ]);
+            if (loadId !== proximityScopedLoadId) return;
 
             if (timelineRes.status === 'fulfilled') {
                 renderTimeline(timelineRes.value.buckets || []);
@@ -627,8 +856,92 @@ export async function loadProximityView() {
             `;
         }
     }
+}
 
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
+function bindScopeEvents() {
+    const sessionSelect = document.getElementById('proximity-session-select');
+    const mapSelect = document.getElementById('proximity-map-select');
+    const roundSelect = document.getElementById('proximity-round-select');
+    const resetBtn = document.getElementById('proximity-reset-scope');
+
+    if (sessionSelect && !sessionSelect.dataset.bound) {
+        sessionSelect.dataset.bound = '1';
+        sessionSelect.addEventListener('change', async () => {
+            proximityScopeState.sessionDate = sessionSelect.value || null;
+            proximityScopeState.mapName = null;
+            proximityScopeState.roundNumber = null;
+            proximityScopeState.roundStartUnix = null;
+            renderScopeSelectors();
+            await loadScopedProximityData();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+    }
+
+    if (mapSelect && !mapSelect.dataset.bound) {
+        mapSelect.dataset.bound = '1';
+        mapSelect.addEventListener('change', async () => {
+            proximityScopeState.mapName = mapSelect.value || null;
+            proximityScopeState.roundNumber = null;
+            proximityScopeState.roundStartUnix = null;
+            renderScopeSelectors();
+            await loadScopedProximityData();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+    }
+
+    if (roundSelect && !roundSelect.dataset.bound) {
+        roundSelect.dataset.bound = '1';
+        roundSelect.addEventListener('change', async () => {
+            const value = roundSelect.value || '';
+            if (!value) {
+                proximityScopeState.roundNumber = null;
+                proximityScopeState.roundStartUnix = null;
+            } else {
+                const [roundStr, startStr] = value.split('|');
+                const roundNum = parseInt(roundStr, 10);
+                const roundStart = parseInt(startStr || '0', 10);
+                proximityScopeState.roundNumber = Number.isFinite(roundNum) ? roundNum : null;
+                proximityScopeState.roundStartUnix = Number.isFinite(roundStart) && roundStart > 0 ? roundStart : null;
+            }
+            renderScopeSelectors();
+            await loadScopedProximityData();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+    }
+
+    if (resetBtn && !resetBtn.dataset.bound) {
+        resetBtn.dataset.bound = '1';
+        resetBtn.addEventListener('click', async () => {
+            proximityScopeState.sessionDate = proximityScopeState.sessions[0]?.session_date || null;
+            proximityScopeState.mapName = null;
+            proximityScopeState.roundNumber = null;
+            proximityScopeState.roundStartUnix = null;
+            renderScopeSelectors();
+            await loadScopedProximityData();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+    }
+}
+
+export async function loadProximityView() {
+    if (proximityViewLoadPromise) {
+        return proximityViewLoadPromise;
+    }
+
+    proximityViewLoadPromise = (async () => {
+        resetProximityValues();
+        bindScopeEvents();
+        await loadScopeHierarchy();
+        await loadScopedProximityData();
+
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    })();
+
+    try {
+        await proximityViewLoadPromise;
+    } finally {
+        proximityViewLoadPromise = null;
     }
 }
