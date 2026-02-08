@@ -543,29 +543,14 @@ class SessionDataService:
                         )
                         SELECT
                             CASE
-                                WHEN MAX(session_total.total_seconds) > 0
-                                THEN (SUM(damage_given) * 60.0) / MAX(session_total.total_seconds)
+                                WHEN SUM(time_played_seconds) > 0
+                                THEN (SUM(damage_given) * 60.0) / SUM(time_played_seconds)
                                 ELSE 0
                             END as weighted_dpm,
                             SUM(deaths),
                             SUM(revives_given),
                             SUM(gibs)
                         FROM player_comprehensive_stats
-                        CROSS JOIN (
-                            SELECT SUM(
-                                CASE
-                                    WHEN r.actual_time LIKE '%:%' THEN
-                                        CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                                        CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                                    ELSE
-                                        CAST(r.actual_time AS INTEGER)
-                                END
-                            ) as total_seconds
-                            FROM rounds r
-                            WHERE r.id IN (SELECT id FROM target_sessions)
-                              AND r.round_number IN (1, 2)
-                              AND (r.round_status = 'completed' OR r.round_status IS NULL)
-                        ) session_total
                         WHERE round_id IN (SELECT id FROM target_sessions)
                             AND player_name = ?
                             AND player_guid IN ({team_guids_placeholders})
