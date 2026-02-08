@@ -38,34 +38,67 @@ class SessionEmbedBuilder:
         team_2_score: int,
         hardcoded_teams: bool,
         scoring_result: Optional[Dict] = None,
-        player_badges: Optional[Dict[str, str]] = None
+        player_badges: Optional[Dict[str, str]] = None,
+        full_selfkills_available: bool = True,
+        bot_session_summary: Optional[Dict[str, Any]] = None
     ) -> discord.Embed:
         """Build main session overview embed with all players and match score."""
         # Build description with match score
         desc = f"**{player_count} players** • **{rounds_played} rounds** • **Maps**: {maps_played}"
+
+        # Optional bot-only / mixed session label
+        if bot_session_summary:
+            bot_rounds = bot_session_summary.get("bot_rounds", 0)
+            total_rounds = bot_session_summary.get("total_rounds", 0)
+            bot_only = bot_session_summary.get("bot_only", False)
+            if bot_only and total_rounds > 0:
+                desc += f"\n🤖 **BOT-ONLY SESSION** • Rounds: {bot_rounds}/{total_rounds}"
+            elif bot_rounds > 0 and total_rounds > 0:
+                desc += f"\n🤖 **Mixed Session** • Bot rounds: {bot_rounds}/{total_rounds}"
         if hardcoded_teams and team_1_score + team_2_score > 0:
             if team_1_score == team_2_score:
                 desc += f"\n\n🤝 **Match Result: {team_1_score} - {team_2_score} (PERFECT TIE)**"
             else:
                 desc += f"\n\n🏆 **Match Result: {team_1_name} {team_1_score} - {team_2_score} {team_2_name}**"
-            
+
             # Add map-by-map breakdown if available
             if scoring_result and 'maps' in scoring_result:
                 desc += "\n\n**📊 Map Breakdown:**"
                 for map_result in scoring_result['maps']:
-                    map_name = map_result['map']
-                    t1_pts = map_result['team1_points']
-                    t2_pts = map_result['team2_points']
-                    
-                    # Show winner emoji
-                    if t1_pts > t2_pts:
-                        winner_emoji = "🟢"
-                    elif t2_pts > t1_pts:
-                        winner_emoji = "🔴"
+                    map_name = map_result.get('map', 'Unknown')
+                    counted = map_result.get('counted', True)
+                    note = map_result.get('note') or map_result.get('description', '').strip()
+
+                    if not counted:
+                        reason = note or "Not counted"
+                        desc += f"\n⚪ `{map_name}`: {reason}"
+                        continue
+
+                    # Support both old format (team1_points) and new format (team_a_points)
+                    t1_pts = map_result.get('team_a_points', map_result.get('team1_points', 0))
+                    t2_pts = map_result.get('team_b_points', map_result.get('team2_points', 0))
+
+                    # Get timing info if available (new format)
+                    t1_time = map_result.get('team_a_time', '')
+                    t2_time = map_result.get('team_b_time', '')
+
+                    # Use provided emoji or calculate based on points
+                    winner_emoji = map_result.get('emoji', '')
+                    if not winner_emoji:
+                        if t1_pts > t2_pts:
+                            winner_emoji = "🟢"
+                        elif t2_pts > t1_pts:
+                            winner_emoji = "🔴"
+                        else:
+                            winner_emoji = "🟡"
+
+                    # Build display string
+                    if t1_time and t2_time:
+                        # New format with timing: "🟢 mp_decoy: puran (8:45) vs sWat (fullhold)"
+                        desc += f"\n{winner_emoji} `{map_name}`: {team_1_name} ({t1_time}) vs {team_2_name} ({t2_time})"
                     else:
-                        winner_emoji = "🟡"
-                    
-                    desc += f"\n{winner_emoji} `{map_name}`: {t1_pts}-{t2_pts}"
+                        # Old format: just points
+                        desc += f"\n{winner_emoji} `{map_name}`: {t1_pts}-{t2_pts}"
 
         embed = discord.Embed(
             title=f"📊 Session Summary: {latest_date}",
@@ -89,6 +122,8 @@ class SessionEmbedBuilder:
                 total_gibs, total_revives_given, total_times_revived, total_damage_received, total_damage_given = player[12:17]
                 total_useful_kills, total_double_kills, total_triple_kills, total_quad_kills = player[17:21]
                 total_multi_kills, total_mega_kills = player[21:23]
+                total_self_kills = player[23] if len(player) > 23 else 0
+                total_full_selfkills = player[24] if len(player) > 24 else 0
 
                 # Handle NULL values
                 kills = kills or 0
@@ -191,7 +226,8 @@ class SessionEmbedBuilder:
 
                 # Line 3: Support/meta stats (UK, revives, times, multikills)
                 field_text += (
-                    f"   {total_useful_kills} UK • {total_revives_given}↑/{total_times_revived}↓ • "
+                    f"   {total_useful_kills} UK • {total_self_kills} SK • {total_full_selfkills} FSK • "
+                    f"{total_revives_given}↑/{total_times_revived}↓ • "
                     f"⏱{time_display} 💀{time_dead_display}({dead_pct:.0f}%) ⏳{time_denied_display}({denied_pct:.0f}%){multikills_display}\n\n"
                 )
             
@@ -203,7 +239,10 @@ class SessionEmbedBuilder:
             
             embed.add_field(name=field_name, value=field_text.rstrip(), inline=False)
 
-        embed.set_footer(text=f"Round: {latest_date}")
+        footer = f"Round: {latest_date}"
+        if not full_selfkills_available:
+            footer += " • FSK unavailable (missing column)"
+        embed.set_footer(text=footer)
         return embed
 
     def _build_endstats_section(
@@ -489,13 +528,29 @@ class SessionEmbedBuilder:
         unique_maps: int,
         team_1_score: int,
         team_2_score: int,
-        hardcoded_teams: bool
+        hardcoded_teams: bool,
+        detection_confidence: str = 'high'
     ) -> discord.Embed:
-        """Build team composition embed with rosters and session info."""
+        """Build team composition embed with rosters and session info.
+
+        Args:
+            detection_confidence: Team detection confidence ('high'/'medium'/'low')
+                - high: All players consistent across session
+                - medium: Mostly consistent with few variations
+                - low: Inconsistent team assignments
+        """
+        # Confidence indicator emoji
+        confidence_emoji = {
+            'high': '✅',
+            'medium': '⚠️',
+            'low': '❌'
+        }.get(detection_confidence, '❓')
+
         embed = discord.Embed(
             title="👥 Team Composition",
             description=(
                 f"Player roster for {team_1_name} vs {team_2_name}\n"
+                f"{confidence_emoji} **Detection Confidence:** {detection_confidence.upper()}\n"
                 "🔄 indicates players who swapped teams during session"
             ),
             color=0x57F287,

@@ -125,7 +125,7 @@ You should see in the logs:
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `!map_list` | List all maps in etmain/ | `!maps` |
+| `!list_maps` | List all maps in etmain/ | `!map_list` |
 | `!map_add` | Upload new map (attach .pk3) | `!addmap` + attach file |
 | `!map_change <name>` | Change current map | `!map goldrush` |
 | `!map_delete <name>` | Delete a map | `!deletemap old_map.pk3` |
@@ -445,7 +445,7 @@ In your admin channel:
 ```text
 
 !server_status
-!map_list
+!list_maps
 !rcon status
 
 ```yaml
@@ -455,7 +455,7 @@ In your admin channel:
 1. Download a test map (small .pk3 file)
 2. In admin channel: `!map_add`
 3. Attach the .pk3 file
-4. Verify it appears in `!map_list`
+4. Verify it appears in `!list_maps`
 
 ### 3. Set Up Regular Monitoring
 

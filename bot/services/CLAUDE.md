@@ -93,12 +93,14 @@ query = """
 ### Time Dead Capping (Bug Workaround)
 
 ```python
-# ET:Legacy Lua bug causes time_dead > time_played
-# Cap per-round using LEAST()
+# FIX (2026-02-01): Use time_dead_minutes directly, NOT ratio calculation!
+# The time_dead_ratio in R2 files is calculated against cumulative time_played,
+# but we store differential time_played. Using the ratio causes ~15 min/session errors.
+# Cap per-round using LEAST() to handle edge cases
 SELECT
     player_guid,
     LEAST(
-        time_played_minutes * time_dead_ratio / 100.0 * 60,
+        COALESCE(time_dead_minutes, 0) * 60,
         time_played_seconds
     ) as capped_time_dead
 FROM player_comprehensive_stats
@@ -116,7 +118,36 @@ not their actual team.
 We must use hardcoded teams or session_teams table to determine
 actual teams.
 """
+```
+
+### StopwatchScoringService
+
+**Key Methods:**
+
+1. `calculate_map_score()` - Determines map winner based on R1/R2 times
+2. `calculate_session_scores()` - Legacy method, counts rounds by side
+3. `calculate_session_scores_with_teams()` - **NEW (2026-02-01)**: Team-aware MAP scoring
+
+**Stopwatch Mode Logic:**
 ```text
+Round 1: Team A attacks (as Axis), Team B defends (as Allies)
+Round 2: Teams SWAP sides - Team B attacks, Team A defends
+
+Map Winner = faster attack time wins
+- Both complete: faster team wins the map
+- One fullholds: completing team wins
+- Double fullhold: 1-1 tie (both defended successfully)
+```
+
+**Usage in !last_session:**
+```python
+# Build team rosters from session_teams table
+team_rosters = {"puran": [guid1, guid2], "sWat": [guid3, guid4]}
+scoring = await scoring_service.calculate_session_scores_with_teams(
+    session_date, session_ids, team_rosters
+)
+# Returns: {'team_a_name': 'puran', 'team_a_maps': 3, 'team_b_maps': 2, 'maps': [...]}
+```
 
 ### SessionGraphGenerator
 

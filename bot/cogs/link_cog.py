@@ -33,7 +33,7 @@ Enhanced Features:
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict
 
 import discord
 from discord.ext import commands
@@ -64,7 +64,99 @@ class LinkCog(commands.Cog, name="Link"):
         self.bot = bot
         self.display_name_service = PlayerDisplayNameService(bot.db_adapter)
         self.player_formatter = PlayerFormatter(bot.db_adapter)
+        self.enable_link_selection_state = getattr(
+            bot.config, "enable_link_selection_state", False
+        )
+        self.selection_ttl_seconds = getattr(
+            bot.config, "link_selection_ttl_seconds", 60
+        )
+        self.pending_link_selections = {}
         logger.info("🔗 LinkCog loaded")
+
+    def _store_link_selection(self, discord_id: int, message_id: int, options: List[Dict]):
+        """Store pending link selection (in-memory, experimental)."""
+        if not self.enable_link_selection_state:
+            return
+        expires_at = datetime.utcnow().timestamp() + self.selection_ttl_seconds
+        self.pending_link_selections[discord_id] = {
+            "message_id": message_id,
+            "options": options,
+            "expires_at": expires_at,
+        }
+
+    def _get_link_selection(self, discord_id: int) -> Optional[Dict]:
+        """Get pending link selection if valid."""
+        pending = self.pending_link_selections.get(discord_id)
+        if not pending:
+            return None
+        if pending.get("expires_at", 0) < datetime.utcnow().timestamp():
+            self.pending_link_selections.pop(discord_id, None)
+            return None
+        return pending
+
+    def _clear_link_selection(self, discord_id: int) -> None:
+        """Clear pending selection for a user."""
+        if discord_id in self.pending_link_selections:
+            del self.pending_link_selections[discord_id]
+
+    async def _apply_link_selection(self, ctx, discord_id: int, selected: Dict):
+        """Apply a selected link option (shared by reactions and !select)."""
+        existing = await self.bot.db_adapter.fetch_one(
+            """
+            SELECT player_name, player_guid FROM player_links
+            WHERE discord_id = ?
+            """,
+            (discord_id,),
+        )
+        if existing:
+            await ctx.send(
+                f"⚠️ You're already linked to **{existing[0]}** (GUID: `{existing[1]}`)\n\n"
+                "Use `!unlink` first to change your linked account."
+            )
+            return
+
+        if self.bot.config.database_type == 'sqlite':
+            await self.bot.db_adapter.execute(
+                """
+                INSERT OR REPLACE INTO player_links
+                (discord_id, discord_username, player_guid, player_name, linked_at)
+                VALUES (?, ?, ?, ?, datetime('now'))
+                """,
+                (discord_id, str(ctx.author), selected["guid"], selected["name"]),
+            )
+        else:  # PostgreSQL
+            await self.bot.db_adapter.execute(
+                """
+                INSERT INTO player_links
+                (discord_id, discord_username, player_guid, player_name, linked_at)
+                VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                ON CONFLICT (discord_id) DO UPDATE SET
+                    discord_username = EXCLUDED.discord_username,
+                    player_guid = EXCLUDED.player_guid,
+                    player_name = EXCLUDED.player_name,
+                    linked_at = EXCLUDED.linked_at
+                """,
+                (discord_id, str(ctx.author), selected["guid"], selected["name"]),
+            )
+
+        success_embed = discord.Embed(
+            title="✅ Account Linked Successfully!",
+            description=f"You're now linked to **{selected['name']}**",
+            color=0x00FF00,
+        )
+        if "games" in selected and "kills" in selected:
+            success_embed.add_field(
+                name="Your Stats",
+                value=f"**Games:** {selected['games']:,}\n**Kills:** {selected['kills']:,}",
+                inline=True,
+            )
+        success_embed.add_field(
+            name="Quick Access",
+            value="• Use `!stats` (no arguments)\n• Your stats are now tracked!",
+            inline=False,
+        )
+        success_embed.set_footer(text=f"GUID: {selected['guid']}")
+        await ctx.send(embed=success_embed)
 
     @is_public_channel()
     @commands.command(name="list_players", aliases=["players", "lp"])
@@ -727,6 +819,9 @@ class LinkCog(commands.Cog, name="Link"):
                 await message.add_reaction(emoji)
             await message.add_reaction(cancel_emoji)
 
+            # Cache options for !select (optional feature flag)
+            self._store_link_selection(discord_id, message.id, options_data)
+
             # Wait for reaction
             def check(reaction, user):
                 return (
@@ -743,6 +838,7 @@ class LinkCog(commands.Cog, name="Link"):
                 # Handle cancellation
                 if str(reaction.emoji) == cancel_emoji:
                     await message.clear_reactions()
+                    self._clear_link_selection(discord_id)
                     await ctx.send(
                         "❌ Link cancelled.\n\n"
                         "💡 Use `!link` to try again or `!find_player <name>` to search for a specific player"
@@ -753,50 +849,9 @@ class LinkCog(commands.Cog, name="Link"):
                 selected_idx = emojis.index(str(reaction.emoji))
                 selected = options_data[selected_idx]
 
-                # Link the account (database-specific syntax)
-                if self.bot.config.database_type == 'sqlite':
-                    await self.bot.db_adapter.execute(
-                        """
-                        INSERT OR REPLACE INTO player_links
-                        (discord_id, discord_username, player_guid, player_name, linked_at)
-                        VALUES (?, ?, ?, ?, datetime('now'))
-                        """,
-                        (discord_id, str(ctx.author), selected["guid"], selected["name"]),
-                    )
-                else:  # PostgreSQL
-                    await self.bot.db_adapter.execute(
-                        """
-                        INSERT INTO player_links
-                        (discord_id, discord_username, player_guid, player_name, linked_at)
-                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-                        ON CONFLICT (discord_id) DO UPDATE SET
-                            discord_username = EXCLUDED.discord_username,
-                            player_guid = EXCLUDED.player_guid,
-                            player_name = EXCLUDED.player_name,
-                            linked_at = EXCLUDED.linked_at
-                        """,
-                        (discord_id, str(ctx.author), selected["guid"], selected["name"]),
-                    )
-
-                # Success!
+                await self._apply_link_selection(ctx, discord_id, selected)
                 await message.clear_reactions()
-                success_embed = discord.Embed(
-                    title="✅ Account Linked Successfully!",
-                    description=f"You're now linked to **{selected['name']}**",
-                    color=0x00FF00,
-                )
-                success_embed.add_field(
-                    name="Your Stats",
-                    value=f"**Games:** {selected['games']:,}\n**Kills:** {selected['kills']:,}",
-                    inline=True,
-                )
-                success_embed.add_field(
-                    name="Quick Access",
-                    value="• Use `!stats` (no arguments)\n• Your stats are now tracked!",
-                    inline=False,
-                )
-                success_embed.set_footer(text=f"GUID: {selected['guid']}")
-                await ctx.send(embed=success_embed)
+                self._clear_link_selection(discord_id)
 
                 logger.info(
                     f"✅ Self-link: {ctx.author} linked to {selected['name']} (GUID: {selected['guid']})"
@@ -804,6 +859,7 @@ class LinkCog(commands.Cog, name="Link"):
 
             except asyncio.TimeoutError:
                 await message.clear_reactions()
+                self._clear_link_selection(discord_id)
                 await ctx.send(
                     "⏱️ Link request timed out (60s expired).\n\n"
                     "💡 Try again with `!link` or use `!find_player <name>` to search"
@@ -1087,6 +1143,9 @@ class LinkCog(commands.Cog, name="Link"):
                 for emoji in emojis:
                     await message.add_reaction(emoji)
 
+                # Cache options for !select (optional feature flag)
+                self._store_link_selection(discord_id, message.id, options_data)
+
                 def check(reaction, user):
                     return (
                         user == ctx.author
@@ -1101,41 +1160,15 @@ class LinkCog(commands.Cog, name="Link"):
                     selected_idx = emojis.index(str(reaction.emoji))
                     selected = options_data[selected_idx]
 
-                    # Link it (database-specific syntax)
-                    if self.bot.config.database_type == 'sqlite':
-                        await self.bot.db_adapter.execute(
-                            """
-                            INSERT OR REPLACE INTO player_links
-                            (discord_id, discord_username, player_guid, player_name, linked_at)
-                            VALUES (?, ?, ?, ?, datetime('now'))
-                            """,
-                            (discord_id, str(ctx.author), selected["guid"], selected["name"]),
-                        )
-                    else:  # PostgreSQL
-                        await self.bot.db_adapter.execute(
-                            """
-                            INSERT INTO player_links
-                            (discord_id, discord_username, player_guid, player_name, linked_at)
-                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-                            ON CONFLICT (discord_id) DO UPDATE SET
-                                discord_username = EXCLUDED.discord_username,
-                                player_guid = EXCLUDED.player_guid,
-                                player_name = EXCLUDED.player_name,
-                                linked_at = EXCLUDED.linked_at
-                            """,
-                            (discord_id, str(ctx.author), selected["guid"], selected["name"]),
-                        )
-
+                    await self._apply_link_selection(ctx, discord_id, selected)
                     await message.clear_reactions()
-                    await ctx.send(
-                        f"✅ Successfully linked to **{selected['name']}** (GUID: `{selected['guid']}`)\n\n"
-                        "💡 Use `!stats` to see your stats!"
-                    )
+                    self._clear_link_selection(discord_id)
 
                     logger.info(f"✅ Name link: {ctx.author} linked to {selected['name']} (GUID: {selected['guid']})")
 
                 except asyncio.TimeoutError:
                     await message.clear_reactions()
+                    self._clear_link_selection(discord_id)
                     await ctx.send("⏱️ Selection timed out.")
 
         except Exception as e:
@@ -1463,20 +1496,37 @@ class LinkCog(commands.Cog, name="Link"):
             await ctx.send("❌ Please select 1, 2, or 3.")
             return
 
-        await ctx.send(
-            f"💡 You selected option **{selection}**!\n\n"
-            "**Note:** The `!select` command currently requires integration "
-            "with the link workflow.\n\n"
-            "**For now:**\n"
-            "• Use the reaction emojis (1️⃣/2️⃣/3️⃣) on the link message\n"
-            "• Or use `!link <GUID>` to link directly\n"
-            "• Or use `!find_player <name>` to find GUIDs\n\n"
-            "**Tip:** React to the message above within 60 seconds!"
-        )
+        if not self.enable_link_selection_state:
+            await ctx.send(
+                f"💡 You selected option **{selection}**!\n\n"
+                "**Note:** The `!select` command is disabled until verified.\n\n"
+                "**For now:**\n"
+                "• Use the reaction emojis (1️⃣/2️⃣/3️⃣) on the link message\n"
+                "• Or use `!link <GUID>` to link directly\n"
+                "• Or use `!find_player <name>` to find GUIDs\n\n"
+                "**Tip:** React to the message above within 60 seconds!"
+            )
+            return
 
-        # TODO: Implement persistent selection state
-        # This would require storing pending link requests per user
-        # and checking if they have an active selection window
+        discord_id = int(ctx.author.id)
+        pending = self._get_link_selection(discord_id)
+        if not pending:
+            await ctx.send(
+                "❌ No active selection found (or it expired).\n\n"
+                "💡 Use `!link` or `!link <name>` to start a new selection."
+            )
+            return
+
+        options = pending.get("options", [])
+        if selection < 1 or selection > len(options):
+            await ctx.send(
+                f"❌ Invalid selection. Choose 1-{len(options)}."
+            )
+            return
+
+        selected = options[selection - 1]
+        await self._apply_link_selection(ctx, discord_id, selected)
+        self._clear_link_selection(discord_id)
 
     @is_public_channel()
     @commands.command(name="setname")

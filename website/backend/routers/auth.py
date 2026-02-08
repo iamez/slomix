@@ -35,6 +35,7 @@ async def login():
 from website.backend.dependencies import get_db
 from bot.core.database_adapter import DatabaseAdapter
 from fastapi import Depends
+from website.backend.routers.api import resolve_display_name
 
 
 @router.get("/callback")
@@ -135,19 +136,61 @@ async def search_players(q: str, db: DatabaseAdapter = Depends(get_db)):
     if not q or len(q) < 2:
         return []
 
-    # Search for players matching the query (case-insensitive)
-    results = await db.fetch_all(
-        """
-        SELECT DISTINCT player_guid, player_name, clean_name
-        FROM player_comprehensive_stats
-        WHERE LOWER(player_name) LIKE LOWER($1) OR LOWER(clean_name) LIKE LOWER($1)
-        ORDER BY player_name
+    like_query = f"%{q}%"
+    # Prefer unique GUIDs to avoid duplicate aliases showing as separate players
+    advanced_query = """
+        WITH candidates AS (
+            SELECT DISTINCT player_guid
+            FROM player_comprehensive_stats
+            WHERE LOWER(player_name) LIKE LOWER($1)
+               OR LOWER(clean_name) LIKE LOWER($1)
+            UNION
+            SELECT DISTINCT guid
+            FROM player_aliases
+            WHERE LOWER(alias) LIKE LOWER($1)
+        )
+        SELECT
+            c.player_guid,
+            MAX(p.player_name) as player_name,
+            MAX(p.clean_name) as clean_name
+        FROM candidates c
+        LEFT JOIN player_comprehensive_stats p
+            ON p.player_guid = c.player_guid
+        GROUP BY c.player_guid
+        ORDER BY MAX(p.player_name) NULLS LAST
         LIMIT 20
-        """,
-        (f"%{q}%",),
-    )
+    """
+    fallback_query = """
+        SELECT
+            player_guid,
+            MAX(player_name) as player_name,
+            MAX(clean_name) as clean_name
+        FROM player_comprehensive_stats
+        WHERE LOWER(player_name) LIKE LOWER($1)
+           OR LOWER(clean_name) LIKE LOWER($1)
+        GROUP BY player_guid
+        ORDER BY MAX(player_name)
+        LIMIT 20
+    """
 
-    return [{"guid": r[0], "name": r[1], "clean_name": r[2]} for r in results]
+    try:
+        rows = await db.fetch_all(advanced_query, (like_query,))
+    except Exception:
+        rows = await db.fetch_all(fallback_query, (like_query,))
+
+    results = []
+    for guid, player_name, clean_name in rows:
+        fallback_name = player_name or clean_name or guid
+        display_name = await resolve_display_name(db, guid, fallback_name)
+        results.append(
+            {
+                "guid": guid,
+                "name": display_name,
+                "clean_name": clean_name,
+                "canonical_name": player_name or clean_name or display_name,
+            }
+        )
+    return results
 
 
 @router.post("/link")

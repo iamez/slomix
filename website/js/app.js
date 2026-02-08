@@ -14,22 +14,203 @@ import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js';
 import { checkLoginStatus, initSearchListeners, setLoadPlayerProfile } from './auth.js';
 import { loadLiveStatus, initLivePolling, updateLiveSession } from './live-status.js';
 import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js';
-import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo } from './leaderboard.js';
-import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP } from './sessions.js';
+import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo, initLeaderboardDefaults } from './leaderboard.js';
+import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js';
 import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js';
 import { loadCommunityView } from './community.js';
 import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
+import { loadProximityView } from './proximity.js';
+import { loadAdminPanelView } from './admin-panel.js';
+import {
+    initGreatshotModule,
+    loadGreatshotView,
+    loadGreatshotDemoDetail,
+} from './greatshot.js';
 import './compare.js'; // Self-registers to window
+import { getBadgesForPlayer, renderBadges, renderBadge } from './badges.js';
+import { loadSeasonLeaders, loadActivityCalendar, loadSeasonSummary } from './season-stats.js';
 
 // ============================================================================
 // NAVIGATION
 // ============================================================================
 
+const PROTOTYPE_TONE_STYLES = {
+    amber: {
+        border: 'border-brand-amber/30',
+        bg: 'bg-brand-amber/10',
+        text: 'text-brand-amber',
+        icon: 'flask-conical'
+    },
+    cyan: {
+        border: 'border-brand-cyan/30',
+        bg: 'bg-brand-cyan/10',
+        text: 'text-brand-cyan',
+        icon: 'radar'
+    },
+    rose: {
+        border: 'border-brand-rose/30',
+        bg: 'bg-brand-rose/10',
+        text: 'text-brand-rose',
+        icon: 'alert-triangle'
+    },
+    emerald: {
+        border: 'border-brand-emerald/30',
+        bg: 'bg-brand-emerald/10',
+        text: 'text-brand-emerald',
+        icon: 'badge-check'
+    }
+};
+
+function parseHashRoute() {
+    const cleanHash = window.location.hash.replace(/^#\/?/, '');
+    if (!cleanHash) return { viewId: 'home', params: {} };
+
+    const segments = cleanHash.split('/').filter(Boolean);
+    if (segments[0] === 'greatshot') {
+        if (segments[1] === 'demo' && segments[2]) {
+            return {
+                viewId: 'greatshot-demo',
+                params: { demoId: decodeURIComponent(segments[2]) }
+            };
+        }
+        const section = ['demos', 'highlights', 'clips', 'renders'].includes(segments[1] || '')
+            ? segments[1]
+            : 'demos';
+        return {
+            viewId: 'greatshot',
+            params: { section }
+        };
+    }
+
+    return { viewId: segments[0] || 'home', params: {} };
+}
+
+function initNavDropdowns() {
+    const toggles = document.querySelectorAll('[data-nav-menu-toggle]');
+
+    const closeMenu = (toggle, menu) => {
+        toggle.setAttribute('aria-expanded', 'false');
+        menu.classList.add('hidden');
+        menu.querySelectorAll('[role="menuitem"]').forEach((item) => {
+            item.tabIndex = -1;
+        });
+    };
+
+    const openMenu = (toggle, menu) => {
+        toggle.setAttribute('aria-expanded', 'true');
+        menu.classList.remove('hidden');
+        menu.querySelectorAll('[role="menuitem"]').forEach((item) => {
+            item.tabIndex = 0;
+        });
+    };
+
+    const closeAll = () => {
+        toggles.forEach((toggle) => {
+            const menuId = toggle.getAttribute('aria-controls');
+            const menu = menuId ? document.getElementById(menuId) : null;
+            if (menu) closeMenu(toggle, menu);
+        });
+    };
+
+    toggles.forEach((toggle) => {
+        const menuId = toggle.getAttribute('aria-controls');
+        const menu = menuId ? document.getElementById(menuId) : null;
+        if (!menu) return;
+
+        closeMenu(toggle, menu);
+
+        toggle.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const isOpen = toggle.getAttribute('aria-expanded') === 'true';
+            closeAll();
+            if (!isOpen) {
+                openMenu(toggle, menu);
+                const first = menu.querySelector('[role="menuitem"]');
+                if (first) first.focus();
+            }
+        });
+
+        toggle.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                openMenu(toggle, menu);
+                const first = menu.querySelector('[role="menuitem"]');
+                if (first) first.focus();
+            } else if (event.key === 'Escape') {
+                closeMenu(toggle, menu);
+                toggle.focus();
+            }
+        });
+    });
+
+    document.addEventListener('click', closeAll);
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeAll();
+    });
+}
+
+function renderPrototypeBanner(viewElement) {
+    if (!viewElement) return;
+
+    const isPrototype = viewElement.dataset.prototype === 'true';
+    const slot = viewElement.querySelector('[data-prototype-slot]');
+    const existing = slot ? slot.querySelector('.prototype-banner') : null;
+
+    if (!isPrototype) {
+        if (existing) existing.remove();
+        return;
+    }
+
+    if (!slot) return;
+
+    const title = viewElement.dataset.prototypeTitle || 'Prototype';
+    const message = viewElement.dataset.prototypeMessage || 'This view is still under active development.';
+    const toneKey = viewElement.dataset.prototypeTone || 'amber';
+    const tone = PROTOTYPE_TONE_STYLES[toneKey] || PROTOTYPE_TONE_STYLES.amber;
+
+    const banner = document.createElement('div');
+    banner.className = `prototype-banner glass-panel ${tone.border} ${tone.bg} border px-4 py-3 rounded-xl mb-6`;
+
+    const row = document.createElement('div');
+    row.className = 'flex items-start gap-3';
+
+    const iconWrap = document.createElement('div');
+    iconWrap.className = `${tone.text} mt-0.5`;
+    const icon = document.createElement('i');
+    icon.className = 'w-4 h-4';
+    icon.setAttribute('data-lucide', tone.icon);
+    iconWrap.appendChild(icon);
+
+    const textWrap = document.createElement('div');
+    const titleEl = document.createElement('div');
+    titleEl.className = `text-[11px] font-bold uppercase ${tone.text} tracking-widest`;
+    titleEl.textContent = title;
+    const messageEl = document.createElement('div');
+    messageEl.className = 'text-sm text-slate-300 mt-1';
+    messageEl.textContent = message;
+    textWrap.appendChild(titleEl);
+    textWrap.appendChild(messageEl);
+
+    row.appendChild(iconWrap);
+    row.appendChild(textWrap);
+    banner.appendChild(row);
+
+    if (existing) {
+        existing.replaceWith(banner);
+    } else {
+        slot.appendChild(banner);
+    }
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
 /**
  * Navigate to a view section
  */
-export function navigateTo(viewId, updateHistory = true) {
+export function navigateTo(viewId, updateHistory = true, params = {}) {
     console.log('Navigating to:', viewId);
 
     // Hide all views
@@ -43,6 +224,7 @@ export function navigateTo(viewId, updateHistory = true) {
     if (target) {
         target.classList.add('active');
         target.classList.remove('hidden');
+        renderPrototypeBanner(target);
     } else {
         console.error(`View not found: view-${viewId}`);
         return;
@@ -50,13 +232,34 @@ export function navigateTo(viewId, updateHistory = true) {
 
     // Update Nav Links
     document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-    const link = document.getElementById(`link-${viewId}`);
-    if (link) link.classList.add('active');
+    const navKey = viewId === 'greatshot-demo' ? 'greatshot' : viewId;
+    const statsViews = new Set(['leaderboards', 'maps', 'weapons', 'records', 'awards']);
+    const activeKeys = [`link-${navKey}`];
+    if (statsViews.has(viewId)) {
+        activeKeys.push('link-stats');
+    }
+    activeKeys.forEach((id) => {
+        const link = document.getElementById(id);
+        if (link) link.classList.add('active');
+    });
 
     // Update URL hash
     if (updateHistory) {
-        const hash = viewId === 'home' ? '' : `#/${viewId}`;
-        window.location.hash = hash;
+        let hash = '';
+        if (viewId === 'greatshot-demo' && params.demoId) {
+            hash = `#/greatshot/demo/${encodeURIComponent(params.demoId)}`;
+        } else if (viewId === 'greatshot') {
+            const section = ['demos', 'highlights', 'clips', 'renders'].includes(params.section)
+                ? params.section
+                : 'demos';
+            hash = `#/greatshot/${section}`;
+        } else if (viewId !== 'home') {
+            hash = `#/${viewId}`;
+        }
+        if (window.location.hash !== hash) {
+            window.location.hash = hash;
+            return;
+        }
     }
 
     // Scroll to top
@@ -71,12 +274,24 @@ export function navigateTo(viewId, updateHistory = true) {
         loadCommunityView();
     } else if (viewId === 'maps') {
         loadMapsView();
+    } else if (viewId === 'leaderboards') {
+        initLeaderboardDefaults();
     } else if (viewId === 'weapons') {
         loadWeaponsView();
     } else if (viewId === 'records') {
         loadRecordsView();
     } else if (viewId === 'awards') {
         loadAwardsView();
+    } else if (viewId === 'proximity') {
+        loadProximityView();
+    } else if (viewId === 'greatshot') {
+        loadGreatshotView(params.section || 'demos');
+    } else if (viewId === 'greatshot-demo') {
+        if (params.demoId) {
+            loadGreatshotDemoDetail(params.demoId);
+        }
+    } else if (viewId === 'admin') {
+        loadAdminPanelView();
     }
 }
 
@@ -92,15 +307,18 @@ window.loadPlayerProfile = loadPlayerProfile;
 window.loadMatchDetails = loadMatchDetails;
 window.loadLeaderboard = loadLeaderboard;
 window.loadAwardsView = loadAwardsView;
+window.getBadgesForPlayer = getBadgesForPlayer;
+window.renderBadges = renderBadges;
+window.renderBadge = renderBadge;
+window.toggleSeasonDetails = toggleSeasonDetails;
 
 // ============================================================================
 // BROWSER HISTORY
 // ============================================================================
 
-window.addEventListener('popstate', () => {
-    const hash = window.location.hash.replace('#/', '');
-    const viewId = hash || 'home';
-    navigateTo(viewId, false);
+window.addEventListener('hashchange', () => {
+    const route = parseHashRoute();
+    navigateTo(route.viewId, false, route.params);
 });
 
 // ============================================================================
@@ -118,11 +336,41 @@ async function loadOverviewStats() {
         const statPlayers = document.getElementById('stat-players');
         const statSessions = document.getElementById('stat-sessions');
         const statKills = document.getElementById('stat-kills');
+        const roundsSince = document.getElementById('stat-rounds-since');
+        const roundsRecent = document.getElementById('stat-rounds-14d');
+        const playersAll = document.getElementById('stat-players-all');
+        const sessionsRecent = document.getElementById('stat-sessions-14d');
+        const killsRecent = document.getElementById('stat-kills-14d');
+        const activeAll = document.getElementById('stat-active-all-name');
+        const activeAllCount = document.getElementById('stat-active-all-count');
+        const activeRecent = document.getElementById('stat-active-14d-name');
+        const activeRecentCount = document.getElementById('stat-active-14d-count');
 
-        if (statRounds) statRounds.textContent = formatNumber(data.rounds);
-        if (statPlayers) statPlayers.textContent = formatNumber(data.players);
-        if (statSessions) statSessions.textContent = formatNumber(data.sessions);
-        if (statKills) statKills.textContent = formatNumber(data.total_kills);
+        const formatDateLabel = (raw) => {
+            if (!raw) return '--';
+            const parts = String(raw).split('-');
+            if (parts.length !== 3) return raw;
+            const [year, month, day] = parts;
+            const date = new Date(`${year}-${month}-${day}T00:00:00`);
+            if (Number.isNaN(date.getTime())) return raw;
+            return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        };
+
+        if (statRounds) statRounds.textContent = formatNumber(data.rounds || 0);
+        if (statPlayers) statPlayers.textContent = formatNumber(data.players_14d ?? data.players ?? 0);
+        if (statSessions) statSessions.textContent = formatNumber(data.sessions || 0);
+        if (statKills) statKills.textContent = formatNumber(data.total_kills || 0);
+
+        if (roundsSince) roundsSince.textContent = data.rounds_since ? `Since ${formatDateLabel(data.rounds_since)}` : 'Since --';
+        if (roundsRecent) roundsRecent.textContent = `Last ${data.window_days || 14}d: ${formatNumber(data.rounds_14d || 0)}`;
+        if (playersAll) playersAll.textContent = `All-time: ${formatNumber(data.players_all_time || 0)}`;
+        if (sessionsRecent) sessionsRecent.textContent = `Last ${data.window_days || 14}d: ${formatNumber(data.sessions_14d || 0)}`;
+        if (killsRecent) killsRecent.textContent = `Last ${data.window_days || 14}d: ${formatNumber(data.total_kills_14d || 0)}`;
+
+        if (activeAll) activeAll.textContent = data.most_active_overall?.name || '--';
+        if (activeAllCount) activeAllCount.textContent = data.most_active_overall ? `${data.most_active_overall.rounds} rounds` : '-- rounds';
+        if (activeRecent) activeRecent.textContent = data.most_active_14d?.name || '--';
+        if (activeRecentCount) activeRecentCount.textContent = data.most_active_14d ? `${data.most_active_14d.rounds} rounds` : '-- rounds';
     } catch (e) {
         console.error('Failed to load overview stats:', e);
     }
@@ -167,6 +415,14 @@ async function loadPredictions() {
  */
 async function initApp() {
     console.log('🚀 Slomix App Initializing...');
+    initNavDropdowns();
+    initGreatshotModule();
+
+    // Prototype banner for initial view
+    const activeView = document.querySelector('.view-section.active');
+    if (activeView) {
+        renderPrototypeBanner(activeView);
+    }
 
     // Check API Status
     try {
@@ -198,6 +454,9 @@ async function initApp() {
     loadMatchesView();
     checkLoginStatus();
     loadLiveStatus();
+    loadSeasonLeaders();
+    loadActivityCalendar();
+    loadSeasonSummary();
 
     // Initialize search listeners
     initSearchListeners();
@@ -209,9 +468,9 @@ async function initApp() {
     setInterval(loadLiveStatus, 30000);
 
     // Handle initial URL hash
-    const hash = window.location.hash.replace('#/', '');
-    if (hash && hash !== 'home') {
-        navigateTo(hash, false);
+    const route = parseHashRoute();
+    if (route.viewId && route.viewId !== 'home') {
+        navigateTo(route.viewId, false, route.params);
     }
 
     console.log('✅ Slomix App Ready');

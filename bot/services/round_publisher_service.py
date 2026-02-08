@@ -27,9 +27,10 @@ class RoundPublisherService:
     3. Build rich Discord embed with ALL players ranked by kills
     4. Post to production channel
     5. Check if map complete → Post aggregate map summary if last round
+    6. Post timing debug comparison if enabled
     """
 
-    def __init__(self, bot, config, db_adapter):
+    def __init__(self, bot, config, db_adapter, timing_debug_service=None, timing_comparison_service=None):
         """
         Initialize round publisher service.
 
@@ -37,10 +38,14 @@ class RoundPublisherService:
             bot: Discord bot instance (for channel access)
             config: BotConfig instance (for production_channel_id)
             db_adapter: DatabaseAdapter instance (for database queries)
+            timing_debug_service: Optional TimingDebugService for timing comparisons
+            timing_comparison_service: Optional TimingComparisonService for per-player timing analysis
         """
         self.bot = bot
         self.config = config
         self.db_adapter = db_adapter
+        self.timing_debug_service = timing_debug_service
+        self.timing_comparison_service = timing_comparison_service
 
         logger.info("✅ RoundPublisherService initialized")
 
@@ -105,6 +110,40 @@ class RoundPublisherService:
             db_winner_team = round_info[2] if round_info else winner_team
             db_round_outcome = round_info[3] if round_info else round_outcome
 
+            # If Lua override metadata is available, prefer corrected playtime for display
+            override_metadata = result.get('override_metadata') or {}
+            lua_duration = (
+                override_metadata.get('actual_duration_seconds')
+                or override_metadata.get('lua_playtime_seconds')
+                or 0
+            )
+            corrected_time = None
+            if lua_duration and int(lua_duration) > 0:
+                mins = int(lua_duration) // 60
+                secs = int(lua_duration) % 60
+                corrected_time = f"{mins}:{secs:02d}"
+                actual_time = corrected_time
+
+            # Sanity cap: orphan R2 files may have cumulative server time
+            # (e.g., 79:20 for a 12:00 map). Cap to time_limit for display.
+            if not corrected_time and actual_time and time_limit:
+                if actual_time != 'Unknown' and time_limit != 'Unknown':
+                    try:
+                        def _time_to_seconds(t):
+                            parts = t.split(':')
+                            return int(parts[0]) * 60 + int(parts[1]) if len(parts) == 2 else 0
+                        actual_sec = _time_to_seconds(actual_time)
+                        limit_sec = _time_to_seconds(time_limit)
+                        if limit_sec > 0 and actual_sec > limit_sec:
+                            raw_time = actual_time
+                            actual_time = time_limit
+                            logger.warning(
+                                f"[TIMING] Capped display actual_time to {time_limit} "
+                                f"(raw was {raw_time}, exceeded time_limit)"
+                            )
+                    except (ValueError, TypeError, IndexError):
+                        pass
+
             # Get player stats (expanded to include multikills and time denied)
             players_query = """
                 SELECT
@@ -164,9 +203,11 @@ class RoundPublisherService:
 
             # Add time information (limit vs actual)
             if time_limit and actual_time and time_limit != 'Unknown' and actual_time != 'Unknown':
-                description_parts.append(f"⏱️ **Time:** {actual_time} / {time_limit}")
+                time_note = " (Lua)" if corrected_time else ""
+                description_parts.append(f"⏱️ **Time:** {actual_time} / {time_limit}{time_note}")
             elif actual_time and actual_time != 'Unknown':
-                description_parts.append(f"⏱️ **Duration:** {actual_time}")
+                time_note = " (Lua)" if corrected_time else ""
+                description_parts.append(f"⏱️ **Duration:** {actual_time}{time_note}")
 
             # Add round outcome - use DB values if available
             outcome_to_show = db_round_outcome if db_round_outcome else round_outcome
@@ -368,6 +409,21 @@ class RoundPublisherService:
 
             # 🗺️ Check if this was the last round for the map → post map summary
             await self._check_and_post_map_completion(round_id, map_name, round_num, channel)
+
+            # ⏱️ Post timing debug comparison (stats file vs Lua webhook)
+            if self.timing_debug_service and self.timing_debug_service.enabled:
+                await self.timing_debug_service.post_round_timing_comparison(
+                    round_id=round_id
+                )
+
+            # 👥 Post per-player timing comparison (dev channel)
+            if (self.timing_comparison_service and
+                self.config.timing_comparison_enabled and
+                self.config.dev_timing_channel_id):
+                await self.timing_comparison_service.post_timing_comparison(
+                    round_id=round_id,
+                    dev_channel_id=self.config.dev_timing_channel_id
+                )
 
             logger.info("=" * 60)
 

@@ -1,5 +1,5 @@
 -- ============================================================
--- PROXIMITY TRACKER v4.1 - FULL PLAYER TRACKING + TEST MODE
+-- PROXIMITY TRACKER v4.2 - FULL PLAYER TRACKING + HARDENING
 -- ET:Legacy Lua Module for Combat Analytics
 --
 -- KEY FEATURES (v4):
@@ -31,13 +31,17 @@
 -- ============================================================
 
 local modname = "proximity_tracker"
-local version = "4.1"
+local version = "4.2"
 
 -- ===== CONFIGURATION =====
 local config = {
     enabled = true,
     debug = false,
     output_dir = "proximity/",  -- Separate from gamestats/ to avoid mixing data
+    output_delay_ms = 0,        -- Delay output after intermission to reduce lag spikes
+    max_string_length = 256,    -- Safety limit for names/strings
+    log_in_intermission = false, -- Reduce log spam during intermission
+    output_guard = true,        -- Prevent double output on gamestate flicker
 
     -- Crossfire detection
     crossfire_window_ms = 1000,     -- 1 second for crossfire detection
@@ -55,6 +59,135 @@ local config = {
     -- Minimum damage to count
     min_damage = 1,
 
+    -- Objective tracking (optional)
+    objective_tracking = true,
+    objective_radius = 500,  -- units (matches Oksii MAX_OBJ_DISTANCE)
+    objectives = {
+        -- Coordinates sourced from proximity/objective_coords_template.json
+        Karsiah_te2 = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        adlernest = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        battery = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        braundorf_b4 = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        bremen_b2 = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        bremen_b3 = {
+            { name = "truck_escape", x = -3143, y = -589, z = 128, type = "escort" },
+        },
+        default = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        dubrovnik_final = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        erdenberg_t1 = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        erdenberg_t2 = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        et_beach = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        et_ice = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        et_ufo_final = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        etl_adlernest = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        etl_frostbite = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        etl_ice = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        etl_sp_delivery = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        etl_supply = {
+            { name = "crane_controls", x = 656, y = -1360, z = 372, type = "misc" },
+            { name = "truck_escape", x = 2720, y = 1376, z = 192, type = "escort" },
+        },
+        frostbite = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        fueldump = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        goldrush = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        karsiah_te2 = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        mp_sillyctf = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        mp_sub_rc1 = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        oasis = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        pha_chateau = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        radar = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        railgun = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        reactor_final = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        sp_delivery_te = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        supply = {
+            { name = "crane_controls", x = 656, y = -1360, z = 372, type = "misc" },
+            { name = "truck_escape", x = 2720, y = 1376, z = 192, type = "escort" },
+        },
+        supplydepot2 = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        sw_battery = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        sw_goldrush_te = {
+            { name = "tank_breakout", x = 1860, y = -80, z = -96, type = "escort" },
+            { name = "truck_escape", x = -3310, y = -1060, z = -31, type = "escort" },
+        },
+        sw_oasis_b3 = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        tc_base = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        te_escape2 = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        the_station = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        warbell = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+        wolken1_b1 = {
+            -- TODO: add coordinates (see proximity/objective_coords_template.json)
+        },
+    },
     -- ===== TEST MODE (v4.1) =====
     -- When enabled, disables advanced analytics and outputs human-readable lifecycle log
     test_mode = {
@@ -83,10 +216,113 @@ local function isFeatureEnabled(feature_name)
     return config.features[feature_name]
 end
 
+local function logObjectiveConfigSummary()
+    if not config.objective_tracking then
+        return
+    end
+    local total_maps = 0
+    local maps_with_coords = 0
+    local total_objectives = 0
+    local missing = {}
+
+    for map_name, objectives in pairs(config.objectives or {}) do
+        total_maps = total_maps + 1
+        local has_coords = false
+        if type(objectives) == "table" then
+            for _, obj in ipairs(objectives) do
+                if type(obj) == "table" and obj.x ~= nil and obj.y ~= nil and obj.z ~= nil then
+                    total_objectives = total_objectives + 1
+                    has_coords = true
+                end
+            end
+        end
+        if has_coords then
+            maps_with_coords = maps_with_coords + 1
+        else
+            table.insert(missing, map_name)
+        end
+    end
+
+    et.G_Print(string.format(
+        ">>> Objective coords: %d/%d maps configured (%d objectives)\n",
+        maps_with_coords, total_maps, total_objectives
+    ))
+
+    if #missing > 0 then
+        table.sort(missing)
+        local preview = {}
+        local limit = 10
+        for i = 1, math.min(#missing, limit) do
+            table.insert(preview, missing[i])
+        end
+        local suffix = (#missing > limit) and string.format(" (+%d more)", #missing - limit) or ""
+        et.G_Print(">>> Objective coords missing: " .. table.concat(preview, ", ") .. suffix .. "\n")
+    end
+end
+
+local last_gentity_error_time = 0
+
+local function safe_gentity_get(clientnum, field)
+    local ok, value = pcall(et.gentity_get, clientnum, field)
+    if ok then
+        return value
+    end
+    local now = (et.trap_Milliseconds and et.trap_Milliseconds()) or (os.time() * 1000)
+    if now - last_gentity_error_time > 5000 then
+        et.G_Print(string.format("[proximity] gentity_get failed client=%d field=%s err=%s\n",
+            clientnum, field, tostring(value)))
+        last_gentity_error_time = now
+    end
+    return nil
+end
+
+local function get_max_clients()
+    local max_clients = tonumber(et.trap_Cvar_Get("sv_maxclients")) or 0
+    if max_clients <= 0 or max_clients > 64 then
+        max_clients = 64
+    end
+    return max_clients
+end
+
+local function isValidClient(clientnum)
+    if type(clientnum) ~= "number" then
+        return false
+    end
+    local max_clients = get_max_clients()
+    return clientnum >= 0 and clientnum < max_clients
+end
+
 -- ===== MOVEMENT STATE BIT FLAGS =====
 local PMF_DUCKED = 1        -- Crouching
 local PMF_PRONE = 512       -- Prone
 local PMF_SPRINT = 16384    -- Sprinting
+
+-- ===== GAMESTATE CONSTANTS =====
+-- ET:Legacy Lua exposes these constants
+local GS_INTERMISSION = et.GS_INTERMISSION or 3
+
+-- ===== BIT OPERATIONS (LuaJIT/Lua 5.1 / Lua 5.4 compatible) =====
+-- Prefer built-ins if available; only require("bit") if it exists.
+local bit = nil
+if _G.bit then
+    bit = _G.bit
+elseif _G.bit32 then
+    bit = _G.bit32
+else
+    local ok, lib = pcall(require, "bit")
+    if ok then
+        bit = lib
+    end
+end
+
+local function has_flag(value, flag)
+    -- Fallback if bit library not available: use modular arithmetic
+    if bit and bit.band then
+        return bit.band(value, flag) ~= 0
+    end
+    -- Modular arithmetic fallback
+    return math.floor(value / flag) % 2 == 1
+end
 
 -- ===== MODULE DATA =====
 local tracker = {
@@ -99,6 +335,9 @@ local tracker = {
     -- Heatmaps (aggregated during round)
     kill_heatmap = {},      -- grid_key -> {axis, allies}
     movement_heatmap = {},  -- grid_key -> {traversal, combat}
+
+    -- Objective focus stats (optional)
+    objective_stats = {},
 
     -- Round info
     round = {
@@ -119,13 +358,26 @@ local tracker = {
     last_sample_time = 0,       -- Last global sample timestamp
 
     -- v4.1: Action event buffer for test mode (clientnum -> array of action events)
-    action_buffer = {}
+    action_buffer = {},
+
+    -- Output guard flags
+    output_in_progress = false,
+    output_written = false,
+    output_pending = false,
+    output_due_ms = 0
 }
+
+-- Round unix timestamps (Oksii-style)
+local round_start_unix = 0
+local round_end_unix = 0
+
+-- Client cache (GUID/team/name)
+local client_cache = {}
 
 -- ===== UTILITY FUNCTIONS =====
 
 local function getPlayerPos(clientnum)
-    local origin = et.gentity_get(clientnum, "ps.origin")
+    local origin = safe_gentity_get(clientnum, "ps.origin")
     if not origin then return nil end
     return {
         x = tonumber(origin[1]) or 0,
@@ -135,11 +387,19 @@ local function getPlayerPos(clientnum)
 end
 
 local function getPlayerGUID(clientnum)
+    if not isValidClient(clientnum) then
+        return string.format("WORLD_%s", tostring(clientnum))
+    end
     -- Primary method: get from userinfo (most reliable)
+    if client_cache[clientnum] and client_cache[clientnum].guid then
+        return client_cache[clientnum].guid
+    end
     local userinfo = et.trap_GetUserinfo(clientnum)
     if userinfo then
         local guid = et.Info_ValueForKey(userinfo, "cl_guid")
         if guid and guid ~= "" then
+            client_cache[clientnum] = client_cache[clientnum] or {}
+            client_cache[clientnum].guid = guid
             return guid
         end
     end
@@ -156,16 +416,54 @@ local function sanitizeName(name)
     name = string.gsub(name, ",", "_")  -- comma breaks sub-field separator
     name = string.gsub(name, "\n", "")  -- newline breaks line parsing
     name = string.gsub(name, "\r", "")  -- carriage return
+    if config.max_string_length and #name > config.max_string_length then
+        name = string.sub(name, 1, config.max_string_length)
+    end
     return name
 end
 
+local function updateClientCache(clientnum)
+    local userinfo = et.trap_GetUserinfo(clientnum)
+    local guid = nil
+    if userinfo then
+        guid = et.Info_ValueForKey(userinfo, "cl_guid")
+    end
+    local name = safe_gentity_get(clientnum, "pers.netname") or "Unknown"
+    name = sanitizeName(name)
+    local team = safe_gentity_get(clientnum, "sess.sessionTeam")
+    local team_name = "SPEC"
+    if team == 1 then team_name = "AXIS"
+    elseif team == 2 then team_name = "ALLIES"
+    end
+    client_cache[clientnum] = {
+        guid = guid or string.format("SLOT%d", clientnum),
+        name = name,
+        team = team_name
+    }
+end
+
 local function getPlayerName(clientnum)
-    local name = et.gentity_get(clientnum, "pers.netname") or "Unknown"
-    return sanitizeName(name)
+    if not isValidClient(clientnum) then
+        return "World"
+    end
+    if client_cache[clientnum] and client_cache[clientnum].name then
+        return client_cache[clientnum].name
+    end
+    local name = safe_gentity_get(clientnum, "pers.netname") or "Unknown"
+    name = sanitizeName(name)
+    client_cache[clientnum] = client_cache[clientnum] or {}
+    client_cache[clientnum].name = name
+    return name
 end
 
 local function getPlayerTeam(clientnum)
-    local team = et.gentity_get(clientnum, "sess.sessionTeam")
+    if not isValidClient(clientnum) then
+        return "SPEC"
+    end
+    if client_cache[clientnum] and client_cache[clientnum].team then
+        return client_cache[clientnum].team
+    end
+    local team = safe_gentity_get(clientnum, "sess.sessionTeam")
     if team == 1 then return "AXIS"
     elseif team == 2 then return "ALLIES"
     else return "SPEC"
@@ -173,9 +471,12 @@ local function getPlayerTeam(clientnum)
 end
 
 local function isPlayerActive(clientnum)
-    local connected = et.gentity_get(clientnum, "pers.connected")
+    if not isValidClient(clientnum) then
+        return false
+    end
+    local connected = safe_gentity_get(clientnum, "pers.connected")
     if connected ~= 2 then return false end
-    local team = et.gentity_get(clientnum, "sess.sessionTeam")
+    local team = safe_gentity_get(clientnum, "sess.sessionTeam")
     return team == 1 or team == 2
 end
 
@@ -202,10 +503,66 @@ local function gameTime()
     return et.trap_Milliseconds() - tracker.round.start_time
 end
 
+local function getMapName()
+    local serverinfo = et.trap_GetConfigstring(0)
+    local mapname = ""
+    if serverinfo then
+        mapname = et.Info_ValueForKey(serverinfo, "mapname") or ""
+    end
+    if not mapname or mapname == "" then
+        mapname = et.trap_Cvar_Get("mapname") or ""
+    end
+    if not mapname or mapname == "" then
+        mapname = "unknown"
+    end
+    return mapname
+end
+
+local function refreshRoundInfo()
+    tracker.round.map_name = getMapName()
+    local round_str = et.trap_Cvar_Get("g_currentRound")
+    local round_num = tonumber(round_str) or 1
+    if round_num < 1 then
+        round_num = 1
+    end
+    tracker.round.round_num = round_num
+end
+
+local function proxPrint(msg)
+    local gs = tonumber(et.trap_Cvar_Get("gamestate")) or -1
+    if gs == GS_INTERMISSION and not config.log_in_intermission then
+        return
+    end
+    et.G_Print(msg)
+end
+
+local function getObjectivesForMap(map_name)
+    if not config.objective_tracking then
+        return nil
+    end
+    return config.objectives[map_name]
+end
+
+local function getNearestObjective(pos, objectives)
+    if not pos or not objectives then
+        return nil, nil
+    end
+    local best_name = nil
+    local best_dist = nil
+    for _, obj in ipairs(objectives) do
+        local dist = distance3D(pos, obj)
+        if not best_dist or dist < best_dist then
+            best_dist = dist
+            best_name = obj.name
+        end
+    end
+    return best_name, best_dist
+end
+
 -- ===== PLAYER STATE FUNCTIONS =====
 
 local function getPlayerVelocity(clientnum)
-    local vel = et.gentity_get(clientnum, "ps.velocity")
+    local vel = safe_gentity_get(clientnum, "ps.velocity")
     if not vel then return 0, 0, 0 end
     return tonumber(vel[1]) or 0, tonumber(vel[2]) or 0, tonumber(vel[3]) or 0
 end
@@ -217,20 +574,20 @@ local function getPlayerSpeed(clientnum)
 end
 
 local function getPlayerMovementState(clientnum)
-    local pm_flags = et.gentity_get(clientnum, "ps.pm_flags") or 0
+    local pm_flags = safe_gentity_get(clientnum, "ps.pm_flags") or 0
 
     -- Decode stance: 0=standing, 1=crouching, 2=prone
-    -- Lua 5.4 uses native & operator for bitwise AND
+    -- Uses has_flag() for LuaJIT/Lua 5.1 compatibility
     local stance = 0
-    if (pm_flags & PMF_PRONE) ~= 0 then
+    if has_flag(pm_flags, PMF_PRONE) then
         stance = 2
-    elseif (pm_flags & PMF_DUCKED) ~= 0 then
+    elseif has_flag(pm_flags, PMF_DUCKED) then
         stance = 1
     end
 
     -- Check sprint
     local sprinting = 0
-    if (pm_flags & PMF_SPRINT) ~= 0 then
+    if has_flag(pm_flags, PMF_SPRINT) then
         sprinting = 1
     end
 
@@ -238,7 +595,7 @@ local function getPlayerMovementState(clientnum)
 end
 
 local function getPlayerClass(clientnum)
-    local ptype = et.gentity_get(clientnum, "sess.playerType") or 0
+    local ptype = safe_gentity_get(clientnum, "sess.playerType") or 0
     local classes = { [0] = "SOLDIER", [1] = "MEDIC", [2] = "ENGINEER", [3] = "FIELDOPS", [4] = "COVERTOPS" }
     return classes[ptype] or "UNKNOWN"
 end
@@ -316,8 +673,8 @@ local function createPlayerTrack(clientnum)
 
     -- Record spawn position as first sample
     if pos then
-        local health = et.gentity_get(clientnum, "health") or 100
-        local weapon = et.gentity_get(clientnum, "ps.weapon") or 0
+        local health = safe_gentity_get(clientnum, "health") or 100
+        local weapon = safe_gentity_get(clientnum, "ps.weapon") or 0
         local stance, sprint = getPlayerMovementState(clientnum)
         local speed = getPlayerSpeed(clientnum)
 
@@ -350,8 +707,8 @@ local function samplePlayer(clientnum, track, event_type)
     local pos = getPlayerPos(clientnum)
     if not pos then return end
 
-    local health = et.gentity_get(clientnum, "health") or 0
-    local weapon = et.gentity_get(clientnum, "ps.weapon") or 0
+    local health = safe_gentity_get(clientnum, "health") or 0
+    local weapon = safe_gentity_get(clientnum, "ps.weapon") or 0
     local stance, sprint = getPlayerMovementState(clientnum)
     local speed = getPlayerSpeed(clientnum)
 
@@ -396,7 +753,7 @@ local function endPlayerTrack(clientnum, death_pos, death_type, killer_name)
     -- Add final sample
     if death_pos then
         local health = 0
-        local weapon = et.gentity_get(clientnum, "ps.weapon") or 0
+        local weapon = safe_gentity_get(clientnum, "ps.weapon") or 0
         table.insert(track.path, {
             time = track.death_time,
             x = round(death_pos.x, 1),
@@ -430,10 +787,38 @@ local function sampleAllPlayers()
     end
     tracker.last_sample_time = now
 
+    local objectives = getObjectivesForMap(tracker.round.map_name)
+
     -- Sample all tracked players
     for clientnum, track in pairs(tracker.player_tracks) do
         if isPlayerActive(clientnum) then
             samplePlayer(clientnum, track, "sample")
+
+            if objectives and config.objective_tracking then
+                local pos = getPlayerPos(clientnum)
+                local obj_name, dist = getNearestObjective(pos, objectives)
+                if obj_name and dist then
+                    local stats = tracker.objective_stats[track.guid]
+                    if not stats then
+                        stats = {
+                            guid = track.guid,
+                            name = track.name,
+                            team = track.team,
+                            samples = 0,
+                            distance_sum = 0,
+                            time_within_radius_ms = 0,
+                            objective_counts = {}
+                        }
+                        tracker.objective_stats[track.guid] = stats
+                    end
+                    stats.samples = stats.samples + 1
+                    stats.distance_sum = stats.distance_sum + dist
+                    stats.objective_counts[obj_name] = (stats.objective_counts[obj_name] or 0) + 1
+                    if dist <= config.objective_radius then
+                        stats.time_within_radius_ms = stats.time_within_radius_ms + config.position_sample_interval
+                    end
+                end
+            end
         end
     end
 end
@@ -494,6 +879,9 @@ local function createEngagement(target_slot)
 end
 
 local function recordHit(engagement, attacker_slot, damage, weapon)
+    if not isValidClient(attacker_slot) then
+        return
+    end
     local now = gameTime()
     local attacker_guid = getPlayerGUID(attacker_slot)
     local target_pos = getPlayerPos(engagement.target_slot)
@@ -612,7 +1000,7 @@ local function closeEngagement(engagement, outcome, killer_slot)
     end
     
     -- If killed, mark the killer
-    if outcome == "killed" and killer_slot then
+    if outcome == "killed" and killer_slot and isValidClient(killer_slot) and isPlayerActive(killer_slot) then
         local killer_guid = getPlayerGUID(killer_slot)
         engagement.killer_guid = killer_guid
         engagement.killer_name = getPlayerName(killer_slot)
@@ -635,6 +1023,9 @@ local function closeEngagement(engagement, outcome, killer_slot)
                 tracker.kill_heatmap[key].allies = tracker.kill_heatmap[key].allies + 1
             end
         end
+    else
+        engagement.killer_guid = nil
+        engagement.killer_name = nil
     end
 
     -- Escape movement heatmap (only if feature enabled)
@@ -754,25 +1145,41 @@ local function serializeTrackPath(path)
 end
 
 local function outputData()
+    if config.output_guard and (tracker.output_in_progress or tracker.output_written) then
+        proxPrint("[PROX] Output already written or in progress, skipping\n")
+        return
+    end
+    tracker.output_in_progress = true
+
     if #tracker.completed == 0 and #tracker.completed_tracks == 0 then
-        et.G_Print("[PROX] No data to output\n")
+    proxPrint("[PROX] No data to output\n")
+        tracker.output_in_progress = false
         return
     end
 
     -- Filename: gamestats/YYYY-MM-DD-HHMMSS-mapname-round-N_engagements.txt
+    if tracker.round.map_name == "" or tracker.round.map_name == "unknown" then
+        refreshRoundInfo()
+    end
     local filename = string.format("%s%s-%s-round-%d_engagements.txt",
         config.output_dir,
         os.date('%Y-%m-%d-%H%M%S'),
         tracker.round.map_name,
         tracker.round.round_num)
 
-    et.G_Print("[PROX] Attempting to write: " .. filename .. "\n")
+    proxPrint("[PROX] Attempting to write: " .. filename .. "\n")
+    local fs_basepath = et.trap_Cvar_Get("fs_basepath") or ""
+    local fs_game = et.trap_Cvar_Get("fs_game") or ""
+    if fs_basepath ~= "" and fs_game ~= "" then
+        proxPrint(string.format("[PROX] Output dir (resolved): %s/%s/%s\n", fs_basepath, fs_game, config.output_dir))
+    end
 
     -- et.FS_WRITE = 1 (write mode)
     local fd, len = et.trap_FS_FOpenFile(filename, 1)
     if not fd or fd == -1 or fd == 0 then
         et.G_Print("[PROX] ERROR: Could not open file for writing: " .. filename .. "\n")
         et.G_Print("[PROX] Check that " .. config.output_dir .. " directory exists!\n")
+        tracker.output_in_progress = false
         return
     end
     
@@ -784,13 +1191,17 @@ local function outputData()
         "# crossfire_window=%d\n" ..
         "# escape_time=%d\n" ..
         "# escape_distance=%d\n" ..
-        "# position_sample_interval=%d\n",
+        "# position_sample_interval=%d\n" ..
+        "# round_start_unix=%d\n" ..
+        "# round_end_unix=%d\n",
         tracker.round.map_name,
         tracker.round.round_num,
         config.crossfire_window_ms,
         config.escape_time_ms,
         config.escape_distance,
-        config.position_sample_interval
+        config.position_sample_interval,
+        round_start_unix,
+        round_end_unix
     )
     et.trap_FS_Write(header, string.len(header), fd)
     
@@ -884,6 +1295,37 @@ local function outputData()
             gx, gy, data.traversal, data.combat, data.escape)
         et.trap_FS_Write(line, string.len(line), fd)
     end
+
+    -- Objective focus (optional)
+    if config.objective_tracking and next(tracker.objective_stats) then
+        local obj_header = "\n# OBJECTIVE_FOCUS\n# guid;name;team;objective;avg_distance;time_within_radius_ms;samples\n"
+        et.trap_FS_Write(obj_header, string.len(obj_header), fd)
+
+        for guid, stats in pairs(tracker.objective_stats) do
+            local top_obj = ""
+            local top_count = 0
+            for name, count in pairs(stats.objective_counts or {}) do
+                if count > top_count then
+                    top_obj = name
+                    top_count = count
+                end
+            end
+            local avg_dist = 0
+            if stats.samples > 0 then
+                avg_dist = stats.distance_sum / stats.samples
+            end
+            local line = string.format("%s;%s;%s;%s;%.1f;%d;%d\n",
+                guid,
+                stats.name,
+                stats.team,
+                top_obj,
+                avg_dist,
+                stats.time_within_radius_ms or 0,
+                stats.samples or 0
+            )
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
     
     et.trap_FS_FCloseFile(fd)
 
@@ -897,14 +1339,17 @@ local function outputData()
         total_samples = total_samples + #track.path
     end
 
-    et.G_Print(string.format("[PROX] Saved: %d tracks (%d samples), %d engagements (%d crossfire)\n",
+    proxPrint(string.format("[PROX] Saved: %d tracks (%d samples), %d engagements (%d crossfire)\n",
         #tracker.completed_tracks, total_samples, #tracker.completed, crossfire_count))
-    et.G_Print(string.format("[PROX] Output: %s\n", filename))
+    proxPrint(string.format("[PROX] Output: %s\n", filename))
 
     -- v4.1: Output lifecycle log if test mode enabled
     if config.test_mode.enabled and config.test_mode.lifecycle_log then
         outputLifecycleLog()
     end
+
+    tracker.output_in_progress = false
+    tracker.output_written = true
 end
 
 -- ===== LIFECYCLE LOG OUTPUT (v4.1) =====
@@ -923,7 +1368,7 @@ outputLifecycleLog = function()
         tracker.round.map_name,
         tracker.round.round_num)
 
-    et.G_Print("[PROX] Writing lifecycle log: " .. filename .. "\n")
+    proxPrint("[PROX] Writing lifecycle log: " .. filename .. "\n")
 
     local fd, len = et.trap_FS_FOpenFile(filename, 1)
     if not fd or fd == -1 or fd == 0 then
@@ -1048,18 +1493,27 @@ end
 function et_InitGame(levelTime, randomSeed, restart)
     et.RegisterModname(modname .. " " .. version)
 
-    -- Get map info safely
-    local serverinfo = et.trap_GetConfigstring(0)  -- CS_SERVERINFO = 0
-    if serverinfo then
-        tracker.round.map_name = et.Info_ValueForKey(serverinfo, "mapname") or "unknown"
-    else
-        tracker.round.map_name = "unknown"
+    -- Normalize output directory
+    if not config.output_dir or config.output_dir == "" then
+        config.output_dir = "proximity/"
+        et.G_Print("[PROX] output_dir not set, defaulting to proximity/\n")
+    end
+    if config.output_dir:sub(-1) ~= "/" then
+        config.output_dir = config.output_dir .. "/"
     end
 
-    -- Get round number (may not exist on all servers)
-    local round_str = et.trap_Cvar_Get("g_currentRound")
-    tracker.round.round_num = tonumber(round_str) or 1
+    -- Get map + round info (with fallbacks)
+    refreshRoundInfo()
     tracker.round.start_time = levelTime
+    round_start_unix = 0
+    round_end_unix = 0
+    tracker.output_written = false
+    tracker.output_in_progress = false
+    tracker.output_pending = false
+    tracker.output_due_ms = 0
+
+    -- Refresh client cache
+    client_cache = {}
 
     -- Reset all tracking data
     tracker.engagements = {}
@@ -1074,11 +1528,18 @@ function et_InitGame(levelTime, randomSeed, restart)
     tracker.completed_tracks = {}
     tracker.last_sample_time = 0
     tracker.action_buffer = {}  -- v4.1: Reset action buffer
+    tracker.objective_stats = {}
 
     et.G_Print(">>> Proximity Tracker v" .. version .. " initialized\n")
     et.G_Print(">>> Map: " .. tracker.round.map_name .. ", Round: " .. tracker.round.round_num .. "\n")
     et.G_Print(">>> Position sample interval: " .. config.position_sample_interval .. "ms\n")
     et.G_Print(">>> Output directory: " .. config.output_dir .. "\n")
+    local fs_basepath = et.trap_Cvar_Get("fs_basepath") or ""
+    local fs_game = et.trap_Cvar_Get("fs_game") or ""
+    if fs_basepath ~= "" and fs_game ~= "" then
+        et.G_Print(string.format(">>> Output dir (resolved): %s/%s/%s\n", fs_basepath, fs_game, config.output_dir))
+    end
+    logObjectiveConfigSummary()
     -- v4.1: Show test mode status
     if config.test_mode.enabled then
         et.G_Print(">>> TEST MODE ENABLED - Advanced features disabled, lifecycle log active\n")
@@ -1092,8 +1553,20 @@ function et_RunFrame(levelTime)
 
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
 
+    -- Detect round start (gamestate transition into PLAYING)
+    if gamestate == 0 and last_gamestate ~= 0 then
+        refreshRoundInfo()
+        round_start_unix = os.time()
+        round_end_unix = 0
+        tracker.output_written = false
+        tracker.output_in_progress = false
+        tracker.output_pending = false
+        tracker.output_due_ms = 0
+    end
+
     -- Check for round end
     if last_gamestate == 0 and gamestate == 3 then
+        round_end_unix = os.time()
         -- End all active player tracks (round ended)
         for clientnum, track in pairs(tracker.player_tracks) do
             local pos = getPlayerPos(clientnum)
@@ -1106,9 +1579,9 @@ function et_RunFrame(levelTime)
                     x = round(pos.x, 1),
                     y = round(pos.y, 1),
                     z = round(pos.z, 1),
-                    health = et.gentity_get(clientnum, "health") or 0,
+                    health = safe_gentity_get(clientnum, "health") or 0,
                     speed = 0,
-                    weapon = et.gentity_get(clientnum, "ps.weapon") or 0,
+                    weapon = safe_gentity_get(clientnum, "ps.weapon") or 0,
                     stance = 0,
                     sprint = 0,
                     event = "round_end"
@@ -1118,12 +1591,24 @@ function et_RunFrame(levelTime)
         end
         tracker.player_tracks = {}
 
-        -- Close all active engagements as round_end
-        for target_slot, engagement in pairs(tracker.engagements) do
-            closeEngagement(engagement, "round_end", nil)
+        -- Close all active engagements as round_end.
+        -- Iterate over a stable key list because closeEngagement mutates tracker.engagements.
+        local active_targets = {}
+        for target_slot, _ in pairs(tracker.engagements) do
+            table.insert(active_targets, target_slot)
         end
-
-        outputData()
+        for _, target_slot in ipairs(active_targets) do
+            local engagement = tracker.engagements[target_slot]
+            if engagement then
+                closeEngagement(engagement, "round_end", nil)
+            end
+        end
+        if config.output_delay_ms and config.output_delay_ms > 0 then
+            tracker.output_pending = true
+            tracker.output_due_ms = et.trap_Milliseconds() + config.output_delay_ms
+        else
+            outputData()
+        end
     end
 
     last_gamestate = gamestate
@@ -1138,6 +1623,12 @@ function et_RunFrame(levelTime)
             checkEscapes(levelTime)
         end
     end
+
+    -- Handle delayed output
+    if tracker.output_pending and et.trap_Milliseconds() >= tracker.output_due_ms then
+        tracker.output_pending = false
+        outputData()
+    end
 end
 
 function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
@@ -1145,6 +1636,7 @@ function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
 
     -- Validate
     if not target or not attacker then return end
+    if not isValidClient(target) or not isValidClient(attacker) then return end
     if target == attacker then return end  -- self damage
     if attacker == 1022 or attacker == 1023 then return end  -- world damage
     if damage < config.min_damage then return end
@@ -1164,14 +1656,14 @@ function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
         end
 
         -- Record the hit
-        local weapon = et.gentity_get(attacker, "ps.weapon") or 0
+        local weapon = safe_gentity_get(attacker, "ps.weapon") or 0
         recordHit(engagement, attacker, damage, weapon)
     end
 
     -- v4.1: Action annotation for test mode (record damage received/dealt)
     if config.test_mode.enabled and config.test_mode.action_annotations then
         local now = gameTime()
-        local weapon = et.gentity_get(attacker, "ps.weapon") or 0
+        local weapon = safe_gentity_get(attacker, "ps.weapon") or 0
 
         -- Record damage received for target (store in track.actions)
         local target_track = tracker.player_tracks[target]
@@ -1233,7 +1725,7 @@ function et_Obituary(victim, killer, meansOfDeath)
 
             -- Add killer as attacker if valid
             if killer and killer ~= 1022 and killer ~= 1023 and killer ~= victim then
-                local weapon = et.gentity_get(killer, "ps.weapon") or 0
+                local weapon = safe_gentity_get(killer, "ps.weapon") or 0
                 recordHit(engagement, killer, 100, weapon)  -- assume lethal damage
             end
 
@@ -1255,8 +1747,8 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
                 local pos = getPlayerPos(clientNum)
                 -- Add revive as a path sample with "revived" event
                 if pos then
-                    local health = et.gentity_get(clientNum, "health") or 100
-                    local weapon = et.gentity_get(clientNum, "ps.weapon") or 0
+                    local health = safe_gentity_get(clientNum, "health") or 100
+                    local weapon = safe_gentity_get(clientNum, "ps.weapon") or 0
                     local stance, sprint = getPlayerMovementState(clientNum)
                     table.insert(track.path, {
                         time = now,
@@ -1297,6 +1789,16 @@ function et_ClientDisconnect(clientNum)
         local pos = getPlayerPos(clientNum)
         endPlayerTrack(clientNum, pos, "disconnect")  -- v4.1: Pass disconnect death type
     end
+    client_cache[clientNum] = nil
+end
+
+function et_ClientConnect(clientNum, firstTime, isBot)
+    updateClientCache(clientNum)
+    return nil
+end
+
+function et_ClientUserinfoChanged(clientNum)
+    updateClientCache(clientNum)
 end
 
 -- ===== MODULE END =====

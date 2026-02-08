@@ -203,32 +203,109 @@ class EndstatsAggregator:
         Returns:
             Formatted string (e.g., "3.2K", "52%", "2:30")
         """
-        # Damage-related awards: show in K format
-        if "damage" in award_name.lower():
-            if value >= 1000:
-                return f"{value/1000:.1f}K"
-            return f"{int(value)}"
+        name_lc = award_name.lower()
 
         # Accuracy awards: show as percentage
-        if "accuracy" in award_name.lower():
+        if "accuracy" in name_lc:
             return f"{value:.0f}%"
 
         # Time-related awards: show as m:ss
-        if "time" in award_name.lower() or "spawn" in award_name.lower():
+        if "time" in name_lc or "spawn" in name_lc:
             minutes = int(value // 60)
             seconds = int(value % 60)
             return f"{minutes}:{seconds:02d}"
 
         # Ratio awards
-        if "ratio" in award_name.lower():
+        if "ratio" in name_lc:
             return f"{value:.2f}"
 
-        # Default: integer or float based on value
+        # Damage-related awards: show in K format
+        if "damage" in name_lc:
+            if value >= 1000:
+                return f"{value/1000:.1f}K"
+
+        # Default formatting
         if value >= 1000:
             return f"{value/1000:.1f}K"
         if value == int(value):
             return str(int(value))
         return f"{value:.1f}"
+
+    def build_round_awards_display(
+        self,
+        awards: List[Dict[str, Any]],
+        *,
+        max_per_category: Optional[int] = 2,
+        max_total: Optional[int] = 30,
+    ) -> str:
+        """
+        Build a readable per-round awards display.
+
+        Args:
+            awards: List of award dicts with keys: name, player, value, numeric
+            max_per_category: Limit awards per category (None for all)
+            max_total: Hard cap on total lines (None for unlimited)
+        """
+        if not awards:
+            return "*No awards recorded for this round*"
+
+        # Build reverse lookup: award_name -> category
+        award_to_category = {}
+        for category, award_list in AWARD_CATEGORIES.items():
+            for award_name in award_list:
+                award_to_category[award_name] = category
+
+        categorized: Dict[str, List[Dict[str, Any]]] = {}
+        for award in awards:
+            category = award_to_category.get(award.get("name"), "other")
+            categorized.setdefault(category, []).append(award)
+
+        # Sort categories by display priority, then "other" last
+        ordered_categories = sorted(
+            [c for c in categorized.keys() if c in CATEGORY_DISPLAY],
+            key=lambda c: CATEGORY_DISPLAY[c][1],
+        )
+        if "other" in categorized:
+            ordered_categories.append("other")
+
+        lines: List[str] = []
+        total_lines = 0
+
+        for category in ordered_categories:
+            awards_list = categorized.get(category, [])
+            if not awards_list:
+                continue
+
+            display_name = CATEGORY_DISPLAY.get(category, ("Other", 999))[0]
+            lines.append(f"**{display_name}**")
+            total_lines += 1
+
+            # Keep stable ordering
+            awards_list = sorted(
+                awards_list,
+                key=lambda a: (a.get("name") or "", a.get("numeric") or 0),
+            )
+
+            count = 0
+            for award in awards_list:
+                if max_per_category is not None and count >= max_per_category:
+                    break
+                award_name = award.get("name") or "Unknown"
+                player = award.get("player") or "Unknown"
+                numeric = award.get("numeric")
+                value = award.get("value")
+                if numeric is not None:
+                    formatted = self._format_value(float(numeric), award_name)
+                else:
+                    formatted = value or ""
+                lines.append(f"• {award_name}: `{player}` ({formatted})")
+                count += 1
+                total_lines += 1
+                if max_total is not None and total_lines >= max_total:
+                    lines.append("• …and more")
+                    return "\n".join(lines)
+
+        return "\n".join(lines)
 
     async def aggregate_session_endstats(
         self, session_ids: List[int], session_ids_str: str

@@ -18,7 +18,8 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Set
 import discord
-import aiosqlite
+from bot.services.player_display_name_service import PlayerDisplayNameService
+from bot.core.database_adapter import ensure_player_name_alias
 
 logger = logging.getLogger(__name__)
 
@@ -128,118 +129,111 @@ class AchievementSystem:
         try:
             new_achievements = []
 
-            async with aiosqlite.connect(self.bot.db_path) as db:
-                # Ensure a per-connection alias for player_name if DB uses a different column
-                try:
-                    await self._ensure_player_name_alias(db)
-                except Exception:
-                    # _ensure_player_name_alias logs its own errors; continue
-                    pass
-                
-                # Get player totals
-                async with db.execute(
-                    """
-                    SELECT
-                        SUM(p.kills) as total_kills,
-                        SUM(p.deaths) as total_deaths,
-                        COUNT(DISTINCT p.round_id) as total_games,
-                        CASE
-                            WHEN SUM(p.deaths) > 0
-                            THEN CAST(SUM(p.kills) AS REAL) / SUM(p.deaths)
-                            ELSE SUM(p.kills)
-                        END as overall_kd
-                    FROM player_comprehensive_stats p
-                    JOIN rounds r ON p.round_id = r.id
-                    WHERE p.player_guid = ?
-                      AND r.round_number IN (1, 2)
-                      AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+            try:
+                await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
+            except Exception:
+                pass
+
+            stats = await self.bot.db_adapter.fetch_one(
+                """
+                SELECT
+                    SUM(p.kills) as total_kills,
+                    SUM(p.deaths) as total_deaths,
+                    COUNT(DISTINCT p.round_id) as total_games,
+                    CASE
+                        WHEN SUM(p.deaths) > 0
+                        THEN CAST(SUM(p.kills) AS REAL) / SUM(p.deaths)
+                        ELSE SUM(p.kills)
+                    END as overall_kd
+                FROM player_comprehensive_stats p
+                JOIN rounds r ON p.round_id = r.id
+                WHERE p.player_guid = ?
+                  AND r.round_number IN (1, 2)
+                  AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                 """,
-                    (player_guid,),
-                ) as cursor:
-                    stats = await cursor.fetchone()
+                (player_guid,),
+            )
 
-                if not stats or stats[0] is None:
-                    return []
+            if not stats or stats[0] is None:
+                return []
 
-                kills, deaths, games, kd_ratio = stats
+            kills, deaths, games, kd_ratio = stats
 
-                # Get player's Discord link (if exists)
-                async with db.execute(
-                    """
-                    SELECT discord_id, et_name FROM player_links
-                    WHERE et_guid = ?
-                """,
-                    (player_guid,),
-                ) as cursor:
-                    link = await cursor.fetchone()
+            # Use proper name resolution service (works for all players)
+            display_name_service = PlayerDisplayNameService(self.bot.db_adapter)
+            player_name = await display_name_service.get_display_name(player_guid)
 
-                discord_id = link[0] if link else None
-                player_name = link[1] if link else "Unknown Player"
+            # Still need discord_id for @mention in achievement embed
+            link = await self.bot.db_adapter.fetch_one(
+                "SELECT discord_id FROM player_links WHERE player_guid = ?",
+                (player_guid,),
+            )
+            discord_id = link[0] if link else None
 
-                # Check kill milestones
-                for threshold, achievement in self.KILL_MILESTONES.items():
-                    achievement_id = f"{player_guid}_kills_{threshold}"
+            # Check kill milestones
+            for threshold, achievement in self.KILL_MILESTONES.items():
+                achievement_id = f"{player_guid}_kills_{threshold}"
+                if (
+                    kills >= threshold
+                    and achievement_id not in self.notified_achievements
+                ):
+                    new_achievements.append(
+                        {
+                            "type": "kills",
+                            "threshold": threshold,
+                            "achievement": achievement,
+                            "player_name": player_name,
+                            "discord_id": discord_id,
+                            "value": kills,
+                        }
+                    )
+                    self.notified_achievements.add(achievement_id)
+
+            # Check game milestones
+            for threshold, achievement in self.GAME_MILESTONES.items():
+                achievement_id = f"{player_guid}_games_{threshold}"
+                if (
+                    games >= threshold
+                    and achievement_id not in self.notified_achievements
+                ):
+                    new_achievements.append(
+                        {
+                            "type": "games",
+                            "threshold": threshold,
+                            "achievement": achievement,
+                            "player_name": player_name,
+                            "discord_id": discord_id,
+                            "value": games,
+                        }
+                    )
+                    self.notified_achievements.add(achievement_id)
+
+            # Check K/D milestones (only if player has 20+ games)
+            if games >= 20:
+                for threshold, achievement in self.KD_MILESTONES.items():
+                    achievement_id = f"{player_guid}_kd_{threshold}"
                     if (
-                        kills >= threshold
+                        kd_ratio >= threshold
                         and achievement_id not in self.notified_achievements
                     ):
                         new_achievements.append(
                             {
-                                "type": "kills",
+                                "type": "kd",
                                 "threshold": threshold,
                                 "achievement": achievement,
                                 "player_name": player_name,
                                 "discord_id": discord_id,
-                                "value": kills,
+                                "value": kd_ratio,
                             }
                         )
                         self.notified_achievements.add(achievement_id)
 
-                # Check game milestones
-                for threshold, achievement in self.GAME_MILESTONES.items():
-                    achievement_id = f"{player_guid}_games_{threshold}"
-                    if (
-                        games >= threshold
-                        and achievement_id not in self.notified_achievements
-                    ):
-                        new_achievements.append(
-                            {
-                                "type": "games",
-                                "threshold": threshold,
-                                "achievement": achievement,
-                                "player_name": player_name,
-                                "discord_id": discord_id,
-                                "value": games,
-                            }
-                        )
-                        self.notified_achievements.add(achievement_id)
+            # Send notifications for new achievements
+            if new_achievements and channel:
+                for ach in new_achievements:
+                    await self._send_achievement_notification(ach, channel)
 
-                # Check K/D milestones (only if player has 20+ games)
-                if games >= 20:
-                    for threshold, achievement in self.KD_MILESTONES.items():
-                        achievement_id = f"{player_guid}_kd_{threshold}"
-                        if (
-                            kd_ratio >= threshold
-                            and achievement_id not in self.notified_achievements
-                        ):
-                            new_achievements.append(
-                                {
-                                    "type": "kd",
-                                    "threshold": threshold,
-                                    "achievement": achievement,
-                                    "player_name": player_name,
-                                    "discord_id": discord_id,
-                                    "value": kd_ratio,
-                                }
-                            )
-                            self.notified_achievements.add(achievement_id)
-
-                # Send notifications for new achievements
-                if new_achievements and channel:
-                    for ach in new_achievements:
-                        await self._send_achievement_notification(ach, channel)
-
-                return new_achievements
+            return new_achievements
 
         except Exception as e:
             logger.error(
@@ -307,32 +301,3 @@ class AchievementSystem:
                 f"Error sending achievement notification: {e}", exc_info=True
             )
 
-    async def _ensure_player_name_alias(self, db: "aiosqlite.Connection") -> None:
-        """
-        Create a TEMP VIEW aliasing an existing name column to `player_name`.
-
-        Some queries expect a column named `player_name`, but the actual database
-        schema may use a different column name. This helper creates a temporary
-        view to bridge that gap for the current connection.
-
-        Args:
-            db: Active aiosqlite database connection
-
-        Note:
-            This is a compatibility shim. Errors are logged but not raised.
-        """
-        try:
-            # Check if we need to create the alias
-            cursor = await db.execute("PRAGMA table_info(player_comprehensive_stats)")
-            columns = await cursor.fetchall()
-            column_names = [col[1] for col in columns]
-            
-            if "player_name" not in column_names:
-                # Create a temporary view with the alias
-                await db.execute("""
-                    CREATE TEMP VIEW IF NOT EXISTS player_comprehensive_stats_view AS
-                    SELECT *, name AS player_name FROM player_comprehensive_stats
-                """)
-                logger.debug("Created temporary player_name alias view")
-        except Exception as e:
-            logger.warning(f"Could not create player_name alias: {e}")

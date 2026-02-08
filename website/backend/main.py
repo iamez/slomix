@@ -2,7 +2,9 @@ import sys
 import os
 import asyncio
 import json
+from pathlib import Path
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -35,8 +37,15 @@ setup_logging(
 
 logger = get_app_logger(__name__)
 
-from website.backend.routers import api, auth, predictions
-from website.backend.dependencies import init_db_pool, close_db_pool
+from website.backend.routers import api, auth, predictions, greatshot
+from website.backend.dependencies import init_db_pool, close_db_pool, get_db_pool
+from website.backend.services.greatshot_store import get_greatshot_storage
+from website.backend.services.greatshot_jobs import (
+    GreatshotJobService,
+    get_greatshot_job_service,
+    set_greatshot_job_service,
+)
+from greatshot.config import CONFIG as GREATSHOT_CONFIG
 
 # Configuration from environment
 WEBSITE_PORT = int(os.getenv("WEBSITE_PORT", "8000"))
@@ -84,6 +93,18 @@ app.add_middleware(RequestLoggingMiddleware)
 app.include_router(api.router, prefix="/api", tags=["API"])
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(predictions.router, prefix="/api/predictions", tags=["Predictions"])
+app.include_router(greatshot.router, prefix="/api", tags=["Greatshot"])
+
+
+@app.get("/greatshot", include_in_schema=False)
+@app.get("/greatshot/demos", include_in_schema=False)
+@app.get("/greatshot/clips", include_in_schema=False)
+@app.get("/greatshot/highlights", include_in_schema=False)
+@app.get("/greatshot/renders", include_in_schema=False)
+@app.get("/greatshot/demo/{demo_id}", include_in_schema=False)
+async def greatshot_spa_entry(demo_id: str | None = None):
+    index_path = os.path.join(project_root, "website", "index.html")
+    return FileResponse(index_path)
 
 # Serve Static Files (Frontend)
 # Mount this LAST to avoid conflicts with API routes
@@ -95,11 +116,22 @@ app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 async def startup_event():
     logger.info("🚀 Slomix Website Backend Starting...")
     await init_db_pool()  # Initialize shared DB pool once
-    logger.info("✅ Slomix Website Backend Ready (Read-Only Mode)")
+    greatshot_storage = get_greatshot_storage(Path(project_root))
+    job_service = GreatshotJobService(get_db_pool(), greatshot_storage)
+    set_greatshot_job_service(job_service)
+    await job_service.start(
+        analysis_workers=GREATSHOT_CONFIG.analysis_queue_workers,
+        render_workers=GREATSHOT_CONFIG.render_queue_workers,
+    )
+    logger.info("✅ Slomix Website Backend Ready")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("🛑 Slomix Website Backend Stopping...")
+    try:
+        await get_greatshot_job_service().stop()
+    except Exception:
+        logger.warning("Greatshot job service was not initialized during shutdown")
     await close_db_pool()  # Clean up DB pool
     logger.info("✅ Slomix Website Backend Stopped")

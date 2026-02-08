@@ -10,7 +10,6 @@ Note: These are different from session *viewing* commands (in Session Cog).
 These commands control the active session and monitoring state.
 """
 
-import aiosqlite
 import logging
 from datetime import datetime
 
@@ -51,19 +50,19 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
             date_str = now.strftime("%Y-%m-%d")
             time_str = now.strftime("%H:%M:%S")
 
-            async with aiosqlite.connect(self.bot.db_path) as db:
-                # Create round entry
-                cursor = await db.execute(
-                    """
-                    INSERT INTO rounds (start_time, date, map_name, status)
-                    VALUES (?, ?, ?, 'active')
+            round_row = await self.bot.db_adapter.fetch_one(
+                """
+                INSERT INTO rounds (round_time, round_date, map_name, round_status)
+                VALUES (?, ?, ?, 'active')
+                RETURNING id
                 """,
-                    (time_str, date_str, map_name),
-                )
+                (time_str, date_str, map_name),
+            )
+            if not round_row:
+                raise RuntimeError("Failed to create session round entry")
 
-                round_id = cursor.lastrowid
-                self.bot.current_session = round_id
-                await db.commit()
+            round_id = round_row[0]
+            self.bot.current_session = round_id
 
             # Enable monitoring
             self.bot.monitoring = True

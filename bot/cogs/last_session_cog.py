@@ -12,17 +12,18 @@ This cog handles the !last_session command by delegating to specialized services
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
 from bot.core.database_adapter import ensure_player_name_alias
+from bot.core.endstats_pagination_view import EndstatsPaginationView
 from bot.core.utils import sanitize_error_message
-from tools.stopwatch_scoring import StopwatchScoring
 from bot.stats import StatsCalculator
 from bot.services.session_data_service import SessionDataService
+from bot.services.stopwatch_scoring_service import StopwatchScoringService
 from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.session_embed_builder import SessionEmbedBuilder
 from bot.services.session_graph_generator import SessionGraphGenerator
@@ -45,11 +46,15 @@ class LastSessionCog(commands.Cog):
         self.data_service = SessionDataService(bot.db_adapter, bot.db_path if hasattr(bot, 'db_path') else None)
         self.stats_aggregator = SessionStatsAggregator(bot.db_adapter)
         self.embed_builder = SessionEmbedBuilder()
-        self.graph_generator = SessionGraphGenerator(bot.db_adapter)
+        self.graph_generator = SessionGraphGenerator(
+            bot.db_adapter,
+            timing_debug_service=getattr(bot, 'timing_debug_service', None)
+        )
         self.view_handlers = SessionViewHandlers(bot.db_adapter, StatsCalculator)
         self.badge_service = PlayerBadgeService(bot.db_adapter)
         self.display_name_service = PlayerDisplayNameService(bot.db_adapter)
         self.endstats_aggregator = EndstatsAggregator(bot.db_adapter)
+        self.scoring_service = StopwatchScoringService(bot.db_adapter)
 
         logger.info("✅ All services initialized successfully")
 
@@ -73,6 +78,8 @@ class LastSessionCog(commands.Cog):
         - !last_session maps     → Per-map summaries (popular stats)
         - !last_session maps full → Round-by-round breakdown
         - !last_session graphs   → Performance graphs
+        - !last_session time     → Time audit (played/dead/denied)
+        - !last_session time_raw → Raw Lua time export (CSV)
         """
         try:
             # Setup database aliases
@@ -116,6 +123,14 @@ class LastSessionCog(commands.Cog):
 
             if subcommand and subcommand.lower() in ("sprees", "spree"):
                 await self.view_handlers.show_sprees_view(ctx, latest_date, session_ids, session_ids_str, player_count)
+                return
+
+            if subcommand and subcommand.lower() in ("time", "timing", "times"):
+                await self.view_handlers.show_time_view(ctx, latest_date, session_ids, session_ids_str, player_count)
+                return
+
+            if subcommand and subcommand.lower() in ("time_raw", "timeraw", "time-raw", "timecsv", "time_csv"):
+                await self.view_handlers.show_time_raw_export(ctx, latest_date, session_ids, session_ids_str)
                 return
 
             if subcommand and subcommand.lower() in ("top", "top10"):
@@ -169,7 +184,7 @@ class LastSessionCog(commands.Cog):
                     )
                     embed3 = discord.Embed(
                         title=f"ADVANCED METRICS  -  {latest_date}",
-                        description="FragPotential, Damage Efficiency, Denied Playtime, Survival Rate",
+                        description="FragPotential, Damage Efficiency, Denied Playtime, Survival Rate, Useful Kills, Self Kills, Full Selfkills",
                         color=0xE74C3C,
                         timestamp=datetime.now()
                     )
@@ -226,23 +241,113 @@ class LastSessionCog(commands.Cog):
                     await self.view_handlers.show_maps_view(ctx, latest_date, sessions, session_ids, session_ids_str, player_count)
                 return
 
+            # Scoring debug view (header winner + side mapping)
+            if subcommand and subcommand.lower() == "debug":
+                hardcoded_teams = await self.data_service.get_hardcoded_teams(session_ids)
+                if not hardcoded_teams or len(hardcoded_teams) < 2:
+                    await ctx.send("❌ No hardcoded teams available for scoring debug.")
+                    return
+
+                team_rosters = {k: v.get('guids', []) for k, v in hardcoded_teams.items()}
+                scoring_result = await self.scoring_service.calculate_session_scores_with_teams(
+                    latest_date, session_ids, team_rosters
+                )
+                if not scoring_result or 'maps' not in scoring_result:
+                    await ctx.send("❌ No scoring debug data available.")
+                    return
+
+                team_a_name = scoring_result.get('team_a_name', 'Team A')
+                team_b_name = scoring_result.get('team_b_name', 'Team B')
+
+                lines = []
+                for m in scoring_result['maps']:
+                    map_name = m.get('map', 'Unknown')
+                    winner = m.get('winner', 'tie')
+                    winner_side = m.get('winner_side', 'n/a')
+                    team_a_r1_side = m.get('team_a_r1_side', 'n/a')
+                    team_a_r2_side = m.get('team_a_r2_side', 'n/a')
+                    r1_def_side = m.get('r1_defender_side', 'n/a')
+                    source = m.get('scoring_source', 'n/a')
+                    counted = m.get('counted', True)
+                    note = m.get('note') or m.get('description', '')
+
+                    lines.append(
+                        f"**{map_name}** → winner: `{winner}` | "
+                        f"winner_side:`{winner_side}` r1_def:`{r1_def_side}` "
+                        f"TeamA R1:`{team_a_r1_side}` R2:`{team_a_r2_side}` "
+                        f"source:`{source}` counted:`{counted}` note:`{note}`"
+                    )
+
+                if len(lines) > 20:
+                    lines = lines[:20] + ["... (truncated)"]
+
+                embed = discord.Embed(
+                    title=f"🧪 Scoring Debug - {latest_date}",
+                    description=(
+                        f"TeamA=`{team_a_name}` • TeamB=`{team_b_name}`\n\n" +
+                        "\n".join(lines)
+                    ),
+                    color=0x95A5A6,
+                    timestamp=datetime.now()
+                )
+                await ctx.send(embed=embed)
+                return
+
             # ═══════════════════════════════════════════════════════════════════════
             # DEFAULT COMPREHENSIVE VIEW - Full session analytics
             # ═══════════════════════════════════════════════════════════════════════
 
             # Phase 2: Get hardcoded teams and team scores
             hardcoded_teams = await self.data_service.get_hardcoded_teams(session_ids)
-            team_1_name, team_2_name, team_1_score, team_2_score, scoring_result = await self.data_service.calculate_team_scores(session_ids)
 
-            # Get team mappings FIRST (needed for proper team stats aggregation)
+            # Get team mappings FIRST (needed for proper team stats aggregation and scoring)
             team_1_name_mapped, team_2_name_mapped, team_1_players_list, team_2_players_list, name_to_team = await self.data_service.build_team_mappings(
                 session_ids, session_ids_str, hardcoded_teams
             )
 
-            # Use mapped team names if available
+            # Try to calculate team-aware stopwatch scoring (MAP wins, not round wins)
+            scoring_result = None
+            if hardcoded_teams and len(hardcoded_teams) >= 2:
+                # Build team_rosters dict for scoring service
+                team_rosters = {}
+                for team_name, players in hardcoded_teams.items():
+                    # Extract GUIDs from player data (supports both dict and list formats)
+                    if isinstance(players, dict):
+                        guids = players.get('guids', [])
+                    else:
+                        guids = []
+                        for p in players:
+                            if isinstance(p, dict) and 'guid' in p:
+                                guids.append(p['guid'])
+                            elif isinstance(p, str):
+                                guids.append(p)
+                    team_rosters[team_name] = guids
+
+                scoring_result = await self.scoring_service.calculate_session_scores_with_teams(
+                    latest_date, session_ids, team_rosters
+                )
+
+            if scoring_result:
+                # Use team-aware map scoring (correct for stopwatch mode)
+                team_1_name = scoring_result.get('team_a_name', 'Team A')
+                team_2_name = scoring_result.get('team_b_name', 'Team B')
+                team_1_score = scoring_result.get('team_a_maps', 0)
+                team_2_score = scoring_result.get('team_b_maps', 0)
+            else:
+                # Fallback to old round-based scoring
+                scores = await self.stats_aggregator.calculate_session_scores(session_ids, session_ids_str, hardcoded_teams)
+                team_1_name = scores['team_a_name']
+                team_2_name = scores['team_b_name']
+                team_1_score = scores['team_a_score']
+                team_2_score = scores['team_b_score']
+                scoring_result = scores
+
+            # Use mapped team names if available and scoring didn't provide them
             if team_1_name_mapped and team_2_name_mapped:
-                team_1_name = team_1_name_mapped
-                team_2_name = team_2_name_mapped
+                if team_1_name in ('Team A', 'Team 1'):
+                    team_1_name = team_1_name_mapped
+                if team_2_name in ('Team B', 'Team 2'):
+                    team_2_name = team_2_name_mapped
 
             # Phase 3: Aggregate all data (now with correct team mappings)
             all_players = await self.stats_aggregator.aggregate_all_player_stats(session_ids, session_ids_str)
@@ -309,11 +414,13 @@ class LastSessionCog(commands.Cog):
                     player_list[0] = display_names[guid]  # Replace name at index 0
                 all_players_with_display_names.append(tuple(player_list))
 
+            full_selfkills_available = await self.stats_aggregator.has_full_selfkills_column()
+
             # DEFAULT VIEW: ONLY SESSION OVERVIEW
             embed1 = await self.embed_builder.build_session_overview_embed(
                 latest_date, all_players_with_display_names, maps_played, rounds_played, player_count,
                 team_1_name, team_2_name, team_1_score, team_2_score, hardcoded_teams is not None,
-                scoring_result, player_badges
+                scoring_result, player_badges, full_selfkills_available
             )
 
             # Try to send the embed, handle size limit errors
@@ -338,11 +445,16 @@ class LastSessionCog(commands.Cog):
 
             # Send cumulative endstats as separate message
             if endstats_data and endstats_data.get('has_data'):
-                endstats_embed = await self.embed_builder.build_session_endstats_embed(
-                    latest_date, endstats_data
+                map_pages, round_pages = await self._build_endstats_pages(
+                    latest_date, sessions, session_ids
                 )
-                if endstats_embed:
-                    await ctx.send(embed=endstats_embed)
+                if map_pages:
+                    view = EndstatsPaginationView(ctx, map_pages, round_pages)
+                    first_embed = view._decorate_embed(map_pages[0])
+                    message = await ctx.send(embed=first_embed, view=view)
+                    view.message = message
+                else:
+                    logger.warning("Endstats data found but no pages were generated")
 
         except Exception as e:
             logger.error(f"Error in last_session command: {e}", exc_info=True)
@@ -355,6 +467,220 @@ class LastSessionCog(commands.Cog):
     async def team_history_command(self, ctx, days: int = 30):
         """📊 Show team performance history (PLACEHOLDER)"""
         await ctx.send(f"📊 Team history for last {days} days (feature coming soon)")
+
+    @is_public_channel()
+    @commands.command(name="endstats_audit", aliases=["endstats_check", "endstats_status"])
+    async def endstats_audit_command(self, ctx):
+        """🔎 Audit endstats coverage for the latest session."""
+        try:
+            latest_date = await self.data_service.get_latest_session_date()
+            if not latest_date:
+                await ctx.send("❌ No rounds found in database")
+                return
+
+            sessions, session_ids, session_ids_str, player_count = await self.data_service.fetch_session_data(
+                latest_date
+            )
+            if not sessions:
+                await ctx.send("❌ No rounds found for latest date")
+                return
+
+            placeholders = ",".join(["?"] * len(session_ids))
+            query = f"""
+                WITH target_rounds AS (
+                    SELECT id, map_name, round_number, round_date, round_time
+                    FROM rounds
+                    WHERE id IN ({placeholders})
+                ),
+                awards AS (
+                    SELECT round_id, COUNT(*) AS awards_count
+                    FROM round_awards
+                    WHERE round_id IN ({placeholders})
+                    GROUP BY round_id
+                )
+                SELECT tr.id, tr.map_name, tr.round_number,
+                       COALESCE(aw.awards_count, 0) AS awards_count
+                FROM target_rounds tr
+                LEFT JOIN awards aw ON aw.round_id = tr.id
+                ORDER BY tr.round_date, tr.round_time
+            """
+            params = tuple(session_ids) * 2
+            rows = await self.bot.db_adapter.fetch_all(query, params)
+
+            total_rounds = len(rows)
+            rounds_with_awards = sum(1 for row in rows if (row[3] or 0) > 0)
+
+            missing_awards = [
+                f"`{row[1]}` R{row[2]} (id {row[0]})"
+                for row in rows if (row[3] or 0) == 0
+            ]
+            embed = discord.Embed(
+                title=f"🔎 Endstats Audit - {latest_date}",
+                description="Coverage summary for the latest session",
+                color=0x5DADE2,
+                timestamp=datetime.now(),
+            )
+
+            embed.add_field(
+                name="Coverage",
+                value=(
+                    f"Rounds: `{total_rounds}`\n"
+                    f"Awards: `{rounds_with_awards}/{total_rounds}`"
+                ),
+                inline=False,
+            )
+
+            if missing_awards:
+                display = missing_awards[:10]
+                if len(missing_awards) > 10:
+                    display.append(f"... +{len(missing_awards) - 10} more")
+                embed.add_field(
+                    name="Missing Awards",
+                    value="\n".join(display),
+                    inline=False,
+                )
+
+            await ctx.send(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error in endstats_audit command: {e}", exc_info=True)
+            await ctx.send(
+                f"❌ Error auditing endstats: {sanitize_error_message(e)}"
+            )
+
+    def _group_map_matches_for_endstats(self, sessions: List[Tuple]) -> List[Dict[str, Any]]:
+        """Group session rounds into map matches (R1/R2 pairs) preserving order."""
+        map_matches: List[Dict[str, Any]] = []
+        i = 0
+        while i < len(sessions):
+            round_id, map_name, round_num, actual_time = sessions[i]
+            match_data = {
+                "map_name": map_name,
+                "rounds": [],
+            }
+
+            while i < len(sessions) and sessions[i][1] == map_name and len(match_data["rounds"]) < 2:
+                round_id, map_name, round_num, actual_time = sessions[i]
+                match_data["rounds"].append(
+                    {
+                        "round_id": round_id,
+                        "round_num": round_num,
+                        "actual_time": actual_time,
+                    }
+                )
+                i += 1
+
+            map_matches.append(match_data)
+
+        return map_matches
+
+    async def _fetch_endstats_round_data(
+        self, session_ids: List[int]
+    ) -> Dict[int, List[Dict[str, Any]]]:
+        if not session_ids:
+            return {}
+
+        placeholders = ",".join(["?"] * len(session_ids))
+
+        awards_query = f"""
+            SELECT round_id, award_name, player_name, award_value, award_value_numeric
+            FROM round_awards
+            WHERE round_id IN ({placeholders})
+            ORDER BY round_id, id
+        """
+        awards_rows = await self.bot.db_adapter.fetch_all(awards_query, tuple(session_ids))
+
+        awards_by_round: Dict[int, List[Dict[str, Any]]] = {}
+        for round_id, award_name, player_name, award_value, award_numeric in awards_rows:
+            awards_by_round.setdefault(round_id, []).append(
+                {
+                    "name": award_name,
+                    "player": player_name,
+                    "value": award_value,
+                    "numeric": award_numeric,
+                }
+            )
+
+        return awards_by_round
+
+    async def _build_endstats_pages(
+        self,
+        latest_date: str,
+        sessions: List[Tuple],
+        session_ids: List[int],
+    ) -> Tuple[List[discord.Embed], List[discord.Embed]]:
+        """Build endstats embeds for map-level and round-level pagination."""
+        awards_by_round = await self._fetch_endstats_round_data(session_ids)
+        map_matches = self._group_map_matches_for_endstats(sessions)
+
+        if not map_matches:
+            return [], []
+
+        map_counts: Dict[str, int] = {}
+        for match in map_matches:
+            map_name = match["map_name"]
+            map_counts[map_name] = map_counts.get(map_name, 0) + 1
+
+        map_occurrence: Dict[str, int] = {}
+        map_pages: List[discord.Embed] = []
+        round_pages: List[discord.Embed] = []
+
+        for map_index, match in enumerate(map_matches, start=1):
+            map_name = match["map_name"]
+            if map_counts[map_name] > 1:
+                occurrence_num = map_occurrence.get(map_name, 0) + 1
+                map_occurrence[map_name] = occurrence_num
+                display_map_name = f"{map_name} (#{occurrence_num})"
+            else:
+                display_map_name = map_name
+
+            map_embed = discord.Embed(
+                title=f"🏆 Endstats - {display_map_name}",
+                description=f"Session {latest_date} • Map {map_index}/{len(map_matches)}",
+                color=0xF1C40F,
+                timestamp=datetime.now(),
+            )
+
+            for round_info in match["rounds"]:
+                round_id = round_info["round_id"]
+                round_num = round_info["round_num"]
+
+                awards_text = self.endstats_aggregator.build_round_awards_display(
+                    awards_by_round.get(round_id, []),
+                    max_per_category=1,
+                    max_total=12,
+                )
+                field_value = awards_text
+
+                map_embed.add_field(
+                    name=f"Round {round_num}",
+                    value=field_value,
+                    inline=False,
+                )
+
+            map_pages.append(map_embed)
+
+            for round_info in match["rounds"]:
+                round_id = round_info["round_id"]
+                round_num = round_info["round_num"]
+
+                round_embed = discord.Embed(
+                    title=f"🏆 Endstats - {display_map_name} R{round_num}",
+                    description=f"Session {latest_date}",
+                    color=0xF39C12,
+                    timestamp=datetime.now(),
+                )
+
+                awards_text = self.endstats_aggregator.build_round_awards_display(
+                    awards_by_round.get(round_id, []),
+                    max_per_category=3,
+                    max_total=36,
+                )
+                round_embed.add_field(name="Awards", value=awards_text, inline=False)
+
+                round_pages.append(round_embed)
+
+        return map_pages, round_pages
 
 
 async def setup(bot):

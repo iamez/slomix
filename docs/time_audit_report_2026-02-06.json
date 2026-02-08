@@ -1,0 +1,1582 @@
+{
+  "generated_at": "2026-02-06T00:03:55.572378",
+  "stats_dir": "/home/samba/share/slomix_discord/local_stats",
+  "thresholds": {
+    "dead_diff_min": 0.05,
+    "denied_diff_sec": 2.0,
+    "played_diff_sec": 2.0,
+    "ratio_diff": 5.0
+  },
+  "summary": {
+    "files_total": 250,
+    "files_parsed": 248,
+    "files_parse_errors": 2,
+    "files_missing_round": 0,
+    "rounds_matched": 248,
+    "players_total": 1559,
+    "players_missing_db": 0,
+    "players_mismatched": 884,
+    "dead_gt_played": 116,
+    "denied_gt_played": 2,
+    "ratio_mismatch": 766,
+    "map_name_mismatch": 0,
+    "diff_dead": 276,
+    "diff_denied": 41,
+    "diff_played": 0,
+    "ratio_mismatch_r1": 36,
+    "ratio_mismatch_r2": 706,
+    "ratio_mismatch_other": 24
+  },
+  "flag_counts": {
+    "dead_diff": 276,
+    "denied_diff": 41,
+    "ratio_diff": 766,
+    "lua_dead_gt_played": 62,
+    "db_dead_gt_played": 54,
+    "lua_denied_gt_played": 1,
+    "db_denied_gt_played": 1
+  },
+  "parse_errors": [
+    {
+      "file": "2026-02-04-112432-etl_adlernest-round-2.txt",
+      "error": "insufficient lines"
+    },
+    {
+      "file": "2026-02-04-113956-supply-round-2.txt",
+      "error": "insufficient lines"
+    }
+  ],
+  "missing_rounds": [],
+  "samples": [
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-221357-etl_adlernest-round-2.txt",
+      "round_id": 9391,
+      "player_guid": "652EB4A6",
+      "player_name": "qmr",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff",
+        "lua_dead_gt_played"
+      ],
+      "lua": {
+        "time_dead_minutes": 3.8,
+        "denied_playtime": 36.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 55.9,
+        "ratio_calc": 119.37
+      },
+      "db": {
+        "time_dead_minutes": 1.7888000011444092,
+        "denied_playtime": 2.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 56.192665100097656
+      },
+      "diffs": {
+        "dead_minutes": 2.0112,
+        "denied_seconds": 34.0,
+        "played_seconds": 0.0,
+        "ratio": 63.18
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-221357-etl_adlernest-round-2.txt",
+      "round_id": 9391,
+      "player_guid": "5D989160",
+      "player_name": ".olz",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.6,
+        "denied_playtime": 15.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 38.9,
+        "ratio_calc": 81.68
+      },
+      "db": {
+        "time_dead_minutes": 1.2447999715805054,
+        "denied_playtime": 9.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 39.10366439819336
+      },
+      "diffs": {
+        "dead_minutes": 1.3552,
+        "denied_seconds": 6.0,
+        "played_seconds": 0.0,
+        "ratio": 42.57
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-221357-etl_adlernest-round-2.txt",
+      "round_id": 9391,
+      "player_guid": "0A26D447",
+      "player_name": "carniee",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.7,
+        "denied_playtime": 20.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 10.3,
+        "ratio_calc": 21.99
+      },
+      "db": {
+        "time_dead_minutes": 0.3296000063419342,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 10.353926658630371
+      },
+      "diffs": {
+        "dead_minutes": 0.3704,
+        "denied_seconds": 20.0,
+        "played_seconds": 0.0,
+        "ratio": 11.64
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-221357-etl_adlernest-round-2.txt",
+      "round_id": 9391,
+      "player_guid": "D8423F90",
+      "player_name": "vid",
+      "flags": [
+        "dead_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.7,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 39.7,
+        "ratio_calc": 84.82
+      },
+      "db": {
+        "time_dead_minutes": 1.270400047302246,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 39.90785598754883
+      },
+      "diffs": {
+        "dead_minutes": 1.4296,
+        "denied_seconds": 0.0,
+        "played_seconds": 0.0,
+        "ratio": 44.91
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-221357-etl_adlernest-round-2.txt",
+      "round_id": 9391,
+      "player_guid": "EDBB5DA9",
+      "player_name": "SuperBoyy",
+      "flags": [
+        "denied_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.1,
+        "denied_playtime": 108.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 1.7,
+        "ratio_calc": 3.14
+      },
+      "db": {
+        "time_dead_minutes": 0.0544000007212162,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 1.7089005708694458
+      },
+      "diffs": {
+        "dead_minutes": 0.0456,
+        "denied_seconds": 108.0,
+        "played_seconds": 0.0,
+        "ratio": 1.43
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-221357-etl_adlernest-round-2.txt",
+      "round_id": 9391,
+      "player_guid": "FDA127DF",
+      "player_name": ".wjs",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.6,
+        "denied_playtime": 86.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 8.5,
+        "ratio_calc": 18.85
+      },
+      "db": {
+        "time_dead_minutes": 0.2720000147819519,
+        "denied_playtime": 68.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 8.544503211975098
+      },
+      "diffs": {
+        "dead_minutes": 0.328,
+        "denied_seconds": 18.0,
+        "played_seconds": 0.0,
+        "ratio": 10.3
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-222417-supply-round-1.txt",
+      "round_id": 9393,
+      "player_guid": "5D989160",
+      "player_name": ".olz",
+      "flags": [
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 4.0,
+        "denied_playtime": 29.0,
+        "time_played_seconds": 720.0,
+        "time_dead_ratio": 49.2,
+        "ratio_calc": 33.33
+      },
+      "db": {
+        "time_dead_minutes": 4.0,
+        "denied_playtime": 29.0,
+        "time_played_seconds": 720.0,
+        "time_dead_ratio": 49.20000076293945
+      },
+      "diffs": {
+        "dead_minutes": 0.0,
+        "denied_seconds": 0.0,
+        "played_seconds": 0.0,
+        "ratio": 15.87
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-222417-supply-round-1.txt",
+      "round_id": 9393,
+      "player_guid": "652EB4A6",
+      "player_name": "qmr",
+      "flags": [
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 4.4,
+        "denied_playtime": 56.0,
+        "time_played_seconds": 720.0,
+        "time_dead_ratio": 53.7,
+        "ratio_calc": 36.67
+      },
+      "db": {
+        "time_dead_minutes": 4.400000095367432,
+        "denied_playtime": 56.0,
+        "time_played_seconds": 720.0,
+        "time_dead_ratio": 53.70000076293945
+      },
+      "diffs": {
+        "dead_minutes": 0.0,
+        "denied_seconds": 0.0,
+        "played_seconds": 0.0,
+        "ratio": 17.03
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-222417-supply-round-1.txt",
+      "round_id": 9393,
+      "player_guid": "FDA127DF",
+      "player_name": ".wjs",
+      "flags": [
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 3.2,
+        "denied_playtime": 69.0,
+        "time_played_seconds": 720.0,
+        "time_dead_ratio": 39.5,
+        "ratio_calc": 26.67
+      },
+      "db": {
+        "time_dead_minutes": 3.200000047683716,
+        "denied_playtime": 69.0,
+        "time_played_seconds": 720.0,
+        "time_dead_ratio": 39.5
+      },
+      "diffs": {
+        "dead_minutes": 0.0,
+        "denied_seconds": 0.0,
+        "played_seconds": 0.0,
+        "ratio": 12.83
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-222417-supply-round-1.txt",
+      "round_id": 9393,
+      "player_guid": "D8423F90",
+      "player_name": "vid",
+      "flags": [
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 6.6,
+        "denied_playtime": 63.0,
+        "time_played_seconds": 720.0,
+        "time_dead_ratio": 81.3,
+        "ratio_calc": 55.0
+      },
+      "db": {
+        "time_dead_minutes": 6.599999904632568,
+        "denied_playtime": 63.0,
+        "time_played_seconds": 720.0,
+        "time_dead_ratio": 81.30000305175781
+      },
+      "diffs": {
+        "dead_minutes": 0.0,
+        "denied_seconds": 0.0,
+        "played_seconds": 0.0,
+        "ratio": 26.3
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-222417-supply-round-1.txt",
+      "round_id": 9393,
+      "player_guid": "EDBB5DA9",
+      "player_name": "SuperBoyy",
+      "flags": [
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 1.5,
+        "denied_playtime": 154.0,
+        "time_played_seconds": 720.0,
+        "time_dead_ratio": 18.7,
+        "ratio_calc": 12.5
+      },
+      "db": {
+        "time_dead_minutes": 1.5,
+        "denied_playtime": 154.0,
+        "time_played_seconds": 720.0,
+        "time_dead_ratio": 18.700000762939453
+      },
+      "diffs": {
+        "dead_minutes": 0.0,
+        "denied_seconds": 0.0,
+        "played_seconds": 0.0,
+        "ratio": 6.2
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-223524-supply-round-2.txt",
+      "round_id": 9394,
+      "player_guid": "D8423F90",
+      "player_name": "vid",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 5.9,
+        "denied_playtime": 156.0,
+        "time_played_seconds": 606.0,
+        "time_dead_ratio": 32.4,
+        "ratio_calc": 58.42
+      },
+      "db": {
+        "time_dead_minutes": 3.27239990234375,
+        "denied_playtime": 93.0,
+        "time_played_seconds": 606.0,
+        "time_dead_ratio": 32.39999771118164
+      },
+      "diffs": {
+        "dead_minutes": 2.6276,
+        "denied_seconds": 63.0,
+        "played_seconds": 0.0,
+        "ratio": 26.02
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-223524-supply-round-2.txt",
+      "round_id": 9394,
+      "player_guid": "0A26D447",
+      "player_name": "carniee",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 4.5,
+        "denied_playtime": 131.0,
+        "time_played_seconds": 606.0,
+        "time_dead_ratio": 24.6,
+        "ratio_calc": 44.55
+      },
+      "db": {
+        "time_dead_minutes": 2.484600067138672,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 606.0,
+        "time_dead_ratio": 24.599998474121094
+      },
+      "diffs": {
+        "dead_minutes": 2.0154,
+        "denied_seconds": 131.0,
+        "played_seconds": 0.0,
+        "ratio": 19.95
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-223524-supply-round-2.txt",
+      "round_id": 9394,
+      "player_guid": "652EB4A6",
+      "player_name": "qmr",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 9.3,
+        "denied_playtime": 71.0,
+        "time_played_seconds": 606.0,
+        "time_dead_ratio": 50.5,
+        "ratio_calc": 92.08
+      },
+      "db": {
+        "time_dead_minutes": 5.100500106811523,
+        "denied_playtime": 15.0,
+        "time_played_seconds": 606.0,
+        "time_dead_ratio": 50.5
+      },
+      "diffs": {
+        "dead_minutes": 4.1995,
+        "denied_seconds": 56.0,
+        "played_seconds": 0.0,
+        "ratio": 41.58
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-223524-supply-round-2.txt",
+      "round_id": 9394,
+      "player_guid": "5D989160",
+      "player_name": ".olz",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 5.5,
+        "denied_playtime": 91.0,
+        "time_played_seconds": 606.0,
+        "time_dead_ratio": 29.8,
+        "ratio_calc": 54.46
+      },
+      "db": {
+        "time_dead_minutes": 3.0097999572753906,
+        "denied_playtime": 62.0,
+        "time_played_seconds": 606.0,
+        "time_dead_ratio": 29.799997329711914
+      },
+      "diffs": {
+        "dead_minutes": 2.4902,
+        "denied_seconds": 29.0,
+        "played_seconds": 0.0,
+        "ratio": 24.66
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-223524-supply-round-2.txt",
+      "round_id": 9394,
+      "player_guid": "FDA127DF",
+      "player_name": ".wjs",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 4.4,
+        "denied_playtime": 111.0,
+        "time_played_seconds": 606.0,
+        "time_dead_ratio": 24.0,
+        "ratio_calc": 43.56
+      },
+      "db": {
+        "time_dead_minutes": 2.4240000247955322,
+        "denied_playtime": 42.0,
+        "time_played_seconds": 606.0,
+        "time_dead_ratio": 24.0
+      },
+      "diffs": {
+        "dead_minutes": 1.976,
+        "denied_seconds": 69.0,
+        "played_seconds": 0.0,
+        "ratio": 19.56
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-223524-supply-round-2.txt",
+      "round_id": 9394,
+      "player_guid": "EDBB5DA9",
+      "player_name": "SuperBoyy",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 4.7,
+        "denied_playtime": 190.0,
+        "time_played_seconds": 606.0,
+        "time_dead_ratio": 25.6,
+        "ratio_calc": 46.53
+      },
+      "db": {
+        "time_dead_minutes": 2.585599899291992,
+        "denied_playtime": 36.0,
+        "time_played_seconds": 606.0,
+        "time_dead_ratio": 25.599998474121094
+      },
+      "diffs": {
+        "dead_minutes": 2.1144,
+        "denied_seconds": 154.0,
+        "played_seconds": 0.0,
+        "ratio": 20.93
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-224316-etl_sp_delivery-round-1.txt",
+      "round_id": 9396,
+      "player_guid": "5D989160",
+      "player_name": ".olz",
+      "flags": [
+        "dead_diff",
+        "lua_dead_gt_played"
+      ],
+      "lua": {
+        "time_dead_minutes": 5.9,
+        "denied_playtime": 59.0,
+        "time_played_seconds": 345.0,
+        "time_dead_ratio": 102.4,
+        "ratio_calc": 102.61
+      },
+      "db": {
+        "time_dead_minutes": 5.75,
+        "denied_playtime": 59.0,
+        "time_played_seconds": 345.0,
+        "time_dead_ratio": 100.0
+      },
+      "diffs": {
+        "dead_minutes": 0.15,
+        "denied_seconds": 0.0,
+        "played_seconds": 0.0,
+        "ratio": 2.61
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-224948-etl_sp_delivery-round-2.txt",
+      "round_id": 9397,
+      "player_guid": "652EB4A6",
+      "player_name": "qmr",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.6,
+        "denied_playtime": 18.0,
+        "time_played_seconds": 342.0,
+        "time_dead_ratio": 22.8,
+        "ratio_calc": 45.61
+      },
+      "db": {
+        "time_dead_minutes": 1.2996000051498413,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 342.0,
+        "time_dead_ratio": 22.80000114440918
+      },
+      "diffs": {
+        "dead_minutes": 1.3004,
+        "denied_seconds": 18.0,
+        "played_seconds": 0.0,
+        "ratio": 22.81
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-224948-etl_sp_delivery-round-2.txt",
+      "round_id": 9397,
+      "player_guid": "EDBB5DA9",
+      "player_name": "SuperBoyy",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.4,
+        "denied_playtime": 58.0,
+        "time_played_seconds": 342.0,
+        "time_dead_ratio": 20.6,
+        "ratio_calc": 42.11
+      },
+      "db": {
+        "time_dead_minutes": 1.1742000579833984,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 342.0,
+        "time_dead_ratio": 20.60000228881836
+      },
+      "diffs": {
+        "dead_minutes": 1.2258,
+        "denied_seconds": 58.0,
+        "played_seconds": 0.0,
+        "ratio": 21.51
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-224948-etl_sp_delivery-round-2.txt",
+      "round_id": 9397,
+      "player_guid": "D8423F90",
+      "player_name": "vid",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 4.0,
+        "denied_playtime": 76.0,
+        "time_played_seconds": 342.0,
+        "time_dead_ratio": 35.1,
+        "ratio_calc": 70.18
+      },
+      "db": {
+        "time_dead_minutes": 2.000699996948242,
+        "denied_playtime": 21.0,
+        "time_played_seconds": 342.0,
+        "time_dead_ratio": 35.10000228881836
+      },
+      "diffs": {
+        "dead_minutes": 1.9993,
+        "denied_seconds": 55.0,
+        "played_seconds": 0.0,
+        "ratio": 35.08
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-224948-etl_sp_delivery-round-2.txt",
+      "round_id": 9397,
+      "player_guid": "0A26D447",
+      "player_name": "carniee",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 3.5,
+        "denied_playtime": 92.0,
+        "time_played_seconds": 342.0,
+        "time_dead_ratio": 30.1,
+        "ratio_calc": 61.4
+      },
+      "db": {
+        "time_dead_minutes": 1.7157000303268433,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 342.0,
+        "time_dead_ratio": 30.10000228881836
+      },
+      "diffs": {
+        "dead_minutes": 1.7843,
+        "denied_seconds": 92.0,
+        "played_seconds": 0.0,
+        "ratio": 31.3
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-224948-etl_sp_delivery-round-2.txt",
+      "round_id": 9397,
+      "player_guid": "5D989160",
+      "player_name": ".olz",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.8,
+        "denied_playtime": 96.0,
+        "time_played_seconds": 342.0,
+        "time_dead_ratio": 24.5,
+        "ratio_calc": 49.12
+      },
+      "db": {
+        "time_dead_minutes": 1.3964999914169312,
+        "denied_playtime": 37.0,
+        "time_played_seconds": 342.0,
+        "time_dead_ratio": 24.5
+      },
+      "diffs": {
+        "dead_minutes": 1.4035,
+        "denied_seconds": 59.0,
+        "played_seconds": 0.0,
+        "ratio": 24.62
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-224948-etl_sp_delivery-round-2.txt",
+      "round_id": 9397,
+      "player_guid": "FDA127DF",
+      "player_name": ".wjs",
+      "flags": [
+        "dead_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.5,
+        "denied_playtime": 55.0,
+        "time_played_seconds": 342.0,
+        "time_dead_ratio": 22.0,
+        "ratio_calc": 43.86
+      },
+      "db": {
+        "time_dead_minutes": 1.253999948501587,
+        "denied_playtime": 54.0,
+        "time_played_seconds": 342.0,
+        "time_dead_ratio": 22.0
+      },
+      "diffs": {
+        "dead_minutes": 1.246,
+        "denied_seconds": 1.0,
+        "played_seconds": 0.0,
+        "ratio": 21.86
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-230744-te_escape2-round-2.txt",
+      "round_id": 9400,
+      "player_guid": "D8423F90",
+      "player_name": "vid",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 1.7,
+        "denied_playtime": 46.0,
+        "time_played_seconds": 215.0,
+        "time_dead_ratio": 11.2,
+        "ratio_calc": 47.44
+      },
+      "db": {
+        "time_dead_minutes": 0.4032000005245209,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 215.0,
+        "time_dead_ratio": 11.252093315124512
+      },
+      "diffs": {
+        "dead_minutes": 1.2968,
+        "denied_seconds": 46.0,
+        "played_seconds": 0.0,
+        "ratio": 36.19
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-230744-te_escape2-round-2.txt",
+      "round_id": 9400,
+      "player_guid": "EDBB5DA9",
+      "player_name": "SuperBoyy",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.4,
+        "denied_playtime": 32.0,
+        "time_played_seconds": 215.0,
+        "time_dead_ratio": 2.4,
+        "ratio_calc": 11.16
+      },
+      "db": {
+        "time_dead_minutes": 0.08640000224113464,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 215.0,
+        "time_dead_ratio": 2.411162853240967
+      },
+      "diffs": {
+        "dead_minutes": 0.3136,
+        "denied_seconds": 32.0,
+        "played_seconds": 0.0,
+        "ratio": 8.75
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-230744-te_escape2-round-2.txt",
+      "round_id": 9400,
+      "player_guid": "5D989160",
+      "player_name": ".olz",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.1,
+        "denied_playtime": 29.0,
+        "time_played_seconds": 215.0,
+        "time_dead_ratio": 13.7,
+        "ratio_calc": 58.6
+      },
+      "db": {
+        "time_dead_minutes": 0.49320000410079956,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 215.0,
+        "time_dead_ratio": 13.763721466064453
+      },
+      "diffs": {
+        "dead_minutes": 1.6068,
+        "denied_seconds": 29.0,
+        "played_seconds": 0.0,
+        "ratio": 44.84
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-230744-te_escape2-round-2.txt",
+      "round_id": 9400,
+      "player_guid": "0A26D447",
+      "player_name": "carniee",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 1.5,
+        "denied_playtime": 52.0,
+        "time_played_seconds": 215.0,
+        "time_dead_ratio": 9.7,
+        "ratio_calc": 41.86
+      },
+      "db": {
+        "time_dead_minutes": 0.3492000102996826,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 215.0,
+        "time_dead_ratio": 9.745116233825684
+      },
+      "diffs": {
+        "dead_minutes": 1.1508,
+        "denied_seconds": 52.0,
+        "played_seconds": 0.0,
+        "ratio": 32.12
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-230744-te_escape2-round-2.txt",
+      "round_id": 9400,
+      "player_guid": "FDA127DF",
+      "player_name": ".wjs",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 1.2,
+        "denied_playtime": 49.0,
+        "time_played_seconds": 215.0,
+        "time_dead_ratio": 7.6,
+        "ratio_calc": 33.49
+      },
+      "db": {
+        "time_dead_minutes": 0.2736000120639801,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 215.0,
+        "time_dead_ratio": 7.635349273681641
+      },
+      "diffs": {
+        "dead_minutes": 0.9264,
+        "denied_seconds": 49.0,
+        "played_seconds": 0.0,
+        "ratio": 25.85
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-230744-te_escape2-round-2.txt",
+      "round_id": 9400,
+      "player_guid": "652EB4A6",
+      "player_name": "qmr",
+      "flags": [
+        "dead_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.9,
+        "denied_playtime": 1.0,
+        "time_played_seconds": 215.0,
+        "time_dead_ratio": 18.7,
+        "ratio_calc": 80.93
+      },
+      "db": {
+        "time_dead_minutes": 0.6732000112533569,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 215.0,
+        "time_dead_ratio": 18.786977767944336
+      },
+      "diffs": {
+        "dead_minutes": 2.2268,
+        "denied_seconds": 1.0,
+        "played_seconds": 0.0,
+        "ratio": 62.14
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-232129-te_escape2-round-2.txt",
+      "round_id": 9403,
+      "player_guid": "D8423F90",
+      "player_name": "vid",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.5,
+        "denied_playtime": 40.0,
+        "time_played_seconds": 144.0,
+        "time_dead_ratio": 4.8,
+        "ratio_calc": 20.83
+      },
+      "db": {
+        "time_dead_minutes": 0.1151999980211258,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 144.0,
+        "time_dead_ratio": 4.799999713897705
+      },
+      "diffs": {
+        "dead_minutes": 0.3848,
+        "denied_seconds": 40.0,
+        "played_seconds": 0.0,
+        "ratio": 16.03
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-232129-te_escape2-round-2.txt",
+      "round_id": 9403,
+      "player_guid": "EDBB5DA9",
+      "player_name": "SuperBoyy",
+      "flags": [
+        "dead_diff",
+        "denied_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.1,
+        "denied_playtime": 16.0,
+        "time_played_seconds": 144.0,
+        "time_dead_ratio": 1.5,
+        "ratio_calc": 4.17
+      },
+      "db": {
+        "time_dead_minutes": 0.035999998450279236,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 144.0,
+        "time_dead_ratio": 1.4999998807907104
+      },
+      "diffs": {
+        "dead_minutes": 0.064,
+        "denied_seconds": 16.0,
+        "played_seconds": 0.0,
+        "ratio": 2.67
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-232129-te_escape2-round-2.txt",
+      "round_id": 9403,
+      "player_guid": "5D989160",
+      "player_name": ".olz",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.5,
+        "denied_playtime": 10.0,
+        "time_played_seconds": 144.0,
+        "time_dead_ratio": 4.6,
+        "ratio_calc": 20.83
+      },
+      "db": {
+        "time_dead_minutes": 0.1103999987244606,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 144.0,
+        "time_dead_ratio": 4.59999942779541
+      },
+      "diffs": {
+        "dead_minutes": 0.3896,
+        "denied_seconds": 10.0,
+        "played_seconds": 0.0,
+        "ratio": 16.23
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-232129-te_escape2-round-2.txt",
+      "round_id": 9403,
+      "player_guid": "FDA127DF",
+      "player_name": ".wjs",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.9,
+        "denied_playtime": 35.0,
+        "time_played_seconds": 144.0,
+        "time_dead_ratio": 9.2,
+        "ratio_calc": 37.5
+      },
+      "db": {
+        "time_dead_minutes": 0.2207999974489212,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 144.0,
+        "time_dead_ratio": 9.19999885559082
+      },
+      "diffs": {
+        "dead_minutes": 0.6792,
+        "denied_seconds": 35.0,
+        "played_seconds": 0.0,
+        "ratio": 28.3
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-232129-te_escape2-round-2.txt",
+      "round_id": 9403,
+      "player_guid": "652EB4A6",
+      "player_name": "qmr",
+      "flags": [
+        "dead_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.3,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 144.0,
+        "time_dead_ratio": 3.6,
+        "ratio_calc": 12.5
+      },
+      "db": {
+        "time_dead_minutes": 0.08640000224113464,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 144.0,
+        "time_dead_ratio": 3.5999999046325684
+      },
+      "diffs": {
+        "dead_minutes": 0.2136,
+        "denied_seconds": 0.0,
+        "played_seconds": 0.0,
+        "ratio": 8.9
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-232129-te_escape2-round-2.txt",
+      "round_id": 9403,
+      "player_guid": "0A26D447",
+      "player_name": "carniee",
+      "flags": [
+        "dead_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.6,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 144.0,
+        "time_dead_ratio": 6.3,
+        "ratio_calc": 25.0
+      },
+      "db": {
+        "time_dead_minutes": 0.15119999647140503,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 144.0,
+        "time_dead_ratio": 6.299999237060547
+      },
+      "diffs": {
+        "dead_minutes": 0.4488,
+        "denied_seconds": 0.0,
+        "played_seconds": 0.0,
+        "ratio": 18.7
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-232941-te_escape2-round-2.txt",
+      "round_id": 9406,
+      "player_guid": "0A26D447",
+      "player_name": "carniee",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.1,
+        "denied_playtime": 14.0,
+        "time_played_seconds": 204.0,
+        "time_dead_ratio": 31.5,
+        "ratio_calc": 61.76
+      },
+      "db": {
+        "time_dead_minutes": 1.0709999799728394,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 204.0,
+        "time_dead_ratio": 31.5
+      },
+      "diffs": {
+        "dead_minutes": 1.029,
+        "denied_seconds": 14.0,
+        "played_seconds": 0.0,
+        "ratio": 30.26
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-232941-te_escape2-round-2.txt",
+      "round_id": 9406,
+      "player_guid": "EDBB5DA9",
+      "player_name": "SuperBoyy",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.9,
+        "denied_playtime": 71.0,
+        "time_played_seconds": 204.0,
+        "time_dead_ratio": 13.0,
+        "ratio_calc": 26.47
+      },
+      "db": {
+        "time_dead_minutes": 0.44200000166893005,
+        "denied_playtime": 31.0,
+        "time_played_seconds": 204.0,
+        "time_dead_ratio": 13.0
+      },
+      "diffs": {
+        "dead_minutes": 0.458,
+        "denied_seconds": 40.0,
+        "played_seconds": 0.0,
+        "ratio": 13.47
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-232941-te_escape2-round-2.txt",
+      "round_id": 9406,
+      "player_guid": "5D989160",
+      "player_name": ".olz",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.0,
+        "denied_playtime": 46.0,
+        "time_played_seconds": 204.0,
+        "time_dead_ratio": 29.0,
+        "ratio_calc": 58.82
+      },
+      "db": {
+        "time_dead_minutes": 0.9860000014305115,
+        "denied_playtime": 10.0,
+        "time_played_seconds": 204.0,
+        "time_dead_ratio": 29.0
+      },
+      "diffs": {
+        "dead_minutes": 1.014,
+        "denied_seconds": 36.0,
+        "played_seconds": 0.0,
+        "ratio": 29.82
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-232941-te_escape2-round-2.txt",
+      "round_id": 9406,
+      "player_guid": "FDA127DF",
+      "player_name": ".wjs",
+      "flags": [
+        "dead_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 1.1,
+        "denied_playtime": 51.0,
+        "time_played_seconds": 204.0,
+        "time_dead_ratio": 17.0,
+        "ratio_calc": 32.35
+      },
+      "db": {
+        "time_dead_minutes": 0.578000009059906,
+        "denied_playtime": 51.0,
+        "time_played_seconds": 204.0,
+        "time_dead_ratio": 17.0
+      },
+      "diffs": {
+        "dead_minutes": 0.522,
+        "denied_seconds": 0.0,
+        "played_seconds": 0.0,
+        "ratio": 15.35
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-232941-te_escape2-round-2.txt",
+      "round_id": 9406,
+      "player_guid": "652EB4A6",
+      "player_name": "qmr",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 1.0,
+        "denied_playtime": 39.0,
+        "time_played_seconds": 204.0,
+        "time_dead_ratio": 15.4,
+        "ratio_calc": 29.41
+      },
+      "db": {
+        "time_dead_minutes": 0.5235999822616577,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 204.0,
+        "time_dead_ratio": 15.399998664855957
+      },
+      "diffs": {
+        "dead_minutes": 0.4764,
+        "denied_seconds": 39.0,
+        "played_seconds": 0.0,
+        "ratio": 14.01
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-232941-te_escape2-round-2.txt",
+      "round_id": 9406,
+      "player_guid": "D8423F90",
+      "player_name": "vid",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.3,
+        "denied_playtime": 32.0,
+        "time_played_seconds": 204.0,
+        "time_dead_ratio": 34.0,
+        "ratio_calc": 67.65
+      },
+      "db": {
+        "time_dead_minutes": 1.156000018119812,
+        "denied_playtime": 6.0,
+        "time_played_seconds": 204.0,
+        "time_dead_ratio": 34.0
+      },
+      "diffs": {
+        "dead_minutes": 1.144,
+        "denied_seconds": 26.0,
+        "played_seconds": 0.0,
+        "ratio": 33.65
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-233646-et_brewdog-round-2.txt",
+      "round_id": 9409,
+      "player_guid": "EDBB5DA9",
+      "player_name": "SuperBoyy",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.6,
+        "denied_playtime": 14.0,
+        "time_played_seconds": 155.0,
+        "time_dead_ratio": 11.1,
+        "ratio_calc": 23.23
+      },
+      "db": {
+        "time_dead_minutes": 0.28859999775886536,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 155.0,
+        "time_dead_ratio": 11.171612739562988
+      },
+      "diffs": {
+        "dead_minutes": 0.3114,
+        "denied_seconds": 14.0,
+        "played_seconds": 0.0,
+        "ratio": 12.05
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-233646-et_brewdog-round-2.txt",
+      "round_id": 9409,
+      "player_guid": "D8423F90",
+      "player_name": "vid",
+      "flags": [
+        "dead_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 1.4,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 155.0,
+        "time_dead_ratio": 26.5,
+        "ratio_calc": 54.19
+      },
+      "db": {
+        "time_dead_minutes": 0.6890000104904175,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 155.0,
+        "time_dead_ratio": 26.670969009399414
+      },
+      "diffs": {
+        "dead_minutes": 0.711,
+        "denied_seconds": 0.0,
+        "played_seconds": 0.0,
+        "ratio": 27.52
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-233646-et_brewdog-round-2.txt",
+      "round_id": 9409,
+      "player_guid": "0A26D447",
+      "player_name": "carniee",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.3,
+        "denied_playtime": 52.0,
+        "time_played_seconds": 155.0,
+        "time_dead_ratio": 6.2,
+        "ratio_calc": 11.61
+      },
+      "db": {
+        "time_dead_minutes": 0.16120000183582306,
+        "denied_playtime": 30.0,
+        "time_played_seconds": 155.0,
+        "time_dead_ratio": 6.240000247955322
+      },
+      "diffs": {
+        "dead_minutes": 0.1388,
+        "denied_seconds": 22.0,
+        "played_seconds": 0.0,
+        "ratio": 5.37
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-233646-et_brewdog-round-2.txt",
+      "round_id": 9409,
+      "player_guid": "5D989160",
+      "player_name": ".olz",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 1.2,
+        "denied_playtime": 32.0,
+        "time_played_seconds": 155.0,
+        "time_dead_ratio": 22.3,
+        "ratio_calc": 46.45
+      },
+      "db": {
+        "time_dead_minutes": 0.579800009727478,
+        "denied_playtime": 10.0,
+        "time_played_seconds": 155.0,
+        "time_dead_ratio": 22.443872451782227
+      },
+      "diffs": {
+        "dead_minutes": 0.6202,
+        "denied_seconds": 22.0,
+        "played_seconds": 0.0,
+        "ratio": 24.01
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-233646-et_brewdog-round-2.txt",
+      "round_id": 9409,
+      "player_guid": "652EB4A6",
+      "player_name": "qmr",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.0,
+        "denied_playtime": 8.0,
+        "time_played_seconds": 155.0,
+        "time_dead_ratio": 37.7,
+        "ratio_calc": 77.42
+      },
+      "db": {
+        "time_dead_minutes": 0.9801999926567078,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 155.0,
+        "time_dead_ratio": 37.9432258605957
+      },
+      "diffs": {
+        "dead_minutes": 1.0198,
+        "denied_seconds": 8.0,
+        "played_seconds": 0.0,
+        "ratio": 39.48
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-233646-et_brewdog-round-2.txt",
+      "round_id": 9409,
+      "player_guid": "FDA127DF",
+      "player_name": ".wjs",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 0.3,
+        "denied_playtime": 21.0,
+        "time_played_seconds": 155.0,
+        "time_dead_ratio": 5.0,
+        "ratio_calc": 11.61
+      },
+      "db": {
+        "time_dead_minutes": 0.12999999523162842,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 155.0,
+        "time_dead_ratio": 5.032258033752441
+      },
+      "diffs": {
+        "dead_minutes": 0.17,
+        "denied_seconds": 21.0,
+        "played_seconds": 0.0,
+        "ratio": 6.58
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-235125-etl_frostbite-round-2.txt",
+      "round_id": 9412,
+      "player_guid": "0A26D447",
+      "player_name": "carniee",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 2.7,
+        "denied_playtime": 41.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 21.1,
+        "ratio_calc": 84.82
+      },
+      "db": {
+        "time_dead_minutes": 0.6751999855041504,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 21.21047019958496
+      },
+      "diffs": {
+        "dead_minutes": 2.0248,
+        "denied_seconds": 41.0,
+        "played_seconds": 0.0,
+        "ratio": 63.61
+      }
+    },
+    {
+      "type": "mismatch",
+      "file": "2025-12-20-235125-etl_frostbite-round-2.txt",
+      "round_id": 9412,
+      "player_guid": "EDBB5DA9",
+      "player_name": "SuperBoyy",
+      "flags": [
+        "dead_diff",
+        "denied_diff",
+        "ratio_diff"
+      ],
+      "lua": {
+        "time_dead_minutes": 1.6,
+        "denied_playtime": 70.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 12.3,
+        "ratio_calc": 50.26
+      },
+      "db": {
+        "time_dead_minutes": 0.3935999870300293,
+        "denied_playtime": 0.0,
+        "time_played_seconds": 191.0,
+        "time_dead_ratio": 12.364397048950195
+      },
+      "diffs": {
+        "dead_minutes": 1.2064,
+        "denied_seconds": 70.0,
+        "played_seconds": 0.0,
+        "ratio": 37.9
+      }
+    }
+  ]
+}

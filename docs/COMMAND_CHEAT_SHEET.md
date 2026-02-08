@@ -248,7 +248,7 @@ cat .env | Select-String "CHANNEL"
 !ping                    # Check bot latency
 !help                    # Show command list
 !stats_info              # Show database statistics
-!maps                    # List all maps with stats
+!list_maps               # List available server maps
 !weapons                 # Show weapon statistics
 
 ```text

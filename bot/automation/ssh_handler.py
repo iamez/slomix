@@ -100,21 +100,31 @@ class SSHHandler:
         }
 
     @staticmethod
-    async def list_remote_files(ssh_config: Dict) -> List[str]:
+    async def list_remote_files(
+        ssh_config: Dict,
+        extensions: Optional[List[str]] = None,
+        exclude_suffixes: Optional[List[str]] = None,
+    ) -> List[str]:
         """
-        List .txt files on remote SSH server
+        List remote files on SSH server with extension filtering.
 
         Args:
             ssh_config: Dict with keys: host, port, user, key_path, remote_path
+            extensions: Optional list of allowed extensions (defaults to [".txt"])
+            exclude_suffixes: Optional list of suffixes to exclude (defaults to ["_ws.txt"])
 
         Returns:
-            List of .txt filenames (excludes _ws.txt files)
+            List of matching filenames
         """
         try:
             # Run in executor to avoid blocking event loop
             loop = asyncio.get_event_loop()
             files = await loop.run_in_executor(
-                None, SSHHandler._list_files_sync, ssh_config
+                None,
+                SSHHandler._list_files_sync,
+                ssh_config,
+                extensions,
+                exclude_suffixes,
             )
             return files
 
@@ -123,7 +133,11 @@ class SSHHandler:
             return []
 
     @staticmethod
-    def _list_files_sync(ssh_config: Dict) -> List[str]:
+    def _list_files_sync(
+        ssh_config: Dict,
+        extensions: Optional[List[str]],
+        exclude_suffixes: Optional[List[str]],
+    ) -> List[str]:
         """Synchronous SSH file listing"""
         import paramiko
 
@@ -147,17 +161,24 @@ class SSHHandler:
 
         files = sftp.listdir(ssh_config["remote_path"])
 
-        # Filter: only .txt files, exclude obsolete _ws.txt files
-        txt_files = [
-            f
-            for f in files
-            if f.endswith(".txt") and not f.endswith("_ws.txt")
-        ]
+        # Defaults preserve existing behavior
+        if extensions is None:
+            extensions = [".txt"]
+        if exclude_suffixes is None:
+            exclude_suffixes = ["_ws.txt"]
+
+        filtered_files = []
+        for filename in files:
+            if extensions and not any(filename.endswith(ext) for ext in extensions):
+                continue
+            if exclude_suffixes and any(filename.endswith(suffix) for suffix in exclude_suffixes):
+                continue
+            filtered_files.append(filename)
 
         sftp.close()
         ssh.close()
 
-        return txt_files
+        return filtered_files
 
     @staticmethod
     async def download_file(

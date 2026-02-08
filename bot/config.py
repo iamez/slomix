@@ -112,6 +112,10 @@ class BotConfig:
             if bot_channels_str else []
         )
 
+        # Dev timing comparison channel (for Lua vs Stats file analysis)
+        self.dev_timing_channel_id: int = int(self._get_config('DEV_TIMING_CHANNEL_ID', '0'))
+        self.timing_comparison_enabled: bool = self._get_config('TIMING_COMPARISON_ENABLED', 'true').lower() == 'true'
+
         # Derived channel lists (computed from above)
         self.public_channels: List[int] = [
             ch for ch in [self.production_channel_id, self.gather_channel_id, self.general_channel_id]
@@ -134,6 +138,17 @@ class BotConfig:
         # Monitoring grace period: Keep checking for files after voice channel empties
         # Default matches round_match_window_minutes for consistency
         self.monitoring_grace_period_minutes: int = int(self._get_config('MONITORING_GRACE_PERIOD_MINUTES', '45'))
+
+        # ==================== WEBSITE MONITORING (SERVER + VOICE HISTORY) ====================
+        self.monitoring_enabled: bool = self._get_config('MONITORING_ENABLED', 'true').lower() == 'true'
+        self.server_host: str = self._get_config('SERVER_HOST', 'puran.hehe.si')
+        self.server_port: int = int(self._get_config('SERVER_PORT', '27960'))
+        self.monitoring_server_interval_seconds: int = int(
+            self._get_config('MONITORING_SERVER_INTERVAL_SECONDS', '300')
+        )
+        self.monitoring_voice_interval_seconds: int = int(
+            self._get_config('MONITORING_VOICE_INTERVAL_SECONDS', '60')
+        )
 
         # ==================== AUTOMATION SYSTEM ====================
         self.automation_enabled: bool = self._get_config('AUTOMATION_ENABLED', 'false').lower() == 'true'
@@ -164,6 +179,15 @@ class BotConfig:
         self.ssh_voice_conditional: bool = self._get_config('SSH_VOICE_CONDITIONAL', 'true').lower() == 'true'
         self.ssh_grace_period_minutes: int = int(self._get_config('SSH_GRACE_PERIOD_MINUTES', '10'))
 
+        # ==================== GAMETIMES (LUA FALLBACK) ====================
+        # Optional ingestion of Lua gametimes JSON files if Discord webhook fails
+        self.gametimes_enabled: bool = self._get_config('GAMETIMES_ENABLED', 'false').lower() == 'true'
+        self.gametimes_remote_path: str = self._get_config('REMOTE_GAMETIMES_PATH', '')
+        self.gametimes_local_path: str = self._get_config('LOCAL_GAMETIMES_PATH', 'local_gametimes')
+        self.gametimes_startup_lookback_hours: int = int(
+            self._get_config('GAMETIMES_STARTUP_LOOKBACK_HOURS', str(self.ssh_startup_lookback_hours))
+        )
+
         # ==================== FILE PATHS ====================
         self.stats_directory: str = self._get_config('STATS_DIRECTORY', 'local_stats')
         self.local_stats_path: str = self._get_config('LOCAL_STATS_PATH', './local_stats')
@@ -182,6 +206,9 @@ class BotConfig:
 
         # Phase 3: Match predictions
         self.enable_match_predictions: bool = self._get_config('ENABLE_MATCH_PREDICTIONS', 'false').lower() == 'true'
+
+        # Optional: H2H results lookup from session_results (kept OFF by default until validated)
+        self.enable_h2h_results_lookup: bool = self._get_config('ENABLE_H2H_RESULTS_LOOKUP', 'false').lower() == 'true'
 
         # Phase 4: Live scoring
         self.enable_live_scoring: bool = self._get_config('ENABLE_LIVE_SCORING', 'false').lower() == 'true'
@@ -205,6 +232,19 @@ class BotConfig:
             id.strip() for id in webhook_whitelist_raw.split(',') if id.strip()
         ]
 
+        # ==================== LINKING FEATURES ====================
+        # Enable !select persistent selection cache (in-memory, TTL controlled)
+        self.enable_link_selection_state: bool = self._get_config('ENABLE_LINK_SELECTION_STATE', 'false').lower() == 'true'
+        self.link_selection_ttl_seconds: int = int(self._get_config('LINK_SELECTION_TTL_SECONDS', '60'))
+
+        # ==================== VOICE SESSION SUMMARY ====================
+        # Enable automatic session summary embeds after voice session ends
+        self.enable_voice_auto_summary: bool = self._get_config('ENABLE_VOICE_AUTO_SUMMARY', 'false').lower() == 'true'
+
+        # ==================== TEAM MAP PERFORMANCE ====================
+        # Enable TeamManager.get_map_performance (experimental)
+        self.enable_team_map_performance: bool = self._get_config('ENABLE_TEAM_MAP_PERFORMANCE', 'false').lower() == 'true'
+
         # ==================== WEBSOCKET PUSH NOTIFICATIONS (DEPRECATED) ====================
         # Bot connects OUT to VPS WebSocket server (no ports needed on bot machine)
         # NOTE: Replaced by webhook trigger approach (Dec 2025)
@@ -224,6 +264,16 @@ class BotConfig:
         self.proximity_auto_import: bool = self._get_config('PROXIMITY_AUTO_IMPORT', 'true').lower() == 'true'
         self.proximity_debug_log: bool = self._get_config('PROXIMITY_DEBUG_LOG', 'false').lower() == 'true'
         self.proximity_discord_commands: bool = self._get_config('PROXIMITY_DISCORD_COMMANDS', 'false').lower() == 'true'
+        self.proximity_remote_path: str = self._get_config('PROXIMITY_REMOTE_PATH', '')
+        self.proximity_local_path: str = self._get_config('PROXIMITY_LOCAL_PATH', 'local_proximity')
+        self.proximity_startup_lookback_hours: int = int(
+            self._get_config('PROXIMITY_STARTUP_LOOKBACK_HOURS', str(self.ssh_startup_lookback_hours))
+        )
+
+        # ==================== TIMING DEBUG ====================
+        # Compare stats file timing vs Lua webhook timing for validation
+        self.timing_debug_enabled: bool = self._get_config('TIMING_DEBUG_ENABLED', 'true').lower() == 'true'
+        self.timing_debug_channel_id: int = int(self._get_config('TIMING_DEBUG_CHANNEL_ID', '1424620499975274496'))
 
         logger.info(f"🔧 Configuration loaded: database_type={self.database_type}")
 
@@ -366,6 +416,11 @@ class BotConfig:
             if not self.ssh_remote_path:
                 errors.append("REMOTE_STATS_PATH is required when SSH_ENABLED=true")
 
+        # Monitoring configuration (if enabled)
+        if self.monitoring_enabled:
+            if not self.server_host:
+                errors.append("SERVER_HOST is required when MONITORING_ENABLED=true")
+
         # RCON configuration (if enabled)
         if self.rcon_enabled:
             if not self.rcon_host:
@@ -385,6 +440,15 @@ class BotConfig:
             logger.info(f"  PostgreSQL: {self.postgres_host}:{self.postgres_port}/{self.postgres_database}")
         logger.info(f"  Automation: {'ENABLED' if self.automation_enabled else 'DISABLED'}")
         logger.info(f"  SSH Monitoring: {'ENABLED' if self.ssh_enabled else 'DISABLED'}")
+        logger.info(f"  Activity Monitoring: {'ENABLED' if self.monitoring_enabled else 'DISABLED'}")
+        if self.monitoring_enabled:
+            logger.info(
+                f"  Monitor Server: {self.server_host}:{self.server_port} "
+                f"every {self.monitoring_server_interval_seconds}s"
+            )
+            logger.info(
+                f"  Monitor Voice: every {self.monitoring_voice_interval_seconds}s"
+            )
         if self.gaming_voice_channels:
             logger.info(f"  Voice Channels: {len(self.gaming_voice_channels)} monitored")
         logger.info(f"  Session Thresholds: {self.session_start_threshold}+ to start, <{self.session_end_threshold} to end")

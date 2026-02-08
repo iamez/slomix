@@ -1,0 +1,1695 @@
+hi codacy fund next issues, if its readable for you attempt to fix whatever you can
+issues i found on codacy:
+
+
+HIGH
+
+Error prone
+Potential
+
+'typing.Optional' imported but unused (F401)
+bot/cogs/
+
+last_session_cog.py
+
+13
+import logging
+14
+from datetime import datetime
+15
+from typing import Any, Dict, List, Optional, Tuple
+16
+
+17
+import discord
+
+Introduced by Your Name, 9 hours ago
+Time to fix: 10 minutes
+Why this is a problem
+
+Detecting errors early in Python code helps prevent runtime exceptions and improves code quality. Pyflakes provides a fast and safe way to find such errors without executing the code, avoiding side effects.
+How to fix it
+
+Review and fix the reported errors in the Python source code as identified by Pyflakes to ensure correctness and reliability.
+
+CRITICAL
+
+Security
+
+SQL Injection
+
+Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection.
+bot/core/
+
+team_manager.py
+
+207
+                    update_fields.append("gaming_session_id = EXCLUDED.gaming_session_id")
+208
+
+209
+                await self.db.execute(
+210
+                    f"""
+211
+                    INSERT INTO session_teams ({", ".join(insert_cols)})
+
+Introduced by Your Name, 9 hours ago
+Time to fix: 10 minutes
+Why this is a problem
+
+Concatenating untrusted input directly into SQL queries can allow attackers to inject malicious SQL code, leading to data breaches, data loss, or unauthorized access. Using raw SQL without proper parameterization bypasses SQLAlchemy's protections.
+How to fix it
+
+Use SQLAlchemy's prepared statements with named parameters (TextualSQL), SQL Expression Language, or ORM methods to safely compose and execute SQL queries, avoiding direct string concatenation of user input.
+HIGH
+
+Error prone
+Potential
+
+Unreachable code
+bot/services/
+
+endstats_aggregator.py
+
+287
+
+288
+        # Accuracy awards: show as percentage
+289
+        if "accuracy" in award_name.lower():
+290
+            return f"{value:.0f}%"
+
+Introduced by Your Name, 17 days ago
+Time to fix: 5 minutes
+Why this is a problem
+
+Unreachable code indicates dead code that will never run, leading to confusion, wasted maintenance effort, and potential bugs if the code was intended to execute.
+How to fix it
+
+Remove or refactor the code that appears after return or raise statements so that all code is reachable during execution.
+Examples
+Good examples
+
+def example(x):
+    if x > 0:
+        return x
+    print('Non-positive')
+
+Bad examples
+
+def example(x):
+    return x
+    print('This is unreachable')
+CRITICAL
+
+Security
+
+Cryptography
+
+The application was found using an insecure or risky digest or signature algorithm.
+bot/services/
+
+matchup_analytics_service.py
+
+186
+        full_hash = hashlib.md5(lineup_string.encode()).hexdigest()
+
+HIGH
+
+Security
+
+Cryptography
+
+Detected MD5 hash algorithm which is considered insecure.
+bot/services/
+
+matchup_analytics_service.py
+
+186
+        full_hash = hashlib.md5(lineup_string.encode()).hexdigest()
+
+
+Why this is a problem
+
+MD2, MD4, MD5, and SHA1 hash algorithms are vulnerable to collisions, meaning different inputs can produce the same hash value. This can compromise security, especially when used for password storage or digital signatures, leading to potential attacks or data breaches.
+How to fix it
+
+Replace insecure hash algorithms with secure alternatives such as SHA-256, SHA-384, or SHA-512. For password hashing, use dedicated algorithms like Argon2id or PBKDF2. Prefer using the 'cryptography' Python package over deprecated ones like 'Crypto' or 'Cryptodome'.
+Examples
+Good examples
+
+from cryptography.hazmat.primitives import hashes
+# Create a SHA384 digest
+digest = hashes.Hash(hashes.SHA384())
+# Update the digest with some initial data
+digest.update(b"some data to hash")
+# Add more data to the digest
+digest.update(b"some more data")
+# Finalize the digest as bytes
+result = digest.finalize()
+Why this is a problem
+
+MD5 is not collision resistant and can be exploited to produce the same hash for different inputs, making it unsuitable for cryptographic signatures and security-sensitive applications.
+How to fix it
+
+Replace MD5 with a more secure hash algorithm such as SHA256 or SHA3 to ensure cryptographic security and collision resistance.
+Why this is a problem
+
+Accessing an instance member before it is defined can lead to runtime errors or unexpected behavior because the member does not yet exist or hold a valid value.
+How to fix it
+
+Ensure that instance members are assigned or initialized before they are accessed in the code, typically by defining them in the constructor or before any usage.
+Examples
+Good examples
+
+class MyClass:
+    def __init__(self):
+        self.value = 10
+    def method(self):
+        print(self.value)  # Access after definition
+
+Bad examples
+
+class MyClass:
+    def method(self):
+        print(self.value)  # Access before definition
+    def __init__(self):
+        self.value = 10
+
+
+
+
+CRITICAL
+
+Security
+
+SQL Injection
+
+Detected string concatenation with a non-literal variable in a asyncpg Python SQL statement.
+
+postgresql_database_manager.py
+
+1791
+                    processed_result = await conn.execute(
+
+CRITICAL
+
+Security
+
+SQL Injection
+
+Detected string concatenation with a non-literal variable in a asyncpg Python SQL statement.
+
+postgresql_database_manager.py
+
+908
+                existing = await conn.fetchval(
+
+
+
+CRITICAL
+
+Security
+
+SQL Injection
+
+Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection.
+proximity/parser/
+
+parser.py
+
+628
+                await self.db_adapter.execute(query, tuple(values))
+
+
+CRITICAL
+
+Security
+
+XSS
+
+Unsafe call to slot.insertAdjacentHTML for argument 1
+website/js/
+
+app.js
+
+96
+        slot.insertAdjacentHTML('beforeend', bannerHtml);
+
+HIGH
+
+Error prone
+
+'lucide' is not defined.
+website/js/
+
+app.js
+
+100
+    lucide.createIcons();
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to outerHTML
+website/js/
+
+app.js
+
+94
+        existing.outerHTML = bannerHtml;
+
+HIGH
+
+Security
+
+XSS
+
+HTML passed in to function 'slot.insertAdjacentHTML'
+website/js/
+
+app.js
+
+96
+        slot.insertAdjacentHTML('beforeend', bannerHtml);
+
+HIGH
+
+Security
+
+Insecure Modules Libraries
+
+Generic Object Injection Sink
+website/js/
+
+app.js
+
+77
+    const tone = PROTOTYPE_TONE_STYLES[toneKey] || PROTOTYPE_TONE_STYLES.amber;
+
+CRITICAL
+
+Security
+
+XSS
+
+Detection of insertAdjacentHTML from non-constant definition.
+website/js/
+
+app.js
+
+96
+        slot.insertAdjacentHTML('beforeend', bannerHtml);
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+app.js
+
+94
+        existing.outerHTML = bannerHtml;
+
+
+CRITICAL
+
+Security
+
+Insecure Storage
+
+Possible hardcoded secret: Discord client ID
+website/js/
+
+badges.js
+
+127
+    if (discordId === '231165917604741121') {
+
+HIGH
+
+Security
+
+Insecure Modules Libraries
+
+Variable Assigned to Object Injection Sink
+website/js/
+
+badges.js
+
+219
+    const badge = BADGE_CONFIG[badgeKey];
+HIGH
+
+Security
+
+Insecure Modules Libraries
+
+Generic Object Injection Sink
+website/js/
+
+leaderboard.js
+
+129
+            colHeader.textContent = labelMap[value] || value.toUpperCase();
+
+HIGH
+
+Security
+
+XSS
+
+HTML passed in to function 'list.insertAdjacentHTML'
+website/js/
+
+leaderboard.js
+
+221
+            list.insertAdjacentHTML('beforeend', '<div class="text-xs text-slate-500">No DPM data yet</div>');
+
+CRITICAL
+
+Security
+
+XSS
+
+Unsafe call to list.insertAdjacentHTML for argument 1
+website/js/
+
+leaderboard.js
+
+213
+                list.insertAdjacentHTML('beforeend', renderRow(player, index, 'XP', 'text-brand-amber'));
+
+CRITICAL
+
+Security
+
+XSS
+
+Unsafe call to list.insertAdjacentHTML for argument 1
+website/js/
+
+leaderboard.js
+
+224
+                list.insertAdjacentHTML('beforeend', renderRow(player, index, 'DPM', 'text-brand-emerald'));
+
+HIGH
+
+Security
+
+XSS
+
+HTML passed in to function 'list.insertAdjacentHTML'
+website/js/
+
+leaderboard.js
+
+210
+            list.insertAdjacentHTML('beforeend', '<div class="text-xs text-slate-500">No XP data yet</div>');
+
+CRITICAL
+
+Security
+
+XSS
+
+Unsafe call to list.insertAdjacentHTML for argument 1
+website/js/
+
+leaderboard.js
+
+172
+            list.insertAdjacentHTML(
+
+CRITICAL
+
+Security
+
+XSS
+
+Unsafe call to list.insertAdjacentHTML for argument 1
+website/js/
+
+leaderboard.js
+
+206
+        list.insertAdjacentHTML('beforeend', `
+
+HIGH
+
+Security
+
+XSS
+
+Non-HTML variable 'safeErrors' is used to store raw HTML
+website/js/
+
+leaderboard.js
+
+171
+            const safeErrors = data.errors.map(err => escapeHtml(err)).join('<br>');
+
+CRITICAL
+
+Security
+
+XSS
+
+Detection of insertAdjacentHTML from non-constant definition.
+website/js/
+
+leaderboard.js
+
+213
+                list.insertAdjacentHTML('beforeend', renderRow(player, index, 'XP', 'text-brand-amber'));
+
+CRITICAL
+
+Security
+
+XSS
+
+Detection of insertAdjacentHTML from non-constant definition.
+website/js/
+
+leaderboard.js
+
+224
+                list.insertAdjacentHTML('beforeend', renderRow(player, index, 'DPM', 'text-brand-emerald'));
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+live-status.js
+
+515
+            container.innerHTML = `
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+live-status.js
+
+488
+            container.innerHTML = data.channels.map(channel => `
+
+HIGH
+
+Error prone
+
+'lucide' is not defined.
+website/js/
+
+live-status.js
+
+482
+            lucide.createIcons();
+
+HIGH
+
+Security
+
+XSS
+
+Unencoded return value from function 'data.channels.map' used in HTML context
+website/js/
+
+live-status.js
+
+488
+            container.innerHTML = data.channels.map(channel => `
+
+HIGH
+
+Security
+
+Insecure Modules Libraries
+
+Generic Object Injection Sink
+website/js/
+
+live-status.js
+
+223
+        const entry = status?.[kind];
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+live-status.js
+
+515
+            container.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+live-status.js
+
+488
+            container.innerHTML = data.channels.map(channel => `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `container.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+live-status.js
+
+515
+            container.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `container.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+live-status.js
+
+488
+            container.innerHTML = data.channels.map(channel => `
+
+HIGH
+
+Security
+
+XSS
+
+Unencoded return value from function 'weapons.map' used in HTML context
+website/js/
+
+matches.js
+
+417
+    grid.innerHTML = weapons.map(weapon => {
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+matches.js
+
+383
+    container.innerHTML = sorted.map(entry => {
+
+HIGH
+
+Error prone
+
+'formatTime' is not defined.
+website/js/
+
+matches.js
+
+911
+                                    <span class="font-mono text-white">${formatTime(data.time.time_played)}</span>
+
+HIGH
+
+Security
+
+Unexpected Behaviour
+
+Unhandled errors detected in asynchronous function
+website/js/
+
+matches.js
+
+322
+    weaponsHall = hof?.leaders || {};
+
+HIGH
+
+Security
+
+XSS
+
+Unencoded return value from function 'maps.map' used in HTML context
+website/js/
+
+matches.js
+
+192
+    grid.innerHTML = maps.map((map) => {
+
+HIGH
+
+Security
+
+Insecure Modules Libraries
+
+Generic Object Injection Sink
+website/js/
+
+matches.js
+
+331
+    return weaponCategories[key] || 'Other';
+
+HIGH
+
+Error prone
+
+'formatTime' is not defined.
+website/js/
+
+matches.js
+
+915
+                                    <span class="font-mono text-slate-400">${formatTime(data.time.time_dead)}</span>
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+matches.js
+
+805
+        detailsRow.innerHTML = `
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+matches.js
+
+192
+    grid.innerHTML = maps.map((map) => {
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+matches.js
+
+158
+    container.innerHTML = `
+
+HIGH
+
+Security
+
+XSS
+
+Unencoded return value from function 'sorted.map' used in HTML context
+website/js/
+
+matches.js
+
+383
+    container.innerHTML = sorted.map(entry => {
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+matches.js
+
+417
+    grid.innerHTML = weapons.map(weapon => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `container.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+matches.js
+
+158
+    container.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+matches.js
+
+158
+    container.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+matches.js
+
+192
+    grid.innerHTML = maps.map((map) => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `grid.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+matches.js
+
+417
+    grid.innerHTML = weapons.map(weapon => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `grid.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+matches.js
+
+192
+    grid.innerHTML = maps.map((map) => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+matches.js
+
+805
+        detailsRow.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `detailsRow.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+matches.js
+
+805
+        detailsRow.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+matches.js
+
+417
+    grid.innerHTML = weapons.map(weapon => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `container.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+matches.js
+
+383
+    container.innerHTML = sorted.map(entry => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+matches.js
+
+383
+    container.innerHTML = sorted.map(entry => {
+
+HIGH
+
+Error prone
+Potential
+
+'content' is not defined.
+website/js/
+
+matches.js
+
+655
+        content.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load match details</div>';
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+proximity.js
+
+45
+        container.innerHTML = `<div class="text-[11px] text-slate-500">${escapeHtml(emptyLabel)}</div>`;
+
+HIGH
+
+Security
+
+XSS
+
+Unencoded return value from function 'buckets.map' used in HTML context
+website/js/
+
+proximity.js
+
+169
+    container.innerHTML = buckets.map((b) => {
+
+HIGH
+
+Error prone
+
+'lucide' is not defined.
+website/js/
+
+proximity.js
+
+632
+        lucide.createIcons();
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+proximity.js
+
+49
+    container.innerHTML = rows.map((row, idx) => {
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+proximity.js
+
+541
+                stateEl.innerHTML = `
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+proximity.js
+
+85
+    container.innerHTML = events.map((e) => {
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+proximity.js
+
+140
+    container.innerHTML = duos.slice(0, 6).map((duo, idx) => {
+
+HIGH
+
+Security
+
+XSS
+
+Unencoded return value from function 'rows.map' used in HTML context
+website/js/
+
+proximity.js
+
+49
+    container.innerHTML = rows.map((row, idx) => {
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+proximity.js
+
+169
+    container.innerHTML = buckets.map((b) => {
+
+HIGH
+
+Security
+
+XSS
+
+Unencoded return value from function 'events.map' used in HTML context
+website/js/
+
+proximity.js
+
+85
+    container.innerHTML = events.map((e) => {
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+proximity.js
+
+434
+            statsEl.innerHTML = `
+
+HIGH
+
+Security
+
+XSS
+
+Unencoded return value from function 'duos.slice(0, 6).map' used in HTML context
+website/js/
+
+proximity.js
+
+140
+    container.innerHTML = duos.slice(0, 6).map((duo, idx) => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+45
+        container.innerHTML = `<div class="text-[11px] text-slate-500">${escapeHtml(emptyLabel)}</div>`;
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `stateEl.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+541
+                stateEl.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `container.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+45
+        container.innerHTML = `<div class="text-[11px] text-slate-500">${escapeHtml(emptyLabel)}</div>`;
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `container.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+169
+    container.innerHTML = buckets.map((b) => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `container.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+140
+    container.innerHTML = duos.slice(0, 6).map((duo, idx) => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `container.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+49
+    container.innerHTML = rows.map((row, idx) => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+434
+            statsEl.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+140
+    container.innerHTML = duos.slice(0, 6).map((duo, idx) => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+169
+    container.innerHTML = buckets.map((b) => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+85
+    container.innerHTML = events.map((e) => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `statsEl.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+434
+            statsEl.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+541
+                stateEl.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `container.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+85
+    container.innerHTML = events.map((e) => {
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+proximity.js
+
+49
+    container.innerHTML = rows.map((row, idx) => {
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+season-stats.js
+
+91
+        container.innerHTML = html;
+
+HIGH
+
+Security
+
+XSS
+
+Unsafe assignment to innerHTML
+website/js/
+
+season-stats.js
+
+155
+            grid.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+season-stats.js
+
+155
+            grid.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in methods like `innerHTML`, `outerHTML` or `document.write` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+season-stats.js
+
+91
+        container.innerHTML = html;
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `grid.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+season-stats.js
+
+155
+            grid.innerHTML = `
+
+CRITICAL
+
+Security
+
+XSS
+
+User controlled data in a `container.innerHTML` is an anti-pattern that can lead to XSS vulnerabilities
+website/js/
+
+season-stats.js
+
+91
+        container.innerHTML = html;
+
+HIGH
+
+Security
+
+Insecure Modules Libraries
+
+Generic Object Injection Sink
+website/js/
+
+sessions.js
+
+835
+        const avgDpm = sums.map((sum, idx) => counts[idx] > 0 ? Math.round(sum / counts[idx]) : 0);
+
+HIGH
+
+Security
+
+Insecure Modules Libraries
+
+Generic Object Injection Sink
+website/js/
+
+sessions.js
+
+72
+        if (MAP_IMAGE_MAP[candidate]) return MAP_IMAGE_MAP[candidate];
+
+HIGH
+
+Security
+
+Insecure Modules Libraries
+
+Generic Object Injection Sink
+website/js/
+
+sessions.js
+
+56
+    if (MAP_IMAGE_MAP[key]) return MAP_IMAGE_MAP[key];
+
+HIGH
+
+Error prone
+
+'Chart' is not defined.
+website/js/
+
+sessions.js
+
+529
+                new Chart(ctxScatter.getContext('2d'), {
+
+HIGH
+
+Error prone
+
+'Chart' is not defined.
+website/js/
+
+sessions.js
+
+979
+        new Chart(ctxSelfkill.getContext('2d'), {
+
+HIGH
+
+Error prone
+
+'Chart' is not defined.
+website/js/
+
+sessions.js
+
+939
+        new Chart(ctxEfficiency.getContext('2d'), {
+
+HIGH
+
+Security
+
+Insecure Modules Libraries
+
+Generic Object Injection Sink
+website/js/
+
+sessions.js
+
+831
+                counts[idx] += 1;
+
+HIGH
+
+Error prone
+
+'Chart' is not defined.
+website/js/
+
+sessions.js
+
+837
+        new Chart(ctxTimeline.getContext('2d'), {
+
+HIGH
+
+Security
+
+Insecure Modules Libraries
+
+Generic Object Injection Sink
+website/js/
+
+sessions.js
+
+830
+                sums[idx] += Number(entry.dpm || 0);
+
+HIGH
+
+Security
+
+XSS
+
+HTML passed in to function 'container.insertAdjacentHTML'
+website/js/
+
+sessions.js
+
+704
+        container.insertAdjacentHTML('beforeend', mapBreakdownHtml);
+
+HIGH
+
+Error prone
+
+'Chart' is not defined.
+website/js/
+
+sessions.js
+
+609
+                new Chart(ctxDamage.getContext('2d'), {
+
+HIGH
+
+Error prone
+
+'Chart' is not defined.
+website/js/
+
+sessions.js
+
+907
+            new Chart(ctxRadar.getContext('2d'), {
+
+HIGH
+
+Security
+
+XSS
+
+Unencoded return value from function 'data.teams.map' used in HTML context
+website/js/
+
+sessions.js
+
+709
+        const teamHtml = data.teams.map((team, idx) => {
+
+HIGH
+
+Error prone
+
+'Chart' is not defined.
+website/js/
+
+sessions.js
+
+501
+            new Chart(ctxTeam.getContext('2d'), {
+
+CRITICAL
+
+Security
+
+XSS
+
+Unsafe call to container.insertAdjacentHTML for argument 1
+website/js/
+
+sessions.js
+
+765
+        container.insertAdjacentHTML(
+
+CRITICAL
+
+Security
+
+XSS
+
+Unsafe call to container.insertAdjacentHTML for argument 1
+website/js/
+
+sessions.js
+
+760
+        container.insertAdjacentHTML('beforeend', rosterHtml);
+
+HIGH
+
+Security
+
+XSS
+
+HTML passed in to function 'container.insertAdjacentHTML'
+website/js/
+
+sessions.js
+
+760
+        container.insertAdjacentHTML('beforeend', rosterHtml);
+
+CRITICAL
+
+Security
+
+XSS
+
+Unsafe call to container.insertAdjacentHTML for argument 1
+website/js/
+
+sessions.js
+
+704
+        container.insertAdjacentHTML('beforeend', mapBreakdownHtml);
+
+HIGH
+
+Error prone
+
+'Chart' is not defined.
+website/js/
+
+sessions.js
+
+571
+                new Chart(ctxTime.getContext('2d'), {
+
+HIGH
+
+Error prone
+
+'Chart' is not defined.
+website/js/
+
+sessions.js
+
+1034
+        new Chart(ctxUtility.getContext('2d'), {
+
+CRITICAL
+
+Security
+
+XSS
+
+Detection of insertAdjacentHTML from non-constant definition.
+website/js/
+
+sessions.js
+
+767
+            `<div class="mt-4 text-xs text-amber-300">Unassigned players: ${names}</div>`
+
+CRITICAL
+
+Security
+
+XSS
+
+Detection of insertAdjacentHTML from non-constant definition.
+website/js/
+
+sessions.js
+
+760
+        container.insertAdjacentHTML('beforeend', rosterHtml);
+
+CRITICAL
+
+Security
+
+XSS
+
+Detection of insertAdjacentHTML from non-constant definition.
+website/js/
+
+sessions.js
+
+775
+            `<div class="glass-panel p-4 rounded-xl mt-4">
+
+CRITICAL
+
+Security
+
+XSS
+
+Detection of insertAdjacentHTML from non-constant definition.
+website/js/
+
+sessions.js
+
+704
+        container.insertAdjacentHTML('beforeend', mapBreakdownHtml);
+

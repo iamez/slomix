@@ -46,6 +46,8 @@ class TestStatsParserBasics:
         assert parser.parse_time_to_seconds("10:45") == 645
         assert parser.parse_time_to_seconds("0:30") == 30
         assert parser.parse_time_to_seconds("30:00") == 1800
+        assert parser.parse_time_to_seconds("20.00") == 1200
+        assert parser.parse_time_to_seconds("5.25") == 315
 
     def test_is_round_2_file(self, parser):
         """Test Round 2 file detection from filename"""

@@ -1,0 +1,70 @@
+LUA error logs provided by user (compiled for sharing)
+Date compiled: 2026-02-07
+
+---
+
+[Log Snippet A]
+5454325 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+5507425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+5507725 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+5508225 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+5508725 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+5509225 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+5509725 Userinfo: \cg_etVersion\ET Legacy v2.80000000 win-x86\cg_uinfo\6 0 125\g_password\none\cl_guid\1C747DF1A037D2AFECCB6ED063DF44E7\password\glhf\etVersion\ET Legacy v2.80.0 win-x86 Apr  9 2022\cg_allowGeoIP\1\snaps\40\rate\45000\name\^dProner^e2026\cl_wwwDownload\1\ip\188.198.180.118:8415
+5509725 ClientUserinfoChanged: 4 n\^dProner^e2026\t\1\c\2\lc\2\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\2\lsw\2\u\194
+5509725 Userinfo: \cg_etVersion\ET Legacy v2.83020000 win-x86\cg_uinfo\14 0 100\g_password\none\cl_guid\DB00AA454019890392D8DBFF5704C999\password\glhf\etVersion\ET Legacy v2.83.2 win-x86 Jan 19 2025\cl_wwwDownload\1\name\Cru^53^7lzor^5.\cg_allowGeoIP\1\rate\90000\snaps\40\ip\213.172.252.194:27960
+5509725 ClientUserinfoChanged: 5 n\Cru^53^7lzor^5.\t\1\c\1\lc\1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\2\lsw\2\u\194
+5509725 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+5510225 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+5510725 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+5510775 Item: 5 item_health
+5511225 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+
+---
+
+[Log Snippet B]
+286250 SV_PacketEvent: fixing up a translated port
+281925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+282425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+282925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+283425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+283925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+284425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+284925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+285425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+285925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+286250 SV_PacketEvent: fixing up a translated port
+286425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+286925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+287425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+287925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+288425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+288925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+289425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+289925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+290425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+290925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+291425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+291925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+292425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+
+---
+
+[Log Snippet C]
+334925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+335050 broadcast: print "^1FIGHT!\n"
+335425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+335925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+336425 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+336925 Lua 5.4 API: ^$et_RunFrame error running lua script: '[string "luascripts/stats_discord_webhook.lua"]:457: tried to get invalid gentity field "pers.connected"'
+337000 Userinfo: \cg_etVersion\ET Legacy v2.82010000 win-x86\cg_uinfo\14 0 125\g_password\none\cl_guid\EDBB5DA97C9F52151865C5F223F9B951\password\glhf\etVersion\ET Legacy v2.82.1 win-x86 Apr 19 2024\cl_wwwDownload\1\rate\90000\snaps\40\cg_allowGeoIP\1\name\^6S^2uper^6B^2oyy\ip\188.159.244.135:27960
+337000 ClientUserinfoChanged: 4 n\^6S^2uper^6B^2oyy\t\2\c\1\lc\1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7\u\106
+337000 Userinfo: \cg_etVersion\ET Legacy v2.80020000 win-x86\cg_uinfo\12 0 100\g_password\none\cl_guid\FDA127DF5246F28D7355490F749DD894\password\glhf\etVersion\ET Legacy v2.80.2 win-x86 May  8 2022\cl_wwwDownload\1\cg_allowGeoIP\1\snaps\40\rate\45000\name\^3.w^7ajs\ip\193.138.53.199:27960
+337000 ClientUserinfoChanged: 6 n\^3.w^7ajs\t\2\c\1\lc\1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7\u\194
+337075 Lua 5.4 API: ^$et_Damage error running lua script: '[string "proximity_tracker.lua"]:405: tried to get invalid gentity field "pers.connected"'
+337075 Kill: 1022 1 35: ^7<world>^7 killed ^jbronze^0.^7 by MOD_TRIGGER_HURT
+337075 ********************
+ERROR: SV_GetUserinfo: bad index 1022
+********************
+337075 ----- Server Shutdown (Server crashed: SV_GetUserinfo: bad index 1022) -----
+

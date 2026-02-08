@@ -8,6 +8,28 @@ import { AUTH_BASE, fetchJSON, escapeHtml } from './utils.js';
 // Will be set by app.js
 let loadPlayerProfileFn = null;
 
+function getAdminDiscordIds() {
+    const meta = document.querySelector('meta[name="slomix-admin-discord-ids"]');
+    if (!meta?.content) return [];
+    return meta.content
+        .split(',')
+        .map(id => id.trim())
+        .filter(Boolean);
+}
+
+function updateAdminButton(user) {
+    const adminButton = document.getElementById('link-admin');
+    if (!adminButton) return;
+
+    const isAdmin = getAdminDiscordIds().includes(String(user?.id || ''));
+    if (isAdmin) {
+        adminButton.classList.remove('hidden');
+    } else {
+        adminButton.classList.add('hidden');
+        adminButton.classList.remove('active');
+    }
+}
+
 /**
  * Set the loadPlayerProfile function reference (to avoid circular imports)
  */
@@ -41,6 +63,8 @@ export async function checkLoginStatus() {
             navAvatar.textContent = displayName.substring(0, 2).toUpperCase();
         }
 
+        updateAdminButton(user);
+
         // Check Link
         if (!user.linked_player) {
             openModal('modal-link-player');
@@ -56,6 +80,7 @@ export async function checkLoginStatus() {
             userEl.classList.add('hidden');
             userEl.classList.remove('flex');
         }
+        updateAdminButton(null);
     }
 }
 
@@ -101,11 +126,17 @@ export async function searchPlayer(query) {
         list.innerHTML = '';
 
         results.forEach(player => {
+            const isString = typeof player === 'string';
+            const displayName = isString ? player : (player.name || player.canonical_name || 'Unknown');
+            const linkName = isString ? player : (player.canonical_name || player.name || 'Unknown');
             const div = document.createElement('div');
             div.className = 'p-3 rounded bg-white/5 hover:bg-white/10 cursor-pointer flex justify-between items-center transition';
-            const safeName = escapeHtml(player.name);
+            const safeName = escapeHtml(displayName);
             div.innerHTML = `<span class="font-bold text-white">${safeName}</span> <span class="text-xs text-brand-blue font-bold">CLAIM</span>`;
-            div.onclick = () => linkPlayer(player.guid, player.name);
+            div.onclick = () => {
+                if (isString || !player.guid) return;
+                linkPlayer(player.guid, linkName);
+            };
             list.appendChild(div);
         });
 
@@ -162,10 +193,13 @@ export async function searchHeroPlayer(query) {
         } else {
             heroSearchResults.innerHTML = '';
             results.forEach(player => {
+                const isString = typeof player === 'string';
+                const displayName = isString ? player : (player.name || player.canonical_name || 'Unknown');
+                const lookupId = isString ? displayName : (player.guid || player.name || displayName);
                 const div = document.createElement('div');
                 div.className = 'p-4 hover:bg-white/5 cursor-pointer flex justify-between items-center transition border-b border-white/5 last:border-0';
-                const safeName = escapeHtml(player.name);
-                const safeInitials = escapeHtml(player.name.replace(/\^./g, '').substring(0, 2).toUpperCase());
+                const safeName = escapeHtml(displayName);
+                const safeInitials = escapeHtml(displayName.replace(/\^./g, '').substring(0, 2).toUpperCase());
                 div.innerHTML = `
                 <div class="flex items-center gap-3">
                     <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">
@@ -178,7 +212,7 @@ export async function searchHeroPlayer(query) {
                 div.onclick = () => {
                     heroSearchResults.classList.add('hidden');
                     if (heroSearchInput) heroSearchInput.value = '';
-                    if (loadPlayerProfileFn) loadPlayerProfileFn(player.name);
+                    if (loadPlayerProfileFn) loadPlayerProfileFn(lookupId);
                 };
                 heroSearchResults.appendChild(div);
             });

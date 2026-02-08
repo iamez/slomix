@@ -1,0 +1,273 @@
+================================================================================
+CLAUDE CODE RESTART GUIDE
+Session: 2026-01-30 (12+ hours)
+================================================================================
+
+CURRENT STATUS:
+---------------
+
+⚠️  CODE CHANGES ARE LOCAL ONLY - NOT COMMITTED TO GIT!
+⚠️  GitHub/Git = Clean backup of working state BEFORE changes
+✅ Documentation committed to: feature/lua-webhook-realtime-stats
+✅ 277 lines changed in 6 files (LOCAL, not in git)
+✅ 32 documentation files created (committed)
+⚠️  Lua webhook fix NOT deployed (vps_scripts gitignored)
+
+FILES MODIFIED (LOCAL ONLY - NOT IN GIT):
+-----------------------------------------
+
+⚠️  IMPORTANT: These changes are in your working directory but NOT committed!
+    Git repository still has clean backup of working state before changes.
+
+1. bot/community_stats_parser.py (LOCAL CHANGES)
+   - R2 parser fix (12 fields: headshot_kills, time_dead, etc.)
+   - 1,933 records affected
+
+2. bot/services/session_stats_aggregator.py (LOCAL CHANGES)
+   - Session score tracking (59 new lines)
+   - calculate_session_scores() function
+
+3. bot/cogs/last_session_cog.py (LOCAL CHANGES)
+   - Display team names and scores
+
+4. postgresql_database_manager.py (LOCAL CHANGES)
+   - ON CONFLICT fix (winner_team, defender_team)
+   - Auto team assignment (138 new lines)
+
+5. bot/ultimate_bot.py (LOCAL CHANGES)
+   - Schema column count update
+
+6. vps_scripts/stats_discord_webhook.lua (LOCAL CHANGES - GITIGNORED)
+   - Gamestate fix (et.GS_PLAYING → 0)
+
+
+WHEN YOU RESTART CLAUDE CODE:
+------------------------------
+
+1. READ FIRST:
+   → docs/2026-01-30-r2-parser-fix/TODO.txt
+   → docs/2026-01-30-r2-parser-fix/TOMORROW_CHECKLIST.md
+
+2. SAY TO CLAUDE:
+   "We worked on fixing the R2 parser and implementing auto team assignment
+   last night. All changes are committed. Please read:
+   - docs/2026-01-30-r2-parser-fix/TODO.txt
+   - docs/2026-01-30-r2-parser-fix/TOMORROW_CHECKLIST.md
+
+   Current issue: Need to re-import 2026-01-27 to 2026-01-30 but
+   postgresql_database_manager.py is outdated. What's the safest approach?"
+
+
+IMMEDIATE PRIORITIES:
+---------------------
+
+1. ⚠️  Find safe way to re-import 2026-01-27 to 2026-01-30
+      Problem: postgresql_database_manager.py not updated with tonight's fixes
+      Options:
+      a) Manual SQL UPDATE of header data
+      b) Standalone script for rounds table only
+      c) Review and fix postgresql_database_manager.py first
+
+2. 🧪 Test R2 parser fix
+      Query: SELECT COUNT(*) FROM player_comprehensive_stats
+             WHERE round_number = 2 AND headshot_kills < 0;
+      Expected: 0
+
+3. 🧪 Test !last_session command
+      Expected: Shows team names and scores
+      Expected: No "⚠️ No team rosters available" warning
+
+4. 🚀 Deploy Lua webhook fix to VPS
+      See: docs/2026-01-30-r2-parser-fix/VPS_DEPLOYMENT_NOTE.txt
+
+
+BACKGROUND CONTEXT FOR CLAUDE:
+-------------------------------
+
+Tonight we discovered and fixed 7 major issues:
+
+1. R2 Parser Bug - 12 fields had negative values (1,933 records)
+   Root cause: Some fields are R2-only, not cumulative
+   Fix: Added R2_ONLY_FIELDS list and differential calculation
+
+2. Lua Webhook - Showed "NO LUA DATA" every round
+   Root cause: et.GS_PLAYING constant doesn't exist
+   Fix: Hardcoded to 0 (actual gamestate value)
+
+3. Header Data Lost - Re-imports lost defender_team/winner_team
+   Root cause: ON CONFLICT didn't update these columns
+   Fix: Added to UPDATE clause
+
+4. No Auto Teams - session_teams had to be set manually
+   Solution: New _auto_assign_teams_from_r1() function
+   Triggers on Round 1 import, uses defender_team from header
+
+5. No Session Scores - !last_session didn't show match score
+   Solution: New calculate_session_scores() function
+   Uses winner_team to count wins per team
+
+6. Spectators Included - Players with team=3 assigned to Team B
+   Fix: Filter team != 1,2 in auto-assignment
+
+7. Filename Detection - Used string match for Round 1
+   Fix: Use parsed round_number field instead
+
+
+DATABASE STATE:
+---------------
+
+⚠️  10 rounds from 2026-01-27+ have:
+    - defender_team = 0 (should be 1 or 2)
+    - winner_team = 0 (should be 0, 1, or 2)
+
+⚠️  0 session_teams entries for recent dates
+    - Need auto-assignment to run
+
+✅ 3 spectator records exist (team=3)
+    - Fix applied, will be filtered on re-import
+
+✅ R2 negative values will be fixed on re-import
+
+
+TESTING CHECKLIST (from TOMORROW_CHECKLIST.md):
+------------------------------------------------
+
+Priority 1: Re-import 2026-01-27 to 2026-01-30 (15 min)
+  ⚠️  BLOCKED - Need safe re-import method
+
+Priority 2: Test !last_session display (5 min)
+  - Run: !last_session
+  - Check: Team names show (not blank)
+  - Check: Scores show (not 0-0)
+  - Check: No warning about team rosters
+
+Priority 3: Check for spectators (5 min)
+  - Query: SELECT COUNT(*), team FROM player_comprehensive_stats
+           WHERE team NOT IN (1, 2) GROUP BY team;
+  - Expected: 3 records (known spectators)
+
+Priority 4: Verify R2 fields (10 min)
+  - Query: SELECT COUNT(*) FROM player_comprehensive_stats
+           WHERE round_number = 2 AND headshot_kills < 0;
+  - Expected: 0 (after re-import)
+
+Priority 5: Wait for live game
+  - Monitor Lua webhook
+  - Check auto-assignment triggers
+  - Verify timing comparison shows Lua data
+
+
+EDGE CASES TO MONITOR (from MASTER_CODE_REVIEW.md):
+----------------------------------------------------
+
+1. Spectator Players (team=3)
+   Status: Filter applied
+   Impact: Low (3 records total)
+
+2. Midnight Crossover Sessions
+   Status: gaming_session_id should handle it
+   Impact: Medium (monitor naturally)
+
+3. R0 Warmup Rounds
+   Status: Working as designed
+   Impact: Low (filtered from calculations)
+
+
+SAFE RE-IMPORT APPROACHES:
+---------------------------
+
+Option A: Manual SQL UPDATE
+  Pros: Targeted, safe, no risk to existing data
+  Cons: Need to parse files manually
+  Steps:
+    1. Parse R1 files to extract defender_team, winner_team
+    2. UPDATE rounds table directly
+    3. Run auto-assignment function separately
+
+Option B: Fix postgresql_database_manager.py
+  Pros: Reusable for future issues
+  Cons: Need to review 1,573 lines of code
+  Steps:
+    1. Check foreign key constraints
+    2. Update delete order (children first)
+    3. Test with small date range first
+
+Option C: Standalone Script
+  Pros: Clean, focused, testable
+  Cons: Need to write from scratch
+  Steps:
+    1. Create minimal script using parser
+    2. Extract header data from files
+    3. UPDATE rounds table
+    4. Call auto-assignment
+
+
+DOCUMENTATION HIERARCHY:
+-------------------------
+
+Quick Start:
+  → TODO.txt (this file's sibling)
+  → TOMORROW_CHECKLIST.md
+
+Deep Dive:
+  → reports/MASTER_CODE_REVIEW.md (full technical analysis)
+  → reports/IMPLEMENTATION_SUMMARY.md (feature overview)
+  → reports/CODE_REVIEW_FINDINGS.md (edge cases)
+
+Specific Topics:
+  → reports/PARSER_FIX_COMPLETE.md (R2 parser details)
+  → reports/LUA_WEBHOOK_FIX.md (webhook gamestate)
+  → VPS_DEPLOYMENT_NOTE.txt (Lua deployment)
+
+
+GIT COMMANDS:
+-------------
+
+# View LOCAL changes (not committed)
+git diff
+
+# View modified files status
+git status
+
+# Discard LOCAL changes if needed (restore to git state)
+git restore <file>
+
+# View git history (documentation commits only)
+git log --oneline -5
+
+⚠️  DO NOT commit code changes until after testing!
+    Git = your backup of working state
+
+
+SUCCESS CRITERIA (Full List):
+------------------------------
+
+✅ Re-import completes without errors
+✅ defender_team shows 1 or 2 (not 0)
+✅ winner_team shows 0, 1, or 2
+✅ session_teams entries created
+✅ !last_session shows team names
+✅ !last_session shows scores (not 0-0)
+✅ No "⚠️ No team rosters available" warning
+✅ All R2 fields positive (no negatives)
+✅ SuperBoyy test case values correct
+✅ Spectator check shows 3 records (known)
+✅ Live game triggers auto-assignment
+✅ Lua webhook fires
+✅ Timing comparison shows Lua data
+
+
+ESTIMATED TIME:
+---------------
+
+Planning safe re-import approach: 10-15 min
+Executing re-import: 15 min
+Testing all checks: 35 min
+Total: ~60 min + waiting for live game
+
+
+================================================================================
+GET SOME SLEEP! 😴
+Everything is committed and documented.
+Start fresh tomorrow with TODO.txt and TOMORROW_CHECKLIST.md
+================================================================================

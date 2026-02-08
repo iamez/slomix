@@ -7,7 +7,7 @@
 - [ ] Admin channel ID added to `.env` file
 - [ ] Bot restarted and cog loaded successfully
 - [ ] Tested `!server_status` command
-- [ ] Tested `!map_list` command
+- [ ] Tested `!list_maps` command (alias: `!map_list`)
 
 ---
 
@@ -20,7 +20,7 @@
 
 ### Maps
 
-- `!map_list` or `!maps` - Show all maps
+- `!list_maps` or `!map_list` - Show all maps
 - `!map_change <name>` - Change map
 - `!map_add` + attach .pk3 - Upload new map
 

@@ -22,7 +22,7 @@ import socket
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 
 import discord
 import paramiko
@@ -447,7 +447,7 @@ class ServerControl(commands.Cog):
     # MAP MANAGEMENT
     # ========================================
     
-    @commands.command(name='map_list', aliases=['maps', 'listmaps'])
+    @commands.command(name='list_maps', aliases=['map_list', 'listmaps'])
     async def map_list(self, ctx):
         """📋 List available maps on server"""
         await ctx.send("📂 Fetching map list...")

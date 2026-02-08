@@ -84,7 +84,7 @@ In your admin channel, try:
 ```text
 
 !server_status
-!map_list
+!list_maps
 !rcon status
 
 ```sql
@@ -145,7 +145,7 @@ You can now:
 
 # Maps
 
-!maps              - List maps
+!list_maps         - List maps
 !map <name>        - Change map
 !addmap            - Upload map (attach file)
 

@@ -60,6 +60,9 @@ from bot.services.voice_session_service import VoiceSessionService
 # Publishing services
 from bot.services.round_publisher_service import RoundPublisherService
 
+# Debug services
+from bot.services.timing_debug_service import TimingDebugService
+
 __all__ = [
     # Session services
     'SessionDataService',
@@ -79,4 +82,6 @@ __all__ = [
     'VoiceSessionService',
     # Publishing services
     'RoundPublisherService',
+    # Debug services
+    'TimingDebugService',
 ]
