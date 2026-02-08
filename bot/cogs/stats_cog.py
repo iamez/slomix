@@ -349,15 +349,7 @@ class StatsCog(commands.Cog, name="Stats"):
                         COUNT(DISTINCT p.round_id) as total_games,
                         SUM(p.damage_given) as total_damage,
                         SUM(p.headshot_kills) as total_headshots,
-                        SUM(
-                            CASE
-                                WHEN r.actual_time LIKE '%:%' THEN
-                                    CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                                    CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                                ELSE
-                                    CAST(r.actual_time AS INTEGER)
-                            END
-                        ) as total_time_seconds
+                        SUM(p.time_played_seconds) as total_time_seconds
                     FROM player_comprehensive_stats p
                     JOIN rounds r ON p.round_id = r.id
                     WHERE p.player_guid = ?

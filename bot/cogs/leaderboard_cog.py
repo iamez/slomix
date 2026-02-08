@@ -233,24 +233,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             SUM(p.damage_received) as total_damage_received,
                             SUM(p.headshot_kills) as total_headshots,
                             CASE
-                                WHEN SUM(
-                                    CASE
-                                        WHEN r.actual_time LIKE '%:%' THEN
-                                            CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                                            CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                                        ELSE
-                                            CAST(r.actual_time AS INTEGER)
-                                    END
-                                ) > 0
-                                THEN (SUM(p.damage_given) * 60.0) / SUM(
-                                    CASE
-                                        WHEN r.actual_time LIKE '%:%' THEN
-                                            CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                                            CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                                        ELSE
-                                            CAST(r.actual_time AS INTEGER)
-                                    END
-                                )
+                                WHEN SUM(p.time_played_seconds) > 0
+                                THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
                                 ELSE 0
                             END as weighted_dpm,
                             AVG(p.kd_ratio) as avg_kd
@@ -553,24 +537,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                                  GROUP BY player_name
                                  ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
                                 CASE
-                                    WHEN SUM(
-                                        CASE
-                                            WHEN r.actual_time LIKE '%:%' THEN
-                                                CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                                                CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                                            ELSE
-                                                CAST(r.actual_time AS INTEGER)
-                                        END
-                                    ) > 0
-                                    THEN (SUM(p.damage_given) * 60.0) / SUM(
-                                        CASE
-                                            WHEN r.actual_time LIKE '%:%' THEN
-                                                CAST(SPLIT_PART(r.actual_time, ':', 1) AS INTEGER) * 60 +
-                                                CAST(SPLIT_PART(r.actual_time, ':', 2) AS INTEGER)
-                                            ELSE
-                                                CAST(r.actual_time AS INTEGER)
-                                        END
-                                    )
+                                    WHEN SUM(p.time_played_seconds) > 0
+                                    THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
                                     ELSE 0
                                 END as weighted_dpm,
                                 SUM(p.kills) as total_kills,

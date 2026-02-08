@@ -38,15 +38,31 @@ logger = logging.getLogger(__name__)
 # DO NOT subtract R1 from these - use R2 value directly!
 # =============================================================================
 R2_ONLY_FIELDS = {
+    # --- Originally identified (correct) ---
     'xp',                   # TAB[9] - XP THIS round
-    'death_spree',          # TAB[11] - Death spree THIS round
-    'kill_assists',         # TAB[12] - Kill assists THIS round
-    'headshot_kills',       # TAB[14] - Headshot kills THIS round
-    'objectives_stolen',    # TAB[15] - Objectives stolen THIS round
-    'dynamites_planted',    # TAB[17] - Dynamites planted THIS round
-    'times_revived',        # TAB[19] - Times revived THIS round
-    'useful_kills',         # TAB[27] - Useful kills THIS round
-    'revives_given',        # TAB[37] - Revives given THIS round
+    'death_spree',          # TAB[11] - Death spree THIS round (topshots[2])
+    'kill_assists',         # TAB[12] - Kill assists THIS round (topshots[3])
+    'headshot_kills',       # TAB[14] - Headshot kills THIS round (topshots[5])
+    'objectives_stolen',    # TAB[15] - Objectives stolen THIS round (topshots[6])
+    'dynamites_planted',    # TAB[17] - Dynamites planted THIS round (topshots[8])
+    'times_revived',        # TAB[19] - Times revived THIS round (topshots[10])
+    'useful_kills',         # TAB[27] - Useful kills THIS round (topshots[15])
+    'revives_given',        # TAB[37] - Revives given THIS round (topshots[20])
+    # --- Lua resets these in et_InitGame() (topshots[]/multikills[] arrays) ---
+    'killing_spree',        # TAB[10] - topshots[1]
+    'kill_steals',          # TAB[13] - topshots[4]
+    'objectives_returned',  # TAB[16] - topshots[7]
+    'dynamites_defused',    # TAB[18] - topshots[9]
+    'denied_playtime',      # TAB[28] - topshots[16]
+    'multikill_2x',         # TAB[29] - multikills[1]
+    'multikill_3x',         # TAB[30] - multikills[2]
+    'multikill_4x',         # TAB[31] - multikills[3]
+    'multikill_5x',         # TAB[32] - multikills[4]
+    'multikill_6x',         # TAB[33] - multikills[5]
+    'useless_kills',        # TAB[34] - topshots[17]
+    'full_selfkills',       # TAB[35] - topshots[18]
+    'repairs_constructions', # TAB[36] - topshots[19]
+    'time_dead_minutes',    # TAB[25] - from death_time_total (resets per round)
 }
 
 # C0RNP0RN3.LUA weapon enumeration (the actual format used)
