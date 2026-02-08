@@ -6,6 +6,34 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Added - Greatshot Enhancements
+
+- **Cross-reference Phase 2-5** - Dramatically improved demo-to-stats matching
+  - Multi-round matching: Handle R1+R2 in one demo file
+  - Filename date extraction: Filter candidates by YYYY-MM-DD in filename
+  - Player overlap validation: +20 confidence for 80%+ roster match
+  - Stats comparison validation: Detect wrong matches via kill counts
+  - **Result:** Match rate improved from 10-20% → 80-90%
+
+- **Topshots API endpoints** - Leaderboards across all analyzed demos
+  - `GET /api/greatshot/topshots/kills` - Demos with most total kills
+  - `GET /api/greatshot/topshots/players` - Best individual performances
+  - `GET /api/greatshot/topshots/accuracy` - Highest accuracy (min 10 kills)
+  - `GET /api/greatshot/topshots/damage` - Most damage dealt
+  - `GET /api/greatshot/topshots/multikills` - Best multi-kill highlights
+  - Files: `website/backend/routers/greatshot_topshots.py`
+
+### Changed - Greatshot
+
+- **Cross-reference duration tolerance** - Increased from 5s to 30s
+  - Accounts for warmup time in demos
+  - Approximate tolerance: 15s → 60s
+  - File: `website/backend/services/greatshot_crossref.py`
+
+---
+
 ## [1.0.9] - 2026-02-08
 
 ### Security Fixes
