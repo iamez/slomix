@@ -14,6 +14,11 @@ from pydantic import BaseModel
 from greatshot.config import CONFIG
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
+from website.backend.services.greatshot_crossref import (
+    build_comparison,
+    enrich_with_db_stats,
+    find_matching_round,
+)
 from website.backend.services.greatshot_jobs import get_greatshot_job_service
 from website.backend.services.greatshot_store import get_greatshot_storage
 
@@ -334,7 +339,12 @@ async def get_greatshot_detail(demo_id: str, request: Request, db=Depends(get_db
     }
 
 
+_ALLOWED_ARTIFACT_FIELDS = {"analysis_json_path", "report_txt_path"}
+
+
 async def _artifact_for_user(db, demo_id: str, user_id: int, field_name: str) -> str:
+    if field_name not in _ALLOWED_ARTIFACT_FIELDS:
+        raise ValueError(f"Invalid artifact field: {field_name}")
     row = await db.fetch_one(
         f"SELECT {field_name} FROM greatshot_demos WHERE id = $1 AND user_id = $2",
         (demo_id, user_id),
@@ -409,6 +419,67 @@ async def queue_highlight_render(
     await get_greatshot_job_service().enqueue_render(render_id)
 
     return {"render_id": render_id, "status": "queued"}
+
+
+@router.get("/greatshot/{demo_id}/crossref")
+async def get_crossref(demo_id: str, request: Request, db=Depends(get_db)):
+    user = _require_user(request)
+    user_id = int(user["id"])
+
+    demo_row = await db.fetch_one(
+        "SELECT metadata_json FROM greatshot_demos WHERE id = $1 AND user_id = $2",
+        (demo_id, user_id),
+    )
+    if not demo_row:
+        raise HTTPException(status_code=404, detail="Greatshot entry not found")
+
+    metadata = _parse_json_field(demo_row[0]) or {}
+    if not metadata:
+        return {"matched": False, "reason": "No metadata available for cross-reference"}
+
+    match = await find_matching_round(metadata, db)
+    if not match:
+        return {"matched": False, "reason": "No matching round found in database"}
+
+    round_id = match["round_id"]
+    db_stats = await enrich_with_db_stats(round_id, db)
+
+    # Get demo player_stats from analysis
+    analysis_row = await db.fetch_one(
+        "SELECT stats_json FROM greatshot_analysis WHERE demo_id = $1",
+        (demo_id,),
+    )
+    demo_player_stats = {}
+    if analysis_row:
+        stats_data = _parse_json_field(analysis_row[0]) or {}
+        # player_stats stored in the analysis output (via player_stats key in the full analysis JSON)
+        # But stats_json only has summary stats. Let's check metadata_json for player_stats.
+
+    # Try to get player_stats from the full analysis JSON file
+    analysis_path_row = await db.fetch_one(
+        "SELECT analysis_json_path FROM greatshot_demos WHERE id = $1",
+        (demo_id,),
+    )
+    if analysis_path_row and analysis_path_row[0]:
+        import json as json_mod
+        from pathlib import Path as PathLib
+        try:
+            analysis_file = PathLib(analysis_path_row[0])
+            if analysis_file.is_file():
+                with analysis_file.open() as f:
+                    full_analysis = json_mod.load(f)
+                    demo_player_stats = full_analysis.get("player_stats") or {}
+        except Exception:
+            pass
+
+    comparison = await build_comparison(demo_player_stats, db_stats)
+
+    return {
+        "matched": True,
+        "round": match,
+        "db_player_stats": db_stats,
+        "comparison": comparison,
+    }
 
 
 async def _highlight_clip_for_user(db, demo_id: str, highlight_id: str, user_id: int) -> str:

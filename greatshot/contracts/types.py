@@ -76,9 +76,10 @@ class AnalysisResult:
     highlights: List[Highlight] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     parser: Dict[str, Any] = field(default_factory=dict)
+    player_stats: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "schema_version": SCHEMA_VERSION,
             "metadata": self.metadata,
             "players": self.players,
@@ -88,3 +89,6 @@ class AnalysisResult:
             "warnings": list(self.warnings),
             "parser": self.parser,
         }
+        if self.player_stats:
+            result["player_stats"] = self.player_stats
+        return result

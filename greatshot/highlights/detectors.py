@@ -2,11 +2,55 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-from typing import Any, Dict, Iterable, List, Tuple
+from collections import Counter, defaultdict
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from greatshot.config import HIGHLIGHT_DEFAULTS
 from greatshot.contracts.types import Highlight
+
+
+def _build_kill_sequence(segment: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Build a structured kill sequence from a list of kill events."""
+    return [
+        {
+            "t_ms": int(ev.get("t_ms", 0)),
+            "victim": ev.get("victim", "unknown"),
+            "weapon": ev.get("weapon", "unknown"),
+            "headshot": ev.get("hit_region") == "head",
+        }
+        for ev in segment
+    ]
+
+
+def _build_enriched_meta(segment: List[Dict[str, Any]], base_meta: Dict[str, Any]) -> Dict[str, Any]:
+    """Enrich a highlight meta dict with kill_sequence, victims, weapons, and timing gaps."""
+    meta = dict(base_meta)
+
+    kill_seq = _build_kill_sequence(segment)
+    meta["kill_sequence"] = kill_seq
+
+    meta["victims"] = [k["victim"] for k in kill_seq]
+
+    weapons: Counter[str] = Counter()
+    headshot_weapons: Counter[str] = Counter()
+    for k in kill_seq:
+        weapons[k["weapon"]] += 1
+        if k["headshot"]:
+            headshot_weapons[k["weapon"]] += 1
+    meta["weapons_used"] = dict(weapons)
+    if headshot_weapons:
+        meta["headshot_weapons"] = dict(headshot_weapons)
+
+    if len(kill_seq) >= 2:
+        gaps = [
+            kill_seq[i]["t_ms"] - kill_seq[i - 1]["t_ms"]
+            for i in range(1, len(kill_seq))
+        ]
+        meta["kill_gaps_ms"] = gaps
+        meta["avg_kill_gap_ms"] = round(sum(gaps) / len(gaps))
+        meta["fastest_kill_gap_ms"] = min(gaps)
+
+    return meta
 
 
 def _kill_events(events: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -60,6 +104,11 @@ def _detect_multi_kills(kills: List[Dict[str, Any]], cfg: Dict[str, int]) -> Lis
                 segment = events[left : right + 1]
                 hs_count = sum(1 for item in segment if item.get("hit_region") == "head")
                 score = float(count * 10 + hs_count * 2)
+                base_meta = {
+                    "kill_count": count,
+                    "headshots": hs_count,
+                    "window_ms": window_ms,
+                }
                 highlights.append(
                     Highlight(
                         highlight_type=kind,
@@ -70,11 +119,7 @@ def _detect_multi_kills(kills: List[Dict[str, Any]], cfg: Dict[str, int]) -> Lis
                         explanation=(
                             f"{count} kills in {(segment[-1]['t_ms'] - segment[0]['t_ms']) / 1000:.2f}s"
                         ),
-                        meta={
-                            "kill_count": count,
-                            "headshots": hs_count,
-                            "window_ms": window_ms,
-                        },
+                        meta=_build_enriched_meta(segment, base_meta),
                     )
                 )
 
@@ -84,6 +129,7 @@ def _detect_multi_kills(kills: List[Dict[str, Any]], cfg: Dict[str, int]) -> Lis
 def _detect_sprees(kills: List[Dict[str, Any]], cfg: Dict[str, int]) -> List[Highlight]:
     spree_count: Dict[str, int] = defaultdict(int)
     spree_start: Dict[str, int] = {}
+    spree_events: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     highlights: List[Highlight] = []
 
     for event in kills:
@@ -93,9 +139,13 @@ def _detect_sprees(kills: List[Dict[str, Any]], cfg: Dict[str, int]) -> List[Hig
 
         if spree_count[attacker] == 0:
             spree_start[attacker] = t_ms
+            spree_events[attacker] = []
         spree_count[attacker] += 1
+        spree_events[attacker].append(event)
 
         if spree_count[attacker] >= cfg["spree_min"]:
+            segment = list(spree_events[attacker])
+            base_meta = {"kills_without_death": spree_count[attacker]}
             highlights.append(
                 Highlight(
                     highlight_type="spree",
@@ -104,12 +154,13 @@ def _detect_sprees(kills: List[Dict[str, Any]], cfg: Dict[str, int]) -> List[Hig
                     end_ms=t_ms,
                     score=float(spree_count[attacker] * 7),
                     explanation=f"{spree_count[attacker]} kills without dying",
-                    meta={"kills_without_death": spree_count[attacker]},
+                    meta=_build_enriched_meta(segment, base_meta),
                 )
             )
 
         spree_count[victim] = 0
         spree_start.pop(victim, None)
+        spree_events.pop(victim, None)
 
     return highlights
 
@@ -133,8 +184,9 @@ def _detect_quick_headshots(kills: List[Dict[str, Any]], cfg: Dict[str, int]) ->
             if count < cfg["quick_headshot_min"]:
                 continue
 
-            start_ms = int(headshots[left]["t_ms"])
-            end_ms = int(headshots[right]["t_ms"])
+            segment = headshots[left : right + 1]
+            start_ms = int(segment[0]["t_ms"])
+            end_ms = int(segment[-1]["t_ms"])
             duration = max(1, end_ms - start_ms)
             is_aim_moment = count >= cfg["aim_moment_headshots"]
             h_type = "aim_moment" if is_aim_moment else "quick_headshot_chain"
@@ -143,6 +195,7 @@ def _detect_quick_headshots(kills: List[Dict[str, Any]], cfg: Dict[str, int]) ->
                 if is_aim_moment
                 else f"Headshot burst: {count} in {duration / 1000:.2f}s"
             )
+            base_meta = {"headshots": count, "window_ms": duration}
             highlights.append(
                 Highlight(
                     highlight_type=h_type,
@@ -151,7 +204,7 @@ def _detect_quick_headshots(kills: List[Dict[str, Any]], cfg: Dict[str, int]) ->
                     end_ms=end_ms,
                     score=float(count * (9 if is_aim_moment else 6)),
                     explanation=explanation,
-                    meta={"headshots": count, "window_ms": duration},
+                    meta=_build_enriched_meta(segment, base_meta),
                 )
             )
 
@@ -161,6 +214,7 @@ def _detect_quick_headshots(kills: List[Dict[str, Any]], cfg: Dict[str, int]) ->
 def detect_highlights(
     events: Iterable[Dict[str, Any]],
     thresholds: Dict[str, int] | None = None,
+    player_stats: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> List[Highlight]:
     cfg = dict(HIGHLIGHT_DEFAULTS)
     if thresholds:
@@ -174,6 +228,21 @@ def detect_highlights(
     candidates.extend(_detect_multi_kills(kills, cfg))
     candidates.extend(_detect_sprees(kills, cfg))
     candidates.extend(_detect_quick_headshots(kills, cfg))
+
+    # Attach attacker_stats from match-level player stats
+    if player_stats:
+        for item in candidates:
+            ps = player_stats.get(item.player)
+            if ps:
+                kills_val = int(ps.get("kills", 0))
+                deaths_val = int(ps.get("deaths", 0))
+                item.meta["attacker_stats"] = {
+                    "kills": kills_val,
+                    "deaths": deaths_val,
+                    "kdr": round(kills_val / max(1, deaths_val), 2),
+                    "damage_given": int(ps.get("damage_given", 0)),
+                    "accuracy": ps.get("accuracy"),
+                }
 
     deduped: Dict[Tuple[str, str, int, int], Highlight] = {}
     for item in candidates:

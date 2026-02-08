@@ -31,9 +31,20 @@ function formatStatus(status) {
 function fmtMs(ms) {
     if (!Number.isFinite(Number(ms))) return '--';
     const total = Math.max(0, Math.floor(Number(ms) / 1000));
-    const minutes = Math.floor(total / 60);
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
     const seconds = total % 60;
+    if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+/** Format absolute server-time ms as gameplay-relative time by subtracting round start offset. */
+function fmtRelMs(ms, offsetMs) {
+    if (!Number.isFinite(Number(ms))) return '--';
+    const relative = Number(ms) - (Number(offsetMs) || 0);
+    return fmtMs(Math.max(0, relative));
 }
 
 function fmtDate(value) {
@@ -267,7 +278,7 @@ export async function loadGreatshotView(section = 'demos') {
     }
 }
 
-function renderTimeline(events) {
+function renderTimeline(events, roundStartMs = 0) {
     const container = document.getElementById('demo-detail-timeline');
     if (!container) return;
 
@@ -278,7 +289,7 @@ function renderTimeline(events) {
 
     const preview = events.slice(0, 120);
     container.innerHTML = preview.map((event) => {
-        const t = fmtMs(event.t_ms);
+        const t = fmtRelMs(event.t_ms, roundStartMs);
         const type = escapeHtml(event.type || 'event');
         if (event.type === 'kill') {
             return `<div class="data-row text-xs"><span class="text-slate-500">${t}</span><span class="text-slate-200">${escapeHtml(event.attacker || 'world')} -> ${escapeHtml(event.victim || 'unknown')} <span class="text-brand-amber">${escapeHtml(event.weapon || '--')}</span></span></div>`;
@@ -290,7 +301,52 @@ function renderTimeline(events) {
     }).join('');
 }
 
-function renderHighlights(demoId, highlights) {
+function renderKillSequence(meta, roundStartMs) {
+    const seq = meta?.kill_sequence;
+    if (!seq || seq.length === 0) return '';
+
+    const rows = seq.map((k) => {
+        const t = fmtRelMs(k.t_ms, roundStartMs);
+        const hs = k.headshot ? '<span class="text-brand-rose">HS</span>' : '';
+        return `<span class="text-slate-500">${t}</span> ${escapeHtml(k.victim || '?')} <span class="text-brand-amber">${escapeHtml(k.weapon || '?')}</span> ${hs}`;
+    }).join('<br>');
+
+    return `<div class="mt-2 text-xs leading-relaxed">${rows}</div>`;
+}
+
+function renderWeaponBadges(meta) {
+    const weapons = meta?.weapons_used;
+    if (!weapons) return '';
+
+    const sorted = Object.entries(weapons).sort((a, b) => b[1] - a[1]);
+    const badges = sorted.map(([w, c]) => {
+        const isHs = meta.headshot_weapons && meta.headshot_weapons[w];
+        const hsClass = isHs ? 'border-brand-rose/40 text-brand-rose' : 'border-white/10 text-slate-300';
+        return `<span class="px-2 py-0.5 rounded border ${hsClass} text-[10px]">${escapeHtml(w)} x${c}</span>`;
+    }).join('');
+
+    return `<div class="mt-2 flex flex-wrap gap-1">${badges}</div>`;
+}
+
+function renderKillRhythm(meta) {
+    const gaps = meta?.kill_gaps_ms;
+    if (!gaps || gaps.length === 0) return '';
+
+    const avg = meta.avg_kill_gap_ms || 0;
+    const fastest = meta.fastest_kill_gap_ms || 0;
+    return `<div class="mt-1 text-[10px] text-slate-500">Rhythm: avg ${avg}ms, fastest ${fastest}ms</div>`;
+}
+
+function renderAttackerStats(meta) {
+    const s = meta?.attacker_stats;
+    if (!s) return '';
+
+    const kdr = s.kdr || 0;
+    const acc = s.accuracy != null ? `, ${s.accuracy}% acc` : '';
+    return `<div class="mt-1 text-[10px] text-slate-400">Match: ${s.kills || 0}K/${s.deaths || 0}D (${kdr} KDR${acc})</div>`;
+}
+
+function renderHighlights(demoId, highlights, roundStartMs = 0) {
     const container = document.getElementById('demo-detail-highlights');
     if (!container) return;
 
@@ -303,18 +359,23 @@ function renderHighlights(demoId, highlights) {
         const type = escapeHtml(item.type || '--');
         const player = escapeHtml(item.player || '--');
         const explanation = escapeHtml(item.meta?.explanation || item.explanation || '');
+        const meta = item.meta || {};
         const clipLink = item.clip_download
             ? `<a href="${escapeHtml(item.clip_download)}" class="px-3 py-2 rounded-lg text-xs font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">Clip</a>`
             : '';
         return `
             <div class="glass-card p-4 rounded-xl border border-white/10">
                 <div class="flex items-center justify-between gap-3">
-                    <div>
+                    <div class="flex-1 min-w-0">
                         <div class="text-sm font-bold text-white">${type}</div>
-                        <div class="text-xs text-slate-400 mt-1">${player} | ${fmtMs(item.start_ms)} - ${fmtMs(item.end_ms)} | score ${Number(item.score || 0).toFixed(2)}</div>
+                        <div class="text-xs text-slate-400 mt-1">${player} | ${fmtRelMs(item.start_ms, roundStartMs)} - ${fmtRelMs(item.end_ms, roundStartMs)} | score ${Number(item.score || 0).toFixed(2)}</div>
                         ${explanation ? `<div class="text-xs text-slate-500 mt-1">${explanation}</div>` : ''}
+                        ${renderKillSequence(meta, roundStartMs)}
+                        ${renderWeaponBadges(meta)}
+                        ${renderKillRhythm(meta)}
+                        ${renderAttackerStats(meta)}
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-shrink-0">
                         ${clipLink}
                         <button class="px-3 py-2 rounded-lg text-xs font-bold border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition"
                             onclick="queueHighlightRender('${escapeHtml(demoId)}','${escapeHtml(item.id)}')">
@@ -325,6 +386,73 @@ function renderHighlights(demoId, highlights) {
             </div>
         `;
     }).join('');
+}
+
+async function renderCrossref(demoId) {
+    const container = document.getElementById('demo-detail-crossref');
+    if (!container) return;
+
+    container.innerHTML = '<div class="text-slate-500 text-sm">Checking database...</div>';
+
+    try {
+        const data = await fetchJSONWithAuth(`${API_BASE}/greatshot/${encodeURIComponent(demoId)}/crossref`);
+
+        if (!data.matched) {
+            container.innerHTML = `<div class="text-slate-500 text-sm">${escapeHtml(data.reason || 'No match found')}</div>`;
+            return;
+        }
+
+        const round = data.round || {};
+        const confidence = Number(round.confidence || 0);
+        const confColor = confidence >= 80 ? 'text-brand-emerald' : confidence >= 50 ? 'text-brand-amber' : 'text-brand-rose';
+
+        let html = `
+            <div class="flex items-center gap-3 mb-3">
+                <span class="text-xs font-bold ${confColor}">${confidence}% confidence</span>
+                <span class="text-xs text-slate-400">${(round.match_details || []).join(', ')}</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-4">
+                <div><span class="text-slate-500">Round ID:</span> <span class="text-white">${round.round_id || '--'}</span></div>
+                <div><span class="text-slate-500">Session:</span> <span class="text-white">${round.gaming_session_id || '--'}</span></div>
+                <div><span class="text-slate-500">Date:</span> <span class="text-white">${escapeHtml(round.round_date || '--')}</span></div>
+                <div><span class="text-slate-500">Winner:</span> <span class="text-white">${escapeHtml(round.winner_team || '--')}</span></div>
+            </div>
+        `;
+
+        const comparison = data.comparison || [];
+        if (comparison.length > 0) {
+            html += '<div class="text-xs font-bold uppercase text-slate-500 mb-2">Player Stats Comparison</div>';
+            html += '<div class="overflow-x-auto"><table class="w-full text-xs">';
+            html += '<thead><tr class="text-slate-500 border-b border-white/10">';
+            html += '<th class="text-left py-1 pr-2">Player</th>';
+            html += '<th class="text-right pr-2">Demo K</th><th class="text-right pr-2">DB K</th>';
+            html += '<th class="text-right pr-2">Demo D</th><th class="text-right pr-2">DB D</th>';
+            html += '<th class="text-right pr-2">DB KDR</th><th class="text-right">DB DPM</th>';
+            html += '</tr></thead><tbody>';
+
+            for (const c of comparison) {
+                const name = escapeHtml(c.db_name || c.demo_name || '?');
+                const ds = c.demo_stats || {};
+                const bs = c.db_stats || {};
+                const matchIcon = c.matched ? '' : '<span class="text-brand-amber">*</span>';
+                html += `<tr class="border-b border-white/5">`;
+                html += `<td class="py-1 pr-2 text-slate-200">${name}${matchIcon}</td>`;
+                html += `<td class="text-right pr-2 text-slate-300">${ds.kills ?? '--'}</td>`;
+                html += `<td class="text-right pr-2 text-white">${bs.kills ?? '--'}</td>`;
+                html += `<td class="text-right pr-2 text-slate-300">${ds.deaths ?? '--'}</td>`;
+                html += `<td class="text-right pr-2 text-white">${bs.deaths ?? '--'}</td>`;
+                html += `<td class="text-right pr-2 text-white">${bs.kdr != null ? Number(bs.kdr).toFixed(2) : '--'}</td>`;
+                html += `<td class="text-right text-white">${bs.dpm != null ? Number(bs.dpm).toFixed(1) : '--'}</td>`;
+                html += `</tr>`;
+            }
+
+            html += '</tbody></table></div>';
+        }
+
+        container.innerHTML = html;
+    } catch (error) {
+        container.innerHTML = `<div class="text-brand-rose text-sm">Cross-reference failed: ${escapeHtml(error.message)}</div>`;
+    }
 }
 
 function renderRenderJobs(jobs) {
@@ -398,9 +526,14 @@ export async function loadGreatshotDemoDetail(demoId) {
             downloads.innerHTML = links.join('') || '<span class="text-slate-500 text-sm">No reports yet.</span>';
         }
 
-        renderTimeline(payload.analysis?.events || []);
-        renderHighlights(demoId, payload.highlights || []);
+        const roundStartMs = Number(payload.metadata?.start_ms || 0);
+        renderTimeline(payload.analysis?.events || [], roundStartMs);
+        renderHighlights(demoId, payload.highlights || [], roundStartMs);
         renderRenderJobs(payload.renders || []);
+
+        if (payload.status === 'analyzed') {
+            renderCrossref(demoId);
+        }
 
         const errorBox = document.getElementById('demo-detail-error');
         if (errorBox) {

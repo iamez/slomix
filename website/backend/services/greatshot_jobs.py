@@ -14,6 +14,7 @@ from greatshot.cutter.api import build_clip_window, cut_demo
 from greatshot.renderer.api import render_clip
 from greatshot.worker.runner import run_analysis_job
 from website.backend.logging_config import get_app_logger
+from website.backend.services.greatshot_crossref import find_matching_round
 from website.backend.services.greatshot_store import GreatshotStorageService
 
 
@@ -211,6 +212,31 @@ class GreatshotJobService:
                 ),
             )
 
+            # Auto-crossref: try to match demo to a round in the database
+            try:
+                metadata = analysis.get("metadata") or {}
+                crossref_match = await find_matching_round(metadata, self.db)
+                if crossref_match and crossref_match.get("confidence", 0) >= 50:
+                    metadata["matched_round_id"] = crossref_match["round_id"]
+                    metadata["crossref_confidence"] = crossref_match["confidence"]
+                    metadata["crossref_match_details"] = crossref_match.get("match_details", [])
+                    updated_metadata_json = json.dumps(metadata)
+                    await self.db.execute(
+                        """
+                        UPDATE greatshot_demos
+                        SET metadata_json = $2::jsonb,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $1
+                        """,
+                        (demo_id, updated_metadata_json),
+                    )
+                    logger.info(
+                        "Greatshot crossref: demo=%s matched round_id=%s (confidence=%.1f)",
+                        demo_id, crossref_match["round_id"], crossref_match["confidence"],
+                    )
+            except Exception as crossref_exc:
+                logger.warning("Greatshot crossref failed for %s: %s", demo_id, crossref_exc)
+
             logger.info("✅ Greatshot analysis completed for %s", demo_id)
 
         except Exception as exc:
@@ -281,14 +307,18 @@ class GreatshotJobService:
                 except Exception:
                     metadata = {}
 
-            demo_duration_ms = int(metadata.get("duration_ms") or 0)
-            if demo_duration_ms <= 0:
-                demo_duration_ms = int(end_ms or 0) + 3000
+            # Highlights use absolute server-time offsets (e.g. 8.7M ms).
+            # We need the demo's maximum server-time as the upper clamp.
+            # metadata["end_ms"] = absolute server time at demo end.
+            # metadata["duration_ms"] = gameplay-only length (NOT usable as clamp).
+            demo_end_ms = int(metadata.get("end_ms") or 0)
+            if demo_end_ms <= 0:
+                demo_end_ms = int(end_ms or 0) + 3000
 
             clip_start, clip_end = build_clip_window(
                 highlight_start_ms=int(start_ms or 0),
                 highlight_end_ms=int(end_ms or 0),
-                demo_duration_ms=demo_duration_ms,
+                demo_duration_ms=demo_end_ms,
             )
 
             clip_missing = not clip_demo_path or not Path(str(clip_demo_path)).is_file()
