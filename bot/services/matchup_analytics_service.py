@@ -669,7 +669,6 @@ class MatchupAnalyticsService:
             baseline_dpm = baseline.get('avg_dpm', 0)
             baseline_kd = baseline.get('avg_kd', 0)
             dpm_delta = avg_dpm_together - baseline_dpm
-            kd_delta = avg_kd_together - baseline_kd
 
             # Safe synergy percent calculation
             synergy_percent = (dpm_delta / baseline_dpm * 100) if baseline_dpm > 0 else 0

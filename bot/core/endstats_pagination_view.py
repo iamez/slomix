@@ -13,7 +13,7 @@ from __future__ import annotations
 import discord
 from discord.ui import View, Button
 from discord import ButtonStyle, Interaction
-from typing import List, Optional
+from typing import List
 import logging
 
 logger = logging.getLogger("bot.core.endstats_pagination_view")

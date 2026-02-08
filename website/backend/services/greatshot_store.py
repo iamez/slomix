@@ -7,7 +7,7 @@ import os
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from fastapi import HTTPException, UploadFile
 
@@ -173,6 +173,16 @@ class GreatshotStorageService:
         return resolved
 
     async def ensure_schema(self, db) -> None:
+        try:
+            await self._ensure_schema_inner(db)
+        except Exception as e:
+            if "InsufficientPrivilege" in type(e).__name__ or "permission" in str(e).lower() or "owner" in str(e).lower():
+                logger.warning("⚠️ Greatshot schema DDL skipped due to insufficient privileges: %s", e)
+                logger.warning("   Tables may already exist with correct schema. Continuing startup.")
+                return
+            raise
+
+    async def _ensure_schema_inner(self, db) -> None:
         await db.execute(
             """
             DO $$

@@ -11,7 +11,7 @@ Advanced player analytics beyond basic stats:
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 from collections import defaultdict
 import statistics
 

@@ -14,7 +14,7 @@ import logging
 import sys
 import os
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Optional
 
 # Add project root to path for imports
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
@@ -142,12 +142,17 @@ class MonitoringService:
                 return
             logger.error(f"Failed to ensure {step_name}: {e}", exc_info=True)
 
+    _MONITORING_TABLES = frozenset({"server_status_history", "voice_status_history", "voice_members", "live_status"})
+
     async def _ensure_index(
         self,
         table_name: str,
         index_name: str,
         index_expr: str,
     ) -> None:
+        if table_name not in self._MONITORING_TABLES:
+            logger.error("Refusing to create index on non-monitoring table: %s", table_name)
+            return
         if not await self._table_exists(table_name):
             logger.warning(
                 "Skipping monitoring DDL for %s index: table does not exist",
@@ -307,6 +312,9 @@ class MonitoringService:
         )
 
     async def _cleanup_table(self, table_name: str, cutoff: datetime) -> None:
+        if table_name not in self._MONITORING_TABLES:
+            logger.error("Refusing to cleanup non-monitoring table: %s", table_name)
+            return
         try:
             await self.db.execute(
                 f"DELETE FROM {table_name} WHERE recorded_at < $1",

@@ -84,7 +84,7 @@ export async function loadLiveStatus() {
                 serverBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400';
 
                 const hostname = escapeHtml(server.hostname) || 'Game Server';
-                const errorMsg = server.error || 'Server is not responding';
+                const errorMsg = escapeHtml(server.error || 'Server is not responding');
                 serverDetails.innerHTML = `
                     <span class="text-slate-400">${hostname}</span>
                     <span class="text-slate-500 mx-1">·</span>

@@ -10,7 +10,7 @@ Commands:
 """
 
 import logging
-from typing import List, Optional
+from typing import List
 
 import discord
 from discord.ext import commands

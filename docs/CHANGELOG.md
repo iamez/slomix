@@ -6,6 +6,54 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.0.8] - 2026-02-08
+
+### Added
+
+- **Greatshot highlight metadata enrichment** - Richer fragmovie scout data
+  - Kill sequences with victim, weapon, headshot per kill
+  - Victims list, weapons_used dict, headshot_weapons dict
+  - Kill timing rhythm: kill_gaps_ms, avg_kill_gap_ms, fastest_kill_gap_ms
+  - Attacker match stats (kills, deaths, KDR, damage, accuracy) on each highlight
+  - New file: `greatshot/highlights/detectors.py` with 3 enrichment helpers
+
+- **Player stats extraction from demos** - Match-level performance data
+  - Extract player_stats from UDT matchStats.playerStats
+  - Fallback to timeline-derived kills/deaths when UDT data unavailable
+  - player_stats field added to AnalysisResult output
+  - Files: `greatshot/scanner/api.py`, `greatshot/contracts/types.py`
+
+- **Database cross-reference system** - Match demos to ET:Legacy stats rounds
+  - NEW: `website/backend/services/greatshot_crossref.py`
+  - Match by map (exact), duration (±5s), winner, scores
+  - Confidence scoring: 30% map + 30% duration + 20% winner + 20% scores
+  - Auto-crossref after analysis, store matched_round_id in metadata_json
+  - Enrich with 16-field player stats from player_comprehensive_stats
+  - Side-by-side comparison (demo kills vs DB kills/deaths/KDR/DPM)
+  - GET /api/greatshot/{demo_id}/crossref endpoint
+  - Files: `website/backend/routers/greatshot.py`, `website/backend/services/greatshot_jobs.py`
+
+- **Frontend highlight detail expansion** - Rich scout-friendly UI
+  - Kill sequence display (timestamp, victim, weapon, HS indicator)
+  - Weapon badges with headshot weapon highlighting
+  - Kill rhythm visualization (avg/fastest gap stats)
+  - Attacker's overall match stats display
+  - Database crossref panel: matched round, confidence, stats comparison table
+  - Files: `website/js/greatshot.js`, `website/index.html`
+
+- **Enhanced text reports** - Richer highlight metadata in reports
+  - Show victims, weapons, kill rhythm in highlight listings
+  - Player stats summary section (top 16 by kills)
+  - File: `greatshot/scanner/report.py`
+
+### Changed
+
+- Highlight detection now passes player_stats for attacker_stats enrichment
+- AnalysisResult.to_dict() now includes player_stats when available
+- Greatshot jobs auto-crossref demos with ≥50% confidence
+
+---
+
 ## [1.0.6] - 2026-02-07
 
 ### Added

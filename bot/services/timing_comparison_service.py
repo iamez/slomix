@@ -21,7 +21,7 @@ NOTE: match_id linking issue exists:
 import logging
 import re
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, Optional, Tuple, Any
 
 import discord
 
@@ -426,8 +426,6 @@ class TimingComparisonService:
             pause_count = lua_data.get('pause_count', 0)
             end_reason = lua_data.get('end_reason', 'unknown')
             confidence = lua_data.get('match_confidence', 'unknown')
-            lua_end_unix = lua_data.get('round_end_unix')
-
             # Surrender info
             surr_team = lua_data.get('surrender_team', 0)
             surr_text = ""
