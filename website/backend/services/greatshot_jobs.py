@@ -75,34 +75,80 @@ class GreatshotJobService:
         await self.render_queue.put(render_id)
 
     async def _analysis_worker(self, worker_id: int) -> None:
+        MAX_RETRIES = 2  # Retry failed jobs up to 2 times
+        retry_delay = 5  # seconds
+
         while True:
             demo_id = await self.analysis_queue.get()
-            try:
-                logger.info("[analysis:%s] Processing demo_id=%s", worker_id, demo_id)
-                await self._process_analysis_job(demo_id)
-            except Exception:
-                logger.error(
-                    "Unhandled analysis worker failure for demo_id=%s\n%s",
-                    demo_id,
-                    traceback.format_exc(),
-                )
-            finally:
-                self.analysis_queue.task_done()
+            retries = 0
+            success = False
+
+            while retries <= MAX_RETRIES and not success:
+                try:
+                    logger.info("[analysis:%s] Processing demo_id=%s (attempt %d/%d)",
+                               worker_id, demo_id, retries + 1, MAX_RETRIES + 1)
+                    await self._process_analysis_job(demo_id)
+                    success = True
+                except asyncio.TimeoutError:
+                    # Don't retry timeouts - these are likely corrupted demos
+                    logger.error("Analysis timeout for demo_id=%s - not retrying", demo_id)
+                    break
+                except Exception:
+                    logger.error(
+                        "Analysis worker failure for demo_id=%s (attempt %d/%d)\n%s",
+                        demo_id,
+                        retries + 1,
+                        MAX_RETRIES + 1,
+                        traceback.format_exc(),
+                    )
+                    retries += 1
+                    if retries <= MAX_RETRIES:
+                        logger.info("Retrying demo_id=%s in %ds...", demo_id, retry_delay)
+                        await asyncio.sleep(retry_delay)
+                    else:
+                        # Mark as failed after all retries exhausted
+                        await self.db.execute(
+                            """
+                            UPDATE greatshot_demos
+                            SET status = 'failed',
+                                error = 'Analysis failed after retries',
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = $1
+                            """,
+                            (demo_id,),
+                        )
+
+            self.analysis_queue.task_done()
 
     async def _render_worker(self, worker_id: int) -> None:
+        MAX_RETRIES = 1  # Retry failed renders once (rendering is expensive)
+        retry_delay = 10  # seconds
+
         while True:
             render_id = await self.render_queue.get()
-            try:
-                logger.info("[render:%s] Processing render_id=%s", worker_id, render_id)
-                await self._process_render_job(render_id)
-            except Exception:
-                logger.error(
-                    "Unhandled render worker failure for render_id=%s\n%s",
-                    render_id,
-                    traceback.format_exc(),
-                )
-            finally:
-                self.render_queue.task_done()
+            retries = 0
+            success = False
+
+            while retries <= MAX_RETRIES and not success:
+                try:
+                    logger.info("[render:%s] Processing render_id=%s (attempt %d/%d)",
+                               worker_id, render_id, retries + 1, MAX_RETRIES + 1)
+                    await self._process_render_job(render_id)
+                    success = True
+                except Exception:
+                    logger.error(
+                        "Render worker failure for render_id=%s (attempt %d/%d)\n%s",
+                        render_id,
+                        retries + 1,
+                        MAX_RETRIES + 1,
+                        traceback.format_exc(),
+                    )
+                    retries += 1
+                    if retries <= MAX_RETRIES:
+                        logger.info("Retrying render_id=%s in %ds...", render_id, retry_delay)
+                        await asyncio.sleep(retry_delay)
+
+            self.render_queue.task_done()
 
     async def _process_analysis_job(self, demo_id: str) -> None:
         row = await self.db.fetch_one(
@@ -134,12 +180,33 @@ class GreatshotJobService:
 
         try:
             artifacts_dir = self.storage.artifacts_dir(demo_id)
-            result = await asyncio.to_thread(
-                run_analysis_job,
-                demo_path,
-                artifacts_dir,
-                None,
-            )
+
+            # Enforce timeout to prevent analysis from hanging forever
+            timeout_seconds = getattr(GREATSHOT_CONFIG, 'scanner_timeout_seconds', 300)  # Default 5 min
+            try:
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        run_analysis_job,
+                        demo_path,
+                        artifacts_dir,
+                        None,
+                    ),
+                    timeout=timeout_seconds
+                )
+            except asyncio.TimeoutError:
+                error_msg = f"Analysis timed out after {timeout_seconds}s"
+                logger.error(f"{error_msg} for demo {demo_id}")
+                await self.db.execute(
+                    """
+                    UPDATE greatshot_demos
+                    SET status = 'failed',
+                        error = $2,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $1
+                    """,
+                    (demo_id, error_msg),
+                )
+                return
 
             analysis = result["analysis"]
             metadata_json = json.dumps(analysis.get("metadata") or {})
@@ -147,17 +214,22 @@ class GreatshotJobService:
             events_json = json.dumps(analysis.get("timeline") or [])
             warnings_json = json.dumps(analysis.get("warnings") or [])
 
+            # Calculate total_kills for efficient topshots queries (avoids N+1 file reads)
+            player_stats = analysis.get("player_stats") or {}
+            total_kills = sum([p.get("kills", 0) for p in player_stats.values()])
+
             await self.db.execute(
                 """
-                INSERT INTO greatshot_analysis (demo_id, metadata_json, stats_json, events_json, created_at)
-                VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, CURRENT_TIMESTAMP)
+                INSERT INTO greatshot_analysis (demo_id, metadata_json, stats_json, events_json, total_kills, created_at)
+                VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5, CURRENT_TIMESTAMP)
                 ON CONFLICT (demo_id) DO UPDATE SET
                     metadata_json = EXCLUDED.metadata_json,
                     stats_json = EXCLUDED.stats_json,
                     events_json = EXCLUDED.events_json,
+                    total_kills = EXCLUDED.total_kills,
                     created_at = CURRENT_TIMESTAMP
                 """,
-                (demo_id, metadata_json, stats_json, events_json),
+                (demo_id, metadata_json, stats_json, events_json, total_kills),
             )
 
             await self.db.execute(
@@ -321,7 +393,16 @@ class GreatshotJobService:
                 demo_duration_ms=demo_end_ms,
             )
 
-            clip_missing = not clip_demo_path or not Path(str(clip_demo_path)).is_file()
+            # Lock the highlight row to prevent race conditions when multiple workers
+            # try to extract the same clip simultaneously (SELECT FOR UPDATE)
+            locked_highlight = await self.db.fetch_one(
+                "SELECT clip_demo_path FROM greatshot_highlights WHERE id = $1 FOR UPDATE",
+                (highlight_id,)
+            )
+
+            # Re-check after acquiring lock (another worker may have just finished)
+            locked_clip_path = locked_highlight[0] if locked_highlight else None
+            clip_missing = not locked_clip_path or not Path(str(locked_clip_path)).is_file()
             if clip_missing:
                 clips_dir = self.storage.clips_dir(demo_id)
                 clips_dir.mkdir(parents=True, exist_ok=True)

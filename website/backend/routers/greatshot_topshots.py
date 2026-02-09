@@ -33,65 +33,44 @@ async def get_top_kills(limit: int = 10, db=Depends(get_db)):
     Returns:
         List of demos ranked by total kills across all players
     """
+    # Optimized query using total_kills column (avoids N+1 file reads)
     rows = await db.fetch_all(
         """
         SELECT
             d.id,
             d.original_filename,
             d.metadata_json,
+            a.total_kills,
+            a.stats_json,
             d.created_at
         FROM greatshot_demos d
         JOIN greatshot_analysis a ON a.demo_id = d.id
-        WHERE d.status = 'completed'
-          AND a.stats_json IS NOT NULL
-        ORDER BY d.created_at DESC
-        LIMIT 100
+        WHERE d.status = 'analyzed'
+          AND a.total_kills > 0
+        ORDER BY a.total_kills DESC
+        LIMIT $1
         """,
-        ()
+        (limit,)
     )
 
     results = []
     for row in rows:
-        demo_id, filename, metadata_json, created_at = row
+        demo_id, filename, metadata_json, total_kills, stats_json, created_at = row
         metadata = _safe_json_field(metadata_json) or {}
+        stats = _safe_json_field(stats_json) or {}
 
-        # Get analysis JSON path
-        analysis_row = await db.fetch_one(
-            "SELECT analysis_json_path FROM greatshot_demos WHERE id = $1",
-            (demo_id,)
-        )
+        player_stats = stats.get("player_stats") or {}
 
-        if not analysis_row or not analysis_row[0]:
-            continue
+        results.append({
+            "demo_id": demo_id,
+            "filename": filename,
+            "map": metadata.get("map"),
+            "total_kills": total_kills,
+            "player_count": len(player_stats),
+            "created_at": str(created_at),
+        })
 
-        try:
-            import json
-            from pathlib import Path
-            analysis_file = Path(analysis_row[0])
-            if not analysis_file.is_file():
-                continue
-
-            with analysis_file.open() as f:
-                full_analysis = json.load(f)
-
-            player_stats = full_analysis.get("player_stats") or {}
-            total_kills = sum([p.get("kills", 0) for p in player_stats.values()])
-
-            results.append({
-                "demo_id": demo_id,
-                "filename": filename,
-                "map": metadata.get("map"),
-                "total_kills": total_kills,
-                "player_count": len(player_stats),
-                "created_at": str(created_at),
-            })
-        except Exception as e:
-            logger.warning(f"Failed to process demo {demo_id}: {e}")
-            continue
-
-    # Sort by kills and return top N
-    results.sort(key=lambda x: x["total_kills"], reverse=True)
-    return results[:limit]
+    return results
 
 
 @router.get("/greatshot/topshots/players")
@@ -110,7 +89,7 @@ async def get_top_players(limit: int = 10, db=Depends(get_db)):
             d.analysis_json_path,
             d.created_at
         FROM greatshot_demos d
-        WHERE d.status = 'completed'
+        WHERE d.status = 'analyzed'
           AND d.analysis_json_path IS NOT NULL
         ORDER BY d.created_at DESC
         LIMIT 100
@@ -190,7 +169,7 @@ async def get_top_accuracy(min_kills: int = 10, limit: int = 10, db=Depends(get_
             d.analysis_json_path,
             d.created_at
         FROM greatshot_demos d
-        WHERE d.status = 'completed'
+        WHERE d.status = 'analyzed'
           AND d.analysis_json_path IS NOT NULL
         ORDER BY d.created_at DESC
         LIMIT 100
@@ -261,7 +240,7 @@ async def get_top_damage(limit: int = 10, db=Depends(get_db)):
             d.analysis_json_path,
             d.created_at
         FROM greatshot_demos d
-        WHERE d.status = 'completed'
+        WHERE d.status = 'analyzed'
           AND d.analysis_json_path IS NOT NULL
         ORDER BY d.created_at DESC
         LIMIT 100
@@ -334,7 +313,7 @@ async def get_top_multikills(limit: int = 10, db=Depends(get_db)):
         FROM greatshot_highlights h
         JOIN greatshot_demos d ON d.id = h.demo_id
         WHERE h.type IN ('double_kill', 'triple_kill', 'quad_kill', 'penta_kill', 'multi_kill')
-          AND d.status = 'completed'
+          AND d.status = 'analyzed'
         ORDER BY h.score DESC
         LIMIT $1
         """,
