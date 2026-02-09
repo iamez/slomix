@@ -2185,8 +2185,8 @@
                             <h2 class="text-lg font-black text-white mb-4">Upload Demo</h2>
                             <form id="demo-upload-form" class="space-y-4" enctype="multipart/form-data">
                                 <div>
-                                    <label for="demo-upload-file" class="text-xs font-bold uppercase tracking-wide text-slate-500">File (.dm_84)</label>
-                                    <input id="demo-upload-file" name="file" type="file" accept=".dm_84"
+                                    <label for="demo-upload-file" class="text-xs font-bold uppercase tracking-wide text-slate-500">Files (.dm_84)</label>
+                                    <input id="demo-upload-file" name="file" type="file" accept=".dm_84" multiple
                                         class="mt-2 w-full rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-brand-cyan/60"
                                         required>
                                 </div>
@@ -2195,6 +2195,24 @@
                                     Upload + Scan
                                 </button>
                                 <div id="demo-upload-status" class="text-xs text-slate-400 min-h-[1.25rem]"></div>
+                                <!-- Analysis progress panel (hidden by default) -->
+                                <div id="demo-analysis-progress" class="hidden mt-3 p-4 rounded-xl border border-brand-cyan/30 bg-brand-cyan/5">
+                                    <div class="flex items-center gap-3 mb-2">
+                                        <div id="analysis-spinner" class="w-4 h-4 border-2 border-brand-cyan/30 border-t-brand-cyan rounded-full animate-spin"></div>
+                                        <span id="analysis-phase" class="text-sm font-bold text-brand-cyan">Analyzing demo...</span>
+                                        <span id="analysis-elapsed" class="ml-auto text-xs text-slate-500 tabular-nums">0s</span>
+                                    </div>
+                                    <!-- Single-file phase badges (shown for 1 file) -->
+                                    <div id="analysis-phases-single" class="flex gap-2 mt-2">
+                                        <span id="phase-upload" class="text-[10px] px-2 py-0.5 rounded border border-brand-emerald/40 text-brand-emerald bg-brand-emerald/10">Uploaded</span>
+                                        <span id="phase-queue" class="text-[10px] px-2 py-0.5 rounded border border-white/10 text-slate-500">Queued</span>
+                                        <span id="phase-scan" class="text-[10px] px-2 py-0.5 rounded border border-white/10 text-slate-500">Scanning</span>
+                                        <span id="phase-done" class="text-[10px] px-2 py-0.5 rounded border border-white/10 text-slate-500">Done</span>
+                                    </div>
+                                    <!-- Multi-file progress list (shown for 2+ files) -->
+                                    <div id="analysis-multi-list" class="hidden mt-2 space-y-1"></div>
+                                    <div id="analysis-result" class="hidden mt-3 text-xs text-slate-300"></div>
+                                </div>
                                 <div class="text-[11px] text-slate-500">
                                     Allowed extension: <code>.dm_84</code>. Uploads are stored outside web root and processed asynchronously.
                                 </div>
@@ -2305,6 +2323,11 @@
                     <div class="glass-card p-4 rounded-xl mt-6">
                         <div class="text-xs font-bold uppercase text-slate-500 mb-2">Database Cross-Reference</div>
                         <div id="demo-detail-crossref" class="space-y-2"></div>
+                    </div>
+
+                    <div class="glass-card p-4 rounded-xl mt-6">
+                        <div class="text-xs font-bold uppercase text-slate-500 mb-2">Player Stats</div>
+                        <div id="demo-detail-playerstats" class="overflow-x-auto"></div>
                     </div>
                 </div>
             </div>

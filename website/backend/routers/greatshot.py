@@ -191,6 +191,43 @@ async def list_greatshot(request: Request, db=Depends(get_db)):
     return {"items": items}
 
 
+@router.get("/greatshot/{demo_id}/status")
+async def get_greatshot_status(demo_id: str, request: Request, db=Depends(get_db)):
+    """Lightweight status endpoint for polling during analysis."""
+    user = _require_user(request)
+    user_id = int(user["id"])
+
+    row = await db.fetch_one(
+        """
+        SELECT
+            status,
+            error,
+            processing_started_at,
+            processing_finished_at,
+            metadata_json,
+            (SELECT COUNT(*) FROM greatshot_highlights h WHERE h.demo_id = d.id) AS highlight_count
+        FROM greatshot_demos d
+        WHERE id = $1 AND user_id = $2
+        """,
+        (demo_id, user_id),
+    )
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Greatshot entry not found")
+
+    status, error, started_at, finished_at, metadata_json, highlight_count = row
+    metadata = _parse_json_field(metadata_json) or {}
+
+    return {
+        "status": status,
+        "error": error,
+        "processing_started_at": str(started_at) if started_at else None,
+        "processing_finished_at": str(finished_at) if finished_at else None,
+        "highlight_count": int(highlight_count or 0),
+        "map": metadata.get("map"),
+    }
+
+
 @router.get("/greatshot/{demo_id}")
 async def get_greatshot_detail(demo_id: str, request: Request, db=Depends(get_db)):
     user = _require_user(request)
@@ -319,6 +356,20 @@ async def get_greatshot_detail(demo_id: str, request: Request, db=Depends(get_db
         for row in render_rows
     ]
 
+    # Read player_stats from analysis JSON file on disk
+    player_stats = None
+    if analysis_json_path:
+        import json as json_mod
+        from pathlib import Path as PathLib
+        try:
+            analysis_file = PathLib(analysis_json_path)
+            if analysis_file.is_file():
+                with analysis_file.open() as f:
+                    full_analysis = json_mod.load(f)
+                    player_stats = full_analysis.get("player_stats") or None
+        except Exception:
+            pass
+
     return {
         "id": demo_id,
         "filename": original_filename,
@@ -332,6 +383,7 @@ async def get_greatshot_detail(demo_id: str, request: Request, db=Depends(get_db
         "analysis": analysis_payload,
         "highlights": highlights,
         "renders": renders,
+        "player_stats": player_stats,
         "downloads": {
             "json": f"/api/greatshot/{demo_id}/report.json" if analysis_json_path else None,
             "txt": f"/api/greatshot/{demo_id}/report.txt" if report_txt_path else None,
