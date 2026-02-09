@@ -48,8 +48,11 @@ class SynergyAnalytics(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.db_path = 'etlegacy_production.db'  # Database path
-        self.detector = SynergyDetector(self.db_path)
+        # Use the bot's database adapter instead of hardcoded SQLite path
+        # SynergyDetector will need to be adapted to use PostgreSQL via bot.db_adapter
+        # For now, this cog is disabled until synergy_detector is updated for PostgreSQL
+        self.db_path = None  # Disabled - needs PostgreSQL migration
+        self.detector = None  # SynergyDetector(self.db_path)
         self.cache = {}  # Simple in-memory cache
         self.player_formatter = PlayerFormatter(bot.db_adapter)
         

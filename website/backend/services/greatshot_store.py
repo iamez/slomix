@@ -77,8 +77,34 @@ class GreatshotStorageService:
             )
         return ext
 
+    def _check_disk_space(self, required_bytes: int = 1024 * 1024 * 100) -> None:
+        """Check if sufficient disk space is available (default 100MB minimum).
+
+        Raises HTTPException if disk space is insufficient.
+        """
+        try:
+            import shutil
+            stat = shutil.disk_usage(self.root)
+            free_bytes = stat.free
+
+            if free_bytes < required_bytes:
+                logger.error(f"Insufficient disk space: {free_bytes / (1024**3):.2f}GB free, "
+                           f"need at least {required_bytes / (1024**3):.2f}GB")
+                raise HTTPException(
+                    status_code=507,
+                    detail="Insufficient disk space for this operation"
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Could not check disk space: {e}")
+            # Don't fail uploads if disk check fails, just log warning
+
     async def save_upload(self, upload: UploadFile) -> SavedGreatshotUpload:
         self.ensure_storage_tree()
+
+        # Check disk space before accepting upload
+        self._check_disk_space(required_bytes=self.max_upload_bytes * 3)  # 3x for processing overhead
 
         unsafe_name = upload.filename or "upload.dm_84"
         original_filename = Path(unsafe_name).name
@@ -235,10 +261,22 @@ class GreatshotStorageService:
                 metadata_json JSONB NOT NULL,
                 stats_json JSONB NOT NULL,
                 events_json JSONB NOT NULL,
+                total_kills INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
+
+        # Migration: Add total_kills column if it doesn't exist
+        try:
+            await db.execute(
+                """
+                ALTER TABLE greatshot_analysis
+                ADD COLUMN IF NOT EXISTS total_kills INTEGER DEFAULT 0
+                """
+            )
+        except Exception:
+            pass  # Column may already exist
 
         await db.execute(
             """

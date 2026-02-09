@@ -2590,9 +2590,7 @@ async def get_sessions_list(
                 COALESCE(SUM(p.kills), 0) as total_kills
             FROM rounds r
             INNER JOIN player_comprehensive_stats p
-                ON r.round_date = p.round_date
-                AND r.map_name = p.map_name
-                AND r.round_number = p.round_number
+                ON p.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
