@@ -4,12 +4,22 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
 
 router = APIRouter()
 logger = get_app_logger("greatshot.topshots")
+
+
+def _require_user(request: Request) -> Dict[str, Any]:
+    """Require authenticated user, raise 401 if not present."""
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    if "id" not in user:
+        raise HTTPException(status_code=401, detail="Invalid session user")
+    return user
 
 
 def _safe_json_field(value: Any) -> Optional[Dict]:
@@ -26,12 +36,15 @@ def _safe_json_field(value: Any) -> Optional[Dict]:
 
 
 @router.get("/greatshot/topshots/kills")
-async def get_top_kills(limit: int = 10, db=Depends(get_db)):
+async def get_top_kills(request: Request, limit: int = 10, db=Depends(get_db)):
     """Get demos with highest total kills.
 
     Returns:
-        List of demos ranked by total kills across all players
+        List of demos ranked by total kills across all players (user's demos only)
     """
+    user = _require_user(request)
+    user_id = int(user["id"])
+    
     # Optimized query using total_kills column (avoids N+1 file reads)
     rows = await db.fetch_all(
         """
@@ -45,11 +58,12 @@ async def get_top_kills(limit: int = 10, db=Depends(get_db)):
         FROM greatshot_demos d
         JOIN greatshot_analysis a ON a.demo_id = d.id
         WHERE d.status = 'analyzed'
+          AND d.user_id = $1
           AND a.total_kills > 0
         ORDER BY a.total_kills DESC
-        LIMIT $1
+        LIMIT $2
         """,
-        (limit,)
+        (user_id, limit)
     )
 
     results = []
@@ -73,12 +87,15 @@ async def get_top_kills(limit: int = 10, db=Depends(get_db)):
 
 
 @router.get("/greatshot/topshots/players")
-async def get_top_players(limit: int = 10, db=Depends(get_db)):
+async def get_top_players(request: Request, limit: int = 10, db=Depends(get_db)):
     """Get players with best individual round performances across all demos.
 
     Returns:
-        List of player performances ranked by kills
+        List of player performances ranked by kills (user's demos only)
     """
+    user = _require_user(request)
+    user_id = int(user["id"])
+    
     rows = await db.fetch_all(
         """
         SELECT
@@ -89,10 +106,11 @@ async def get_top_players(limit: int = 10, db=Depends(get_db)):
             d.created_at
         FROM greatshot_demos d
         WHERE d.status = 'analyzed'
+          AND d.user_id = $1
           AND d.analysis_json_path IS NOT NULL
         ORDER BY d.created_at DESC
         """,
-        ()
+        (user_id,)
     )
 
     performances = []
@@ -148,7 +166,7 @@ async def get_top_players(limit: int = 10, db=Depends(get_db)):
 
 
 @router.get("/greatshot/topshots/accuracy")
-async def get_top_accuracy(min_kills: int = 10, limit: int = 10, db=Depends(get_db)):
+async def get_top_accuracy(request: Request, min_kills: int = 10, limit: int = 10, db=Depends(get_db)):
     """Get players with best accuracy across all demos.
 
     Args:
@@ -156,8 +174,11 @@ async def get_top_accuracy(min_kills: int = 10, limit: int = 10, db=Depends(get_
         limit: Number of results to return (default 10)
 
     Returns:
-        List of player performances ranked by accuracy
+        List of player performances ranked by accuracy (user's demos only)
     """
+    user = _require_user(request)
+    user_id = int(user["id"])
+    
     rows = await db.fetch_all(
         """
         SELECT
@@ -168,10 +189,11 @@ async def get_top_accuracy(min_kills: int = 10, limit: int = 10, db=Depends(get_
             d.created_at
         FROM greatshot_demos d
         WHERE d.status = 'analyzed'
+          AND d.user_id = $1
           AND d.analysis_json_path IS NOT NULL
         ORDER BY d.created_at DESC
         """,
-        ()
+        (user_id,)
     )
 
     performances = []
@@ -222,12 +244,15 @@ async def get_top_accuracy(min_kills: int = 10, limit: int = 10, db=Depends(get_
 
 
 @router.get("/greatshot/topshots/damage")
-async def get_top_damage(limit: int = 10, db=Depends(get_db)):
+async def get_top_damage(request: Request, limit: int = 10, db=Depends(get_db)):
     """Get players with highest damage dealt across all demos.
 
     Returns:
-        List of player performances ranked by damage
+        List of player performances ranked by damage (user's demos only)
     """
+    user = _require_user(request)
+    user_id = int(user["id"])
+    
     rows = await db.fetch_all(
         """
         SELECT
@@ -238,10 +263,11 @@ async def get_top_damage(limit: int = 10, db=Depends(get_db)):
             d.created_at
         FROM greatshot_demos d
         WHERE d.status = 'analyzed'
+          AND d.user_id = $1
           AND d.analysis_json_path IS NOT NULL
         ORDER BY d.created_at DESC
         """,
-        ()
+        (user_id,)
     )
 
     performances = []
@@ -288,12 +314,15 @@ async def get_top_damage(limit: int = 10, db=Depends(get_db)):
 
 
 @router.get("/greatshot/topshots/multikills")
-async def get_top_multikills(limit: int = 10, db=Depends(get_db)):
+async def get_top_multikills(request: Request, limit: int = 10, db=Depends(get_db)):
     """Get best multi-kill highlights across all demos.
 
     Returns:
-        List of highlights ranked by kill count
+        List of highlights ranked by kill count (user's demos only)
     """
+    user = _require_user(request)
+    user_id = int(user["id"])
+    
     rows = await db.fetch_all(
         """
         SELECT
@@ -310,10 +339,11 @@ async def get_top_multikills(limit: int = 10, db=Depends(get_db)):
         JOIN greatshot_demos d ON d.id = h.demo_id
         WHERE h.type IN ('double_kill', 'triple_kill', 'quad_kill', 'penta_kill', 'multi_kill')
           AND d.status = 'analyzed'
+          AND d.user_id = $1
         ORDER BY h.score DESC
-        LIMIT $1
+        LIMIT $2
         """,
-        (limit * 2,)  # Get more to filter later
+        (user_id, limit * 2)  # Get more to filter later
     )
 
     highlights = []
