@@ -405,7 +405,7 @@ CREATE TABLE IF NOT EXISTS proximity_objective_focus (
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    UNIQUE(session_date, round_number, player_guid)
+    UNIQUE(session_date, round_number, round_start_unix, player_guid)
 );
 
 -- ===== TRADE EVENTS (v1) =====

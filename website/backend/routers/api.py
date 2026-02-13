@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple
 import math
 import json
@@ -26,6 +26,47 @@ router = APIRouter()
 # Game server configuration (for direct UDP query)
 GAME_SERVER_HOST = os.getenv("SERVER_HOST", "puran.hehe.si")
 GAME_SERVER_PORT = int(os.getenv("SERVER_PORT", "27960"))
+
+MONITORING_STALE_THRESHOLD_SECONDS = int(os.getenv("MONITORING_STALE_THRESHOLD_SECONDS", "300"))
+
+
+def _normalize_monitoring_timestamp(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    ts = value
+    if not isinstance(ts, datetime):
+        try:
+            ts = datetime.fromisoformat(str(ts))
+        except ValueError:
+            return None
+    if ts.tzinfo is not None:
+        ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
+    return ts
+
+
+def _normalize_weapon_key(weapon_name: Any) -> str:
+    """Normalize weapon names for grouping/filtering (e.g. WS_MP40 -> mp40)."""
+    if weapon_name is None:
+        return "unknown"
+    key = str(weapon_name).strip().lower()
+    if key.startswith("ws_"):
+        key = key[3:]
+    elif key.startswith("ws "):
+        key = key[3:]
+    return key.replace("_", "").replace(" ", "")
+
+
+def _clean_weapon_name(weapon_name: Any) -> str:
+    """Format weapon names for UI display (e.g. WS_GRENADE -> Grenade)."""
+    if weapon_name is None:
+        return "Unknown"
+    clean_name = str(weapon_name).strip()
+    lower_name = clean_name.lower()
+    if lower_name.startswith("ws_"):
+        clean_name = clean_name[3:]
+    elif lower_name.startswith("ws "):
+        clean_name = clean_name[3:]
+    return clean_name.replace("_", " ").title()
 
 
 # ========================================
@@ -321,8 +362,17 @@ async def resolve_name_guid_map(
 
 
 @router.get("/status")
-async def get_status():
-    return {"status": "online", "service": "Slomix API"}
+async def get_status(db: DatabaseAdapter = Depends(get_db)):
+    try:
+        await db.fetch_one("SELECT 1")
+        return {"status": "online", "service": "Slomix API", "database": "ok"}
+    except Exception as exc:
+        return {
+            "status": "degraded",
+            "service": "Slomix API",
+            "database": "error",
+            "error": str(exc),
+        }
 
 
 @router.get("/diagnostics")
@@ -519,6 +569,10 @@ async def get_lua_webhook_diagnostics(db: DatabaseAdapter = Depends(get_db)):
         "counts": {},
         "latest": None,
         "recent": [],
+        "trends": {
+            "lua_rows_by_day": [],
+            "rounds_without_lua_by_day": [],
+        },
         "errors": [],
     }
 
@@ -623,6 +677,53 @@ async def get_lua_webhook_diagnostics(db: DatabaseAdapter = Depends(get_db)):
             )
     except Exception as e:
         payload["errors"].append(f"recent_failed: {e}")
+
+    try:
+        lua_daily_rows = await db.fetch_all(
+            """
+            SELECT
+                DATE(captured_at) AS day,
+                COUNT(*) AS lua_rows,
+                COUNT(*) FILTER (WHERE round_id IS NULL) AS unlinked_rows
+            FROM lua_round_teams
+            WHERE captured_at >= NOW() - INTERVAL '14 days'
+            GROUP BY 1
+            ORDER BY 1 DESC
+            """
+        )
+        for day, lua_rows, unlinked_rows in lua_daily_rows:
+            payload["trends"]["lua_rows_by_day"].append(
+                {
+                    "day": str(day),
+                    "lua_rows": int(lua_rows or 0),
+                    "unlinked_rows": int(unlinked_rows or 0),
+                }
+            )
+
+        round_daily_rows = await db.fetch_all(
+            """
+            SELECT
+                r.round_date AS day,
+                COUNT(*) AS rounds_total,
+                COUNT(*) FILTER (WHERE l.id IS NULL) AS rounds_without_lua
+            FROM rounds r
+            LEFT JOIN lua_round_teams l ON l.round_id = r.id
+            WHERE r.round_number IN (1, 2)
+              AND r.round_date >= CURRENT_DATE - INTERVAL '14 days'
+            GROUP BY 1
+            ORDER BY 1 DESC
+            """
+        )
+        for day, rounds_total, rounds_without_lua in round_daily_rows:
+            payload["trends"]["rounds_without_lua_by_day"].append(
+                {
+                    "day": str(day),
+                    "rounds_total": int(rounds_total or 0),
+                    "rounds_without_lua": int(rounds_without_lua or 0),
+                }
+            )
+    except Exception as e:
+        payload["errors"].append(f"trends_failed: {e}")
 
     if payload["errors"]:
         payload["status"] = "warning"
@@ -864,9 +965,22 @@ async def get_monitoring_status(db: DatabaseAdapter = Depends(get_db)):
     """
     Lightweight monitoring status for history tables.
     """
+    now = datetime.utcnow()
     payload = {
-        "server": {"count": 0, "last_recorded_at": None},
-        "voice": {"count": 0, "last_recorded_at": None},
+        "server": {
+            "count": 0,
+            "last_recorded_at": None,
+            "age_seconds": None,
+            "is_stale": False,
+            "stale_threshold_seconds": MONITORING_STALE_THRESHOLD_SECONDS,
+        },
+        "voice": {
+            "count": 0,
+            "last_recorded_at": None,
+            "age_seconds": None,
+            "is_stale": False,
+            "stale_threshold_seconds": MONITORING_STALE_THRESHOLD_SECONDS,
+        },
     }
 
     for table, key in (
@@ -876,14 +990,32 @@ async def get_monitoring_status(db: DatabaseAdapter = Depends(get_db)):
         try:
             count = await db.fetch_val(f"SELECT COUNT(*) FROM {table}")
             last = await db.fetch_val(f"SELECT MAX(recorded_at) FROM {table}")
+            normalized_last = _normalize_monitoring_timestamp(last)
+            age_seconds = (
+                int((now - normalized_last).total_seconds())
+                if normalized_last
+                else None
+            )
+            is_stale = (
+                age_seconds is not None
+                and age_seconds > MONITORING_STALE_THRESHOLD_SECONDS
+            )
             payload[key] = {
                 "count": count or 0,
-                "last_recorded_at": last.isoformat() if last else None,
+                "last_recorded_at": f"{normalized_last.isoformat()}Z"
+                if normalized_last
+                else None,
+                "age_seconds": age_seconds,
+                "is_stale": is_stale,
+                "stale_threshold_seconds": MONITORING_STALE_THRESHOLD_SECONDS,
             }
         except Exception as e:
             payload[key] = {
                 "count": 0,
                 "last_recorded_at": None,
+                "age_seconds": None,
+                "is_stale": False,
+                "stale_threshold_seconds": MONITORING_STALE_THRESHOLD_SECONDS,
                 "error": str(e),
             }
 
@@ -1209,7 +1341,13 @@ async def get_current_voice_activity(db: DatabaseAdapter = Depends(get_db)):
         }
 
     except Exception as e:
-        print(f"Error fetching current voice activity: {e}")
+        error_text = str(e)
+        denied_voice_members = (
+            "permission denied" in error_text.lower()
+            and "voice_members" in error_text.lower()
+        )
+        if not denied_voice_members:
+            print(f"Error fetching current voice activity: {e}")
         # Fallback to live_status table
         try:
             query = """
@@ -1236,7 +1374,12 @@ async def get_current_voice_activity(db: DatabaseAdapter = Depends(get_db)):
         except:
             pass
 
-        return {"total_count": 0, "members": [], "channels": [], "error": str(e)}
+        return {
+            "total_count": 0,
+            "members": [],
+            "channels": [],
+            "error": None if denied_voice_members else error_text,
+        }
 
 
 @router.get("/stats/overview")
@@ -2393,7 +2536,9 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
                 total_mega_kills,
                 total_self_kills,
                 total_full_selfkills,
+                *optional_tail,
             ) = row
+            total_kill_assists = optional_tail[0] if optional_tail else 0
 
             total_kills += int(kills or 0)
             total_deaths += int(deaths or 0)
@@ -2426,6 +2571,7 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
                 "mega_kills": int(total_mega_kills or 0),
                 "self_kills": int(total_self_kills or 0),
                 "full_selfkills": int(total_full_selfkills or 0),
+                "kill_assists": int(total_kill_assists or 0),
             }
 
             if team_name and team_name in team_lookup:
@@ -2590,9 +2736,7 @@ async def get_sessions_list(
                 COALESCE(SUM(p.kills), 0) as total_kills
             FROM rounds r
             INNER JOIN player_comprehensive_stats p
-                ON r.round_date = p.round_date
-                AND r.map_name = p.map_name
-                AND r.round_number = p.round_number
+                ON p.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
@@ -3862,6 +4006,31 @@ async def get_weapon_stats(
     if not rows:
         return []
 
+    weapons = []
+    for row in rows:
+        weapon_name = row[0] or "Unknown"
+        total_kills = row[1] or 0
+        total_headshots = row[2] or 0
+        avg_accuracy = row[5] or 0
+
+        if total_kills <= 0:
+            continue
+
+        # In ET:Legacy, headshot count can exceed killing shots; cap display at 100%.
+        hs_rate = min(100, round((total_headshots / total_kills * 100), 1))
+        weapons.append(
+            {
+                "name": _clean_weapon_name(weapon_name),
+                "weapon_key": _normalize_weapon_key(weapon_name),
+                "kills": int(total_kills),
+                "headshots": int(total_headshots),
+                "hs_rate": hs_rate,
+                "accuracy": round(avg_accuracy, 1),
+            }
+        )
+
+    return weapons
+
 
 @router.get("/stats/weapons/hall-of-fame")
 async def get_weapon_hall_of_fame(
@@ -3888,6 +4057,7 @@ async def get_weapon_hall_of_fame(
         "grenade",
     ]
 
+    weapon_key_expr = "REPLACE(REPLACE(LOWER(weapon_name), 'ws_', ''), ' ', '')"
     where_clause = "WHERE weapon_name IS NOT NULL"
     params = []
     param_idx = 1
@@ -3912,12 +4082,12 @@ async def get_weapon_hall_of_fame(
     weapon_placeholders = ",".join(
         f"${i}" for i in range(param_idx, param_idx + len(hall_weapons))
     )
-    where_clause += f" AND LOWER(weapon_name) IN ({weapon_placeholders})"
+    where_clause += f" AND {weapon_key_expr} IN ({weapon_placeholders})"
     params.extend(hall_weapons)
 
     query = f"""
         SELECT
-            LOWER(weapon_name) as weapon_key,
+            {weapon_key_expr} as weapon_key,
             MAX(weapon_name) as weapon_name,
             player_guid,
             MAX(player_name) as player_name,
@@ -3953,7 +4123,8 @@ async def get_weapon_hall_of_fame(
         current = leaders.get(weapon_key)
         if not current or kills > current["kills"]:
             leaders[weapon_key] = {
-                "weapon": weapon_name,
+                "weapon": _clean_weapon_name(weapon_name),
+                "weapon_key": weapon_key,
                 "player_guid": player_guid,
                 "player_name": player_name,
                 "kills": kills,
@@ -3963,43 +4134,121 @@ async def get_weapon_hall_of_fame(
 
     return {"period": period, "leaders": leaders}
 
-    weapons = []
+
+@router.get("/stats/weapons/by-player")
+@router.get("/stats/weapons/by_player")
+async def get_weapon_stats_by_player(
+    period: str = "all",
+    player_limit: int = 25,
+    weapon_limit: int = 5,
+    player_guid: Optional[str] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Return per-player weapon stats keyed by player GUID.
+    Useful for comprehensive weapon mastery views.
+    """
+    from datetime import datetime, timedelta
+
+    where_clause = "WHERE weapon_name IS NOT NULL"
+    params: List[Any] = []
+    param_idx = 1
+
+    if period == "7d":
+        start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        where_clause += f" AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST(${param_idx} AS TEXT)"
+        params.append(start_date)
+        param_idx += 1
+    elif period == "30d":
+        start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        where_clause += f" AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST(${param_idx} AS TEXT)"
+        params.append(start_date)
+        param_idx += 1
+    elif period == "season":
+        sm = SeasonManager()
+        start_date = sm.get_season_dates()[0].strftime("%Y-%m-%d")
+        where_clause += f" AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST(${param_idx} AS TEXT)"
+        params.append(start_date)
+        param_idx += 1
+
+    if player_guid:
+        where_clause += f" AND player_guid = ${param_idx}"
+        params.append(player_guid)
+        param_idx += 1
+
+    query = f"""
+        SELECT
+            player_guid,
+            MAX(player_name) AS player_name,
+            weapon_name,
+            SUM(kills) AS total_kills,
+            SUM(headshots) AS total_headshots,
+            SUM(shots) AS total_shots,
+            SUM(hits) AS total_hits,
+            AVG(accuracy) AS avg_accuracy
+        FROM weapon_comprehensive_stats
+        {where_clause}
+        GROUP BY player_guid, weapon_name
+        HAVING SUM(kills) > 0
+        ORDER BY player_guid, total_kills DESC
+    """
+
+    try:
+        rows = await db.fetch_all(query, tuple(params))
+    except Exception as e:
+        print(f"Error fetching weapon stats by player: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+    players: Dict[str, Dict[str, Any]] = {}
     for row in rows:
-        weapon_name = row[0] or "Unknown"
-        total_kills = row[1] or 0
-        total_headshots = row[2] or 0
-        total_shots = row[3] or 0
-        total_hits = row[4] or 0
-        avg_accuracy = row[5] or 0
+        guid = row[0]
+        if not guid:
+            continue
+        if guid not in players:
+            players[guid] = {
+                "player_guid": guid,
+                "player_name": row[1] or "Unknown",
+                "total_kills": 0,
+                "weapons": [],
+            }
 
-        if total_kills > 0:
-            # Note: In ET:Legacy, headshots can exceed kills (tracking all headshots, not just killing shots)
-            # We cap hs_rate at 100% for display purposes
-            hs_rate = (
-                min(100, round((total_headshots / total_kills * 100), 1))
-                if total_kills > 0
-                else 0
-            )
+        kills = int(row[3] or 0)
+        headshots = int(row[4] or 0)
+        shots = int(row[5] or 0)
+        hits = int(row[6] or 0)
+        avg_accuracy = float(row[7] or 0)
+        hs_rate = round((headshots / kills) * 100, 1) if kills > 0 else 0.0
 
-            # Clean up weapon name (remove "Ws " prefix, "WS_" prefix, underscores)
-            clean_name = weapon_name
-            if clean_name.lower().startswith("ws "):
-                clean_name = clean_name[3:]
-            if clean_name.lower().startswith("ws_"):
-                clean_name = clean_name[3:]
-            clean_name = clean_name.replace("_", " ").title()
+        players[guid]["total_kills"] += kills
+        players[guid]["weapons"].append(
+            {
+                "name": _clean_weapon_name(row[2]),
+                "weapon_key": _normalize_weapon_key(row[2]),
+                "kills": kills,
+                "headshots": headshots,
+                "hs_rate": min(100.0, hs_rate),
+                "shots": shots,
+                "hits": hits,
+                "accuracy": round(avg_accuracy, 1),
+            }
+        )
 
-            weapons.append(
-                {
-                    "name": clean_name,
-                    "kills": int(total_kills),
-                    "headshots": int(total_headshots),
-                    "hs_rate": hs_rate,
-                    "accuracy": round(avg_accuracy, 1),
-                }
-            )
+    ranked_players = sorted(
+        players.values(),
+        key=lambda p: p["total_kills"],
+        reverse=True,
+    )
 
-    return weapons
+    if player_limit > 0:
+        ranked_players = ranked_players[:player_limit]
+    for player in ranked_players:
+        player["weapons"] = player["weapons"][: max(1, weapon_limit)]
+
+    return {
+        "period": period,
+        "player_count": len(ranked_players),
+        "players": ranked_players,
+    }
 
 
 @router.get("/stats/matches/{match_id}")
@@ -4457,6 +4706,7 @@ async def get_session_graph_stats(
             p.damage_received,
             p.time_played_seconds,
             p.revives_given,
+            p.kill_assists,
             p.gibs,
             p.headshots,
             p.accuracy,
@@ -4470,6 +4720,8 @@ async def get_session_graph_stats(
         FROM player_comprehensive_stats p
         JOIN rounds r ON p.round_id = r.id
         WHERE {where_clause}
+          AND r.round_number IN (1, 2)
+          AND (r.round_status IN ('completed', 'cancelled', 'substitution') OR r.round_status IS NULL)
         ORDER BY p.player_name, r.id
     """
 
@@ -4495,16 +4747,17 @@ async def get_session_graph_stats(
         damage_received = row[5] or 0
         time_played = row[6] or 0
         revives = row[7] or 0
-        gibs = row[8] or 0
-        headshots = row[9] or 0
-        accuracy = row[10] or 0
-        team_kills = row[11] or 0
-        self_kills = row[12] or 0
-        times_revived = row[13] or 0
-        time_dead_minutes = row[14] or 0
-        denied_playtime = row[15] or 0
-        map_name = row[16]
-        round_id = row[17]  # unique identifier for deduplication
+        kill_assists = row[8] or 0
+        gibs = row[9] or 0
+        headshots = row[10] or 0
+        accuracy = row[11] or 0
+        team_kills = row[12] or 0
+        self_kills = row[13] or 0
+        times_revived = row[14] or 0
+        time_dead_minutes = row[15] or 0
+        denied_playtime = row[16] or 0
+        map_name = row[17]
+        round_id = row[18]  # unique identifier for deduplication
 
         if name not in player_stats:
             player_stats[name] = {
@@ -4514,6 +4767,7 @@ async def get_session_graph_stats(
                 "damage_received": 0,
                 "time_played": 0,
                 "revives": 0,
+                "kill_assists": 0,
                 "gibs": 0,
                 "headshots": 0,
                 "accuracy_sum": 0,
@@ -4540,6 +4794,7 @@ async def get_session_graph_stats(
         ps["damage_received"] += damage_received
         ps["time_played"] += time_played
         ps["revives"] += revives
+        ps["kill_assists"] += kill_assists
         ps["gibs"] += gibs
         ps["headshots"] += headshots
         ps["accuracy_sum"] += accuracy
@@ -4569,8 +4824,10 @@ async def get_session_graph_stats(
         dpm = stats["damage_given"] / time_minutes
 
         # Advanced metrics (similar to Discord bot's SessionGraphGenerator)
-        # FragPotential: (kills + assists_proxy) / time * scaling
-        frag_potential = (stats["kills"] + stats["revives"] * 0.5) / time_minutes * 10
+        # FragPotential: (kills + kill_assists proxy) / time * scaling
+        frag_potential = (
+            (stats["kills"] + stats["kill_assists"] * 0.5) / time_minutes * 10
+        )
 
         # Damage Efficiency: damage_given / (damage_given + damage_received)
         total_damage = stats["damage_given"] + stats["damage_received"]
@@ -4610,6 +4867,7 @@ async def get_session_graph_stats(
                 },
                 "combat_defense": {
                     "revives": stats["revives"],
+                    "kill_assists": stats["kill_assists"],
                     "gibs": stats["gibs"],
                     "headshots": stats["headshots"],
                     "times_revived": stats["times_revived"],
@@ -5537,7 +5795,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     """
     fallback_time_dead = """
         SELECT player_guid, MAX(player_name) as player_name,
-               SUM(COALESCE(time_dead_seconds, 0)) / 60.0 as time_dead_minutes
+               SUM(COALESCE(time_dead_minutes, 0)) as time_dead_minutes
         FROM player_comprehensive_stats
         WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid

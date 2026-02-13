@@ -106,7 +106,7 @@ cd /slomix
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
-pip install discord.py asyncpg matplotlib numpy python-dotenv
+pip install -r requirements.txt
 ```text
 
 ### Step 7: Populate Database

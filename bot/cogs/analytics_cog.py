@@ -15,6 +15,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.utils import sanitize_error_message
 from bot.services.player_analytics_service import PlayerAnalyticsService
 
 logger = logging.getLogger("bot.cogs.analytics")
@@ -42,10 +43,11 @@ class AnalyticsCog(commands.Cog):
 
         # Try partial match
         query = """
-            SELECT DISTINCT player_guid
+            SELECT player_guid
             FROM player_comprehensive_stats
             WHERE LOWER(player_name) LIKE LOWER($1)
-            ORDER BY round_date DESC
+            GROUP BY player_guid
+            ORDER BY MAX(round_date) DESC
             LIMIT 1
         """
         result = await self.bot.db_adapter.fetch_one(query, (f"%{player_name}%",))
@@ -80,7 +82,7 @@ class AnalyticsCog(commands.Cog):
                     return
             except Exception as e:
                 logger.error(f"Error in consistency command: {e}", exc_info=True)
-                await ctx.send(f"Error analyzing consistency: {e}")
+                await ctx.send(f"Error analyzing consistency: {sanitize_error_message(e)}")
                 return
 
             # Color based on consistency
@@ -135,7 +137,7 @@ class AnalyticsCog(commands.Cog):
                     return
             except Exception as e:
                 logger.error(f"Error in map_stats command: {e}", exc_info=True)
-                await ctx.send(f"Error analyzing map stats: {e}")
+                await ctx.send(f"Error analyzing map stats: {sanitize_error_message(e)}")
                 return
 
             embed = discord.Embed(
@@ -185,7 +187,7 @@ class AnalyticsCog(commands.Cog):
                     return
             except Exception as e:
                 logger.error(f"Error in playstyle command: {e}", exc_info=True)
-                await ctx.send(f"Error analyzing playstyle: {e}")
+                await ctx.send(f"Error analyzing playstyle: {sanitize_error_message(e)}")
                 return
 
             # Color based on preference
@@ -246,7 +248,7 @@ class AnalyticsCog(commands.Cog):
                     return
             except Exception as e:
                 logger.error(f"Error in awards command: {e}", exc_info=True)
-                await ctx.send(f"Error generating awards: {e}")
+                await ctx.send(f"Error generating awards: {sanitize_error_message(e)}")
                 return
 
             embed = discord.Embed(
@@ -301,7 +303,7 @@ class AnalyticsCog(commands.Cog):
                     return
             except Exception as e:
                 logger.error(f"Error in fatigue command: {e}", exc_info=True)
-                await ctx.send(f"Error analyzing fatigue: {e}")
+                await ctx.send(f"Error analyzing fatigue: {sanitize_error_message(e)}")
                 return
 
             # Color based on trend

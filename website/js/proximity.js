@@ -113,8 +113,11 @@ function ensureValidScopeSelection() {
 }
 
 function updateScopeUIText() {
-    setText('proximity-scope-caption', getScopeDescription());
-    setText('proximity-window-label', getScopeDescription());
+    const scope = getScopeDescription();
+    setText('proximity-scope-caption', scope);
+    setText('proximity-window-label', scope);
+    setText('proximity-timeline-scope', `Scope: ${scope}`);
+    setText('proximity-heatmap-scope', `Scope: ${scope}`);
 }
 
 function renderScopeSelectors() {
@@ -356,15 +359,16 @@ function renderHeatmap(payload) {
     if (!canvas) return;
 
     const hotzones = payload?.hotzones || [];
+    const scope = getScopeDescription();
     if (!hotzones.length) {
         if (empty) empty.classList.remove('hidden');
-        if (caption) caption.textContent = 'No hotzone data yet.';
+        if (caption) caption.textContent = `No hotzone data yet for ${scope}.`;
         return;
     }
 
     if (empty) empty.classList.add('hidden');
     const mapName = payload?.map_name || 'unknown';
-    if (caption) caption.textContent = `Map: ${stripEtColors(mapName)} • ${hotzones.length} hotzones`;
+    if (caption) caption.textContent = `Map: ${stripEtColors(mapName)} • ${hotzones.length} hotzones • ${scope}`;
 
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
@@ -693,8 +697,11 @@ function resetProximityValues() {
     setText('proximity-trade-missed', '--');
     setText('proximity-support-uptime', '--');
     setText('proximity-isolation-deaths', '--');
-    setText('proximity-window-label', `Last ${DEFAULT_RANGE_DAYS}d window`);
-    setText('proximity-scope-caption', `Last ${DEFAULT_RANGE_DAYS}d window`);
+    const defaultScope = `Last ${DEFAULT_RANGE_DAYS}d window`;
+    setText('proximity-window-label', defaultScope);
+    setText('proximity-scope-caption', defaultScope);
+    setText('proximity-timeline-scope', `Scope: ${defaultScope}`);
+    setText('proximity-heatmap-scope', `Scope: ${defaultScope}`);
 
     renderTimeline([]);
     renderHeatmap({ hotzones: [] });

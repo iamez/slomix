@@ -3,26 +3,23 @@
 ## Overview
 
 Test suite for the ET:Legacy Statistics Bot.
-Currently focused on security testing, with room for expansion.
+Includes unit, security, parser, and Greatshot regression coverage.
 
 ## Directory Structure
 
 ```python
 tests/
-├── __init__.py
-├── conftest.py              # Pytest fixtures (if exists)
-├── unit/                    # Unit tests
-│   └── test_database_adapter.py
-├── integration/             # Integration tests
-│   └── (empty)
-├── security/                # Security tests
-│   └── test_security_validation.py
-├── e2e/                     # End-to-end tests
-│   └── (empty)
-├── performance/             # Performance tests
-│   └── (empty)
-└── fixtures/                # Test data
-    └── sample_stats_files/
+├── conftest.py                         # Shared pytest fixtures
+├── security/test_security_validation.py
+├── unit/                               # Core unit and regression tests
+│   ├── test_database_adapter.py
+│   ├── test_data_integrity.py
+│   ├── test_round_contract.py
+│   ├── test_greatshot_crossref.py
+│   └── ...
+├── test_community_stats_parser.py      # Parser regression coverage
+├── test_greatshot_api_integration.py   # API integration smoke tests
+└── fixtures/                           # Test data and fixtures
 ```text
 
 ## Running Tests
@@ -41,7 +38,7 @@ pytest --cov=bot --cov-report=html
 pytest -v
 ```yaml
 
-## Existing Tests
+## Existing Coverage
 
 ### Security Tests (`tests/security/`)
 
@@ -51,46 +48,21 @@ pytest -v
 | `test_filename_format` | Validates stats filename format |
 | `test_sql_injection_prevention` | Tests SQL parameter escaping |
 
-## Test Gaps (To Be Created)
+### High-Value Unit/Regression Tests (`tests/unit/`)
 
-### Data Integrity Tests (HIGH PRIORITY)
+| Test | Purpose |
+|------|---------|
+| `test_data_integrity.py` | Caps/constraints and aggregation safety checks |
+| `test_round_contract.py` | Round-contract storage invariants |
+| `test_lua_round_teams_param_packing.py` | Lua webhook DB param-packing regression |
+| `test_greatshot_crossref.py` | Greatshot cross-reference logic |
+| `test_greatshot_router_crossref.py` | Greatshot API route behavior |
 
-```python
-# tests/unit/test_data_integrity.py
-def test_headshot_kills_not_exceed_kills():
-    """headshot_kills should never exceed kills"""
+## Remaining Gaps
 
-def test_time_dead_not_exceed_played():
-    """time_dead should never exceed time_played"""
-
-def test_dpm_calculation_accuracy():
-    """DPM = damage_given / (time_played_seconds / 60)"""
-```text
-
-### Parser Tests
-
-```python
-# tests/unit/test_parser.py
-def test_r2_differential_calculation():
-    """R2_only = R2_cumulative - R1"""
-
-def test_midnight_crossover():
-    """R1 at 23:55, R2 at 00:10 next day"""
-
-def test_same_map_twice():
-    """Same map played twice in session"""
-```text
-
-### Session Tests
-
-```python
-# tests/unit/test_sessions.py
-def test_60_minute_session_gap():
-    """Rounds 60+ min apart = new session"""
-
-def test_session_id_consistency():
-    """Same session_id for continuous play"""
-```text
+- Add true end-to-end suite covering bot startup + DB + command smoke tests.
+- Add load/performance tests for high-frequency webhook and importer paths.
+- Add CI matrix for both PostgreSQL-only and SQLite-fallback runtime modes.
 
 ## Writing New Tests
 

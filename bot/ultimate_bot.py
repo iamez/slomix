@@ -11,6 +11,7 @@ import re
 import sys
 import time
 from datetime import datetime, timedelta
+from typing import Optional
 
 import discord
 from discord.ext import commands, tasks
@@ -21,6 +22,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import extracted core classes
 from bot.core import StatsCache, SeasonManager, AchievementSystem
 from bot.core.utils import sanitize_error_message
+from bot.core.round_contract import (
+    normalize_end_reason,
+    normalize_side_value,
+    score_confidence_state,
+    derive_stopwatch_contract,
+    derive_end_reason_display,
+)
 
 # Import database adapter and config for PostgreSQL migration
 from bot.core.database_adapter import create_adapter
@@ -761,13 +769,35 @@ class UltimateETLegacyBot(commands.Bot):
 
             # For PostgreSQL, we don't have a db_path, but metrics_logger needs one for its own SQLite db
             # Use a sensible default path for metrics database
-            metrics_db_path = self.config.metrics_db_path
+            db_type = str(getattr(self.config, "database_type", "postgresql")).strip().lower()
+            metrics_db_path = getattr(self.config, "metrics_db_path", "")
+
+            if db_type in ("postgresql", "postgres"):
+                sqlite_path = getattr(self.config, "sqlite_db_path", "") or ""
+                default_metrics_path = os.path.join("bot", "logs", "metrics", "metrics.db")
+                sqlite_abs = os.path.abspath(sqlite_path) if sqlite_path else ""
+                metrics_abs = os.path.abspath(metrics_db_path) if metrics_db_path else ""
+                metrics_basename = os.path.basename(metrics_abs) if metrics_abs else ""
+                needs_dedicated_metrics_store = (
+                    not metrics_db_path
+                    or (sqlite_abs and metrics_abs == sqlite_abs)
+                    or metrics_basename == "etlegacy.db"
+                )
+                if needs_dedicated_metrics_store:
+                    metrics_db_path = default_metrics_path
+                    logger.info("Using dedicated metrics SQLite store for PostgreSQL mode")
 
             # Create automation services in correct order (MetricsLogger first, it's needed by HealthMonitor)
             self.metrics = MetricsLogger(db_path=metrics_db_path)
+            await self.metrics.initialize_metrics_db()
             self.ssh_monitor = SSHMonitor(self)
             self.health_monitor = HealthMonitor(self, admin_channel_id, self.metrics)
-            self.db_maintenance = DatabaseMaintenance(self, self.db_path or "bot/data/etlegacy.db", admin_channel_id)
+            backup_path: Optional[str] = None
+            if db_type in ("sqlite", "sqlite3"):
+                backup_candidate = self.db_path or self.config.sqlite_db_path
+                if backup_candidate and os.path.exists(backup_candidate):
+                    backup_path = backup_candidate
+            self.db_maintenance = DatabaseMaintenance(self, backup_path, admin_channel_id)
 
             logger.info("✅ Automation services initialized (SSH, Health, Metrics, DB Maintenance)")
 
@@ -1042,7 +1072,8 @@ class UltimateETLegacyBot(commands.Bot):
 
             # 🔥 FIX: Use PostgreSQL database manager instead of bot's own import logic
             # This ensures proper transaction handling and constraint checks
-            if self.config.database_type == "postgres":
+            db_type = str(getattr(self.config, "database_type", "")).strip().lower()
+            if db_type in {"postgres", "postgresql"}:
                 from postgresql_database_manager import PostgreSQLDatabase
                 from pathlib import Path
 
@@ -1067,7 +1098,7 @@ class UltimateETLegacyBot(commands.Bot):
                     raise Exception(f"Import failed: {message}")
 
                 # Parse file to get player count for return value
-                from community_stats_parser import C0RNP0RN3StatsParser
+                from bot.community_stats_parser import C0RNP0RN3StatsParser
                 parser = C0RNP0RN3StatsParser(
                     round_match_window_minutes=self.config.round_match_window_minutes
                 )
@@ -1115,7 +1146,7 @@ class UltimateETLegacyBot(commands.Bot):
                 }
             else:
                 # SQLite fallback - use old import logic
-                from community_stats_parser import C0RNP0RN3StatsParser
+                from bot.community_stats_parser import C0RNP0RN3StatsParser
 
                 # Parse using existing parser (it reads the file itself)
                 parser = C0RNP0RN3StatsParser(
@@ -1180,8 +1211,7 @@ class UltimateETLegacyBot(commands.Bot):
         """
         try:
             from datetime import datetime
-            import re
-            from bot.core.round_linker import resolve_round_id
+            from bot.core.round_linker import resolve_round_id_with_reason
 
             map_name = metadata.get('map_name') or metadata.get('map')
             round_number = metadata.get('round_number') or metadata.get('round')
@@ -1223,7 +1253,7 @@ class UltimateETLegacyBot(commands.Bot):
                 target_dt = datetime.fromtimestamp(round_start_unix)
 
             window_minutes = getattr(self.config, "round_match_window_minutes", 45)
-            return await resolve_round_id(
+            round_id, diag = await resolve_round_id_with_reason(
                 self.db_adapter,
                 map_name,
                 round_number,
@@ -1232,6 +1262,31 @@ class UltimateETLegacyBot(commands.Bot):
                 round_time=round_time,
                 window_minutes=window_minutes,
             )
+            reason_code = diag.get("reason_code")
+            if round_id:
+                logger.info(
+                    "🔗 Round linker resolved: map=%s round=%s round_id=%s reason=%s candidates=%s diff_s=%s",
+                    map_name,
+                    round_number,
+                    round_id,
+                    reason_code,
+                    diag.get("candidate_count"),
+                    diag.get("best_diff_seconds"),
+                )
+            else:
+                logger.warning(
+                    "⚠️ Round linker unresolved: map=%s round=%s reason=%s candidates=%s parsed=%s "
+                    "best_diff_s=%s round_date=%s round_time=%s",
+                    map_name,
+                    round_number,
+                    reason_code,
+                    diag.get("candidate_count"),
+                    diag.get("parsed_candidate_count"),
+                    diag.get("best_diff_seconds"),
+                    round_date,
+                    round_time,
+                )
+            return round_id
         except Exception as e:
             logger.debug(f"Round ID resolve failed: {e}")
             return None
@@ -1244,6 +1299,11 @@ class UltimateETLegacyBot(commands.Bot):
         milestones via AchievementSystem and posts any new unlocks.
         """
         try:
+            mode = getattr(self.config, "live_achievement_mode", "off")
+            mode = str(mode).strip().lower()
+            if mode == "off":
+                return
+
             if not stats_data:
                 return
 
@@ -1267,13 +1327,81 @@ class UltimateETLegacyBot(commands.Bot):
             if not guids:
                 return
 
+            if mode == "individual":
+                for guid in guids:
+                    await self.achievements.check_player_achievements(
+                        guid, channel=channel
+                    )
+                return
+
+            # summary mode: collect unlocks but emit a single embed
+            all_unlocks = []
             for guid in guids:
-                await self.achievements.check_player_achievements(
-                    guid, channel=channel
+                unlocks = await self.achievements.check_player_achievements(
+                    guid, channel=None
                 )
+                if unlocks:
+                    all_unlocks.extend(unlocks)
+
+            if all_unlocks:
+                await self._post_live_achievement_summary(all_unlocks, channel)
 
         except Exception as e:
             logger.error(f"Live achievement posting failed: {e}", exc_info=True)
+
+    async def _post_live_achievement_summary(self, unlocks: list, channel) -> None:
+        """
+        Post one compact round summary for newly unlocked achievements.
+        """
+        try:
+            by_player = {}
+            for unlock in unlocks:
+                player = unlock.get("player_name", "Unknown")
+                title = unlock.get("achievement", {}).get("title", "Unknown")
+                if player not in by_player:
+                    by_player[player] = []
+                if title not in by_player[player]:
+                    by_player[player].append(title)
+
+            if not by_player:
+                return
+
+            lines = []
+            ordered_players = sorted(
+                by_player.items(),
+                key=lambda item: (-len(item[1]), item[0].lower())
+            )
+            for player_name, titles in ordered_players:
+                preview = ", ".join(titles[:4])
+                if len(titles) > 4:
+                    preview += f", +{len(titles) - 4} more"
+                lines.append(f"**{player_name}**: {preview}")
+
+            max_lines = 12
+            hidden_count = max(0, len(lines) - max_lines)
+            shown_lines = lines[:max_lines]
+            if hidden_count:
+                shown_lines.append(f"... and {hidden_count} more player(s)")
+
+            embed = discord.Embed(
+                title="🏆 Achievement Round Summary",
+                description="New achievements unlocked this round.",
+                color=discord.Color.gold(),
+                timestamp=datetime.now(),
+            )
+            embed.add_field(
+                name=f"Players ({len(by_player)})",
+                value="\n".join(shown_lines),
+                inline=False,
+            )
+            embed.set_footer(text=f"{len(unlocks)} unlock(s) • mode=summary")
+
+            await channel.send(embed=embed)
+            logger.info(
+                f"🏆 Posted achievement summary: {len(unlocks)} unlocks across {len(by_player)} players"
+            )
+        except Exception as e:
+            logger.error(f"Failed to post achievement summary: {e}", exc_info=True)
 
     async def _apply_round_metadata_override(self, filename: str, metadata: dict):
         """
@@ -1634,6 +1762,12 @@ class UltimateETLegacyBot(commands.Bot):
             defender_team = stats_data.get("defender_team", 0)
             winner_team = stats_data.get("winner_team", 0)
             round_outcome = stats_data.get("round_outcome", "")
+            side_diag = stats_data.get("side_parse_diagnostics") or {}
+            side_diag_reasons = list(side_diag.get("reasons") or [])
+
+            def _add_side_reason(reason: str) -> None:
+                if reason and reason not in side_diag_reasons:
+                    side_diag_reasons.append(reason)
 
             # If R2 header data missing, inherit from latest R1 of same map/session
             if (
@@ -1659,10 +1793,77 @@ class UltimateETLegacyBot(commands.Bot):
                         fallback_def, fallback_win = fallback
                         if defender_team == 0:
                             defender_team = fallback_def or 0
+                            if defender_team:
+                                _add_side_reason("defender_fallback_from_round1")
                         if winner_team == 0:
                             winner_team = fallback_win or 0
-                except Exception:
-                    pass
+                            if winner_team:
+                                _add_side_reason("winner_fallback_from_round1")
+                except Exception as exc:
+                    logger.warning(
+                        "Round side fallback lookup failed for map=%s session=%s: %s",
+                        stats_data.get("map_name"),
+                        gaming_session_id,
+                        exc,
+                    )
+
+            if defender_team == 0:
+                _add_side_reason("defender_zero_final")
+            if winner_team == 0:
+                _add_side_reason("winner_zero_final")
+
+            fallback_used = any("fallback_from_round1" in r for r in side_diag_reasons)
+            score_confidence = score_confidence_state(
+                defender_team,
+                winner_team,
+                reasons=side_diag_reasons,
+                fallback_used=fallback_used,
+            )
+            stats_data["score_confidence"] = score_confidence
+
+            # Keep stopwatch contract fields explicit when parser provided no value.
+            if stats_data.get("round_stopwatch_state") is None:
+                stopwatch_contract = derive_stopwatch_contract(
+                    stats_data.get("round_num"),
+                    stats_data.get("map_time", ""),
+                    stats_data.get("actual_time", ""),
+                    end_reason="NORMAL",
+                )
+                stats_data["round_stopwatch_state"] = stopwatch_contract["round_stopwatch_state"]
+                stats_data["time_to_beat_seconds"] = stopwatch_contract["time_to_beat_seconds"]
+                stats_data["next_timelimit_minutes"] = stopwatch_contract["next_timelimit_minutes"]
+
+            if side_diag_reasons:
+                if not hasattr(self, "_side_diag_reason_counts"):
+                    self._side_diag_reason_counts = {}
+                for reason in side_diag_reasons:
+                    self._side_diag_reason_counts[reason] = (
+                        self._side_diag_reason_counts.get(reason, 0) + 1
+                    )
+
+                logger.warning(
+                    "[SIDE DIAG] file=%s map=%s round=%s defender=%s winner=%s "
+                    "defender_raw=%s winner_raw=%s reasons=%s counts=%s",
+                    filename,
+                    stats_data.get("map_name"),
+                    stats_data.get("round_num"),
+                    defender_team,
+                    winner_team,
+                    side_diag.get("defender_team_raw"),
+                    side_diag.get("winner_team_raw"),
+                    ",".join(side_diag_reasons),
+                    self._side_diag_reason_counts,
+                )
+            else:
+                logger.info(
+                    "[SIDE DIAG] file=%s map=%s round=%s defender=%s winner=%s score_confidence=%s",
+                    filename,
+                    stats_data.get("map_name"),
+                    stats_data.get("round_num"),
+                    defender_team,
+                    winner_team,
+                    score_confidence,
+                )
 
             # Insert new round (include optional columns if present)
             insert_cols = [
@@ -1689,6 +1890,18 @@ class UltimateETLegacyBot(commands.Bot):
             if "round_outcome" in self._rounds_columns:
                 insert_cols.append("round_outcome")
                 insert_vals.append(round_outcome)
+            if "score_confidence" in self._rounds_columns:
+                insert_cols.append("score_confidence")
+                insert_vals.append(score_confidence)
+            if "round_stopwatch_state" in self._rounds_columns:
+                insert_cols.append("round_stopwatch_state")
+                insert_vals.append(stats_data.get("round_stopwatch_state"))
+            if "time_to_beat_seconds" in self._rounds_columns:
+                insert_cols.append("time_to_beat_seconds")
+                insert_vals.append(stats_data.get("time_to_beat_seconds"))
+            if "next_timelimit_minutes" in self._rounds_columns:
+                insert_cols.append("next_timelimit_minutes")
+                insert_vals.append(stats_data.get("next_timelimit_minutes"))
             if "is_bot_round" in self._rounds_columns:
                 insert_cols.append("is_bot_round")
                 insert_vals.append(bool(stats_data.get("is_bot_round", False)))
@@ -1842,7 +2055,9 @@ class UltimateETLegacyBot(commands.Bot):
 
             # Check if teams exist for this session
             existing_teams = await self.team_manager.get_session_teams(
-                session_date, auto_detect=False
+                session_date,
+                auto_detect=False,
+                gaming_session_id=gaming_session_id,
             )
 
             if not existing_teams:
@@ -1857,10 +2072,16 @@ class UltimateETLegacyBot(commands.Bot):
                 else:
                     # R2 came before R1 in import order - detect teams from all data
                     logger.info(f"🎯 R2 without R1 teams - running full detection...")
-                    teams = await self.team_manager.detect_session_teams(session_date)
+                    teams = await self.team_manager.detect_session_teams(
+                        session_date,
+                        gaming_session_id=gaming_session_id,
+                    )
                     if teams:
                         await self.team_manager.store_session_teams(
-                            session_date, teams, auto_assign_names=True
+                            session_date,
+                            teams,
+                            auto_assign_names=True,
+                            gaming_session_id=gaming_session_id,
                         )
             else:
                 # Teams exist - check for new players (subs/late joiners)
@@ -2279,9 +2500,6 @@ class UltimateETLegacyBot(commands.Bot):
 
         except Exception as e:
             logger.error(f"❌ Failed to update alias for {guid}/{alias}: {e}")
-
-
-            logger.error(f"❌ Failed to post map summary: {e}")
 
     # NOTE: File tracking methods moved to bot/automation/file_tracker.py
     # - FileTracker.should_process_file()
@@ -3132,6 +3350,7 @@ class UltimateETLegacyBot(commands.Bot):
 
         Downloads file via SSH, parses, imports to DB, and posts stats.
         """
+        added_processing_marker = False
         try:
             webhook_logger.info(f"⚡ Processing webhook-triggered file: {filename}")
 
@@ -3147,6 +3366,7 @@ class UltimateETLegacyBot(commands.Bot):
 
             # IMMEDIATELY mark as being processed to prevent race with polling
             self.file_tracker.processed_files.add(filename)
+            added_processing_marker = True
 
             # Build SSH config
             ssh_config = {
@@ -3165,6 +3385,8 @@ class UltimateETLegacyBot(commands.Bot):
 
             if not local_path:
                 webhook_logger.error(f"❌ Failed to download: {filename}")
+                if added_processing_marker:
+                    self.file_tracker.processed_files.discard(filename)
                 # React to trigger with failure indicator
                 try:
                     await trigger_message.add_reaction('❌')
@@ -3196,6 +3418,8 @@ class UltimateETLegacyBot(commands.Bot):
             else:
                 error_msg = result.get('error', 'Unknown error') if result else 'No result'
                 webhook_logger.warning(f"⚠️ Processing failed for {filename}: {error_msg}")
+                if added_processing_marker:
+                    self.file_tracker.processed_files.discard(filename)
                 # Notify trigger channel of processing failure
                 try:
                     await trigger_message.add_reaction('⚠️')
@@ -3209,6 +3433,8 @@ class UltimateETLegacyBot(commands.Bot):
                     pass
 
         except Exception as e:
+            if added_processing_marker:
+                self.file_tracker.processed_files.discard(filename)
             webhook_logger.error(f"❌ Error processing webhook-triggered file: {e}", exc_info=True)
             # Notify trigger channel of critical error
             try:
@@ -3264,15 +3490,34 @@ class UltimateETLegacyBot(commands.Bot):
     ) -> dict:
         import json as _json
 
+        winner_raw = metadata.get("winner", 0)
+        defender_raw = metadata.get("defender", 0)
+        winner_team = normalize_side_value(winner_raw, allow_unknown=True)
+        defender_team = normalize_side_value(defender_raw, allow_unknown=True)
+        side_reasons = []
+        if winner_team == 0:
+            side_reasons.append("winner_missing_or_invalid")
+        if defender_team == 0:
+            side_reasons.append("defender_missing_or_invalid")
+
+        end_reason_raw = metadata.get("lua_endreason", metadata.get("end reason", "unknown"))
+        normalized_end_reason = normalize_end_reason(end_reason_raw)
+
         round_metadata = {
             "map_name": metadata.get("map", "unknown"),
             "round_number": int(metadata.get("round", 0) or 0),
-            "winner_team": int(metadata.get("winner", 0) or 0),
-            "defender_team": int(metadata.get("defender", 0) or 0),
-            # v1.2.0: renamed fields with Lua_ prefix
-            "end_reason": metadata.get("lua_endreason", metadata.get("end reason", "unknown")),
+            "winner_team": winner_team,
+            "defender_team": defender_team,
+            # v1.2.0: renamed fields with Lua_ prefix, normalized to strict enum
+            "end_reason": normalized_end_reason,
+            "end_reason_raw": end_reason_raw,
             "round_start_unix": int(metadata.get("lua_roundstart", metadata.get("start unix", 0)) or 0),
             "round_end_unix": int(metadata.get("lua_roundend", metadata.get("end unix", 0)) or 0),
+            "side_parse_diagnostics": {
+                "winner_team_raw": winner_raw,
+                "defender_team_raw": defender_raw,
+                "reasons": side_reasons,
+            },
         }
 
         duration_str = metadata.get("lua_playtime", metadata.get("duration", "0 sec"))
@@ -3354,6 +3599,26 @@ class UltimateETLegacyBot(commands.Bot):
         lua_version = self._parse_lua_version_from_footer(footer_text)
         if lua_version:
             round_metadata["lua_version"] = lua_version
+
+        stopwatch_contract = derive_stopwatch_contract(
+            round_metadata.get("round_number", 0),
+            int(round_metadata.get("time_limit_minutes", 0) or 0) * 60,
+            round_metadata.get("actual_duration_seconds", 0),
+            round_metadata.get("end_reason"),
+        )
+        round_metadata["round_stopwatch_state"] = stopwatch_contract["round_stopwatch_state"]
+        round_metadata["time_to_beat_seconds"] = stopwatch_contract["time_to_beat_seconds"]
+        round_metadata["next_timelimit_minutes"] = stopwatch_contract["next_timelimit_minutes"]
+        round_metadata["end_reason_display"] = derive_end_reason_display(
+            round_metadata.get("end_reason"),
+            round_stopwatch_state=round_metadata.get("round_stopwatch_state"),
+        )
+        round_metadata["score_confidence"] = score_confidence_state(
+            round_metadata.get("defender_team"),
+            round_metadata.get("winner_team"),
+            reasons=side_reasons,
+            fallback_used=False,
+        )
 
         return round_metadata
 
@@ -3680,6 +3945,15 @@ class UltimateETLegacyBot(commands.Bot):
 
             # Get Lua version from footer if available (we'll default to unknown)
             lua_version = round_metadata.get('lua_version', 'unknown')
+            normalized_end_reason = normalize_end_reason(round_metadata.get('end_reason'))
+            normalized_winner_team = normalize_side_value(
+                round_metadata.get('winner_team'),
+                allow_unknown=True,
+            )
+            normalized_defender_team = normalize_side_value(
+                round_metadata.get('defender_team'),
+                allow_unknown=True,
+            )
 
             # Insert or update (upsert on conflict)
             # v1.2.0: Added warmup timing columns (lua_warmup_seconds, lua_warmup_start_unix)
@@ -3785,59 +4059,59 @@ class UltimateETLegacyBot(commands.Bot):
             # Get pause events array (v1.3.0)
             pause_events = round_metadata.get('lua_pause_events', [])
 
-            params = (
-                match_id,
-                round_number,
-                *((
-                    (
-                        round_id,
-                        json.dumps(axis_players),
-                        json.dumps(allies_players),
-                        round_metadata.get('round_start_unix'),
-                        round_metadata.get('round_end_unix'),
-                        round_metadata.get('actual_duration_seconds'),
-                        round_metadata.get('total_pause_seconds', 0),
-                        round_metadata.get('pause_count', 0),
-                        round_metadata.get('end_reason'),
-                        round_metadata.get('winner_team'),
-                        round_metadata.get('defender_team'),
-                        map_name,
-                        round_metadata.get('time_limit_minutes'),
-                        round_metadata.get('lua_warmup_seconds', 0),
-                        round_metadata.get('lua_warmup_start_unix', 0),
-                        json.dumps(pause_events),  # v1.3.0: Pause event timestamps
-                        round_metadata.get('surrender_team', 0),  # v1.4.0
-                        round_metadata.get('surrender_caller_guid', ''),  # v1.4.0
-                        round_metadata.get('surrender_caller_name', ''),  # v1.4.0
-                        round_metadata.get('axis_score', 0),  # v1.4.0
-                        round_metadata.get('allies_score', 0),  # v1.4.0
-                        lua_version,
-                    ) if has_round_id else
-                    (
-                        json.dumps(axis_players),
-                        json.dumps(allies_players),
-                        round_metadata.get('round_start_unix'),
-                        round_metadata.get('round_end_unix'),
-                        round_metadata.get('actual_duration_seconds'),
-                        round_metadata.get('total_pause_seconds', 0),
-                        round_metadata.get('pause_count', 0),
-                        round_metadata.get('end_reason'),
-                        round_metadata.get('winner_team'),
-                        round_metadata.get('defender_team'),
-                        map_name,
-                        round_metadata.get('time_limit_minutes'),
-                        round_metadata.get('lua_warmup_seconds', 0),
-                        round_metadata.get('lua_warmup_start_unix', 0),
-                        json.dumps(pause_events),  # v1.3.0: Pause event timestamps
-                        round_metadata.get('surrender_team', 0),  # v1.4.0
-                        round_metadata.get('surrender_caller_guid', ''),  # v1.4.0
-                        round_metadata.get('surrender_caller_name', ''),  # v1.4.0
-                        round_metadata.get('axis_score', 0),  # v1.4.0
-                        round_metadata.get('allies_score', 0),  # v1.4.0
-                        lua_version,
-                    )
-                ),)
-            )
+            if has_round_id:
+                params = (
+                    match_id,
+                    round_number,
+                    round_id,
+                    json.dumps(axis_players),
+                    json.dumps(allies_players),
+                    round_metadata.get('round_start_unix'),
+                    round_metadata.get('round_end_unix'),
+                    round_metadata.get('actual_duration_seconds'),
+                    round_metadata.get('total_pause_seconds', 0),
+                    round_metadata.get('pause_count', 0),
+                    normalized_end_reason,
+                    normalized_winner_team,
+                    normalized_defender_team,
+                    map_name,
+                    round_metadata.get('time_limit_minutes'),
+                    round_metadata.get('lua_warmup_seconds', 0),
+                    round_metadata.get('lua_warmup_start_unix', 0),
+                    json.dumps(pause_events),  # v1.3.0: Pause event timestamps
+                    round_metadata.get('surrender_team', 0),  # v1.4.0
+                    round_metadata.get('surrender_caller_guid', ''),  # v1.4.0
+                    round_metadata.get('surrender_caller_name', ''),  # v1.4.0
+                    round_metadata.get('axis_score', 0),  # v1.4.0
+                    round_metadata.get('allies_score', 0),  # v1.4.0
+                    lua_version,
+                )
+            else:
+                params = (
+                    match_id,
+                    round_number,
+                    json.dumps(axis_players),
+                    json.dumps(allies_players),
+                    round_metadata.get('round_start_unix'),
+                    round_metadata.get('round_end_unix'),
+                    round_metadata.get('actual_duration_seconds'),
+                    round_metadata.get('total_pause_seconds', 0),
+                    round_metadata.get('pause_count', 0),
+                    normalized_end_reason,
+                    normalized_winner_team,
+                    normalized_defender_team,
+                    map_name,
+                    round_metadata.get('time_limit_minutes'),
+                    round_metadata.get('lua_warmup_seconds', 0),
+                    round_metadata.get('lua_warmup_start_unix', 0),
+                    json.dumps(pause_events),  # v1.3.0: Pause event timestamps
+                    round_metadata.get('surrender_team', 0),  # v1.4.0
+                    round_metadata.get('surrender_caller_guid', ''),  # v1.4.0
+                    round_metadata.get('surrender_caller_name', ''),  # v1.4.0
+                    round_metadata.get('axis_score', 0),  # v1.4.0
+                    round_metadata.get('allies_score', 0),  # v1.4.0
+                    lua_version,
+                )
 
             await self.db_adapter.execute(query, params)
 
@@ -3946,6 +4220,7 @@ class UltimateETLegacyBot(commands.Bot):
 
         Uses the metadata to find the correct file and applies accurate timing data.
         """
+        added_processing_marker = False
         try:
             from bot.automation.ssh_handler import SSHHandler
             import re
@@ -4030,6 +4305,7 @@ class UltimateETLegacyBot(commands.Bot):
 
             # Mark as processing
             self.file_tracker.processed_files.add(filename)
+            added_processing_marker = True
 
             # Download the file
             local_path = await SSHHandler.download_file(
@@ -4038,6 +4314,8 @@ class UltimateETLegacyBot(commands.Bot):
 
             if not local_path:
                 webhook_logger.error(f"❌ Failed to download: {filename}")
+                if added_processing_marker:
+                    self.file_tracker.processed_files.discard(filename)
                 return
 
             webhook_logger.info(f"✅ Downloaded: {local_path}")
@@ -4056,8 +4334,12 @@ class UltimateETLegacyBot(commands.Bot):
             else:
                 error_msg = result.get('error', 'Unknown') if result else 'No result'
                 webhook_logger.warning(f"⚠️ Processing failed: {error_msg}")
+                if added_processing_marker:
+                    self.file_tracker.processed_files.discard(filename)
 
         except Exception as e:
+            if added_processing_marker:
+                self.file_tracker.processed_files.discard(filename)
             webhook_logger.error(f"❌ Error fetching stats file: {e}", exc_info=True)
 
     def _get_endstats_retry_delay(self, attempt: int) -> int:

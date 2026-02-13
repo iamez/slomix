@@ -1,5 +1,7 @@
 # ET:Legacy Discord Bot - Comprehensive Security Audit & Threat Model
 
+> **Superseded Notice (2026-02-12):** This audit is historical context. For current security closure state, use `docs/evidence/2026-02-18_ws4_reaudit.md` and `docs/evidence/2026-02-19_ws4_secret_rotation.md`.
+
 **Document Version:** 1.0
 **Last Updated:** 2025-12-14
 **Audit Status:** IN PROGRESS

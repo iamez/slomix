@@ -14,7 +14,10 @@ from collections import defaultdict
 from itertools import combinations
 from typing import Dict, List, Optional, Tuple
 
-from tools.stopwatch_scoring import StopwatchScoring
+try:
+    from tools.stopwatch_scoring import StopwatchScoring
+except ModuleNotFoundError:
+    StopwatchScoring = None  # Optional local helper, not required in CI/production PostgreSQL mode
 
 logger = logging.getLogger("bot.services.session_data")
 
@@ -217,40 +220,78 @@ class SessionDataService:
             Dict with team names as keys, containing 'guids' and 'names' lists
         """
         try:
-            # Get the date range for these session_ids
+            if not session_ids:
+                return None
+
+            # Prefer gaming_session_id-scoped lookups to avoid same-day session mixing.
             placeholders = ",".join("?" * len(session_ids))
-            dates_result = await self.db_adapter.fetch_all(
+            gsid_result = await self.db_adapter.fetch_all(
                 f"""
-                SELECT DISTINCT SUBSTR(round_date, 1, 10) as date
+                SELECT DISTINCT gaming_session_id
                 FROM rounds
                 WHERE id IN ({placeholders})
+                  AND gaming_session_id IS NOT NULL
                 """,  # nosec B608 - parameterized
                 tuple(session_ids),
             )
-            dates = [row[0] for row in dates_result]
+            gaming_session_ids = [row[0] for row in gsid_result if row and row[0] is not None]
 
-            if not dates:
-                return None
+            rows = []
+            dates: List[str] = []
+            if gaming_session_ids:
+                gsid_placeholders = ",".join("?" * len(gaming_session_ids))
+                rows = await self.db_adapter.fetch_all(
+                    f"""
+                    SELECT team_name, player_guids, player_names
+                    FROM session_teams
+                    WHERE gaming_session_id IN ({gsid_placeholders})
+                      AND map_name = 'ALL'
+                    ORDER BY team_name
+                    """,  # nosec B608 - parameterized
+                    tuple(gaming_session_ids),
+                )
+            else:
+                # Legacy fallback for rows imported before gaming_session_id existed.
+                dates_result = await self.db_adapter.fetch_all(
+                    f"""
+                    SELECT DISTINCT SUBSTR(round_date, 1, 10) as date
+                    FROM rounds
+                    WHERE id IN ({placeholders})
+                    """,  # nosec B608 - parameterized
+                    tuple(session_ids),
+                )
+                dates = [row[0] for row in dates_result]
+                if not dates:
+                    return None
 
-            # Query session_teams for these dates
-            date_placeholders = ",".join("?" * len(dates))
-            rows = await self.db_adapter.fetch_all(
-                f"""
-                SELECT team_name, player_guids, player_names
-                FROM session_teams
-                WHERE SUBSTR(session_start_date, 1, 10) IN ({date_placeholders})
-                  AND map_name = 'ALL'
-                ORDER BY team_name
-                """,  # nosec B608 - parameterized
-                tuple(dates),
-            )
+                date_placeholders = ",".join("?" * len(dates))
+                rows = await self.db_adapter.fetch_all(
+                    f"""
+                    SELECT team_name, player_guids, player_names
+                    FROM session_teams
+                    WHERE SUBSTR(session_start_date, 1, 10) IN ({date_placeholders})
+                      AND map_name = 'ALL'
+                    ORDER BY team_name
+                    """,  # nosec B608 - parameterized
+                    tuple(dates),
+                )
 
             if not rows:
                 # Auto-detect teams if missing (best-effort)
                 try:
                     from bot.core.team_manager import TeamManager
 
-                    session_date = min(dates) if dates else None
+                    meta = await self.db_adapter.fetch_one(
+                        f"""
+                        SELECT MIN(SUBSTR(round_date, 1, 10)) as session_date,
+                               MIN(gaming_session_id) as gaming_session_id
+                        FROM rounds
+                        WHERE id IN ({placeholders})
+                        """,  # nosec B608 - parameterized
+                        tuple(session_ids),
+                    )
+                    session_date = meta[0] if meta else (min(dates) if dates else None)
+                    auto_detect_session_id = meta[1] if meta else None
                     if session_date:
                         logger.info(
                             f"⚠️ No session_teams found for {session_date}, "
@@ -258,7 +299,9 @@ class SessionDataService:
                         )
                         team_manager = TeamManager(self.db_adapter)
                         detected = await team_manager.get_session_teams(
-                            session_date, auto_detect=True
+                            session_date,
+                            auto_detect=True,
+                            gaming_session_id=auto_detect_session_id,
                         )
                         return detected if detected else None
                 except Exception as e:
@@ -268,13 +311,17 @@ class SessionDataService:
             teams = {}
             for team_name, player_guids_json, player_names_json in rows:
                 if team_name not in teams:
+                    if isinstance(player_guids_json, str):
+                        player_guids = json.loads(player_guids_json) if player_guids_json else []
+                    else:
+                        player_guids = player_guids_json or []
+                    if isinstance(player_names_json, str):
+                        player_names = json.loads(player_names_json) if player_names_json else []
+                    else:
+                        player_names = player_names_json or []
                     teams[team_name] = {
-                        "guids": (
-                            json.loads(player_guids_json) if player_guids_json else []
-                        ),
-                        "names": (
-                            json.loads(player_names_json) if player_names_json else []
-                        ),
+                        "guids": player_guids,
+                        "names": player_names,
                     }
 
             return teams if teams else None
@@ -297,7 +344,8 @@ class SessionDataService:
         Returns: (team_1_name, team_2_name, team_1_score, team_2_score, scoring_result)
         """
         # Skip stopwatch scoring in PostgreSQL mode (requires refactor)
-        if not self.db_path:
+        # and when optional local helper module is unavailable (e.g. CI).
+        if not self.db_path or StopwatchScoring is None:
             return "Team 1", "Team 2", 0, 0, None
 
         scorer = StopwatchScoring(self.db_path)
