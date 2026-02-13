@@ -4136,6 +4136,7 @@ async def get_weapon_hall_of_fame(
 
 
 @router.get("/stats/weapons/by-player")
+@router.get("/stats/weapons/by_player")
 async def get_weapon_stats_by_player(
     period: str = "all",
     player_limit: int = 25,

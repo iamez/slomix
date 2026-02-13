@@ -87,8 +87,19 @@ class GreatshotJobService:
                 try:
                     logger.info("[analysis:%s] Processing demo_id=%s (attempt %d/%d)",
                                worker_id, demo_id, retries + 1, MAX_RETRIES + 1)
-                    await self._process_analysis_job(demo_id)
-                    success = True
+                    success = await self._process_analysis_job(demo_id)
+                    if success:
+                        break
+                    retries += 1
+                    if retries <= MAX_RETRIES:
+                        logger.info("Retrying demo_id=%s in %ds...", demo_id, retry_delay)
+                        await asyncio.sleep(retry_delay)
+                    else:
+                        logger.error(
+                            "Analysis failed for demo_id=%s after %d attempts",
+                            demo_id,
+                            MAX_RETRIES + 1,
+                        )
                 except asyncio.TimeoutError:
                     # Don't retry timeouts - these are likely corrupted demos
                     logger.error("Analysis timeout for demo_id=%s - not retrying", demo_id)
@@ -133,8 +144,19 @@ class GreatshotJobService:
                 try:
                     logger.info("[render:%s] Processing render_id=%s (attempt %d/%d)",
                                worker_id, render_id, retries + 1, MAX_RETRIES + 1)
-                    await self._process_render_job(render_id)
-                    success = True
+                    success = await self._process_render_job(render_id)
+                    if success:
+                        break
+                    retries += 1
+                    if retries <= MAX_RETRIES:
+                        logger.info("Retrying render_id=%s in %ds...", render_id, retry_delay)
+                        await asyncio.sleep(retry_delay)
+                    else:
+                        logger.error(
+                            "Render failed for render_id=%s after %d attempts",
+                            render_id,
+                            MAX_RETRIES + 1,
+                        )
                 except Exception:
                     logger.error(
                         "Render worker failure for render_id=%s (attempt %d/%d)\n%s",
@@ -150,7 +172,7 @@ class GreatshotJobService:
 
             self.render_queue.task_done()
 
-    async def _process_analysis_job(self, demo_id: str) -> None:
+    async def _process_analysis_job(self, demo_id: str) -> bool:
         row = await self.db.fetch_one(
             """
             SELECT stored_path, extension
@@ -161,7 +183,7 @@ class GreatshotJobService:
         )
         if not row:
             logger.warning("Analysis job skipped: demo %s not found", demo_id)
-            return
+            return True
 
         stored_path, extension = row
         demo_path = Path(stored_path)
@@ -206,7 +228,7 @@ class GreatshotJobService:
                     """,
                     (demo_id, error_msg),
                 )
-                return
+                return False
 
             analysis = result["analysis"]
             metadata_json = json.dumps(analysis.get("metadata") or {})
@@ -310,6 +332,7 @@ class GreatshotJobService:
                 logger.warning("Greatshot crossref failed for %s: %s", demo_id, crossref_exc)
 
             logger.info("✅ Greatshot analysis completed for %s", demo_id)
+            return True
 
         except Exception as exc:
             await self.db.execute(
@@ -324,8 +347,9 @@ class GreatshotJobService:
                 (demo_id, str(exc)[:1200]),
             )
             logger.error("❌ Greatshot analysis failed for %s: %s", demo_id, exc)
+            return False
 
-    async def _process_render_job(self, render_id: str) -> None:
+    async def _process_render_job(self, render_id: str) -> bool:
         row = await self.db.fetch_one(
             """
             SELECT
@@ -347,7 +371,7 @@ class GreatshotJobService:
 
         if not row:
             logger.warning("Render job skipped: render %s not found", render_id)
-            return
+            return True
 
         (
             highlight_id,
@@ -458,6 +482,7 @@ class GreatshotJobService:
                 """,
                 (render_id, str(output_mp4)),
             )
+            return True
 
         except Exception as exc:
             await self.db.execute(
@@ -471,6 +496,7 @@ class GreatshotJobService:
                 (render_id, str(exc)[:1200]),
             )
             logger.warning("Render job failed for %s: %s", render_id, exc)
+            return False
 
 
 _greatshot_jobs: Optional[GreatshotJobService] = None

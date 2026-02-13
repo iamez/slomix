@@ -209,6 +209,7 @@ check_before_commit.sh
 
 # Local data directories
 /local_proximity/
+/local_gametimes/
 /data/
 
 # Root junk files
