@@ -1173,13 +1173,27 @@ class PostgreSQLDatabaseManager:
                     """
                 )
                 for row in legacy_constraints:
-                    constraint_name = row["conname"].replace('"', '""')
                     logger.info(
                         "   ➖ Dropping legacy session_teams constraint '%s'...",
                         row["conname"],
                     )
+                if legacy_constraints:
                     await conn.execute(
-                        f'ALTER TABLE session_teams DROP CONSTRAINT "{constraint_name}"'
+                        """
+                        DO $$
+                        DECLARE rec RECORD;
+                        BEGIN
+                            FOR rec IN
+                                SELECT conname
+                                FROM pg_constraint
+                                WHERE conrelid = 'session_teams'::regclass
+                                  AND contype IN ('u', 'p')
+                                  AND pg_get_constraintdef(oid) LIKE '%(session_start_date, map_name, team_name)%'
+                            LOOP
+                                EXECUTE format('ALTER TABLE session_teams DROP CONSTRAINT %I', rec.conname);
+                            END LOOP;
+                        END $$;
+                        """
                     )
 
                 has_identity_unique = await conn.fetchval(

@@ -303,17 +303,16 @@ class StopwatchScoringService:
 
             # Map game team numbers to actual team names
             if session_ids:
-                placeholders = ",".join(["?" for _ in session_ids])
-                sample_query = f"""
+                sample_query = """
                     SELECT p.player_guid, p.team
                     FROM player_comprehensive_stats p
                     JOIN rounds r ON r.id = p.round_id
-                    WHERE p.round_id IN ({placeholders})
+                    WHERE p.round_id = ANY(?::int[])
                       AND p.round_number = 1
                     ORDER BY r.round_date, r.round_time
                     LIMIT 1
                 """
-                sample_player = await self.db.fetch_one(sample_query, tuple(session_ids))
+                sample_player = await self.db.fetch_one(sample_query, (list(session_ids),))
             elif resolved_session_id is not None:
                 sample_query = """
                     SELECT p.player_guid, p.team

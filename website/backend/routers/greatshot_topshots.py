@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
 
