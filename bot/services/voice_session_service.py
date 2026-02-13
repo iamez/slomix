@@ -985,7 +985,7 @@ class VoiceSessionService:
             placeholders = ', '.join([f'${i+1}' for i in range(len(guids))])
             # nosec B608 - placeholders are parameterized integers, not user input
             query = f"""
-                SELECT DISTINCT player_guid, player_name
+                SELECT player_guid, player_name
                 FROM player_comprehensive_stats
                 WHERE player_guid IN ({placeholders})
                 ORDER BY id DESC

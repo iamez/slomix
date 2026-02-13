@@ -22,7 +22,11 @@ _WINNER_MAP = {
 def _normalize_winner(value: Any) -> Optional[str]:
     if value is None:
         return None
-    return _WINNER_MAP.get(str(value).lower().strip())
+    try:
+        normalized = str(value).lower().strip()
+    except Exception:
+        return None
+    return _WINNER_MAP.get(normalized)
 
 
 def _extract_date_from_filename(filename: str) -> Optional[str]:
@@ -47,6 +51,38 @@ def _extract_date_from_filename(filename: str) -> Optional[str]:
         return f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
 
     return None
+
+
+_KD_RATIO_COLUMN_CACHE: Optional[str] = None
+_KD_RATIO_COLUMN_CANDIDATES = ("kd_ratio", "kdr")
+
+
+async def _resolve_kd_ratio_column(db) -> str:
+    global _KD_RATIO_COLUMN_CACHE
+    if _KD_RATIO_COLUMN_CACHE:
+        return _KD_RATIO_COLUMN_CACHE
+
+    for column in _KD_RATIO_COLUMN_CANDIDATES:
+        row = await db.fetch_one(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'player_comprehensive_stats'
+              AND column_name = $1
+            LIMIT 1
+            """,
+            (column,),
+        )
+        if row:
+            _KD_RATIO_COLUMN_CACHE = column
+            break
+
+    if not _KD_RATIO_COLUMN_CACHE:
+        logger.warning("Greatshot crossref: no kd_ratio/kdr column found, defaulting to kd_ratio")
+        _KD_RATIO_COLUMN_CACHE = "kd_ratio"
+
+    return _KD_RATIO_COLUMN_CACHE
 
 
 async def _calculate_player_overlap(
@@ -326,7 +362,11 @@ async def find_matching_round(
     Returns:
         Best match dict with round_id, confidence, and match details, or None
     """
-    demo_map = (metadata.get("map") or "").lower().strip()
+    raw_map = metadata.get("map")
+    if raw_map is None:
+        demo_map = ""
+    else:
+        demo_map = str(raw_map).lower().strip()
     if not demo_map:
         return None
 
@@ -384,8 +424,9 @@ async def enrich_with_db_stats(
     db,
 ) -> Dict[str, Any]:
     """Fetch full player stats from player_comprehensive_stats for a matched round."""
+    kd_column = await _resolve_kd_ratio_column(db)
     rows = await db.fetch_all(
-        """
+        f"""
         SELECT
             player_name,
             player_guid,
@@ -400,7 +441,7 @@ async def enrich_with_db_stats(
             time_played_seconds,
             team,
             efficiency,
-            kd_ratio AS kdr,
+            {kd_column} AS kdr,
             skill_rating,
             dpm
         FROM player_comprehensive_stats

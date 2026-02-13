@@ -14,7 +14,10 @@ from collections import defaultdict
 from itertools import combinations
 from typing import Dict, List, Optional, Tuple
 
-from tools.stopwatch_scoring import StopwatchScoring
+try:
+    from tools.stopwatch_scoring import StopwatchScoring
+except ModuleNotFoundError:
+    StopwatchScoring = None  # Optional local helper, not required in CI/production PostgreSQL mode
 
 logger = logging.getLogger("bot.services.session_data")
 
@@ -341,7 +344,8 @@ class SessionDataService:
         Returns: (team_1_name, team_2_name, team_1_score, team_2_score, scoring_result)
         """
         # Skip stopwatch scoring in PostgreSQL mode (requires refactor)
-        if not self.db_path:
+        # and when optional local helper module is unavailable (e.g. CI).
+        if not self.db_path or StopwatchScoring is None:
             return "Team 1", "Team 2", 0, 0, None
 
         scorer = StopwatchScoring(self.db_path)

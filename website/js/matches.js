@@ -340,8 +340,8 @@ let weaponFiltersBound = false;
 
 async function fetchWeaponPlayers(period) {
     const query = `period=${encodeURIComponent(period)}&player_limit=24&weapon_limit=4`;
-    const primaryUrl = `${API_BASE}/stats/weapons/by-player?${query}`;
-    const fallbackUrl = `${API_BASE}/stats/weapons/by_player?${query}`;
+    const primaryUrl = `${API_BASE}/stats/weapons/by_player?${query}`;
+    const fallbackUrl = `${API_BASE}/stats/weapons/by-player?${query}`;
 
     try {
         return await fetchJSON(primaryUrl);

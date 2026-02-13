@@ -58,9 +58,14 @@ class DatabaseMaintenance:
     async def backup_database(self) -> bool:
         """Create database backup"""
         config = getattr(self.bot, "config", None)
-        database_type = str(
-            getattr(config, "database_type", "postgresql")
-        ).lower()
+        configured_type = str(getattr(config, "database_type", "postgresql")).lower()
+        adapter_name = self.bot.db_adapter.__class__.__name__.lower()
+        if "postgres" in adapter_name:
+            database_type = "postgresql"
+        elif "sqlite" in adapter_name:
+            database_type = "sqlite"
+        else:
+            database_type = configured_type
 
         if database_type in ("sqlite", "sqlite3") and (not self.db_path or not os.path.exists(self.db_path)):
             logger.warning(

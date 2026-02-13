@@ -770,13 +770,22 @@ class UltimateETLegacyBot(commands.Bot):
             # For PostgreSQL, we don't have a db_path, but metrics_logger needs one for its own SQLite db
             # Use a sensible default path for metrics database
             db_type = str(getattr(self.config, "database_type", "postgresql")).strip().lower()
-            metrics_db_path = self.config.metrics_db_path
+            metrics_db_path = getattr(self.config, "metrics_db_path", "")
 
             if db_type in ("postgresql", "postgres"):
-                sqlite_path = getattr(self.config, "sqlite_db_path", "")
-                if sqlite_path and metrics_db_path and os.path.abspath(metrics_db_path) == os.path.abspath(sqlite_path):
-                    metrics_db_path = os.path.join("bot", "logs", "metrics", "metrics.db")
-                    logger.warning("Metrics DB path collided with SQLite DB path; using dedicated metrics store")
+                sqlite_path = getattr(self.config, "sqlite_db_path", "") or ""
+                default_metrics_path = os.path.join("bot", "logs", "metrics", "metrics.db")
+                sqlite_abs = os.path.abspath(sqlite_path) if sqlite_path else ""
+                metrics_abs = os.path.abspath(metrics_db_path) if metrics_db_path else ""
+                metrics_basename = os.path.basename(metrics_abs) if metrics_abs else ""
+                needs_dedicated_metrics_store = (
+                    not metrics_db_path
+                    or (sqlite_abs and metrics_abs == sqlite_abs)
+                    or metrics_basename == "etlegacy.db"
+                )
+                if needs_dedicated_metrics_store:
+                    metrics_db_path = default_metrics_path
+                    logger.info("Using dedicated metrics SQLite store for PostgreSQL mode")
 
             # Create automation services in correct order (MetricsLogger first, it's needed by HealthMonitor)
             self.metrics = MetricsLogger(db_path=metrics_db_path)
