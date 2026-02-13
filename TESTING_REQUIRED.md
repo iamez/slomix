@@ -226,7 +226,7 @@ tail -50 logs/website.log
 
 1. **Database Verification**
    ```bash
-   PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
+   PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy
    ```
    Run queries above, note results
 

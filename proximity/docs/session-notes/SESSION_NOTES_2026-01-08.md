@@ -286,7 +286,7 @@ scp -P 48101 -i ~/.ssh/etlegacy_bot \
 
 ```bash
 # Created player_track table
-PGPASSWORD='etlegacy_secure_2025' psql -h 192.168.64.116 -U etlegacy_user -d etlegacy
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h 192.168.64.116 -U etlegacy_user -d etlegacy
 
 # Ran CREATE TABLE and CREATE INDEX statements
 ```sql

@@ -257,11 +257,11 @@ class SecretsManager:
             List of (filename, line_number, line_content) tuples
 
         This checks for:
-        - The production password 'etlegacy_secure_2025'
+        - A configurable legacy password marker (default: 'REDACTED_DB_PASSWORD')
         - Common password patterns in Python files
         """
         findings = []
-        search_term = "etlegacy_secure_2025"
+        search_term = os.getenv("SECRETS_AUDIT_SEARCH_TERM", "REDACTED_DB_PASSWORD")
 
         # Directories to search
         search_dirs = [
@@ -351,7 +351,8 @@ def main():
         print(f"Backup created: {backup_path}")
 
     elif args.command == 'audit':
-        print("🔍 Scanning for hardcoded password 'etlegacy_secure_2025'...\n")
+        search_term = os.getenv("SECRETS_AUDIT_SEARCH_TERM", "REDACTED_DB_PASSWORD")
+        print(f"🔍 Scanning for hardcoded password '{search_term}'...\n")
         findings = manager.audit_hardcoded_secrets()
 
         if findings:

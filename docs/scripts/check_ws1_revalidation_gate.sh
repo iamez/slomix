@@ -5,7 +5,12 @@ DB_HOST="${DB_HOST:-192.168.64.116}"
 DB_PORT="${DB_PORT:-5432}"
 DB_USER="${DB_USER:-etlegacy_user}"
 DB_NAME="${DB_NAME:-etlegacy}"
-export PGPASSWORD="${PGPASSWORD:-etlegacy_secure_2025}"
+if [[ -z "${PGPASSWORD:-}" ]]; then
+  echo "❌ PGPASSWORD is not set."
+  echo "Set it explicitly before running, e.g.:"
+  echo "  export PGPASSWORD='your_db_password'"
+  exit 1
+fi
 
 PSQL=(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -F $'\t' -At -v ON_ERROR_STOP=1)
 
