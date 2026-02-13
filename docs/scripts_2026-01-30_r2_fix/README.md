@@ -56,7 +56,7 @@ python verify_database_health.py
 
 **Usage:**
 ```bash
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -f show_corrupted_values.sql
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy -f show_corrupted_values.sql
 ```
 
 ---
@@ -167,7 +167,7 @@ If you need to restore `time_dead_minutes_original` data:
 
 ```bash
 # 1. Restore from backup #4
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy < \
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy < \
   /home/samba/share/slomix_discord/backups/etlegacy_before_r2_fix_v2_20260130_152445.sql
 
 # 2. Re-run final fix for 35 new files

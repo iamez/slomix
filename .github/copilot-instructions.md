@@ -37,7 +37,7 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=etlegacy
 DB_USER=etlegacy_user
-DB_PASSWORD=etlegacy_secure_2025
+DB_PASSWORD=REDACTED_DB_PASSWORD
 ```python
 
 ### Stats Import Pipeline: Four-Stage Process

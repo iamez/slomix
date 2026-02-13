@@ -164,7 +164,7 @@ echo -e "\xff\xff\xff\xffrcon glavni123 lua_modules" | nc -u -w 2 puran.hehe.si 
 
 ```bash
 # Check if player_synergies exists (it doesn't)
-PGPASSWORD='etlegacy_secure_2025' psql -h 192.168.64.116 -U etlegacy_user -d etlegacy \
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h 192.168.64.116 -U etlegacy_user -d etlegacy \
   -c "\dt player_synergies"
 # Result: Did not find any relation named "player_synergies"
 ```python

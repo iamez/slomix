@@ -16,6 +16,8 @@ import logging
 import re
 from typing import List, Optional, Tuple, Any, Dict
 
+from bot.core.round_contract import normalize_end_reason
+
 logger = logging.getLogger('TimingDebugService')
 
 
@@ -456,9 +458,9 @@ class TimingDebugService:
                 analysis_parts.append(f"**Difference:** {diff_seconds} seconds")
 
                 # Check for surrender fix
-                if lua_end_reason == 'surrender' and diff_seconds > 0:
+                if normalize_end_reason(lua_end_reason) == "SURRENDER" and diff_seconds > 0:
                     analysis_parts.append(f"**Surrender Fix:** ✅ Yes (saved {diff_seconds}s)")
-                elif lua_end_reason == 'surrender':
+                elif normalize_end_reason(lua_end_reason) == "SURRENDER":
                     analysis_parts.append(f"**Surrender Fix:** ✅ Applied")
                 elif diff_seconds == 0:
                     analysis_parts.append("**Match:** ✅ Perfect timing match!")
@@ -539,9 +541,18 @@ class TimingDebugService:
                     l.surrender_team,
                     l.surrender_caller_name
                 FROM rounds r
-                LEFT JOIN lua_round_teams l
-                    ON r.match_id = l.match_id
-                    AND r.round_number = l.round_number
+                LEFT JOIN LATERAL (
+                    SELECT
+                        lrt.actual_duration_seconds,
+                        lrt.total_pause_seconds,
+                        lrt.end_reason,
+                        lrt.surrender_team,
+                        lrt.surrender_caller_name
+                    FROM lua_round_teams lrt
+                    WHERE lrt.round_id = r.id
+                    ORDER BY lrt.captured_at DESC
+                    LIMIT 1
+                ) l ON TRUE
                 WHERE r.id IN ({placeholders})
                 ORDER BY r.round_date, r.round_time, r.round_number
             """
@@ -578,7 +589,7 @@ class TimingDebugService:
                         diff = stats_duration - lua_duration  # Positive = stats is longer
                         max_diff = max(max_diff, abs(diff))
 
-                        if lua_end_reason == 'surrender' and diff > 0:
+                        if normalize_end_reason(lua_end_reason) == "SURRENDER" and diff > 0:
                             surrender_fixes += 1
                             total_time_corrected += diff
                             fix_indicator = "✓"

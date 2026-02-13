@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> **Historical Notice (2026-02-12):** This file contains legacy guidance and may not reflect the current two-week execution state. Use `docs/TWO_WEEK_EXECUTION_TRACKER_2026-02-11.md` and `docs/CRASH_PROOF_TODO_2026-02-12.md` as canonical status sources.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **📝 Session Memory:** Check `.claude/memories.md` for recent session context, ongoing work, and things to remember across sessions.
@@ -80,7 +82,7 @@ Direct database access via MCP tools (`mcp__db__execute_sql`, `mcp__db__search_o
 ```bash
 # Configured via:
 claude mcp add --transport stdio --scope user db -- npx -y @bytebase/dbhub \
-  --dsn "postgresql://etlegacy_user:etlegacy_secure_2025@localhost:5432/etlegacy"
+  --dsn "postgresql://etlegacy_user:REDACTED_DB_PASSWORD@localhost:5432/etlegacy"
 ```
 
 ### User Preferences
@@ -104,7 +106,7 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 - **Type**: PostgreSQL 14 (system service)
 - **Database**: etlegacy
 - **User**: etlegacy_user
-- **Password**: etlegacy_secure_2025 (in .env)
+- **Password**: REDACTED_DB_PASSWORD (in .env)
 - **Host**: localhost:5432
 - **Data Location**: `/var/lib/postgresql/14/main/` (managed by PostgreSQL service)
 - **Service**: `postgresql.service` (systemd)
@@ -530,7 +532,7 @@ python postgresql_database_manager.py
 # 6 - Quick test (10 files)
 
 # Connect to PostgreSQL directly
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy
 
 # Common queries
 psql -d etlegacy -c "SELECT COUNT(*) FROM rounds;"
@@ -640,7 +642,7 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=etlegacy
 DB_USER=etlegacy_user
-DB_PASSWORD=etlegacy_secure_2025
+DB_PASSWORD=REDACTED_DB_PASSWORD
 
 # SSH Automation
 SSH_ENABLED=true
@@ -758,7 +760,7 @@ Parser finds correct Round 1 from 5 minutes earlier instead.
 
 ```bash
 # Connect to database
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy
 
 # Common diagnostic queries
 SELECT COUNT(*) FROM rounds;

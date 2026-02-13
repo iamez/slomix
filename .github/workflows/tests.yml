@@ -19,7 +19,7 @@ jobs:
         image: postgres:14
         env:
           POSTGRES_USER: etlegacy_user
-          POSTGRES_PASSWORD: etlegacy_secure_2025
+          POSTGRES_PASSWORD: etlegacy_test_password
           POSTGRES_DB: etlegacy_test
         ports:
           - 5432:5432
@@ -52,7 +52,7 @@ jobs:
 
     - name: Set up test database
       env:
-        PGPASSWORD: etlegacy_secure_2025
+        PGPASSWORD: etlegacy_test_password
       run: |
         # Wait for PostgreSQL to be ready
         until pg_isready -h localhost -p 5432 -U etlegacy_user; do
@@ -81,7 +81,7 @@ jobs:
         POSTGRES_TEST_PORT: 5432
         POSTGRES_TEST_DATABASE: etlegacy_test
         POSTGRES_TEST_USER: etlegacy_user
-        POSTGRES_TEST_PASSWORD: etlegacy_secure_2025
+        POSTGRES_TEST_PASSWORD: etlegacy_test_password
       run: |
         pytest tests/unit/test_database_adapter.py -v --tb=short --cov=bot --cov-append --cov-report=xml --cov-report=term -m requires_db
       continue-on-error: true  # Allow this to fail if schema doesn't exist

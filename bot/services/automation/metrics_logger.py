@@ -13,6 +13,7 @@ Features:
 - Exports metrics to JSON/CSV
 """
 
+import asyncio
 import aiosqlite
 import json
 import logging
@@ -41,7 +42,7 @@ class MetricsLogger:
         Initialize metrics logger.
 
         Args:
-            db_path: Path to main database
+            db_path: Path to metrics SQLite database
             log_dir: Directory for metrics logs
         """
         self.db_path = db_path
@@ -60,10 +61,19 @@ class MetricsLogger:
         # Start time
         self.start_time = datetime.now()
 
-        # Create metrics database
-        self.metrics_db_path = os.path.join(log_dir, "metrics.db")
+        # Metrics database path (explicit config path wins)
+        self.metrics_db_path = db_path or os.path.join(log_dir, "metrics.db")
+        metrics_db_dir = os.path.dirname(self.metrics_db_path)
+        if metrics_db_dir:
+            os.makedirs(metrics_db_dir, exist_ok=True)
 
-        logger.info(f"📊 Metrics Logger initialized: {self.log_dir}")
+        # Lazy one-time initialization guard
+        self._is_initialized = False
+        self._init_lock = asyncio.Lock()
+
+        logger.info(
+            f"📊 Metrics Logger initialized: log_dir={self.log_dir}, db={self.metrics_db_path}"
+        )
 
     async def initialize_metrics_db(self):
         """Create metrics database tables"""
@@ -120,10 +130,20 @@ class MetricsLogger:
                 """)
 
                 await db.commit()
+                self._is_initialized = True
                 logger.info("✅ Metrics database initialized")
 
         except Exception as e:
             logger.error(f"❌ Failed to initialize metrics DB: {e}")
+
+    async def _ensure_initialized(self):
+        """Ensure metrics schema exists before reads/writes."""
+        if self._is_initialized:
+            return
+        async with self._init_lock:
+            if self._is_initialized:
+                return
+            await self.initialize_metrics_db()
 
     async def log_event(self, event_type: str, event_data: Optional[Dict] = None,
                        duration_ms: Optional[float] = None, success: bool = True):
@@ -137,6 +157,7 @@ class MetricsLogger:
             success: Whether the event succeeded
         """
         try:
+            await self._ensure_initialized()
             timestamp = datetime.now().isoformat()
 
             # Store in memory
@@ -185,6 +206,7 @@ class MetricsLogger:
             context: Additional context about when/where error occurred
         """
         try:
+            await self._ensure_initialized()
             timestamp = datetime.now().isoformat()
 
             # Store in memory
@@ -231,6 +253,7 @@ class MetricsLogger:
             unit: Unit of measurement (e.g., 'ms', 'seconds', 'bytes')
         """
         try:
+            await self._ensure_initialized()
             timestamp = datetime.now().isoformat()
 
             # Store in memory
@@ -274,6 +297,7 @@ class MetricsLogger:
             cpu_percent: CPU usage percentage
         """
         try:
+            await self._ensure_initialized()
             timestamp = datetime.now().isoformat()
 
             async with aiosqlite.connect(self.metrics_db_path) as db:
@@ -299,117 +323,130 @@ class MetricsLogger:
         Returns:
             Dictionary with analysis results
         """
-        try:
-            cutoff_time = datetime.now() - timedelta(hours=hours)
-            cutoff_str = cutoff_time.isoformat()
+        for attempt in range(2):
+            try:
+                await self._ensure_initialized()
+                cutoff_time = datetime.now() - timedelta(hours=hours)
+                cutoff_str = cutoff_time.isoformat()
 
-            report = {
-                'generated_at': datetime.now().isoformat(),
-                'time_range_hours': hours,
-                'summary': {},
-                'events': {},
-                'errors': {},
-                'performance': {},
-                'health': {}
-            }
-
-            async with aiosqlite.connect(self.metrics_db_path) as db:
-                # Event summary
-                cursor = await db.execute("""
-                    SELECT event_type, COUNT(*), AVG(duration_ms), SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END)
-                    FROM events
-                    WHERE timestamp > ?
-                    GROUP BY event_type
-                """, (cutoff_str,))
-
-                events = await cursor.fetchall()
-                report['events'] = {
-                    row[0]: {
-                        'count': row[1],
-                        'avg_duration_ms': row[2],
-                        'success_count': row[3],
-                        'success_rate': (row[3] / row[1] * 100) if row[1] > 0 else 0
-                    }
-                    for row in events
+                report = {
+                    'generated_at': datetime.now().isoformat(),
+                    'time_range_hours': hours,
+                    'summary': {},
+                    'events': {},
+                    'errors': {},
+                    'performance': {},
+                    'health': {}
                 }
 
-                # Error summary
-                cursor = await db.execute("""
-                    SELECT error_type, COUNT(*), MAX(timestamp)
-                    FROM errors
-                    WHERE timestamp > ?
-                    GROUP BY error_type
-                """, (cutoff_str,))
+                async with aiosqlite.connect(self.metrics_db_path) as db:
+                    # Event summary
+                    cursor = await db.execute("""
+                        SELECT event_type, COUNT(*), AVG(duration_ms), SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END)
+                        FROM events
+                        WHERE timestamp > ?
+                        GROUP BY event_type
+                    """, (cutoff_str,))
 
-                errors = await cursor.fetchall()
-                report['errors'] = {
-                    row[0]: {
-                        'count': row[1],
-                        'last_occurrence': row[2]
-                    }
-                    for row in errors
-                }
-
-                # Performance metrics
-                cursor = await db.execute("""
-                    SELECT metric_name, AVG(metric_value), MIN(metric_value), MAX(metric_value), unit
-                    FROM performance
-                    WHERE timestamp > ?
-                    GROUP BY metric_name, unit
-                """, (cutoff_str,))
-
-                perf = await cursor.fetchall()
-                report['performance'] = {
-                    row[0]: {
-                        'avg': row[1],
-                        'min': row[2],
-                        'max': row[3],
-                        'unit': row[4]
-                    }
-                    for row in perf
-                }
-
-                # Health checks
-                cursor = await db.execute("""
-                    SELECT
-                        COUNT(*) as check_count,
-                        SUM(CASE WHEN status = 'healthy' THEN 1 ELSE 0 END) as healthy_count,
-                        AVG(memory_mb) as avg_memory,
-                        AVG(cpu_percent) as avg_cpu,
-                        MAX(db_size_mb) as max_db_size
-                    FROM health_checks
-                    WHERE timestamp > ?
-                """, (cutoff_str,))
-
-                health_row = await cursor.fetchone()
-                if health_row:
-                    report['health'] = {
-                        'total_checks': health_row[0],
-                        'healthy_checks': health_row[1],
-                        'health_rate': (health_row[1] / health_row[0] * 100) if health_row[0] > 0 else 0,
-                        'avg_memory_mb': health_row[2],
-                        'avg_cpu_percent': health_row[3],
-                        'max_db_size_mb': health_row[4]
+                    events = await cursor.fetchall()
+                    report['events'] = {
+                        row[0]: {
+                            'count': row[1],
+                            'avg_duration_ms': row[2],
+                            'success_count': row[3],
+                            'success_rate': (row[3] / row[1] * 100) if row[1] > 0 else 0
+                        }
+                        for row in events
                     }
 
-                # Overall summary
-                total_events = sum(e['count'] for e in report['events'].values())
-                total_errors = sum(e['count'] for e in report['errors'].values())
+                    # Error summary
+                    cursor = await db.execute("""
+                        SELECT error_type, COUNT(*), MAX(timestamp)
+                        FROM errors
+                        WHERE timestamp > ?
+                        GROUP BY error_type
+                    """, (cutoff_str,))
 
-                report['summary'] = {
-                    'total_events': total_events,
-                    'total_errors': total_errors,
-                    'error_rate': (total_errors / total_events * 100) if total_events > 0 else 0,
-                    'uptime_hours': hours,
-                    'events_per_hour': total_events / hours if hours > 0 else 0
-                }
+                    errors = await cursor.fetchall()
+                    report['errors'] = {
+                        row[0]: {
+                            'count': row[1],
+                            'last_occurrence': row[2]
+                        }
+                        for row in errors
+                    }
 
-            logger.info(f"📊 Report generated for last {hours} hours")
-            return report
+                    # Performance metrics
+                    cursor = await db.execute("""
+                        SELECT metric_name, AVG(metric_value), MIN(metric_value), MAX(metric_value), unit
+                        FROM performance
+                        WHERE timestamp > ?
+                        GROUP BY metric_name, unit
+                    """, (cutoff_str,))
 
-        except Exception as e:
-            logger.error(f"❌ Failed to generate report: {e}")
-            return {}
+                    perf = await cursor.fetchall()
+                    report['performance'] = {
+                        row[0]: {
+                            'avg': row[1],
+                            'min': row[2],
+                            'max': row[3],
+                            'unit': row[4]
+                        }
+                        for row in perf
+                    }
+
+                    # Health checks
+                    cursor = await db.execute("""
+                        SELECT
+                            COUNT(*) as check_count,
+                            SUM(CASE WHEN status = 'healthy' THEN 1 ELSE 0 END) as healthy_count,
+                            AVG(memory_mb) as avg_memory,
+                            AVG(cpu_percent) as avg_cpu,
+                            MAX(db_size_mb) as max_db_size
+                        FROM health_checks
+                        WHERE timestamp > ?
+                    """, (cutoff_str,))
+
+                    health_row = await cursor.fetchone()
+                    if health_row:
+                        report['health'] = {
+                            'total_checks': health_row[0],
+                            'healthy_checks': health_row[1],
+                            'health_rate': (health_row[1] / health_row[0] * 100) if health_row[0] > 0 else 0,
+                            'avg_memory_mb': health_row[2],
+                            'avg_cpu_percent': health_row[3],
+                            'max_db_size_mb': health_row[4]
+                        }
+
+                    # Overall summary
+                    total_events = sum(e['count'] for e in report['events'].values())
+                    total_errors = sum(e['count'] for e in report['errors'].values())
+
+                    report['summary'] = {
+                        'total_events': total_events,
+                        'total_errors': total_errors,
+                        'error_rate': (total_errors / total_events * 100) if total_events > 0 else 0,
+                        'uptime_hours': hours,
+                        'events_per_hour': total_events / hours if hours > 0 else 0
+                    }
+
+                logger.info(f"📊 Report generated for last {hours} hours")
+                return report
+            except aiosqlite.OperationalError as e:
+                if "no such table" in str(e).lower() and attempt == 0:
+                    logger.warning(
+                        "Metrics schema missing during report generation; reinitializing metrics DB"
+                    )
+                    self._is_initialized = False
+                    await self.initialize_metrics_db()
+                    continue
+                logger.error(f"❌ Failed to generate report: {e}")
+                return {}
+            except Exception as e:
+                logger.error(f"❌ Failed to generate report: {e}")
+                return {}
+
+        return {}
 
     async def export_to_json(self, filepath: Optional[str] = None) -> str:
         """

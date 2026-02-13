@@ -1,5 +1,7 @@
 # ET:Legacy Discord Bot - Comprehensive Security Audit & Threat Model
 
+> **Superseded Notice (2026-02-12):** This audit is historical context. For current security closure state, use `docs/evidence/2026-02-18_ws4_reaudit.md` and `docs/evidence/2026-02-19_ws4_secret_rotation.md`.
+
 **Document Version:** 1.0
 **Last Updated:** 2025-12-14
 **Audit Status:** IN PROGRESS
@@ -400,7 +402,7 @@ ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # ACCEPTS ANY HOST KE
 **Connection String:**
 
 ```python
-postgres://etlegacy_user:etlegacy_secure_2025@192.168.64.116:5432/etlegacy
+postgres://etlegacy_user:REDACTED_DB_PASSWORD@192.168.64.116:5432/etlegacy
 ```yaml
 
 **Attack Vectors:**
@@ -1118,7 +1120,7 @@ Destruction: Never
 **Attack Steps:**
 
 1. Database connection fails (wrong password)
-2. Error logged: `asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "etlegacy_user" with password "etlegacy_secure_2025"`
+2. Error logged: `asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "etlegacy_user" with password "REDACTED_DB_PASSWORD"`
 3. Attacker with log access → full database access
 
 **Likelihood:** MEDIUM

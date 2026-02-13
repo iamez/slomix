@@ -667,7 +667,7 @@ cat REFACTORING_PROGRESS.md
 
 # 3. Create database backup
 timestamp=$(date +%Y%m%d_%H%M%S)
-PGPASSWORD='etlegacy_secure_2025' pg_dump -h localhost -U etlegacy_user -d etlegacy > "etlegacy_production.db.backup_${timestamp}"
+PGPASSWORD='REDACTED_DB_PASSWORD' pg_dump -h localhost -U etlegacy_user -d etlegacy > "etlegacy_production.db.backup_${timestamp}"
 
 # 4. Create feature branch
 git checkout -b refactor/configuration-object  # or whatever phase we're on

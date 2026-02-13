@@ -16,6 +16,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.utils import sanitize_error_message
 from bot.services.matchup_analytics_service import MatchupAnalyticsService
 
 logger = logging.getLogger("bot.cogs.matchup")
@@ -43,9 +44,11 @@ class MatchupCog(commands.Cog):
         for name in player_names:
             # Try exact match first
             query = """
-                SELECT DISTINCT player_guid
+                SELECT player_guid
                 FROM player_comprehensive_stats
                 WHERE LOWER(player_name) = LOWER($1)
+                GROUP BY player_guid
+                ORDER BY MAX(round_date) DESC
                 LIMIT 1
             """
             result = await self.bot.db_adapter.fetch_one(query, (name,))
@@ -55,10 +58,11 @@ class MatchupCog(commands.Cog):
             else:
                 # Try partial match
                 query = """
-                    SELECT DISTINCT player_guid
+                    SELECT player_guid
                     FROM player_comprehensive_stats
                     WHERE LOWER(player_name) LIKE LOWER($1)
-                    ORDER BY round_date DESC
+                    GROUP BY player_guid
+                    ORDER BY MAX(round_date) DESC
                     LIMIT 1
                 """
                 result = await self.bot.db_adapter.fetch_one(query, (f"%{name}%",))
@@ -154,7 +158,7 @@ class MatchupCog(commands.Cog):
                 summary = self.matchup_service.format_matchup_summary(stats, perspective='a')
             except Exception as e:
                 logger.error(f"Error in matchup command: {e}", exc_info=True)
-                await ctx.send(f"Error analyzing matchup: {e}")
+                await ctx.send(f"Error analyzing matchup: {sanitize_error_message(e)}")
                 return
 
             embed = discord.Embed(
@@ -218,7 +222,7 @@ class MatchupCog(commands.Cog):
                 summary = self.matchup_service.format_synergy_summary(synergy, name1, name2)
             except Exception as e:
                 logger.error(f"Error in synergy command: {e}", exc_info=True)
-                await ctx.send(f"Error analyzing synergy: {e}")
+                await ctx.send(f"Error analyzing synergy: {sanitize_error_message(e)}")
                 return
 
             # Color based on synergy
@@ -309,7 +313,7 @@ class MatchupCog(commands.Cog):
                 nemeses.sort(key=lambda x: x['suppression'])
             except Exception as e:
                 logger.error(f"Error in nemesis command: {e}", exc_info=True)
-                await ctx.send(f"Error analyzing nemesis: {e}")
+                await ctx.send(f"Error analyzing nemesis: {sanitize_error_message(e)}")
                 return
 
             # Format output

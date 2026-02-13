@@ -14,7 +14,7 @@ bot/
 ├── community_stats_parser.py # Stats file parser (1,036 lines)
 ├── config.py                # Configuration management
 ├── logging_config.py        # Logging setup
-├── cogs/                    # Discord command modules (14 cogs)
+├── cogs/                    # Discord command modules (20 cogs currently in repo)
 ├── core/                    # Business logic layer
 ├── services/                # Service layer
 ├── automation/              # SSH monitoring & file tracking
@@ -32,7 +32,7 @@ bot/
 ### ultimate_bot.py
 
 - Main bot class extending `commands.Bot`
-- Loads all 14 cogs on startup
+- Loads core cogs plus optional feature cogs on startup
 - Contains `endstats_monitor` task loop (SSH polling)
 - Schema validation at startup
 - Admin notification system (`alert_admins()`, `track_error()`)

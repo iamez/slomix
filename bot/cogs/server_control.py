@@ -491,8 +491,9 @@ class ServerControl(commands.Cog):
         except Exception as e:
             logger.error(f"Error listing maps: {e}", exc_info=True)
             await ctx.send(f"❌ Error listing maps: {sanitize_error_message(e)}")
-    
+
     @commands.command(name='map_add', aliases=['addmap', 'upload_map'])
+    @is_admin()
     async def map_add(self, ctx):
         """➕ Upload new map to server (Admin channel only)
         
@@ -573,8 +574,9 @@ class ServerControl(commands.Cog):
             logger.error(f"Error uploading map: {e}", exc_info=True)
             await ctx.send(f"❌ Error uploading map: {sanitize_error_message(e)}")
             await self.log_action(ctx, "Map Upload Failed", f"❌ {sanitized_name}")
-    
+
     @commands.command(name='map_change', aliases=['changemap', 'map'])
+    @is_admin()
     async def map_change(self, ctx, map_name: str):
         """🗺️ Change current map (Admin channel only)
         
@@ -611,8 +613,9 @@ class ServerControl(commands.Cog):
             logger.error(f"Error changing map: {e}", exc_info=True)
             await ctx.send(f"❌ Error changing map: {sanitize_error_message(e)}")
             await self.log_action(ctx, "Map Change Failed", f"❌ {map_name}")
-    
+
     @commands.command(name='map_delete', aliases=['deletemap', 'remove_map'])
+    @is_admin()
     async def map_delete(self, ctx, map_name: str):
         """🗑️ Delete a map from server (Admin channel only)
         
@@ -660,8 +663,9 @@ class ServerControl(commands.Cog):
     # ========================================
     # RCON COMMANDS
     # ========================================
-    
+
     @commands.command(name='rcon')
+    @is_admin()
     async def rcon_command(self, ctx, *, command: str):
         """🎮 Send RCON command to server (Admin channel only)
         
@@ -703,8 +707,9 @@ class ServerControl(commands.Cog):
             logger.error(f"Error executing RCON: {e}", exc_info=True)
             await ctx.send(
                 f"❌ Error executing RCON command: {sanitize_error_message(e)}")
-    
+
     @commands.command(name='kick')
+    @is_admin()
     async def kick_player(self, ctx, player_id: int, *, reason: str = "Kicked by admin"):
         """👢 Kick a player from server (Admin channel only)
         
@@ -730,8 +735,9 @@ class ServerControl(commands.Cog):
         except Exception as e:
             logger.error(f"Error kicking player: {e}", exc_info=True)
             await ctx.send(f"❌ Error kicking player: {sanitize_error_message(e)}")
-    
+
     @commands.command(name='say')
+    @is_admin()
     async def server_say(self, ctx, *, message: str):
         """💬 Send message to server chat (Admin channel only)
         

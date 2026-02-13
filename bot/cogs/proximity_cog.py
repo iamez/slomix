@@ -325,7 +325,8 @@ class ProximityCog(commands.Cog, name="Proximity"):
             # Create parser with database adapter
             parser = ProximityParserV3(
                 db_adapter=self.bot.db_adapter,
-                output_dir=str(filepath.parent)
+                output_dir=str(filepath.parent),
+                gametimes_dir=getattr(self.bot.config, "gametimes_local_path", "local_gametimes"),
             )
 
             # Import the file

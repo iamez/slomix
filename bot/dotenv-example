@@ -10,7 +10,7 @@ POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_DATABASE=etlegacy
 POSTGRES_USER=etlegacy_user
-POSTGRES_PASSWORD=etlegacy_secure_2025
+POSTGRES_PASSWORD=your_secure_database_password_here
 POSTGRES_MIN_POOL=10
 POSTGRES_MAX_POOL=30
 
@@ -19,9 +19,7 @@ SQLITE_DB_PATH=/home/samba/share/slomix_discord/bot/etlegacy_production.db
 
 # ========== DISCORD CONFIGURATION ==========
 # Your Discord bot token (required)
-DISCORD_BOT_TOKEN=myactualtoken
-
-#MTE3NDM4ODUxNjAwNDgzNTQxOQ.GLlR-y.nqIZFtrSweaX-ZGZ1S2YUARSWvXmYHABjLEukA
+DISCORD_BOT_TOKEN=your_discord_bot_token_here
 
 # Your Discord server (guild) ID (optional, for guild-specific commands)
 GUILD_ID=1420158096801661011
@@ -39,10 +37,10 @@ BOT_COMMAND_CHANNELS=1424620499975274496
 # Your ET:Legacy game server details (required)
 SERVER_HOST=puran.hehe.si  # Your server hostname/IP
 SERVER_PORT=27960  # ET:Legacy game port (default: 27960)
-SERVER_PASSWORD=glhf  # Server password for players
+SERVER_PASSWORD=your_server_password_here  # Server password for players
 
 # RCON password for server control (required)
-RCON_PASSWORD=glavni123
+RCON_PASSWORD=your_secure_rcon_password_here
 
 # ========== AUTOMATION SYSTEM ==========
 # Automation features (set to true to enable)

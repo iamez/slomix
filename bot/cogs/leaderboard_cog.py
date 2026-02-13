@@ -490,10 +490,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 if stat == "kills":
                     query = """
                         SELECT
-                            (SELECT player_name FROM player_comprehensive_stats
-                             WHERE player_guid = p.player_guid
-                             GROUP BY player_name
-                             ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                            MAX(p.player_name) as primary_name,
                             SUM(p.kills) as total_kills,
                             SUM(p.deaths) as total_deaths,
                             COUNT(DISTINCT p.round_id) as games,
@@ -511,10 +508,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 elif stat == "kd":
                     query = """
                             SELECT
-                                (SELECT player_name FROM player_comprehensive_stats
-                                 WHERE player_guid = p.player_guid
-                                 GROUP BY player_name
-                                 ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                                MAX(p.player_name) as primary_name,
                                 SUM(p.kills) as total_kills,
                                 SUM(p.deaths) as total_deaths,
                                 COUNT(DISTINCT p.round_id) as games,
@@ -532,10 +526,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 elif stat == "dpm":
                     query = """
                             SELECT
-                                (SELECT player_name FROM player_comprehensive_stats
-                                 WHERE player_guid = p.player_guid
-                                 GROUP BY player_name
-                                 ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                                MAX(p.player_name) as primary_name,
                                 CASE
                                     WHEN SUM(p.time_played_seconds) > 0
                                     THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
@@ -557,10 +548,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 elif stat == "accuracy":
                     query = """
                             SELECT
-                                (SELECT player_name FROM player_comprehensive_stats
-                                 WHERE player_guid = p.player_guid
-                                 GROUP BY player_name
-                                 ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                                MAX(p.player_name) as primary_name,
                                 SUM(w.hits) as total_hits,
                                 SUM(w.shots) as total_shots,
                                 SUM(p.kills) as total_kills,
@@ -582,10 +570,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 elif stat == "headshots":
                     query = """
                             SELECT
-                                (SELECT player_name FROM player_comprehensive_stats
-                                 WHERE player_guid = p.player_guid
-                                 GROUP BY player_name
-                                 ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                                MAX(p.player_name) as primary_name,
                                 SUM(p.headshot_kills) as total_hs,
                                 SUM(w.hits) as total_hits,
                                 SUM(p.kills) as total_kills,
@@ -607,10 +592,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 elif stat == "games":
                     query = """
                             SELECT 
-                                (SELECT player_name FROM player_comprehensive_stats 
-                                 WHERE player_guid = p.player_guid 
-                                 GROUP BY player_name 
-                                 ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                                MAX(p.player_name) as primary_name,
                                 COUNT(DISTINCT p.round_id) as games,
                                 SUM(p.kills) as total_kills,
                                 SUM(p.deaths) as total_deaths,
@@ -627,10 +609,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 elif stat == "revives":
                     query = """
                             SELECT 
-                                (SELECT player_name FROM player_comprehensive_stats 
-                                 WHERE player_guid = p.player_guid 
-                                 GROUP BY player_name 
-                                 ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                                MAX(p.player_name) as primary_name,
                                 SUM(p.revives_given) as total_revives,
                                 SUM(p.kills) as total_kills,
                                 COUNT(DISTINCT p.round_id) as games,
@@ -648,10 +627,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 elif stat == "gibs":
                     query = """
                             SELECT 
-                                (SELECT player_name FROM player_comprehensive_stats 
-                                 WHERE player_guid = p.player_guid 
-                                 GROUP BY player_name 
-                                 ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                                MAX(p.player_name) as primary_name,
                                 SUM(p.gibs) as total_gibs,
                                 SUM(p.kills) as total_kills,
                                 COUNT(DISTINCT p.round_id) as games,
@@ -669,10 +645,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 elif stat == "objectives":
                     query = """
                             SELECT 
-                                (SELECT player_name FROM player_comprehensive_stats 
-                                 WHERE player_guid = p.player_guid 
-                                 GROUP BY player_name 
-                                 ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                                MAX(p.player_name) as primary_name,
                                 SUM(p.objectives_completed + p.objectives_destroyed + p.objectives_stolen + p.objectives_returned) as total_obj,
                                 SUM(p.objectives_completed) as completed,
                                 COUNT(DISTINCT p.round_id) as games,
@@ -690,10 +663,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 elif stat == "efficiency":
                     query = """
                             SELECT 
-                                (SELECT player_name FROM player_comprehensive_stats 
-                                 WHERE player_guid = p.player_guid 
-                                 GROUP BY player_name 
-                                 ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                                MAX(p.player_name) as primary_name,
                                 AVG(p.efficiency) as avg_eff,
                                 SUM(p.kills) as total_kills,
                                 COUNT(DISTINCT p.round_id) as games,
@@ -711,10 +681,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 elif stat == "teamwork":
                     query = """
                             SELECT
-                                (SELECT player_name FROM player_comprehensive_stats
-                                 WHERE player_guid = p.player_guid
-                                 GROUP BY player_name
-                                 ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                                MAX(p.player_name) as primary_name,
                                 SUM(p.team_damage_given) as total_team_dmg,
                                 SUM(p.damage_given) as total_dmg,
                                 COUNT(DISTINCT p.round_id) as games,
@@ -735,10 +702,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 elif stat == "multikills":
                     query = """
                             SELECT 
-                                (SELECT player_name FROM player_comprehensive_stats 
-                                 WHERE player_guid = p.player_guid 
-                                 GROUP BY player_name 
-                                 ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                                MAX(p.player_name) as primary_name,
                                 SUM(p.double_kills + p.triple_kills + p.quad_kills + p.multi_kills + p.mega_kills) as total_multi,
                                 SUM(p.mega_kills) as megas,
                                 COUNT(DISTINCT p.round_id) as games,
@@ -756,10 +720,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 elif stat == "grenades":
                     query = """
                             SELECT
-                                (SELECT player_name FROM player_comprehensive_stats
-                                 WHERE player_guid = w.player_guid
-                                 GROUP BY player_name
-                                 ORDER BY COUNT(*) DESC LIMIT 1) as primary_name,
+                                MAX(p.player_name) as primary_name,
                                 SUM(w.kills) as total_kills,
                                 SUM(w.shots) as total_throws,
                                 SUM(w.hits) as total_hits,

@@ -145,7 +145,7 @@ The unfinished modules were developed during Week 11-12 (November 2, 2025 commit
 **Production Evidence:**
 
 - Current bot uses PostgreSQL: `database_type = "postgresql"` (bot/config.py)
-- Current connection string: `postgresql://etlegacy_user:etlegacy_secure_2025@localhost/etlegacy`
+- Current connection string: `postgresql://etlegacy_user:REDACTED_DB_PASSWORD@localhost/etlegacy`
 - NONE of the unfinished modules would work with this setup
 
 ### Solution Strategy

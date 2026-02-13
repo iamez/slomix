@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger("bot.core.round_linker")
 
@@ -48,23 +48,67 @@ async def resolve_round_id(
     """
     Resolve round_id using map + round_number + nearest time.
 
-    Args:
-        db_adapter: Database adapter (PostgreSQLAdapter)
-        map_name: Map name (required)
-        round_number: Round number (required)
-        target_dt: Preferred datetime for proximity matching
-        round_date: Optional round_date filter (YYYY-MM-DD)
-        round_time: Optional round_time string (HHMMSS or HH:MM:SS)
-        window_minutes: Max time delta for matching (minutes)
+    This is the compatibility API used by existing callers.
     """
+    round_id, _diag = await resolve_round_id_with_reason(
+        db_adapter,
+        map_name,
+        round_number,
+        target_dt=target_dt,
+        round_date=round_date,
+        round_time=round_time,
+        window_minutes=window_minutes,
+    )
+    return round_id
+
+
+async def resolve_round_id_with_reason(
+    db_adapter,
+    map_name: str,
+    round_number: int,
+    *,
+    target_dt: Optional[datetime] = None,
+    round_date: Optional[str] = None,
+    round_time: Optional[str] = None,
+    window_minutes: int = 45,
+) -> Tuple[Optional[int], Dict[str, Any]]:
+    """
+    Resolve round_id and return structured diagnostics.
+
+    Diagnostic payload keys:
+    1. reason_code
+    2. candidate_count
+    3. parsed_candidate_count
+    4. best_diff_seconds
+    5. map_name
+    6. round_number
+    7. round_date
+    8. round_time
+    9. window_minutes
+    """
+    diag: Dict[str, Any] = {
+        "reason_code": "unknown",
+        "candidate_count": 0,
+        "parsed_candidate_count": 0,
+        "best_diff_seconds": None,
+        "map_name": map_name,
+        "round_number": round_number,
+        "round_date": round_date,
+        "round_time": round_time,
+        "window_minutes": window_minutes,
+    }
     if not map_name or not round_number:
-        return None
+        diag["reason_code"] = "invalid_input"
+        return None, diag
 
     if not target_dt and round_date and round_time:
         target_dt = _parse_round_datetime(round_date, round_time)
+        if not target_dt:
+            diag["reason_code"] = "time_parse_failed"
 
     if not round_date and target_dt:
         round_date = target_dt.strftime("%Y-%m-%d")
+        diag["round_date"] = round_date
 
     params: Tuple = (map_name, round_number)
     query = """
@@ -82,14 +126,34 @@ async def resolve_round_id(
 
     rows = await db_adapter.fetch_all(query, params)
     if not rows:
-        return None
+        if round_date:
+            date_free_rows = await db_adapter.fetch_all(
+                """
+                SELECT id
+                FROM rounds
+                WHERE map_name = ?
+                  AND round_number = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (map_name, round_number),
+            )
+            if date_free_rows:
+                diag["reason_code"] = "date_filter_excluded_rows"
+                return None, diag
+        diag["reason_code"] = "no_rows_for_map_round"
+        return None, diag
 
     if not target_dt:
-        return rows[0][0]
+        diag["candidate_count"] = len(rows)
+        diag["reason_code"] = "resolved"
+        return rows[0][0], diag
 
     best_id = None
     best_diff = timedelta(days=1)
     max_diff = timedelta(minutes=window_minutes)
+    parsed_diffs_seconds = []
+    diag["candidate_count"] = len(rows)
 
     for row in rows:
         round_id, r_date, r_time, created_at = row
@@ -107,9 +171,22 @@ async def resolve_round_id(
         if not candidate_dt:
             continue
 
+        diag["parsed_candidate_count"] += 1
         diff = abs(candidate_dt - target_dt)
+        parsed_diffs_seconds.append(diff.total_seconds())
         if diff <= max_diff and diff < best_diff:
             best_diff = diff
             best_id = round_id
 
-    return best_id
+    if best_id is not None:
+        diag["reason_code"] = "resolved"
+        diag["best_diff_seconds"] = int(best_diff.total_seconds())
+        return best_id, diag
+
+    if diag["parsed_candidate_count"] == 0:
+        diag["reason_code"] = "time_parse_failed"
+    else:
+        diag["reason_code"] = "all_candidates_outside_window"
+        if parsed_diffs_seconds:
+            diag["best_diff_seconds"] = int(min(parsed_diffs_seconds))
+    return None, diag

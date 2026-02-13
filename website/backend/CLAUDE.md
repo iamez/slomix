@@ -3,31 +3,31 @@
 ## Overview
 
 FastAPI backend for the ET:Legacy Statistics Website.
-Provides REST API endpoints for player stats, leaderboards, and predictions.
+Provides REST API endpoints for player stats, sessions, predictions, and Greatshot analytics.
 
 ## Architecture
 
 ```python
-Frontend (index.html + app.js)
-    │
-    │ HTTP/REST
-    ▼
+Frontend (website/)
+    |
+    | HTTP/REST
+    v
 FastAPI (main.py)
-    │
-    ├── Routers (api.py, auth.py, predictions.py)
-    │
-    ├── Services (website_session_data_service.py)
-    │
-    └── Database (local_database_adapter.py)
-            │
-            └── PostgreSQL (shared with bot)
+    |
+    +-- Routers (api.py, auth.py, predictions.py, greatshot.py, greatshot_topshots.py)
+    |
+    +-- Services (session + greatshot + voice/game helpers)
+    |
+    +-- Database adapter (local_database_adapter.py)
+            |
+            +-- PostgreSQL (shared with bot)
 ```python
 
 ## File Reference
 
 | File | Purpose |
 |------|---------|
-| `main.py` | FastAPI app, CORS, session middleware |
+| `main.py` | FastAPI app, middleware, router wiring |
 | `dependencies.py` | Dependency injection (DB, auth) |
 | `local_database_adapter.py` | PostgreSQL async adapter |
 | `init_db.py` | Database initialization |
@@ -36,15 +36,22 @@ FastAPI (main.py)
 
 | Router | Prefix | Purpose |
 |--------|--------|---------|
-| `api.py` | `/api` | Stats API endpoints |
+| `api.py` | `/api` | Stats/session/search endpoints |
 | `auth.py` | `/auth` | Discord OAuth |
-| `predictions.py` | `/api` | Prediction endpoints |
+| `predictions.py` | `/api/predictions` | Prediction endpoints |
+| `greatshot.py` | `/api` | Greatshot import/crossref endpoints |
+| `greatshot_topshots.py` | `/api` | Greatshot topshots endpoints |
 
 ### Services
 
 | Service | Purpose |
 |---------|---------|
 | `website_session_data_service.py` | Session data aggregation |
+| `greatshot_crossref.py` | Greatshot cross-reference matching |
+| `greatshot_jobs.py` | Greatshot background job orchestration |
+| `greatshot_store.py` | Greatshot storage and schema helpers |
+| `voice_channel_tracker.py` | Voice activity tracking helpers |
+| `game_server_query.py` | Game-server query helpers |
 
 ## Security Requirements
 
@@ -139,7 +146,7 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=etlegacy
 DB_USER=etlegacy_user
-DB_PASSWORD=etlegacy_secure_2025
+DB_PASSWORD=REDACTED_DB_PASSWORD
 
 # Security
 SESSION_SECRET=<generate-with-secrets-module>

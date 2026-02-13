@@ -145,40 +145,51 @@ class SSHHandler:
         configure_ssh_host_key_policy(ssh)
 
         key_path = os.path.expanduser(ssh_config["key_path"])
+        sftp = None
 
-        ssh.connect(
-            hostname=ssh_config["host"],
-            port=ssh_config["port"],
-            username=ssh_config["user"],
-            key_filename=key_path,
-            timeout=10,
-        )
+        try:
+            ssh.connect(
+                hostname=ssh_config["host"],
+                port=ssh_config["port"],
+                username=ssh_config["user"],
+                key_filename=key_path,
+                timeout=10,
+            )
 
-        sftp = ssh.open_sftp()
+            sftp = ssh.open_sftp()
 
-        # Set timeout for SFTP operations
-        sftp.get_channel().settimeout(15.0)
+            # Set timeout for SFTP operations
+            sftp.get_channel().settimeout(15.0)
 
-        files = sftp.listdir(ssh_config["remote_path"])
+            files = sftp.listdir(ssh_config["remote_path"])
 
-        # Defaults preserve existing behavior
-        if extensions is None:
-            extensions = [".txt"]
-        if exclude_suffixes is None:
-            exclude_suffixes = ["_ws.txt"]
+            # Defaults preserve existing behavior
+            if extensions is None:
+                extensions = [".txt"]
+            if exclude_suffixes is None:
+                exclude_suffixes = ["_ws.txt"]
 
-        filtered_files = []
-        for filename in files:
-            if extensions and not any(filename.endswith(ext) for ext in extensions):
-                continue
-            if exclude_suffixes and any(filename.endswith(suffix) for suffix in exclude_suffixes):
-                continue
-            filtered_files.append(filename)
+            filtered_files = []
+            for filename in files:
+                if extensions and not any(filename.endswith(ext) for ext in extensions):
+                    continue
+                if exclude_suffixes and any(filename.endswith(suffix) for suffix in exclude_suffixes):
+                    continue
+                filtered_files.append(filename)
 
-        sftp.close()
-        ssh.close()
+            return filtered_files
 
-        return filtered_files
+        finally:
+            # Ensure connections are closed even on error
+            if sftp:
+                try:
+                    sftp.close()
+                except Exception as e:  # nosec B110 - intentional cleanup suppression
+                    logger.debug(f"SFTP close ignored: {e}")
+            try:
+                ssh.close()
+            except Exception as e:  # nosec B110 - intentional cleanup suppression
+                logger.debug(f"SSH close ignored: {e}")
 
     @staticmethod
     async def download_file(

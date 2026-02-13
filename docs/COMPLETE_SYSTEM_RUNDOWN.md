@@ -57,7 +57,7 @@ stats/
 │   │   └── server_control_cog.py # RCON commands (optional)
 │   │
 │   └── services/
-│       └── automation/            # Automation services (not integrated yet)
+│       └── automation/            # Automation services (integrated)
 │           ├── ssh_monitor.py
 │           ├── metrics_logger.py
 │           ├── health_monitor.py
@@ -486,43 +486,40 @@ async def cache_refresher(self):
 - **Function:** Keeps processed files cache synchronized
 - **Why:** Fast duplicate detection without database queries
 
-### Optional Services (Created but NOT Integrated)
+### Automation Services (Integrated)
 
-These were created as separate modules but are **NOT USED** by the bot:
+These services are initialized in `bot/ultimate_bot.py` and controlled through
+`bot/cogs/automation_commands.py`.
 
-#### ❌ SSH Monitor Service (Not Used)
+#### ✅ SSH Monitor Service
 
 - **File:** `bot/services/automation/ssh_monitor.py`
-- **Status:** Superseded by enhanced `endstats_monitor()` in ultimate_bot.py
-- **Action:** Can be deleted - functionality merged into main bot
+- **Status:** Integrated, but auto-start is intentionally disabled to avoid race conditions with `endstats_monitor()`
+- **Usage:** Available for manual control via `!start_monitoring` and `!stop_monitoring`
 
-#### ❌ Metrics Logging (Not Used)
+#### ✅ Metrics Logging
 
 - **File:** `bot/services/automation/metrics_logger.py`
-- **Function:** Track all events, errors, performance for analysis
-- **Status:** Created but not integrated
-- **Action:** Can be integrated later for analytics
+- **Status:** Integrated and initialized at startup
+- **Usage:** Exposed via `!metrics_report` and `!metrics_summary`
 
-#### ❌ Health Monitoring (Not Used)
+#### ✅ Health Monitoring
 
 - **File:** `bot/services/automation/health_monitor.py`
-- **Function:** Monitor bot health, send Discord alerts
-- **Status:** Created but not integrated
-- **Action:** Can be integrated later for proactive monitoring
+- **Status:** Integrated and attached to automation services lifecycle
+- **Usage:** Exposed via `!health`
 
-#### ❌ Database Maintenance (Not Used)
+#### ✅ Database Maintenance
 
 - **File:** `bot/services/automation/database_maintenance.py`
-- **Function:** Auto-backups, VACUUM, log cleanup
-- **Status:** Created but not integrated
-- **Action:** Can be integrated later for maintenance
+- **Status:** Integrated and available via commands
+- **Usage:** Exposed via `!backup_db` and `!vacuum_db`
 
-#### ❌ Automation Commands Cog (Not Used)
+#### ✅ Automation Commands Cog
 
 - **File:** `bot/cogs/automation_commands.py`
-- **Function:** Discord commands for automation services
-- **Status:** Created but not integrated (tied to unused services above)
-- **Action:** Can be deleted or integrated if services are added
+- **Status:** Loaded by the bot during startup
+- **Usage:** `!automation_status`, `!health`, `!ssh_stats`, maintenance and metrics commands
 
 ---
 
@@ -606,9 +603,9 @@ These were created as separate modules but are **NOT USED** by the bot:
 | `!recent_imports` | Last imports | `!recent_imports` |
 | `!failed_imports` | Failed files | `!failed_imports` |
 | `!database_size` | DB size info | `!database_size` |
-| `!backup_database` | Manual backup | `!backup_database` |
-| `!vacuum_database` | Optimize DB | `!vacuum_database` |
-| `!clear_cache` | Reset caches | `!clear_cache` |
+| `!backup_db` | Manual backup | `!backup_db` |
+| `!vacuum_db` | Optimize DB | `!vacuum_db` |
+| `!cache_clear` | Reset caches | `!cache_clear` |
 | `!export_stats` | Export to CSV | `!export_stats` |
 | `!database_info` | Comprehensive info | `!database_info` |
 
@@ -1132,19 +1129,19 @@ tail -f logs/discord_bot.log
 9. **Historical Snapshots** - Daily/weekly performance archives
 10. **Player Profiles** - Custom Discord embeds with stats
 
-### Files Created Today (NOT Used by Bot)
+### Automation Files Status
 
-These files exist in `bot/services/automation/` but are **NOT integrated**:
+The files in `bot/services/automation/` are currently integrated into startup.
 
-- ❌ `ssh_monitor.py` - Separate SSH monitor (not used, merged into ultimate_bot.py)
-- ❌ `metrics_logger.py` - Event/error/performance tracking (not used)
-- ❌ `health_monitor.py` - Bot health checks (not used)
-- ❌ `database_maintenance.py` - Auto-backups, VACUUM, cleanup (not used)
-- ❌ `automation_commands.py` - Discord commands for above services (not used)
+- ✅ `ssh_monitor.py` - Loaded and available for manual control
+- ✅ `metrics_logger.py` - Loaded and used by automation reporting commands
+- ✅ `health_monitor.py` - Loaded and used by health command flow
+- ✅ `database_maintenance.py` - Loaded and used by maintenance commands
+- ✅ `automation_commands.py` - Cog loaded at startup
 
-**Status:** Can be deleted OR integrated later if you want the extra features
+**Status:** Active; do not delete without replacing their command and startup wiring.
 
-**What the bot actually uses:** Only `endstats_monitor()` task in `ultimate_bot.py`
+**Note:** `endstats_monitor()` remains the primary auto SSH polling loop.
 
 ---
 
@@ -1194,9 +1191,9 @@ Discord Embeds (auto-posted stats)
 - ✅ Enhanced existing `endstats_monitor` task in `ultimate_bot.py` (line 4073)
 - ✅ Added `post_round_stats_auto()` method (line 3278)
 - ✅ Now auto-posts round stats to Discord after processing
-- ✅ **Single unified system** - only ONE SSH monitor exists
-- ✅ Did NOT integrate separate `bot/services/automation/ssh_monitor.py`
-- ✅ That file can be deleted - it's not used by the bot
+- ✅ Endstats loop remains the primary auto SSH polling path
+- ✅ Separate automation services are integrated and available via commands
+- ✅ SSH monitor auto-start is intentionally disabled to avoid duplicate processing
 
 ### Current State
 

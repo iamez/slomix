@@ -66,7 +66,7 @@ sudo apt install -y python3-dev libpq-dev
 sudo -u postgres psql
 
 # Create database and user
-CREATE USER etlegacy_user WITH PASSWORD 'etlegacy_secure_2025';
+CREATE USER etlegacy_user WITH PASSWORD 'REDACTED_DB_PASSWORD';
 CREATE DATABASE etlegacy OWNER etlegacy_user;
 GRANT ALL PRIVILEGES ON DATABASE etlegacy TO etlegacy_user;
 \c etlegacy
@@ -94,7 +94,7 @@ Create `/slomix/bot/config.json`:
     "port": 5432,
     "database": "etlegacy",
     "user": "etlegacy_user",
-    "password": "etlegacy_secure_2025"
+    "password": "REDACTED_DB_PASSWORD"
   }
 }
 ```text
@@ -106,7 +106,7 @@ cd /slomix
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
-pip install discord.py asyncpg matplotlib numpy python-dotenv
+pip install -r requirements.txt
 ```text
 
 ### Step 7: Populate Database
@@ -264,7 +264,7 @@ cat /slomix/bot/config.json
 ```bash
 # Reset PostgreSQL password
 sudo -u postgres psql
-ALTER USER etlegacy_user WITH PASSWORD 'etlegacy_secure_2025';
+ALTER USER etlegacy_user WITH PASSWORD 'REDACTED_DB_PASSWORD';
 \q
 
 # Check PostgreSQL is listening
@@ -318,7 +318,7 @@ PostgreSQL credentials (default):
 - Port: 5432
 - Database: etlegacy
 - User: etlegacy_user
-- Password: etlegacy_secure_2025
+- Password: REDACTED_DB_PASSWORD
 
 ---
 

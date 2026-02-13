@@ -146,7 +146,7 @@ rcon.send_command(f'map {safe_map_name}')
 **Migration Executed:**
 
 ```bash
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -f migrations/add_user_permissions.sql
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy -f migrations/add_user_permissions.sql
 ```text
 
 **Verification:**
@@ -506,13 +506,13 @@ CHECK (tier IN ('root', 'admin', 'moderator'));
 **Verify tables exist:**
 
 ```bash
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -c "\dt user_permissions"
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy -c "\dt user_permissions"
 ```text
 
 **Verify root user:**
 
 ```bash
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT * FROM user_permissions WHERE tier='root';"
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT * FROM user_permissions WHERE tier='root';"
 ```text
 
 **Expected result:**

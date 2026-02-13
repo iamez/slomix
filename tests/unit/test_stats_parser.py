@@ -11,7 +11,7 @@ Tests for parsing ET:Legacy stats files, including:
 
 import pytest
 from pathlib import Path
-from bot.community_stats_parser import C0RNP0RN3StatsParser
+from bot.community_stats_parser import C0RNP0RN3StatsParser, _parse_side_fields
 
 
 class TestStatsParserBasics:
@@ -62,6 +62,36 @@ class TestStatsParserBasics:
         # Invalid filenames
         assert parser.is_round_2_file("invalid_format.txt") is False
         assert parser.is_round_2_file("") is False
+
+
+class TestSideFieldDiagnostics:
+    def test_parse_side_fields_valid_values(self):
+        header_parts = ["x", "supply", "x", "1", "2", "1", "20:00", "10:00"]
+        defender, winner, diag = _parse_side_fields(header_parts)
+
+        assert defender == 2
+        assert winner == 1
+        assert diag["reasons"] == []
+        assert diag["defender_team_raw"] == "2"
+        assert diag["winner_team_raw"] == "1"
+
+    def test_parse_side_fields_missing_and_invalid(self):
+        header_parts = ["x", "supply", "x", "2", "", "axis", "20:00", "10:00"]
+        defender, winner, diag = _parse_side_fields(header_parts)
+
+        assert defender == 1  # Compatibility default
+        assert winner == 0    # Unknown default
+        assert "defender_missing" in diag["reasons"]
+        assert "winner_non_numeric" in diag["reasons"]
+
+    def test_parse_side_fields_out_of_range(self):
+        header_parts = ["x", "supply", "x", "2", "9", "7", "20:00", "10:00"]
+        defender, winner, diag = _parse_side_fields(header_parts)
+
+        assert defender == 9
+        assert winner == 7
+        assert "defender_out_of_range" in diag["reasons"]
+        assert "winner_out_of_range" in diag["reasons"]
 
 
 class TestStatsFileParsing:
@@ -141,6 +171,24 @@ class TestStatsFileParsing:
         # Parser should indicate file not found or error
         print(f"Nonexistent file result: {result}")
 
+    def test_parse_regular_file_includes_side_diagnostics(self, parser, tmp_path):
+        stats_file = tmp_path / "side-diag-round-1.txt"
+        stats_file.write_text(
+            (
+                "x\\supply\\x\\1\\2\\axis\\20:00\\10:00\n"
+                "12345678\\^1Player\\1\\1\\1 1 1 1 1 1\n"
+            ),
+            encoding="utf-8",
+        )
+
+        result = parser.parse_regular_stats_file(str(stats_file))
+
+        assert result["success"] is True
+        assert result["defender_team"] == 2
+        assert result["winner_team"] == 0
+        assert "winner_non_numeric" in result["side_parse_diagnostics"]["reasons"]
+        assert result["score_confidence"] == "ambiguous"
+
 
 class TestRound1Round2Matching:
     """Tests for finding corresponding R1 file for R2 differential"""
@@ -180,6 +228,136 @@ class TestRound1Round2Matching:
         # Should return None when R2 doesn't exist or R1 can't be found
         # (or might return a path that doesn't exist)
         print(f"R1 file for nonexistent R2: {r1_file}")
+
+
+class TestRound2CounterResetFallback:
+    """Tests for reconnect/non-cumulative per-player R2 fallback logic."""
+
+    @pytest.fixture
+    def parser(self):
+        return C0RNP0RN3StatsParser()
+
+    def test_uses_r2_raw_when_player_counters_drop(self, parser):
+        round_1_data = {
+            "map_name": "etl_sp_delivery",
+            "defender_team": 1,
+            "winner_team": 2,
+            "map_time": "20:00",
+            "actual_time": "7:30",
+            "round_outcome": "Completed",
+            "players": [
+                {
+                    "guid": "AAA11111",
+                    "name": "ResetPlayer",
+                    "team": 1,
+                    "kills": 13,
+                    "deaths": 5,
+                    "headshots": 2,
+                    "damage_given": 3039,
+                    "damage_received": 1800,
+                    "weapon_stats": {
+                        "WS_MP40": {"hits": 50, "shots": 100, "kills": 13, "deaths": 5, "headshots": 2}
+                    },
+                    "objective_stats": {
+                        "time_played_minutes": 7.5,
+                        "time_dead_minutes": 1.2,
+                        "denied_playtime": 120,
+                        "damage_given": 3039,
+                        "damage_received": 1800,
+                    },
+                },
+                {
+                    "guid": "BBB22222",
+                    "name": "NormalPlayer",
+                    "team": 2,
+                    "kills": 10,
+                    "deaths": 8,
+                    "headshots": 1,
+                    "damage_given": 2000,
+                    "damage_received": 1600,
+                    "weapon_stats": {
+                        "WS_THOMPSON": {"hits": 30, "shots": 90, "kills": 10, "deaths": 8, "headshots": 1}
+                    },
+                    "objective_stats": {
+                        "time_played_minutes": 10.0,
+                        "time_dead_minutes": 2.0,
+                        "denied_playtime": 90,
+                        "damage_given": 2000,
+                        "damage_received": 1600,
+                    },
+                },
+            ],
+        }
+
+        round_2_cumulative_data = {
+            "map_name": "etl_sp_delivery",
+            "defender_team": 2,
+            "winner_team": 1,
+            "map_time": "20:00",
+            "actual_time": "8:00",
+            "round_outcome": "Completed",
+            "players": [
+                {
+                    "guid": "AAA11111",
+                    "name": "ResetPlayer",
+                    "team": 1,
+                    "kills": 1,
+                    "deaths": 1,
+                    "headshots": 0,
+                    "damage_given": 500,
+                    "damage_received": 400,
+                    "weapon_stats": {
+                        "WS_MP40": {"hits": 10, "shots": 25, "kills": 1, "deaths": 1, "headshots": 0}
+                    },
+                    "objective_stats": {
+                        "time_played_minutes": 7.5,
+                        "time_dead_minutes": 0.5,
+                        "denied_playtime": 25,
+                        "damage_given": 500,
+                        "damage_received": 400,
+                    },
+                },
+                {
+                    "guid": "BBB22222",
+                    "name": "NormalPlayer",
+                    "team": 2,
+                    "kills": 20,
+                    "deaths": 12,
+                    "headshots": 3,
+                    "damage_given": 3000,
+                    "damage_received": 2000,
+                    "weapon_stats": {
+                        "WS_THOMPSON": {"hits": 55, "shots": 140, "kills": 20, "deaths": 12, "headshots": 3}
+                    },
+                    "objective_stats": {
+                        "time_played_minutes": 15.0,
+                        "time_dead_minutes": 2.8,
+                        "denied_playtime": 130,
+                        "damage_given": 3000,
+                        "damage_received": 2000,
+                    },
+                },
+            ],
+        }
+
+        result = parser.calculate_round_2_differential(round_1_data, round_2_cumulative_data)
+        assert result["success"] is True
+
+        players = {p["name"]: p for p in result["players"]}
+        reset_player = players["ResetPlayer"]
+        normal_player = players["NormalPlayer"]
+
+        assert reset_player["r2_counter_reset_fallback"] is True
+        assert "kills" in reset_player["r2_counter_reset_fields"]
+        assert reset_player["kills"] == 1
+        assert reset_player["damage_given"] == 500
+        assert reset_player["objective_stats"]["time_played_minutes"] == pytest.approx(7.5)
+        assert reset_player["time_played_seconds"] == 450
+
+        assert normal_player["r2_counter_reset_fallback"] is False
+        assert normal_player["kills"] == 10
+        assert normal_player["damage_given"] == 1000
+        assert normal_player["objective_stats"]["time_played_minutes"] == pytest.approx(5.0)
 
 
 class TestEdgeCases:

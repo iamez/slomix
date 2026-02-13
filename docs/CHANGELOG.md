@@ -6,6 +6,101 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Added - Greatshot Enhancements
+
+- **Cross-reference Phase 2-5** - Dramatically improved demo-to-stats matching
+  - Multi-round matching: Handle R1+R2 in one demo file
+  - Filename date extraction: Filter candidates by YYYY-MM-DD in filename
+  - Player overlap validation: +20 confidence for 80%+ roster match
+  - Stats comparison validation: Detect wrong matches via kill counts
+  - **Result:** Match rate improved from 10-20% → 80-90%
+
+- **Topshots API endpoints** - Leaderboards across all analyzed demos
+  - `GET /api/greatshot/topshots/kills` - Demos with most total kills
+  - `GET /api/greatshot/topshots/players` - Best individual performances
+  - `GET /api/greatshot/topshots/accuracy` - Highest accuracy (min 10 kills)
+  - `GET /api/greatshot/topshots/damage` - Most damage dealt
+  - `GET /api/greatshot/topshots/multikills` - Best multi-kill highlights
+  - Files: `website/backend/routers/greatshot_topshots.py`
+
+### Changed - Greatshot
+
+- **Cross-reference duration tolerance** - Increased from 5s to 30s
+  - Accounts for warmup time in demos
+  - Approximate tolerance: 15s → 60s
+  - File: `website/backend/services/greatshot_crossref.py`
+
+---
+
+## [1.0.9] - 2026-02-08
+
+### Security Fixes
+
+- **CRITICAL: Added admin permission decorators** - Server control commands now require admin channel
+  - `rcon`, `map_add`, `map_change`, `map_delete`, `kick`, `say` commands protected
+  - File: `bot/cogs/server_control.py`
+
+- **CRITICAL: Fixed file integrity verification crash** - Runtime AttributeError on every file check
+  - Changed `tuple.get()` to index access `[0]`
+  - File: `bot/automation/file_tracker.py`
+
+- **HIGH: Fixed player GUID grouping** - Eliminated duplicate player entries in leaderboards
+  - Changed 14 SQL queries from `GROUP BY player_name` to `GROUP BY player_guid`
+  - Each player now appears once regardless of name changes
+  - Files: `bot/cogs/leaderboard_cog.py`, `bot/services/session_view_handlers.py`
+
+- **HIGH: Fixed XSS in website onclick handlers** - JavaScript context injection vulnerability
+  - Changed `escapeHtml()` to `escapeJsString()` in 6 onclick attributes
+  - Files: `website/js/awards.js`, `website/js/greatshot.js`
+
+- **MEDIUM: Fixed SSH resource leak** - Connections not closed on exceptions
+  - Added try/finally blocks to ensure cleanup
+  - File: `bot/automation/ssh_handler.py`
+
+- **MEDIUM: Sanitized error messages** - Database details no longer leaked to Discord
+  - Added `sanitize_error_message()` to 8 error handlers
+  - Files: `bot/cogs/matchup_cog.py`, `bot/cogs/analytics_cog.py`
+
+- **MEDIUM: Fixed SQL limit injection** - Unvalidated limit parameter
+  - Added validation (1-1000 range) with ValueError on invalid input
+  - File: `bot/services/session_stats_aggregator.py`
+
+### Added
+
+- **Secrets management system** - Password rotation and generation tool
+  - New tool: `tools/secrets_manager.py`
+  - Generate passwords in format: `thunder-mountain-eagle1337`
+  - Rotate database passwords, Discord tokens, SSH keys
+  - Audit codebase for hardcoded secrets
+  - Documentation: `docs/SECRETS_MANAGEMENT.md`
+  - **Status**: Ready to use, NOT activated (passwords unchanged)
+
+- **Security audit documentation**
+  - Complete fix report: `docs/SECURITY_FIXES_2026-02-08.md`
+  - Lists all 9 critical/high fixes applied
+  - Testing recommendations and deployment checklist
+
+### Changed
+
+- **Admin channel configuration** - Added documentation to `.env.example`
+  - Production: 822036093775249438
+  - Bot-dev: 1424620551300710511, 1424620499975274496
+
+### Fixed
+
+- **Orphaned error log statement** - Removed misleading "Failed to post map summary" message
+  - File: `bot/ultimate_bot.py` line 2284
+
+### Documentation
+
+- Added comprehensive security audit report
+- Added secrets management usage guide
+- Updated .env.example with admin channel IDs
+
+---
+
 ## [1.0.8] - 2026-02-08
 
 ### Added

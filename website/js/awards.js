@@ -3,7 +3,7 @@
  * @module awards
  */
 
-import { API_BASE, fetchJSON, escapeHtml, formatNumber } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, escapeJsString, formatNumber } from './utils.js';
 
 // State
 let currentTab = 'round';
@@ -333,7 +333,7 @@ async function loadByPlayerView() {
             const initials = player.player.substring(0, 2).toUpperCase();
 
             html += `
-                <tr class="hover:bg-white/5 transition cursor-pointer" onclick="loadPlayerProfile('${escapeHtml(player.player)}')">
+                <tr class="hover:bg-white/5 transition cursor-pointer" onclick="loadPlayerProfile('${escapeJsString(player.player)}')">
                     <td class="px-6 py-4">
                         <span class="font-mono font-bold ${rankStyle}">#${rank}${rankBadge}</span>
                     </td>

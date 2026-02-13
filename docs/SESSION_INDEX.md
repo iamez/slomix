@@ -1,5 +1,5 @@
 # Session Documentation Index
-Last Updated: 2026-01-31
+Last Updated: 2026-02-12
 
 ## Latest Session
 📍 **[2026-01-31: Claude Code Restoration & Settings Review](SESSION_2026-01-31_CLAUDE_CODE_RESTORATION.md)**
@@ -59,6 +59,8 @@ Last Updated: 2026-01-31
 - [Claude Code Quick Reference](reference/CLAUDE_CODE_QUICK_REFERENCE.md) ⭐ NEW
 - [Claude Code Settings Review](reports/CLAUDE_SETTINGS_REVIEW_2026-01-31.md) ⭐ NEW
 - [Claude Config Audit](reports/CLAUDE_CONFIG_AUDIT_2026-01-31.md) ⭐ NEW
+- [LAN Public Access Plan (Cloudflare Tunnel)](LAN_PUBLIC_ACCESS_PLAN_2026-02-12.md) ⭐ NEW
+- [LAN Public Access Runbook (Cloudflare Tunnel)](LAN_PUBLIC_ACCESS_CLOUDFLARE_TUNNEL_RUNBOOK.md) ⭐ NEW
 - [CLAUDE.md](CLAUDE.md) - Main AI guide
 - [Fresh Install Guide](FRESH_INSTALL_GUIDE.md)
 - [Deployment Checklist](DEPLOYMENT_CHECKLIST.md)

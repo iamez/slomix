@@ -2,7 +2,7 @@
  * Greatshot upload + analysis frontend module.
  */
 
-import { API_BASE, escapeHtml } from './utils.js';
+import { API_BASE, escapeHtml, escapeJsString } from './utils.js';
 
 let currentDetailId = null;
 let cachedGreatshotItems = [];
@@ -115,7 +115,7 @@ function renderDemosList(items) {
         return `
             <button
                 class="glass-card p-4 rounded-xl border border-white/10 text-left hover:border-brand-cyan/40 transition w-full"
-                onclick="navigateToGreatshotDemo('${escapeHtml(item.id)}')">
+                onclick="navigateToGreatshotDemo('${escapeJsString(item.id)}')">
                 <div class="flex items-center justify-between gap-3">
                     <div class="text-sm font-bold text-white truncate">${escapeHtml(item.filename || item.id)}</div>
                     <span class="text-[10px] font-bold px-2 py-1 rounded border ${status.classes}">${status.label}</span>
@@ -148,7 +148,7 @@ function renderHighlightsHub(items) {
             <div class="text-slate-200">${escapeHtml(item.filename || item.id)}</div>
             <div class="flex items-center gap-3 text-xs">
                 <span class="text-brand-amber">${Number(item.highlight_count || 0)} highlights</span>
-                <button onclick="navigateToGreatshotDemo('${escapeHtml(item.id)}')"
+                <button onclick="navigateToGreatshotDemo('${escapeJsString(item.id)}')"
                     class="px-2 py-1 rounded border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition">
                     Open
                 </button>
@@ -172,7 +172,7 @@ function renderClipsHub(items) {
             <div class="text-slate-200">${escapeHtml(item.filename || item.id)}</div>
             <div class="flex items-center gap-3 text-xs">
                 <span class="text-slate-400">${Number(item.highlight_count || 0)} clip windows</span>
-                <button onclick="navigateToGreatshotDemo('${escapeHtml(item.id)}')"
+                <button onclick="navigateToGreatshotDemo('${escapeJsString(item.id)}')"
                     class="px-2 py-1 rounded border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition">
                     Manage Clips
                 </button>
@@ -197,7 +197,7 @@ function renderRendersHub(items) {
             <div class="flex items-center gap-3 text-xs">
                 <span class="text-brand-emerald">${Number(item.rendered_count || 0)} rendered</span>
                 <span class="text-slate-400">${Number(item.render_job_count || 0)} total jobs</span>
-                <button onclick="navigateToGreatshotDemo('${escapeHtml(item.id)}')"
+                <button onclick="navigateToGreatshotDemo('${escapeJsString(item.id)}')"
                     class="px-2 py-1 rounded border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition">
                     Open
                 </button>
@@ -212,6 +212,193 @@ function renderGreatshotHubPanels(items) {
     renderRendersHub(items);
 }
 
+// --- Multi-file analysis polling state ---
+let analysisPollingTimer = null;
+let analysisStartTime = null;
+let analysisElapsedTimer = null;
+/** @type {Map<string, {filename: string, status: string, data: object|null}>} */
+let pendingDemos = new Map();
+
+function showAnalysisProgress(show) {
+    const panel = document.getElementById('demo-analysis-progress');
+    if (panel) panel.classList.toggle('hidden', !show);
+}
+
+function setAnalysisPhase(phase) {
+    const phaseEl = document.getElementById('analysis-phase');
+    const phases = { upload: 'phase-upload', queued: 'phase-queue', scanning: 'phase-scan', done: 'phase-done' };
+    const labels = { upload: 'Uploaded', queued: 'Queued for analysis...', scanning: 'Scanning demo...', done: 'Analysis complete!' };
+    const activeClasses = 'border-brand-cyan/40 text-brand-cyan bg-brand-cyan/10';
+    const doneClasses = 'border-brand-emerald/40 text-brand-emerald bg-brand-emerald/10';
+    const inactiveClasses = 'border-white/10 text-slate-500';
+
+    if (phaseEl) phaseEl.textContent = labels[phase] || phase;
+
+    const order = ['upload', 'queued', 'scanning', 'done'];
+    const currentIdx = order.indexOf(phase);
+
+    for (let i = 0; i < order.length; i++) {
+        const el = document.getElementById(phases[order[i]]);
+        if (!el) continue;
+        el.className = 'text-[10px] px-2 py-0.5 rounded border ';
+        if (i < currentIdx) {
+            el.className += doneClasses;
+        } else if (i === currentIdx) {
+            el.className += (phase === 'done' ? doneClasses : activeClasses);
+        } else {
+            el.className += inactiveClasses;
+        }
+    }
+}
+
+function updateElapsedTime() {
+    const el = document.getElementById('analysis-elapsed');
+    if (!el || !analysisStartTime) return;
+    const secs = Math.floor((Date.now() - analysisStartTime) / 1000);
+    el.textContent = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+}
+
+function stopAnalysisPolling() {
+    if (analysisPollingTimer) { clearInterval(analysisPollingTimer); analysisPollingTimer = null; }
+    if (analysisElapsedTimer) { clearInterval(analysisElapsedTimer); analysisElapsedTimer = null; }
+    pendingDemos.clear();
+}
+
+function getSinglePendingDemoSnapshot() {
+    if (pendingDemos.size !== 1) return { id: null, entry: null };
+    const first = pendingDemos.entries().next().value;
+    if (!first) return { id: null, entry: null };
+    return { id: first[0], entry: first[1] };
+}
+
+function showAnalysisResult(status, data) {
+    const resultEl = document.getElementById('analysis-result');
+    const spinnerEl = document.getElementById('analysis-spinner');
+    if (spinnerEl) spinnerEl.classList.add('hidden');
+
+    if (!resultEl) return;
+    resultEl.classList.remove('hidden');
+
+    if (status === 'analyzed') {
+        const parts = [];
+        if (data.map) parts.push(`Map: ${data.map}`);
+        if (data.highlight_count != null) parts.push(`${data.highlight_count} highlight${data.highlight_count !== 1 ? 's' : ''} found`);
+        resultEl.innerHTML = `<span class="text-brand-emerald font-bold">Analysis complete.</span> ${escapeHtml(parts.join(' · '))}`;
+    } else if (status === 'failed') {
+        resultEl.innerHTML = `<span class="text-brand-rose font-bold">Analysis failed:</span> ${escapeHtml(data.error || 'Unknown error')}`;
+    }
+}
+
+/** Render multi-file progress list in the analysis panel. */
+function renderMultiProgress() {
+    const listEl = document.getElementById('analysis-multi-list');
+    if (!listEl) return;
+
+    let html = '';
+    for (const [demoId, entry] of pendingDemos) {
+        const name = escapeHtml(entry.filename);
+        let icon, statusText, statusClass;
+        if (entry.status === 'analyzed') {
+            icon = '<span class="text-brand-emerald">&#10003;</span>';
+            statusText = 'Done';
+            statusClass = 'text-brand-emerald';
+        } else if (entry.status === 'failed') {
+            icon = '<span class="text-brand-rose">&#10007;</span>';
+            statusText = entry.data?.error ? escapeHtml(entry.data.error) : 'Failed';
+            statusClass = 'text-brand-rose';
+        } else if (entry.status === 'scanning') {
+            icon = '<span class="w-3 h-3 inline-block border-2 border-brand-cyan/30 border-t-brand-cyan rounded-full animate-spin"></span>';
+            statusText = 'Scanning...';
+            statusClass = 'text-brand-cyan';
+        } else {
+            icon = '<span class="w-3 h-3 inline-block border-2 border-brand-amber/30 border-t-brand-amber rounded-full animate-spin"></span>';
+            statusText = 'Queued';
+            statusClass = 'text-brand-amber';
+        }
+        html += `<div class="flex items-center gap-2 text-xs">
+            ${icon}
+            <span class="text-slate-200 truncate flex-1">${name}</span>
+            <span class="${statusClass}">${statusText}</span>
+        </div>`;
+    }
+    listEl.innerHTML = html;
+}
+
+/** Poll status for all pending demos. */
+async function pollMultiAnalysisStatus() {
+    const stillPending = [];
+    for (const [demoId, entry] of pendingDemos) {
+        if (entry.status === 'analyzed' || entry.status === 'failed') continue;
+        stillPending.push(demoId);
+    }
+
+    if (stillPending.length === 0) {
+        // All done
+        const { id: singleId, entry: singleEntry } = getSinglePendingDemoSnapshot();
+        stopAnalysisPolling();
+        const phaseEl = document.getElementById('analysis-phase');
+        const spinnerEl = document.getElementById('analysis-spinner');
+        if (phaseEl) phaseEl.textContent = 'All analyses complete!';
+        if (spinnerEl) spinnerEl.classList.add('hidden');
+        await loadGreatshotView('demos');
+        if (singleId && singleEntry?.status === 'analyzed') {
+            setTimeout(() => {
+                if (typeof window.navigateToGreatshotDemo === 'function') {
+                    window.navigateToGreatshotDemo(singleId);
+                }
+            }, 2000);
+        }
+        return;
+    }
+
+    // Update header with progress count
+    const total = pendingDemos.size;
+    const done = total - stillPending.length;
+    const phaseEl = document.getElementById('analysis-phase');
+    if (phaseEl) phaseEl.textContent = `Analyzing ${done}/${total} complete...`;
+
+    for (const demoId of stillPending) {
+        try {
+            const data = await fetchJSONWithAuth(`${API_BASE}/greatshot/${encodeURIComponent(demoId)}/status`);
+            const entry = pendingDemos.get(demoId);
+            if (!entry) continue;
+            entry.status = data.status;
+            entry.data = data;
+        } catch (_) {
+            // keep trying
+        }
+    }
+
+    renderMultiProgress();
+
+    // Check if all done now
+    let allDone = true;
+    for (const [, entry] of pendingDemos) {
+        if (entry.status !== 'analyzed' && entry.status !== 'failed') {
+            allDone = false;
+            break;
+        }
+    }
+
+    if (allDone) {
+        const { id: singleId, entry: singleEntry } = getSinglePendingDemoSnapshot();
+        stopAnalysisPolling();
+        const spinnerEl = document.getElementById('analysis-spinner');
+        if (spinnerEl) spinnerEl.classList.add('hidden');
+        if (phaseEl) phaseEl.textContent = 'All analyses complete!';
+        await loadGreatshotView('demos');
+
+        // For single file, navigate to detail after short delay
+        if (singleId && singleEntry?.status === 'analyzed') {
+            setTimeout(() => {
+                if (typeof window.navigateToGreatshotDemo === 'function') {
+                    window.navigateToGreatshotDemo(singleId);
+                }
+            }, 2000);
+        }
+    }
+}
+
 async function uploadDemo(form) {
     const fileInput = document.getElementById('demo-upload-file');
     const statusBox = document.getElementById('demo-upload-status');
@@ -222,35 +409,100 @@ async function uploadDemo(form) {
         return;
     }
 
-    const formData = new FormData(form);
+    const files = Array.from(fileInput.files);
+    const totalFiles = files.length;
+
+    stopAnalysisPolling();
+    showAnalysisProgress(false);
+    pendingDemos.clear();
+
+    // Toggle single vs multi progress UI
+    const singlePhases = document.getElementById('analysis-phases-single');
+    const multiList = document.getElementById('analysis-multi-list');
+    if (totalFiles === 1) {
+        if (singlePhases) singlePhases.classList.remove('hidden');
+        if (multiList) multiList.classList.add('hidden');
+    } else {
+        if (singlePhases) singlePhases.classList.add('hidden');
+        if (multiList) multiList.classList.remove('hidden');
+    }
 
     try {
         if (submitBtn) submitBtn.disabled = true;
-        if (statusBox) statusBox.textContent = 'Uploading...';
 
-        const response = await fetch(`${API_BASE}/greatshot/upload`, {
-            method: 'POST',
-            credentials: 'same-origin',
-            body: formData,
-        });
+        // Upload each file individually
+        const uploadedIds = [];
+        for (let i = 0; i < totalFiles; i++) {
+            const file = files[i];
+            if (statusBox) statusBox.textContent = totalFiles > 1
+                ? `Uploading ${i + 1}/${totalFiles}: ${file.name}`
+                : 'Uploading...';
 
-        if (!response.ok) {
-            let detail = `HTTP ${response.status}`;
-            try {
-                const payload = await response.json();
-                if (payload?.detail) detail = payload.detail;
-            } catch (_) {
-                // ignore
+            const fd = new FormData();
+            fd.append('file', file);
+
+            const response = await fetch(`${API_BASE}/greatshot/upload`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: fd,
+            });
+
+            if (!response.ok) {
+                let detail = `HTTP ${response.status}`;
+                try {
+                    const payload = await response.json();
+                    if (payload?.detail) detail = payload.detail;
+                } catch (_) {
+                    // ignore
+                }
+                // For multi-file, show error but continue
+                if (totalFiles > 1) {
+                    pendingDemos.set(`error-${i}`, { filename: file.name, status: 'failed', data: { error: detail } });
+                    continue;
+                }
+                throw new Error(detail);
             }
-            throw new Error(detail);
+
+            const payload = await response.json();
+            uploadedIds.push(payload.demo_id);
+            pendingDemos.set(payload.demo_id, { filename: file.name, status: 'uploaded', data: null });
         }
 
-        const payload = await response.json();
-        if (statusBox) statusBox.textContent = `Uploaded. Demo queued: ${payload.demo_id}`;
+        if (statusBox) statusBox.textContent = '';
         form.reset();
+
+        if (uploadedIds.length === 0 && pendingDemos.size > 0) {
+            // All uploads failed
+            showAnalysisProgress(true);
+            renderMultiProgress();
+            const phaseEl = document.getElementById('analysis-phase');
+            const spinnerEl = document.getElementById('analysis-spinner');
+            if (phaseEl) phaseEl.textContent = 'All uploads failed';
+            if (spinnerEl) spinnerEl.classList.add('hidden');
+            return;
+        }
+
+        // Show progress panel and start polling
+        showAnalysisProgress(true);
+        analysisStartTime = Date.now();
+        analysisElapsedTimer = setInterval(updateElapsedTime, 1000);
+
+        if (totalFiles === 1) {
+            // Single file: use original single-file UX
+            setAnalysisPhase('queued');
+            analysisPollingTimer = setInterval(() => pollMultiAnalysisStatus(), 2000);
+        } else {
+            // Multi file: use list-based UX
+            const phaseEl = document.getElementById('analysis-phase');
+            if (phaseEl) phaseEl.textContent = `Analyzing 0/${pendingDemos.size} complete...`;
+            renderMultiProgress();
+            analysisPollingTimer = setInterval(() => pollMultiAnalysisStatus(), 2000);
+        }
+
         await loadGreatshotView('demos');
     } catch (error) {
         if (statusBox) statusBox.textContent = `Upload failed: ${error.message}`;
+        showAnalysisProgress(false);
     } finally {
         if (submitBtn) submitBtn.disabled = false;
     }
@@ -378,7 +630,7 @@ function renderHighlights(demoId, highlights, roundStartMs = 0) {
                     <div class="flex items-center gap-2 flex-shrink-0">
                         ${clipLink}
                         <button class="px-3 py-2 rounded-lg text-xs font-bold border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition"
-                            onclick="queueHighlightRender('${escapeHtml(demoId)}','${escapeHtml(item.id)}')">
+                            onclick="queueHighlightRender('${escapeJsString(demoId)}','${escapeJsString(item.id)}')">
                             Render
                         </button>
                     </div>
@@ -427,6 +679,9 @@ async function renderCrossref(demoId) {
             html += '<th class="text-left py-1 pr-2">Player</th>';
             html += '<th class="text-right pr-2">Demo K</th><th class="text-right pr-2">DB K</th>';
             html += '<th class="text-right pr-2">Demo D</th><th class="text-right pr-2">DB D</th>';
+            html += '<th class="text-right pr-2">Demo DMG</th><th class="text-right pr-2">DB DMG</th>';
+            html += '<th class="text-right pr-2">Demo ACC%</th><th class="text-right pr-2">DB ACC%</th>';
+            html += '<th class="text-right pr-2">Demo TPM</th><th class="text-right pr-2">DB TPM</th>';
             html += '<th class="text-right pr-2">DB KDR</th><th class="text-right">DB DPM</th>';
             html += '</tr></thead><tbody>';
 
@@ -435,12 +690,20 @@ async function renderCrossref(demoId) {
                 const ds = c.demo_stats || {};
                 const bs = c.db_stats || {};
                 const matchIcon = c.matched ? '' : '<span class="text-brand-amber">*</span>';
+                const demoTpm = ds.tpm ?? ds.time_played_minutes;
+                const dbTpm = bs.tpm ?? bs.time_played_minutes;
                 html += `<tr class="border-b border-white/5">`;
                 html += `<td class="py-1 pr-2 text-slate-200">${name}${matchIcon}</td>`;
                 html += `<td class="text-right pr-2 text-slate-300">${ds.kills ?? '--'}</td>`;
                 html += `<td class="text-right pr-2 text-white">${bs.kills ?? '--'}</td>`;
                 html += `<td class="text-right pr-2 text-slate-300">${ds.deaths ?? '--'}</td>`;
                 html += `<td class="text-right pr-2 text-white">${bs.deaths ?? '--'}</td>`;
+                html += `<td class="text-right pr-2 text-slate-300">${ds.damage_given ?? '--'}</td>`;
+                html += `<td class="text-right pr-2 text-white">${bs.damage_given ?? '--'}</td>`;
+                html += `<td class="text-right pr-2 text-slate-300">${ds.accuracy != null ? Number(ds.accuracy).toFixed(1) : '--'}</td>`;
+                html += `<td class="text-right pr-2 text-white">${bs.accuracy != null ? Number(bs.accuracy).toFixed(1) : '--'}</td>`;
+                html += `<td class="text-right pr-2 text-slate-300">${demoTpm != null ? Number(demoTpm).toFixed(2) : '--'}</td>`;
+                html += `<td class="text-right pr-2 text-white">${dbTpm != null ? Number(dbTpm).toFixed(2) : '--'}</td>`;
                 html += `<td class="text-right pr-2 text-white">${bs.kdr != null ? Number(bs.kdr).toFixed(2) : '--'}</td>`;
                 html += `<td class="text-right text-white">${bs.dpm != null ? Number(bs.dpm).toFixed(1) : '--'}</td>`;
                 html += `</tr>`;
@@ -480,6 +743,61 @@ function renderRenderJobs(jobs) {
             </div>
         `;
     }).join('');
+}
+
+function renderPlayerStats(playerStats) {
+    const container = document.getElementById('demo-detail-playerstats');
+    if (!container) return;
+
+    if (!playerStats || typeof playerStats !== 'object' || Object.keys(playerStats).length === 0) {
+        container.innerHTML = '<div class="text-slate-500 text-sm">No player stats available.</div>';
+        return;
+    }
+
+    // Convert object {name: {kills, deaths, ...}} to sorted array
+    const players = Object.entries(playerStats).map(([name, stats]) => ({
+        name,
+        kills: Number(stats.kills || 0),
+        deaths: Number(stats.deaths || 0),
+        damage: Number(stats.damage_given || stats.damage || 0),
+        accuracy: stats.accuracy != null ? Number(stats.accuracy) : null,
+        headshots: Number(stats.headshots || stats.headshot_kills || 0),
+        tpm: stats.tpm != null
+            ? Number(stats.tpm)
+            : (stats.time_played_minutes != null ? Number(stats.time_played_minutes) : null),
+    }));
+
+    // Sort by kills descending
+    players.sort((a, b) => b.kills - a.kills);
+
+    let html = '<table class="w-full text-xs">';
+    html += '<thead><tr class="text-slate-500 border-b border-white/10">';
+    html += '<th class="text-left py-1 pr-3">Player</th>';
+    html += '<th class="text-right pr-3">Kills</th>';
+    html += '<th class="text-right pr-3">Deaths</th>';
+    html += '<th class="text-right pr-3">KDR</th>';
+    html += '<th class="text-right pr-3">Damage</th>';
+    html += '<th class="text-right pr-3">Acc%</th>';
+    html += '<th class="text-right pr-3">TPM</th>';
+    html += '<th class="text-right">HS</th>';
+    html += '</tr></thead><tbody>';
+
+    for (const p of players) {
+        const kdr = p.deaths > 0 ? (p.kills / p.deaths).toFixed(2) : p.kills > 0 ? p.kills.toFixed(2) : '0.00';
+        html += '<tr class="border-b border-white/5">';
+        html += `<td class="py-1 pr-3 text-slate-200">${escapeHtml(p.name)}</td>`;
+        html += `<td class="text-right pr-3 text-white">${p.kills}</td>`;
+        html += `<td class="text-right pr-3 text-white">${p.deaths}</td>`;
+        html += `<td class="text-right pr-3 text-white">${kdr}</td>`;
+        html += `<td class="text-right pr-3 text-white">${p.damage}</td>`;
+        html += `<td class="text-right pr-3 text-white">${p.accuracy != null ? p.accuracy.toFixed(1) : '--'}</td>`;
+        html += `<td class="text-right pr-3 text-white">${p.tpm != null ? p.tpm.toFixed(2) : '--'}</td>`;
+        html += `<td class="text-right text-white">${p.headshots}</td>`;
+        html += '</tr>';
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
 }
 
 export async function loadGreatshotDemoDetail(demoId) {
@@ -530,6 +848,7 @@ export async function loadGreatshotDemoDetail(demoId) {
         renderTimeline(payload.analysis?.events || [], roundStartMs);
         renderHighlights(demoId, payload.highlights || [], roundStartMs);
         renderRenderJobs(payload.renders || []);
+        renderPlayerStats(payload.player_stats);
 
         if (payload.status === 'analyzed') {
             renderCrossref(demoId);
@@ -602,4 +921,3 @@ export function getCurrentGreatshotDetailId() {
 export function getCachedGreatshotItems() {
     return cachedGreatshotItems.slice();
 }
-
