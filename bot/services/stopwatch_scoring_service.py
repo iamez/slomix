@@ -258,12 +258,32 @@ class StopwatchScoringService:
                 return None
 
             # Get team assignments from session_teams
-            teams_query = """
-                SELECT DISTINCT team_name, player_guids
-                FROM session_teams
-                WHERE SUBSTRING(session_start_date, 1, 10) = $1
-            """
-            team_rows = await self.db.fetch_all(teams_query, (session_date,))
+            session_id_candidates = sorted(
+                {
+                    m.get("gaming_session_id")
+                    for m in maps
+                    if m.get("gaming_session_id") is not None
+                }
+            )
+            resolved_session_id = (
+                session_id_candidates[0] if len(session_id_candidates) == 1 else None
+            )
+            if resolved_session_id is not None:
+                teams_query = """
+                    SELECT DISTINCT team_name, player_guids
+                    FROM session_teams
+                    WHERE gaming_session_id = ?
+                      AND map_name = 'ALL'
+                """
+                team_rows = await self.db.fetch_all(teams_query, (resolved_session_id,))
+            else:
+                teams_query = """
+                    SELECT DISTINCT team_name, player_guids
+                    FROM session_teams
+                    WHERE SUBSTRING(session_start_date, 1, 10) = ?
+                      AND map_name = 'ALL'
+                """
+                team_rows = await self.db.fetch_all(teams_query, (session_date,))
 
             if not team_rows or len(team_rows) < 2:
                 logger.debug(f"Not enough teams found for {session_date}")
@@ -274,21 +294,47 @@ class StopwatchScoringService:
             team_guids_list = []
             for row in team_rows:
                 team_name, player_guids_json = row
-                player_guids = json.loads(player_guids_json)
+                if isinstance(player_guids_json, str):
+                    player_guids = json.loads(player_guids_json) if player_guids_json else []
+                else:
+                    player_guids = player_guids_json or []
                 team_names_list.append(team_name)
                 team_guids_list.append(set(player_guids))
 
             # Map game team numbers to actual team names
-            sample_query = """
-                SELECT player_guid, team
-                FROM player_comprehensive_stats
-                WHERE SUBSTRING(round_date, 1, 10) = $1
-                AND round_number = 1
-                LIMIT 1
-            """
-            sample_player = await self.db.fetch_one(
-                sample_query, (session_date,)
-            )
+            if session_ids:
+                placeholders = ",".join(["?" for _ in session_ids])
+                sample_query = f"""
+                    SELECT p.player_guid, p.team
+                    FROM player_comprehensive_stats p
+                    JOIN rounds r ON r.id = p.round_id
+                    WHERE p.round_id IN ({placeholders})
+                      AND p.round_number = 1
+                    ORDER BY r.round_date, r.round_time
+                    LIMIT 1
+                """
+                sample_player = await self.db.fetch_one(sample_query, tuple(session_ids))
+            elif resolved_session_id is not None:
+                sample_query = """
+                    SELECT p.player_guid, p.team
+                    FROM player_comprehensive_stats p
+                    JOIN rounds r ON r.id = p.round_id
+                    WHERE r.gaming_session_id = ?
+                      AND p.round_number = 1
+                    ORDER BY p.round_date, p.round_time
+                    LIMIT 1
+                """
+                sample_player = await self.db.fetch_one(sample_query, (resolved_session_id,))
+            else:
+                sample_query = """
+                    SELECT player_guid, team
+                    FROM player_comprehensive_stats
+                    WHERE SUBSTRING(round_date, 1, 10) = ?
+                      AND round_number = 1
+                    ORDER BY round_date, round_time
+                    LIMIT 1
+                """
+                sample_player = await self.db.fetch_one(sample_query, (session_date,))
 
             if not sample_player:
                 logger.debug(f"No player stats for mapping teams: {session_date}")

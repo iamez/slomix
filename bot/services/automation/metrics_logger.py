@@ -13,6 +13,7 @@ Features:
 - Exports metrics to JSON/CSV
 """
 
+import asyncio
 import aiosqlite
 import json
 import logging
@@ -41,7 +42,7 @@ class MetricsLogger:
         Initialize metrics logger.
 
         Args:
-            db_path: Path to main database
+            db_path: Path to metrics SQLite database
             log_dir: Directory for metrics logs
         """
         self.db_path = db_path
@@ -60,10 +61,19 @@ class MetricsLogger:
         # Start time
         self.start_time = datetime.now()
 
-        # Create metrics database
-        self.metrics_db_path = os.path.join(log_dir, "metrics.db")
+        # Metrics database path (explicit config path wins)
+        self.metrics_db_path = db_path or os.path.join(log_dir, "metrics.db")
+        metrics_db_dir = os.path.dirname(self.metrics_db_path)
+        if metrics_db_dir:
+            os.makedirs(metrics_db_dir, exist_ok=True)
 
-        logger.info(f"📊 Metrics Logger initialized: {self.log_dir}")
+        # Lazy one-time initialization guard
+        self._is_initialized = False
+        self._init_lock = asyncio.Lock()
+
+        logger.info(
+            f"📊 Metrics Logger initialized: log_dir={self.log_dir}, db={self.metrics_db_path}"
+        )
 
     async def initialize_metrics_db(self):
         """Create metrics database tables"""
@@ -120,10 +130,20 @@ class MetricsLogger:
                 """)
 
                 await db.commit()
+                self._is_initialized = True
                 logger.info("✅ Metrics database initialized")
 
         except Exception as e:
             logger.error(f"❌ Failed to initialize metrics DB: {e}")
+
+    async def _ensure_initialized(self):
+        """Ensure metrics schema exists before reads/writes."""
+        if self._is_initialized:
+            return
+        async with self._init_lock:
+            if self._is_initialized:
+                return
+            await self.initialize_metrics_db()
 
     async def log_event(self, event_type: str, event_data: Optional[Dict] = None,
                        duration_ms: Optional[float] = None, success: bool = True):
@@ -137,6 +157,7 @@ class MetricsLogger:
             success: Whether the event succeeded
         """
         try:
+            await self._ensure_initialized()
             timestamp = datetime.now().isoformat()
 
             # Store in memory
@@ -185,6 +206,7 @@ class MetricsLogger:
             context: Additional context about when/where error occurred
         """
         try:
+            await self._ensure_initialized()
             timestamp = datetime.now().isoformat()
 
             # Store in memory
@@ -231,6 +253,7 @@ class MetricsLogger:
             unit: Unit of measurement (e.g., 'ms', 'seconds', 'bytes')
         """
         try:
+            await self._ensure_initialized()
             timestamp = datetime.now().isoformat()
 
             # Store in memory
@@ -274,6 +297,7 @@ class MetricsLogger:
             cpu_percent: CPU usage percentage
         """
         try:
+            await self._ensure_initialized()
             timestamp = datetime.now().isoformat()
 
             async with aiosqlite.connect(self.metrics_db_path) as db:
@@ -300,6 +324,7 @@ class MetricsLogger:
             Dictionary with analysis results
         """
         try:
+            await self._ensure_initialized()
             cutoff_time = datetime.now() - timedelta(hours=hours)
             cutoff_str = cutoff_time.isoformat()
 

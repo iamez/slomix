@@ -71,11 +71,22 @@ class SessionStatsAggregator:
         """
         columns = await self._get_player_stats_columns()
         has_full_selfkills = "full_selfkills" in columns
+        has_kill_assists = "kill_assists" in columns
         full_selfkills_select = (
             "SUM(p.full_selfkills) as total_full_selfkills"
             if has_full_selfkills
             else "0 as total_full_selfkills"
         )
+        kill_assists_select = (
+            "SUM(p.kill_assists) as total_kill_assists"
+            if has_kill_assists
+            else "0 as total_kill_assists"
+        )
+        if not has_kill_assists and not getattr(self, "_warned_missing_kill_assists", False):
+            logger.warning(
+                "player_comprehensive_stats.kill_assists column missing; defaulting total_kill_assists to 0"
+            )
+            self._warned_missing_kill_assists = True
 
         query = f"""
             SELECT MAX(p.player_name) as player_name,
@@ -114,7 +125,8 @@ class SessionStatsAggregator:
                 SUM(p.multi_kills) as total_multi_kills,
                 SUM(p.mega_kills) as total_mega_kills,
                 SUM(p.self_kills) as total_self_kills,
-                {full_selfkills_select}
+                {full_selfkills_select},
+                {kill_assists_select}
             FROM player_comprehensive_stats p
             LEFT JOIN (
                 SELECT round_id, player_guid,

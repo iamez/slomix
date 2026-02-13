@@ -24,6 +24,7 @@ Version: 1.0 - PostgreSQL Production Ready
 
 import asyncio
 import asyncpg
+import hashlib
 import logging
 import os
 import time
@@ -497,8 +498,9 @@ class PostgreSQLDatabaseManager:
                     player_names JSONB,
                     color INTEGER,
                     gaming_session_id INTEGER,
+                    session_identity TEXT GENERATED ALWAYS AS (COALESCE(gaming_session_id::TEXT, session_start_date)) STORED,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(session_start_date, map_name, team_name)
+                    CONSTRAINT session_teams_identity_unique UNIQUE (session_identity, map_name, team_name)
                 )
             ''')
 
@@ -1138,6 +1140,77 @@ class PostgreSQLDatabaseManager:
                     await conn.execute("ALTER TABLE session_teams ADD COLUMN gaming_session_id INTEGER")
                     logger.info("   ✅ Added 'gaming_session_id' column to session_teams")
 
+            # Migration 7b: Make session_teams uniqueness gaming_session-aware
+            if has_session_teams:
+                has_session_identity = await conn.fetchval(
+                    """
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'session_teams'
+                          AND column_name = 'session_identity'
+                    )
+                    """
+                )
+                if not has_session_identity:
+                    logger.info("   ➕ Adding 'session_identity' generated column to session_teams...")
+                    await conn.execute(
+                        """
+                        ALTER TABLE session_teams
+                        ADD COLUMN session_identity TEXT
+                        GENERATED ALWAYS AS (COALESCE(gaming_session_id::TEXT, session_start_date)) STORED
+                        """
+                    )
+                    logger.info("   ✅ Added 'session_identity' column to session_teams")
+
+                legacy_constraints = await conn.fetch(
+                    """
+                    SELECT conname
+                    FROM pg_constraint
+                    WHERE conrelid = 'session_teams'::regclass
+                      AND contype IN ('u', 'p')
+                      AND pg_get_constraintdef(oid) LIKE '%(session_start_date, map_name, team_name)%'
+                    """
+                )
+                for row in legacy_constraints:
+                    constraint_name = row["conname"].replace('"', '""')
+                    logger.info(
+                        "   ➖ Dropping legacy session_teams constraint '%s'...",
+                        row["conname"],
+                    )
+                    await conn.execute(
+                        f'ALTER TABLE session_teams DROP CONSTRAINT "{constraint_name}"'
+                    )
+
+                has_identity_unique = await conn.fetchval(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conrelid = 'session_teams'::regclass
+                          AND conname = 'session_teams_identity_unique'
+                    )
+                    """
+                )
+                if not has_identity_unique:
+                    logger.info("   ➕ Adding session_teams identity uniqueness constraint...")
+                    await conn.execute(
+                        """
+                        ALTER TABLE session_teams
+                        ADD CONSTRAINT session_teams_identity_unique
+                        UNIQUE (session_identity, map_name, team_name)
+                        """
+                    )
+                    logger.info("   ✅ Added session_teams identity uniqueness constraint")
+
+                await conn.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_session_teams_gaming_session_id
+                    ON session_teams(gaming_session_id)
+                    WHERE gaming_session_id IS NOT NULL
+                    """
+                )
+
             # Migration 8: Add bot round flag columns to rounds
             has_rounds = await conn.fetchval("""
                 SELECT EXISTS (
@@ -1159,6 +1232,29 @@ class PostgreSQLDatabaseManager:
                     await conn.execute("ALTER TABLE rounds ADD COLUMN bot_player_count INTEGER DEFAULT 0")
                     await conn.execute("ALTER TABLE rounds ADD COLUMN human_player_count INTEGER DEFAULT 0")
                     logger.info("   ✅ Added bot round flag columns to rounds")
+
+            # Migration 9: Add WS0 round-contract fields to rounds
+            if has_rounds:
+                has_score_confidence = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns
+                        WHERE table_name = 'rounds'
+                        AND column_name = 'score_confidence'
+                    )
+                """)
+                if not has_score_confidence:
+                    logger.info("   ➕ Adding WS0 score/stopwatch contract columns to rounds...")
+                    await conn.execute("ALTER TABLE rounds ADD COLUMN score_confidence VARCHAR(32)")
+                    await conn.execute("ALTER TABLE rounds ADD COLUMN round_stopwatch_state VARCHAR(16)")
+                    await conn.execute("ALTER TABLE rounds ADD COLUMN time_to_beat_seconds INTEGER")
+                    await conn.execute("ALTER TABLE rounds ADD COLUMN next_timelimit_minutes INTEGER")
+                    await conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_rounds_score_confidence ON rounds(score_confidence)"
+                    )
+                    await conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_rounds_stopwatch_state ON rounds(round_stopwatch_state)"
+                    )
+                    logger.info("   ✅ Added WS0 score/stopwatch contract columns")
 
             logger.info("   ✅ Schema migrations complete!")
     
@@ -1244,20 +1340,58 @@ class PostgreSQLDatabaseManager:
                 filename
             )
             return result > 0
-    
-    async def mark_file_processed(self, filename: str, success: bool = True, error_msg: str = None):
+
+    async def find_processed_by_hash(self, file_hash: Optional[str]) -> Optional[str]:
+        """Find an already-successfully-processed filename by content hash."""
+        if not file_hash:
+            return None
+        async with self.pool.acquire() as conn:
+            return await conn.fetchval(
+                """
+                SELECT filename
+                FROM processed_files
+                WHERE file_hash = $1 AND success = TRUE
+                ORDER BY processed_at DESC
+                LIMIT 1
+                """,
+                file_hash,
+            )
+
+    def _compute_file_hashes(self, file_path: Path) -> Tuple[str, str]:
+        """
+        Compute full-file hash and payload hash.
+
+        Payload hash ignores the first line because that header can vary while
+        player-stat payload stays identical for duplicate mirror files.
+        """
+        raw = file_path.read_bytes()
+        full_hash = hashlib.sha256(raw).hexdigest()
+        text = raw.decode("utf-8", errors="ignore")
+        lines = text.splitlines()
+        payload = "\n".join(lines[1:]) if len(lines) > 1 else text
+        payload_hash = hashlib.sha256(payload.encode("utf-8", errors="ignore")).hexdigest()
+        return full_hash, payload_hash
+
+    async def mark_file_processed(
+        self,
+        filename: str,
+        success: bool = True,
+        error_msg: str = None,
+        file_hash: Optional[str] = None,
+    ):
         """Mark file as processed"""
         async with self.pool.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO processed_files (filename, success, error_message, processed_at)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO processed_files (filename, file_hash, success, error_message, processed_at)
+                VALUES ($1, $2, $3, $4, $5)
                 ON CONFLICT (filename) DO UPDATE SET
+                    file_hash = EXCLUDED.file_hash,
                     success = EXCLUDED.success,
                     error_message = EXCLUDED.error_message,
                     processed_at = EXCLUDED.processed_at
                 """,
-                filename, success, error_msg, datetime.now()
+                filename, file_hash, success, error_msg, datetime.now()
             )
     
     def _extract_date_time_from_filename(self, filename: str) -> Tuple[str, str]:
@@ -1287,13 +1421,35 @@ class PostgreSQLDatabaseManager:
         """
         filename = file_path.name
         start_time = time.time()
+        payload_hash = None
         
         try:
+            # Compute hash early so renamed duplicates are detectable.
+            try:
+                _, payload_hash = self._compute_file_hashes(file_path)
+            except Exception as hash_exc:
+                logger.warning(f"⚠️ Could not hash file {filename}: {hash_exc}")
+
             # Check if already processed
             if await self.is_file_processed(filename):
                 self.stats['files_skipped'] += 1
                 logger.debug(f"⏭️  Skipped (already processed): {filename}")
                 return True, "Already processed"
+
+            # Skip renamed mirror files that have identical payload content.
+            duplicate_source = await self.find_processed_by_hash(payload_hash)
+            if duplicate_source and duplicate_source != filename:
+                self.stats['files_skipped'] += 1
+                await self.mark_file_processed(
+                    filename,
+                    success=True,
+                    error_msg=f"DUPLICATE_PAYLOAD_OF:{duplicate_source}",
+                    file_hash=payload_hash,
+                )
+                logger.warning(
+                    f"⏭️ Skipped duplicate payload file: {filename} (same payload as {duplicate_source})"
+                )
+                return True, f"Duplicate payload of {duplicate_source}"
             
             # STEP 1: Parse file
             logger.debug(f"📖 Parsing file: {filename}")
@@ -1302,7 +1458,12 @@ class PostgreSQLDatabaseManager:
             if not parsed_data or parsed_data.get('error'):
                 error = parsed_data.get('error', 'Unknown error') if parsed_data else 'No data'
                 self.stats['files_failed'] += 1
-                await self.mark_file_processed(filename, success=False, error_msg=error)
+                await self.mark_file_processed(
+                    filename,
+                    success=False,
+                    error_msg=error,
+                    file_hash=payload_hash,
+                )
                 logger.error(f"❌ Parse failed: {filename} - {error}")
                 log_stats_import(filename, error=error)
                 return False, f"Parse error: {error}"
@@ -1320,7 +1481,12 @@ class PostgreSQLDatabaseManager:
             file_date, round_time = self._extract_date_time_from_filename(filename)
             if not file_date:
                 self.stats['files_failed'] += 1
-                await self.mark_file_processed(filename, success=False, error_msg="Invalid filename format")
+                await self.mark_file_processed(
+                    filename,
+                    success=False,
+                    error_msg="Invalid filename format",
+                    file_hash=payload_hash,
+                )
                 logger.error(f"❌ Invalid filename format: {filename}")
                 return False, "Invalid filename format"
             
@@ -1400,9 +1566,14 @@ class PostgreSQLDatabaseManager:
             # 🔒 CRITICAL: Mark file as processed ONLY after transaction commits successfully
             # This prevents files from being marked as processed when the transaction rolls back
             if validation_passed:
-                await self.mark_file_processed(filename, success=True)
+                await self.mark_file_processed(filename, success=True, file_hash=payload_hash)
             else:
-                await self.mark_file_processed(filename, success=True, error_msg=f"WARN: {validation_msg}")
+                await self.mark_file_processed(
+                    filename,
+                    success=True,
+                    error_msg=f"WARN: {validation_msg}",
+                    file_hash=payload_hash,
+                )
 
             # 🆕 AUTO-TEAM ASSIGNMENT: If this is Round 1, auto-assign teams from header data
             round_num = parsed_data.get('round_num', parsed_data.get('round_number', 0))
@@ -1418,7 +1589,12 @@ class PostgreSQLDatabaseManager:
             duration = time.time() - start_time
             logger.error(f"❌ Error processing {filename} [{duration:.2f}s]: {error_msg}", exc_info=True)
             log_stats_import(filename, error=error_msg, duration=duration)
-            await self.mark_file_processed(filename, success=False, error_msg=error_msg)
+            await self.mark_file_processed(
+                filename,
+                success=False,
+                error_msg=error_msg,
+                file_hash=payload_hash,
+            )
             return False, error_msg
 
     async def _auto_assign_teams_from_r1(self, round_id: int, session_date: str) -> bool:
@@ -1463,22 +1639,59 @@ class PostgreSQLDatabaseManager:
                 defender_team = round_info['defender_team']
                 gaming_session_id = round_info['gaming_session_id']
 
+                has_session_teams_gaming_session_id = await conn.fetchval(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'session_teams'
+                          AND column_name = 'gaming_session_id'
+                    )
+                    """
+                )
+                has_session_teams_identity = await conn.fetchval(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'session_teams'
+                          AND column_name = 'session_identity'
+                    )
+                    """
+                )
+
                 # If defender_team is 0 (not set), skip
                 if defender_team == 0:
                     logger.debug(f"Round {round_id} has no defender_team, skipping auto-team")
                     return False
 
                 # Check if teams already assigned for this session
-                existing = await conn.fetchval(
-                    """
-                    SELECT COUNT(*) FROM session_teams
-                    WHERE session_start_date LIKE ($1 || '%')
-                    """,
-                    session_date
-                )
+                if has_session_teams_gaming_session_id and gaming_session_id is not None:
+                    existing = await conn.fetchval(
+                        """
+                        SELECT COUNT(*) FROM session_teams
+                        WHERE gaming_session_id = $1
+                          AND map_name = 'ALL'
+                        """,
+                        gaming_session_id
+                    )
+                else:
+                    existing = await conn.fetchval(
+                        """
+                        SELECT COUNT(*) FROM session_teams
+                        WHERE session_start_date LIKE ($1 || '%')
+                          AND map_name = 'ALL'
+                        """,
+                        session_date
+                    )
 
                 if existing > 0:
-                    logger.debug(f"Session {session_date} already has teams assigned")
+                    logger.debug(
+                        f"Session already has teams assigned "
+                        f"(date={session_date}, gaming_session_id={gaming_session_id})"
+                    )
                     return False
 
                 # Query all players from R1 and their team (axis=1, allies=2)
@@ -1525,36 +1738,151 @@ class PostgreSQLDatabaseManager:
 
                 # Insert into session_teams
                 async with conn.transaction():
-                    # Delete any existing entries (safety)
-                    await conn.execute(
-                        """
-                        DELETE FROM session_teams
-                        WHERE session_start_date LIKE ($1 || '%')
-                        """,
-                        session_date
-                    )
-
                     # Insert Team A (defenders)
                     # JSONB columns require JSON strings, not Python lists
                     import json
-                    await conn.execute(
-                        """
-                        INSERT INTO session_teams
-                        (session_start_date, map_name, team_name, player_guids, player_names, created_at)
-                        VALUES ($1, 'ALL', 'Team A', $2::jsonb, $3::jsonb, $4)
-                        """,
-                        session_date, json.dumps(team_a_guids), json.dumps(team_a_names), datetime.now()
-                    )
+                    if has_session_teams_gaming_session_id:
+                        if has_session_teams_identity:
+                            await conn.execute(
+                                """
+                                INSERT INTO session_teams
+                                (session_start_date, map_name, team_name, player_guids, player_names, created_at, gaming_session_id)
+                                VALUES ($1, 'ALL', 'Team A', $2::jsonb, $3::jsonb, $4, $5)
+                                ON CONFLICT ON CONSTRAINT session_teams_identity_unique DO UPDATE SET
+                                    player_guids = EXCLUDED.player_guids,
+                                    player_names = EXCLUDED.player_names,
+                                    created_at = EXCLUDED.created_at,
+                                    gaming_session_id = EXCLUDED.gaming_session_id
+                                """,
+                                session_date,
+                                json.dumps(team_a_guids),
+                                json.dumps(team_a_names),
+                                datetime.now(),
+                                gaming_session_id,
+                            )
 
-                    # Insert Team B (attackers)
-                    await conn.execute(
-                        """
-                        INSERT INTO session_teams
-                        (session_start_date, map_name, team_name, player_guids, player_names, created_at)
-                        VALUES ($1, 'ALL', 'Team B', $2::jsonb, $3::jsonb, $4)
-                        """,
-                        session_date, json.dumps(team_b_guids), json.dumps(team_b_names), datetime.now()
-                    )
+                            # Insert Team B (attackers)
+                            await conn.execute(
+                                """
+                                INSERT INTO session_teams
+                                (session_start_date, map_name, team_name, player_guids, player_names, created_at, gaming_session_id)
+                                VALUES ($1, 'ALL', 'Team B', $2::jsonb, $3::jsonb, $4, $5)
+                                ON CONFLICT ON CONSTRAINT session_teams_identity_unique DO UPDATE SET
+                                    player_guids = EXCLUDED.player_guids,
+                                    player_names = EXCLUDED.player_names,
+                                    created_at = EXCLUDED.created_at,
+                                    gaming_session_id = EXCLUDED.gaming_session_id
+                                """,
+                                session_date,
+                                json.dumps(team_b_guids),
+                                json.dumps(team_b_names),
+                                datetime.now(),
+                                gaming_session_id,
+                            )
+                        else:
+                            await conn.execute(
+                                """
+                                INSERT INTO session_teams
+                                (session_start_date, map_name, team_name, player_guids, player_names, created_at, gaming_session_id)
+                                VALUES ($1, 'ALL', 'Team A', $2::jsonb, $3::jsonb, $4, $5)
+                                ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
+                                    player_guids = EXCLUDED.player_guids,
+                                    player_names = EXCLUDED.player_names,
+                                    created_at = EXCLUDED.created_at,
+                                    gaming_session_id = EXCLUDED.gaming_session_id
+                                """,
+                                session_date,
+                                json.dumps(team_a_guids),
+                                json.dumps(team_a_names),
+                                datetime.now(),
+                                gaming_session_id,
+                            )
+
+                            # Insert Team B (attackers)
+                            await conn.execute(
+                                """
+                                INSERT INTO session_teams
+                                (session_start_date, map_name, team_name, player_guids, player_names, created_at, gaming_session_id)
+                                VALUES ($1, 'ALL', 'Team B', $2::jsonb, $3::jsonb, $4, $5)
+                                ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
+                                    player_guids = EXCLUDED.player_guids,
+                                    player_names = EXCLUDED.player_names,
+                                    created_at = EXCLUDED.created_at,
+                                    gaming_session_id = EXCLUDED.gaming_session_id
+                                """,
+                                session_date,
+                                json.dumps(team_b_guids),
+                                json.dumps(team_b_names),
+                                datetime.now(),
+                                gaming_session_id,
+                            )
+                    else:
+                        if has_session_teams_identity:
+                            await conn.execute(
+                                """
+                                INSERT INTO session_teams
+                                (session_start_date, map_name, team_name, player_guids, player_names, created_at)
+                                VALUES ($1, 'ALL', 'Team A', $2::jsonb, $3::jsonb, $4)
+                                ON CONFLICT ON CONSTRAINT session_teams_identity_unique DO UPDATE SET
+                                    player_guids = EXCLUDED.player_guids,
+                                    player_names = EXCLUDED.player_names,
+                                    created_at = EXCLUDED.created_at
+                                """,
+                                session_date,
+                                json.dumps(team_a_guids),
+                                json.dumps(team_a_names),
+                                datetime.now(),
+                            )
+
+                            # Insert Team B (attackers)
+                            await conn.execute(
+                                """
+                                INSERT INTO session_teams
+                                (session_start_date, map_name, team_name, player_guids, player_names, created_at)
+                                VALUES ($1, 'ALL', 'Team B', $2::jsonb, $3::jsonb, $4)
+                                ON CONFLICT ON CONSTRAINT session_teams_identity_unique DO UPDATE SET
+                                    player_guids = EXCLUDED.player_guids,
+                                    player_names = EXCLUDED.player_names,
+                                    created_at = EXCLUDED.created_at
+                                """,
+                                session_date,
+                                json.dumps(team_b_guids),
+                                json.dumps(team_b_names),
+                                datetime.now(),
+                            )
+                        else:
+                            await conn.execute(
+                                """
+                                INSERT INTO session_teams
+                                (session_start_date, map_name, team_name, player_guids, player_names, created_at)
+                                VALUES ($1, 'ALL', 'Team A', $2::jsonb, $3::jsonb, $4)
+                                ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
+                                    player_guids = EXCLUDED.player_guids,
+                                    player_names = EXCLUDED.player_names,
+                                    created_at = EXCLUDED.created_at
+                                """,
+                                session_date,
+                                json.dumps(team_a_guids),
+                                json.dumps(team_a_names),
+                                datetime.now(),
+                            )
+
+                            # Insert Team B (attackers)
+                            await conn.execute(
+                                """
+                                INSERT INTO session_teams
+                                (session_start_date, map_name, team_name, player_guids, player_names, created_at)
+                                VALUES ($1, 'ALL', 'Team B', $2::jsonb, $3::jsonb, $4)
+                                ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
+                                    player_guids = EXCLUDED.player_guids,
+                                    player_names = EXCLUDED.player_names,
+                                    created_at = EXCLUDED.created_at
+                                """,
+                                session_date,
+                                json.dumps(team_b_guids),
+                                json.dumps(team_b_names),
+                                datetime.now(),
+                            )
 
                 logger.info(
                     f"✅ Auto-assigned teams for session {session_date}: "

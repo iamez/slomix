@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> **Historical Notice (2026-02-12):** This file contains legacy guidance and may not reflect the current two-week execution state. Use `docs/TWO_WEEK_EXECUTION_TRACKER_2026-02-11.md` and `docs/CRASH_PROOF_TODO_2026-02-12.md` as canonical status sources.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **📝 Session Memory:** Check `.claude/memories.md` for recent session context, ongoing work, and things to remember across sessions.

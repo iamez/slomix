@@ -1,4 +1,7 @@
 # Handoff to Next Claude Agent
+
+> **Historical Notice (2026-02-12):** This handoff captures a past session snapshot. For current active priorities and status, use `docs/TWO_WEEK_EXECUTION_TRACKER_2026-02-11.md` and `docs/CRASH_PROOF_TODO_2026-02-12.md`.
+
 **Date:** 2026-01-31  
 **From:** Claude Opus 4.5 (Configuration Recovery Session)  
 **Status:** ✅ Ready for Development

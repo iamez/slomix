@@ -55,6 +55,51 @@ def _parse_json_field(value: Any) -> Any:
     return None
 
 
+def _is_permission_denied_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    name = type(exc).__name__.lower()
+    return (
+        "permission denied" in text
+        or "insufficientprivilege" in name
+        or "insufficient privilege" in text
+        or "must be owner" in text
+        or "not owner" in text
+    )
+
+
+def _raise_permission_denied(exc: Exception) -> None:
+    if _is_permission_denied_error(exc):
+        logger.warning("Greatshot DB permission denied: %s", exc)
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied while accessing Greatshot data",
+        ) from exc
+
+
+async def _safe_fetch_one(db, query: str, params=None):
+    try:
+        return await db.fetch_one(query, params)
+    except Exception as exc:
+        _raise_permission_denied(exc)
+        raise
+
+
+async def _safe_fetch_all(db, query: str, params=None):
+    try:
+        return await db.fetch_all(query, params)
+    except Exception as exc:
+        _raise_permission_denied(exc)
+        raise
+
+
+async def _safe_execute(db, query: str, params=None):
+    try:
+        return await db.execute(query, params)
+    except Exception as exc:
+        _raise_permission_denied(exc)
+        raise
+
+
 @router.post("/greatshot/upload")
 async def upload_greatshot(
     request: Request,
@@ -69,7 +114,7 @@ async def upload_greatshot(
     finally:
         await file.close()
 
-    await db.execute(
+    await _safe_execute(
         """
         INSERT INTO greatshot_demos (
             id,
@@ -112,7 +157,7 @@ async def list_greatshot(request: Request, db=Depends(get_db)):
     user = _require_user(request)
     user_id = int(user["id"])
 
-    rows = await db.fetch_all(
+    rows = await _safe_fetch_all(
         """
         SELECT
             id,
@@ -197,7 +242,7 @@ async def get_greatshot_status(demo_id: str, request: Request, db=Depends(get_db
     user = _require_user(request)
     user_id = int(user["id"])
 
-    row = await db.fetch_one(
+    row = await _safe_fetch_one(
         """
         SELECT
             status,
@@ -233,7 +278,7 @@ async def get_greatshot_detail(demo_id: str, request: Request, db=Depends(get_db
     user = _require_user(request)
     user_id = int(user["id"])
 
-    greatshot_row = await db.fetch_one(
+    greatshot_row = await _safe_fetch_one(
         """
         SELECT
             id,
@@ -270,7 +315,7 @@ async def get_greatshot_detail(demo_id: str, request: Request, db=Depends(get_db
         finished_at,
     ) = greatshot_row
 
-    analysis_row = await db.fetch_one(
+    analysis_row = await _safe_fetch_one(
         """
         SELECT metadata_json, stats_json, events_json, created_at
         FROM greatshot_analysis
@@ -293,7 +338,7 @@ async def get_greatshot_detail(demo_id: str, request: Request, db=Depends(get_db
             "created_at": str(analysis_row[3]) if analysis_row[3] else None,
         }
 
-    highlight_rows = await db.fetch_all(
+    highlight_rows = await _safe_fetch_all(
         """
         SELECT id, type, player, start_ms, end_ms, score, meta_json, clip_demo_path, created_at
         FROM greatshot_highlights
@@ -303,7 +348,7 @@ async def get_greatshot_detail(demo_id: str, request: Request, db=Depends(get_db
         (demo_id,),
     )
 
-    render_rows = await db.fetch_all(
+    render_rows = await _safe_fetch_all(
         """
         SELECT r.id, r.highlight_id, r.status, r.mp4_path, r.error, r.created_at, r.updated_at
         FROM greatshot_renders r
@@ -397,7 +442,7 @@ _ALLOWED_ARTIFACT_FIELDS = {"analysis_json_path", "report_txt_path"}
 async def _artifact_for_user(db, demo_id: str, user_id: int, field_name: str) -> str:
     if field_name not in _ALLOWED_ARTIFACT_FIELDS:
         raise ValueError(f"Invalid artifact field: {field_name}")
-    row = await db.fetch_one(
+    row = await _safe_fetch_one(
         f"SELECT {field_name} FROM greatshot_demos WHERE id = $1 AND user_id = $2",
         (demo_id, user_id),
     )
@@ -445,14 +490,14 @@ async def queue_highlight_render(
     user = _require_user(request)
     user_id = int(user["id"])
 
-    greatshot_exists = await db.fetch_one(
+    greatshot_exists = await _safe_fetch_one(
         "SELECT id FROM greatshot_demos WHERE id = $1 AND user_id = $2",
         (demo_id, user_id),
     )
     if not greatshot_exists:
         raise HTTPException(status_code=404, detail="Greatshot entry not found")
 
-    highlight = await db.fetch_one(
+    highlight = await _safe_fetch_one(
         "SELECT id FROM greatshot_highlights WHERE id = $1 AND demo_id = $2",
         (payload.highlight_id, demo_id),
     )
@@ -460,7 +505,7 @@ async def queue_highlight_render(
         raise HTTPException(status_code=404, detail="Highlight not found")
 
     render_id = uuid.uuid4().hex
-    await db.execute(
+    await _safe_execute(
         """
         INSERT INTO greatshot_renders (id, highlight_id, status, mp4_path, error, created_at, updated_at)
         VALUES ($1, $2, 'queued', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -478,7 +523,7 @@ async def get_crossref(demo_id: str, request: Request, db=Depends(get_db)):
     user = _require_user(request)
     user_id = int(user["id"])
 
-    demo_row = await db.fetch_one(
+    demo_row = await _safe_fetch_one(
         "SELECT metadata_json FROM greatshot_demos WHERE id = $1 AND user_id = $2",
         (demo_id, user_id),
     )
@@ -491,7 +536,7 @@ async def get_crossref(demo_id: str, request: Request, db=Depends(get_db)):
 
     # Get demo player_stats BEFORE matching (used for validation)
     demo_player_stats = {}
-    analysis_path_row = await db.fetch_one(
+    analysis_path_row = await _safe_fetch_one(
         "SELECT analysis_json_path FROM greatshot_demos WHERE id = $1",
         (demo_id,),
     )
@@ -526,7 +571,7 @@ async def get_crossref(demo_id: str, request: Request, db=Depends(get_db)):
 
 
 async def _highlight_clip_for_user(db, demo_id: str, highlight_id: str, user_id: int) -> str:
-    row = await db.fetch_one(
+    row = await _safe_fetch_one(
         """
         SELECT h.clip_demo_path
         FROM greatshot_highlights h
@@ -543,7 +588,7 @@ async def _highlight_clip_for_user(db, demo_id: str, highlight_id: str, user_id:
 
 
 async def _render_video_for_user(db, demo_id: str, render_id: str, user_id: int) -> str:
-    row = await db.fetch_one(
+    row = await _safe_fetch_one(
         """
         SELECT r.mp4_path
         FROM greatshot_renders r

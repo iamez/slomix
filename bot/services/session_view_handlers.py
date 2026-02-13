@@ -110,7 +110,7 @@ class SessionViewHandlers:
             name = row[0]
             if name not in player_objectives:
                 player_objectives[name] = {
-                    "xp": 0, "assists": 0, "obj_stolen": 0, "obj_returned": 0,
+                    "xp": 0, "kill_assists": 0, "obj_stolen": 0, "obj_returned": 0,
                     "dyn_planted": 0, "dyn_defused": 0, "times_revived": 0,
                     "revives_given": 0, "multi_2x": 0, "multi_3x": 0,
                     "multi_4x": 0, "multi_5x": 0, "multi_6x": 0,
@@ -119,7 +119,7 @@ class SessionViewHandlers:
                 }
 
             player_objectives[name]["xp"] += row[1] or 0
-            player_objectives[name]["assists"] += row[2] or 0
+            player_objectives[name]["kill_assists"] += row[2] or 0
             player_objectives[name]["obj_stolen"] += row[3] or 0
             player_objectives[name]["obj_returned"] += row[4] or 0
             player_objectives[name]["dyn_planted"] += row[5] or 0
@@ -156,6 +156,7 @@ class SessionViewHandlers:
         for i, (player, stats) in enumerate(sorted_players, 1):
             txt_lines = []
             txt_lines.append(f"XP: `{stats.get('xp',0)}`")
+            txt_lines.append(f"Kill Assists: `{stats.get('kill_assists',0)}`")
             txt_lines.append(f"Revives Given: `{stats.get('revives_given',0)}` • Times Revived: `{stats.get('times_revived',0)}`")
             txt_lines.append(f"Dyns P/D: `{stats.get('dyn_planted',0)}/{stats.get('dyn_defused',0)}` • S/R: `{stats.get('obj_stolen',0)}/{stats.get('obj_returned',0)}`")
         
