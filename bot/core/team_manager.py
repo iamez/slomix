@@ -120,6 +120,21 @@ class TeamManager:
         return "ON CONFLICT (session_start_date, map_name, team_name)"
 
     @staticmethod
+    def _session_delete_query(columns: Set[str], gaming_session_id: Optional[int], map_all_only: bool) -> str:
+        """Return a safe, static DELETE query for session_teams scope."""
+        if "gaming_session_id" in columns and gaming_session_id is not None:
+            return (
+                "DELETE FROM session_teams WHERE gaming_session_id = ? AND map_name = 'ALL'"
+                if map_all_only
+                else "DELETE FROM session_teams WHERE gaming_session_id = ?"
+            )
+        return (
+            "DELETE FROM session_teams WHERE session_start_date LIKE ? AND map_name = 'ALL'"
+            if map_all_only
+            else "DELETE FROM session_teams WHERE session_start_date LIKE ?"
+        )
+
+    @staticmethod
     def _decode_json_array(value) -> List[Any]:
         """
         Normalize JSON/JSONB values that may arrive as strings or native lists.
@@ -684,14 +699,14 @@ class TeamManager:
         """
         await self._ensure_session_teams_table()
         columns = await self._get_session_teams_columns()
-        scope_clause, scope_params = self._session_scope_clause(
+        _, scope_params = self._session_scope_clause(
             columns, session_date, gaming_session_id
         )
         conflict_clause = self._session_teams_conflict_clause(columns)
 
         # Delete existing entries for this session
         await self.db.execute(
-            f"DELETE FROM session_teams WHERE {scope_clause} AND map_name = 'ALL'",
+            self._session_delete_query(columns, gaming_session_id, map_all_only=True),
             scope_params,
         )
 
@@ -805,7 +820,7 @@ class TeamManager:
                                  f"both teams have identical {len(guids_a)} players. Re-detecting...")
                     # Delete corrupted data and re-detect
                     await self.db.execute(
-                        f"DELETE FROM session_teams WHERE {scope_clause}",
+                        self._session_delete_query(columns, gaming_session_id, map_all_only=False),
                         scope_params,
                     )
                     if auto_detect:

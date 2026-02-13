@@ -28,10 +28,8 @@ Version: 1.0.0
 import argparse
 import os
 import random
-import re
 import secrets
 import shutil
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
@@ -204,12 +202,12 @@ class SecretsManager:
         self.write_env(env_vars)
 
         print(f"\n{'='*70}")
-        print(f"🔐 DATABASE PASSWORD ROTATION")
+        print("🔐 DATABASE PASSWORD ROTATION")
         print(f"{'='*70}")
         print(f"Old password: {old_password[:8]}..." if old_password else "Old password: (not set)")
         print(f"New password: {new_password}")
-        print(f"\n⚠️  IMPORTANT: You must run this SQL command manually:")
-        print(f"\n    psql -U postgres -d etlegacy")
+        print("\n⚠️  IMPORTANT: You must run this SQL command manually:")
+        print("\n    psql -U postgres -d etlegacy")
         print(f"    ALTER USER etlegacy_user WITH PASSWORD '{new_password}';")
         print(f"\n{'='*70}\n")
 
@@ -239,12 +237,12 @@ class SecretsManager:
         self.write_env(env_vars)
 
         print(f"\n{'='*70}")
-        print(f"🤖 DISCORD BOT TOKEN ROTATION")
+        print("🤖 DISCORD BOT TOKEN ROTATION")
         print(f"{'='*70}")
         print(f"Old token: {old_token[:20]}..." if old_token else "Old token: (not set)")
         print(f"New token: {new_token[:20]}...")
-        print(f"\n✅ Updated .env file")
-        print(f"⚠️  Remember to restart the bot!")
+        print("\n✅ Updated .env file")
+        print("⚠️  Remember to restart the bot!")
         print(f"{'='*70}\n")
 
         return old_token, new_token

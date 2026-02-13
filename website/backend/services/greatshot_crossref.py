@@ -92,7 +92,6 @@ async def _validate_stats_match(
 
     # Calculate demo totals
     demo_kills = sum([p.get("kills", 0) for p in demo_player_stats.values()])
-    demo_damage = sum([p.get("damage_given", 0) for p in demo_player_stats.values()])
 
     if demo_kills == 0:
         return 0.0
@@ -111,7 +110,6 @@ async def _validate_stats_match(
         return 0.0
 
     db_kills = db_result[0] or 0
-    db_damage = db_result[1] or 0
 
     if db_kills == 0:
         return 0.0
@@ -282,9 +280,9 @@ async def _match_single_round(
             stats_adj = await _validate_stats_match(demo_player_stats, round_id, db)
             confidence += stats_adj
             if stats_adj > 0:
-                match_details.append(f"stats-validated")
+                match_details.append("stats-validated")
             elif stats_adj < 0:
-                match_details.append(f"stats-mismatch")
+                match_details.append("stats-mismatch")
 
         if confidence > best_confidence:
             best_confidence = confidence
