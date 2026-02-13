@@ -264,6 +264,13 @@ function stopAnalysisPolling() {
     pendingDemos.clear();
 }
 
+function getSinglePendingDemoSnapshot() {
+    if (pendingDemos.size !== 1) return { id: null, entry: null };
+    const first = pendingDemos.entries().next().value;
+    if (!first) return { id: null, entry: null };
+    return { id: first[0], entry: first[1] };
+}
+
 function showAnalysisResult(status, data) {
     const resultEl = document.getElementById('analysis-result');
     const spinnerEl = document.getElementById('analysis-spinner');
@@ -327,12 +334,20 @@ async function pollMultiAnalysisStatus() {
 
     if (stillPending.length === 0) {
         // All done
+        const { id: singleId, entry: singleEntry } = getSinglePendingDemoSnapshot();
         stopAnalysisPolling();
         const phaseEl = document.getElementById('analysis-phase');
         const spinnerEl = document.getElementById('analysis-spinner');
         if (phaseEl) phaseEl.textContent = 'All analyses complete!';
         if (spinnerEl) spinnerEl.classList.add('hidden');
         await loadGreatshotView('demos');
+        if (singleId && singleEntry?.status === 'analyzed') {
+            setTimeout(() => {
+                if (typeof window.navigateToGreatshotDemo === 'function') {
+                    window.navigateToGreatshotDemo(singleId);
+                }
+            }, 2000);
+        }
         return;
     }
 
@@ -366,6 +381,7 @@ async function pollMultiAnalysisStatus() {
     }
 
     if (allDone) {
+        const { id: singleId, entry: singleEntry } = getSinglePendingDemoSnapshot();
         stopAnalysisPolling();
         const spinnerEl = document.getElementById('analysis-spinner');
         if (spinnerEl) spinnerEl.classList.add('hidden');
@@ -373,16 +389,12 @@ async function pollMultiAnalysisStatus() {
         await loadGreatshotView('demos');
 
         // For single file, navigate to detail after short delay
-        if (total === 1) {
-            const singleId = [...pendingDemos.keys()][0];
-            const singleEntry = pendingDemos.get(singleId);
-            if (singleEntry?.status === 'analyzed') {
-                setTimeout(() => {
-                    if (typeof window.navigateToGreatshotDemo === 'function') {
-                        window.navigateToGreatshotDemo(singleId);
-                    }
-                }, 2000);
-            }
+        if (singleId && singleEntry?.status === 'analyzed') {
+            setTimeout(() => {
+                if (typeof window.navigateToGreatshotDemo === 'function') {
+                    window.navigateToGreatshotDemo(singleId);
+                }
+            }, 2000);
         }
     }
 }

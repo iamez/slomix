@@ -1202,7 +1202,6 @@ class UltimateETLegacyBot(commands.Bot):
         """
         try:
             from datetime import datetime
-            import re
             from bot.core.round_linker import resolve_round_id_with_reason
 
             map_name = metadata.get('map_name') or metadata.get('map')
@@ -1791,8 +1790,13 @@ class UltimateETLegacyBot(commands.Bot):
                             winner_team = fallback_win or 0
                             if winner_team:
                                 _add_side_reason("winner_fallback_from_round1")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning(
+                        "Round side fallback lookup failed for map=%s session=%s: %s",
+                        stats_data.get("map_name"),
+                        gaming_session_id,
+                        exc,
+                    )
 
             if defender_team == 0:
                 _add_side_reason("defender_zero_final")

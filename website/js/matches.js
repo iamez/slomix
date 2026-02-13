@@ -338,11 +338,35 @@ let weaponPeriod = 'all';
 let weaponCategory = 'all';
 let weaponFiltersBound = false;
 
+async function fetchWeaponPlayers(period) {
+    const query = `period=${encodeURIComponent(period)}&player_limit=24&weapon_limit=4`;
+    const primaryUrl = `${API_BASE}/stats/weapons/by-player?${query}`;
+    const fallbackUrl = `${API_BASE}/stats/weapons/by_player?${query}`;
+
+    try {
+        return await fetchJSON(primaryUrl);
+    } catch (err) {
+        if (!String(err?.message || '').includes('HTTP 404')) {
+            throw err;
+        }
+    }
+
+    try {
+        return await fetchJSON(fallbackUrl);
+    } catch (err) {
+        if (!String(err?.message || '').includes('HTTP 404')) {
+            throw err;
+        }
+        console.warn('Weapons by-player endpoint unavailable; continuing without player breakdown');
+        return { players: [] };
+    }
+}
+
 async function refreshWeaponsData() {
     const [weapons, hof, byPlayer] = await Promise.all([
         fetchJSON(`${API_BASE}/stats/weapons?limit=200&period=${weaponPeriod}`),
         fetchJSON(`${API_BASE}/stats/weapons/hall-of-fame?period=${weaponPeriod}`),
-        fetchJSON(`${API_BASE}/stats/weapons/by-player?period=${weaponPeriod}&player_limit=24&weapon_limit=4`)
+        fetchWeaponPlayers(weaponPeriod)
     ]);
     weaponsCache = Array.isArray(weapons) ? weapons : [];
     weaponsHall = hof?.leaders || {};
