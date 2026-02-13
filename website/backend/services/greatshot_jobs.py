@@ -417,37 +417,41 @@ class GreatshotJobService:
                 demo_duration_ms=demo_end_ms,
             )
 
-            # Lock the highlight row to prevent race conditions when multiple workers
-            # try to extract the same clip simultaneously (SELECT FOR UPDATE)
-            locked_highlight = await self.db.fetch_one(
-                "SELECT clip_demo_path FROM greatshot_highlights WHERE id = $1 FOR UPDATE",
-                (highlight_id,)
-            )
+            # Hold a row lock for the full check/cut/update sequence.
+            # This prevents concurrent workers from extracting the same clip at once.
+            clip_demo_path = None
+            async with self.db.connection() as conn:
+                async with conn.transaction():
+                    locked_highlight = await conn.fetchrow(
+                        "SELECT clip_demo_path FROM greatshot_highlights WHERE id = $1 FOR UPDATE",
+                        highlight_id,
+                    )
 
-            # Re-check after acquiring lock (another worker may have just finished)
-            locked_clip_path = locked_highlight[0] if locked_highlight else None
-            clip_demo_path = str(locked_clip_path) if locked_clip_path else None
-            clip_missing = not clip_demo_path or not Path(clip_demo_path).is_file()
-            if clip_missing:
-                clips_dir = self.storage.clips_dir(demo_id)
-                clips_dir.mkdir(parents=True, exist_ok=True)
-                clip_demo = clips_dir / f"{highlight_id}{extension}"
+                    locked_clip_path = locked_highlight[0] if locked_highlight else None
+                    clip_demo_path = str(locked_clip_path) if locked_clip_path else None
+                    clip_missing = not clip_demo_path or not Path(clip_demo_path).is_file()
 
-                await asyncio.to_thread(
-                    cut_demo,
-                    stored_path,
-                    clip_start,
-                    clip_end,
-                    clip_demo,
-                    None,
-                    GREATSHOT_CONFIG.cutter_timeout_seconds,
-                )
+                    if clip_missing:
+                        clips_dir = self.storage.clips_dir(demo_id)
+                        clips_dir.mkdir(parents=True, exist_ok=True)
+                        clip_demo = clips_dir / f"{highlight_id}{extension}"
 
-                clip_demo_path = str(clip_demo)
-                await self.db.execute(
-                    "UPDATE greatshot_highlights SET clip_demo_path = $2 WHERE id = $1",
-                    (highlight_id, clip_demo_path),
-                )
+                        await asyncio.to_thread(
+                            cut_demo,
+                            stored_path,
+                            clip_start,
+                            clip_end,
+                            clip_demo,
+                            None,
+                            GREATSHOT_CONFIG.cutter_timeout_seconds,
+                        )
+
+                        clip_demo_path = str(clip_demo)
+                        await conn.execute(
+                            "UPDATE greatshot_highlights SET clip_demo_path = $2 WHERE id = $1",
+                            highlight_id,
+                            clip_demo_path,
+                        )
 
             if not clip_demo_path:
                 raise RuntimeError(

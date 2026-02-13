@@ -92,7 +92,6 @@ async def get_top_players(limit: int = 10, db=Depends(get_db)):
         WHERE d.status = 'analyzed'
           AND d.analysis_json_path IS NOT NULL
         ORDER BY d.created_at DESC
-        LIMIT 100
         """,
         ()
     )
@@ -172,7 +171,6 @@ async def get_top_accuracy(min_kills: int = 10, limit: int = 10, db=Depends(get_
         WHERE d.status = 'analyzed'
           AND d.analysis_json_path IS NOT NULL
         ORDER BY d.created_at DESC
-        LIMIT 100
         """,
         ()
     )
@@ -243,7 +241,6 @@ async def get_top_damage(limit: int = 10, db=Depends(get_db)):
         WHERE d.status = 'analyzed'
           AND d.analysis_json_path IS NOT NULL
         ORDER BY d.created_at DESC
-        LIMIT 100
         """,
         ()
     )
