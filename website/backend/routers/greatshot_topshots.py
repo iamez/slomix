@@ -40,7 +40,7 @@ async def get_top_kills(limit: int = 10, db=Depends(get_db)):
             d.original_filename,
             d.metadata_json,
             a.total_kills,
-            a.stats_json,
+            a.player_count,
             d.created_at
         FROM greatshot_demos d
         JOIN greatshot_analysis a ON a.demo_id = d.id
@@ -54,18 +54,15 @@ async def get_top_kills(limit: int = 10, db=Depends(get_db)):
 
     results = []
     for row in rows:
-        demo_id, filename, metadata_json, total_kills, stats_json, created_at = row
+        demo_id, filename, metadata_json, total_kills, player_count, created_at = row
         metadata = _safe_json_field(metadata_json) or {}
-        stats = _safe_json_field(stats_json) or {}
-
-        player_stats = stats.get("player_stats") or {}
 
         results.append({
             "demo_id": demo_id,
             "filename": filename,
             "map": metadata.get("map"),
             "total_kills": total_kills,
-            "player_count": len(player_stats),
+            "player_count": player_count,
             "created_at": str(created_at),
         })
 

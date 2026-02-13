@@ -236,22 +236,24 @@ class GreatshotJobService:
             events_json = json.dumps(analysis.get("timeline") or [])
             warnings_json = json.dumps(analysis.get("warnings") or [])
 
-            # Calculate total_kills for efficient topshots queries (avoids N+1 file reads)
+            # Calculate total_kills and player_count for efficient topshots queries (avoids N+1 file reads)
             player_stats = analysis.get("player_stats") or {}
             total_kills = sum([p.get("kills", 0) for p in player_stats.values()])
+            player_count = len(player_stats)
 
             await self.db.execute(
                 """
-                INSERT INTO greatshot_analysis (demo_id, metadata_json, stats_json, events_json, total_kills, created_at)
-                VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5, CURRENT_TIMESTAMP)
+                INSERT INTO greatshot_analysis (demo_id, metadata_json, stats_json, events_json, total_kills, player_count, created_at)
+                VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5, $6, CURRENT_TIMESTAMP)
                 ON CONFLICT (demo_id) DO UPDATE SET
                     metadata_json = EXCLUDED.metadata_json,
                     stats_json = EXCLUDED.stats_json,
                     events_json = EXCLUDED.events_json,
                     total_kills = EXCLUDED.total_kills,
+                    player_count = EXCLUDED.player_count,
                     created_at = CURRENT_TIMESTAMP
                 """,
-                (demo_id, metadata_json, stats_json, events_json, total_kills),
+                (demo_id, metadata_json, stats_json, events_json, total_kills, player_count),
             )
 
             await self.db.execute(

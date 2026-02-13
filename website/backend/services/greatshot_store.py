@@ -360,6 +360,7 @@ class GreatshotStorageService:
                 stats_json JSONB NOT NULL,
                 events_json JSONB NOT NULL,
                 total_kills INTEGER DEFAULT 0,
+                player_count INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
@@ -371,6 +372,17 @@ class GreatshotStorageService:
                 """
                 ALTER TABLE greatshot_analysis
                 ADD COLUMN IF NOT EXISTS total_kills INTEGER DEFAULT 0
+                """
+            )
+        except Exception:
+            pass  # Column may already exist
+
+        # Migration: Add player_count column if it doesn't exist
+        try:
+            await db.execute(
+                """
+                ALTER TABLE greatshot_analysis
+                ADD COLUMN IF NOT EXISTS player_count INTEGER DEFAULT 0
                 """
             )
         except Exception:
