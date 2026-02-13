@@ -1830,6 +1830,16 @@
                         <div class="text-slate-400">Loading weapon statistics...</div>
                     </div>
                 </div>
+
+                <div class="mt-10">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-2xl font-black text-white">Player Weapon Mastery</h2>
+                        <div class="text-xs text-slate-500">Per-player/per-guid top weapons</div>
+                    </div>
+                    <div id="weapons-player-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        <div class="glass-card p-4 rounded-xl border border-white/10 text-center text-slate-500">Loading player weapon stats...</div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1953,6 +1963,17 @@
                             <div class="text-sm font-bold text-slate-400">Engagement Timeline</div>
                             <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">Live</span>
                         </div>
+                        <div id="proximity-timeline-scope" class="text-[11px] text-slate-500 mb-3">Scope: Last 30d window</div>
+                        <div class="flex flex-wrap gap-2 mb-3 text-[10px]">
+                            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-400" title="Each bar is one timeline bucket for the selected session/map/round scope.">
+                                <span class="w-2 h-2 rounded-sm bg-brand-cyan/40"></span>
+                                Bucketed engagements
+                            </span>
+                            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-400" title="Taller bars mean more engagements in that bucket.">
+                                <span class="w-2 h-2 rounded-sm bg-brand-cyan"></span>
+                                Height = intensity
+                            </span>
+                        </div>
                         <div class="h-48 rounded-lg border border-white/10 p-3 flex items-end gap-2" id="proximity-timeline">
                             <div id="proximity-timeline-empty" class="h-full flex items-center justify-center text-slate-500">
                                 <div class="text-center">
@@ -1968,6 +1989,17 @@
                         <div class="flex items-center justify-between mb-4">
                             <div class="text-sm font-bold text-slate-400">Hot Zone Map</div>
                             <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-rose/10 text-brand-rose">Live</span>
+                        </div>
+                        <div id="proximity-heatmap-scope" class="text-[11px] text-slate-500 mb-3">Scope: Last 30d window</div>
+                        <div class="flex flex-wrap gap-2 mb-3 text-[10px]">
+                            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-400" title="Hotzones are spatial bins built from engagement events in the selected scope.">
+                                <span class="w-2 h-2 rounded-full bg-brand-rose/40"></span>
+                                Hotzone bin
+                            </span>
+                            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-400" title="Larger and brighter points indicate more kills in that area.">
+                                <span class="w-3 h-3 rounded-full bg-brand-rose"></span>
+                                Size/color = kills
+                            </span>
                         </div>
                         <div class="h-48 rounded-lg border border-white/10 relative overflow-hidden" id="proximity-heatmap-wrap">
                             <canvas id="proximity-heatmap" class="absolute inset-0 w-full h-full"></canvas>

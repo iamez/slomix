@@ -725,6 +725,7 @@ export function renderSessionDetails(data) {
                 const dpm = Number(player.dpm || 0);
                 const kd = (player.kd || 0).toFixed ? player.kd.toFixed(2) : Number(player.kd || 0).toFixed(2);
                 const timePlayed = formatDuration(player.time_played_seconds);
+                const killAssists = Number(player.kill_assists || 0);
                 const selfKills = Number(player.self_kills || 0);
                 const fullSelf = Number(player.full_selfkills || 0);
                 return `
@@ -736,6 +737,7 @@ export function renderSessionDetails(data) {
                         <div class="flex items-center gap-3 text-xs text-slate-400">
                             <span>K ${kills}</span>
                             <span>D ${deaths}</span>
+                            <span>KA ${killAssists}</span>
                             <span>DPM ${dpm}</span>
                             <span>⏱ ${timePlayed}</span>
                             <span>SK ${selfKills}</span>
@@ -1580,6 +1582,7 @@ function transformGraphData(apiData) {
         dpm: p.combat_offense?.dpm || 0,
         // Flatten combat_defense
         revives: p.combat_defense?.revives || 0,
+        kill_assists: p.combat_defense?.kill_assists || 0,
         gibs: p.combat_defense?.gibs || 0,
         headshots: p.combat_defense?.headshots || 0,
         times_revived: p.combat_defense?.times_revived || 0,
@@ -1746,6 +1749,12 @@ function renderSessionGraph(date, tab) {
                         label: 'Revives',
                         data: data.players.map(p => p.revives),
                         backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                        borderWidth: 0,
+                    },
+                    {
+                        label: 'Kill Assists',
+                        data: data.players.map(p => p.kill_assists),
+                        backgroundColor: 'rgba(59, 130, 246, 0.8)',
                         borderWidth: 0,
                     },
                     {

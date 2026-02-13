@@ -416,7 +416,7 @@ export POSTGRES_TEST_HOST=localhost
 export POSTGRES_TEST_PORT=5432
 export POSTGRES_TEST_DATABASE=etlegacy_test
 export POSTGRES_TEST_USER=etlegacy_user
-export POSTGRES_TEST_PASSWORD=etlegacy_secure_2025
+export POSTGRES_TEST_PASSWORD=REDACTED_DB_PASSWORD
 
 # Run database tests
 pytest tests/unit/test_database_adapter.py -v -m requires_db

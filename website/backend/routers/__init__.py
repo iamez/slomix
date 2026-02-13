@@ -34,10 +34,4 @@ Usage:
     app.include_router(auth.router, prefix="/auth")
     app.include_router(predictions.router, prefix="/api")
 """
-
-from website.backend.routers import api
-from website.backend.routers import auth
-from website.backend.routers import predictions
-from website.backend.routers import greatshot
-
-__all__ = ['api', 'auth', 'predictions', 'greatshot']
+__all__ = ["api", "auth", "predictions", "greatshot", "greatshot_topshots"]

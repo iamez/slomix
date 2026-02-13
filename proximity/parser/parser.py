@@ -19,10 +19,14 @@ v4.1 Output Format:
 import os
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 from dataclasses import dataclass, field
+
+PROXIMITY_FILENAME_ROUND_RE = re.compile(r"-round-(\d+)_engagements\.txt$", re.IGNORECASE)
+GAMETIME_FILENAME_RE = re.compile(r"^gametime-(?P<map>.+)-R(?P<round>\d+)-(?P<ts>\d+)\.json$")
 
 
 @dataclass
@@ -143,9 +147,10 @@ class PlayerTrack:
 class ProximityParserV4:
     """Parser for proximity_tracker v4 output files with full player tracking"""
 
-    def __init__(self, db_adapter=None, output_dir: str = "gamestats"):
+    def __init__(self, db_adapter=None, output_dir: str = "gamestats", gametimes_dir: str = "local_gametimes"):
         self.db_adapter = db_adapter
         self.output_dir = output_dir
+        self.gametimes_dir = gametimes_dir
         self.logger = logging.getLogger(__name__)
 
         # Parsed data
@@ -155,9 +160,15 @@ class ProximityParserV4:
         self.movement_heatmap: List[Dict] = []
         self.trade_events: List[Dict] = []
         self.support_summary: Optional[Dict] = None
-        self.metadata = {
+        self.metadata = self._metadata_defaults()
+        self._schema_cache: Dict[tuple, bool] = {}
+
+    @staticmethod
+    def _metadata_defaults() -> Dict:
+        return {
             'map_name': '',
             'round_num': 0,
+            'round_num_source': 'header',
             'crossfire_window': 1000,
             'escape_time': 5000,
             'escape_distance': 300,
@@ -165,7 +176,75 @@ class ProximityParserV4:
             'round_start_unix': 0,
             'round_end_unix': 0,
         }
-        self._schema_cache: Dict[tuple, bool] = {}
+
+    @staticmethod
+    def _extract_round_from_filename(filepath: str) -> Optional[int]:
+        match = PROXIMITY_FILENAME_ROUND_RE.search(os.path.basename(filepath))
+        if not match:
+            return None
+        try:
+            value = int(match.group(1))
+        except ValueError:
+            return None
+        return value if value > 0 else None
+
+    def _extract_round_from_gametime(self, map_name: str, round_end_unix: int) -> Optional[int]:
+        if not map_name or round_end_unix <= 0:
+            return None
+
+        gametime_root = Path(self.gametimes_dir)
+        if not gametime_root.exists():
+            return None
+
+        # Use round_end_unix as the stable join key between proximity and gametimes fallback files.
+        pattern = f"gametime-*-R*-{round_end_unix}.json"
+        map_name_lower = map_name.lower()
+        for candidate in sorted(gametime_root.glob(pattern)):
+            match = GAMETIME_FILENAME_RE.match(candidate.name)
+            if not match:
+                continue
+            if match.group('map').lower() != map_name_lower:
+                continue
+            try:
+                value = int(match.group('round'))
+            except ValueError:
+                return None
+            return value if value > 0 else None
+        return None
+
+    def _normalize_round_metadata(self, filepath: str) -> None:
+        header_round = int(self.metadata.get('round_num') or 0)
+        map_name = str(self.metadata.get('map_name') or '')
+        round_end_unix = int(self.metadata.get('round_end_unix') or 0)
+
+        gametime_round = self._extract_round_from_gametime(map_name, round_end_unix)
+        filename_round = self._extract_round_from_filename(filepath)
+
+        normalized_round = header_round
+        source = 'header'
+        if gametime_round:
+            normalized_round = gametime_round
+            source = 'gametime'
+        elif filename_round:
+            normalized_round = filename_round
+            source = 'filename'
+        elif normalized_round <= 0:
+            normalized_round = 1
+            source = 'default'
+
+        if normalized_round != header_round:
+            self.logger.info(
+                "[ROUND NORMALIZED] file=%s map=%s header=%s normalized=%s source=%s round_end_unix=%s",
+                os.path.basename(filepath),
+                map_name,
+                header_round,
+                normalized_round,
+                source,
+                round_end_unix,
+            )
+
+        self.metadata['round_num'] = normalized_round
+        self.metadata['round_num_source'] = source
     
     def find_files(self, session_date: str = None) -> List[str]:
         """Find v3 engagement files"""
@@ -183,6 +262,7 @@ class ProximityParserV4:
     
     def parse_file(self, filepath: str) -> bool:
         """Parse an engagement file (v3 or v4 format)"""
+        self.metadata = self._metadata_defaults()
         self.engagements = []
         self.player_tracks = []
         self.kill_heatmap = []
@@ -205,7 +285,10 @@ class ProximityParserV4:
                         self.metadata['map_name'] = line.split('=')[1]
                         continue
                     if line.startswith('# round='):
-                        self.metadata['round_num'] = int(line.split('=')[1])
+                        try:
+                            self.metadata['round_num'] = int(line.split('=')[1])
+                        except ValueError:
+                            self.metadata['round_num'] = 0
                         continue
                     if line.startswith('# crossfire_window='):
                         self.metadata['crossfire_window'] = int(line.split('=')[1])
@@ -265,6 +348,7 @@ class ProximityParserV4:
                     elif section == 'objective_focus':
                         self._parse_objective_focus_line(line)
 
+            self._normalize_round_metadata(filepath)
             self.logger.info(f"Parsed {len(self.engagements)} engagements, {len(self.player_tracks)} tracks from {filepath}")
             return True
 
@@ -1098,7 +1182,7 @@ class ProximityParserV4:
                 query = f"""
                     INSERT INTO proximity_objective_focus ({", ".join(columns)})
                     VALUES ({placeholders})
-                    ON CONFLICT (session_date, round_number, player_guid) DO UPDATE SET
+                    ON CONFLICT (session_date, round_number, round_start_unix, player_guid) DO UPDATE SET
                         player_name = EXCLUDED.player_name,
                         team = EXCLUDED.team,
                         objective = EXCLUDED.objective,
@@ -1466,10 +1550,10 @@ class ProximityParserV4:
         # Track stats (v4)
         total_samples = sum(t.sample_count for t in self.player_tracks)
         total_distance = sum(t.total_distance for t in self.player_tracks)
+        positive_duration_tracks = [t for t in self.player_tracks if t.duration_ms > 0]
         avg_life = (
-            sum(t.duration_ms for t in self.player_tracks if t.duration_ms > 0) /
-            len([t for t in self.player_tracks if t.duration_ms > 0])
-            if self.player_tracks else 0
+            sum(t.duration_ms for t in positive_duration_tracks) / len(positive_duration_tracks)
+            if positive_duration_tracks else 0
         )
 
         return {

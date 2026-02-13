@@ -1,5 +1,7 @@
 # 🧠 WEEK HANDOFF MEMORY - Week 11-12 Complete
 
+> **Historical Notice (2026-02-12):** This is an archival handoff snapshot and not the live execution plan. Use `docs/TWO_WEEK_EXECUTION_TRACKER_2026-02-11.md` for current task status.
+
 **Date Created:** 2025-11-28
 **Next Session:** ~2025-12-05 (after 1 week monitoring)
 **Purpose:** Complete memory of project state for resuming after break
@@ -189,7 +191,7 @@ Host: localhost
 Port: 5432
 Database: etlegacy
 User: etlegacy_user
-Password: etlegacy_secure_2025
+Password: REDACTED_DB_PASSWORD
 ```text
 
 ### **Discord Channels:**
@@ -254,7 +256,7 @@ screen -r slomix-bot
 # Detach: Ctrl+A, then D
 
 # Check database
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT COUNT(*) FROM match_predictions;"
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT COUNT(*) FROM match_predictions;"
 # Should return number of predictions (0 expected since features disabled)
 
 # Check recent bot logs
@@ -427,7 +429,7 @@ python -m bot.ultimate_bot
 
 ```bash
 # Restore from backup
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy < backup_20251128.sql
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy < backup_20251128.sql
 ```text
 
 **Disable Predictions:**

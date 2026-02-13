@@ -5,38 +5,42 @@
 Discord.py Cogs for the ET:Legacy Statistics Bot.
 Each cog handles a specific domain of commands.
 
-## Available Cogs (14 total)
+## Available Cogs (20 total)
 
-### User-Facing Commands
+### Core User Cogs
 
-| Cog | File | Purpose | Key Commands |
-|-----|------|---------|--------------|
-| LastSessionCog | `last_session_cog.py` | Gaming session stats | `!last_session`, `!last_session graphs` |
-| LeaderboardCog | `leaderboard_cog.py` | Rankings & leaderboards | `!top_dpm`, `!top_kd`, `!stats` |
-| StatsCog | `stats_cog.py` | Individual player stats | `!stats <player>` |
-| TeamCog | `team_cog.py` | Team-based statistics | `!team_stats` |
-| SessionCog | `session_cog.py` | Session exploration | `!sessions`, `!session <id>` |
-| PredictionsCog | `predictions_cog.py` | Match predictions | `!predictions`, `!predict` |
-| LinkCog | `link_cog.py` | Account linking | `!link`, `!unlink`, `!whoami` |
+| File | Purpose |
+|------|---------|
+| `achievements_cog.py` | Achievement help and badge legend |
+| `analytics_cog.py` | Consistency, map stats, playstyle, awards |
+| `last_session_cog.py` | Latest session embeds and endstats audits |
+| `leaderboard_cog.py` | Leaderboards and player stats entrypoint |
+| `link_cog.py` | Discord-to-player linking and alias tools |
+| `matchup_cog.py` | Duo performance, matchup and nemesis commands |
+| `predictions_cog.py` | Public prediction and trend commands |
+| `proximity_cog.py` | Proximity import/status/objective commands |
+| `session_cog.py` | Session and rounds queries |
+| `stats_cog.py` | General help, compare, achievements progress |
+| `team_cog.py` | Team pool, team record, head-to-head |
 
-### Admin Commands
+### Admin and Operations Cogs
 
-| Cog | File | Purpose | Key Commands |
-|-----|------|---------|--------------|
-| AdminCog | `admin_cog.py` | Database & sync operations | `!sync_all`, `!rebuild_sessions` |
-| AdminPredictionsCog | `admin_predictions_cog.py` | Prediction management | `!resolve_prediction` |
-| SyncCog | `sync_cog.py` | File synchronization | `!sync_historical` |
-| ServerControlCog | `server_control.py` | Game server control | `!rcon`, `!restart` |
-| AutomationCommandsCog | `automation_commands.py` | Automation control | `!automation_status` |
+| File | Purpose |
+|------|---------|
+| `admin_cog.py` | Cache/reload/diagnostic admin commands |
+| `admin_predictions_cog.py` | Admin prediction management |
+| `automation_commands.py` | Automation status, health, metrics, DB maintenance |
+| `permission_management_cog.py` | Permission whitelist management |
+| `server_control.py` | ET server control and RCON actions |
+| `session_management_cog.py` | Manual session start/end |
+| `sync_cog.py` | Manual sync/backfill commands |
+| `team_management_cog.py` | Team assignment helpers |
 
-### Specialized
+### Optional/Extended
 
-| Cog | File | Purpose |
-|-----|------|---------|
-| SynergyAnalyticsCog | `synergy_analytics.py` | Player synergy analysis |
-| SessionManagementCog | `session_management_cog.py` | Session operations |
-| TeamManagementCog | `team_management_cog.py` | Team assignment |
-| PermissionManagementCog | `permission_management_cog.py` | Permission control |
+| File | Purpose |
+|------|---------|
+| `synergy_analytics.py` | Experimental synergy and team-balancing analytics |
 
 ## Cog Template
 

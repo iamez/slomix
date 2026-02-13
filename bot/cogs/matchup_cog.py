@@ -44,9 +44,11 @@ class MatchupCog(commands.Cog):
         for name in player_names:
             # Try exact match first
             query = """
-                SELECT DISTINCT player_guid
+                SELECT player_guid
                 FROM player_comprehensive_stats
                 WHERE LOWER(player_name) = LOWER($1)
+                GROUP BY player_guid
+                ORDER BY MAX(round_date) DESC
                 LIMIT 1
             """
             result = await self.bot.db_adapter.fetch_one(query, (name,))
@@ -56,10 +58,11 @@ class MatchupCog(commands.Cog):
             else:
                 # Try partial match
                 query = """
-                    SELECT DISTINCT player_guid
+                    SELECT player_guid
                     FROM player_comprehensive_stats
                     WHERE LOWER(player_name) LIKE LOWER($1)
-                    ORDER BY round_date DESC
+                    GROUP BY player_guid
+                    ORDER BY MAX(round_date) DESC
                     LIMIT 1
                 """
                 result = await self.bot.db_adapter.fetch_one(query, (f"%{name}%",))

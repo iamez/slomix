@@ -19,7 +19,7 @@ DB_CONFIG = {
     'port': 5432,
     'database': 'etlegacy',
     'user': 'etlegacy_user',
-    'password': 'etlegacy_secure_2025'
+    'password': 'REDACTED_DB_PASSWORD'
 }
 
 # Fields mapping: parser_field -> db_column

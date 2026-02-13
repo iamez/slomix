@@ -116,6 +116,17 @@ class BotConfig:
         self.dev_timing_channel_id: int = int(self._get_config('DEV_TIMING_CHANNEL_ID', '0'))
         self.timing_comparison_enabled: bool = self._get_config('TIMING_COMPARISON_ENABLED', 'true').lower() == 'true'
 
+        # Live achievement notifications:
+        # - off: disabled (prevents channel spam)
+        # - summary: one compact embed per round
+        # - individual: one embed per achievement unlock
+        self.live_achievement_mode: str = self._get_config('LIVE_ACHIEVEMENT_MODE', 'off').strip().lower()
+        if self.live_achievement_mode not in {'off', 'summary', 'individual'}:
+            logger.warning(
+                f"⚠️ Invalid LIVE_ACHIEVEMENT_MODE='{self.live_achievement_mode}', falling back to 'off'"
+            )
+            self.live_achievement_mode = 'off'
+
         # Derived channel lists (computed from above)
         self.public_channels: List[int] = [
             ch for ch in [self.production_channel_id, self.gather_channel_id, self.general_channel_id]
@@ -192,7 +203,7 @@ class BotConfig:
         self.stats_directory: str = self._get_config('STATS_DIRECTORY', 'local_stats')
         self.local_stats_path: str = self._get_config('LOCAL_STATS_PATH', './local_stats')
         self.backup_directory: str = self._get_config('BACKUP_DIRECTORY', 'processed_stats')
-        self.metrics_db_path: str = self._get_config('METRICS_DB_PATH', 'bot/data/metrics.db')
+        self.metrics_db_path: str = self._get_config('METRICS_DB_PATH', 'bot/logs/metrics/metrics.db')
 
         # ==================== RCON (REMOTE CONSOLE) ====================
         self.rcon_enabled: bool = self._get_config('RCON_ENABLED', 'false').lower() == 'true'

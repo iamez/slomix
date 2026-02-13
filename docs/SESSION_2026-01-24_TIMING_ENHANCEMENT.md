@@ -357,7 +357,7 @@ COMMENT ON COLUMN lua_round_teams.lua_warmup_start_unix IS 'Unix timestamp when 
 
 ### Migration Executed
 ```bash
-PGPASSWORD='etlegacy_secure_2025' psql -h 192.168.64.116 -p 5432 \
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h 192.168.64.116 -p 5432 \
   -U etlegacy_user -d etlegacy \
   -f /home/samba/share/slomix_discord/tools/migrations/003_add_warmup_columns.sql
 ```
@@ -396,7 +396,7 @@ Testing checklist for upcoming game session (updated with new field names).
 ### Database Migration
 **Command:**
 ```bash
-PGPASSWORD='etlegacy_secure_2025' psql -h 192.168.64.116 -p 5432 \
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h 192.168.64.116 -p 5432 \
   -U etlegacy_user -d etlegacy \
   -f /home/samba/share/slomix_discord/tools/migrations/003_add_warmup_columns.sql
 ```

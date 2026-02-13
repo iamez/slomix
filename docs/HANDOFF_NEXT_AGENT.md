@@ -1,4 +1,7 @@
 # Handoff to Next Claude Agent
+
+> **Historical Notice (2026-02-12):** This handoff captures a past session snapshot. For current active priorities and status, use `docs/TWO_WEEK_EXECUTION_TRACKER_2026-02-11.md` and `docs/CRASH_PROOF_TODO_2026-02-12.md`.
+
 **Date:** 2026-01-31  
 **From:** Claude Opus 4.5 (Configuration Recovery Session)  
 **Status:** ✅ Ready for Development
@@ -198,7 +201,7 @@ systemctl status etlegacy-bot  # Check service
 mcp__db__execute_sql: SELECT * FROM rounds LIMIT 5;
 
 # Direct psql:
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy
 ```
 
 ### Git Workflow
@@ -274,7 +277,7 @@ cat ~/.claude/mcp.json
 ### Database Issues
 ```bash
 # Test connection
-PGPASSWORD='etlegacy_secure_2025' psql -d etlegacy -c "SELECT 1;"
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -d etlegacy -c "SELECT 1;"
 
 # Check service
 sudo systemctl status postgresql

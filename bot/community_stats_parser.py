@@ -13,6 +13,11 @@ from typing import Any, Dict, List, Optional
 import discord
 
 from bot.stats import StatsCalculator
+from bot.core.round_contract import (
+    normalize_side_value,
+    score_confidence_state,
+    derive_stopwatch_contract,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +101,47 @@ C0RNP0RN3_WEAPONS = {
     26: "WS_MP34",
     27: "WS_SYRINGE",
 }
+
+
+def _parse_side_fields(header_parts: List[str]) -> tuple[int, int, Dict[str, Any]]:
+    """
+    Parse defender/winner side fields and return diagnostics for fallback reasons.
+
+    Current parser defaults are preserved for compatibility:
+    - defender_team defaults to 1 (Axis)
+    - winner_team defaults to 0 (unknown)
+    """
+    defender_raw = header_parts[4].strip() if len(header_parts) > 4 else None
+    winner_raw = header_parts[5].strip() if len(header_parts) > 5 else None
+
+    diagnostics = {
+        "header_field_count": len(header_parts),
+        "defender_team_raw": defender_raw,
+        "winner_team_raw": winner_raw,
+        "reasons": [],
+    }
+
+    defender_team = 1
+    if not defender_raw:
+        diagnostics["reasons"].append("defender_missing")
+    elif not defender_raw.isdigit():
+        diagnostics["reasons"].append("defender_non_numeric")
+    else:
+        defender_team = int(defender_raw)
+        if defender_team not in (1, 2):
+            diagnostics["reasons"].append("defender_out_of_range")
+
+    winner_team = 0
+    if not winner_raw:
+        diagnostics["reasons"].append("winner_missing")
+    elif not winner_raw.isdigit():
+        diagnostics["reasons"].append("winner_non_numeric")
+    else:
+        winner_team = int(winner_raw)
+        if winner_team not in (0, 1, 2):
+            diagnostics["reasons"].append("winner_out_of_range")
+
+    return defender_team, winner_team, diagnostics
 
 
 class C0RNP0RN3StatsParser:
@@ -526,6 +572,53 @@ class C0RNP0RN3StatsParser:
         logger.debug("[MATCH] Attached match summary with cumulative stats from both rounds")
         return round_2_only_result
 
+    def _detect_player_counter_reset(
+        self,
+        r1_player: Dict[str, Any],
+        r2_player: Dict[str, Any],
+    ) -> List[str]:
+        """
+        Detect per-player non-cumulative R2 counters.
+
+        In cumulative mode, R2 values should never be lower than R1 for the same player.
+        If they drop, assume this player reset/reconnected and use safe R2-raw fallback.
+        """
+        dropped_fields: List[str] = []
+
+        r1_obj = r1_player.get('objective_stats', {}) or {}
+        r2_obj = r2_player.get('objective_stats', {}) or {}
+
+        checks = [
+            ("kills", r1_player.get('kills', 0), r2_player.get('kills', 0)),
+            ("deaths", r1_player.get('deaths', 0), r2_player.get('deaths', 0)),
+            ("damage_given", r1_player.get('damage_given', 0), r2_player.get('damage_given', 0)),
+            ("damage_received", r1_player.get('damage_received', 0), r2_player.get('damage_received', 0)),
+            (
+                "objective.time_played_minutes",
+                r1_obj.get('time_played_minutes', 0),
+                r2_obj.get('time_played_minutes', 0),
+            ),
+            (
+                "objective.damage_given",
+                r1_obj.get('damage_given', 0),
+                r2_obj.get('damage_given', 0),
+            ),
+            (
+                "objective.damage_received",
+                r1_obj.get('damage_received', 0),
+                r2_obj.get('damage_received', 0),
+            ),
+        ]
+
+        for field_name, r1_value, r2_value in checks:
+            try:
+                if float(r2_value) < float(r1_value):
+                    dropped_fields.append(field_name)
+            except Exception:
+                continue
+
+        return dropped_fields
+
     def calculate_round_2_differential(
         self, round_1_data: Dict[str, Any], round_2_cumulative_data: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -554,23 +647,53 @@ class C0RNP0RN3StatsParser:
                 round_2_only_players.append(r2_copy)
                 continue
 
+            reset_fields = self._detect_player_counter_reset(r1_player, r2_player)
+            use_r2_raw = len(reset_fields) > 0
+            if use_r2_raw:
+                r1_obj = r1_player.get('objective_stats', {}) or {}
+                r2_obj = r2_player.get('objective_stats', {}) or {}
+                logger.warning(
+                    "[R2 RESET FALLBACK] player=%s fields=%s mode=use_r2_raw "
+                    "r1_time=%.2f r2_time=%.2f",
+                    player_name,
+                    ",".join(reset_fields),
+                    float(r1_obj.get('time_played_minutes', 0) or 0),
+                    float(r2_obj.get('time_played_minutes', 0) or 0),
+                )
+
             # Calculate differential for this player
+            kills = max(0, r2_player['kills']) if use_r2_raw else max(0, r2_player['kills'] - r1_player['kills'])
+            deaths = max(0, r2_player['deaths']) if use_r2_raw else max(0, r2_player['deaths'] - r1_player['deaths'])
+            headshots = (
+                max(0, r2_player.get('headshots', 0))
+                if use_r2_raw
+                else max(0, r2_player.get('headshots', 0) - r1_player.get('headshots', 0))
+            )
+            damage_given = (
+                max(0, r2_player.get('damage_given', 0))
+                if use_r2_raw
+                else max(0, r2_player.get('damage_given', 0) - r1_player.get('damage_given', 0))
+            )
+            damage_received = (
+                max(0, r2_player.get('damage_received', 0))
+                if use_r2_raw
+                else max(0, r2_player.get('damage_received', 0) - r1_player.get('damage_received', 0))
+            )
+
             differential_player = {
                 # FIX: Include GUID for database operations
                 'guid': r2_player.get('guid', 'UNKNOWN'),
                 'name': player_name,
                 'team': r2_player['team'],
-                'kills': max(0, r2_player['kills'] - r1_player['kills']),
-                'deaths': max(0, r2_player['deaths'] - r1_player['deaths']),
-                'headshots': max(0, r2_player.get('headshots', 0) - r1_player.get('headshots', 0)),
-                'damage_given': max(
-                    0, r2_player.get('damage_given', 0) - r1_player.get('damage_given', 0)
-                ),
-                'damage_received': max(
-                    0, r2_player.get('damage_received', 0) - r1_player.get('damage_received', 0)
-                ),
+                'kills': kills,
+                'deaths': deaths,
+                'headshots': headshots,
+                'damage_given': damage_given,
+                'damage_received': damage_received,
                 'weapon_stats': {},
                 'objective_stats': {},  # Will populate below
+                'r2_counter_reset_fallback': use_r2_raw,
+                'r2_counter_reset_fields': reset_fields,
             }
 
             # FIX: Preserve objective_stats from Round 2 cumulative (includes time!)
@@ -592,13 +715,16 @@ class C0RNP0RN3StatsParser:
                     # Time played IS cumulative - subtract R1 to get R2-only
                     r2_time = r2_obj.get('time_played_minutes', 0)
                     r1_time = r1_obj.get('time_played_minutes', 0)
-                    diff_minutes = max(0, r2_time - r1_time)
+                    diff_minutes = max(0, r2_time) if use_r2_raw else max(0, r2_time - r1_time)
                     differential_player['objective_stats']['time_played_minutes'] = diff_minutes
                 elif isinstance(r2_obj[key], (int, float)):
                     # Cumulative numeric fields - subtract R1 to get R2-only value
-                    differential_player['objective_stats'][key] = max(
-                        0, r2_obj.get(key, 0) - r1_obj.get(key, 0)
-                    )
+                    if use_r2_raw:
+                        differential_player['objective_stats'][key] = max(0, r2_obj.get(key, 0))
+                    else:
+                        differential_player['objective_stats'][key] = max(
+                            0, r2_obj.get(key, 0) - r1_obj.get(key, 0)
+                        )
                 else:
                     # For non-numeric, use R2 value
                     differential_player['objective_stats'][key] = r2_obj[key]
@@ -644,13 +770,22 @@ class C0RNP0RN3StatsParser:
                     weapon_name, {'hits': 0, 'shots': 0, 'kills': 0, 'deaths': 0, 'headshots': 0}
                 )
 
-                differential_weapon = {
-                    'hits': max(0, r2_weapon['hits'] - r1_weapon['hits']),
-                    'shots': max(0, r2_weapon['shots'] - r1_weapon['shots']),
-                    'kills': max(0, r2_weapon['kills'] - r1_weapon['kills']),
-                    'deaths': max(0, r2_weapon['deaths'] - r1_weapon['deaths']),
-                    'headshots': max(0, r2_weapon['headshots'] - r1_weapon['headshots']),
-                }
+                if use_r2_raw:
+                    differential_weapon = {
+                        'hits': max(0, r2_weapon.get('hits', 0)),
+                        'shots': max(0, r2_weapon.get('shots', 0)),
+                        'kills': max(0, r2_weapon.get('kills', 0)),
+                        'deaths': max(0, r2_weapon.get('deaths', 0)),
+                        'headshots': max(0, r2_weapon.get('headshots', 0)),
+                    }
+                else:
+                    differential_weapon = {
+                        'hits': max(0, r2_weapon['hits'] - r1_weapon['hits']),
+                        'shots': max(0, r2_weapon['shots'] - r1_weapon['shots']),
+                        'kills': max(0, r2_weapon['kills'] - r1_weapon['kills']),
+                        'deaths': max(0, r2_weapon['deaths'] - r1_weapon['deaths']),
+                        'headshots': max(0, r2_weapon['headshots'] - r1_weapon['headshots']),
+                    }
 
                 # Calculate accuracy for differential stats
                 if differential_weapon['shots'] > 0:
@@ -727,15 +862,31 @@ class C0RNP0RN3StatsParser:
 
         # Return Round 2-only result with proper metadata
         # NOTE: We keep winner_team for R2 to support header-based scoring.
+        score_confidence = score_confidence_state(
+            round_2_cumulative_data.get('defender_team'),
+            round_2_cumulative_data.get('winner_team'),
+            reasons=(round_2_cumulative_data.get('side_parse_diagnostics', {}) or {}).get('reasons', []),
+            fallback_used=False,
+        )
+        stopwatch_contract = derive_stopwatch_contract(
+            2,
+            round_2_cumulative_data.get('map_time'),
+            round_2_cumulative_data.get('actual_time'),
+        )
         return {
             'success': True,
             'map_name': round_2_cumulative_data['map_name'],
             'round_num': 2,  # Always Round 2
             'defender_team': round_2_cumulative_data['defender_team'],
             'winner_team': round_2_cumulative_data.get('winner_team', 0),
+            'side_parse_diagnostics': round_2_cumulative_data.get('side_parse_diagnostics', {}),
+            'score_confidence': score_confidence,
             'map_time': round_2_cumulative_data['map_time'],
             'actual_time': round_2_cumulative_data['actual_time'],
             'round_outcome': round_2_cumulative_data['round_outcome'],
+            'round_stopwatch_state': stopwatch_contract['round_stopwatch_state'],
+            'time_to_beat_seconds': stopwatch_contract['time_to_beat_seconds'],
+            'next_timelimit_minutes': stopwatch_contract['next_timelimit_minutes'],
             'players': round_2_only_players,
             'mvp': mvp,
             'total_players': len(round_2_only_players),
@@ -763,10 +914,19 @@ class C0RNP0RN3StatsParser:
             map_name = header_parts[1]
             header_parts[2]
             round_num = int(header_parts[3]) if header_parts[3].isdigit() else 1
-            defender_team = int(header_parts[4]) if len(header_parts) > 4 and header_parts[4].isdigit() else 1
-            winner_team = int(header_parts[5]) if len(header_parts) > 5 and header_parts[5].isdigit() else 0
+            defender_team, winner_team, side_parse_diagnostics = _parse_side_fields(header_parts)
             map_time = header_parts[6]
             actual_time = header_parts[7] if len(header_parts) > 7 else "Unknown"
+
+            if side_parse_diagnostics["reasons"]:
+                logger.warning(
+                    "[SIDE DIAG] map=%s round=%s defender_raw=%s winner_raw=%s reasons=%s",
+                    map_name,
+                    round_num,
+                    side_parse_diagnostics.get("defender_team_raw"),
+                    side_parse_diagnostics.get("winner_team_raw"),
+                    ",".join(side_parse_diagnostics["reasons"]),
+                )
 
             # Check for NEW lua format: 9th field = actual playtime in seconds
             actual_playtime_seconds = None
@@ -828,6 +988,13 @@ class C0RNP0RN3StatsParser:
 
             # Determine round outcome
             round_outcome = self.determine_round_outcome(map_time, actual_time, round_num)
+            score_confidence = score_confidence_state(
+                defender_team,
+                winner_team,
+                reasons=side_parse_diagnostics.get('reasons', []),
+                fallback_used=False,
+            )
+            stopwatch_contract = derive_stopwatch_contract(round_num, map_time, actual_time)
 
             return {
                 'success': True,
@@ -835,9 +1002,16 @@ class C0RNP0RN3StatsParser:
                 'round_num': round_num,
                 'defender_team': defender_team,
                 'winner_team': winner_team,
+                'winner_team_normalized': normalize_side_value(winner_team, allow_unknown=True),
+                'defender_team_normalized': normalize_side_value(defender_team, allow_unknown=True),
+                'side_parse_diagnostics': side_parse_diagnostics,
+                'score_confidence': score_confidence,
                 'map_time': map_time,
                 'actual_time': actual_time,
                 'round_outcome': round_outcome,
+                'round_stopwatch_state': stopwatch_contract['round_stopwatch_state'],
+                'time_to_beat_seconds': stopwatch_contract['time_to_beat_seconds'],
+                'next_timelimit_minutes': stopwatch_contract['next_timelimit_minutes'],
                 'players': players,
                 'mvp': mvp,
                 'total_players': len(players),
@@ -1115,6 +1289,16 @@ class C0RNP0RN3StatsParser:
             'error': error_type,
             'map_name': 'Unknown',
             'round_num': 0,
+            'side_parse_diagnostics': {
+                'header_field_count': 0,
+                'defender_team_raw': None,
+                'winner_team_raw': None,
+                'reasons': [f"parse_error:{error_type}"],
+            },
+            'score_confidence': 'missing',
+            'round_stopwatch_state': None,
+            'time_to_beat_seconds': None,
+            'next_timelimit_minutes': None,
             'players': [],
             'mvp': None,
             'total_players': 0,

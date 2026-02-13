@@ -56,7 +56,7 @@ def test_db_config() -> Dict[str, Any]:
         "port": int(os.getenv("POSTGRES_TEST_PORT", "5432")),
         "database": os.getenv("POSTGRES_TEST_DATABASE", "etlegacy_test"),
         "user": os.getenv("POSTGRES_TEST_USER", "etlegacy_user"),
-        "password": os.getenv("POSTGRES_TEST_PASSWORD", "etlegacy_secure_2025"),
+        "password": os.getenv("POSTGRES_TEST_PASSWORD", "etlegacy_test_password"),
         "min_pool_size": 2,
         "max_pool_size": 5
     }
@@ -410,7 +410,7 @@ def _check_test_database_available() -> bool:
                 port=int(os.getenv("POSTGRES_TEST_PORT", "5432")),
                 database=os.getenv("POSTGRES_TEST_DATABASE", "etlegacy_test"),
                 user=os.getenv("POSTGRES_TEST_USER", "etlegacy_user"),
-                password=os.getenv("POSTGRES_TEST_PASSWORD", "etlegacy_secure_2025"),
+                password=os.getenv("POSTGRES_TEST_PASSWORD", "etlegacy_test_password"),
                 min_pool_size=1,
                 max_pool_size=2
             )

@@ -340,7 +340,7 @@ WHERE round_number = 2 AND headshot_kills < 0;
 
 Before re-import:
 ```bash
-PGPASSWORD='etlegacy_secure_2025' pg_dump -h localhost -U etlegacy_user -d etlegacy > \
+PGPASSWORD='REDACTED_DB_PASSWORD' pg_dump -h localhost -U etlegacy_user -d etlegacy > \
   /home/samba/share/slomix_discord/backups/before_team_test_$(date +%Y%m%d_%H%M%S).sql
 ```
 

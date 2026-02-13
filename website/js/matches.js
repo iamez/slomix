@@ -304,10 +304,15 @@ export async function loadWeaponsView() {
         bindWeaponFilters();
         renderWeaponHallOfFame();
         renderWeaponsGrid();
+        renderWeaponPlayersGrid();
         if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (e) {
         console.error('Failed to load weapons:', e);
         grid.innerHTML = '<div class="col-span-full text-center text-red-500 py-12">Failed to load weapon statistics</div>';
+        const playersGrid = document.getElementById('weapons-player-grid');
+        if (playersGrid) {
+            playersGrid.innerHTML = '<div class="col-span-full text-center text-red-500 py-8">Failed to load player weapon stats</div>';
+        }
     }
 }
 
@@ -328,21 +333,27 @@ const categoryColors = {
 
 let weaponsCache = [];
 let weaponsHall = {};
+let weaponPlayersCache = [];
 let weaponPeriod = 'all';
 let weaponCategory = 'all';
 let weaponFiltersBound = false;
 
 async function refreshWeaponsData() {
-    const [weapons, hof] = await Promise.all([
+    const [weapons, hof, byPlayer] = await Promise.all([
         fetchJSON(`${API_BASE}/stats/weapons?limit=200&period=${weaponPeriod}`),
-        fetchJSON(`${API_BASE}/stats/weapons/hall-of-fame?period=${weaponPeriod}`)
+        fetchJSON(`${API_BASE}/stats/weapons/hall-of-fame?period=${weaponPeriod}`),
+        fetchJSON(`${API_BASE}/stats/weapons/by-player?period=${weaponPeriod}&player_limit=24&weapon_limit=4`)
     ]);
     weaponsCache = Array.isArray(weapons) ? weapons : [];
     weaponsHall = hof?.leaders || {};
+    weaponPlayersCache = Array.isArray(byPlayer?.players) ? byPlayer.players : [];
 }
 
 function normalizeWeaponKey(name) {
-    return (name || '').toLowerCase().replace(/\s+/g, '');
+    return (name || '')
+        .toLowerCase()
+        .replace(/^ws[_\s]+/, '')
+        .replace(/[_\s]+/g, '');
 }
 
 function getWeaponCategory(weaponName) {
@@ -368,6 +379,7 @@ function bindWeaponFilters() {
             await refreshWeaponsData();
             renderWeaponHallOfFame();
             renderWeaponsGrid();
+            renderWeaponPlayersGrid();
         });
     });
 
@@ -469,6 +481,55 @@ function renderWeaponsGrid() {
         `;
     }).join('');
     if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function renderWeaponPlayersGrid() {
+    const container = document.getElementById('weapons-player-grid');
+    if (!container) return;
+
+    if (!weaponPlayersCache.length) {
+        container.innerHTML = '<div class="col-span-full text-center text-slate-500 py-8">No per-player weapon stats found for this period.</div>';
+        return;
+    }
+
+    container.innerHTML = weaponPlayersCache.map(player => {
+        const guid = escapeHtml(player.player_guid || '');
+        const shortGuid = guid ? `${guid.slice(0, 10)}...` : 'n/a';
+        const playerName = escapeHtml(player.player_name || 'Unknown');
+        const totalKills = Number(player.total_kills || 0);
+        const weapons = Array.isArray(player.weapons) ? player.weapons : [];
+
+        const weaponsHtml = weapons.map(w => {
+            const weaponName = escapeHtml(w.name || 'Unknown');
+            const kills = Number(w.kills || 0).toLocaleString();
+            const acc = Number(w.accuracy || 0).toFixed(1);
+            const hs = Number(w.hs_rate || 0).toFixed(1);
+            return `
+                <div class="flex items-center justify-between text-xs py-1 border-b border-white/5 last:border-b-0">
+                    <span class="text-slate-300 font-semibold">${weaponName}</span>
+                    <span class="text-slate-500">${kills}K · ${acc}% ACC · ${hs}% HS</span>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="glass-card p-4 rounded-xl border border-white/10">
+                <div class="flex items-start justify-between mb-3">
+                    <div>
+                        <div class="text-lg font-black text-white">${playerName}</div>
+                        <div class="text-[11px] text-slate-500 font-mono">${shortGuid}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs text-slate-500 uppercase">Total Kills</div>
+                        <div class="text-base font-black text-brand-rose">${totalKills.toLocaleString()}</div>
+                    </div>
+                </div>
+                <div class="space-y-1">
+                    ${weaponsHtml || '<div class="text-xs text-slate-500">No weapon rows.</div>'}
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 /**

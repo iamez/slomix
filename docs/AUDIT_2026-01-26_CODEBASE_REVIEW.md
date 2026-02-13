@@ -223,7 +223,7 @@ If Claude Code crashes during fixes, resume here:
 python -m bot.ultimate_bot
 
 # Check PostgreSQL table exists
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy \
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy \
   -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'lua_round_teams');"
 
 # Check pool size in logs

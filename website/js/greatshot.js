@@ -667,6 +667,9 @@ async function renderCrossref(demoId) {
             html += '<th class="text-left py-1 pr-2">Player</th>';
             html += '<th class="text-right pr-2">Demo K</th><th class="text-right pr-2">DB K</th>';
             html += '<th class="text-right pr-2">Demo D</th><th class="text-right pr-2">DB D</th>';
+            html += '<th class="text-right pr-2">Demo DMG</th><th class="text-right pr-2">DB DMG</th>';
+            html += '<th class="text-right pr-2">Demo ACC%</th><th class="text-right pr-2">DB ACC%</th>';
+            html += '<th class="text-right pr-2">Demo TPM</th><th class="text-right pr-2">DB TPM</th>';
             html += '<th class="text-right pr-2">DB KDR</th><th class="text-right">DB DPM</th>';
             html += '</tr></thead><tbody>';
 
@@ -675,12 +678,20 @@ async function renderCrossref(demoId) {
                 const ds = c.demo_stats || {};
                 const bs = c.db_stats || {};
                 const matchIcon = c.matched ? '' : '<span class="text-brand-amber">*</span>';
+                const demoTpm = ds.tpm ?? ds.time_played_minutes;
+                const dbTpm = bs.tpm ?? bs.time_played_minutes;
                 html += `<tr class="border-b border-white/5">`;
                 html += `<td class="py-1 pr-2 text-slate-200">${name}${matchIcon}</td>`;
                 html += `<td class="text-right pr-2 text-slate-300">${ds.kills ?? '--'}</td>`;
                 html += `<td class="text-right pr-2 text-white">${bs.kills ?? '--'}</td>`;
                 html += `<td class="text-right pr-2 text-slate-300">${ds.deaths ?? '--'}</td>`;
                 html += `<td class="text-right pr-2 text-white">${bs.deaths ?? '--'}</td>`;
+                html += `<td class="text-right pr-2 text-slate-300">${ds.damage_given ?? '--'}</td>`;
+                html += `<td class="text-right pr-2 text-white">${bs.damage_given ?? '--'}</td>`;
+                html += `<td class="text-right pr-2 text-slate-300">${ds.accuracy != null ? Number(ds.accuracy).toFixed(1) : '--'}</td>`;
+                html += `<td class="text-right pr-2 text-white">${bs.accuracy != null ? Number(bs.accuracy).toFixed(1) : '--'}</td>`;
+                html += `<td class="text-right pr-2 text-slate-300">${demoTpm != null ? Number(demoTpm).toFixed(2) : '--'}</td>`;
+                html += `<td class="text-right pr-2 text-white">${dbTpm != null ? Number(dbTpm).toFixed(2) : '--'}</td>`;
                 html += `<td class="text-right pr-2 text-white">${bs.kdr != null ? Number(bs.kdr).toFixed(2) : '--'}</td>`;
                 html += `<td class="text-right text-white">${bs.dpm != null ? Number(bs.dpm).toFixed(1) : '--'}</td>`;
                 html += `</tr>`;
@@ -739,6 +750,9 @@ function renderPlayerStats(playerStats) {
         damage: Number(stats.damage_given || stats.damage || 0),
         accuracy: stats.accuracy != null ? Number(stats.accuracy) : null,
         headshots: Number(stats.headshots || stats.headshot_kills || 0),
+        tpm: stats.tpm != null
+            ? Number(stats.tpm)
+            : (stats.time_played_minutes != null ? Number(stats.time_played_minutes) : null),
     }));
 
     // Sort by kills descending
@@ -752,6 +766,7 @@ function renderPlayerStats(playerStats) {
     html += '<th class="text-right pr-3">KDR</th>';
     html += '<th class="text-right pr-3">Damage</th>';
     html += '<th class="text-right pr-3">Acc%</th>';
+    html += '<th class="text-right pr-3">TPM</th>';
     html += '<th class="text-right">HS</th>';
     html += '</tr></thead><tbody>';
 
@@ -764,6 +779,7 @@ function renderPlayerStats(playerStats) {
         html += `<td class="text-right pr-3 text-white">${kdr}</td>`;
         html += `<td class="text-right pr-3 text-white">${p.damage}</td>`;
         html += `<td class="text-right pr-3 text-white">${p.accuracy != null ? p.accuracy.toFixed(1) : '--'}</td>`;
+        html += `<td class="text-right pr-3 text-white">${p.tpm != null ? p.tpm.toFixed(2) : '--'}</td>`;
         html += `<td class="text-right text-white">${p.headshots}</td>`;
         html += '</tr>';
     }

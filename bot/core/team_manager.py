@@ -50,15 +50,17 @@ class TeamManager:
         await self.db.execute(
             """
             CREATE TABLE IF NOT EXISTS session_teams (
+                id SERIAL PRIMARY KEY,
                 session_start_date TEXT NOT NULL,
                 map_name TEXT NOT NULL,
                 team_name TEXT NOT NULL,
-                player_guids TEXT,
-                player_names TEXT,
+                player_guids JSONB,
+                player_names JSONB,
                 gaming_session_id INTEGER,
+                session_identity TEXT GENERATED ALWAYS AS (COALESCE(gaming_session_id::TEXT, session_start_date)) STORED,
                 color INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (session_start_date, map_name, team_name)
+                CONSTRAINT session_teams_identity_unique UNIQUE (session_identity, map_name, team_name)
             )
             """
         )
@@ -87,9 +89,51 @@ class TeamManager:
                 "team_name",
                 "player_guids",
                 "player_names",
+                "gaming_session_id",
+                "session_identity",
             }
 
         return self._session_teams_columns
+
+    @staticmethod
+    def _session_scope_clause(
+        columns: Set[str],
+        session_date: str,
+        gaming_session_id: Optional[int],
+        table_alias: str = ""
+    ) -> Tuple[str, Tuple]:
+        """
+        Build a session filter that prefers gaming_session_id when available.
+        """
+        prefix = f"{table_alias}." if table_alias else ""
+        if "gaming_session_id" in columns and gaming_session_id is not None:
+            return f"{prefix}gaming_session_id = ?", (gaming_session_id,)
+        return f"{prefix}session_start_date LIKE ?", (f"{session_date}%",)
+
+    @staticmethod
+    def _session_teams_conflict_clause(columns: Set[str]) -> str:
+        """
+        Return ON CONFLICT clause compatible with current session_teams schema.
+        """
+        if "session_identity" in columns:
+            return "ON CONFLICT ON CONSTRAINT session_teams_identity_unique"
+        return "ON CONFLICT (session_start_date, map_name, team_name)"
+
+    @staticmethod
+    def _decode_json_array(value) -> List[Any]:
+        """
+        Normalize JSON/JSONB values that may arrive as strings or native lists.
+        """
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except Exception:
+                return []
+        return list(value) if isinstance(value, tuple) else []
 
     # =========================================================================
     # REAL-TIME TEAM TRACKING (New approach - Feb 2026)
@@ -120,18 +164,24 @@ class TeamManager:
         try:
             await self._ensure_session_teams_table()
             columns = await self._get_session_teams_columns()
+            scope_clause, scope_params = self._session_scope_clause(
+                columns, session_date, gaming_session_id
+            )
 
             # Check if teams already exist for this session
             existing = await self.db.fetch_one(
-                """
+                f"""
                 SELECT COUNT(*) FROM session_teams
-                WHERE session_start_date LIKE $1 AND map_name = 'ALL'
+                WHERE {scope_clause} AND map_name = 'ALL'
                 """,
-                (f"{session_date}%",)
+                scope_params,
             )
 
             if existing and existing[0] > 0:
-                logger.debug(f"Teams already exist for session {session_date}, skipping creation")
+                logger.debug(
+                    f"Teams already exist for session {session_date} "
+                    f"(gaming_session_id={gaming_session_id}), skipping creation"
+                )
                 return True
 
             # Get all players from this round with their sides
@@ -181,14 +231,15 @@ class TeamManager:
             }
 
             # Store in database
+            conflict_clause = self._session_teams_conflict_clause(columns)
             for team_name, team_data in teams.items():
                 if "gaming_session_id" in columns:
                     await self.db.execute(
-                        """
+                        f"""
                         INSERT INTO session_teams
                         (session_start_date, map_name, team_name, player_guids, player_names, gaming_session_id)
-                        VALUES ($1, $2, $3, $4, $5, $6)
-                        ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        {conflict_clause} DO UPDATE SET
                             player_guids = EXCLUDED.player_guids,
                             player_names = EXCLUDED.player_names,
                             gaming_session_id = EXCLUDED.gaming_session_id
@@ -204,11 +255,11 @@ class TeamManager:
                     )
                 else:
                     await self.db.execute(
-                        """
+                        f"""
                         INSERT INTO session_teams
                         (session_start_date, map_name, team_name, player_guids, player_names)
-                        VALUES ($1, $2, $3, $4, $5)
-                        ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
+                        VALUES (?, ?, ?, ?, ?)
+                        {conflict_clause} DO UPDATE SET
                             player_guids = EXCLUDED.player_guids,
                             player_names = EXCLUDED.player_names
                         """,
@@ -223,7 +274,11 @@ class TeamManager:
 
             # Auto-assign random team names
             try:
-                team_a_final, team_b_final = await self.assign_random_team_names(session_date, force=True)
+                team_a_final, team_b_final = await self.assign_random_team_names(
+                    session_date,
+                    force=True,
+                    gaming_session_id=gaming_session_id,
+                )
                 logger.info(f"🎯 Created teams for session {session_date}: "
                            f"{team_a_final} ({len(team_a_guids)}p) vs {team_b_final} ({len(team_b_guids)}p)")
             except Exception as e:
@@ -263,9 +318,17 @@ class TeamManager:
         """
         try:
             await self._ensure_session_teams_table()
+            columns = await self._get_session_teams_columns()
+            scope_clause, scope_params = self._session_scope_clause(
+                columns, session_date, gaming_session_id
+            )
 
             # Get existing teams
-            teams_data = await self.get_session_teams(session_date, auto_detect=False)
+            teams_data = await self.get_session_teams(
+                session_date,
+                auto_detect=False,
+                gaming_session_id=gaming_session_id,
+            )
             if not teams_data:
                 logger.debug(f"No teams found for {session_date}, cannot update")
                 return {}
@@ -340,17 +403,17 @@ class TeamManager:
 
                                 # Update database
                                 await self.db.execute(
-                                    """
+                                    f"""
                                     UPDATE session_teams
-                                    SET player_guids = $1, player_names = $2
-                                    WHERE session_start_date LIKE $3
+                                    SET player_guids = ?, player_names = ?
+                                    WHERE {scope_clause}
                                       AND map_name = 'ALL'
-                                      AND team_name = $4
+                                      AND team_name = ?
                                     """,
                                     (
                                         json.dumps(guids),
                                         json.dumps(names),
-                                        f"{session_date}%",
+                                        *scope_params,
                                         target_team
                                     )
                                 )
@@ -369,7 +432,8 @@ class TeamManager:
 
     async def detect_session_teams(
         self,
-        session_date: str
+        session_date: str,
+        gaming_session_id: Optional[int] = None
     ) -> Dict[str, Dict]:
         """
         Automatically detect persistent teams for a session.
@@ -399,20 +463,31 @@ class TeamManager:
                 'Team B': { ... }
             }
         """
-        # Get all players from session grouped by round_id and game-team
+        # Get all players from session grouped by round_id and game-team.
         # IMPORTANT: Use round_id (unique per map+round), NOT round_number (1 or 2)
-        # because in stopwatch mode, teams swap between maps!
-        # ALSO: Include defender_team for validation (Jan 2026)
-        query = """
-            SELECT p.round_id, p.team, p.player_guid, p.player_name,
-                   r.round_number, r.defender_team, r.round_date, r.round_time
-            FROM player_comprehensive_stats p
-            JOIN rounds r ON p.round_id = r.id
-            WHERE p.round_date LIKE $1
-              AND p.round_number IN (1, 2)
-            ORDER BY r.round_date, r.round_time, p.round_id, p.team
-        """
-        rows = await self.db.fetch_all(query, (f"{session_date}%",))
+        # because in stopwatch mode, teams swap between maps.
+        if gaming_session_id is not None:
+            query = """
+                SELECT p.round_id, p.team, p.player_guid, p.player_name,
+                       r.round_number, r.defender_team, r.round_date, r.round_time
+                FROM player_comprehensive_stats p
+                JOIN rounds r ON p.round_id = r.id
+                WHERE r.gaming_session_id = ?
+                  AND r.round_number IN (1, 2)
+                ORDER BY r.round_date, r.round_time, p.round_id, p.team
+            """
+            rows = await self.db.fetch_all(query, (gaming_session_id,))
+        else:
+            query = """
+                SELECT p.round_id, p.team, p.player_guid, p.player_name,
+                       r.round_number, r.defender_team, r.round_date, r.round_time
+                FROM player_comprehensive_stats p
+                JOIN rounds r ON p.round_id = r.id
+                WHERE p.round_date LIKE ?
+                  AND r.round_number IN (1, 2)
+                ORDER BY r.round_date, r.round_time, p.round_id, p.team
+            """
+            rows = await self.db.fetch_all(query, (f"{session_date}%",))
 
         if not rows:
             logger.warning(f"No player data found for session {session_date}")
@@ -593,7 +668,8 @@ class TeamManager:
         self,
         session_date: str,
         teams: Dict[str, Dict],
-        auto_assign_names: bool = True
+        auto_assign_names: bool = True,
+        gaming_session_id: Optional[int] = None,
     ) -> bool:
         """
         Store detected teams in the session_teams table.
@@ -607,35 +683,67 @@ class TeamManager:
             True if successful
         """
         await self._ensure_session_teams_table()
+        columns = await self._get_session_teams_columns()
+        scope_clause, scope_params = self._session_scope_clause(
+            columns, session_date, gaming_session_id
+        )
+        conflict_clause = self._session_teams_conflict_clause(columns)
 
         # Delete existing entries for this session
         await self.db.execute(
-            "DELETE FROM session_teams WHERE session_start_date LIKE $1 AND map_name = 'ALL'",
-            (f"{session_date}%",)
+            f"DELETE FROM session_teams WHERE {scope_clause} AND map_name = 'ALL'",
+            scope_params,
         )
 
         # Insert new team data
         for team_name, team_data in teams.items():
-            await self.db.execute(
-                """
-                INSERT INTO session_teams
-                (session_start_date, map_name, team_name, player_guids, player_names)
-                VALUES ($1, 'ALL', $2, $3, $4)
-                """,
-                (
-                    session_date,
-                    team_name,
-                    json.dumps(team_data['guids']),
-                    json.dumps(team_data['names'])
+            if "gaming_session_id" in columns:
+                await self.db.execute(
+                    f"""
+                    INSERT INTO session_teams
+                    (session_start_date, map_name, team_name, player_guids, player_names, gaming_session_id)
+                    VALUES (?, 'ALL', ?, ?, ?, ?)
+                    {conflict_clause} DO UPDATE SET
+                        player_guids = EXCLUDED.player_guids,
+                        player_names = EXCLUDED.player_names,
+                        gaming_session_id = EXCLUDED.gaming_session_id
+                    """,
+                    (
+                        session_date,
+                        team_name,
+                        json.dumps(team_data["guids"]),
+                        json.dumps(team_data["names"]),
+                        gaming_session_id,
+                    ),
                 )
-            )
+            else:
+                await self.db.execute(
+                    f"""
+                    INSERT INTO session_teams
+                    (session_start_date, map_name, team_name, player_guids, player_names)
+                    VALUES (?, 'ALL', ?, ?, ?)
+                    {conflict_clause} DO UPDATE SET
+                        player_guids = EXCLUDED.player_guids,
+                        player_names = EXCLUDED.player_names
+                    """,
+                    (
+                        session_date,
+                        team_name,
+                        json.dumps(team_data["guids"]),
+                        json.dumps(team_data["names"]),
+                    ),
+                )
 
         logger.info(f"✅ Stored teams for session {session_date}")
 
         # Auto-assign random team names from pool
         if auto_assign_names:
             try:
-                team_a, team_b = await self.assign_random_team_names(session_date, force=True)
+                team_a, team_b = await self.assign_random_team_names(
+                    session_date,
+                    force=True,
+                    gaming_session_id=gaming_session_id,
+                )
                 logger.info(f"✅ Auto-assigned team names: {team_a} vs {team_b}")
             except Exception as e:
                 logger.warning(f"Failed to auto-assign team names: {e}")
@@ -646,7 +754,8 @@ class TeamManager:
     async def get_session_teams(
         self,
         session_date: str,
-        auto_detect: bool = True
+        auto_detect: bool = True,
+        gaming_session_id: Optional[int] = None,
     ) -> Dict[str, Dict]:
         """
         Get teams for a session (from DB or auto-detect).
@@ -659,25 +768,31 @@ class TeamManager:
             Team data dictionary
         """
         await self._ensure_session_teams_table()
+        columns = await self._get_session_teams_columns()
+        scope_clause, scope_params = self._session_scope_clause(
+            columns, session_date, gaming_session_id
+        )
 
         # Try to get from database
         rows = await self.db.fetch_all(
-            """
+            f"""
             SELECT team_name, player_guids, player_names
             FROM session_teams
-            WHERE session_start_date LIKE $1 AND map_name = 'ALL'
+            WHERE {scope_clause} AND map_name = 'ALL'
             ORDER BY team_name
             """,
-            (f"{session_date}%",)
+            scope_params,
         )
 
         if rows:
             teams = {}
             for team_name, guids_json, names_json in rows:
+                guids = self._decode_json_array(guids_json)
+                names = self._decode_json_array(names_json)
                 teams[team_name] = {
-                    'guids': json.loads(guids_json),
-                    'names': json.loads(names_json),
-                    'count': len(json.loads(guids_json))
+                    'guids': guids,
+                    'names': names,
+                    'count': len(guids)
                 }
 
             # Validate: Check for corrupted data (both teams have identical players)
@@ -690,13 +805,21 @@ class TeamManager:
                                  f"both teams have identical {len(guids_a)} players. Re-detecting...")
                     # Delete corrupted data and re-detect
                     await self.db.execute(
-                        "DELETE FROM session_teams WHERE session_start_date LIKE $1",
-                        (f"{session_date}%",)
+                        f"DELETE FROM session_teams WHERE {scope_clause}",
+                        scope_params,
                     )
                     if auto_detect:
-                        teams = await self.detect_session_teams(session_date)
+                        teams = await self.detect_session_teams(
+                            session_date,
+                            gaming_session_id=gaming_session_id,
+                        )
                         if teams:
-                            await self.store_session_teams(session_date, teams, auto_assign_names=False)
+                            await self.store_session_teams(
+                                session_date,
+                                teams,
+                                auto_assign_names=False,
+                                gaming_session_id=gaming_session_id,
+                            )
                         return teams
                     return {}
 
@@ -706,10 +829,18 @@ class TeamManager:
         # Auto-detect if requested
         if auto_detect:
             logger.info(f"No stored teams found for {session_date}, auto-detecting...")
-            teams = await self.detect_session_teams(session_date)
+            teams = await self.detect_session_teams(
+                session_date,
+                gaming_session_id=gaming_session_id,
+            )
             if teams:
                 # Don't auto-assign names here - let caller decide
-                await self.store_session_teams(session_date, teams, auto_assign_names=False)
+                await self.store_session_teams(
+                    session_date,
+                    teams,
+                    auto_assign_names=False,
+                    gaming_session_id=gaming_session_id,
+                )
             return teams
 
         return {}
@@ -830,7 +961,8 @@ class TeamManager:
         self,
         session_date: str,
         team_a_name: str,
-        team_b_name: str
+        team_b_name: str,
+        gaming_session_id: Optional[int] = None,
     ) -> bool:
         """
         Set custom names for teams (e.g., "Lakers" vs "Mavericks").
@@ -843,24 +975,29 @@ class TeamManager:
         Returns:
             True if successful
         """
+        columns = await self._get_session_teams_columns()
+        scope_clause, scope_params = self._session_scope_clause(
+            columns, session_date, gaming_session_id
+        )
+
         # Update Team A
         await self.db.execute(
-            """
+            f"""
             UPDATE session_teams
-            SET team_name = $1
-            WHERE session_start_date LIKE $2 AND map_name = 'ALL' AND team_name = 'Team A'
+            SET team_name = ?
+            WHERE {scope_clause} AND map_name = 'ALL' AND team_name = 'Team A'
             """,
-            (team_a_name, f"{session_date}%")
+            (team_a_name, *scope_params)
         )
 
         # Update Team B
         await self.db.execute(
-            """
+            f"""
             UPDATE session_teams
-            SET team_name = $1
-            WHERE session_start_date LIKE $2 AND map_name = 'ALL' AND team_name = 'Team B'
+            SET team_name = ?
+            WHERE {scope_clause} AND map_name = 'ALL' AND team_name = 'Team B'
             """,
-            (team_b_name, f"{session_date}%")
+            (team_b_name, *scope_params)
         )
 
         logger.info(f"✅ Set custom team names for {session_date}: "
@@ -869,7 +1006,8 @@ class TeamManager:
     
     async def get_map_performance(
         self,
-        session_date: str
+        session_date: str,
+        gaming_session_id: Optional[int] = None,
     ) -> Dict[str, Dict]:
         """
         Get team performance per map for a session.
@@ -892,41 +1030,72 @@ class TeamManager:
         try:
             from bot.services.stopwatch_scoring_service import StopwatchScoringService
 
-            # Get round IDs for this session date
-            rows = await self.db.fetch_all(
-                """
-                SELECT id
-                FROM rounds
-                WHERE SUBSTRING(round_date, 1, 10) = $1
-                  AND round_number IN (1, 2)
-                  AND (round_status IN ('completed', 'cancelled', 'substitution') OR round_status IS NULL)
-                ORDER BY round_date, CAST(REPLACE(round_time, ':', '') AS INTEGER)
-                """,
-                (session_date,),
-            )
+            # Get round IDs for this session (prefer gaming_session_id when available)
+            if gaming_session_id is not None:
+                rows = await self.db.fetch_all(
+                    """
+                    SELECT id, gaming_session_id
+                    FROM rounds
+                    WHERE gaming_session_id = ?
+                      AND round_number IN (1, 2)
+                      AND (round_status IN ('completed', 'cancelled', 'substitution') OR round_status IS NULL)
+                    ORDER BY round_date, CAST(REPLACE(round_time, ':', '') AS INTEGER)
+                    """,
+                    (gaming_session_id,),
+                )
+            else:
+                rows = await self.db.fetch_all(
+                    """
+                    SELECT id, gaming_session_id
+                    FROM rounds
+                    WHERE SUBSTRING(round_date, 1, 10) = ?
+                      AND round_number IN (1, 2)
+                      AND (round_status IN ('completed', 'cancelled', 'substitution') OR round_status IS NULL)
+                    ORDER BY round_date, CAST(REPLACE(round_time, ':', '') AS INTEGER)
+                    """,
+                    (session_date,),
+                )
 
             session_ids = [row[0] for row in rows]
             if not session_ids:
                 return {}
 
+            columns = await self._get_session_teams_columns()
+            session_ids_set = {row[1] for row in rows if len(row) > 1 and row[1] is not None}
+            resolved_session_id = gaming_session_id
+            if resolved_session_id is None and len(session_ids_set) == 1:
+                resolved_session_id = next(iter(session_ids_set))
+
             # Load hardcoded teams for this session
-            team_rows = await self.db.fetch_all(
-                """
-                SELECT team_name, player_guids
-                FROM session_teams
-                WHERE SUBSTRING(session_start_date, 1, 10) = $1
-                  AND map_name = 'ALL'
-                ORDER BY team_name
-                """,
-                (session_date,),
-            )
+            if "gaming_session_id" in columns and resolved_session_id is not None:
+                team_rows = await self.db.fetch_all(
+                    """
+                    SELECT team_name, player_guids
+                    FROM session_teams
+                    WHERE gaming_session_id = ?
+                      AND map_name = 'ALL'
+                    ORDER BY team_name
+                    """,
+                    (resolved_session_id,),
+                )
+            else:
+                team_rows = await self.db.fetch_all(
+                    """
+                    SELECT team_name, player_guids
+                    FROM session_teams
+                    WHERE SUBSTRING(session_start_date, 1, 10) = ?
+                      AND map_name = 'ALL'
+                    ORDER BY team_name
+                    """,
+                    (session_date,),
+                )
 
             if not team_rows or len(team_rows) < 2:
                 return {}
 
             team_rosters = {}
             for team_name, guids_json in team_rows:
-                team_rosters[team_name] = json.loads(guids_json) if guids_json else []
+                team_rosters[team_name] = self._decode_json_array(guids_json)
 
             scoring_service = StopwatchScoringService(self.db)
             scoring_result = await scoring_service.calculate_session_scores_with_teams(
@@ -1001,7 +1170,8 @@ class TeamManager:
     async def assign_random_team_names(
         self,
         session_date: str,
-        force: bool = False
+        force: bool = False,
+        gaming_session_id: Optional[int] = None,
     ) -> Tuple[str, str]:
         """
         Randomly assign team names from the pool to a session.
@@ -1020,10 +1190,17 @@ class TeamManager:
         import random
         await self._ensure_session_teams_table()
         columns = await self._get_session_teams_columns()
+        scope_clause, scope_params = self._session_scope_clause(
+            columns, session_date, gaming_session_id
+        )
 
         # Check if session already has custom team names
         if not force:
-            existing = await self.get_session_teams(session_date, auto_detect=False)
+            existing = await self.get_session_teams(
+                session_date,
+                auto_detect=False,
+                gaming_session_id=gaming_session_id,
+            )
             if existing:
                 team_names = list(existing.keys())
                 # If already has custom names (not 'Team A'/'Team B'), return them
@@ -1048,7 +1225,11 @@ class TeamManager:
         logger.info(f"Randomly assigned teams for {session_date}: {team_a_name} vs {team_b_name}")
 
         # Ensure teams exist in session_teams table first
-        teams = await self.get_session_teams(session_date, auto_detect=True)
+        teams = await self.get_session_teams(
+            session_date,
+            auto_detect=True,
+            gaming_session_id=gaming_session_id,
+        )
         if not teams:
             logger.warning(f"Could not detect teams for {session_date}")
             return (team_a_name, team_b_name)
@@ -1059,13 +1240,13 @@ class TeamManager:
         if "color" in columns:
             set_fields_a.append("color = ?")
             params_a.append(team_a_color)
-        params_a.append(f"{session_date}%")
+        params_a.extend(scope_params)
 
         await self.db.execute(
             f"""
             UPDATE session_teams
             SET {", ".join(set_fields_a)}
-            WHERE session_start_date LIKE ? AND map_name = 'ALL' AND team_name = 'Team A'
+            WHERE {scope_clause} AND map_name = 'ALL' AND team_name = 'Team A'
             """,
             tuple(params_a)
         )
@@ -1075,13 +1256,13 @@ class TeamManager:
         if "color" in columns:
             set_fields_b.append("color = ?")
             params_b.append(team_b_color)
-        params_b.append(f"{session_date}%")
+        params_b.extend(scope_params)
 
         await self.db.execute(
             f"""
             UPDATE session_teams
             SET {", ".join(set_fields_b)}
-            WHERE session_start_date LIKE ? AND map_name = 'ALL' AND team_name = 'Team B'
+            WHERE {scope_clause} AND map_name = 'ALL' AND team_name = 'Team B'
             """,
             tuple(params_b)
         )

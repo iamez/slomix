@@ -361,7 +361,7 @@ CREATE TABLE processed_endstats_files (
 ### Migration Command
 
 ```bash
-PGPASSWORD=etlegacy_secure_2025 psql -h 192.168.64.116 -U etlegacy_user -d etlegacy \
+PGPASSWORD=REDACTED_DB_PASSWORD psql -h 192.168.64.116 -U etlegacy_user -d etlegacy \
   -f tools/migrate_add_endstats_tables.sql
 ```yaml
 
@@ -400,7 +400,7 @@ ssh -i ~/.ssh/etlegacy_bot -p 48101 et@puran.hehe.si \
 ### 2. Run Database Migration
 
 ```bash
-PGPASSWORD=etlegacy_secure_2025 psql -h 192.168.64.116 -U etlegacy_user -d etlegacy \
+PGPASSWORD=REDACTED_DB_PASSWORD psql -h 192.168.64.116 -U etlegacy_user -d etlegacy \
   -f tools/migrate_add_endstats_tables.sql
 ```text
 

@@ -251,7 +251,8 @@ async def _match_single_round(
 
         # Winner match
         if demo_winner and db_winner:
-            if demo_winner == db_winner.lower().strip():
+            db_winner_norm = _normalize_winner(db_winner)
+            if db_winner_norm and demo_winner == db_winner_norm:
                 confidence += 20.0
                 match_details.append("winner")
 
@@ -395,7 +396,7 @@ async def enrich_with_db_stats(
             time_played_seconds,
             team,
             efficiency,
-            kdr,
+            kd_ratio AS kdr,
             skill_rating,
             dpm
         FROM player_comprehensive_stats
@@ -412,6 +413,8 @@ async def enrich_with_db_stats(
             accuracy, headshots, hs_kills, revives,
             time_played, team, efficiency, kdr, skill, dpm,
         ) = row
+        time_played_seconds = int(time_played) if time_played else 0
+        time_played_minutes = round(time_played_seconds / 60.0, 2) if time_played_seconds > 0 else None
         players[name] = {
             "player_guid": guid,
             "kills": kills,
@@ -422,7 +425,10 @@ async def enrich_with_db_stats(
             "headshots": headshots,
             "headshot_kills": hs_kills,
             "revives_given": revives,
-            "time_played_seconds": time_played,
+            "time_played_seconds": time_played_seconds,
+            "time_played_minutes": time_played_minutes,
+            # TPM in this context means time played minutes.
+            "tpm": time_played_minutes,
             "team": team,
             "efficiency": efficiency,
             "kdr": float(kdr) if kdr else None,

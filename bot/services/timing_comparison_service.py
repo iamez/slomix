@@ -25,6 +25,8 @@ from typing import Dict, Optional, Tuple, Any
 
 import discord
 
+from bot.core.round_contract import normalize_end_reason
+
 logger = logging.getLogger("bot.services.timing_comparison")
 
 
@@ -41,6 +43,28 @@ class TimingComparisonService:
         """
         self.db_adapter = db_adapter
         self.bot = bot
+
+    @staticmethod
+    def _derive_player_side(axis_rows: Any, allies_rows: Any) -> Tuple[int, str, str]:
+        """
+        Derive canonical side and display marker from aggregated team samples.
+
+        Returns:
+            (team_value, side_state, side_marker)
+            team_value: 1 (Axis), 2 (Allies), 0 (mixed/unknown)
+            side_state: axis|allies|mixed|unknown
+            side_marker: [AX]|[AL]|[MX]|[--]
+        """
+        axis_count = int(axis_rows or 0)
+        allies_count = int(allies_rows or 0)
+
+        if axis_count > 0 and allies_count == 0:
+            return 1, "axis", "[AX]"
+        if allies_count > 0 and axis_count == 0:
+            return 2, "allies", "[AL]"
+        if axis_count > 0 and allies_count > 0:
+            return 0, "mixed", "[MX]"
+        return 0, "unknown", "[--]"
 
     async def post_timing_comparison(
         self,
@@ -130,7 +154,9 @@ class TimingComparisonService:
                        WHEN SUM(time_played_seconds) > 0
                        THEN (SUM(damage_given) * 60.0) / SUM(time_played_seconds)
                        ELSE 0
-                   END as dpm
+                   END as dpm,
+                   SUM(CASE WHEN team = 1 THEN 1 ELSE 0 END) as axis_rows,
+                   SUM(CASE WHEN team = 2 THEN 1 ELSE 0 END) as allies_rows
             FROM player_comprehensive_stats
             WHERE round_id = ?
             GROUP BY player_guid
@@ -140,10 +166,14 @@ class TimingComparisonService:
 
         players = []
         for row in player_rows:
-            guid, name, time_played, time_dead, dead_ratio, dmg, dpm = row
+            guid, name, time_played, time_dead, dead_ratio, dmg, dpm, axis_rows, allies_rows = row
+            team, side_state, side_marker = self._derive_player_side(axis_rows, allies_rows)
             players.append({
                 'guid': guid,
                 'name': name,
+                'team': team,
+                'side_state': side_state,
+                'side_marker': side_marker,
                 'time_played_seconds': time_played or 0,
                 'time_dead_seconds': time_dead or 0,
                 'time_dead_ratio': dead_ratio or 0,
@@ -424,7 +454,7 @@ class TimingComparisonService:
             warmup = lua_data.get('warmup_seconds', 0)
             pauses = lua_data.get('total_pause_seconds', 0)
             pause_count = lua_data.get('pause_count', 0)
-            end_reason = lua_data.get('end_reason', 'unknown')
+            end_reason = normalize_end_reason(lua_data.get('end_reason', 'unknown'))
             confidence = lua_data.get('match_confidence', 'unknown')
             # Surrender info
             surr_team = lua_data.get('surrender_team', 0)
@@ -485,12 +515,17 @@ class TimingComparisonService:
         players = stats_data.get('players', [])[:10]  # Top 10
         if players:
             player_lines = []
+            mixed_or_unknown_count = 0
             for p in players:
                 time_played = self._format_seconds(int(p['time_played_seconds']))
                 time_dead = self._format_seconds(int(p['time_dead_seconds']))
                 dead_pct = p.get('time_dead_ratio', 0)
                 dpm = p.get('dpm', 0)
                 name = p['name'][:12]  # Truncate name
+                side_marker = p.get('side_marker', '[--]')
+                side_state = p.get('side_state', 'unknown')
+                if side_state in ('mixed', 'unknown'):
+                    mixed_or_unknown_count += 1
 
                 # If we have Lua correction, show corrected times
                 if lua_data and stats_duration > 0:
@@ -499,14 +534,20 @@ class TimingComparisonService:
                     corrected_played = int(p['time_played_seconds'] * factor)
                     corrected_dead = int(p['time_dead_seconds'] * factor)
                     player_lines.append(
-                        f"`{name:<12}` ⏱{time_played}→{self._format_seconds(corrected_played)} "
+                        f"{side_marker} `{name:<12}` ⏱{time_played}→{self._format_seconds(corrected_played)} "
                         f"💀{time_dead}→{self._format_seconds(corrected_dead)} ({dead_pct:.0f}%) "
                         f"DPM:{dpm:.0f}"
                     )
                 else:
                     player_lines.append(
-                        f"`{name:<12}` ⏱{time_played} 💀{time_dead} ({dead_pct:.0f}%) DPM:{dpm:.0f}"
+                        f"{side_marker} `{name:<12}` ⏱{time_played} 💀{time_dead} ({dead_pct:.0f}%) DPM:{dpm:.0f}"
                     )
+
+            legend_text = "[AX]=Axis | [AL]=Allies | [MX]/[--]=mixed or unknown"
+            if mixed_or_unknown_count:
+                legend_text += f" ({mixed_or_unknown_count} ambiguous)"
+            player_lines.append("")
+            player_lines.append(f"🧭 {legend_text}")
 
             embed.add_field(
                 name=f"👥 Per-Player Times ({len(players)} shown)",

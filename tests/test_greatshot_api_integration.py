@@ -155,6 +155,13 @@ class _FakeDB:
                 row["processing_finished_at"],
             )
 
+        if query.startswith("SELECT metadata_json FROM greatshot_demos WHERE id = $1 AND user_id = $2"):
+            demo_id, user_id = params
+            row = self.greatshot_demos.get(demo_id)
+            if not row or row["user_id"] != int(user_id):
+                return None
+            return (row["metadata_json"],)
+
         if "SELECT metadata_json, stats_json, events_json, created_at" in query:
             demo_id = params[0]
             row = self.greatshot_analysis.get(demo_id)
@@ -168,9 +175,11 @@ class _FakeDB:
             )
 
         if query.startswith("SELECT analysis_json_path FROM greatshot_demos"):
-            demo_id, user_id = params
+            demo_id = params[0]
             row = self.greatshot_demos.get(demo_id)
-            if not row or row["user_id"] != int(user_id):
+            if not row:
+                return None
+            if len(params) > 1 and row["user_id"] != int(params[1]):
                 return None
             return (row["analysis_json_path"],)
 
@@ -275,3 +284,80 @@ def test_upload_list_detail_and_reports_with_mocked_job(tmp_path: Path, monkeypa
     txt_report_resp = client.get(f"/api/greatshot/{demo_id}/report.txt")
     assert txt_report_resp.status_code == 200
     assert "report body" in txt_report_resp.text
+
+
+def test_crossref_endpoint_returns_200_for_no_match_and_match(tmp_path: Path, monkeypatch):
+    fake_db = _FakeDB()
+    fake_jobs = _FakeJobService()
+
+    storage = GreatshotStorageService(project_root=tmp_path)
+    monkeypatch.setattr(greatshot_router, "storage", storage)
+    monkeypatch.setattr(greatshot_router, "get_greatshot_job_service", lambda: fake_jobs)
+
+    app = FastAPI()
+    app.add_middleware(SessionMiddleware, secret_key="test-session-secret")
+
+    @app.get("/test/login")
+    async def _login(request: Request):
+        request.session["user"] = {"id": "999", "username": "tester"}
+        return {"ok": True}
+
+    async def _db_override():
+        yield fake_db
+
+    app.dependency_overrides[get_db] = _db_override
+    app.include_router(greatshot_router.router, prefix="/api")
+
+    client = TestClient(app)
+    assert client.get("/test/login").status_code == 200
+
+    upload_resp = client.post(
+        "/api/greatshot/upload",
+        files={"file": ("crossref.dm_84", _valid_demo_bytes(), "application/octet-stream")},
+    )
+    assert upload_resp.status_code == 200
+    demo_id = upload_resp.json()["demo_id"]
+
+    # Route only attempts crossref when metadata exists.
+    fake_db.greatshot_demos[demo_id]["metadata_json"] = json.dumps(
+        {"map": "supply", "filename": "2026-02-12-crossref.dm_84", "rounds": []}
+    )
+
+    async def _no_match(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(greatshot_router, "find_matching_round", _no_match)
+    resp_no_match = client.get(f"/api/greatshot/{demo_id}/crossref")
+    assert resp_no_match.status_code == 200
+    assert resp_no_match.json()["matched"] is False
+
+    async def _match(*_args, **_kwargs):
+        return {
+            "round_id": 9841,
+            "match_id": "2026-02-12-115656",
+            "round_number": 2,
+            "map_name": "supply",
+            "confidence": 90.0,
+            "match_details": ["map", "duration", "winner"],
+        }
+
+    async def _enrich(*_args, **_kwargs):
+        return {
+            "PlayerOne": {"kills": 20, "deaths": 10},
+            "PlayerTwo": {"kills": 15, "deaths": 11},
+        }
+
+    async def _comparison(*_args, **_kwargs):
+        return [{"demo_name": "PlayerOne", "db_name": "PlayerOne", "matched": True}]
+
+    monkeypatch.setattr(greatshot_router, "find_matching_round", _match)
+    monkeypatch.setattr(greatshot_router, "enrich_with_db_stats", _enrich)
+    monkeypatch.setattr(greatshot_router, "build_comparison", _comparison)
+
+    resp_match = client.get(f"/api/greatshot/{demo_id}/crossref")
+    assert resp_match.status_code == 200
+    payload = resp_match.json()
+    assert payload["matched"] is True
+    assert payload["round"]["round_id"] == 9841
+    assert "db_player_stats" in payload
+    assert "comparison" in payload

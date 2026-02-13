@@ -402,7 +402,8 @@ class GreatshotJobService:
 
             # Re-check after acquiring lock (another worker may have just finished)
             locked_clip_path = locked_highlight[0] if locked_highlight else None
-            clip_missing = not locked_clip_path or not Path(str(locked_clip_path)).is_file()
+            clip_demo_path = str(locked_clip_path) if locked_clip_path else None
+            clip_missing = not clip_demo_path or not Path(clip_demo_path).is_file()
             if clip_missing:
                 clips_dir = self.storage.clips_dir(demo_id)
                 clips_dir.mkdir(parents=True, exist_ok=True)
@@ -422,6 +423,11 @@ class GreatshotJobService:
                 await self.db.execute(
                     "UPDATE greatshot_highlights SET clip_demo_path = $2 WHERE id = $1",
                     (highlight_id, clip_demo_path),
+                )
+
+            if not clip_demo_path:
+                raise RuntimeError(
+                    f"clip_demo_path unavailable for highlight {highlight_id}"
                 )
 
             videos_dir = self.storage.videos_dir(demo_id)

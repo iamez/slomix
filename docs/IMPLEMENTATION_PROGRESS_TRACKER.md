@@ -1,5 +1,7 @@
 # 🎮 COMPETITIVE ANALYTICS - IMPLEMENTATION PROGRESS TRACKER
 
+> **Superseded Notice (2026-02-12):** This tracker reflects an older program phase. Current execution state is tracked in `docs/TWO_WEEK_EXECUTION_TRACKER_2026-02-11.md`.
+
 **Project:** Automated Team Detection, Predictions & Match Analytics
 **Start Date:** _____________
 **Target Completion:** _____________ (12-14 weeks)
@@ -1649,7 +1651,7 @@ Confidence: _______________
 - [ ] **Connect to PostgreSQL:**
 
   ```bash
-  PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy
+  PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy
   ```sql
 
 - [ ] **Run table creation SQL** (Copy from Opus guide lines 851-917)
@@ -2406,7 +2408,7 @@ screen -r slomix-bot
 # Ctrl+C
 
 # Option A: Drop new tables only (preserves existing data)
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy << EOF
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy << EOF
 DROP TABLE IF EXISTS match_predictions;
 DROP TABLE IF EXISTS lineup_performance;
 DROP TABLE IF EXISTS head_to_head_matchups;
@@ -2417,15 +2419,15 @@ EOF
 # Find backup:
 ls -lht backups/*.sql | head -5
 # Restore:
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U postgres -c "DROP DATABASE etlegacy;"
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U postgres -c "CREATE DATABASE etlegacy OWNER etlegacy_user;"
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy < backups/etlegacy_backup_YYYYMMDD_HHMMSS.sql
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U postgres -c "DROP DATABASE etlegacy;"
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U postgres -c "CREATE DATABASE etlegacy OWNER etlegacy_user;"
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy < backups/etlegacy_backup_YYYYMMDD_HHMMSS.sql
 
 # Restart bot
 ./start_bot.sh
 
 # Verify:
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -c "\dt"
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy -c "\dt"
 ```text
 
 **Rollback Log:**

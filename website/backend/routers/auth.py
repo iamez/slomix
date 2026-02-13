@@ -1,8 +1,10 @@
 import os
+import secrets
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse
 import httpx
 from dotenv import load_dotenv
+from urllib.parse import urlencode, urlsplit
 
 # Load .env file explicitly
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../.env"))
@@ -21,14 +23,46 @@ def get_discord_config():
     }
 
 
+def get_frontend_origin(config: dict) -> str:
+    """Return canonical frontend origin for post-auth redirects."""
+    configured_origin = (
+        os.getenv("FRONTEND_ORIGIN")
+        or os.getenv("PUBLIC_FRONTEND_ORIGIN")
+        or ""
+    ).strip()
+    if configured_origin:
+        parsed = urlsplit(configured_origin)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+    redirect_uri = str(config.get("redirect_uri") or "").strip()
+    parsed_redirect = urlsplit(redirect_uri)
+    if parsed_redirect.scheme and parsed_redirect.netloc:
+        return f"{parsed_redirect.scheme}://{parsed_redirect.netloc}"
+
+    return "http://localhost:8000"
+
+
 @router.get("/login")
-async def login():
+async def login(request: Request):
     config = get_discord_config()
     if not config["client_id"]:
         raise HTTPException(status_code=500, detail="Discord Client ID not configured")
 
+    state = secrets.token_urlsafe(32)
+    request.session["oauth_state"] = state
+
+    auth_query = urlencode(
+        {
+            "client_id": config["client_id"],
+            "redirect_uri": config["redirect_uri"],
+            "response_type": "code",
+            "scope": "identify",
+            "state": state,
+        }
+    )
     return RedirectResponse(
-        f"https://discord.com/api/oauth2/authorize?client_id={config['client_id']}&redirect_uri={config['redirect_uri']}&response_type=code&scope=identify"
+        f"https://discord.com/api/oauth2/authorize?{auth_query}"
     )
 
 
@@ -39,12 +73,21 @@ from website.backend.routers.api import resolve_display_name
 
 
 @router.get("/callback")
-async def callback(request: Request, code: str, db: DatabaseAdapter = Depends(get_db)):
+async def callback(
+    request: Request,
+    code: str,
+    state: str | None = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
     config = get_discord_config()
     if not config["client_id"] or not config["client_secret"]:
         raise HTTPException(
             status_code=500, detail="Discord credentials not configured"
         )
+
+    expected_state = request.session.pop("oauth_state", None)
+    if not state or not expected_state or not secrets.compare_digest(state, expected_state):
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
     async with httpx.AsyncClient() as client:
         # Exchange code for token
@@ -106,17 +149,16 @@ async def callback(request: Request, code: str, db: DatabaseAdapter = Depends(ge
         # Store user info in session
         request.session["user"] = user_data
 
-        # Redirect to frontend home (use request host to be flexible)
-        host = request.headers.get("host", "192.168.64.116:8000")
-        return RedirectResponse(url=f"http://{host}/")
+        frontend_origin = get_frontend_origin(config)
+        return RedirectResponse(url=f"{frontend_origin}/")
 
 
 @router.get("/logout")
 async def logout(request: Request):
     # Clear the entire session
     request.session.clear()
-    host = request.headers.get("host", "192.168.64.116:8000")
-    response = RedirectResponse(url=f"http://{host}/")
+    frontend_origin = get_frontend_origin(get_discord_config())
+    response = RedirectResponse(url=f"{frontend_origin}/")
     # Also delete the session cookie
     response.delete_cookie("session")
     return response

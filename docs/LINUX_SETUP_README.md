@@ -162,7 +162,7 @@ psql -U etlegacy_user -d etlegacy -c "SELECT COUNT(*) FROM rounds;"
 
 # If password fails, reset it
 sudo -u postgres psql
-ALTER USER etlegacy_user WITH PASSWORD 'etlegacy_secure_2025';
+ALTER USER etlegacy_user WITH PASSWORD 'REDACTED_DB_PASSWORD';
 \q
 ```text
 

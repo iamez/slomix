@@ -206,6 +206,48 @@ def _extract_player_stats(
     timeline: List[DemoEvent],
 ) -> Dict[str, Dict[str, Any]]:
     """Extract per-player performance stats from matchStats and timeline events."""
+    def _coerce_int(value: Any) -> int | None:
+        if value is None or value == "":
+            return None
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+    def _coerce_float(value: Any) -> float | None:
+        if value is None or value == "":
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _pick_number(row: Dict[str, Any], keys: tuple[str, ...], as_float: bool = False):
+        for key in keys:
+            if key not in row:
+                continue
+            value = _coerce_float(row.get(key)) if as_float else _coerce_int(row.get(key))
+            if value is not None:
+                return value
+        return None
+
+    def _extract_time_fields(row: Dict[str, Any]) -> tuple[float | None, int | None]:
+        minutes_val = _pick_number(row, ("time_played_minutes", "timePlayedMinutes"), as_float=True)
+        if minutes_val is not None and minutes_val >= 0:
+            seconds_val = int(round(minutes_val * 60.0))
+            return float(minutes_val), seconds_val
+
+        seconds_val = _pick_number(row, ("time_played_seconds", "timePlayedSeconds"))
+        if seconds_val is not None and seconds_val >= 0:
+            return round(seconds_val / 60.0, 2), int(seconds_val)
+
+        ms_val = _pick_number(row, ("time_played_ms", "timePlayedMs"))
+        if ms_val is not None and ms_val >= 0:
+            sec_from_ms = int(round(ms_val / 1000.0))
+            return round(sec_from_ms / 60.0, 2), sec_from_ms
+
+        return None, None
+
     stats: Dict[str, Dict[str, Any]] = {}
 
     # Seed from matchStats playerStats (UDT may include kills/deaths/etc.)
@@ -214,12 +256,48 @@ def _extract_player_stats(
         name = _canonical_name(row.get("cleanName"))
         if name == "unknown":
             continue
-        entry = stats.setdefault(name, {"kills": 0, "deaths": 0, "damage_given": 0, "accuracy": None})
-        for field in ("kills", "deaths", "damage_given", "damage_received"):
-            if field in row:
-                entry[field] = int(row[field])
-        if "accuracy" in row:
-            entry["accuracy"] = row["accuracy"]
+        entry = stats.setdefault(
+            name,
+            {
+                "kills": 0,
+                "deaths": 0,
+                "damage_given": 0,
+                "damage_received": 0,
+                "accuracy": None,
+                "time_played_minutes": None,
+                "time_played_seconds": None,
+                "tpm": None,
+                "headshots": 0,
+            },
+        )
+
+        numeric_map = (
+            ("kills", ("kills",)),
+            ("deaths", ("deaths",)),
+            ("damage_given", ("damage_given", "damageGiven", "damage")),
+            ("damage_received", ("damage_received", "damageReceived", "damageTaken")),
+            ("headshots", ("headshots", "headshot_kills", "headshotKills")),
+        )
+        for target_key, source_keys in numeric_map:
+            value = _pick_number(row, source_keys)
+            if value is not None:
+                entry[target_key] = value
+
+        accuracy_value = _pick_number(row, ("accuracy", "acc"), as_float=True)
+        if accuracy_value is not None:
+            entry["accuracy"] = round(accuracy_value, 2)
+        else:
+            hits = _pick_number(row, ("hits", "shotsHit"), as_float=True)
+            shots = _pick_number(row, ("shots", "shotsFired"), as_float=True)
+            if hits is not None and shots and shots > 0:
+                entry["accuracy"] = round((hits / shots) * 100.0, 2)
+
+        minutes, seconds = _extract_time_fields(row)
+        if minutes is not None and seconds is not None:
+            entry["time_played_minutes"] = round(minutes, 2)
+            entry["time_played_seconds"] = int(seconds)
+            # TPM = time played minutes (for UI parity with existing docs terminology).
+            entry["tpm"] = round(minutes, 2)
 
     # Compute from timeline to fill gaps or override zero values
     kills_by: Dict[str, int] = defaultdict(int)
@@ -236,13 +314,27 @@ def _extract_player_stats(
             deaths_by[event.victim] += 1
 
     for name in set(list(kills_by) + list(deaths_by)):
-        entry = stats.setdefault(name, {"kills": 0, "deaths": 0, "damage_given": 0, "accuracy": None})
+        entry = stats.setdefault(
+            name,
+            {
+                "kills": 0,
+                "deaths": 0,
+                "damage_given": 0,
+                "damage_received": 0,
+                "accuracy": None,
+                "time_played_minutes": None,
+                "time_played_seconds": None,
+                "tpm": None,
+                "headshots": 0,
+            },
+        )
         # Use timeline-derived counts if matchStats didn't provide them
         if entry["kills"] == 0 and kills_by.get(name, 0) > 0:
             entry["kills"] = kills_by[name]
         if entry["deaths"] == 0 and deaths_by.get(name, 0) > 0:
             entry["deaths"] = deaths_by[name]
-        entry.setdefault("headshots", headshots_by.get(name, 0))
+        if entry.get("headshots", 0) == 0 and headshots_by.get(name, 0) > 0:
+            entry["headshots"] = headshots_by.get(name, 0)
 
     return stats
 

@@ -1,5 +1,14 @@
 # Security & Code Quality Fixes - February 8, 2026
 
+## Superseded Notice (2026-02-12)
+This file is a historical point-in-time report. Current status has changed.
+
+Use these as canonical current sources:
+1. `docs/TWO_WEEK_EXECUTION_TRACKER_2026-02-11.md` (live status)
+2. `docs/evidence/2026-02-18_ws4_reaudit.md` (current pass/fail re-audit)
+3. `docs/evidence/2026-02-19_ws4_secret_rotation.md` (secret-rotation state)
+4. `docs/evidence/2026-02-19_ws4_xss_verification.md` (XSS claim re-check)
+
 **Date:** 2026-02-08
 **Version:** 1.0.8 → 1.0.9 (proposed)
 **Auditor:** Claude Code (Opus 4.6)
@@ -206,7 +215,7 @@ ADMIN_CHANNEL_ID=
 ## Pending (Not Yet Fixed)
 
 ### P1: Hardcoded Database Password (CRITICAL)
-**Issue:** Production password `etlegacy_secure_2025` hardcoded in 33+ files
+**Issue:** Production password `REDACTED_DB_PASSWORD` hardcoded in 33+ files
 **Status:** Tool created, ready for rotation when you decide
 **Action required:** Run `python3 tools/secrets_manager.py audit` to see locations
 

@@ -161,19 +161,19 @@ QUICK COMMAND REFERENCE:
 -------------------------
 
 # Check database state
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy \
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy \
   -c "SELECT round_date, round_number, defender_team, winner_team FROM rounds WHERE round_date >= '2026-01-27' ORDER BY round_date, round_time LIMIT 20;"
 
 # Check session_teams entries
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy \
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy \
   -c "SELECT * FROM session_teams WHERE session_start_date >= '2026-01-27';"
 
 # Check for spectators
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy \
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy \
   -c "SELECT COUNT(*), team FROM player_comprehensive_stats WHERE team NOT IN (1,2) GROUP BY team;"
 
 # Check R2 negative values
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy \
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy \
   -c "SELECT COUNT(*) FROM player_comprehensive_stats WHERE round_number = 2 AND headshot_kills < 0;"
 
 

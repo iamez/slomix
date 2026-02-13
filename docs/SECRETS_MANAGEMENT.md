@@ -1,5 +1,13 @@
 # Secrets Management Guide
 
+## Superseded Notice (2026-02-12)
+This guide remains valid for workflow, but occurrence counts in this document are historical snapshots and may be outdated.
+
+For current hardcoded-secret counts/status, use:
+1. `python3 tools/secrets_manager.py audit` (live count)
+2. `docs/evidence/2026-02-18_ws4_reaudit.md`
+3. `docs/evidence/2026-02-19_ws4_secret_rotation.md`
+
 **Date:** 2026-02-08
 **Version:** 1.0.0
 **Status:** Ready for activation (NOT yet deployed)
@@ -92,7 +100,7 @@ Creates timestamped backup: `.env.backup.20260208_143022`
 python tools/secrets_manager.py audit
 ```
 
-Scans entire codebase for the hardcoded production password `etlegacy_secure_2025` and reports all occurrences.
+Scans entire codebase for the hardcoded production password `REDACTED_DB_PASSWORD` and reports all occurrences.
 
 ---
 
@@ -100,7 +108,7 @@ Scans entire codebase for the hardcoded production password `etlegacy_secure_202
 
 ### Hardcoded Password Locations
 
-The production password `etlegacy_secure_2025` is currently hardcoded in **33+ files**:
+The production password `REDACTED_DB_PASSWORD` is currently hardcoded in **33+ files**:
 
 | Location | Count | Risk Level |
 |----------|-------|------------|

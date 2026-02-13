@@ -71,7 +71,7 @@ class FileTracker:
         Checks multiple sources to avoid re-processing:
         1. File age (prevent importing old files) - SKIPPED if ignore_startup_time=True
         2. In-memory cache (fastest)
-        3. Local file exists (fast) - SKIPPED if check_db_only=True
+        3. Local file exists (informational) - SKIPPED if check_db_only=True
         4. Processed files table (fast, persistent)
         5. Sessions table (slower, definitive)
 
@@ -141,10 +141,11 @@ class FileTracker:
             if not check_db_only:
                 local_path = os.path.join("local_stats", filename)
                 if os.path.exists(local_path):
-                    logger.debug(f"⏭️ {filename} exists locally, marking processed")
-                    self.processed_files.add(filename)
-                    await self.mark_processed(filename, success=True)
-                    return False
+                    # Do not auto-mark as processed just because the file exists locally.
+                    # Local files can be leftovers from failed/incomplete imports.
+                    logger.debug(
+                        f"ℹ️ {filename} exists locally, validating database state before skipping"
+                    )
 
             # 4. Check processed_files table
             if await self._is_in_processed_files_table(filename):
@@ -193,8 +194,8 @@ class FileTracker:
             if not file_info:
                 return False
 
-            # Use full timestamp for unique identification
-            timestamp = "-".join(filename.split("-")[:4])
+            file_date = file_info["date"]
+            file_time = file_info["time"]
 
             if self.config.database_type == "sqlite":
                 query = """
@@ -202,6 +203,10 @@ class FileTracker:
                     WHERE round_date = ?
                       AND map_name = ?
                       AND round_number = ?
+                      AND (
+                            round_time = ?
+                            OR REPLACE(CAST(round_time AS TEXT), ':', '') = ?
+                      )
                     LIMIT 1
                 """
             else:  # PostgreSQL
@@ -210,15 +215,21 @@ class FileTracker:
                     WHERE round_date = $1
                       AND map_name = $2
                       AND round_number = $3
+                      AND (
+                            round_time = $4
+                            OR REPLACE(CAST(round_time AS TEXT), ':', '') = $5
+                      )
                     LIMIT 1
                 """
 
             result = await self.db_adapter.fetch_one(
                 query,
                 (
-                    timestamp,
+                    file_date,
                     file_info["map_name"],
                     file_info["round_number"],
+                    file_time,
+                    file_time,
                 ),
             )
 
@@ -377,27 +388,49 @@ class FileTracker:
 
             # Report findings
             if unimported:
-                logger.warning(
-                    f"⚠️  Found {len(unimported)} unimported files in local_stats/ "
-                    f"(total: {len(files)} files)"
-                )
-                if self.config.database_type == "postgresql":
+                lookback_hours = getattr(self.config, "STARTUP_LOOKBACK_HOURS", 168)
+                cutoff_time = self.bot_startup_time - timedelta(hours=lookback_hours)
+                actionable_unimported = []
+                legacy_unimported = 0
+
+                for filename in unimported:
+                    try:
+                        file_datetime = datetime.strptime(filename[:17], "%Y-%m-%d-%H%M%S")
+                        if file_datetime >= cutoff_time:
+                            actionable_unimported.append(filename)
+                        else:
+                            legacy_unimported += 1
+                    except ValueError:
+                        # Unknown filename format: keep visible to avoid hiding potential issues.
+                        actionable_unimported.append(filename)
+
+                if actionable_unimported:
                     logger.warning(
-                        f"💡 To import them, use: python postgresql_database_manager.py "
-                        f"or !import command"
+                        f"⚠️  Found {len(actionable_unimported)} unimported recent files in local_stats/ "
+                        f"(total unimported: {len(unimported)}, total files: {len(files)})"
                     )
-                else:
-                    logger.warning(
-                        "💡 To import them, use the !import command"
+                    if self.config.database_type == "postgresql":
+                        logger.warning(
+                            "💡 To import them, use: python postgresql_database_manager.py "
+                            "or !import command"
+                        )
+                    else:
+                        logger.warning("💡 To import them, use the !import command")
+
+                    # Show a few examples (don't spam log)
+                    if len(actionable_unimported) <= 5:
+                        for f in actionable_unimported:
+                            logger.info(f"   📄 {f}")
+                    else:
+                        for f in actionable_unimported[:3]:
+                            logger.info(f"   📄 {f}")
+                        logger.info(f"   ... and {len(actionable_unimported) - 3} more")
+
+                if legacy_unimported > 0:
+                    logger.info(
+                        f"ℹ️ Ignoring {legacy_unimported} unimported legacy files "
+                        f"(older than {lookback_hours}h startup lookback)"
                     )
-                # Show a few examples (don't spam log)
-                if len(unimported) <= 5:
-                    for f in unimported:
-                        logger.info(f"   📄 {f}")
-                else:
-                    for f in unimported[:3]:
-                        logger.info(f"   📄 {f}")
-                    logger.info(f"   ... and {len(unimported) - 3} more")
             else:
                 logger.info(f"✅ All {len(files)} local files are tracked in database")
 

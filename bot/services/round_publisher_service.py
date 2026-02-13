@@ -30,6 +30,54 @@ class RoundPublisherService:
     6. Post timing debug comparison if enabled
     """
 
+    @staticmethod
+    def _derive_side_marker(axis_rows: int, allies_rows: int):
+        """
+        Return display marker plus ambiguity flag for aggregated player rows.
+        """
+        axis_count = int(axis_rows or 0)
+        allies_count = int(allies_rows or 0)
+
+        if axis_count > 0 and allies_count > 0:
+            return "[MIXED]", True
+        if axis_count > 0:
+            return "[AXIS]", False
+        if allies_count > 0:
+            return "[ALLIES]", False
+        return "[UNK]", True
+
+    @staticmethod
+    def _chunk_embed_lines(lines, separator="\n\n", max_chars=1024):
+        """
+        Chunk preformatted lines into Discord-safe field values.
+        """
+        if not lines:
+            return []
+
+        chunks = []
+        current = []
+
+        for line in lines:
+            safe_line = line
+            if len(safe_line) > max_chars:
+                safe_line = safe_line[: max_chars - 3] + "..."
+
+            if not current:
+                current = [safe_line]
+                continue
+
+            candidate = separator.join(current + [safe_line])
+            if len(candidate) <= max_chars:
+                current.append(safe_line)
+            else:
+                chunks.append(separator.join(current))
+                current = [safe_line]
+
+        if current:
+            chunks.append(separator.join(current))
+
+        return chunks
+
     def __init__(self, bot, config, db_adapter, timing_debug_service=None, timing_comparison_service=None):
         """
         Initialize round publisher service.
@@ -226,6 +274,14 @@ class RoundPublisherService:
             if outcome_line:
                 description_parts.append(outcome_line)
 
+            score_confidence = stats_data.get("score_confidence")
+            if score_confidence:
+                description_parts.append(f"🧭 **Score Confidence:** {score_confidence}")
+
+            stopwatch_state = stats_data.get("round_stopwatch_state")
+            if stopwatch_state:
+                description_parts.append(f"⏱️ **Stopwatch State:** {stopwatch_state}")
+
             # Determine embed color based on round type
             embed_color = discord.Color.blue() if round_num == 1 else discord.Color.red()
 
@@ -236,9 +292,6 @@ class RoundPublisherService:
                 color=embed_color,
                 timestamp=datetime.now()
             )
-
-            # Sort all players by kills
-            players_sorted = sorted(players, key=lambda p: p.get('kills', 0), reverse=True)
 
             # Rank emoji/number helper
             def get_rank_display(rank):
@@ -256,16 +309,31 @@ class RoundPublisherService:
                                    '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
                     return ''.join(emoji_digits[d] for d in rank_str)
 
-            # Split into chunks for Discord field limits (1024 chars per field)
-            chunk_size = 8
-            for i in range(0, len(players_sorted), chunk_size):
-                chunk = players_sorted[i:i + chunk_size]
-                # Use invisible character for field name (required but hidden)
-                field_name = '\u200b'
+            # Split each team into chunks for Discord field limits (1024 chars per field)
+            def normalize_team_value(raw_team):
+                try:
+                    parsed = int(raw_team)
+                except (TypeError, ValueError):
+                    return 0
+                return parsed if parsed in (1, 2) else 0
 
-                player_lines = []
-                for idx, player in enumerate(chunk):
-                    rank = i + idx + 1  # Global rank across all chunks
+            team_sections = [
+                ("⚔️ Axis", 1),
+                ("🛡️ Allies", 2),
+                ("❓ Unknown Side", 0),
+            ]
+
+            for section_name, section_team in team_sections:
+                team_players = [
+                    p for p in players
+                    if normalize_team_value(p.get('team')) == section_team
+                ]
+                if not team_players:
+                    continue
+
+                team_sorted = sorted(team_players, key=lambda p: p.get('kills', 0), reverse=True)
+                player_blocks = []
+                for rank, player in enumerate(team_sorted, 1):
                     rank_display = get_rank_display(rank)
 
                     name = player.get('name', 'Unknown')[:16]
@@ -371,14 +439,16 @@ class RoundPublisherService:
                         line3 += f" 🔥{multikills_str}"
 
                     # Combine: Name on line 1, stats on line 2+3 with indent
-                    player_lines.append(f"{line1}\n↳ {line2}\n↳ {line3}")
+                    player_blocks.append(f"{line1}\n↳ {line2}\n↳ {line3}")
 
-                # Join with blank line between players for readability
-                embed.add_field(
-                    name=field_name,
-                    value='\n\n'.join(player_lines) if player_lines else 'No stats',
-                    inline=False
-                )
+                field_values = self._chunk_embed_lines(player_blocks, separator="\n\n", max_chars=1024)
+                for idx, field_value in enumerate(field_values):
+                    field_name = section_name if idx == 0 else f"{section_name} (cont.)"
+                    embed.add_field(
+                        name=field_name,
+                        value=field_value if field_value else 'No stats',
+                        inline=False
+                    )
 
             # Calculate round totals (comprehensive)
             total_kills = sum(p.get('kills', 0) for p in players)
@@ -442,11 +512,15 @@ class RoundPublisherService:
             channel: Discord channel to post to
         """
         try:
-            # Check if there are any more rounds for this map in this session
+            # Check map progress in the same gaming session scope.
             query = """
                 SELECT MAX(round_number) as max_round, COUNT(DISTINCT round_number) as round_count
-                FROM player_comprehensive_stats
-                WHERE round_id = ? AND map_name = ?
+                FROM rounds
+                WHERE gaming_session_id = (
+                    SELECT gaming_session_id FROM rounds WHERE id = ?
+                )
+                  AND map_name = ?
+                  AND round_number IN (1, 2)
             """
             row = await self.db_adapter.fetch_one(query, (round_id, map_name))
 
@@ -479,7 +553,14 @@ class RoundPublisherService:
         try:
             logger.info(f"📊 Generating map summary for {map_name}...")
 
-            # Get map-level aggregate stats
+            session_query = "SELECT gaming_session_id FROM rounds WHERE id = ?"
+            session_row = await self.db_adapter.fetch_one(session_query, (round_id,))
+            if not session_row:
+                logger.warning(f"⚠️ Could not resolve gaming_session_id for round_id={round_id}")
+                return
+            gaming_session_id = session_row[0]
+
+            # Get map-level aggregate stats using all R1/R2 rounds in this map/session.
             map_query = """
                 SELECT
                     COUNT(DISTINCT round_number) as total_rounds,
@@ -490,9 +571,15 @@ class RoundPublisherService:
                     SUM(headshot_kills) as total_headshots,
                     AVG(accuracy) as avg_accuracy
                 FROM player_comprehensive_stats
-                WHERE round_id = ? AND map_name = ?
+                WHERE round_id IN (
+                    SELECT id
+                    FROM rounds
+                    WHERE gaming_session_id = ?
+                      AND map_name = ?
+                      AND round_number IN (1, 2)
+                )
             """
-            map_stats = await self.db_adapter.fetch_one(map_query, (round_id, map_name))
+            map_stats = await self.db_adapter.fetch_one(map_query, (gaming_session_id, map_name))
 
             if not map_stats:
                 logger.warning(f"⚠️ No map stats found for {map_name}")
@@ -500,21 +587,29 @@ class RoundPublisherService:
 
             total_rounds, unique_players, total_kills, total_deaths, total_damage, total_headshots, avg_accuracy = map_stats
 
-            # Get top 5 players across all rounds on this map
+            # Get top 5 players across all rounds on this map/session.
             top_players_query = """
                 SELECT
-                    player_name,
+                    COALESCE(MAX(player_name), player_guid) as player_name,
                     SUM(kills) as total_kills,
                     SUM(deaths) as total_deaths,
                     SUM(damage_given) as total_damage,
-                    AVG(accuracy) as avg_accuracy
+                    AVG(accuracy) as avg_accuracy,
+                    SUM(CASE WHEN team = 1 THEN 1 ELSE 0 END) as axis_rows,
+                    SUM(CASE WHEN team = 2 THEN 1 ELSE 0 END) as allies_rows
                 FROM player_comprehensive_stats
-                WHERE round_id = ? AND map_name = ?
+                WHERE round_id IN (
+                    SELECT id
+                    FROM rounds
+                    WHERE gaming_session_id = ?
+                      AND map_name = ?
+                      AND round_number IN (1, 2)
+                )
                 GROUP BY player_guid
                 ORDER BY total_kills DESC
                 LIMIT 5
             """
-            top_players = await self.db_adapter.fetch_all(top_players_query, (round_id, map_name))
+            top_players = await self.db_adapter.fetch_all(top_players_query, (gaming_session_id, map_name))
 
             # Create embed
             embed = discord.Embed(
@@ -544,10 +639,14 @@ class RoundPublisherService:
             # Top performers
             if top_players:
                 top_lines = []
-                for i, (name, kills, deaths, damage, acc) in enumerate(top_players, 1):
+                ambiguous_side_count = 0
+                for i, (name, kills, deaths, damage, acc, axis_rows, allies_rows) in enumerate(top_players, 1):
                     kd = kills / deaths if deaths > 0 else kills
+                    side_marker, is_ambiguous_side = self._derive_side_marker(axis_rows, allies_rows)
+                    if is_ambiguous_side:
+                        ambiguous_side_count += 1
                     top_lines.append(
-                        f"{i}. **{name}** - {kills}/{deaths} K/D ({kd:.2f}) | {int(damage):,} DMG | {acc:.1f}% ACC"
+                        f"{i}. {side_marker} **{name}** - {kills}/{deaths} K/D ({kd:.2f}) | {int(damage):,} DMG | {acc:.1f}% ACC"
                     )
 
                 embed.add_field(
@@ -556,7 +655,16 @@ class RoundPublisherService:
                     inline=False
                 )
 
-            embed.set_footer(text=f"Round ID: {round_id}")
+                side_note = "[AXIS]=Axis | [ALLIES]=Allies | [MIXED]/[UNK]=ambiguous side data"
+                if ambiguous_side_count:
+                    side_note += f" ({ambiguous_side_count} ambiguous player(s))"
+                embed.add_field(
+                    name="🧭 Side Markers",
+                    value=side_note,
+                    inline=False,
+                )
+
+            embed.set_footer(text=f"Session: {gaming_session_id} | Anchor Round ID: {round_id}")
 
             # Post to channel
             logger.info(f"📤 Posting map summary to #{channel.name}...")

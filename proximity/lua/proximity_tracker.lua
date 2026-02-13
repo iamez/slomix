@@ -262,15 +262,24 @@ end
 
 local last_gentity_error_time = 0
 
-local function safe_gentity_get(clientnum, field)
-    local ok, value = pcall(et.gentity_get, clientnum, field)
+local function safe_gentity_get(clientnum, field, index)
+    local ok, value
+    if index ~= nil then
+        ok, value = pcall(et.gentity_get, clientnum, field, index)
+    else
+        ok, value = pcall(et.gentity_get, clientnum, field)
+    end
     if ok then
         return value
     end
     local now = (et.trap_Milliseconds and et.trap_Milliseconds()) or (os.time() * 1000)
     if now - last_gentity_error_time > 5000 then
-        et.G_Print(string.format("[proximity] gentity_get failed client=%d field=%s err=%s\n",
-            clientnum, field, tostring(value)))
+        local idx = ""
+        if index ~= nil then
+            idx = "[" .. tostring(index) .. "]"
+        end
+        et.G_Print(string.format("[proximity] gentity_get failed client=%d field=%s%s err=%s\n",
+            clientnum, field, idx, tostring(value)))
         last_gentity_error_time = now
     end
     return nil
@@ -296,6 +305,9 @@ end
 local PMF_DUCKED = 1        -- Crouching
 local PMF_PRONE = 512       -- Prone
 local PMF_SPRINT = 16384    -- Sprinting
+local STAT_SPRINTTIME = 8   -- ps.stats index for stamina/sprint meter
+local STAMINA_DELTA_SPRINT_THRESHOLD = 50
+local MIN_SPRINT_SPEED = 140
 
 -- ===== GAMESTATE CONSTANTS =====
 -- ET:Legacy Lua exposes these constants
@@ -356,6 +368,7 @@ local tracker = {
     player_tracks = {},         -- clientnum -> track data
     completed_tracks = {},      -- Finished tracks for output
     last_sample_time = 0,       -- Last global sample timestamp
+    last_stamina = {},          -- clientnum -> last ps.stats[STAT_SPRINTTIME]
 
     -- v4.1: Action event buffer for test mode (clientnum -> array of action events)
     action_buffer = {},
@@ -573,8 +586,8 @@ local function getPlayerSpeed(clientnum)
     return math.sqrt(vx*vx + vy*vy)
 end
 
-local function getPlayerMovementState(clientnum)
-    local pm_flags = safe_gentity_get(clientnum, "ps.pm_flags") or 0
+local function getPlayerMovementState(clientnum, speed)
+    local pm_flags = tonumber(safe_gentity_get(clientnum, "ps.pm_flags")) or 0
 
     -- Decode stance: 0=standing, 1=crouching, 2=prone
     -- Uses has_flag() for LuaJIT/Lua 5.1 compatibility
@@ -589,6 +602,20 @@ local function getPlayerMovementState(clientnum)
     local sprinting = 0
     if has_flag(pm_flags, PMF_SPRINT) then
         sprinting = 1
+    end
+
+    -- pm_flags has been unreliable on some ETL builds; also infer sprint from
+    -- stamina drain while the player is moving on-foot.
+    local sprint_time = tonumber(safe_gentity_get(clientnum, "ps.stats", STAT_SPRINTTIME))
+    if sprint_time then
+        local last_sprint_time = tracker.last_stamina[clientnum]
+        tracker.last_stamina[clientnum] = sprint_time
+        if last_sprint_time and speed and speed >= MIN_SPRINT_SPEED and stance == 0 then
+            local sprint_delta = last_sprint_time - sprint_time
+            if sprint_delta > STAMINA_DELTA_SPRINT_THRESHOLD then
+                sprinting = 1
+            end
+        end
     end
 
     return stance, sprinting
@@ -675,8 +702,8 @@ local function createPlayerTrack(clientnum)
     if pos then
         local health = safe_gentity_get(clientnum, "health") or 100
         local weapon = safe_gentity_get(clientnum, "ps.weapon") or 0
-        local stance, sprint = getPlayerMovementState(clientnum)
         local speed = getPlayerSpeed(clientnum)
+        local stance, sprint = getPlayerMovementState(clientnum, speed)
 
         table.insert(track.path, {
             time = now,
@@ -709,8 +736,8 @@ local function samplePlayer(clientnum, track, event_type)
 
     local health = safe_gentity_get(clientnum, "health") or 0
     local weapon = safe_gentity_get(clientnum, "ps.weapon") or 0
-    local stance, sprint = getPlayerMovementState(clientnum)
     local speed = getPlayerSpeed(clientnum)
+    local stance, sprint = getPlayerMovementState(clientnum, speed)
 
     -- Detect first movement
     if not track.first_move_time and speed > 10 then
@@ -771,6 +798,7 @@ local function endPlayerTrack(clientnum, death_pos, death_type, killer_name)
     -- Move to completed
     table.insert(tracker.completed_tracks, track)
     tracker.player_tracks[clientnum] = nil
+    tracker.last_stamina[clientnum] = nil
 
     if config.debug then
         et.G_Printf("[PROX] Track ended: %s - %d samples, lived %dms, type=%s\n",
@@ -1527,6 +1555,7 @@ function et_InitGame(levelTime, randomSeed, restart)
     tracker.player_tracks = {}
     tracker.completed_tracks = {}
     tracker.last_sample_time = 0
+    tracker.last_stamina = {}
     tracker.action_buffer = {}  -- v4.1: Reset action buffer
     tracker.objective_stats = {}
 
@@ -1588,6 +1617,7 @@ function et_RunFrame(levelTime)
                 })
             end
             table.insert(tracker.completed_tracks, track)
+            tracker.last_stamina[clientnum] = nil
         end
         tracker.player_tracks = {}
 
@@ -1749,7 +1779,7 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
                 if pos then
                     local health = safe_gentity_get(clientNum, "health") or 100
                     local weapon = safe_gentity_get(clientNum, "ps.weapon") or 0
-                    local stance, sprint = getPlayerMovementState(clientNum)
+                    local stance, sprint = getPlayerMovementState(clientNum, 0)
                     table.insert(track.path, {
                         time = now,
                         x = round(pos.x, 1),
@@ -1789,6 +1819,7 @@ function et_ClientDisconnect(clientNum)
         local pos = getPlayerPos(clientNum)
         endPlayerTrack(clientNum, pos, "disconnect")  -- v4.1: Pass disconnect death type
     end
+    tracker.last_stamina[clientNum] = nil
     client_cache[clientNum] = nil
 end
 

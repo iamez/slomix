@@ -247,7 +247,7 @@ Check that everything is set up correctly:
 
 ```bash
 # Verify you're root
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT * FROM user_permissions WHERE tier='root';"
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT * FROM user_permissions WHERE tier='root';"
 
 # Should show:
 # id | discord_id         | username | tier | added_at | added_by | reason
@@ -350,13 +350,13 @@ tail -50 logs/bot.log
 **Verify tables exist:**
 
 ```bash
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -c "\dt user_permissions"
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy -c "\dt user_permissions"
 ```text
 
 **Rerun migration if needed:**
 
 ```bash
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -f migrations/add_user_permissions.sql
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy -f migrations/add_user_permissions.sql
 ```yaml
 
 ---
@@ -380,7 +380,7 @@ If something goes wrong:
 
 ```bash
 # Only if you want to remove new tables:
-PGPASSWORD='etlegacy_secure_2025' psql -h localhost -U etlegacy_user -d etlegacy -c "DROP TABLE permission_audit_log; DROP TABLE user_permissions;"
+PGPASSWORD='REDACTED_DB_PASSWORD' psql -h localhost -U etlegacy_user -d etlegacy -c "DROP TABLE permission_audit_log; DROP TABLE user_permissions;"
 ```
 
 ---
