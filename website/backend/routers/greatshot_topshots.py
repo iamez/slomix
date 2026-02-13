@@ -44,7 +44,7 @@ async def get_top_kills(request: Request, limit: int = 10, db=Depends(get_db)):
     """
     user = _require_user(request)
     user_id = int(user["id"])
-    
+
     # Optimized query using total_kills column (avoids N+1 file reads)
     rows = await db.fetch_all(
         """
@@ -95,7 +95,7 @@ async def get_top_players(request: Request, limit: int = 10, db=Depends(get_db))
     """
     user = _require_user(request)
     user_id = int(user["id"])
-    
+
     rows = await db.fetch_all(
         """
         SELECT
@@ -178,7 +178,7 @@ async def get_top_accuracy(request: Request, min_kills: int = 10, limit: int = 1
     """
     user = _require_user(request)
     user_id = int(user["id"])
-    
+
     rows = await db.fetch_all(
         """
         SELECT
@@ -252,7 +252,7 @@ async def get_top_damage(request: Request, limit: int = 10, db=Depends(get_db)):
     """
     user = _require_user(request)
     user_id = int(user["id"])
-    
+
     rows = await db.fetch_all(
         """
         SELECT
@@ -322,7 +322,7 @@ async def get_top_multikills(request: Request, limit: int = 10, db=Depends(get_d
     """
     user = _require_user(request)
     user_id = int(user["id"])
-    
+
     rows = await db.fetch_all(
         """
         SELECT
