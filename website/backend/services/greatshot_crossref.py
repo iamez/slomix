@@ -343,10 +343,16 @@ async def find_matching_round(
     # Phase 2: Multi-round matching
     # Try to match each round in the demo
     if not rounds_info:
-        # No round info - use total duration
+        # No per-round entries: preserve top-level metadata for matching.
+        fallback_round_data = {
+            "duration_ms": int(metadata.get("duration_ms") or 0),
+            "winner": metadata.get("winner") or metadata.get("winning_team"),
+            "first_place_score": metadata.get("first_place_score", metadata.get("firstPlaceScore")),
+            "second_place_score": metadata.get("second_place_score", metadata.get("secondPlaceScore")),
+        }
         return await _match_single_round(
             demo_map=demo_map,
-            demo_round_data=None,
+            demo_round_data=fallback_round_data,
             demo_filename=demo_filename,
             demo_player_names=demo_player_names,
             demo_player_stats=demo_player_stats or {},
