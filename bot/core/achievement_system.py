@@ -131,8 +131,8 @@ class AchievementSystem:
 
             try:
                 await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
-            except Exception:
-                pass
+            except (OSError, RuntimeError, ValueError):
+                pass  # Alias table may not exist
 
             stats = await self.bot.db_adapter.fetch_one(
                 """

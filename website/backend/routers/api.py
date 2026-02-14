@@ -20,8 +20,10 @@ from website.backend.services.website_session_data_service import (
 from website.backend.services.game_server_query import query_game_server
 from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.stopwatch_scoring_service import StopwatchScoringService
+from website.backend.logging_config import get_app_logger
 
 router = APIRouter()
+logger = get_app_logger("api")
 
 # Game server configuration (for direct UDP query)
 GAME_SERVER_HOST = os.getenv("SERVER_HOST", "puran.hehe.si")
@@ -233,8 +235,8 @@ async def resolve_player_guid(
         )
         if alias_row and alias_row[0]:
             return alias_row[0]
-    except Exception:
-        pass
+    except (OSError, RuntimeError):
+        logger.debug("player_aliases lookup failed")
 
     return None
 
@@ -256,7 +258,7 @@ async def resolve_display_name(
         )
         if link_row and link_row[0]:
             return link_row[0]
-    except Exception:
+    except (OSError, RuntimeError):
         # Fallback if display_name column doesn't exist or table is unavailable
         try:
             link_row = await db.fetch_one(
@@ -265,8 +267,8 @@ async def resolve_display_name(
             )
             if link_row and link_row[0]:
                 return link_row[0]
-        except Exception:
-            pass
+        except (OSError, RuntimeError):
+            logger.debug("player_links fallback query failed")
 
     # 2) Most recent alias, if alias table exists
     try:
@@ -276,8 +278,8 @@ async def resolve_display_name(
         )
         if alias_row and alias_row[0]:
             return alias_row[0]
-    except Exception:
-        pass
+    except (OSError, RuntimeError):
+        logger.debug("player_aliases query failed")
 
     # 3) Fallback to most recent name in stats
     name_row = await db.fetch_one(
@@ -367,11 +369,12 @@ async def get_status(db: DatabaseAdapter = Depends(get_db)):
         await db.fetch_one("SELECT 1")
         return {"status": "online", "service": "Slomix API", "database": "ok"}
     except Exception as exc:
+        logger.error("Status check database error: %s", exc)
         return {
             "status": "degraded",
             "service": "Slomix API",
             "database": "error",
-            "error": str(exc),
+            "error": "Database connection failed",
         }
 
 
@@ -758,7 +761,8 @@ async def get_time_audit(
     try:
         rows = await db.fetch_all(query, (limit,))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+        logger.error("Database error in time_dead audit: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred.")
 
     summary = {
         "checked": 0,
@@ -881,7 +885,8 @@ async def get_spawn_audit(
     try:
         rows = await db.fetch_all(query, (limit,))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+        logger.error("Database error in round integrity audit: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred.")
 
     summary = {
         "checked": 0,
@@ -1030,9 +1035,6 @@ async def get_live_status(db: DatabaseAdapter = Depends(get_db)):
     - Voice channel data: from database (updated by Discord bot)
     - Game server data: direct UDP query (real-time)
     """
-    import json
-    from datetime import datetime
-
     # ========== VOICE CHANNEL STATUS (from database) ==========
     voice_result = {
         "members": [],
@@ -1101,8 +1103,6 @@ async def get_server_activity_history(
         data_points: Array of status records
         summary: Peak, average, uptime stats
     """
-    from datetime import datetime, timedelta
-
     try:
         # Calculate time range
         since = datetime.utcnow() - timedelta(hours=hours)
@@ -1193,8 +1193,6 @@ async def get_voice_activity_history(
         data_points: Array of voice status records
         summary: Peak, average, session stats
     """
-    from datetime import datetime, timedelta
-
     try:
         # Calculate time range
         since = datetime.utcnow() - timedelta(hours=hours)
@@ -1280,9 +1278,6 @@ async def get_current_voice_activity(db: DatabaseAdapter = Depends(get_db)):
 
     Returns detailed information about who is in voice and how long.
     """
-    import json
-    from datetime import datetime
-
     try:
         # First try to get from voice_members table (active members)
         query = """
@@ -1371,22 +1366,20 @@ async def get_current_voice_activity(db: DatabaseAdapter = Depends(get_db)):
                     ],
                     "channels": [],
                 }
-        except:
-            pass
+        except (json.JSONDecodeError, KeyError, AttributeError, TypeError):
+            logger.debug("Voice status fallback parse failed")
 
         return {
             "total_count": 0,
             "members": [],
             "channels": [],
-            "error": None if denied_voice_members else error_text,
+            "error": None if denied_voice_members else "Voice channel query failed",
         }
 
 
 @router.get("/stats/overview")
 async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
     """Get homepage overview statistics"""
-    from datetime import datetime, timedelta
-
     lookback_days = 14
     start_date_str = (
         (datetime.now() - timedelta(days=lookback_days))
@@ -1982,8 +1975,6 @@ async def get_activity_calendar(
     """
     Return a simple activity calendar (rounds per day) for the last N days.
     """
-    from datetime import datetime, timedelta
-
     lookback_days = max(1, min(days, 365))
     start_date = (datetime.now() - timedelta(days=lookback_days)).date().strftime(
         "%Y-%m-%d"
@@ -2769,8 +2760,6 @@ async def get_sessions_list(
     for row in rows:
         round_date = row[0]
         # Format time_ago
-        from datetime import datetime
-
         if isinstance(round_date, str):
             round_date = round_date[:10]
             dt = datetime.strptime(round_date, "%Y-%m-%d")
@@ -3003,14 +2992,8 @@ async def get_live_session(db: DatabaseAdapter = Depends(get_db)):
     try:
         result = await db.fetch_one(query)
     except Exception as e:
-        print(f"Error in get_live_session (Postgres): {e}")
-        # Fallback for SQLite (if needed, but we seem to be on Postgres)
-        try:
-            query = "SELECT MAX(round_date), COUNT(DISTINCT gaming_session_id), COUNT(DISTINCT player_guid) FROM player_comprehensive_stats WHERE date(round_date) = date('now')"
-            result = await db.fetch_one(query)
-        except Exception as e2:
-            print(f"Error in get_live_session (SQLite fallback): {e2}")
-            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+        logger.error("Database error in get_live_session: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred.")
 
     if not result or not result[0]:
         return {"active": False}
@@ -3390,8 +3373,6 @@ async def get_leaderboard(
     limit: int = 50,
     db: DatabaseAdapter = Depends(get_db),
 ):
-    from datetime import datetime, timedelta
-
     # Calculate start date
     if period == "7d":
         start_date_str = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
@@ -3618,8 +3599,6 @@ async def get_quick_leaders(
     - Top XP in last 7 days
     - Top DPM per session in last 7 days
     """
-    from datetime import datetime, timedelta
-
     start_date = (datetime.now() - timedelta(days=7)).date()
     start_date_str = start_date.strftime("%Y-%m-%d")
 
@@ -3956,8 +3935,6 @@ async def get_weapon_stats(
     Get aggregated weapon statistics across all players.
     Returns weapon usage, kills, and accuracy data from weapon_comprehensive_stats table.
     """
-    from datetime import datetime, timedelta
-
     # Calculate start date based on period
     where_clause = "WHERE 1=1"
     params = []
@@ -4040,8 +4017,6 @@ async def get_weapon_hall_of_fame(
     Get top player per weapon for Hall of Fame.
     Focuses on iconic weapons (pistols, smgs, rifles, heavy, explosives).
     """
-    from datetime import datetime, timedelta
-
     hall_weapons = [
         "luger",
         "colt",
@@ -4148,8 +4123,6 @@ async def get_weapon_stats_by_player(
     Return per-player weapon stats keyed by player GUID.
     Useful for comprehensive weapon mastery views.
     """
-    from datetime import datetime, timedelta
-
     where_clause = "WHERE weapon_name IS NOT NULL"
     params: List[Any] = []
     param_idx = 1
@@ -4521,8 +4494,6 @@ async def get_player_form(
     """
     Get player's recent form - session DPM (aggregated per gaming session).
     """
-    from datetime import datetime
-
     player_guid = await resolve_player_guid(db, player_name)
     use_guid = player_guid is not None
     identifier = player_guid if use_guid else player_name
@@ -4609,8 +4580,6 @@ async def get_player_rounds(
     """
     Get player's recent per-round DPM (individual maps).
     """
-    from datetime import datetime
-
     player_guid = await resolve_player_guid(db, player_name)
     use_guid = player_guid is not None
     identifier = player_guid if use_guid else player_name
@@ -4898,11 +4867,9 @@ def classify_playstyle(stats: dict, dpm: float, kd: float, accuracy: float) -> d
     Classify player playstyle into 8 categories (0-100 scale).
     Based on Discord bot's SessionGraphGenerator logic.
     """
-    time_minutes = stats["time_played"] / 60 if stats["time_played"] > 0 else 1
     rounds = stats["rounds_played"] or 1
 
     # Normalize stats per round for fair comparison
-    kills_pr = stats["kills"] / rounds
     deaths_pr = stats["deaths"] / rounds
     revives_pr = stats["revives"] / rounds
     gibs_pr = stats["gibs"] / rounds
@@ -5891,18 +5858,18 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         "start_date": str(start_date),
         "end_date": str(end_date),
         "leaders": {
-            "damage_given": await leader_payload(dmg_given, lambda v: int(v)),
-            "damage_received": await leader_payload(dmg_recv, lambda v: int(v)),
-            "team_damage": await leader_payload(team_dmg, lambda v: int(v)),
-            "revives": await leader_payload(revives, lambda v: int(v)),
-            "deaths": await leader_payload(deaths, lambda v: int(v)),
-            "gibs": await leader_payload(gibs, lambda v: int(v)),
-            "objectives": await leader_payload(objectives, lambda v: int(v)),
-            "xp": await leader_payload(xp, lambda v: int(v)),
-            "kills": await leader_payload(kills, lambda v: int(v)),
-            "dpm": await leader_payload(dpm, lambda v: float(v)),
-            "time_alive": await leader_payload(time_alive, lambda v: int(v)),
-            "time_dead": await leader_payload(time_dead, lambda v: float(v)),
+            "damage_given": await leader_payload(dmg_given, int),
+            "damage_received": await leader_payload(dmg_recv, int),
+            "team_damage": await leader_payload(team_dmg, int),
+            "revives": await leader_payload(revives, int),
+            "deaths": await leader_payload(deaths, int),
+            "gibs": await leader_payload(gibs, int),
+            "objectives": await leader_payload(objectives, int),
+            "xp": await leader_payload(xp, int),
+            "kills": await leader_payload(kills, int),
+            "dpm": await leader_payload(dpm, float),
+            "time_alive": await leader_payload(time_alive, int),
+            "time_dead": await leader_payload(time_dead, float),
             "longest_session": {
                 "rounds": int(session[1]) if session else 0,
                 "date": str(session[2]) if session else None
@@ -6482,7 +6449,7 @@ def _compute_strafe_metrics(path: List[Dict[str, Any]], min_step: float = 5.0, a
         p2 = points[idx]
         dx = float(p2["x"]) - float(p1["x"])
         dy = float(p2["y"]) - float(p1["y"])
-        step = math.sqrt(dx * dx + dy * dy)
+        step = math.hypot(dx, dy)
         if step < min_step:
             continue
         total_distance += step

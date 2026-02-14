@@ -932,8 +932,11 @@ class UltimateETLegacyBot(commands.Bot):
             logger.debug("⏳ Waiting 3s for file to fully write...")
             await asyncio.sleep(3)
 
+            # Check for pending Lua metadata (from STATS_READY or gametime)
+            override_metadata = self._pop_pending_metadata(filename)
+
             # Process the file (parse + import + Discord post)
-            result = await self.process_gamestats_file(local_path, filename)
+            result = await self.process_gamestats_file(local_path, filename, override_metadata=override_metadata)
 
             if result and result.get('success'):
                 # Post to Discord via round publisher
@@ -2722,7 +2725,8 @@ class UltimateETLegacyBot(commands.Bot):
                             logger.info(f"⚙️ Processing completed in {process_time:.2f}s")
                         else:
                             # Regular stats file processing
-                            result = await self.process_gamestats_file(local_path, filename)
+                            override_metadata = self._pop_pending_metadata(filename)
+                            result = await self.process_gamestats_file(local_path, filename, override_metadata=override_metadata)
                             process_time = time.time() - process_start
 
                             logger.info(f"⚙️ Processing completed in {process_time:.2f}s")
@@ -3076,6 +3080,19 @@ class UltimateETLegacyBot(commands.Bot):
         timestamps.append(now)
         return True
 
+    def _pop_pending_metadata(self, filename: str):
+        """Pop matching Lua metadata from _pending_round_metadata if available."""
+        if not hasattr(self, '_pending_round_metadata') or not self._pending_round_metadata:
+            return None
+        fn_match = re.match(r'\d{4}-\d{2}-\d{2}-\d{6}-(.+)-round-(\d+)\.txt$', filename)
+        if not fn_match:
+            return None
+        metadata_key = f"{fn_match.group(1)}_R{fn_match.group(2)}"
+        metadata = self._pending_round_metadata.pop(metadata_key, None)
+        if metadata:
+            webhook_logger.info(f"📎 Attached pending Lua metadata for {metadata_key}")
+        return metadata
+
     def _validate_stats_filename(self, filename: str) -> bool:
         """
         Strict validation for stats filenames.
@@ -3085,8 +3102,6 @@ class UltimateETLegacyBot(commands.Bot):
 
         Security: Prevents path traversal, injection, null bytes
         """
-        import re
-
         # Length check (prevent DoS)
         if len(filename) > 255:
             logger.warning(f"🚨 Filename too long: {len(filename)} chars")
@@ -3142,8 +3157,6 @@ class UltimateETLegacyBot(commands.Bot):
 
         Security: Prevents path traversal, injection, null bytes
         """
-        import re
-
         # Length check (prevent DoS)
         if len(filename) > 255:
             logger.warning(f"🚨 Endstats filename too long: {len(filename)} chars")
@@ -3313,7 +3326,6 @@ class UltimateETLegacyBot(commands.Bot):
         # Format: 📊 `2025-12-09-221829-etl_sp_delivery-round-1.txt`
         filename = None
         if message.content:
-            import re
             match = re.search(r'`([^`]+\.txt)`', message.content)
             if match:
                 filename = match.group(1)
@@ -3360,8 +3372,8 @@ class UltimateETLegacyBot(commands.Bot):
                 # Optionally delete the trigger message
                 try:
                     await trigger_message.delete()
-                except Exception:
-                    pass
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             # IMMEDIATELY mark as being processed to prevent race with polling
@@ -3391,8 +3403,8 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     await trigger_message.add_reaction('❌')
                     await trigger_message.reply(f"⚠️ Failed to download `{filename}` from server.")
-                except Exception:
-                    pass
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             webhook_logger.info(f"✅ Downloaded: {local_path}")
@@ -3400,8 +3412,11 @@ class UltimateETLegacyBot(commands.Bot):
             # Wait for file to fully write
             await asyncio.sleep(2)
 
+            # Check for pending Lua metadata (from STATS_READY or gametime)
+            override_metadata = self._pop_pending_metadata(filename)
+
             # Process the file (parse and import to DB)
-            result = await self.process_gamestats_file(local_path, filename)
+            result = await self.process_gamestats_file(local_path, filename, override_metadata=override_metadata)
 
             if result and result.get('success'):
                 # Post to production stats channel
@@ -3429,8 +3444,8 @@ class UltimateETLegacyBot(commands.Bot):
                         f"⚠️ Failed to process `{filename}`\n"
                         f"Error: {safe_error[:200]}"
                     )
-                except Exception:
-                    pass
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
 
         except Exception as e:
             if added_processing_marker:
@@ -3440,7 +3455,7 @@ class UltimateETLegacyBot(commands.Bot):
             try:
                 await trigger_message.add_reaction('🚨')
                 await trigger_message.reply(f"🚨 Critical error processing `{filename}`. Check logs.")
-            except Exception:
+            except discord.DiscordException:
                 pass
             # Track for admin alerts
             await self.track_error("webhook_processing", str(e), max_consecutive=3)
@@ -3917,11 +3932,8 @@ class UltimateETLegacyBot(commands.Bot):
 
         Data stored in lua_round_teams table with match_id + round_number key.
         """
-        import json
-
         try:
             # Generate match_id from timestamp and map (same pattern used elsewhere)
-            from datetime import datetime
             round_end = round_metadata.get('round_end_unix', 0)
             map_name = round_metadata.get('map_name', 'unknown')
             round_number = round_metadata.get('round_number', 0)
@@ -4134,7 +4146,6 @@ class UltimateETLegacyBot(commands.Bot):
         Expected spawn_stats format (list of dicts):
           {guid, name, spawns, deaths, dead_seconds, avg_respawn, max_respawn}
         """
-        import json
         if not spawn_stats:
             return
         try:
@@ -4142,7 +4153,6 @@ class UltimateETLegacyBot(commands.Bot):
                 webhook_logger.warning("⚠️ lua_spawn_stats table missing (migration not run).")
                 return
 
-            from datetime import datetime
             round_end = round_metadata.get('round_end_unix', 0)
             map_name = round_metadata.get('map_name', 'unknown')
             round_number = round_metadata.get('round_number', 0)
@@ -4223,8 +4233,6 @@ class UltimateETLegacyBot(commands.Bot):
         added_processing_marker = False
         try:
             from bot.automation.ssh_handler import SSHHandler
-            import re
-            from datetime import datetime
 
             # Build SSH config
             ssh_config = {
@@ -4235,25 +4243,45 @@ class UltimateETLegacyBot(commands.Bot):
                 "remote_path": self.config.ssh_remote_path,
             }
 
-            # List files on server to find the matching one
-            files = await SSHHandler.list_remote_files(ssh_config)
-            if not files:
-                webhook_logger.warning("No files found on server")
-                return
-
-            # Find files matching the map and round
+            # Find files matching the map and round (with retry for file not yet written)
             map_name = round_metadata['map_name']
             round_num = round_metadata['round_number']
             target_time = round_metadata['round_end_unix']
 
+            # Only consider files from the same day to avoid picking old files
+            date_prefix = None
+            if target_time:
+                date_prefix = datetime.fromtimestamp(target_time).strftime('%Y-%m-%d')
+
             matching_files = []
-            for f in files:
-                # Check if filename matches pattern and contains map name
-                if map_name in f and f'-round-{round_num}.txt' in f and not f.endswith('-endstats.txt'):
-                    matching_files.append(f)
+            for attempt in range(4):
+                files = await SSHHandler.list_remote_files(ssh_config)
+                if not files:
+                    webhook_logger.warning("No files found on server")
+                    if attempt < 3:
+                        await asyncio.sleep(5)
+                        continue
+                    return
+
+                matching_files = []
+                for f in files:
+                    if map_name in f and f'-round-{round_num}.txt' in f and not f.endswith('-endstats.txt'):
+                        # Filter to same-day files only
+                        if date_prefix and not f.startswith(date_prefix):
+                            continue
+                        matching_files.append(f)
+
+                if matching_files:
+                    break
+                if attempt < 3:
+                    webhook_logger.info(
+                        f"⏳ Stats file not yet on server for {map_name} R{round_num}, "
+                        f"retry {attempt + 1}/3 in 5s..."
+                    )
+                    await asyncio.sleep(5)
 
             if not matching_files:
-                webhook_logger.warning(f"No matching file found for {map_name} R{round_num}")
+                webhook_logger.warning(f"No matching file found for {map_name} R{round_num} (after retries)")
                 return
 
             def _extract_timestamp(filename: str) -> int | None:
@@ -4376,7 +4404,7 @@ class UltimateETLegacyBot(commands.Bot):
             try:
                 if trigger_message:
                     await trigger_message.add_reaction('⚠️')
-            except Exception:
+            except discord.DiscordException:
                 pass
             return
 
@@ -4643,8 +4671,8 @@ class UltimateETLegacyBot(commands.Bot):
                 webhook_logger.debug(f"⏭️ Endstats already in progress: {filename}")
                 try:
                     await trigger_message.delete()
-                except Exception:
-                    pass
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             # Then check database table
@@ -4655,8 +4683,8 @@ class UltimateETLegacyBot(commands.Bot):
                 self.processed_endstats_files.add(filename)  # Sync to memory
                 try:
                     await trigger_message.delete()
-                except Exception:
-                    pass
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             # IMMEDIATELY mark as being processed to prevent race with polling
@@ -4682,8 +4710,8 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     await trigger_message.add_reaction('❌')
                     await trigger_message.reply(f"⚠️ Failed to download `{filename}` from server.")
-                except Exception:
-                    pass
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             webhook_logger.info(f"✅ Downloaded endstats: {local_path}")
@@ -4698,8 +4726,8 @@ class UltimateETLegacyBot(commands.Bot):
                 webhook_logger.error(f"❌ Failed to parse endstats: {filename}")
                 try:
                     await trigger_message.add_reaction('⚠️')
-                except Exception:
-                    pass
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             metadata = endstats_data['metadata']
@@ -4732,8 +4760,8 @@ class UltimateETLegacyBot(commands.Bot):
                 )
                 try:
                     await trigger_message.add_reaction('⏳')
-                except Exception:
-                    pass
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
                 await self._schedule_endstats_retry(
                     filename, local_path, endstats_data, trigger_message
                 )
@@ -4763,7 +4791,7 @@ class UltimateETLegacyBot(commands.Bot):
             try:
                 await trigger_message.add_reaction('🚨')
                 await trigger_message.reply(f"🚨 Error processing endstats `{filename}`. Check logs.")
-            except Exception:
+            except discord.DiscordException:
                 pass
             await self.track_error("endstats_processing", str(e), max_consecutive=3)
 

@@ -318,7 +318,7 @@ class LinkCog(commands.Cog, name="Link"):
                                 last_str = f"{days_ago//7}w"
                             else:
                                 last_str = f"{days_ago//30}mo"
-                    except Exception:
+                    except (ValueError, TypeError, AttributeError):
                         last_str = "?"
 
                     player_lines.append(
@@ -539,7 +539,7 @@ class LinkCog(commands.Cog, name="Link"):
                     else:
                         years = days_ago // 365
                         last_str = f"{years} year{'s' if years > 1 else ''} ago"
-                except Exception:
+                except (ValueError, TypeError, AttributeError):
                     last_str = last_seen
 
                 # Add field to embed with formatted name and badges
@@ -1652,7 +1652,7 @@ class LinkCog(commands.Cog, name="Link"):
             try:
                 last_seen_dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00") if "Z" in last_seen else last_seen)
                 last_seen_str = last_seen_dt.strftime("%Y-%m-%d")
-            except Exception:
+            except (ValueError, TypeError):
                 last_seen_str = "Unknown"
 
             alias_lines.append(

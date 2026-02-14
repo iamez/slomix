@@ -114,7 +114,7 @@ def main():
         return 1
 
     print(f"\n✅ If anything goes wrong, restore with:")
-    print(f"   PGPASSWORD='{DB_CONFIG['password']}' psql -h {DB_CONFIG['host']} \\")
+    print(f"   PGPASSWORD='<DB_PASSWORD>' psql -h {DB_CONFIG['host']} \\")
     print(f"     -U {DB_CONFIG['user']} -d {DB_CONFIG['database']} < {backup_file}")
 
     # Get files

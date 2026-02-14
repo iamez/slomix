@@ -94,8 +94,8 @@ class EndstatsPaginationView(View):
             if not interaction.response.is_done():
                 try:
                     await interaction.response.defer()
-                except Exception:
-                    pass
+                except discord.DiscordException:
+                    logger.debug("Deferred interaction response failed")
             try:
                 await interaction.message.edit(embed=embed, view=self)
             except Exception as inner:

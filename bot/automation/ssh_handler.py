@@ -25,7 +25,7 @@ logger = logging.getLogger("bot.automation.ssh")
 
 # Security: SSH host key verification mode
 # Set SSH_STRICT_HOST_KEY=true to require known_hosts verification
-SSH_STRICT_HOST_KEY = os.getenv('SSH_STRICT_HOST_KEY', 'false').lower() == 'true'
+SSH_STRICT_HOST_KEY = os.getenv('SSH_STRICT_HOST_KEY', 'true').lower() == 'true'
 
 
 def configure_ssh_host_key_policy(ssh_client):
@@ -59,7 +59,11 @@ def configure_ssh_host_key_policy(ssh_client):
                 "to add your server's host key."
             )
     else:
-        # Permissive mode: auto-accept host keys (default for trusted VPS)
+        # Permissive mode: auto-accept host keys (explicit opt-in only)
+        logger.warning(
+            "SSH host key validation DISABLED (SSH_STRICT_HOST_KEY=false). "
+            "Set SSH_STRICT_HOST_KEY=true and populate ~/.ssh/known_hosts for production."
+        )
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
 
