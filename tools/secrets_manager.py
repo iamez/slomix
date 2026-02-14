@@ -204,11 +204,11 @@ class SecretsManager:
         print(f"\n{'='*70}")
         print("🔐 DATABASE PASSWORD ROTATION")
         print(f"{'='*70}")
-        print(f"Old password: {old_password[:8]}..." if old_password else "Old password: (not set)")
-        print(f"New password: {new_password}")
+        print(f"Old password: {old_password[:4]}****" if old_password else "Old password: (not set)")
+        print(f"New password: {'*' * len(new_password)} (written to .env)")
         print("\n⚠️  IMPORTANT: You must run this SQL command manually:")
         print("\n    psql -U postgres -d etlegacy")
-        print(f"    ALTER USER etlegacy_user WITH PASSWORD '{new_password}';")
+        print("    ALTER USER etlegacy_user WITH PASSWORD '<password-from-.env-file>';")
         print(f"\n{'='*70}\n")
 
         return old_password, new_password

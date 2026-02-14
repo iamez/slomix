@@ -5,7 +5,7 @@ try:
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-except Exception:
+except ImportError:
     matplotlib = None
     plt = None
 
@@ -73,7 +73,7 @@ def create_performance_image(top_players, title_date: str):
                 scaled = True
             if scaled:
                 scaled_any = True
-        except Exception:
+        except ImportError:
             s = float(g)
         scaled_gibs.append(int(round(s)))
 
