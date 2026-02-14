@@ -3,7 +3,7 @@
  * @module matches
  */
 
-import { API_BASE, fetchJSON, escapeHtml, formatStopwatchTime } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml } from './utils.js';
 import { openModal } from './auth.js';
 
 function formatClockTime(seconds) {

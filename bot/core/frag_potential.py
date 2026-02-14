@@ -217,7 +217,7 @@ class FragPotentialCalculator:
 
         if td_seconds < 0:
             td_seconds = 0.0
-        if td_seconds > time_played_seconds and time_played_seconds > 0:
+        if td_seconds > time_played_seconds > 0:
             td_seconds = float(time_played_seconds)
 
         # Calculate time alive
