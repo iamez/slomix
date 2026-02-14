@@ -3102,8 +3102,6 @@ class UltimateETLegacyBot(commands.Bot):
 
         Security: Prevents path traversal, injection, null bytes
         """
-        import re
-
         # Length check (prevent DoS)
         if len(filename) > 255:
             logger.warning(f"🚨 Filename too long: {len(filename)} chars")
@@ -3159,8 +3157,6 @@ class UltimateETLegacyBot(commands.Bot):
 
         Security: Prevents path traversal, injection, null bytes
         """
-        import re
-
         # Length check (prevent DoS)
         if len(filename) > 255:
             logger.warning(f"🚨 Endstats filename too long: {len(filename)} chars")
@@ -3330,7 +3326,6 @@ class UltimateETLegacyBot(commands.Bot):
         # Format: 📊 `2025-12-09-221829-etl_sp_delivery-round-1.txt`
         filename = None
         if message.content:
-            import re
             match = re.search(r'`([^`]+\.txt)`', message.content)
             if match:
                 filename = match.group(1)
@@ -3378,7 +3373,7 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     await trigger_message.delete()
                 except discord.DiscordException:
-                    pass
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             # IMMEDIATELY mark as being processed to prevent race with polling
@@ -3409,7 +3404,7 @@ class UltimateETLegacyBot(commands.Bot):
                     await trigger_message.add_reaction('❌')
                     await trigger_message.reply(f"⚠️ Failed to download `{filename}` from server.")
                 except discord.DiscordException:
-                    pass
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             webhook_logger.info(f"✅ Downloaded: {local_path}")
@@ -3450,7 +3445,7 @@ class UltimateETLegacyBot(commands.Bot):
                         f"Error: {safe_error[:200]}"
                     )
                 except discord.DiscordException:
-                    pass
+                    logger.debug("Discord notification failed (non-critical)")
 
         except Exception as e:
             if added_processing_marker:
@@ -3937,11 +3932,8 @@ class UltimateETLegacyBot(commands.Bot):
 
         Data stored in lua_round_teams table with match_id + round_number key.
         """
-        import json
-
         try:
             # Generate match_id from timestamp and map (same pattern used elsewhere)
-            from datetime import datetime
             round_end = round_metadata.get('round_end_unix', 0)
             map_name = round_metadata.get('map_name', 'unknown')
             round_number = round_metadata.get('round_number', 0)
@@ -4154,7 +4146,6 @@ class UltimateETLegacyBot(commands.Bot):
         Expected spawn_stats format (list of dicts):
           {guid, name, spawns, deaths, dead_seconds, avg_respawn, max_respawn}
         """
-        import json
         if not spawn_stats:
             return
         try:
@@ -4162,7 +4153,6 @@ class UltimateETLegacyBot(commands.Bot):
                 webhook_logger.warning("⚠️ lua_spawn_stats table missing (migration not run).")
                 return
 
-            from datetime import datetime
             round_end = round_metadata.get('round_end_unix', 0)
             map_name = round_metadata.get('map_name', 'unknown')
             round_number = round_metadata.get('round_number', 0)
@@ -4243,8 +4233,6 @@ class UltimateETLegacyBot(commands.Bot):
         added_processing_marker = False
         try:
             from bot.automation.ssh_handler import SSHHandler
-            import re
-            from datetime import datetime
 
             # Build SSH config
             ssh_config = {
@@ -4684,7 +4672,7 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     await trigger_message.delete()
                 except discord.DiscordException:
-                    pass
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             # Then check database table
@@ -4696,7 +4684,7 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     await trigger_message.delete()
                 except discord.DiscordException:
-                    pass
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             # IMMEDIATELY mark as being processed to prevent race with polling
@@ -4723,7 +4711,7 @@ class UltimateETLegacyBot(commands.Bot):
                     await trigger_message.add_reaction('❌')
                     await trigger_message.reply(f"⚠️ Failed to download `{filename}` from server.")
                 except discord.DiscordException:
-                    pass
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             webhook_logger.info(f"✅ Downloaded endstats: {local_path}")
@@ -4739,7 +4727,7 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     await trigger_message.add_reaction('⚠️')
                 except discord.DiscordException:
-                    pass
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             metadata = endstats_data['metadata']
@@ -4773,7 +4761,7 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     await trigger_message.add_reaction('⏳')
                 except discord.DiscordException:
-                    pass
+                    logger.debug("Discord notification failed (non-critical)")
                 await self._schedule_endstats_retry(
                     filename, local_path, endstats_data, trigger_message
                 )

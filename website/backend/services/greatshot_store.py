@@ -138,7 +138,7 @@ class GreatshotStorageService:
                     try:
                         stored_path.unlink(missing_ok=True)
                     except OSError:
-                        pass
+                        logger.debug("Could not clean up file after error")
                     raise HTTPException(
                         status_code=413,
                         detail=(

@@ -420,7 +420,7 @@ async def get_greatshot_detail(demo_id: str, request: Request, db=Depends(get_db
                     full_analysis = json_mod.load(f)
                     player_stats = full_analysis.get("player_stats") or None
         except (OSError, json_mod.JSONDecodeError, KeyError, ValueError):
-            pass
+            logger.debug("Could not read analysis JSON")
 
     return {
         "id": demo_id,
@@ -563,7 +563,7 @@ async def get_crossref(demo_id: str, request: Request, db=Depends(get_db)):
                     full_analysis = json_mod.load(f)
                     demo_player_stats = full_analysis.get("player_stats") or {}
         except (OSError, json_mod.JSONDecodeError, KeyError, ValueError):
-            pass
+            logger.debug("Could not read analysis JSON")
 
     # Pass player stats to matching function for validation
     match = await find_matching_round(metadata, db, demo_player_stats=demo_player_stats)
