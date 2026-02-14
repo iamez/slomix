@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -18,7 +20,7 @@ def _require_user_id(request: Request) -> int:
         raise HTTPException(status_code=401, detail="Authentication required")
     try:
         return int(user["id"])
-    except Exception as exc:
+    except (ValueError, TypeError, KeyError) as exc:
         raise HTTPException(status_code=401, detail="Invalid session user") from exc
 
 
@@ -29,9 +31,8 @@ def _safe_json_field(value: Any) -> Optional[Dict]:
     if isinstance(value, dict):
         return value
     try:
-        import json
         return json.loads(value) if isinstance(value, str) else None
-    except Exception:
+    except (json.JSONDecodeError, ValueError, TypeError):
         return None
 
 
@@ -123,8 +124,6 @@ async def get_top_players(request: Request, limit: int = 10, db=Depends(get_db))
             continue
 
         try:
-            import json
-            from pathlib import Path
             analysis_file = Path(analysis_path)
             if not analysis_file.is_file():
                 continue
@@ -156,8 +155,8 @@ async def get_top_players(request: Request, limit: int = 10, db=Depends(get_db))
                     "headshots": headshots,
                     "created_at": str(created_at),
                 })
-        except Exception as e:
-            logger.warning(f"Failed to process demo {demo_id}: {e}")
+        except (OSError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+            logger.warning("Failed to process demo %s: %s", demo_id, str(e).replace('\n', ' ')[:200])
             continue
 
     # Sort by kills and return top N
@@ -209,8 +208,6 @@ async def get_top_accuracy(
             continue
 
         try:
-            import json
-            from pathlib import Path
             analysis_file = Path(analysis_path)
             if not analysis_file.is_file():
                 continue
@@ -237,8 +234,8 @@ async def get_top_accuracy(
                     "accuracy": round(accuracy, 1),
                     "created_at": str(created_at),
                 })
-        except Exception as e:
-            logger.warning(f"Failed to process demo {demo_id}: {e}")
+        except (OSError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+            logger.warning("Failed to process demo %s: %s", demo_id, str(e).replace('\n', ' ')[:200])
             continue
 
     # Sort by accuracy and return top N
@@ -281,8 +278,6 @@ async def get_top_damage(request: Request, limit: int = 10, db=Depends(get_db)):
             continue
 
         try:
-            import json
-            from pathlib import Path
             analysis_file = Path(analysis_path)
             if not analysis_file.is_file():
                 continue
@@ -305,8 +300,8 @@ async def get_top_damage(request: Request, limit: int = 10, db=Depends(get_db)):
                     "kills": kills,
                     "created_at": str(created_at),
                 })
-        except Exception as e:
-            logger.warning(f"Failed to process demo {demo_id}: {e}")
+        except (OSError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+            logger.warning("Failed to process demo %s: %s", demo_id, str(e).replace('\n', ' ')[:200])
             continue
 
     # Sort by damage and return top N

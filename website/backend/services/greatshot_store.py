@@ -137,7 +137,7 @@ class GreatshotStorageService:
                     handle.close()
                     try:
                         stored_path.unlink(missing_ok=True)
-                    except Exception:
+                    except OSError:
                         pass
                     raise HTTPException(
                         status_code=413,
@@ -157,16 +157,16 @@ class GreatshotStorageService:
         if total_bytes == 0:
             try:
                 stored_path.unlink(missing_ok=True)
-            except Exception:
+            except OSError:
                 pass
             raise HTTPException(status_code=400, detail="Empty upload is not allowed.")
 
         try:
             sniff_demo_header_bytes(header_bytes)
-        except Exception as exc:
+        except (ValueError, OSError) as exc:
             try:
                 stored_path.unlink(missing_ok=True)
-            except Exception:
+            except OSError:
                 pass
             raise HTTPException(status_code=400, detail=f"Invalid demo header: {exc}") from exc
 
@@ -184,7 +184,7 @@ class GreatshotStorageService:
             resolved = Path(absolute_path).resolve()
             relative = resolved.relative_to(self.root)
             return str(relative)
-        except Exception:
+        except (ValueError, OSError):
             return None
 
     def resolve_checked_path(self, raw_path: str) -> Path:

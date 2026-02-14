@@ -23,16 +23,16 @@ ParserClass = None
 try:
     from bot.community_stats_parser import CommunityStatsParser as _CSP
     ParserClass = _CSP
-except Exception:
+except ImportError:
     try:
         from bot.community_stats_parser import C0RNP0RN3StatsParser as _CSP2
         ParserClass = _CSP2
-    except Exception:
+    except ImportError:
         try:
             # Fallback to top-level shim
             from community_stats_parser import CommunityStatsParser as _CSP3
             ParserClass = _CSP3
-        except Exception:
+        except ImportError:
             ParserClass = None
 
 # Simple internal parser fallback (very small subset) if no parser found
