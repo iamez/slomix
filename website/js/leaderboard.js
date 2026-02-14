@@ -57,7 +57,7 @@ export async function loadLeaderboard() {
             const displayName = row.name || row.guid || 'Unknown';
             const profileId = row.guid || row.name || 'unknown';
             const initials = displayName.substring(0, 2).toUpperCase();
-            let valueText = row.value;
+            let valueText;
             if (currentLbStat === 'accuracy') {
                 valueText = `${Number(row.value || 0).toFixed(1)}%`;
             } else if (currentLbStat === 'dpm') {

@@ -235,8 +235,8 @@ async def resolve_player_guid(
         )
         if alias_row and alias_row[0]:
             return alias_row[0]
-    except Exception:
-        pass
+    except (OSError, RuntimeError):
+        pass  # Table may not exist
 
     return None
 
@@ -258,7 +258,7 @@ async def resolve_display_name(
         )
         if link_row and link_row[0]:
             return link_row[0]
-    except Exception:
+    except (OSError, RuntimeError):
         # Fallback if display_name column doesn't exist or table is unavailable
         try:
             link_row = await db.fetch_one(
@@ -267,7 +267,7 @@ async def resolve_display_name(
             )
             if link_row and link_row[0]:
                 return link_row[0]
-        except Exception:
+        except (OSError, RuntimeError):
             pass
 
     # 2) Most recent alias, if alias table exists
@@ -278,7 +278,7 @@ async def resolve_display_name(
         )
         if alias_row and alias_row[0]:
             return alias_row[0]
-    except Exception:
+    except (OSError, RuntimeError):
         pass
 
     # 3) Fallback to most recent name in stats
@@ -369,11 +369,12 @@ async def get_status(db: DatabaseAdapter = Depends(get_db)):
         await db.fetch_one("SELECT 1")
         return {"status": "online", "service": "Slomix API", "database": "ok"}
     except Exception as exc:
+        logger.error("Status check database error: %s", exc)
         return {
             "status": "degraded",
             "service": "Slomix API",
             "database": "error",
-            "error": str(exc),
+            "error": "Database connection failed",
         }
 
 
@@ -1372,7 +1373,7 @@ async def get_current_voice_activity(db: DatabaseAdapter = Depends(get_db)):
             "total_count": 0,
             "members": [],
             "channels": [],
-            "error": None if denied_voice_members else error_text,
+            "error": None if denied_voice_members else "Voice channel query failed",
         }
 
 
@@ -6448,7 +6449,7 @@ def _compute_strafe_metrics(path: List[Dict[str, Any]], min_step: float = 5.0, a
         p2 = points[idx]
         dx = float(p2["x"]) - float(p1["x"])
         dy = float(p2["y"]) - float(p1["y"])
-        step = math.sqrt(dx * dx + dy * dy)
+        step = math.hypot(dx, dy)
         if step < min_step:
             continue
         total_distance += step

@@ -2251,7 +2251,7 @@ class PostgreSQLDatabaseManager:
                             f"(diff {time_diff:.2f}m) round_id={round_id}"
                         )
 
-                    ratio_from_raw = (time_dead_minutes / raw_time_minutes) * 100 if raw_time_minutes > 0 else 0
+                    ratio_from_raw = (time_dead_minutes / raw_time_minutes) * 100
                     ratio_diff = abs(ratio_from_raw - time_dead_ratio)
                     if time_dead_ratio > 0 and ratio_diff > 5:
                         logger.warning(

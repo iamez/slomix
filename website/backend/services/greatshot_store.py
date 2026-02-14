@@ -49,7 +49,7 @@ class GreatshotStorageService:
     def ensure_storage_tree(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         try:
-            os.chmod(self.root, 0o750)
+            os.chmod(self.root, 0o700)
         except OSError:
             pass
 
