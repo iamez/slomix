@@ -68,7 +68,7 @@ def get_new_round2_files():
                     file_date = f"{parts[0]}-{parts[1]}-{parts[2]}"
                     if file_date >= "2026-01-16":
                         r2_files.append((filename, os.path.join(LOCAL_STATS, filename)))
-                except:
+                except (ValueError, IndexError):
                     continue
 
     r2_files.sort()

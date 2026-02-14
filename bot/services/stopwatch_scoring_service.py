@@ -664,7 +664,7 @@ class StopwatchScoringService:
             rows = await self.db.fetch_all(rounds_query, tuple(session_ids))
 
             if not rows:
-                logger.debug(f"No completed rounds found for session {session_date}")
+                logger.debug("No completed rounds found for session %s", session_date)
                 return None
 
             # Group rounds into map pairs (R1 + R2)
@@ -722,7 +722,7 @@ class StopwatchScoringService:
             ]
 
             if not complete_maps and not incomplete_maps:
-                logger.debug(f"No map data found for {session_date}")
+                logger.debug("No map data found for %s", session_date)
                 return None
 
             # For each map, determine which persistent team was attacking in R1

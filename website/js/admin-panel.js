@@ -2703,11 +2703,6 @@ const LUA_MAP_NODE_INDEX = LUA_MAP_GROUPS.flatMap(group =>
     }))
 );
 
-const FULL_GROUP_LOOKUP = FULL_MAP_GROUPS.reduce((acc, group) => {
-    acc[group.id] = group;
-    return acc;
-}, {});
-
 const FULL_FLOW_BASE = [
     { from: 'core_game_server', to: 'core_postgres', type: 'core', label: 'Stats stored' },
     { from: 'core_postgres', to: 'core_bot_web', type: 'core', label: 'Queries + outputs' },

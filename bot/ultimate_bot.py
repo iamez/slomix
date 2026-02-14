@@ -3377,7 +3377,7 @@ class UltimateETLegacyBot(commands.Bot):
                 # Optionally delete the trigger message
                 try:
                     await trigger_message.delete()
-                except Exception:
+                except discord.DiscordException:
                     pass
                 return
 
@@ -3408,7 +3408,7 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     await trigger_message.add_reaction('❌')
                     await trigger_message.reply(f"⚠️ Failed to download `{filename}` from server.")
-                except Exception:
+                except discord.DiscordException:
                     pass
                 return
 
@@ -3449,7 +3449,7 @@ class UltimateETLegacyBot(commands.Bot):
                         f"⚠️ Failed to process `{filename}`\n"
                         f"Error: {safe_error[:200]}"
                     )
-                except Exception:
+                except discord.DiscordException:
                     pass
 
         except Exception as e:
@@ -3460,7 +3460,7 @@ class UltimateETLegacyBot(commands.Bot):
             try:
                 await trigger_message.add_reaction('🚨')
                 await trigger_message.reply(f"🚨 Critical error processing `{filename}`. Check logs.")
-            except Exception:
+            except discord.DiscordException:
                 pass
             # Track for admin alerts
             await self.track_error("webhook_processing", str(e), max_consecutive=3)
@@ -4416,7 +4416,7 @@ class UltimateETLegacyBot(commands.Bot):
             try:
                 if trigger_message:
                     await trigger_message.add_reaction('⚠️')
-            except Exception:
+            except discord.DiscordException:
                 pass
             return
 
@@ -4683,7 +4683,7 @@ class UltimateETLegacyBot(commands.Bot):
                 webhook_logger.debug(f"⏭️ Endstats already in progress: {filename}")
                 try:
                     await trigger_message.delete()
-                except Exception:
+                except discord.DiscordException:
                     pass
                 return
 
@@ -4695,7 +4695,7 @@ class UltimateETLegacyBot(commands.Bot):
                 self.processed_endstats_files.add(filename)  # Sync to memory
                 try:
                     await trigger_message.delete()
-                except Exception:
+                except discord.DiscordException:
                     pass
                 return
 
@@ -4722,7 +4722,7 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     await trigger_message.add_reaction('❌')
                     await trigger_message.reply(f"⚠️ Failed to download `{filename}` from server.")
-                except Exception:
+                except discord.DiscordException:
                     pass
                 return
 
@@ -4738,7 +4738,7 @@ class UltimateETLegacyBot(commands.Bot):
                 webhook_logger.error(f"❌ Failed to parse endstats: {filename}")
                 try:
                     await trigger_message.add_reaction('⚠️')
-                except Exception:
+                except discord.DiscordException:
                     pass
                 return
 
@@ -4772,7 +4772,7 @@ class UltimateETLegacyBot(commands.Bot):
                 )
                 try:
                     await trigger_message.add_reaction('⏳')
-                except Exception:
+                except discord.DiscordException:
                     pass
                 await self._schedule_endstats_retry(
                     filename, local_path, endstats_data, trigger_message
@@ -4803,7 +4803,7 @@ class UltimateETLegacyBot(commands.Bot):
             try:
                 await trigger_message.add_reaction('🚨')
                 await trigger_message.reply(f"🚨 Error processing endstats `{filename}`. Check logs.")
-            except Exception:
+            except discord.DiscordException:
                 pass
             await self.track_error("endstats_processing", str(e), max_consecutive=3)
 

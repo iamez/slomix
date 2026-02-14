@@ -9,7 +9,6 @@ This cog handles the !last_session command by delegating to specialized services
 - SessionViewHandlers: Different view modes (obj, combat, weapons, etc.)
 """
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Tuple

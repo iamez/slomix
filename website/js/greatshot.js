@@ -271,24 +271,6 @@ function getSinglePendingDemoSnapshot() {
     return { id: first[0], entry: first[1] };
 }
 
-function showAnalysisResult(status, data) {
-    const resultEl = document.getElementById('analysis-result');
-    const spinnerEl = document.getElementById('analysis-spinner');
-    if (spinnerEl) spinnerEl.classList.add('hidden');
-
-    if (!resultEl) return;
-    resultEl.classList.remove('hidden');
-
-    if (status === 'analyzed') {
-        const parts = [];
-        if (data.map) parts.push(`Map: ${data.map}`);
-        if (data.highlight_count != null) parts.push(`${data.highlight_count} highlight${data.highlight_count !== 1 ? 's' : ''} found`);
-        resultEl.innerHTML = `<span class="text-brand-emerald font-bold">Analysis complete.</span> ${escapeHtml(parts.join(' · '))}`;
-    } else if (status === 'failed') {
-        resultEl.innerHTML = `<span class="text-brand-rose font-bold">Analysis failed:</span> ${escapeHtml(data.error || 'Unknown error')}`;
-    }
-}
-
 /** Render multi-file progress list in the analysis panel. */
 function renderMultiProgress() {
     const listEl = document.getElementById('analysis-multi-list');
