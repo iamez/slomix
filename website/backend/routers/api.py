@@ -236,7 +236,7 @@ async def resolve_player_guid(
         if alias_row and alias_row[0]:
             return alias_row[0]
     except (OSError, RuntimeError):
-        pass  # Table may not exist
+        logger.debug("player_aliases lookup failed")
 
     return None
 
@@ -268,7 +268,7 @@ async def resolve_display_name(
             if link_row and link_row[0]:
                 return link_row[0]
         except (OSError, RuntimeError):
-            pass
+            logger.debug("player_links fallback query failed")
 
     # 2) Most recent alias, if alias table exists
     try:
@@ -279,7 +279,7 @@ async def resolve_display_name(
         if alias_row and alias_row[0]:
             return alias_row[0]
     except (OSError, RuntimeError):
-        pass
+        logger.debug("player_aliases query failed")
 
     # 3) Fallback to most recent name in stats
     name_row = await db.fetch_one(
@@ -1367,7 +1367,7 @@ async def get_current_voice_activity(db: DatabaseAdapter = Depends(get_db)):
                     "channels": [],
                 }
         except (json.JSONDecodeError, KeyError, AttributeError, TypeError):
-            pass
+            logger.debug("Voice status fallback parse failed")
 
         return {
             "total_count": 0,

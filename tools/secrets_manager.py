@@ -204,7 +204,7 @@ class SecretsManager:
         print(f"\n{'='*70}")
         print("🔐 DATABASE PASSWORD ROTATION")
         print(f"{'='*70}")
-        print(f"Old password: {old_password[:4]}****" if old_password else "Old password: (not set)")
+        print("Old password: ****" if old_password else "Old password: (not set)")  # nosec
         print(f"New password: {'*' * len(new_password)} (written to .env)")
         print("\n⚠️  IMPORTANT: You must run this SQL command manually:")
         print("\n    psql -U postgres -d etlegacy")

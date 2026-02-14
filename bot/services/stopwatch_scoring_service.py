@@ -557,7 +557,6 @@ class StopwatchScoringService:
             matchup_service = MatchupAnalyticsService(self.db)
 
             # Get player stats for this session
-            placeholders = ','.join(['$' + str(i+1) for i in range(1)])
             query = """
                 SELECT player_guid, MAX(player_name) as name,
                        SUM(kills) as kills, SUM(deaths) as deaths,
@@ -664,7 +663,7 @@ class StopwatchScoringService:
             rows = await self.db.fetch_all(rounds_query, tuple(session_ids))
 
             if not rows:
-                logger.debug("No completed rounds found for session %s", session_date)
+                logger.debug("No completed rounds found for session %s", str(session_date).replace('\n', '')[:30])
                 return None
 
             # Group rounds into map pairs (R1 + R2)
@@ -722,7 +721,7 @@ class StopwatchScoringService:
             ]
 
             if not complete_maps and not incomplete_maps:
-                logger.debug("No map data found for %s", session_date)
+                logger.debug("No map data found for %s", str(session_date).replace('\n', '')[:30])
                 return None
 
             # For each map, determine which persistent team was attacking in R1
