@@ -420,6 +420,8 @@ bot/remove_duplicates.py
 bot/retro_text_stats.py
 bot/retro_viz.py
 bot/setup_automation.py
+bot/image_generator.py
+bot/stats/calculator.py
 bot/website_design_prototype.pdf
 
 # ============================================
