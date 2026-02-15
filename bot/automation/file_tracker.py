@@ -164,8 +164,8 @@ class FileTracker:
             return True
 
         except Exception as e:
-            logger.error(f"Error checking if should process {filename}: {e}")
-            return False  # Skip on error to be safe
+            logger.warning(f"DB error checking if should process {filename}: {e} — processing file anyway (import is idempotent)")
+            return True  # Process on DB error — import uses ON CONFLICT so duplicates are safe
 
     async def _is_in_processed_files_table(self, filename: str) -> bool:
         """Check if filename exists in processed_files table"""

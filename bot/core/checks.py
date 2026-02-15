@@ -54,8 +54,8 @@ def is_admin_channel():
             # Fallback to single admin_channel_id for backward compatibility
             admin_channel_id = getattr(ctx.bot, 'admin_channel_id', 0)
             if admin_channel_id == 0:
-                logger.debug("Admin channel not configured, allowing command from any channel")
-                return True
+                logger.warning("Admin channel not configured, denying command (fail-closed)")
+                return False
             admin_channels = [admin_channel_id]
 
         # Check if command is in an admin channel
