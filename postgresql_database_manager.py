@@ -308,7 +308,7 @@ class PostgreSQLDatabaseManager:
                 '-U', self.config.postgres_user,
                 '-d', self.config.postgres_database,
                 '-f', backup_file
-            ], capture_output=True, text=True, env={'PGPASSWORD': self.config.postgres_password}, timeout=300)
+            ], capture_output=True, text=True, env={**os.environ, 'PGPASSWORD': self.config.postgres_password}, timeout=300)
 
             if result.returncode != 0:
                 error_msg = f"pg_dump failed with exit code {result.returncode}: {result.stderr}"
@@ -1316,31 +1316,28 @@ class PostgreSQLDatabaseManager:
         failed_tables = []
 
         async with self.pool.acquire() as conn:
-            for table in tables:
-                try:
-                    # Check if table exists before trying to wipe
-                    table_exists = await conn.fetchval("""
-                        SELECT EXISTS (
-                            SELECT FROM information_schema.tables
-                            WHERE table_schema = 'public' AND table_name = $1
+            async with conn.transaction():
+                for table in tables:
+                    try:
+                        # Check if table exists before trying to wipe
+                        table_exists = await conn.fetchval("""
+                            SELECT EXISTS (
+                                SELECT FROM information_schema.tables
+                                WHERE table_schema = 'public' AND table_name = $1
+                            )
+                        """, table)
+                        if not table_exists:
+                            logger.info(f"   ⏭️  Skipped {table} (does not exist)")
+                            continue
+                        await conn.execute(f"DELETE FROM {table}")
+                        logger.info(f"   ✅ Wiped {table}")
+                    except Exception as e:
+                        error_msg = f"Failed to wipe {table}: {e}"
+                        logger.error(f"   ❌ {error_msg}")
+                        raise RuntimeError(
+                            f"Table wipe aborted at {table}: {e}. "
+                            f"Transaction rolled back — database unchanged."
                         )
-                    """, table)
-                    if not table_exists:
-                        logger.info(f"   ⏭️  Skipped {table} (does not exist)")
-                        continue
-                    await conn.execute(f"DELETE FROM {table}")
-                    logger.info(f"   ✅ Wiped {table}")
-                except Exception as e:
-                    error_msg = f"Failed to wipe {table}: {e}"
-                    logger.error(f"   ❌ {error_msg}")
-                    failed_tables.append((table, str(e)))
-
-            if failed_tables:
-                error_details = ", ".join([f"{table} ({error})" for table, error in failed_tables])
-                raise RuntimeError(
-                    f"Failed to wipe {len(failed_tables)} table(s): {error_details}. "
-                    f"Database may be in inconsistent state. Run validation before proceeding."
-                )
     
     # =========================================================================
     # FILE PROCESSING

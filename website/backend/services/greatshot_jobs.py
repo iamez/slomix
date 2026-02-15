@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import traceback
 import uuid
 from pathlib import Path
@@ -173,49 +174,69 @@ class GreatshotJobService:
             self.render_queue.task_done()
 
     async def _process_analysis_job(self, demo_id: str) -> bool:
-        row = await self.db.fetch_one(
-            """
-            SELECT stored_path, extension
-            FROM greatshot_demos
-            WHERE id = $1
-            """,
-            (demo_id,),
-        )
-        if not row:
-            logger.warning("Analysis job skipped: demo %s not found", demo_id)
-            return True
+        # F-05: Use FOR UPDATE inside a transaction to prevent concurrent
+        # workers from processing the same demo simultaneously.
+        async with self.db.connection() as conn:
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    """
+                    SELECT stored_path, extension
+                    FROM greatshot_demos
+                    WHERE id = $1 AND status NOT IN ('scanning', 'analyzed')
+                    FOR UPDATE SKIP LOCKED
+                    """,
+                    demo_id,
+                )
+                if not row:
+                    logger.warning("Analysis job skipped: demo %s not found or already being processed", demo_id)
+                    return True
 
-        stored_path, extension = row
-        demo_path = Path(stored_path)
+                stored_path, extension = row["stored_path"], row["extension"]
+                demo_path = Path(stored_path)
 
-        await self.db.execute(
-            """
-            UPDATE greatshot_demos
-            SET status = 'scanning',
-                error = NULL,
-                processing_started_at = CURRENT_TIMESTAMP,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1
-            """,
-            (demo_id,),
-        )
+                await conn.execute(
+                    """
+                    UPDATE greatshot_demos
+                    SET status = 'scanning',
+                        error = NULL,
+                        processing_started_at = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $1
+                    """,
+                    demo_id,
+                )
 
         try:
             artifacts_dir = self.storage.artifacts_dir(demo_id)
 
             # Enforce timeout to prevent analysis from hanging forever
             timeout_seconds = getattr(GREATSHOT_CONFIG, 'scanner_timeout_seconds', 300)  # Default 5 min
+
+            # F-06: Cooperative cancellation event so the worker thread
+            # stops promptly when the asyncio timeout fires.
+            cancel_event = threading.Event()
+
+            def _cancellable_analysis():
+                """Wrapper that periodically checks for cancellation."""
+                # Check before starting
+                if cancel_event.is_set():
+                    raise RuntimeError("Analysis cancelled before start")
+                result = run_analysis_job(
+                    demo_path,
+                    artifacts_dir,
+                    None,
+                    cancel_event=cancel_event,
+                )
+                return result
+
             try:
                 result = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        run_analysis_job,
-                        demo_path,
-                        artifacts_dir,
-                        None,
-                    ),
+                    asyncio.to_thread(_cancellable_analysis),
                     timeout=timeout_seconds
                 )
             except asyncio.TimeoutError:
+                # Signal the worker thread to stop
+                cancel_event.set()
                 error_msg = f"Analysis timed out after {timeout_seconds}s"
                 logger.error(f"{error_msg} for demo {demo_id}")
                 await self.db.execute(

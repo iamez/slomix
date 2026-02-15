@@ -67,15 +67,7 @@ jobs:
 
         echo "Test database ready"
 
-    - name: Run Parser Tests
-      run: |
-        pytest tests/unit/test_stats_parser.py -v --tb=short --cov=bot --cov-report=xml --cov-report=term
-
-    - name: Run Security Tests
-      run: |
-        pytest tests/security/test_security_validation.py -v --tb=short --cov=bot --cov-append --cov-report=xml --cov-report=term
-
-    - name: Run Database Tests
+    - name: Run Full Test Suite
       env:
         POSTGRES_TEST_HOST: localhost
         POSTGRES_TEST_PORT: 5432
@@ -83,8 +75,7 @@ jobs:
         POSTGRES_TEST_USER: etlegacy_user
         POSTGRES_TEST_PASSWORD: etlegacy_test_password
       run: |
-        pytest tests/unit/test_database_adapter.py -v --tb=short --cov=bot --cov-append --cov-report=xml --cov-report=term -m requires_db
-      continue-on-error: true  # Allow this to fail if schema doesn't exist
+        pytest tests/ -v --tb=short --cov=bot --cov-report=xml --cov-report=term 2>&1 | tee test-output.txt
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673  # v5.4.1 - pinned SHA
@@ -95,9 +86,13 @@ jobs:
         fail_ci_if_error: false
 
     - name: Test Summary
+      if: always()
       run: |
         echo "## Test Results" >> $GITHUB_STEP_SUMMARY
-        echo "✅ Parser Tests: 17 tests" >> $GITHUB_STEP_SUMMARY
-        echo "✅ Security Tests: 21 tests" >> $GITHUB_STEP_SUMMARY
-        echo "✅ Database Tests: 20 tests (requires schema)" >> $GITHUB_STEP_SUMMARY
-        echo "**Total: 58 tests implemented**" >> $GITHUB_STEP_SUMMARY
+        if [ -f test-output.txt ]; then
+          # Extract the pytest summary line (e.g., "=== 42 passed, 3 skipped ===")
+          SUMMARY=$(grep -E '(passed|failed|error|skipped)' test-output.txt | tail -1)
+          echo "**${SUMMARY}**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ No test output captured" >> $GITHUB_STEP_SUMMARY
+        fi
