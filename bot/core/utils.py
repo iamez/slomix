@@ -193,9 +193,8 @@ def validate_stats_filename(filename: str) -> bool:
 
     Security: Prevents path traversal, injection, null bytes.
 
-    This is a standalone version of the validation logic in
-    ultimate_bot.py._validate_stats_filename(), kept in sync
-    so it can be tested without instantiating the full bot.
+    This is the canonical implementation of stats filename validation.
+    ultimate_bot.py._validate_stats_filename() delegates to this function.
 
     Args:
         filename: The filename to validate (basename only, no directory)

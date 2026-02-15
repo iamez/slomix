@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import extracted core classes
 from bot.core import StatsCache, SeasonManager, AchievementSystem
-from bot.core.utils import sanitize_error_message
+from bot.core.utils import sanitize_error_message, validate_stats_filename
 from bot.core.round_contract import (
     normalize_end_reason,
     normalize_side_value,
@@ -3097,56 +3097,9 @@ class UltimateETLegacyBot(commands.Bot):
         """
         Strict validation for stats filenames.
 
-        Valid format: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
-        Example: 2025-12-09-221829-etl_sp_delivery-round-1.txt
-
-        Security: Prevents path traversal, injection, null bytes
+        Delegates to the shared utility function in bot.core.utils.
         """
-        # Length check (prevent DoS)
-        if len(filename) > 255:
-            logger.warning(f"🚨 Filename too long: {len(filename)} chars")
-            return False
-
-        # Path traversal checks
-        if any(char in filename for char in ['/', '\\', '\0']):
-            logger.warning(f"🚨 Invalid characters in filename: {filename}")
-            return False
-
-        if '..' in filename:
-            logger.warning(f"🚨 Parent directory reference: {filename}")
-            return False
-
-        # Strict pattern: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
-        pattern = r'^(\d{4})-(\d{2})-(\d{2})-(\d{6})-([a-zA-Z0-9_-]+)-round-(\d+)\.txt$'
-        match = re.match(pattern, filename)
-
-        if not match:
-            logger.warning(f"🚨 Invalid filename format: {filename}")
-            return False
-
-        # Validate components
-        year, month, day, timestamp, map_name, round_num = match.groups()
-
-        if not (2020 <= int(year) <= 2035):
-            return False
-        if not (1 <= int(month) <= 12):
-            return False
-        if not (1 <= int(day) <= 31):
-            return False
-        if not (1 <= int(round_num) <= 10):
-            return False
-        if len(map_name) > 50:
-            return False
-
-        # Validate timestamp (HHMMSS)
-        hour = int(timestamp[0:2])
-        minute = int(timestamp[2:4])
-        second = int(timestamp[4:6])
-        if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
-            return False
-
-        logger.debug(f"✅ Filename validated: {filename}")
-        return True
+        return validate_stats_filename(filename)
 
     def _validate_endstats_filename(self, filename: str) -> bool:
         """
