@@ -555,7 +555,8 @@ async def get_diagnostics(db: DatabaseAdapter = Depends(get_db)):
                 "last_recorded_at": last.isoformat() if last else None,
             }
         except Exception as e:
-            monitoring[key] = {"count": 0, "last_recorded_at": None, "error": str(e)}
+            logger.error("Error querying monitoring table %s: %s", key, e, exc_info=True)
+            monitoring[key] = {"count": 0, "last_recorded_at": None, "error": "query failed"}
 
     results["monitoring"] = monitoring
     return results
@@ -1021,8 +1022,9 @@ async def get_monitoring_status(db: DatabaseAdapter = Depends(get_db)):
                 "age_seconds": None,
                 "is_stale": False,
                 "stale_threshold_seconds": MONITORING_STALE_THRESHOLD_SECONDS,
-                "error": str(e),
+                "error": "query failed",
             }
+            logger.error("Error querying monitoring status %s: %s", key, e, exc_info=True)
 
     return payload
 
@@ -1165,7 +1167,7 @@ async def get_server_activity_history(
         }
 
     except Exception as e:
-        print(f"Error fetching server activity: {e}")
+        logger.error("Error fetching server activity: %s", e, exc_info=True)
         return {
             "data_points": [],
             "summary": {
@@ -1175,7 +1177,7 @@ async def get_server_activity_history(
                 "uptime_percent": 0,
                 "total_records": 0,
             },
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 
@@ -1257,7 +1259,7 @@ async def get_voice_activity_history(
         }
 
     except Exception as e:
-        print(f"Error fetching voice activity: {e}")
+        logger.error("Error fetching voice activity: %s", e, exc_info=True)
         return {
             "data_points": [],
             "summary": {
@@ -1267,7 +1269,7 @@ async def get_voice_activity_history(
                 "total_sessions": 0,
                 "total_records": 0,
             },
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 
@@ -3568,9 +3570,8 @@ async def get_leaderboard(
         rows = await db.fetch_all(query, (start_date_str, limit))
     except Exception as e:
 
-        error_msg = f"Leaderboard Query Error: {str(e)}"
-        print(error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
+        logger.error("Leaderboard query error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Database error")
 
     leaderboard = []
     for i, row in enumerate(rows):

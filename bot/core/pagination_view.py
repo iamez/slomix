@@ -105,17 +105,17 @@ class PaginationView(View):
         await self.update_message(interaction)
 
     async def on_timeout(self):
-        """Called when view times out - disable all buttons"""
-        for child in self.children:
-            child.disabled = True
-
+        """Called when view times out - disable all buttons and notify user"""
         if self.message:
             try:
-                await self.message.edit(view=self)
-            except discord.errors.NotFound:
-                logger.debug("Message was deleted, cannot disable buttons")
-            except Exception as e:
-                logger.warning(f"Failed to disable buttons on timeout: {e}")
+                for child in self.children:
+                    child.disabled = True
+                embed = self.message.embeds[0] if self.message.embeds else None
+                if embed:
+                    embed.set_footer(text="Navigation expired. Run the command again to continue.")
+                await self.message.edit(embed=embed, view=self)
+            except Exception:
+                pass
 
     async def interaction_check(self, interaction: Interaction) -> bool:
         """
