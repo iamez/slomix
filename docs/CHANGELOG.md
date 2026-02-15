@@ -8,6 +8,45 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Docs
+
+- Slimmed `docs/CLAUDE.md` from 894 to ~186 lines; moved fix history here and known issues to `docs/KNOWN_ISSUES.md`
+- Fixed factual drift: table count (7→36), cog count (14→20), core modules (12→18), Lua version (v1.3.0→v1.6.0), command count (63→80+), system status version (1.0.1→1.0.6)
+
+---
+
+## Detailed Fix History (Dec 2025)
+
+### Fixed - Dec 14-17, 2025
+
+- **Duplicate Player Entries in Rankings** - Player "olympus" appeared twice due to `GROUP BY player_guid, player_name`. Fixed to `GROUP BY player_guid` with `MAX(player_name)`. Files: session_stats_aggregator.py, session_graph_generator.py, session_view_handlers.py, session_data_service.py
+- **Stats Command UnboundLocalError** - `!stats` crashed because `embed` variable was only created in cache MISS path. Fixed in leaderboard_cog.py
+- **Find Player SQL Syntax Error** - `{ph}` placeholder instead of `?` in link_cog.py
+- **Impossible Time Dead Values** - Players showing dead longer than played. Capped `time_dead` at `time_played` using `LEAST()` in SQL
+- **Webhook Notification Security Hardening** (commit 3f15b1a)
+- **Leaderboard Pagination & Session Graphs** - Fixed pagination, changed Denied Playtime graph to percentage
+- **Incomplete local_stats Sync** - Added 7-day lookback window + `!sync_historical` command to prevent data loss during bot downtime
+
+### Fixed - Dec 1, 2025
+
+- **SSHMonitor Race Condition** - Disabled SSHMonitor auto-start; endstats_monitor now handles SSH + DB import + Discord posting as unified system
+- **Channel Checks Silent Ignore** - Changed `is_public_channel()` / `is_admin_channel()` to silently return False
+- **on_message Channel Filtering** - Uses `public_channels` as fallback when `bot_command_channels` not configured
+- **Website Security Fixes** - HTML corruption, duplicate functions, SQL injection protection
+
+### Fixed - Nov 2025
+
+- **Gaming Session Detection Bug** - Use `WHERE round_id IN (session_ids_list)` instead of date filters
+- **Player Duplication Bug** - Always `GROUP BY player_guid`, never by player_name
+- **Duplicate Detection Bug** - Added `round_time` to duplicate check (not just map_name + round_number)
+- **30-Minute vs 60-Minute Gap** - Changed all instances to 60 minutes
+
+### Added - Nov 19, 2025
+
+- **Achievement System** - Badge emojis for lifetime achievements. Files: player_badge_service.py, achievements_cog.py
+
+---
+
 ### Added - Greatshot Enhancements
 
 - **Cross-reference Phase 2-5** - Dramatically improved demo-to-stats matching

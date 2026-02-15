@@ -84,7 +84,13 @@ app.add_middleware(
 )
 
 # Session Middleware
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET,
+    https_only=True,
+    same_site="lax",
+    max_age=86400,  # 24 hours
+)
 
 # Request Logging Middleware (added after session so it can access session data)
 app.add_middleware(RequestLoggingMiddleware)
