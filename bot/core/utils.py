@@ -184,6 +184,66 @@ def truncate_string(text: str, max_length: int = 100) -> str:
     return text[:max_length - 3] + "..."
 
 
+def validate_stats_filename(filename: str) -> bool:
+    """
+    Strict validation for stats filenames.
+
+    Valid format: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+    Example: 2025-12-09-221829-etl_sp_delivery-round-1.txt
+
+    Security: Prevents path traversal, injection, null bytes.
+
+    This is the canonical implementation of stats filename validation.
+    ultimate_bot.py._validate_stats_filename() delegates to this function.
+
+    Args:
+        filename: The filename to validate (basename only, no directory)
+
+    Returns:
+        True if the filename is valid, False otherwise
+    """
+    # Length check (prevent DoS)
+    if len(filename) > 255:
+        return False
+
+    # Path traversal checks
+    if any(char in filename for char in ['/', '\\', '\0']):
+        return False
+
+    if '..' in filename:
+        return False
+
+    # Strict pattern: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+    pattern = r'^(\d{4})-(\d{2})-(\d{2})-(\d{6})-([a-zA-Z0-9_-]+)-round-(\d+)\.txt$'
+    match = re.match(pattern, filename)
+
+    if not match:
+        return False
+
+    # Validate components
+    year, month, day, timestamp, map_name, round_num = match.groups()
+
+    if not (2020 <= int(year) <= 2035):
+        return False
+    if not (1 <= int(month) <= 12):
+        return False
+    if not (1 <= int(day) <= 31):
+        return False
+    if not (1 <= int(round_num) <= 10):
+        return False
+    if len(map_name) > 50:
+        return False
+
+    # Validate timestamp (HHMMSS)
+    hour = int(timestamp[0:2])
+    minute = int(timestamp[2:4])
+    second = int(timestamp[4:6])
+    if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
+        return False
+
+    return True
+
+
 def normalize_player_name(name: str) -> str:
     """
     Normalize a player name for consistent comparison.

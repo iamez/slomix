@@ -226,6 +226,7 @@ show_*.py
 pentest_*.py
 test_*.py
 !tests/test_*.py
+!tests/**/test_*.py
 
 # Root Lua files (game server files, not bot code)
 /*.lua
@@ -289,6 +290,173 @@ tools/*
 docs/archive/
 
 # ============================================
+# DOCS - INTERNAL DEV ARTIFACTS
+# ============================================
+# Session reports (internal dev logs)
+docs/SESSION_*.md
+docs/SESSION_INDEX.md
+docs/SESSION_REPORT_*.md
+
+# Evidence files (internal verification)
+docs/evidence/
+
+# Codex reports (AI audit artifacts)
+docs/codexreport-*.md
+
+# Internal plans, TODOs, handoffs, checklists
+docs/TODO_*.md
+docs/TODO-*.md
+docs/HANDOFF_*.md
+docs/CRASH_PROOF_*.md
+docs/TWO_WEEK_*.md
+docs/ROAD_AHEAD_*.md
+docs/WEBHOOK_TRIAGE_*.md
+docs/MISSION_*.md
+docs/LIVE_MONITORING_*.md
+docs/WEEK_HANDOFF_*.md
+docs/*_IMPLEMENTATION_PLAN_*.md
+docs/IMPLEMENTATION_PROGRESS_*.md
+docs/IMPLEMENTATION_COMPLETE_*.md
+docs/REFACTORING_PROGRESS.md
+docs/INTEGRATION_CONFLICTS_*.md
+docs/LAN_PUBLIC_ACCESS_*.md
+
+# Internal reports, audits, and analysis
+docs/reports/deep-research-report*.md
+docs/reports/deep-research-report*.docx
+docs/reports/deep-research-report*.pdf
+docs/reports/CLAUDE_*.md
+docs/reports/CODEBASE_FINDINGS_*.md
+docs/time_audit_report_*.json
+docs/TECHNICAL_DEBT_AUDIT_*.md
+docs/AUDIT_*.md
+docs/CRITICAL_DISCOVERY_REPORT.md
+docs/TIMING_BUG_ANALYSIS.md
+docs/PR30_REVIEW.md
+docs/SCORING_NOTE_*.md
+docs/DEEP_TIMING_*.md
+docs/SECURITY_FIXES_*.md
+docs/SECURITY_AUDIT_*.md
+docs/PRODUCTION_AUDIT_*.md
+docs/PRODUCTION_STATUS.md
+docs/PARSER_FIX_COMPLETE.md
+docs/slomix-refactor-*.md
+docs/slomix_code_review_*.md
+docs/*-RECOVERY*.md
+docs/*-WEBSITE_FIXES*.md
+docs/AI_AGENT_INSTRUCTIONS.md
+docs/GEMINI_IMPLEMENTATION_GUIDE.md
+docs/TESTING_IMPLEMENTATION_SUMMARY.md
+docs/PERFORMANCE_IMPACT_ANALYSIS.md
+docs/BACKLOG_*.md
+docs/WEEK_*_RECONNAISSANCE_REPORT.md
+docs/RUNTIME_CYCLE_COMPLETE.md
+docs/IMPLEMENTATION_SUMMARY.md
+docs/FIXES_APPLIED_*.md
+docs/FIX_LAST_SESSION.md
+docs/FIX_TEAM_TRACKING.md
+docs/CHANGES_*.md
+docs/DOCUMENTATION_ACCURACY_*.md
+docs/BOT_AUDIT_REPORT_*.md
+docs/CODE_AUDIT_*.md
+docs/codacy-issues*.txt*
+docs/LUA_ERROR_LOGS_*.txt
+docs/POSTING_SYSTEMS_INVESTIGATION.md
+docs/MISSING_R1_*.md
+docs/PIPELINE_VALIDATION_*.md
+docs/TIME_DEAD_*.md
+docs/TIME_TRACKING_*.md
+docs/LUA_TIME_BUG_*.md
+docs/LUA_REF_SCRIPT_*.md
+docs/LUA_WEBHOOK_HARDENING_*.md
+docs/SECRETS_CENTRALIZATION_*.md
+docs/PLAN_FASTDL_*.md
+docs/COMPETITIVE_ANALYTICS_*.md
+docs/PROXIMITY_ANALYTICS_BACKLOG_*.md
+docs/PROXIMITY_MAP_OVERLAY_*.md
+docs/PROXIMITY_RESEARCH_*.md
+docs/GREATSHOT_CROSSREF_*.md
+docs/ENHANCEMENT_IDEAS.md
+docs/ANALYTICS_ROADMAP.md
+docs/SL0MIX_SPA_*.md
+docs/WEBSITE_APPJS_*.md
+docs/WEBSITE_FIX_SESSION_*.md
+docs/WEBSITE_INTEGRATION_NOTES.md
+docs/WEBSITE_PROJECT_REVIEW.md
+docs/WEBSITE_UI_UPGRADE_*.md
+docs/WEBSITE_VISION_*.md
+docs/WEBHOOK_SSH_SMART_*.md
+docs/WEBHOOK_NOTIFICATION_SETUP.md
+docs/STOPWATCH_TIME_*.md
+docs/OMNIBOT_*.cfg
+docs/omnibot_*.md
+docs/INTEGRATION_*.md
+docs/et_stopwatch_proximity_analytics_spec.md
+docs/reference/TESTING_CHECKLIST_*.md
+
+# Historical fix scripts and one-off directories
+docs/2026-01-30-r2-parser-fix/
+docs/scripts_2026-01-30_r2_fix/
+docs/scripts/
+
+# ============================================
+# BOT - DEAD CODE & DEV ARTIFACTS
+# ============================================
+bot/BOT_CRITICAL_FIXES.py
+bot/automation_architecture.py
+bot/automation_enhancements.py
+bot/check_db.py
+bot/dotenv-example
+bot/helper_methods_to_insert.txt
+bot/hybrid_processing_helpers.py
+bot/insert_helpers.py
+bot/integrate_automation.py
+bot/last_session_helpers.py
+bot/last_session_redesigned_impl.py
+bot/proximity_parser.py
+bot/proximity_parser_v2.py
+bot/proximity_parser_v3.py
+bot/remove_duplicates.py
+bot/retro_text_stats.py
+bot/retro_viz.py
+bot/setup_automation.py
+bot/image_generator.py
+bot/stats/calculator.py
+bot/website_design_prototype.pdf
+
+# ============================================
+# TEST DEV SCRIPTS (keep real tests)
+# ============================================
+tests/check_*.py
+tests/compile_all.py
+tests/diag_*.py
+tests/tmp_*.py
+
+# ============================================
+# WEBSITE DEV ARTIFACTS
+# ============================================
+website/backend/debug_*.py
+website/fix_*.sql
+website/grant_*.sql
+
+# ============================================
+# SUB-PROJECT DEV FILES
+# ============================================
+proximity/.github/
+website/.github/
+proximity/map_rotation.txt
+
+# ============================================
+# ROOT DEV ARTIFACTS
+# ============================================
+.markdownlint.json
+.markdownlintignore
+postgres_setup.md
+DATA_ACCURACY_REPORT.md
+TESTING_REQUIRED.md
+WEBSITE_STAT_BUGS_FOUND.md
+
+# ============================================
 # KEEP ESSENTIAL FILES
 # ============================================
 !README.md
@@ -299,7 +467,6 @@ docs/archive/
 !install.sh
 !start_bot.sh
 !update_bot.sh
-!postgres_setup.md
 
 # ============================================
 # COPILOT/AI INSTRUCTIONS (keep these)
