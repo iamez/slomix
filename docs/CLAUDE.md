@@ -834,9 +834,61 @@ SELECT COUNT(*) FROM processed_files WHERE success = true;
 
 ---
 
+## Development Workflow Rules
+
+### Environment Switching Checklist
+
+When switching between sub-projects (bot, website, proximity, greatshot), always:
+
+1. Confirm which directory you are working in before making edits
+2. Check if the sub-project has its own `CLAUDE.md` or `README.md` with specific rules
+3. Use the correct database connection (bot uses read-write, website uses read-only)
+4. Do not mix imports or dependencies across sub-projects without documenting the dependency
+
+### README Update Obligation
+
+**When modifying a sub-project, update its README if:**
+
+- New files or modules are added
+- New environment variables are introduced
+- API endpoints are added or changed
+- Database schema changes (new tables, columns, migrations)
+- New features become functional or existing features change status
+- Dependencies are added or removed
+
+This applies to: `website/README.md`, `proximity/README.md`, `greatshot/README.md`, and `docs/CLAUDE.md`.
+
+### Conventional Commits
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) format for all commit messages:
+
+```
+<type>(<scope>): <description>
+
+Types: feat, fix, docs, chore, refactor, test, security, perf
+Scopes: bot, website, proximity, greatshot, ci, db, lua
+```
+
+Examples:
+- `feat(proximity): add trade opportunity tracking`
+- `fix(website): resolve XSS in player search`
+- `docs(greatshot): update README with demo cut tool plan`
+- `chore(ci): add lint+test workflow`
+
+### Pre-Push Documentation Check
+
+Before pushing any branch, verify:
+
+1. Changed files have corresponding documentation updates (if applicable)
+2. `docs/CHANGELOG.md` is updated for user-visible changes
+3. No hardcoded secrets, passwords, or API keys in committed files
+4. Sub-project READMEs reflect the current state of the code
+
+---
+
 **Version**: 1.0.6
 **Release Date**: February 1, 2026
-**Last Updated**: 2026-02-01
+**Last Updated**: 2026-02-15
 **Schema Version**: 2.0
 **Repository Size**: ~50-100 MB (cleaned)
 **Status**: Production-ready, fully documented, maintainable ✅
