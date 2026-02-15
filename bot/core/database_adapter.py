@@ -106,7 +106,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         self._pool_lock = asyncio.Lock()  # Prevents race condition on pool init
 
         ssl_status = "SSL disabled" if ssl_mode == 'disable' else f"SSL mode: {ssl_mode}"
-        logger.info(f"📦 PostgreSQL Adapter initialized: {host}:{port}/{database} ({ssl_status})")
+        logger.debug(f"📦 PostgreSQL Adapter initialized: {host}:{port}/{database} ({ssl_status})")
 
     async def connect(self):
         """Initialize PostgreSQL connection pool."""
@@ -153,10 +153,12 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 max_size=self.max_pool_size,
                 command_timeout=120  # 2 minutes for complex aggregation queries
             )
-            logger.info(f"✅ PostgreSQL pool created: {self.host}:{self.port}/{self.database}")
-            logger.info(f"   Pool size: {self.min_pool_size}-{self.max_pool_size} connections")
+            logger.debug(f"✅ PostgreSQL pool created: {self.host}:{self.port}/{self.database}")
+            logger.info(f"✅ PostgreSQL pool created (pool size: {self.min_pool_size}-{self.max_pool_size})")
         except Exception as e:
-            logger.error(f"❌ Failed to connect to PostgreSQL: {e}")
+            # Redact connection details from error message to avoid leaking credentials
+            error_type = type(e).__name__
+            logger.error(f"❌ Failed to connect to PostgreSQL at {self.host}:{self.port}/{self.database}: {error_type}")
             raise
 
     async def close(self):

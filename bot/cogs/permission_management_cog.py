@@ -66,7 +66,7 @@ class PermissionManagement(commands.Cog):
 
             if existing:
                 existing_tier = existing[0]  # tuple access
-                await ctx.send(f"⚠️ {user.mention} is already in the system as **{existing_tier}**. Use `!admin_promote` to change tier.")
+                await ctx.send(f"⚠️ {user.mention} is already in the system as **{existing_tier}**. Remove and re-add with the desired tier.")
                 return
 
             # Insert into database

@@ -624,14 +624,14 @@ class C0RNP0RN3StatsParser:
     ) -> Dict[str, Any]:
         """Calculate Round 2-only stats by subtracting Round 1 from Round 2 cumulative"""
 
-        # Create player lookup for Round 1 stats
-        round_1_players = {player['name']: player for player in round_1_data['players']}
+        # Create player lookup for Round 1 stats (keyed by GUID, not name)
+        round_1_players = {player['guid']: player for player in round_1_data['players']}
 
         round_2_only_players = []
 
         for r2_player in round_2_cumulative_data['players']:
             player_name = r2_player['name']
-            r1_player = round_1_players.get(player_name)
+            r1_player = round_1_players.get(r2_player['guid'])
 
             if not r1_player:
                 # Player only in Round 2, use cumulative stats as-is

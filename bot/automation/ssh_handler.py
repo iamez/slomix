@@ -10,9 +10,8 @@ All methods use paramiko for SSH/SFTP operations.
 """
 
 # SECURITY NOTE: SSH host key verification
-# By default, this module uses paramiko.AutoAddPolicy() which accepts any SSH host key.
-# This is acceptable for connecting to our own trusted VPS but can be changed to
-# strict mode (RejectPolicy with known_hosts) via SSH_STRICT_HOST_KEY=true env var.
+# By default, this module uses paramiko.RejectPolicy() which requires known_hosts.
+# Set SSH_STRICT_HOST_KEY=false to use AutoAddPolicy (accepts any host key).
 # See: https://docs.paramiko.org/en/stable/api/client.html#paramiko.client.AutoAddPolicy
 
 import asyncio
@@ -22,6 +21,11 @@ import re
 from typing import Dict, List, Optional
 
 logger = logging.getLogger("bot.automation.ssh")
+
+
+class SSHConnectionError(Exception):
+    """Raised when SSH operations fail due to connection or transport errors."""
+    pass
 
 # Security: SSH host key verification mode
 # Set SSH_STRICT_HOST_KEY=true to require known_hosts verification
@@ -36,7 +40,7 @@ def configure_ssh_host_key_policy(ssh_client):
         Uses RejectPolicy - only connects to hosts in ~/.ssh/known_hosts
         More secure but requires manual host key setup
 
-    If SSH_STRICT_HOST_KEY=false (default):
+    If SSH_STRICT_HOST_KEY=false:
         Uses AutoAddPolicy - accepts any host key on first connect
         Less secure but works out of the box for trusted VPS
 
@@ -121,20 +125,27 @@ class SSHHandler:
             List of matching filenames
         """
         try:
-            # Run in executor to avoid blocking event loop
+            # Run in executor to avoid blocking event loop, with 30s timeout
             loop = asyncio.get_event_loop()
-            files = await loop.run_in_executor(
-                None,
-                SSHHandler._list_files_sync,
-                ssh_config,
-                extensions,
-                exclude_suffixes,
+            files = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    SSHHandler._list_files_sync,
+                    ssh_config,
+                    extensions,
+                    exclude_suffixes,
+                ),
+                timeout=30,
             )
             return files
 
+        except asyncio.TimeoutError:
+            logger.error("❌ SSH list files timed out after 30 seconds")
+            raise SSHConnectionError("SSH list files timed out after 30 seconds")
+
         except Exception as e:
             logger.error(f"❌ SSH list files failed: {e}")
-            return []
+            raise SSHConnectionError(f"SSH list files failed: {e}") from e
 
     @staticmethod
     def _list_files_sync(
