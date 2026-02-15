@@ -75,6 +75,7 @@ jobs:
         POSTGRES_TEST_USER: etlegacy_user
         POSTGRES_TEST_PASSWORD: etlegacy_test_password
       run: |
+        set -o pipefail
         pytest tests/ -v --tb=short --cov=bot --cov-report=xml --cov-report=term 2>&1 | tee test-output.txt
 
     - name: Upload coverage to Codecov
