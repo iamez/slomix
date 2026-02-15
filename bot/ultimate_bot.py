@@ -176,6 +176,21 @@ def _split_chunks(s: str, max_len: int = 900):
 class UltimateETLegacyBot(commands.Bot):
     """🚀 Ultimate consolidated ET:Legacy Discord bot with proper Cog structure"""
 
+    @staticmethod
+    def _safe_create_task(coro, *, name=None):
+        """Create an asyncio task with error logging to prevent silent failures."""
+        task = asyncio.create_task(coro, name=name)
+
+        def _handle_exception(t):
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc:
+                logger.error(f"Unhandled exception in background task {t.get_name()}: {exc}", exc_info=exc)
+
+        task.add_done_callback(_handle_exception)
+        return task
+
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -1077,25 +1092,22 @@ class UltimateETLegacyBot(commands.Bot):
             # This ensures proper transaction handling and constraint checks
             db_type = str(getattr(self.config, "database_type", "")).strip().lower()
             if db_type in {"postgres", "postgresql"}:
-                from postgresql_database_manager import PostgreSQLDatabase
+                from postgresql_database_manager import PostgreSQLDatabaseManager
                 from pathlib import Path
 
-                # Create database manager instance (reuses existing pool)
-                db_config = {
-                    'host': self.config.postgres_host,
-                    'port': self.config.postgres_port,
-                    'database': self.config.postgres_database,
-                    'user': self.config.postgres_user,
-                    'password': self.config.postgres_password
-                }
+                # Create database manager instance and share the bot's existing pool
+                db_manager = PostgreSQLDatabaseManager()
+                # Reuse the bot's existing asyncpg pool instead of creating a new one
+                if hasattr(self, 'db_adapter') and hasattr(self.db_adapter, 'pool') and self.db_adapter.pool:
+                    db_manager.pool = self.db_adapter.pool
+                else:
+                    await db_manager.connect()
 
-                db_manager = PostgreSQLDatabase(db_config)
-                await db_manager.connect()
-
-                # 🔧 FIX: Use process_file() not import_stats_file() (method doesn't exist!)
                 success, message = await db_manager.process_file(Path(local_path))
 
-                await db_manager.disconnect()
+                # Only disconnect if we created our own pool
+                if not (hasattr(self, 'db_adapter') and hasattr(self.db_adapter, 'pool') and self.db_adapter.pool):
+                    await db_manager.disconnect()
 
                 if not success:
                     raise Exception(f"Import failed: {message}")
@@ -1137,7 +1149,7 @@ class UltimateETLegacyBot(commands.Bot):
 
                 # Live achievements: announce new milestones (non-blocking)
                 if stats_data:
-                    asyncio.create_task(self._post_live_achievements(stats_data))
+                    self._safe_create_task(self._post_live_achievements(stats_data), name="live_achievements")
 
                 return {
                     "success": True,
@@ -1179,7 +1191,7 @@ class UltimateETLegacyBot(commands.Bot):
 
                 # Live achievements: announce new milestones (non-blocking)
                 if stats_data:
-                    asyncio.create_task(self._post_live_achievements(stats_data))
+                    self._safe_create_task(self._post_live_achievements(stats_data), name="live_achievements")
 
                 return {
                     "success": True,
@@ -3267,7 +3279,7 @@ class UltimateETLegacyBot(commands.Bot):
             if message.embeds:
                 webhook_logger.info("📥 Received STATS_READY webhook with metadata")
                 _debug_webhook("accepted: STATS_READY with embeds")
-                asyncio.create_task(self._process_stats_ready_webhook(message))
+                self._safe_create_task(self._process_stats_ready_webhook(message), name="stats_ready_webhook")
                 return True
             else:
                 webhook_logger.warning("STATS_READY webhook received but no embeds found")
@@ -3298,14 +3310,14 @@ class UltimateETLegacyBot(commands.Bot):
                 return False
             webhook_logger.info(f"📥 Endstats webhook trigger validated: {filename}")
             # Process endstats file in background
-            asyncio.create_task(self._process_webhook_triggered_endstats(filename, message))
+            self._safe_create_task(self._process_webhook_triggered_endstats(filename, message), name=f"webhook_endstats_{filename}")
         else:
             if not self._validate_stats_filename(filename):
                 webhook_logger.error(f"🚨 SECURITY: Invalid filename from webhook: {filename}")
                 return False
             webhook_logger.info(f"📥 Webhook trigger validated: {filename}")
             # Process regular stats file in background
-            asyncio.create_task(self._process_webhook_triggered_file(filename, message))
+            self._safe_create_task(self._process_webhook_triggered_file(filename, message), name=f"webhook_file_{filename}")
 
         return True
 
@@ -4373,7 +4385,7 @@ class UltimateETLegacyBot(commands.Bot):
                 filename, local_path, endstats_data, trigger_message
             )
 
-        self.endstats_retry_tasks[filename] = asyncio.create_task(_retry())
+        self.endstats_retry_tasks[filename] = self._safe_create_task(_retry(), name=f"endstats_retry_{filename}")
 
     async def _retry_webhook_endstats_link(
         self,

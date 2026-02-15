@@ -915,7 +915,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
             # Get and send first page (0-indexed for LazyPaginationView)
             first_page = await get_page(0)
             if first_page:
-                await ctx.send(embed=first_page, view=view)
+                message = await ctx.send(embed=first_page, view=view)
+                view.message = message
             else:
                 await ctx.send(
                     f"❌ No data found for leaderboard type: {stat_type}"
