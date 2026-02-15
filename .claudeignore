@@ -44,3 +44,23 @@ local_stats/
 tmp/
 temp/
 *.tmp
+
+# Historical/evidence docs (reduce token waste)
+docs/archive/
+docs/evidence/
+docs/reports/
+docs/scripts/
+docs/codexreport-*.md
+docs/SESSION_*.md
+docs/TODO_*.md
+docs/CRASH_PROOF_*.md
+docs/TWO_WEEK_*.md
+
+# Binary documents
+*.docx
+*.pdf
+
+# Local data
+local_gametimes/
+local_proximity/
+migrations/
