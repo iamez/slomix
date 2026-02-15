@@ -1,0 +1,45 @@
+name: Repo Hygiene
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install ruff
+      - name: Lint with ruff
+        run: ruff check bot/ website/backend/ --select E,F,W --ignore E501,E402
+
+  file-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for large files (>500KB)
+        run: |
+          large_files=$(find . -type f -size +500k -not -path './.git/*' -not -path './local_stats/*' -not -path './node_modules/*' -not -path './.venv/*')
+          if [ -n "$large_files" ]; then
+            echo "::error::Large files detected (>500KB):"
+            echo "$large_files"
+            exit 1
+          fi
+      - name: Check for merge conflict markers
+        run: |
+          if grep -rn '<<<<<<< ' --include='*.py' --include='*.js' --include='*.html' --include='*.md' --include='*.yml' --include='*.yaml' --include='*.json' . 2>/dev/null | grep -v '.git/'; then
+            echo "::error::Merge conflict markers found!"
+            exit 1
+          fi
+      - name: Check for secrets patterns
+        run: |
+          if grep -rn 'PGPASSWORD=\|etlegacy_secure\|password.*=.*[a-zA-Z0-9_]\{8,\}' --include='*.py' --include='*.js' --include='*.json' --include='*.yml' --include='*.yaml' . 2>/dev/null | grep -v '.git/' | grep -v '.env.example' | grep -v 'REDACTED' | grep -v 'test' | grep -v 'TODO'; then
+            echo "::warning::Possible hardcoded secrets detected. Please review."
+          fi
