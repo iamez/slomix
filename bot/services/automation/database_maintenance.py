@@ -163,10 +163,31 @@ class DatabaseMaintenance:
         return backup_path
 
     async def vacuum_database(self) -> bool:
-        """Optimize database"""
+        """Optimize database.
+
+        PostgreSQL: VACUUM cannot run inside a transaction, so we use a
+        dedicated connection with autocommit. Falls back to ANALYZE-only
+        if VACUUM fails.
+        """
         try:
-            await self.bot.db_adapter.execute("VACUUM", ())
-            await self.bot.db_adapter.execute("ANALYZE", ())
+            config = getattr(self.bot, "config", None)
+            db_type = str(getattr(config, "database_type", "postgresql")).lower()
+
+            if db_type in ("postgresql", "postgres"):
+                # PostgreSQL VACUUM must run outside a transaction block.
+                # Use a raw asyncpg connection with autocommit semantics.
+                adapter = self.bot.db_adapter
+                pool = getattr(adapter, "pool", None)
+                if pool:
+                    async with pool.acquire() as conn:
+                        await conn.execute("VACUUM ANALYZE")
+                else:
+                    # No pool available — run ANALYZE only (works inside txn)
+                    await self.bot.db_adapter.execute("ANALYZE", ())
+            else:
+                # SQLite: VACUUM works normally
+                await self.bot.db_adapter.execute("VACUUM", ())
+                await self.bot.db_adapter.execute("ANALYZE", ())
 
             self.last_vacuum = datetime.now()
             logger.info("✅ Database vacuumed and optimized")

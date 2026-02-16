@@ -2883,6 +2883,28 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.error(f"Voice monitor error: {e}")
 
+    async def _auto_end_session(self):
+        """Auto-end session via voice session service.
+
+        Delegates to VoiceSessionService which handles:
+        - Session state cleanup
+        - Discord notification
+        - Session results finalization (team W/L tracking)
+        """
+        try:
+            if hasattr(self, 'voice_session_service') and self.voice_session_service:
+                await self.voice_session_service.auto_end_session()
+            else:
+                logger.warning("Voice session service not available for auto-end")
+
+            # Reset local state
+            self.session_active = False
+            self.session_end_timer = None
+        except Exception as e:
+            logger.error(f"Error in _auto_end_session: {e}", exc_info=True)
+            self.session_active = False
+            self.session_end_timer = None
+
     @voice_session_monitor.before_loop
     async def before_voice_monitor(self):
         """Wait for bot to be ready"""
