@@ -37,8 +37,8 @@ Scope: Runtime implementation and verification checklist
 | ID | Priority | Workstream | Task | Definition of Done | Evidence Link | Owner | Due Date | Status |
 |---|---|---|---|---|---|---|---|---|
 | WS1-001 | P0 | WS1 | Run live triage pass on current real round | Server logs show round end + webhook send, bot logs show accepted STATS_READY, DB count increments | `docs/WEBHOOK_TRIAGE_CHECKLIST_2026-02-11.md` | Unassigned | 2026-02-11 | done |
-| WS1-002 | P0 | WS1 | Run second live triage pass (R1/R2 pair) | Two fresh rounds persisted in `lua_round_teams` | `docs/evidence/2026-02-11_ws1_round_b.md` | Unassigned | 2026-02-11 | blocked |
-| WS1-003 | P0 | WS1 | Capture diagnostics snapshot after each pass | `/diagnostics/lua-webhook` reflects fresh timestamp + count growth | `docs/evidence/2026-02-11_ws1_diagnostics.md` | Unassigned | 2026-02-11 | blocked |
+| WS1-002 | P0 | WS1 | Run second live triage pass (R1/R2 pair) | Two fresh rounds persisted in `lua_round_teams` | `docs/evidence/2026-02-16_ws1_live_session.md` | Unassigned | 2026-02-16 | done |
+| WS1-003 | P0 | WS1 | Capture diagnostics snapshot after each pass | `/diagnostics/lua-webhook` reflects fresh timestamp + count growth | `docs/evidence/2026-02-16_ws1_live_session.md` | Unassigned | 2026-02-16 | done |
 | WS1-004 | P0 | WS1 | Execute failure matrix branch if STATS_READY missing | Root cause classified as send/reject/parse/store and next fix task opened | `docs/WEBHOOK_TRIAGE_CHECKLIST_2026-02-11.md` | Unassigned | 2026-02-11 | done |
 | WS1-005 | P0 | WS1 | Verify post-restart Lua insert path with 2 fresh rounds | `lua_round_teams` count increments from `1` and latest `captured_at` is >= `2026-02-11` | `docs/evidence/2026-02-12_ws1_post_restart_insert.md` | Unassigned | 2026-02-12 | done |
 | WS1-006 | P0 | WS1 | Fix `_store_lua_round_teams` parameter packing mismatch | No `"expects 24 arguments ... 3 were passed"` warnings in webhook logs for fresh rounds | `docs/evidence/2026-02-12_ws1_param_pack_fix.md` | Unassigned | 2026-02-12 | done |
@@ -90,7 +90,7 @@ Scope: Runtime implementation and verification checklist
 ## Open Blockers
 1. ~~WS1 is blocked by missing fresh live-round consumer proof (`WS1-007`) despite synthetic/runtime storage proof.~~ **Resolved 2026-02-16**: WS1-007 closed via synthetic end-to-end verification (6 R1/R2 pairs with HAS_LUA + timing consumer confirmation).
 2. ~~WS2/WS3 are gated and cannot be closed until WS1 persistence gate passes on fresh rounds.~~ **Resolved 2026-02-16**: WS1 gate passed; WS2 and WS3 all tasks marked done.
-3. WS1-002/WS1-003 remain blocked on fresh live player traffic (infrastructure ready, auto-closes on next game session).
+3. ~~WS1-002/WS1-003 remain blocked on fresh live player traffic.~~ **Resolved 2026-02-16**: Live session (gaming_session_id=89) produced 8 rounds across 4 maps. STATS_READY received and stored for 6/8 rounds. Complete R1+R2 Lua pairs confirmed for supply and etl_sp_delivery. 2 R2 rounds (etl_adlernest, te_escape2) missed due to server-side Lua VM race during map transitions — documented as known issue.
 
 ## Live Findings Update (2026-02-12 00:35 UTC)
 1. Session `gaming_session_id=88` exists in `rounds` with complete map pairs (`9818` to `9838`), so stats-file ingestion worked.

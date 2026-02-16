@@ -9,7 +9,7 @@
 
 ## Sprint Overview
 
-This sprint targeted closing open score/timing/webhook/security/documentation debt across the Slomix ET:Legacy bot, website, and proximity subsystems. Work was organized into 8 workstreams (WS0–WS7) with 43 tracked tasks. All tasks that could be completed without live server traffic have been shipped, tested, and evidenced. The sprint closes 9 days early with 40/43 tasks done, 1 deferred (WS1-002/WS1-003 blocked on live data), and the final closeout task (WS5-003) itself now closed.
+This sprint targeted closing open score/timing/webhook/security/documentation debt across the Slomix ET:Legacy bot, website, and proximity subsystems. Work was organized into 8 workstreams (WS0–WS7) with 43 tracked tasks. **All 43 tasks are now done.** The sprint closed 9 days early. Final blockers (WS1-002/WS1-003) were resolved on 2026-02-16 when a live game session (gaming_session_id=89) provided fresh R1/R2 evidence with STATS_READY webhook persistence confirmed.
 
 ---
 
@@ -26,8 +26,8 @@ This sprint targeted closing open score/timing/webhook/security/documentation de
 | WS0-007 | WS0 | Reconnect-safe R2 differential logic | done | `docs/evidence/2026-02-13_ws0_reconnect_differential.md` |
 | WS0-008 | WS0 | Add counter-reset detection telemetry | done | `docs/evidence/2026-02-13_ws0_counter_reset_telemetry.md` |
 | WS1-001 | WS1 | Run live triage pass on current real round | done | `docs/WEBHOOK_TRIAGE_CHECKLIST_2026-02-11.md` |
-| WS1-002 | WS1 | Run second live triage pass (R1/R2 pair) | blocked | Requires fresh live rounds; deferred |
-| WS1-003 | WS1 | Capture diagnostics snapshot after each pass | blocked | Requires fresh live rounds; deferred |
+| WS1-002 | WS1 | Run second live triage pass (R1/R2 pair) | done | `docs/evidence/2026-02-16_ws1_live_session.md` |
+| WS1-003 | WS1 | Capture diagnostics snapshot after each pass | done | `docs/evidence/2026-02-16_ws1_live_session.md` |
 | WS1-004 | WS1 | Execute failure matrix branch | done | `docs/WEBHOOK_TRIAGE_CHECKLIST_2026-02-11.md` |
 | WS1-005 | WS1 | Verify post-restart Lua insert path | done | `docs/evidence/2026-02-12_ws1_post_restart_insert.md` |
 | WS1-006 | WS1 | Fix `_store_lua_round_teams` param packing | done | `docs/evidence/2026-02-12_ws1_param_pack_fix.md` |
@@ -63,7 +63,7 @@ This sprint targeted closing open score/timing/webhook/security/documentation de
 | WS7-001 | WS7 | Implement kill-assists visibility path | done | `docs/evidence/2026-02-12_ws7_kill_assists_visibility.md` |
 | WS7-002 | WS7 | Run live/runtime smoke for kill-assists | done | `docs/evidence/2026-02-12_ws7_kill_assists_visibility.md` |
 
-**Summary**: 40 done, 1 blocked/deferred (WS1-002), 1 blocked/deferred (WS1-003), 1 closed-as-this-report (WS5-003)
+**Summary**: 43/43 done (WS1-002/WS1-003 closed 2026-02-16 with live session evidence)
 
 ---
 
@@ -94,12 +94,12 @@ All 7 data pipeline legs are operational:
 | 1. SSH stats file polling | Operational | 60s poll cycle, endstats_monitor task loop |
 | 2. Stats file parsing (R1/R2 differential) | Operational | Reconnect fallback added (WS0-007) |
 | 3. Lua webhook (STATS_READY) | Operational | Parameter packing fix applied (WS1-006) |
-| 4. Lua round-teams persistence | Operational | 17 rows linked, backfill script available |
+| 4. Lua round-teams persistence | Operational | 23 rows linked (6 fresh live Feb 16), R2 miss on 2/4 maps (server Lua race) |
 | 5. Proximity file import | Operational | Path corrected, constraints cleaned |
 | 6. Gametime fallback ingestion | Operational | Contract normalization added |
 | 7. Round linkage + timing consumer | Operational | `round_id`-based join, reason codes logged |
 
-**WS1 Gate**: Passed via synthetic end-to-end verification. Stats + Lua linkage proven for 6 fresh R1/R2 pairs with `HAS_LUA` status and timing consumer read confirmation (`match_confidence=direct`).
+**WS1 Gate**: Passed via live session 2026-02-16 (gaming_session_id=89). 6/8 live rounds stored in `lua_round_teams` via STATS_READY webhook. Complete R1+R2 Lua pairs for supply (surrenders) and etl_sp_delivery (normal). Spawn stats: 36 rows. All 5 exit criteria met.
 
 ---
 
@@ -107,7 +107,8 @@ All 7 data pipeline legs are operational:
 
 | Item | Status | Notes |
 |---|---|---|
-| WS1-002 / WS1-003 | Blocked | Requires fresh live rounds from active players. Infrastructure is ready; closure is automatic on next game session. |
+| WS1-002 / WS1-003 | **Done** | Closed 2026-02-16. Live session (gaming_session_id=89): 6/8 rounds stored in `lua_round_teams` via STATS_READY webhook. Complete R1+R2 Lua pairs for supply and etl_sp_delivery. |
+| Lua R2 map-transition race | Known | Server-side Lua VM unloaded during R2 map transitions on etl_adlernest and te_escape2. `intermission_handled` flag reset causes silent dedup. Fix requires server Lua change (deferred). |
 | Proximity R2 server-side limitation | Known | Second-round proximity files still report `round=1` in header metadata. Parser normalization (gametime-precedence) handles this, but server-side Lua fix is outside sprint scope. |
 | Live production credential rotation | Deferred | Repo secrets sanitized (72 → 0 hardcoded matches). Actual server credential rotation deferred to infra owner (target: 2026-02-25). |
 
@@ -117,7 +118,8 @@ All 7 data pipeline legs are operational:
 
 | Item | Rationale |
 |---|---|
-| WS1-002/WS1-003 (live R1/R2 triage pair) | No live player traffic during sprint window. Synthetic verification proves the path works. Will auto-close on next game night. |
+| ~~WS1-002/WS1-003~~ | **Closed 2026-02-16.** Live session (gaming_session_id=89) provided fresh R1/R2 pairs with STATS_READY + Lua persistence confirmed. |
+| Lua R2 map-transition race | Server-side Lua `intermission_handled` flag resets too aggressively during R2 map transitions. Affects etl_adlernest and te_escape2 R2. Fix requires server Lua edit (deferred). |
 | Large architectural refactor of webhook/timing pipeline | Current blocker was operational reliability, not architecture. Targeted fixes delivered; broad refactor deferred post-sprint. |
 | Cross-cutting database schema redesign | Not needed — targeted migrations (WS0 contract columns, proximity constraints) sufficient. |
 | Proximity R2 header fix (server-side Lua) | Requires game server Lua modification; parser-side normalization is the safe mitigation. |
