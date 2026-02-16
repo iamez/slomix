@@ -775,6 +775,15 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(f"⚠️  Could not load Admin Predictions cog: {e}")
             logger.warning("Bot will continue without admin prediction commands")
 
+        # 📊 AVAILABILITY POLL: Daily gaming availability tracking
+        try:
+            from bot.cogs.availability_poll_cog import AvailabilityPollCog
+            await self.add_cog(AvailabilityPollCog(self))
+            status = "ENABLED" if self.config.availability_poll_enabled else "disabled"
+            logger.info(f"✅ Availability Poll cog loaded ({status})")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load Availability Poll cog: {e}")
+
         # 🤖 AUTOMATION: Initialize automation services
         try:
             from bot.services.automation import SSHMonitor, HealthMonitor, MetricsLogger, DatabaseMaintenance
@@ -1447,7 +1456,7 @@ class UltimateETLegacyBot(commands.Bot):
             # This helps verify the surrender fix is working correctly
             # Query current values from DB (from stats file)
             compare_query = """
-                SELECT round_time_seconds, time_limit_seconds, winner_team
+                SELECT actual_duration_seconds, time_limit, winner_team
                 FROM rounds WHERE id = $1
             """
             current_values = await self.db_adapter.fetch_one(compare_query, (round_id,))
@@ -3625,7 +3634,8 @@ class UltimateETLegacyBot(commands.Bot):
                 footer_text = embed.footer.text
             round_metadata = self._build_round_metadata_from_map(metadata, footer_text=footer_text)
 
-            if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", 0) == 0:
+            # round_number 0 is valid in ET:Legacy (g_currentRound=0 means R2 in stopwatch)
+            if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", -1) < 0:
                 webhook_logger.warning("STATS_READY webhook missing map/round metadata; skipping")
                 return
 
