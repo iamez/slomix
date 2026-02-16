@@ -566,14 +566,28 @@ async def get_crossref(demo_id: str, request: Request, db=Depends(get_db)):
             logger.debug("Could not read analysis JSON")
 
     # Pass player stats to matching function for validation
-    match = await find_matching_round(metadata, db, demo_player_stats=demo_player_stats)
+    try:
+        match = await find_matching_round(metadata, db, demo_player_stats=demo_player_stats)
+    except Exception:
+        logger.exception("Cross-reference matching failed for demo_id=%s", demo_id)
+        return {"matched": False, "reason": "Cross-reference matching encountered an error"}
+
     if not match:
         return {"matched": False, "reason": "No matching round found in database"}
 
     round_id = match["round_id"]
-    db_stats = await enrich_with_db_stats(round_id, db)
 
-    comparison = await build_comparison(demo_player_stats, db_stats)
+    try:
+        db_stats = await enrich_with_db_stats(round_id, db)
+        comparison = await build_comparison(demo_player_stats, db_stats)
+    except Exception:
+        logger.exception("Cross-reference enrichment failed for round_id=%s", round_id)
+        return {
+            "matched": True,
+            "round": match,
+            "db_player_stats": {},
+            "comparison": [],
+        }
 
     return {
         "matched": True,

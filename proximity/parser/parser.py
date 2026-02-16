@@ -642,7 +642,6 @@ class ProximityParserV4:
     
     async def _import_engagements(self, session_date: str):
         """Import engagements to combat_engagement table"""
-        supports_round_start = await self._table_has_column('combat_engagement', 'round_start_unix')
         supports_round_end = await self._table_has_column('combat_engagement', 'round_end_unix')
         for eng in self.engagements:
             # Serialize for JSONB
@@ -662,144 +661,57 @@ class ProximityParserV4:
                 for a in eng.attackers.values()
             ])
             cf_participants_json = json.dumps(eng.crossfire_participants) if eng.crossfire_participants else None
-            
-            if supports_round_start:
-                if supports_round_end:
-                    query = """
-                        INSERT INTO combat_engagement (
-                            session_date, round_number, round_start_unix, round_end_unix,
-                            map_name, engagement_id,
-                            start_time_ms, end_time_ms, duration_ms,
-                            target_guid, target_name, target_team,
-                            outcome, total_damage_taken, killer_guid, killer_name,
-                            position_path, start_x, start_y, start_z, end_x, end_y, end_z,
-                            distance_traveled, attackers, num_attackers,
-                            is_crossfire, crossfire_delay_ms, crossfire_participants
-                        ) VALUES (
-                            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                            $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23,
-                            $24, $25, $26, $27, $28, $29
-                        )
-                        ON CONFLICT (session_date, round_number, round_start_unix, engagement_id)
-                        DO NOTHING
-                    """
-                    await self.db_adapter.execute(query, (
-                        session_date,
-                        self.metadata['round_num'],
-                        self.metadata.get('round_start_unix', 0),
-                        self.metadata.get('round_end_unix', 0),
-                        self.metadata['map_name'],
-                        eng.id,
-                        eng.start_time,
-                        eng.end_time,
-                        eng.duration,
-                        eng.target_guid,
-                        eng.target_name,
-                        eng.target_team,
-                        eng.outcome,
-                        eng.total_damage,
-                        eng.killer_guid,
-                        eng.killer_name,
-                        position_path_json,
-                        eng.start_x, eng.start_y, eng.start_z,
-                        eng.end_x, eng.end_y, eng.end_z,
-                        eng.distance_traveled,
-                        attackers_json,
-                        eng.num_attackers,
-                        eng.is_crossfire,
-                        eng.crossfire_delay,
-                        cf_participants_json
-                    ))
-                else:
-                    query = """
-                        INSERT INTO combat_engagement (
-                            session_date, round_number, round_start_unix,
-                            map_name, engagement_id,
-                            start_time_ms, end_time_ms, duration_ms,
-                            target_guid, target_name, target_team,
-                            outcome, total_damage_taken, killer_guid, killer_name,
-                            position_path, start_x, start_y, start_z, end_x, end_y, end_z,
-                            distance_traveled, attackers, num_attackers,
-                            is_crossfire, crossfire_delay_ms, crossfire_participants
-                        ) VALUES (
-                            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                            $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
-                            $23, $24, $25, $26, $27, $28
-                        )
-                        ON CONFLICT (session_date, round_number, round_start_unix, engagement_id)
-                        DO NOTHING
-                    """
-                    await self.db_adapter.execute(query, (
-                        session_date,
-                        self.metadata['round_num'],
-                        self.metadata.get('round_start_unix', 0),
-                        self.metadata['map_name'],
-                        eng.id,
-                        eng.start_time,
-                        eng.end_time,
-                        eng.duration,
-                        eng.target_guid,
-                        eng.target_name,
-                        eng.target_team,
-                        eng.outcome,
-                        eng.total_damage,
-                        eng.killer_guid,
-                        eng.killer_name,
-                        position_path_json,
-                        eng.start_x, eng.start_y, eng.start_z,
-                        eng.end_x, eng.end_y, eng.end_z,
-                        eng.distance_traveled,
-                        attackers_json,
-                        eng.num_attackers,
-                        eng.is_crossfire,
-                        eng.crossfire_delay,
-                        cf_participants_json
-                    ))
-            else:
-                query = """
-                    INSERT INTO combat_engagement (
-                        session_date, round_number, map_name, engagement_id,
-                        start_time_ms, end_time_ms, duration_ms,
-                        target_guid, target_name, target_team,
-                        outcome, total_damage_taken, killer_guid, killer_name,
-                        position_path, start_x, start_y, start_z, end_x, end_y, end_z,
-                        distance_traveled, attackers, num_attackers,
-                        is_crossfire, crossfire_delay_ms, crossfire_participants
-                    ) VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                        $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
-                    )
-                    ON CONFLICT (session_date, round_number, engagement_id) DO NOTHING
-                """
-                await self.db_adapter.execute(query, (
-                    session_date,
-                    self.metadata['round_num'],
-                    self.metadata['map_name'],
-                    eng.id,
-                    eng.start_time,
-                    eng.end_time,
-                    eng.duration,
-                    eng.target_guid,
-                    eng.target_name,
-                    eng.target_team,
-                    eng.outcome,
-                    eng.total_damage,
-                    eng.killer_guid,
-                    eng.killer_name,
-                    position_path_json,
-                    eng.start_x, eng.start_y, eng.start_z,
-                    eng.end_x, eng.end_y, eng.end_z,
-                    eng.distance_traveled,
-                    attackers_json,
-                    eng.num_attackers,
-                    eng.is_crossfire,
-                    eng.crossfire_delay,
-                    cf_participants_json
-                ))
+
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name", "engagement_id",
+                "start_time_ms", "end_time_ms", "duration_ms",
+                "target_guid", "target_name", "target_team",
+                "outcome", "total_damage_taken", "killer_guid", "killer_name",
+                "position_path", "start_x", "start_y", "start_z", "end_x", "end_y", "end_z",
+                "distance_traveled", "attackers", "num_attackers",
+                "is_crossfire", "crossfire_delay_ms", "crossfire_participants",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                eng.id,
+                eng.start_time,
+                eng.end_time,
+                eng.duration,
+                eng.target_guid,
+                eng.target_name,
+                eng.target_team,
+                eng.outcome,
+                eng.total_damage,
+                eng.killer_guid,
+                eng.killer_name,
+                position_path_json,
+                eng.start_x, eng.start_y, eng.start_z,
+                eng.end_x, eng.end_y, eng.end_z,
+                eng.distance_traveled,
+                attackers_json,
+                eng.num_attackers,
+                eng.is_crossfire,
+                eng.crossfire_delay,
+                cf_participants_json,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO combat_engagement ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, engagement_id)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
 
     async def _import_player_tracks(self, session_date: str):
         """Import player tracks to player_track table (v4)"""
-        supports_round_start = await self._table_has_column('player_track', 'round_start_unix')
         supports_round_end = await self._table_has_column('player_track', 'round_end_unix')
         for track in self.player_tracks:
             # Serialize path as JSONB
@@ -826,82 +738,46 @@ class ProximityParserV4:
             avg_speed = track.avg_speed
             sprint_pct = track.sprint_percentage
 
-            if supports_round_start:
-                columns = [
-                    "session_date", "round_number", "round_start_unix",
-                    "map_name",
-                    "player_guid", "player_name", "team", "player_class",
-                    "spawn_time_ms", "death_time_ms", "duration_ms",
-                    "first_move_time_ms", "time_to_first_move_ms",
-                    "sample_count", "path",
-                    "total_distance", "avg_speed", "sprint_percentage",
-                ]
-                values = [
-                    session_date,
-                    self.metadata['round_num'],
-                    self.metadata.get('round_start_unix', 0),
-                    self.metadata['map_name'],
-                    track.guid,
-                    track.name,
-                    track.team,
-                    track.player_class,
-                    track.spawn_time,
-                    track.death_time,
-                    duration_ms,
-                    track.first_move_time,
-                    time_to_first_move,
-                    track.sample_count,
-                    path_json,
-                    total_distance,
-                    avg_speed,
-                    sprint_pct,
-                ]
-                if supports_round_end:
-                    columns.insert(3, "round_end_unix")
-                    values.insert(3, self.metadata.get('round_end_unix', 0))
-                placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
-                query = f"""
-                    INSERT INTO player_track ({", ".join(columns)})
-                    VALUES ({placeholders})
-                    ON CONFLICT (session_date, round_number, round_start_unix, player_guid, spawn_time_ms)
-                    DO NOTHING
-                """
-                await self.db_adapter.execute(query, tuple(values))
-            else:
-                query = """
-                    INSERT INTO player_track (
-                        session_date, round_number, map_name,
-                        player_guid, player_name, team, player_class,
-                        spawn_time_ms, death_time_ms, duration_ms,
-                        first_move_time_ms, time_to_first_move_ms,
-                        sample_count, path,
-                        total_distance, avg_speed, sprint_percentage
-                    ) VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                        $11, $12, $13, $14, $15, $16, $17
-                    )
-                    ON CONFLICT (session_date, round_number, player_guid, spawn_time_ms)
-                    DO NOTHING
-                """
-                await self.db_adapter.execute(query, (
-                    session_date,
-                    self.metadata['round_num'],
-                    self.metadata['map_name'],
-                    track.guid,
-                    track.name,
-                    track.team,
-                    track.player_class,
-                    track.spawn_time,
-                    track.death_time,
-                    duration_ms,
-                    track.first_move_time,
-                    time_to_first_move,
-                    track.sample_count,
-                    path_json,
-                    total_distance,
-                    avg_speed,
-                    sprint_pct
-                ))
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "player_guid", "player_name", "team", "player_class",
+                "spawn_time_ms", "death_time_ms", "duration_ms",
+                "first_move_time_ms", "time_to_first_move_ms",
+                "sample_count", "path",
+                "total_distance", "avg_speed", "sprint_percentage",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                track.guid,
+                track.name,
+                track.team,
+                track.player_class,
+                track.spawn_time,
+                track.death_time,
+                duration_ms,
+                track.first_move_time,
+                time_to_first_move,
+                track.sample_count,
+                path_json,
+                total_distance,
+                avg_speed,
+                sprint_pct,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO player_track ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, player_guid, spawn_time_ms)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
 
     async def _update_player_stats(self):
         """Update player_teamplay_stats from engagements"""
@@ -1151,74 +1027,43 @@ class ProximityParserV4:
 
     async def _import_objective_focus(self, session_date: str):
         """Import objective focus metrics if table exists"""
-        supports_round_start = await self._table_has_column('proximity_objective_focus', 'round_start_unix')
         supports_round_end = await self._table_has_column('proximity_objective_focus', 'round_end_unix')
         for row in self.objective_focus:
-            if supports_round_start:
-                columns = [
-                    "session_date", "round_number", "round_start_unix",
-                    "map_name",
-                    "player_guid", "player_name", "team",
-                    "objective", "avg_distance", "time_within_radius_ms", "samples",
-                ]
-                values = [
-                    session_date,
-                    self.metadata['round_num'],
-                    self.metadata.get('round_start_unix', 0),
-                    self.metadata['map_name'],
-                    row['guid'],
-                    row['name'],
-                    row['team'],
-                    row['objective'],
-                    row['avg_distance'],
-                    row['time_within_radius_ms'],
-                    row['samples'],
-                ]
-                if supports_round_end:
-                    columns.insert(3, "round_end_unix")
-                    values.insert(3, self.metadata.get('round_end_unix', 0))
-                placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
-                query = f"""
-                    INSERT INTO proximity_objective_focus ({", ".join(columns)})
-                    VALUES ({placeholders})
-                    ON CONFLICT (session_date, round_number, round_start_unix, player_guid) DO UPDATE SET
-                        player_name = EXCLUDED.player_name,
-                        team = EXCLUDED.team,
-                        objective = EXCLUDED.objective,
-                        avg_distance = EXCLUDED.avg_distance,
-                        time_within_radius_ms = EXCLUDED.time_within_radius_ms,
-                        samples = EXCLUDED.samples
-                """
-                await self.db_adapter.execute(query, tuple(values))
-            else:
-                query = """
-                    INSERT INTO proximity_objective_focus (
-                        session_date, round_number, map_name,
-                        player_guid, player_name, team,
-                        objective, avg_distance, time_within_radius_ms, samples
-                    ) VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-                    )
-                    ON CONFLICT (session_date, round_number, player_guid) DO UPDATE SET
-                        player_name = EXCLUDED.player_name,
-                        team = EXCLUDED.team,
-                        objective = EXCLUDED.objective,
-                        avg_distance = EXCLUDED.avg_distance,
-                        time_within_radius_ms = EXCLUDED.time_within_radius_ms,
-                        samples = EXCLUDED.samples
-                """
-                await self.db_adapter.execute(query, (
-                    session_date,
-                    self.metadata['round_num'],
-                    self.metadata['map_name'],
-                    row['guid'],
-                    row['name'],
-                    row['team'],
-                    row['objective'],
-                    row['avg_distance'],
-                    row['time_within_radius_ms'],
-                    row['samples'],
-                ))
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "player_guid", "player_name", "team",
+                "objective", "avg_distance", "time_within_radius_ms", "samples",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                row['guid'],
+                row['name'],
+                row['team'],
+                row['objective'],
+                row['avg_distance'],
+                row['time_within_radius_ms'],
+                row['samples'],
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_objective_focus ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, player_guid) DO UPDATE SET
+                    player_name = EXCLUDED.player_name,
+                    team = EXCLUDED.team,
+                    objective = EXCLUDED.objective,
+                    avg_distance = EXCLUDED.avg_distance,
+                    time_within_radius_ms = EXCLUDED.time_within_radius_ms,
+                    samples = EXCLUDED.samples
+            """
+            await self.db_adapter.execute(query, tuple(values))
 
     def _distance2d(self, a: Tuple[float, float, float], b: Tuple[float, float, float]) -> float:
         dx = (a[0] or 0) - (b[0] or 0)
