@@ -571,6 +571,9 @@ async def get_lua_webhook_diagnostics(db: DatabaseAdapter = Depends(get_db)):
     payload = {
         "status": "ok",
         "counts": {},
+        "linkage_health": {},
+        "r1_r2_coverage": [],
+        "orphans": [],
         "latest": None,
         "recent": [],
         "trends": {
@@ -601,6 +604,72 @@ async def get_lua_webhook_diagnostics(db: DatabaseAdapter = Depends(get_db)):
         payload["counts"]["unlinked_24h"] = int(unlinked_24h or 0)
     except Exception as e:
         payload["errors"].append(f"count_24h_failed: {e}")
+
+    # --- Linkage health summary ---
+    try:
+        total_count = payload["counts"].get("total", 0)
+        unlinked_count = payload["counts"].get("unlinked_total", 0)
+        linked_count = total_count - unlinked_count
+        pct = round(100.0 * linked_count / total_count, 1) if total_count else 0.0
+        payload["linkage_health"] = {
+            "linked": linked_count,
+            "orphans": unlinked_count,
+            "linkage_pct": pct,
+            "status": "healthy" if pct >= 90 else ("degraded" if pct >= 50 else "poor"),
+        }
+    except Exception as e:
+        payload["errors"].append(f"linkage_health_failed: {e}")
+
+    # --- R1/R2 coverage ---
+    try:
+        coverage_rows = await db.fetch_all(
+            """
+            SELECT
+                r.round_number,
+                COUNT(*) AS total_rounds,
+                COUNT(l.id) AS with_lua,
+                COUNT(*) - COUNT(l.id) AS without_lua,
+                ROUND(100.0 * COUNT(l.id) / NULLIF(COUNT(*), 0), 1) AS coverage_pct
+            FROM rounds r
+            LEFT JOIN lua_round_teams l ON l.round_id = r.id
+            WHERE r.round_number IN (1, 2)
+            GROUP BY r.round_number
+            ORDER BY r.round_number
+            """
+        )
+        for rn, total_r, with_lua, without_lua, cov_pct in coverage_rows:
+            payload["r1_r2_coverage"].append({
+                "round_number": int(rn),
+                "total_rounds": int(total_r or 0),
+                "with_lua": int(with_lua or 0),
+                "without_lua": int(without_lua or 0),
+                "coverage_pct": float(cov_pct or 0),
+            })
+    except Exception as e:
+        payload["errors"].append(f"r1_r2_coverage_failed: {e}")
+
+    # --- Orphan details ---
+    try:
+        orphan_rows = await db.fetch_all(
+            """
+            SELECT id, match_id, map_name, round_number, round_start_unix, captured_at
+            FROM lua_round_teams
+            WHERE round_id IS NULL
+            ORDER BY id
+            LIMIT 20
+            """
+        )
+        for oid, mid, mname, rnum, rstart, cap_at in orphan_rows:
+            payload["orphans"].append({
+                "id": int(oid),
+                "match_id": mid,
+                "map_name": mname,
+                "round_number": int(rnum),
+                "round_start_unix": int(rstart or 0),
+                "captured_at": cap_at.isoformat() if cap_at else None,
+            })
+    except Exception as e:
+        payload["errors"].append(f"orphans_failed: {e}")
 
     try:
         row = await db.fetch_one(
@@ -7061,7 +7130,7 @@ async def get_proximity_movers(
         )
         sprint_rows = await db.fetch_all(
             "SELECT player_guid, player_name, AVG(sprint_percentage) AS sprint_pct, COUNT(*) AS tracks "
-            f"FROM player_track {where_sql} "
+            f"FROM player_track {where_sql} AND sprint_percentage IS NOT NULL "
             "GROUP BY player_guid, player_name "
             f"ORDER BY sprint_pct DESC NULLS LAST LIMIT ${limit_placeholder}",
             query_params,
