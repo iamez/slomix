@@ -1765,8 +1765,10 @@ class UltimateETLegacyBot(commands.Bot):
             # Calculate gaming_session_id (60-minute gap logic)
             gaming_session_id = await self._calculate_gaming_session_id(date_part, round_time)
 
-            # Discover rounds table columns once (cache)
-            if not hasattr(self, "_rounds_columns"):
+            # Discover rounds table columns (cached, refreshed every 100 imports)
+            import_count = getattr(self, "_rounds_col_import_count", 0) + 1
+            self._rounds_col_import_count = import_count
+            if not hasattr(self, "_rounds_columns") or import_count % 100 == 1:
                 try:
                     if self.config.database_type == 'sqlite':
                         cols = await self.db_adapter.fetch_all("PRAGMA table_info(rounds)")
@@ -1781,7 +1783,8 @@ class UltimateETLegacyBot(commands.Bot):
                         )
                         self._rounds_columns = {c[0] for c in cols}
                 except Exception:
-                    self._rounds_columns = set()
+                    if not hasattr(self, "_rounds_columns"):
+                        self._rounds_columns = set()
 
             defender_team = stats_data.get("defender_team", 0)
             winner_team = stats_data.get("winner_team", 0)

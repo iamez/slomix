@@ -2150,6 +2150,16 @@ class PostgreSQLDatabaseManager:
                 # Calculate time difference
                 time_diff_minutes = (current_dt - earlier_dt).total_seconds() / 60
 
+                # Skip if time gap is too large (map rotation replay, not a restart)
+                # A real restart has a very short gap (< 5 min typically).
+                # Map rotation replays of the same map happen 15-30+ min apart.
+                if time_diff_minutes > 15:
+                    logger.debug(
+                        f"Skipping restart check for round {earlier_id}: "
+                        f"time gap {time_diff_minutes:.1f}min too large (likely map rotation replay)"
+                    )
+                    continue
+
                 # If within threshold, check for roster changes
                 if 0 < time_diff_minutes <= RESTART_THRESHOLD_MINUTES:
                     restart_status = 'cancelled'  # Default to cancelled
