@@ -8,8 +8,69 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed — 2026-02-16
+
+- **R2 Lua Webhook Rejection** — `bot/ultimate_bot.py:3637` rejected all R2 webhook data because `round_metadata.get("round_number", 0) == 0` treated `round_number=0` as invalid. In ET:Legacy stopwatch mode, `g_currentRound=0` means R2, so `round_number=0` is a valid value. Changed guard to `round_metadata.get("round_number", -1) < 0`. DB evidence: `lua_round_teams` had 13 rows total, 11 R1, 0 R2.
+- **Non-existent column references in round timing** — `bot/ultimate_bot.py:1459` referenced `round_time_seconds` and `time_limit_seconds` which do not exist in the `rounds` table. Fixed to `actual_duration_seconds` and `time_limit` respectively (WS1-006 related).
+
+### Recovered
+
+- **Restored deleted planning docs** — Two critical execution-tracking documents were recovered from git history (deleted in commit `1c0ab8e` during Feb 15 cleanup):
+  - `docs/WEBHOOK_TRIAGE_CHECKLIST_2026-02-11.md` — Live gameplay monitoring protocol
+  - `docs/ROAD_AHEAD_EXECUTION_RUNBOOK_2026-02-12.md` — Sprint execution order with gates
+
+### Added
+
+- **Website Redesign — Analytics-First Platform**
+  - **Component System** — Reusable UI components (`website/js/components.js`): PageHeader, KpiTile, ChartCard, TableCard, PodiumCard, ExpandableList, EmptyState, LoadingSkeleton
+  - **Filter System** — Shared filter logic with URL sync (`website/js/filters.js`): GlobalFilterBar, period options (All Time, Season, 7d/14d/30d/90d, Custom), shareable URLs
+  - **Hall of Fame Page** — 12 metric categories (Most Active, Wins, Damage, Kills, Revives, XP, Assists, Deaths, Selfkills, Full Selfkills, Consecutive Games, DPM) with podium display, expandable rankings, and time filters (`website/js/hall-of-fame.js`)
+  - **Hall of Fame API** — `GET /api/hall-of-fame` with period filtering, 12 aggregate queries grouped by player_guid
+  - **Trends API** — `GET /api/stats/trends` with time-series data for rounds, active players, kills, and map distribution
+  - **Round Visualizer** — Interactive Chart.js round analytics replacing the static PNG gallery (`website/js/retro-viz.js`): 6 panels (Match Summary, Combat Radar, Top Fraggers, Damage Heatmap, Support Performance, Time Distribution), round picker dropdown, click-to-expand lightbox
+  - **Round Viz API** — `GET /api/rounds/{id}/viz` returns full player stats for a round; `GET /api/rounds/recent` returns recent rounds for the picker
+  - **Retro Viz Gallery (legacy)** — `GET /api/retro-viz/gallery` still available for PNG files
+  - **Landing Page Insights** — New insights charts strip (rounds/day, active players/day, map distribution) with 14d/30d/90d toggle
+  - **Retro Viz Teaser** — Teaser card on home page linking to gallery
+
+### Changed
+
+- **Navigation** — Removed standalone Sessions button from top-level nav (still accessible in Stats dropdown); added Hall of Fame as top-level nav item; added Retro Viz to Stats dropdown
+- **Landing Page KPI Tiles** — Restyled to 3x2 grid with glass-panel cards, monospace numbers, colored accent borders
+- **Landing Page Hero** — Updated tagline to "Track every frag, analyze every round, celebrate every victory"
+
+- **Upload Library** — Community file sharing for configs (.cfg, .hud), archives (.zip, .rar), and clips (.mp4, .avi, .mkv)
+  - OWASP-compliant file validation: extension allowlists, magic byte verification, size limits, SHA256 hashing
+  - UUID-based storage outside web root with streaming upload and cleanup on failure
+  - Browse/search/filter by category and tags, paginated results
+  - Safe download headers (X-Content-Type-Options, CSP, X-Frame-Options), inline playback for MP4
+  - Rate limit: 10 uploads/hour per user
+  - Soft-delete (owner only)
+  - Migration: `website/migrations/003_upload_library.sql` (uploads + upload_tags tables)
+  - Backend: `website/backend/routers/uploads.py`, `website/backend/services/upload_store.py`, `website/backend/services/upload_validators.py`
+  - Frontend: `website/js/uploads.js`, upload view in index.html
+
+- **Daily Availability Poll + Notifications** — Discord daily "Who can play tonight?" system
+  - Automated daily poll posting with ✅❌❔ reactions at configurable CET time
+  - Reaction tracking via `on_raw_reaction_add/remove` (survives bot restarts)
+  - Threshold notification: DMs opted-in players when YES count reaches N
+  - Game-time reminders at configurable CET times (default 20:45, 21:00)
+  - Per-user notification preferences via `!poll_notify` command and website UI
+  - Website availability page with today's poll, response list, and history chart
+  - Migration: `website/migrations/004_daily_availability_poll.sql` (daily_polls + poll_responses + poll_reminder_preferences)
+  - Bot cog: `bot/cogs/availability_poll_cog.py`
+  - Backend: `website/backend/routers/availability.py`
+  - Frontend: `website/js/availability.js`, availability view in index.html
+
+### Fixed
+
+- **Discord login broken** — `https_only=True` in SessionMiddleware prevented cookies over HTTP; made configurable via `SESSION_HTTPS_ONLY` env var (defaults to false)
+- **Admin panel hidden behind login** — Renamed to "System Overview", moved to public nav bar (visible without auth)
+- **Voice monitoring lag** — Reduced voice recording interval from 60s to 300s, frontend live polling from 10s to 60s, live status refresh from 30s to 300s
+
 ### Docs
 
+- **Upload Security Threat Model** — `docs/UPLOAD_SECURITY.md` with 5 attack surfaces, 15 existing mitigations documented with file references, 6 gaps identified, 30+ red-team test cases
 - Slimmed `docs/CLAUDE.md` from 894 to ~186 lines; moved fix history here and known issues to `docs/KNOWN_ISSUES.md`
 - Fixed factual drift: table count (7→36), cog count (14→20), core modules (12→18), Lua version (v1.3.0→v1.6.0), command count (63→80+), system status version (1.0.1→1.0.6)
 

@@ -309,8 +309,9 @@ docs/TODO-*.md
 docs/HANDOFF_*.md
 docs/CRASH_PROOF_*.md
 docs/TWO_WEEK_*.md
-docs/ROAD_AHEAD_*.md
-docs/WEBHOOK_TRIAGE_*.md
+# Recovered planning docs — DO NOT re-ignore (see ROAD_AHEAD runbook rule #5)
+# docs/ROAD_AHEAD_*.md
+# docs/WEBHOOK_TRIAGE_*.md
 docs/MISSION_*.md
 docs/LIVE_MONITORING_*.md
 docs/WEEK_HANDOFF_*.md
