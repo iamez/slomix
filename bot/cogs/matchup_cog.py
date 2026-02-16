@@ -270,15 +270,16 @@ class MatchupCog(commands.Cog):
 
                 # Get all unique opponents from matchup history
                 query = """
-                    SELECT DISTINCT jsonb_array_elements_text(
-                        CASE
-                            WHEN lineup_a_guids::text LIKE $1 THEN lineup_b_guids
-                            ELSE lineup_a_guids
-                        END
-                    ) as opponent_guid
-                    FROM matchup_history
-                    WHERE lineup_a_guids::text LIKE $1
-                       OR lineup_b_guids::text LIKE $1
+                    SELECT DISTINCT opponent_guid
+                    FROM (
+                        SELECT jsonb_array_elements_text(lineup_b_guids) AS opponent_guid
+                        FROM matchup_history
+                        WHERE lineup_a_guids::text LIKE $1
+                        UNION
+                        SELECT jsonb_array_elements_text(lineup_a_guids) AS opponent_guid
+                        FROM matchup_history
+                        WHERE lineup_b_guids::text LIKE $1
+                    ) sub
                 """
                 rows = await self.bot.db_adapter.fetch_all(query, (f'%{player_guid}%',))
 
