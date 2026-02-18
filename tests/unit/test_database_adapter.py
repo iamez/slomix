@@ -306,7 +306,8 @@ class TestDatabaseIntegrity:
                 "SELECT COUNT(*) FROM processed_files WHERE filename = $1",
                 ("file1.txt",)
             )
-            assert count == 1
+            if count != 1:
+                raise AssertionError(f"Expected 1 row for file1.txt, found {count}")
 
         except Exception as e:
             # Unique constraint violation expected

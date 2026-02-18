@@ -1,0 +1,4 @@
+exclude_paths:
+  - "bot/schema.sql"
+  - "schema.sql"
+  - "tools/schema_postgresql.sql"
