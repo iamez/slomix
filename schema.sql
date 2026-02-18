@@ -1,2 +1,2 @@
-\echo 'Loading schema from bot/schema.sql'
-\i bot/schema.sql
+\echo 'Loading PostgreSQL schema from tools/schema_postgresql.sql'
+\i tools/schema_postgresql.sql

@@ -219,10 +219,10 @@ class TestDatabaseIntegrity:
             await clean_test_db.execute(
                 """
                 INSERT INTO player_comprehensive_stats
-                (round_id, guid, name, team, kills, deaths)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                (round_id, round_date, map_name, round_number, player_guid, player_name, team, kills, deaths)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 """,
-                (99999, "TESTGUID", "TestPlayer", 1, 10, 5)
+                (99999, "2025-12-17", "fk_test", 1, "TESTGUID", "TestPlayer", 1, 10, 5)
             )
 
     @pytest.mark.asyncio
@@ -243,19 +243,19 @@ class TestDatabaseIntegrity:
         await clean_test_db.execute(
             """
             INSERT INTO player_comprehensive_stats
-            (round_id, guid, name, team, kills, deaths)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            (round_id, round_date, map_name, round_number, player_guid, player_name, team, kills, deaths)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             """,
-            (round_id, "TESTGUID1", "Player1", 1, 10, 5)
+            (round_id, "2025-12-17", "cascade_test", 1, "TESTGUID1", "Player1", 1, 10, 5)
         )
 
         await clean_test_db.execute(
             """
             INSERT INTO player_comprehensive_stats
-            (round_id, guid, name, team, kills, deaths)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            (round_id, round_date, map_name, round_number, player_guid, player_name, team, kills, deaths)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             """,
-            (round_id, "TESTGUID2", "Player2", 2, 8, 7)
+            (round_id, "2025-12-17", "cascade_test", 1, "TESTGUID2", "Player2", 2, 8, 7)
         )
 
         # Verify player stats exist
@@ -285,33 +285,28 @@ class TestDatabaseIntegrity:
         # Insert a processed file hash
         await clean_test_db.execute(
             """
-            INSERT INTO processed_files (file_hash, file_path, import_date)
-            VALUES ($1, $2, CURRENT_TIMESTAMP)
+            INSERT INTO processed_files (filename, file_hash)
+            VALUES ($1, $2)
             """,
-            ("abc123hash", "/path/to/file1.txt")
+            ("file1.txt", "abc123hash")
         )
 
-        # Try to insert same hash again (should fail if unique constraint exists)
-        # Note: Check if processed_files has unique constraint on file_hash
+        # Try to insert same filename again (filename is unique in current schema)
         try:
             await clean_test_db.execute(
                 """
-                INSERT INTO processed_files (file_hash, file_path, import_date)
-                VALUES ($1, $2, CURRENT_TIMESTAMP)
+                INSERT INTO processed_files (filename, file_hash)
+                VALUES ($1, $2)
                 """,
-                ("abc123hash", "/path/to/file2.txt")
+                ("file1.txt", "different_hash")
             )
 
-            # If it succeeds, there might not be a unique constraint
-            # Count to see if duplicate was allowed
+            # If insert succeeds unexpectedly, ensure duplicates were not created.
             count = await clean_test_db.fetch_val(
-                "SELECT COUNT(*) FROM processed_files WHERE file_hash = $1",
-                ("abc123hash",)
+                "SELECT COUNT(*) FROM processed_files WHERE filename = $1",
+                ("file1.txt",)
             )
-
-            # This test documents whether duplicates are prevented or allowed
-            # Adjust assertion based on actual schema
-            print(f"Duplicate hash count: {count}")
+            assert count == 1
 
         except Exception as e:
             # Unique constraint violation expected
