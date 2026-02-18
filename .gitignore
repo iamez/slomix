@@ -210,6 +210,8 @@ check_before_commit.sh
 # /proximity/    # ENABLED - Added in v1.1.0
 /opusreview/
 /vps_scripts/
+!/vps_scripts/
+!/vps_scripts/stats_discord_webhook.lua
 
 # Demo files (binary recordings, never commit)
 *.dm_84
@@ -296,6 +298,7 @@ tools/*
 !tools/simple_bulk_import.py
 !tools/stopwatch_scoring.py
 !tools/schema_postgresql.sql
+!tools/pipeline_health_report.py
 
 # ============================================
 # DOCS ARCHIVE (historical, not needed)
