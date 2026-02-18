@@ -4609,6 +4609,13 @@ class UltimateETLegacyBot(commands.Bot):
     ) -> bool:
         return incoming_quality > existing_quality
 
+    def _is_endstats_round_unique_violation(self, exc: Exception) -> bool:
+        text = str(exc)
+        return (
+            "uq_processed_endstats_round_id" in text
+            and "duplicate key value violates unique constraint" in text
+        )
+
     async def _get_round_endstats_quality(self, round_id: int) -> tuple[int, int]:
         row = await self.db_adapter.fetch_one(
             """
@@ -5170,17 +5177,62 @@ class UltimateETLegacyBot(commands.Bot):
             )
             return False
 
-        await self.db_adapter.execute(
-            """
-            UPDATE processed_endstats_files
-            SET round_id = $2,
-                success = TRUE,
-                error_message = NULL,
-                processed_at = CURRENT_TIMESTAMP
-            WHERE filename = $1
-            """,
-            (filename, round_id),
-        )
+        try:
+            await self.db_adapter.execute(
+                """
+                UPDATE processed_endstats_files
+                SET round_id = $2,
+                    success = TRUE,
+                    error_message = NULL,
+                    processed_at = CURRENT_TIMESTAMP
+                WHERE filename = $1
+                """,
+                (filename, round_id),
+            )
+        except Exception as e:
+            if not self._is_endstats_round_unique_violation(e):
+                raise
+
+            existing_success = await self.db_adapter.fetch_one(
+                """
+                SELECT filename, processed_at
+                FROM processed_endstats_files
+                WHERE round_id = $1
+                  AND success = TRUE
+                ORDER BY processed_at DESC NULLS LAST, id DESC
+                LIMIT 1
+                """,
+                (round_id,),
+            )
+            existing_filename = existing_success[0] if existing_success else "unknown"
+            processed_at = existing_success[1] if existing_success else "unknown"
+
+            await self.db_adapter.execute(
+                """
+                UPDATE processed_endstats_files
+                SET round_id = $2,
+                    success = FALSE,
+                    error_message = $3,
+                    processed_at = CURRENT_TIMESTAMP
+                WHERE filename = $1
+                """,
+                (
+                    filename,
+                    round_id,
+                    f"duplicate_round_conflict_existing_success:{existing_filename}",
+                ),
+            )
+
+            self._log_endstats_transition(
+                log,
+                source,
+                "race_conflict_skip",
+                filename,
+                round_id=round_id,
+                detail=f"existing_filename={existing_filename} processed_at={processed_at}",
+                level="warning",
+            )
+            return True
 
         self._log_endstats_transition(
             log,
