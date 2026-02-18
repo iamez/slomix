@@ -263,8 +263,8 @@ class ServerControl(commands.Cog):
             
             if exit_code == 0 and self.screen_name in output:
                 # Server is running - get more details
-                cpu_cmd = f"ps aux | grep '[e]tlded' | awk '{{print $3}}'"
-                mem_cmd = f"ps aux | grep '[e]tlded' | awk '{{print $4}}'"
+                cpu_cmd = "ps aux | grep '[e]tlded' | awk '{print $3}'"
+                mem_cmd = "ps aux | grep '[e]tlded' | awk '{print $4}'"
                 
                 cpu_output, _, _ = self.execute_ssh_command(cpu_cmd)
                 mem_output, _, _ = self.execute_ssh_command(mem_cmd)

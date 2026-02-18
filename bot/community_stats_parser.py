@@ -329,11 +329,16 @@ class C0RNP0RN3StatsParser:
                 multikills_text = ""
                 if double_kills or triple_kills or quad_kills or penta_kills or mega_kills:
                     multikill_parts = []
-                    if double_kills: multikill_parts.append(f"{double_kills} DOUBLE")
-                    if triple_kills: multikill_parts.append(f"{triple_kills} TRIPLE")
-                    if quad_kills: multikill_parts.append(f"{quad_kills} QUAD")
-                    if penta_kills: multikill_parts.append(f"{penta_kills} PENTA")
-                    if mega_kills: multikill_parts.append(f"{mega_kills} MEGA")
+                    if double_kills:
+                        multikill_parts.append(f"{double_kills} DOUBLE")
+                    if triple_kills:
+                        multikill_parts.append(f"{triple_kills} TRIPLE")
+                    if quad_kills:
+                        multikill_parts.append(f"{quad_kills} QUAD")
+                    if penta_kills:
+                        multikill_parts.append(f"{penta_kills} PENTA")
+                    if mega_kills:
+                        multikill_parts.append(f"{mega_kills} MEGA")
                     multikills_text = f"🔥 `{' • '.join(multikill_parts)}` • "
 
                 player_text += f"{multikills_text}💀 `{time_dead_display}` • ⏳ `{denied_display}`"

@@ -43,6 +43,8 @@ env/
 *.backup
 *BACKUP*
 *.sql
+!schema.sql
+!bot/schema.sql
 !migrations/*.sql
 !website/*.sql
 !proximity/**/*.sql
@@ -283,6 +285,7 @@ bot/config.json
 bot/fiveeyes_config.json
 bot/schema.json
 bot/schema.sql
+!bot/schema.sql
 bot/README_AUTOMATION.md
 
 # ============================================
