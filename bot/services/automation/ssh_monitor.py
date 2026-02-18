@@ -139,10 +139,14 @@ class SSHMonitor:
 
         if not all(required):
             logger.error("❌ Missing SSH configuration:")
-            if not self.ssh_config['host']: logger.error("  - SSH_HOST")
-            if not self.ssh_config['user']: logger.error("  - SSH_USER")
-            if not self.ssh_config['key_path']: logger.error("  - SSH_KEY_PATH")
-            if not self.ssh_config['remote_path']: logger.error("  - REMOTE_STATS_PATH")
+            if not self.ssh_config['host']:
+                logger.error("  - SSH_HOST")
+            if not self.ssh_config['user']:
+                logger.error("  - SSH_USER")
+            if not self.ssh_config['key_path']:
+                logger.error("  - SSH_KEY_PATH")
+            if not self.ssh_config['remote_path']:
+                logger.error("  - REMOTE_STATS_PATH")
             return False
 
         return True
@@ -759,11 +763,16 @@ class SSHMonitor:
 
                 # Build multikills string
                 multikills_parts = []
-                if double: multikills_parts.append(f"{double}DBL")
-                if triple: multikills_parts.append(f"{triple}TPL")
-                if quad: multikills_parts.append(f"{quad}QD")
-                if multi: multikills_parts.append(f"{multi}PNT")
-                if mega: multikills_parts.append(f"{mega}MGA")
+                if double:
+                    multikills_parts.append(f"{double}DBL")
+                if triple:
+                    multikills_parts.append(f"{triple}TPL")
+                if quad:
+                    multikills_parts.append(f"{quad}QD")
+                if multi:
+                    multikills_parts.append(f"{multi}PNT")
+                if mega:
+                    multikills_parts.append(f"{mega}MGA")
                 multikills_display = f" • {' '.join(multikills_parts)}" if multikills_parts else ""
 
                 # Three-line format
@@ -1022,11 +1031,16 @@ class SSHMonitor:
 
                 # Build multikills string
                 multikills_parts = []
-                if double: multikills_parts.append(f"{double}DBL")
-                if triple: multikills_parts.append(f"{triple}TPL")
-                if quad: multikills_parts.append(f"{quad}QD")
-                if multi: multikills_parts.append(f"{multi}PNT")
-                if mega: multikills_parts.append(f"{mega}MGA")
+                if double:
+                    multikills_parts.append(f"{double}DBL")
+                if triple:
+                    multikills_parts.append(f"{triple}TPL")
+                if quad:
+                    multikills_parts.append(f"{quad}QD")
+                if multi:
+                    multikills_parts.append(f"{multi}PNT")
+                if mega:
+                    multikills_parts.append(f"{mega}MGA")
                 multikills_display = f" • {' '.join(multikills_parts)}" if multikills_parts else ""
 
                 # Three-line format

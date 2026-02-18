@@ -83,7 +83,7 @@ logger.info(f"📦 Discord.py: {discord.__version__}")
 # ======================================================================
 
 
-async def ensure_player_name_alias(db: "aiosqlite.Connection") -> None:
+async def ensure_player_name_alias(db) -> None:
     """Create a TEMP VIEW aliasing an existing name column to `player_name`.
 
     This standalone helper mirrors the Cog method and can be used by
@@ -2090,7 +2090,7 @@ class UltimateETLegacyBot(commands.Bot):
             if not existing_teams:
                 # No teams yet - this is likely the first round of a new session
                 if round_num == 1:
-                    logger.info(f"🎯 R1 of new session - creating initial teams...")
+                    logger.info("🎯 R1 of new session - creating initial teams...")
                     await self.team_manager.create_initial_teams_from_round(
                         round_id=round_id,
                         session_date=session_date,
@@ -2098,7 +2098,7 @@ class UltimateETLegacyBot(commands.Bot):
                     )
                 else:
                     # R2 came before R1 in import order - detect teams from all data
-                    logger.info(f"🎯 R2 without R1 teams - running full detection...")
+                    logger.info("🎯 R2 without R1 teams - running full detection...")
                     teams = await self.team_manager.detect_session_teams(
                         session_date,
                         gaming_session_id=gaming_session_id,
@@ -2743,7 +2743,7 @@ class UltimateETLegacyBot(commands.Bot):
 
                         # Route endstats files to dedicated processor
                         if is_endstats:
-                            logger.info(f"🏆 Detected endstats file, using endstats processor")
+                            logger.info("🏆 Detected endstats file, using endstats processor")
                             await self._process_endstats_file(local_path, filename)
                             process_time = time.time() - process_start
                             logger.info(f"⚙️ Processing completed in {process_time:.2f}s")
@@ -2767,7 +2767,7 @@ class UltimateETLegacyBot(commands.Bot):
                             else:
                                 error_msg = result.get('error', 'Unknown error') if result else 'No result'
                                 logger.warning(f"⚠️ Processing failed for {filename}: {error_msg}")
-                                logger.warning(f"⚠️ Skipping Discord post")
+                                logger.warning("⚠️ Skipping Discord post")
                     else:
                         logger.error(f"❌ Download failed for {filename}")
 
@@ -4356,7 +4356,7 @@ class UltimateETLegacyBot(commands.Bot):
             )
 
             if result and result.get('success'):
-                webhook_logger.info(f"📊 Posting stats with accurate timing data")
+                webhook_logger.info("📊 Posting stats with accurate timing data")
                 await self.round_publisher.publish_round_stats(filename, result)
                 webhook_logger.info(f"✅ Successfully processed: {filename}")
             else:

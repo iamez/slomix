@@ -401,7 +401,7 @@ class TimingDebugService:
                 if lua_pauses and lua_pause_count:
                     lua_value += f"\n**Pauses:** {lua_pause_count} ({lua_pauses} sec)"
                 elif lua_pauses == 0:
-                    lua_value += f"\n**Pauses:** None"
+                    lua_value += "\n**Pauses:** None"
 
                 if lua_start_unix and lua_end_unix:
                     wall_clock = int(lua_end_unix) - int(lua_start_unix)
@@ -461,7 +461,7 @@ class TimingDebugService:
                 if normalize_end_reason(lua_end_reason) == "SURRENDER" and diff_seconds > 0:
                     analysis_parts.append(f"**Surrender Fix:** ✅ Yes (saved {diff_seconds}s)")
                 elif normalize_end_reason(lua_end_reason) == "SURRENDER":
-                    analysis_parts.append(f"**Surrender Fix:** ✅ Applied")
+                    analysis_parts.append("**Surrender Fix:** ✅ Applied")
                 elif diff_seconds == 0:
                     analysis_parts.append("**Match:** ✅ Perfect timing match!")
                 elif diff_seconds < 5:
