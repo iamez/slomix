@@ -289,10 +289,7 @@ class TimingComparisonService:
         """
         rows = await self.db_adapter.fetch_all(query, (map_name, round_number))
 
-        if not rows:
-            return None
-
-        # Find best match by time proximity
+        # Find best match by time proximity (map + round_number strict path)
         best_match = None
         min_diff = timedelta(hours=24)
 
@@ -365,12 +362,131 @@ class TimingComparisonService:
                 best_match['match_confidence'],
                 int(min_diff.total_seconds()),
             )
-        else:
+            return best_match
+
+        logger.warning(
+            "fuzzy match miss: round_id=%s map=%s rn=%d — trying round-number-relaxed fallback",
+            round_id, map_name, round_number,
+        )
+
+        # Conservative diagnostic fallback:
+        # same map + time window, but do not require same round_number.
+        relaxed_query = """
+            SELECT id, match_id, round_number, map_name,
+                   round_start_unix, round_end_unix, actual_duration_seconds,
+                   total_pause_seconds, pause_count, end_reason,
+                   winner_team, defender_team, time_limit_minutes,
+                   lua_warmup_seconds, lua_warmup_start_unix,
+                   lua_pause_events,
+                   surrender_team, surrender_caller_name,
+                   axis_score, allies_score,
+                   captured_at
+            FROM lua_round_teams
+            WHERE map_name = ?
+            ORDER BY captured_at DESC
+            LIMIT 20
+        """
+        relaxed_rows = await self.db_adapter.fetch_all(relaxed_query, (map_name,))
+        fallback_candidates = []
+
+        for row in relaxed_rows:
+            (id_, match_id, rn, mn, start_unix, end_unix, duration,
+             pause_sec, pause_count, end_reason, winner, defender, timelimit,
+             warmup_sec, warmup_start, pause_events,
+             surr_team, surr_caller, axis_score, allies_score, captured_at) = row
+
+            candidates = []
+            if end_unix:
+                try:
+                    candidates.append(datetime.fromtimestamp(end_unix))
+                except (OSError, ValueError, TypeError):
+                    pass
+            if start_unix:
+                try:
+                    candidates.append(datetime.fromtimestamp(start_unix))
+                except (OSError, ValueError, TypeError):
+                    pass
+            if captured_at:
+                if isinstance(captured_at, str):
+                    try:
+                        captured_dt = datetime.fromisoformat(captured_at.replace('Z', '+00:00'))
+                        candidates.append(captured_dt.replace(tzinfo=None))
+                    except ValueError:
+                        pass
+                else:
+                    candidates.append(captured_at.replace(tzinfo=None) if captured_at.tzinfo else captured_at)
+
+            if not candidates:
+                continue
+
+            best_candidate = min(candidates, key=lambda dt: abs(dt - round_datetime))
+            time_diff = abs(best_candidate - round_datetime)
+            if time_diff >= timedelta(minutes=30):
+                continue
+
+            fallback_candidates.append((time_diff, {
+                'lua_id': id_,
+                'match_id': match_id,
+                'round_number': rn,
+                'map_name': mn,
+                'round_start_unix': start_unix,
+                'round_end_unix': end_unix,
+                'lua_duration_seconds': duration,
+                'total_pause_seconds': pause_sec or 0,
+                'pause_count': pause_count or 0,
+                'end_reason': end_reason,
+                'winner_team': winner,
+                'defender_team': defender,
+                'time_limit_minutes': timelimit,
+                'warmup_seconds': warmup_sec or 0,
+                'warmup_start_unix': warmup_start,
+                'surrender_team': surr_team,
+                'surrender_caller': surr_caller,
+                'axis_score': axis_score,
+                'allies_score': allies_score,
+                'captured_at': captured_at,
+                'match_confidence': 'low'
+            }))
+
+        if not fallback_candidates:
             logger.warning(
-                "fuzzy match miss: round_id=%s map=%s rn=%d — no lua_round_teams row within 30min window",
+                "round-number-relaxed fallback miss: round_id=%s map=%s rn=%d — no candidates within 30min",
                 round_id, map_name, round_number,
             )
-        return best_match
+            return None
+
+        fallback_candidates.sort(key=lambda item: item[0])
+        best_diff, best_fallback = fallback_candidates[0]
+
+        accept_fallback = False
+        reason = ""
+        if len(fallback_candidates) == 1:
+            accept_fallback = True
+            reason = "single_close_candidate"
+        else:
+            second_diff = fallback_candidates[1][0]
+            if best_diff <= timedelta(minutes=10) and (second_diff - best_diff) >= timedelta(minutes=5):
+                accept_fallback = True
+                reason = "best_candidate_clearly_near"
+
+        if accept_fallback:
+            logger.warning(
+                "round-number-relaxed fallback hit: round_id=%s map=%s requested_rn=%d matched_rn=%d diff=%ds candidates=%d reason=%s confidence=low",
+                round_id, map_name, round_number,
+                best_fallback['round_number'],
+                int(best_diff.total_seconds()),
+                len(fallback_candidates),
+                reason,
+            )
+            return best_fallback
+
+        logger.warning(
+            "round-number-relaxed fallback ambiguous: round_id=%s map=%s rn=%d best_diff=%ds candidates=%d",
+            round_id, map_name, round_number,
+            int(best_diff.total_seconds()),
+            len(fallback_candidates),
+        )
+        return None
 
     def _parse_round_datetime(self, round_date: str, round_time: str) -> Optional[datetime]:
         """Parse round date/time from multiple known formats."""

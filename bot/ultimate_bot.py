@@ -296,6 +296,17 @@ class UltimateETLegacyBot(commands.Bot):
         self._webhook_rate_limit = defaultdict(deque)
         self._webhook_rate_limit_max = 5  # Max 5 triggers per minute
         self._webhook_rate_limit_window = 60  # Seconds
+        self._stats_ready_rate_limit = defaultdict(deque)
+        self._stats_ready_rate_limit_max = 4
+        self._stats_ready_rate_limit_window = 30  # Lightweight burst protection
+        self._processed_webhook_message_ids = deque()
+        self._processed_webhook_message_id_set = set()
+        self._webhook_message_dedupe_ttl = 600  # Seconds
+
+        # Pending metadata queue keyed by map+round (supports repeated events safely)
+        self._pending_round_metadata = defaultdict(list)
+        self._pending_metadata_ttl_seconds = 3 * 3600
+        self._pending_metadata_max_per_key = 8
 
         # Load channel configuration from config object
         self.gaming_voice_channels = self.config.gaming_voice_channels
@@ -3100,25 +3111,201 @@ class UltimateETLegacyBot(commands.Bot):
         # Process commands normally
         await self.process_commands(message)
 
-    def _check_webhook_rate_limit(self, webhook_id: int) -> bool:
-        """Rate limit: Max 5 triggers per 60 seconds per webhook."""
-        # timedelta already imported at top of file
+    def _normalize_lua_round_for_metadata_paths(self, raw_round) -> int:
+        """
+        Normalize Lua round numbering for webhook/gametime metadata paths.
+        ET:Legacy may report g_currentRound=0 for stopwatch R2.
+        """
+        if raw_round is None:
+            return 0
+        raw_text = str(raw_round).strip()
+        if not raw_text:
+            return 0
+        try:
+            parsed = int(raw_text)
+        except (TypeError, ValueError):
+            return 0
+        if parsed == 0 and raw_text.lstrip("+-") == "0":
+            return 2
+        if parsed < 0:
+            return 0
+        return parsed
 
+    def _normalize_metadata_map_name(self, map_name: str | None) -> str:
+        return str(map_name or "").strip().lower()
+
+    def _pending_metadata_key(self, map_name: str | None, round_number) -> str | None:
+        normalized_map = self._normalize_metadata_map_name(map_name)
+        normalized_round = self._normalize_lua_round_for_metadata_paths(round_number)
+        if not normalized_map or normalized_round <= 0:
+            return None
+        return f"{normalized_map}_R{normalized_round}"
+
+    def _metadata_event_unix(self, metadata: dict) -> int:
+        for field in ("round_end_unix", "round_start_unix"):
+            try:
+                value = int(metadata.get(field, 0) or 0)
+            except (TypeError, ValueError):
+                value = 0
+            if value > 0:
+                return value
+        return 0
+
+    def _parse_stats_filename_context(self, filename: str) -> dict | None:
+        match = re.match(
+            r'^(\d{4}-\d{2}-\d{2})-(\d{6})-(.+)-round-(\d+)\.txt$',
+            filename,
+        )
+        if not match:
+            return None
+        date_part, time_part, map_name, round_text = match.groups()
+        try:
+            filename_ts = int(
+                datetime.strptime(
+                    f"{date_part} {time_part}", "%Y-%m-%d %H%M%S"
+                ).timestamp()
+            )
+        except ValueError:
+            filename_ts = 0
+        return {
+            "map_name": map_name,
+            "round_number": int(round_text),
+            "filename_ts": filename_ts,
+        }
+
+    def _prune_pending_round_metadata(self) -> None:
+        if not self._pending_round_metadata:
+            return
+        cutoff_unix = int(time.time()) - self._pending_metadata_ttl_seconds
+        stale_keys = []
+        for key, entries in list(self._pending_round_metadata.items()):
+            pruned_entries = [
+                entry for entry in entries
+                if int(entry.get("received_unix", 0)) >= cutoff_unix
+            ]
+            if len(pruned_entries) > self._pending_metadata_max_per_key:
+                pruned_entries = pruned_entries[-self._pending_metadata_max_per_key:]
+            if pruned_entries:
+                self._pending_round_metadata[key] = pruned_entries
+            else:
+                stale_keys.append(key)
+        for key in stale_keys:
+            self._pending_round_metadata.pop(key, None)
+
+    def _queue_pending_metadata(self, round_metadata: dict, source: str) -> None:
+        metadata_key = self._pending_metadata_key(
+            round_metadata.get("map_name"),
+            round_metadata.get("round_number"),
+        )
+        if not metadata_key:
+            return
+
+        self._prune_pending_round_metadata()
+        bucket = self._pending_round_metadata[metadata_key]
+        bucket.append(
+            {
+                "metadata": dict(round_metadata),
+                "received_unix": int(time.time()),
+                "source": source,
+            }
+        )
+        if len(bucket) > self._pending_metadata_max_per_key:
+            del bucket[:-self._pending_metadata_max_per_key]
+
+    def _pop_pending_metadata(self, filename: str):
+        """
+        Pop best matching Lua metadata from pending queue for this stats filename.
+        Chooses by timestamp proximity when both sides have timestamps.
+        """
+        self._prune_pending_round_metadata()
+        if not self._pending_round_metadata:
+            return None
+
+        context = self._parse_stats_filename_context(filename)
+        if not context:
+            return None
+
+        metadata_key = self._pending_metadata_key(
+            context.get("map_name"),
+            context.get("round_number"),
+        )
+        if not metadata_key:
+            return None
+
+        candidates = self._pending_round_metadata.get(metadata_key) or []
+        if not candidates:
+            return None
+
+        filename_ts = int(context.get("filename_ts", 0) or 0)
+        best_idx = len(candidates) - 1  # Fallback to newest metadata
+        best_diff = None
+        if filename_ts:
+            for idx, entry in enumerate(candidates):
+                meta_ts = self._metadata_event_unix(entry.get("metadata") or {})
+                if not meta_ts:
+                    continue
+                diff = abs(meta_ts - filename_ts)
+                if best_diff is None or diff < best_diff:
+                    best_diff = diff
+                    best_idx = idx
+
+        selected = candidates.pop(best_idx)
+        if not candidates:
+            self._pending_round_metadata.pop(metadata_key, None)
+
+        metadata = selected.get("metadata")
+        if metadata:
+            if best_diff is not None:
+                webhook_logger.info(
+                    f"📎 Attached pending Lua metadata for {metadata_key} (Δ {best_diff}s)"
+                )
+            else:
+                webhook_logger.info(f"📎 Attached pending Lua metadata for {metadata_key}")
+        return metadata
+
+    def _prune_processed_webhook_message_ids(self) -> None:
+        if not self._processed_webhook_message_ids:
+            return
+        cutoff = datetime.now() - timedelta(seconds=self._webhook_message_dedupe_ttl)
+        while self._processed_webhook_message_ids and self._processed_webhook_message_ids[0][0] < cutoff:
+            _, stale_id = self._processed_webhook_message_ids.popleft()
+            self._processed_webhook_message_id_set.discard(stale_id)
+
+    def _register_processed_webhook_message_id(self, message_id: int | None) -> bool:
+        """
+        Return False when this webhook message id was already seen recently.
+        """
+        if not message_id:
+            return True
+        self._prune_processed_webhook_message_ids()
+        if message_id in self._processed_webhook_message_id_set:
+            return False
         now = datetime.now()
-        window_start = now - timedelta(seconds=self._webhook_rate_limit_window)
+        self._processed_webhook_message_ids.append((now, message_id))
+        self._processed_webhook_message_id_set.add(message_id)
+        return True
 
-        timestamps = self._webhook_rate_limit[webhook_id]
+    def _check_rate_limit(
+        self,
+        bucket,
+        bucket_key: int,
+        *,
+        max_events: int,
+        window_seconds: int,
+        label: str,
+    ) -> bool:
+        now = datetime.now()
+        window_start = now - timedelta(seconds=window_seconds)
+        timestamps = bucket[bucket_key]
 
-        # Remove old timestamps
         while timestamps and timestamps[0] < window_start:
             timestamps.popleft()
 
-        # Check limit
-        if len(timestamps) >= self._webhook_rate_limit_max:
-            wait_time = (timestamps[0] + timedelta(seconds=self._webhook_rate_limit_window) - now).total_seconds()
-            logger.warning(
-                f"🚨 Webhook {webhook_id} rate limited "
-                f"({len(timestamps)} triggers in {self._webhook_rate_limit_window}s). "
+        if len(timestamps) >= max_events:
+            wait_time = (timestamps[0] + timedelta(seconds=window_seconds) - now).total_seconds()
+            webhook_logger.warning(
+                f"🚨 {label} {bucket_key} rate limited "
+                f"({len(timestamps)} triggers in {window_seconds}s). "
                 f"Retry in {wait_time:.1f}s"
             )
             return False
@@ -3126,18 +3313,25 @@ class UltimateETLegacyBot(commands.Bot):
         timestamps.append(now)
         return True
 
-    def _pop_pending_metadata(self, filename: str):
-        """Pop matching Lua metadata from _pending_round_metadata if available."""
-        if not hasattr(self, '_pending_round_metadata') or not self._pending_round_metadata:
-            return None
-        fn_match = re.match(r'\d{4}-\d{2}-\d{2}-\d{6}-(.+)-round-(\d+)\.txt$', filename)
-        if not fn_match:
-            return None
-        metadata_key = f"{fn_match.group(1)}_R{fn_match.group(2)}"
-        metadata = self._pending_round_metadata.pop(metadata_key, None)
-        if metadata:
-            webhook_logger.info(f"📎 Attached pending Lua metadata for {metadata_key}")
-        return metadata
+    def _check_webhook_rate_limit(self, webhook_id: int) -> bool:
+        """Rate limit filename/endstats triggers per webhook."""
+        return self._check_rate_limit(
+            self._webhook_rate_limit,
+            webhook_id,
+            max_events=self._webhook_rate_limit_max,
+            window_seconds=self._webhook_rate_limit_window,
+            label="Webhook",
+        )
+
+    def _check_stats_ready_rate_limit(self, webhook_id: int) -> bool:
+        """Lightweight STATS_READY rate limit per webhook."""
+        return self._check_rate_limit(
+            self._stats_ready_rate_limit,
+            webhook_id,
+            max_events=self._stats_ready_rate_limit_max,
+            window_seconds=self._stats_ready_rate_limit_window,
+            label="STATS_READY webhook",
+        )
 
     def _validate_stats_filename(self, filename: str) -> bool:
         """
@@ -3231,7 +3425,7 @@ class UltimateETLegacyBot(commands.Bot):
         if filename in self.processed_endstats_files:
             return False
 
-        check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+        check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
         result = await self.db_adapter.fetch_one(check_query, (filename,))
         if result:
             self.processed_endstats_files.add(filename)
@@ -3302,15 +3496,17 @@ class UltimateETLegacyBot(commands.Bot):
             _debug_webhook(f"ignored: username mismatch (expected={expected_username})")
             return False
 
-        # HIGH: Rate limit check
-        if not self._check_webhook_rate_limit(message.webhook_id):
-            _debug_webhook("ignored: rate limited")
-            return False
+        if not self._register_processed_webhook_message_id(getattr(message, "id", None)):
+            _debug_webhook("ignored: duplicate webhook message id")
+            return True
 
-        # ===== NEW: Handle STATS_READY webhook with embedded metadata =====
+        # ===== Handle STATS_READY webhook with embedded metadata =====
         # Lua script sends "STATS_READY" with embeds containing timing/winner data
         if message.content and message.content.strip() == "STATS_READY":
             if message.embeds:
+                if not self._check_stats_ready_rate_limit(message.webhook_id):
+                    _debug_webhook("ignored: STATS_READY rate limited")
+                    return False
                 webhook_logger.info("📥 Received STATS_READY webhook with metadata")
                 _debug_webhook("accepted: STATS_READY with embeds")
                 self._safe_create_task(self._process_stats_ready_webhook(message), name="stats_ready_webhook")
@@ -3319,6 +3515,13 @@ class UltimateETLegacyBot(commands.Bot):
                 webhook_logger.warning("STATS_READY webhook received but no embeds found")
                 _debug_webhook("ignored: STATS_READY missing embeds")
                 return False
+
+        # HIGH: Rate limit check (applies to filename/endstats triggers only).
+        # STATS_READY carries authoritative round metadata and should not be
+        # suppressed by bursts of regular file-trigger messages.
+        if not self._check_webhook_rate_limit(message.webhook_id):
+            _debug_webhook("ignored: rate limited")
+            return False
 
         # ===== EXISTING: Handle filename-based webhook trigger =====
         # Extract filename from message content
@@ -3516,10 +3719,13 @@ class UltimateETLegacyBot(commands.Bot):
 
         end_reason_raw = metadata.get("lua_endreason", metadata.get("end reason", "unknown"))
         normalized_end_reason = normalize_end_reason(end_reason_raw)
+        raw_round_number = metadata.get("round")
+        normalized_round_number = self._normalize_lua_round_for_metadata_paths(raw_round_number)
 
         round_metadata = {
             "map_name": metadata.get("map", "unknown"),
-            "round_number": int(metadata.get("round", 0) or 0),
+            "round_number": normalized_round_number,
+            "lua_round_number_raw": raw_round_number,
             "winner_team": winner_team,
             "defender_team": defender_team,
             # v1.2.0: renamed fields with Lua_ prefix, normalized to strict enum
@@ -3659,8 +3865,7 @@ class UltimateETLegacyBot(commands.Bot):
                 footer_text = embed.footer.text
             round_metadata = self._build_round_metadata_from_map(metadata, footer_text=footer_text)
 
-            # round_number 0 is valid in ET:Legacy (g_currentRound=0 means R2 in stopwatch)
-            if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", -1) < 0:
+            if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", 0) <= 0:
                 webhook_logger.warning("STATS_READY webhook missing map/round metadata; skipping")
                 return
 
@@ -3700,12 +3905,8 @@ class UltimateETLegacyBot(commands.Bot):
             if spawn_stats:
                 await self._store_lua_spawn_stats(round_metadata, spawn_stats)
 
-            # Store metadata for the processing step to use
-            # Key by map + round for lookup
-            metadata_key = f"{round_metadata['map_name']}_R{round_metadata['round_number']}"
-            if not hasattr(self, '_pending_round_metadata'):
-                self._pending_round_metadata = {}
-            self._pending_round_metadata[metadata_key] = round_metadata
+            # Keep metadata queued for later filename-triggered processing as fallback.
+            self._queue_pending_metadata(round_metadata, source="stats_ready")
 
             # Now trigger SSH fetch for the actual stats file
             # Build expected filename pattern: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
@@ -3779,8 +3980,10 @@ class UltimateETLegacyBot(commands.Bot):
         meta = gametime_data.get("meta") or {}
         if round_metadata.get("map_name") == "unknown" and meta.get("map"):
             round_metadata["map_name"] = meta.get("map")
-        if round_metadata.get("round_number", 0) == 0 and meta.get("round"):
-            round_metadata["round_number"] = int(meta.get("round"))
+        if round_metadata.get("round_number", 0) == 0 and meta.get("round") is not None:
+            round_metadata["round_number"] = self._normalize_lua_round_for_metadata_paths(
+                meta.get("round")
+            )
         if round_metadata.get("round_end_unix", 0) == 0 and meta.get("round_end_unix"):
             round_metadata["round_end_unix"] = int(meta.get("round_end_unix"))
         spawn_stats_meta = meta.get("spawn_stats")
@@ -3792,7 +3995,7 @@ class UltimateETLegacyBot(commands.Bot):
         if not isinstance(spawn_stats_meta, list):
             spawn_stats_meta = []
 
-        if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", 0) == 0:
+        if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", 0) <= 0:
             webhook_logger.warning(f"⚠️ Gametime file missing map/round metadata: {filename}")
             return False
 
@@ -3819,10 +4022,7 @@ class UltimateETLegacyBot(commands.Bot):
         if spawn_stats_meta:
             await self._store_lua_spawn_stats(round_metadata, spawn_stats_meta)
 
-        metadata_key = f"{round_metadata['map_name']}_R{round_metadata['round_number']}"
-        if not hasattr(self, "_pending_round_metadata"):
-            self._pending_round_metadata = {}
-        self._pending_round_metadata[metadata_key] = round_metadata
+        self._queue_pending_metadata(round_metadata, source="gametime")
 
         # Attempt to fetch the matching stats file using the Lua timing data
         if self.ssh_enabled:
@@ -4245,7 +4445,9 @@ class UltimateETLegacyBot(commands.Bot):
 
             # Find files matching the map and round (with retry for file not yet written)
             map_name = round_metadata['map_name']
-            round_num = round_metadata['round_number']
+            round_num = self._normalize_lua_round_for_metadata_paths(
+                round_metadata.get('round_number')
+            )
             target_time = round_metadata['round_end_unix']
 
             # Only consider files from the same day to avoid picking old files
@@ -4370,6 +4572,135 @@ class UltimateETLegacyBot(commands.Bot):
                 self.file_tracker.processed_files.discard(filename)
             webhook_logger.error(f"❌ Error fetching stats file: {e}", exc_info=True)
 
+    def _log_endstats_transition(
+        self,
+        log,
+        source: str,
+        state: str,
+        filename: str,
+        round_id: int | None = None,
+        detail: str = "-",
+        level: str = "info",
+    ) -> None:
+        round_value = round_id if round_id is not None else "null"
+        log_fn = getattr(log, level, log.info)
+        log_fn(
+            "event=endstats_pipeline source=%s state=%s filename=%s round_id=%s detail=%s",
+            source,
+            state,
+            filename,
+            round_value,
+            detail,
+        )
+
+    async def _is_endstats_round_already_processed(
+        self,
+        round_id: int,
+        filename: str,
+        source: str,
+        log,
+    ) -> bool:
+        existing = await self.db_adapter.fetch_one(
+            """
+            SELECT filename, processed_at
+            FROM processed_endstats_files
+            WHERE round_id = $1
+              AND success = TRUE
+            ORDER BY processed_at DESC NULLS LAST, id DESC
+            LIMIT 1
+            """,
+            (round_id,),
+        )
+        if not existing:
+            return False
+
+        existing_filename = existing[0]
+        processed_at = existing[1]
+        self._log_endstats_transition(
+            log,
+            source,
+            "duplicate_round_skip",
+            filename,
+            round_id=round_id,
+            detail=f"existing_filename={existing_filename} processed_at={processed_at}",
+            level="warning",
+        )
+        return True
+
+    async def _is_endstats_round_ready(
+        self,
+        round_id: int,
+        filename: str,
+        source: str,
+        log,
+    ) -> bool:
+        row = await self.db_adapter.fetch_one(
+            """
+            SELECT r.round_status, COUNT(p.id) AS player_stats_rows
+            FROM rounds r
+            LEFT JOIN player_comprehensive_stats p ON p.round_id = r.id
+            WHERE r.id = $1
+            GROUP BY r.round_status
+            """,
+            (round_id,),
+        )
+
+        if not row:
+            self._log_endstats_transition(
+                log,
+                source,
+                "not_ready_round_missing",
+                filename,
+                round_id=round_id,
+                detail="round_id_not_found",
+                level="warning",
+            )
+            return False
+
+        round_status = row[0]
+        player_stats_rows = int(row[1] or 0)
+        normalized_status = None
+        if isinstance(round_status, str):
+            normalized_status = round_status.strip().lower()
+
+        status_allowed = (
+            round_status is None
+            or normalized_status in {"completed", "cancelled", "canceled", "substitution"}
+        )
+        if not status_allowed:
+            self._log_endstats_transition(
+                log,
+                source,
+                "not_ready_round_status",
+                filename,
+                round_id=round_id,
+                detail=f"round_status={round_status}",
+                level="warning",
+            )
+            return False
+
+        if player_stats_rows <= 0:
+            self._log_endstats_transition(
+                log,
+                source,
+                "not_ready_missing_player_stats",
+                filename,
+                round_id=round_id,
+                detail=f"player_stats_rows={player_stats_rows}",
+                level="warning",
+            )
+            return False
+
+        self._log_endstats_transition(
+            log,
+            source,
+            "ready_to_publish",
+            filename,
+            round_id=round_id,
+            detail=f"round_status={round_status} player_stats_rows={player_stats_rows}",
+        )
+        return True
+
     def _get_endstats_retry_delay(self, attempt: int) -> int:
         delay = self.endstats_retry_base_delay * (2 ** (attempt - 1))
         return min(delay, self.endstats_retry_max_delay)
@@ -4429,12 +4760,25 @@ class UltimateETLegacyBot(commands.Bot):
         endstats_data: dict,
         trigger_message,
     ) -> None:
+        source = "webhook_retry"
         try:
+            self._log_endstats_transition(
+                webhook_logger,
+                source,
+                "retry_attempt",
+                filename,
+                detail=f"attempt={self.endstats_retry_counts.get(filename, 0)}",
+            )
             # If already processed in DB, stop retrying
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
-                webhook_logger.info(f"✅ Endstats already processed during retry: {filename}")
+                self._log_endstats_transition(
+                    webhook_logger,
+                    source,
+                    "already_processed_filename",
+                    filename,
+                )
                 self._clear_endstats_retry_state(filename)
                 return
 
@@ -4460,11 +4804,42 @@ class UltimateETLegacyBot(commands.Bot):
             round_id = await self._resolve_round_id_for_metadata(stats_filename, round_meta)
 
             if not round_id:
+                self._log_endstats_transition(
+                    webhook_logger,
+                    source,
+                    "waiting_round_id",
+                    filename,
+                    detail="round_id_unresolved",
+                    level="warning",
+                )
                 await self._schedule_endstats_retry(
                     filename, local_path, endstats_data, trigger_message
                 )
                 return
-            await self._store_endstats_and_publish(
+
+            self._log_endstats_transition(
+                webhook_logger,
+                source,
+                "round_id_resolved",
+                filename,
+                round_id=round_id,
+            )
+
+            if await self._is_endstats_round_already_processed(
+                round_id, filename, source, webhook_logger
+            ):
+                self._clear_endstats_retry_state(filename)
+                return
+
+            if not await self._is_endstats_round_ready(
+                round_id, filename, source, webhook_logger
+            ):
+                await self._schedule_endstats_retry(
+                    filename, local_path, endstats_data, trigger_message
+                )
+                return
+
+            published = await self._store_endstats_and_publish(
                 filename,
                 endstats_data,
                 round_id,
@@ -4472,7 +4847,13 @@ class UltimateETLegacyBot(commands.Bot):
                 map_name,
                 round_number,
                 webhook_logger,
+                source=source,
             )
+            if not published:
+                await self._schedule_endstats_retry(
+                    filename, local_path, endstats_data, trigger_message
+                )
+                return
 
             self._clear_endstats_retry_state(filename)
 
@@ -4496,74 +4877,189 @@ class UltimateETLegacyBot(commands.Bot):
         map_name: str,
         round_number: int,
         log,
-    ) -> None:
+        source: str = "unknown",
+    ) -> bool:
         awards = endstats_data.get('awards', [])
         vs_stats = endstats_data.get('vs_stats', [])
 
-        # Store awards in database
-        for award in awards:
-            player_guid = None
-            alias_query = """
-                SELECT guid FROM player_aliases
-                WHERE alias = $1
-                ORDER BY last_seen DESC LIMIT 1
-            """
-            alias_result = await self.db_adapter.fetch_one(alias_query, (award['player'],))
-            if alias_result:
-                player_guid = alias_result[0]
+        async with self.db_adapter.transaction():
+            # If this round already has a successful endstats post, skip.
+            existing_success = await self.db_adapter.fetch_one(
+                """
+                SELECT filename, processed_at
+                FROM processed_endstats_files
+                WHERE round_id = $1
+                  AND success = TRUE
+                ORDER BY processed_at DESC NULLS LAST, id DESC
+                LIMIT 1
+                """,
+                (round_id,),
+            )
+            if existing_success and existing_success[0] != filename:
+                self._log_endstats_transition(
+                    log,
+                    source,
+                    "claim_conflict_skip",
+                    filename,
+                    round_id=round_id,
+                    detail=f"existing_filename={existing_success[0]} processed_at={existing_success[1]}",
+                    level="warning",
+                )
+                return True
 
-            insert_query = """
-                INSERT INTO round_awards
-                (round_id, round_date, map_name, round_number, award_name,
-                 player_name, player_guid, award_value, award_value_numeric)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            """
-            await self.db_adapter.execute(insert_query, (
-                round_id, round_date, map_name, round_number,
-                award['name'], award['player'], player_guid,
-                award['value'], award.get('numeric')
-            ))
+            # Claim processing slot first so duplicate filenames/round_ids short-circuit.
+            claim_row = await self.db_adapter.fetch_one(
+                """
+                INSERT INTO processed_endstats_files (filename, round_id, success, error_message, processed_at)
+                VALUES ($1, $2, FALSE, NULL, CURRENT_TIMESTAMP)
+                ON CONFLICT (filename) DO UPDATE SET
+                    round_id = EXCLUDED.round_id,
+                    success = FALSE,
+                    error_message = NULL,
+                    processed_at = CURRENT_TIMESTAMP
+                RETURNING id
+                """,
+                (filename, round_id),
+            )
 
-        log.info(f"✅ Stored {len(awards)} awards")
+            if not claim_row:
+                self._log_endstats_transition(
+                    log,
+                    source,
+                    "claim_conflict_skip",
+                    filename,
+                    round_id=round_id,
+                    detail="claim_upsert_failed",
+                    level="warning",
+                )
+                return True
 
-        # Store VS stats in database
-        for vs in vs_stats:
-            player_guid = None
-            alias_query = """
-                SELECT guid FROM player_aliases
-                WHERE alias = $1
-                ORDER BY last_seen DESC LIMIT 1
-            """
-            alias_result = await self.db_adapter.fetch_one(alias_query, (vs['player'],))
-            if alias_result:
-                player_guid = alias_result[0]
+            self._log_endstats_transition(
+                log,
+                source,
+                "claim_acquired",
+                filename,
+                round_id=round_id,
+                detail=f"claim_id={claim_row[0]}",
+            )
 
-            insert_query = """
-                INSERT INTO round_vs_stats
-                (round_id, round_date, map_name, round_number,
-                 player_name, player_guid, kills, deaths)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            """
-            await self.db_adapter.execute(insert_query, (
-                round_id, round_date, map_name, round_number,
-                vs['player'], player_guid, vs['kills'], vs['deaths']
-            ))
+            # Keep endstats rows idempotent across retries.
+            await self.db_adapter.execute(
+                "DELETE FROM round_awards WHERE round_id = $1",
+                (round_id,),
+            )
+            await self.db_adapter.execute(
+                "DELETE FROM round_vs_stats WHERE round_id = $1",
+                (round_id,),
+            )
 
-        log.info(f"✅ Stored {len(vs_stats)} VS stats")
+            # Store awards in database
+            for award in awards:
+                player_guid = None
+                alias_query = """
+                    SELECT guid FROM player_aliases
+                    WHERE alias = $1
+                    ORDER BY last_seen DESC LIMIT 1
+                """
+                alias_result = await self.db_adapter.fetch_one(alias_query, (award['player'],))
+                if alias_result:
+                    player_guid = alias_result[0]
 
-        # Mark file as processed
-        processed_query = """
-            INSERT INTO processed_endstats_files (filename, round_id, success)
-            VALUES ($1, $2, TRUE)
-        """
-        await self.db_adapter.execute(processed_query, (filename, round_id))
+                insert_query = """
+                    INSERT INTO round_awards
+                    (round_id, round_date, map_name, round_number, award_name,
+                     player_name, player_guid, award_value, award_value_numeric)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                """
+                await self.db_adapter.execute(insert_query, (
+                    round_id, round_date, map_name, round_number,
+                    award['name'], award['player'], player_guid,
+                    award['value'], award.get('numeric')
+                ))
 
-        # Post endstats embed to production channel
-        await self.round_publisher.publish_endstats(
+            log.info(f"✅ Stored {len(awards)} awards")
+
+            # Store VS stats in database
+            for vs in vs_stats:
+                player_guid = None
+                alias_query = """
+                    SELECT guid FROM player_aliases
+                    WHERE alias = $1
+                    ORDER BY last_seen DESC LIMIT 1
+                """
+                alias_result = await self.db_adapter.fetch_one(alias_query, (vs['player'],))
+                if alias_result:
+                    player_guid = alias_result[0]
+
+                insert_query = """
+                    INSERT INTO round_vs_stats
+                    (round_id, round_date, map_name, round_number,
+                     player_name, player_guid, kills, deaths)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                """
+                await self.db_adapter.execute(insert_query, (
+                    round_id, round_date, map_name, round_number,
+                    vs['player'], player_guid, vs['kills'], vs['deaths']
+                ))
+
+            log.info(f"✅ Stored {len(vs_stats)} VS stats")
+
+        self._log_endstats_transition(
+            log,
+            source,
+            "db_persisted",
+            filename,
+            round_id=round_id,
+            detail=f"awards={len(awards)} vs_rows={len(vs_stats)}",
+        )
+
+        published = await self.round_publisher.publish_endstats(
             filename, endstats_data, round_id, map_name, round_number
         )
 
-        log.info(f"✅ Successfully processed endstats: {filename}")
+        if not published:
+            await self.db_adapter.execute(
+                """
+                UPDATE processed_endstats_files
+                SET round_id = $2,
+                    success = FALSE,
+                    error_message = $3,
+                    processed_at = CURRENT_TIMESTAMP
+                WHERE filename = $1
+                """,
+                (filename, round_id, "publish_failed"),
+            )
+            self._log_endstats_transition(
+                log,
+                source,
+                "publish_failed",
+                filename,
+                round_id=round_id,
+                detail="publish_endstats returned false",
+                level="warning",
+            )
+            return False
+
+        await self.db_adapter.execute(
+            """
+            UPDATE processed_endstats_files
+            SET round_id = $2,
+                success = TRUE,
+                error_message = NULL,
+                processed_at = CURRENT_TIMESTAMP
+            WHERE filename = $1
+            """,
+            (filename, round_id),
+        )
+
+        self._log_endstats_transition(
+            log,
+            source,
+            "published",
+            filename,
+            round_id=round_id,
+        )
+        return True
 
     async def _process_endstats_file(self, local_path: str, filename: str):
         """
@@ -4573,8 +5069,15 @@ class UltimateETLegacyBot(commands.Bot):
         Parses awards/VS stats, stores in DB, posts embed.
         Endstats file: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
         """
+        source = "polling"
         try:
-            logger.info(f"🏆 Processing endstats file: {filename}")
+            self._log_endstats_transition(
+                logger,
+                source,
+                "received",
+                filename,
+                detail=f"local_path={local_path}",
+            )
 
             # Import parser
             from bot.endstats_parser import parse_endstats_file
@@ -4582,14 +5085,26 @@ class UltimateETLegacyBot(commands.Bot):
             # Check if already processed (prevent duplicates)
             # First check in-memory set (fast, prevents race with webhook)
             if filename in self.processed_endstats_files:
-                logger.debug(f"⏭️ Endstats already in progress: {filename}")
+                self._log_endstats_transition(
+                    logger,
+                    source,
+                    "in_memory_skip",
+                    filename,
+                    detail="already_in_memory_set",
+                )
                 return
 
             # Then check database table
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
-                logger.debug(f"⏭️ Endstats already processed: {filename}")
+                self._log_endstats_transition(
+                    logger,
+                    source,
+                    "db_filename_skip",
+                    filename,
+                    detail="already_processed_filename",
+                )
                 self.processed_endstats_files.add(filename)  # Sync to memory
                 return
 
@@ -4628,17 +5143,39 @@ class UltimateETLegacyBot(commands.Bot):
             round_id = await self._resolve_round_id_for_metadata(stats_filename, round_meta)
 
             if not round_id:
-                logger.warning(
-                    f"⏳ Round not found yet for endstats {filename}. "
-                    f"Main stats file may not be processed yet. Will retry next poll."
+                self._log_endstats_transition(
+                    logger,
+                    source,
+                    "waiting_round_id",
+                    filename,
+                    detail="round_id_unresolved_next_poll",
+                    level="warning",
                 )
                 # Remove from in-memory set to allow retry on next polling cycle
                 self.processed_endstats_files.discard(filename)
                 return
 
-            logger.info(f"✅ Linked to round_id={round_id}")
+            self._log_endstats_transition(
+                logger,
+                source,
+                "round_id_resolved",
+                filename,
+                round_id=round_id,
+            )
 
-            await self._store_endstats_and_publish(
+            if await self._is_endstats_round_already_processed(
+                round_id, filename, source, logger
+            ):
+                return
+
+            if not await self._is_endstats_round_ready(
+                round_id, filename, source, logger
+            ):
+                # Not ready in polling path: release in-memory marker and retry next cycle.
+                self.processed_endstats_files.discard(filename)
+                return
+
+            published = await self._store_endstats_and_publish(
                 filename,
                 endstats_data,
                 round_id,
@@ -4646,7 +5183,11 @@ class UltimateETLegacyBot(commands.Bot):
                 map_name,
                 round_number,
                 logger,
+                source=source,
             )
+            if not published:
+                # Release in-memory marker so polling can retry later.
+                self.processed_endstats_files.discard(filename)
 
         except Exception as e:
             logger.error(f"❌ Error processing endstats file: {e}", exc_info=True)
@@ -4659,8 +5200,14 @@ class UltimateETLegacyBot(commands.Bot):
         Downloads file via SSH, parses awards/VS stats, stores in DB, posts embed.
         Endstats file: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
         """
+        source = "webhook"
         try:
-            webhook_logger.info(f"🏆 Processing webhook-triggered endstats: {filename}")
+            self._log_endstats_transition(
+                webhook_logger,
+                source,
+                "received",
+                filename,
+            )
 
             # Import parser
             from bot.endstats_parser import parse_endstats_file
@@ -4668,7 +5215,13 @@ class UltimateETLegacyBot(commands.Bot):
             # Check if already processed (prevent duplicates)
             # First check in-memory set (fast, prevents race with polling)
             if filename in self.processed_endstats_files:
-                webhook_logger.debug(f"⏭️ Endstats already in progress: {filename}")
+                self._log_endstats_transition(
+                    webhook_logger,
+                    source,
+                    "in_memory_skip",
+                    filename,
+                    detail="already_in_memory_set",
+                )
                 try:
                     await trigger_message.delete()
                 except discord.DiscordException:
@@ -4676,10 +5229,16 @@ class UltimateETLegacyBot(commands.Bot):
                 return
 
             # Then check database table
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
-                webhook_logger.debug(f"⏭️ Endstats already processed: {filename}")
+                self._log_endstats_transition(
+                    webhook_logger,
+                    source,
+                    "db_filename_skip",
+                    filename,
+                    detail="already_processed_filename",
+                )
                 self.processed_endstats_files.add(filename)  # Sync to memory
                 try:
                     await trigger_message.delete()
@@ -4754,9 +5313,13 @@ class UltimateETLegacyBot(commands.Bot):
             round_id = await self._resolve_round_id_for_metadata(stats_filename, round_meta)
 
             if not round_id:
-                webhook_logger.warning(
-                    f"⏳ Round not found yet for endstats {filename}. "
-                    f"Main stats file may not be processed yet. Scheduling retry."
+                self._log_endstats_transition(
+                    webhook_logger,
+                    source,
+                    "waiting_round_id",
+                    filename,
+                    detail="round_id_unresolved_schedule_retry",
+                    level="warning",
                 )
                 try:
                     await trigger_message.add_reaction('⏳')
@@ -4767,9 +5330,36 @@ class UltimateETLegacyBot(commands.Bot):
                 )
                 return
 
-            webhook_logger.info(f"✅ Linked to round_id={round_id}")
+            self._log_endstats_transition(
+                webhook_logger,
+                source,
+                "round_id_resolved",
+                filename,
+                round_id=round_id,
+            )
 
-            await self._store_endstats_and_publish(
+            if await self._is_endstats_round_already_processed(
+                round_id, filename, source, webhook_logger
+            ):
+                try:
+                    await trigger_message.delete()
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
+                return
+
+            if not await self._is_endstats_round_ready(
+                round_id, filename, source, webhook_logger
+            ):
+                try:
+                    await trigger_message.add_reaction('⏳')
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
+                await self._schedule_endstats_retry(
+                    filename, local_path, endstats_data, trigger_message
+                )
+                return
+
+            published = await self._store_endstats_and_publish(
                 filename,
                 endstats_data,
                 round_id,
@@ -4777,7 +5367,17 @@ class UltimateETLegacyBot(commands.Bot):
                 map_name,
                 round_number,
                 webhook_logger,
+                source=source,
             )
+            if not published:
+                try:
+                    await trigger_message.add_reaction('⏳')
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
+                await self._schedule_endstats_retry(
+                    filename, local_path, endstats_data, trigger_message
+                )
+                return
 
             # Delete the trigger message
             try:

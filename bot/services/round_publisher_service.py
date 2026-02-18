@@ -681,7 +681,7 @@ class RoundPublisherService:
         round_id: int,
         map_name: str,
         round_number: int
-    ):
+    ) -> bool:
         """
         Post endstats (awards and VS stats) embed to Discord.
 
@@ -701,12 +701,12 @@ class RoundPublisherService:
             # Get production channel
             if not self.config.production_channel_id:
                 logger.warning("⚠️ PRODUCTION_CHANNEL_ID not configured")
-                return
+                return False
 
             channel = self.bot.get_channel(self.config.production_channel_id)
             if not channel:
                 logger.error("❌ Production channel not found")
-                return
+                return False
 
             awards = endstats_data.get('awards', [])
             vs_stats = endstats_data.get('vs_stats', [])
@@ -781,6 +781,8 @@ class RoundPublisherService:
             # Post embed
             await channel.send(embed=embed)
             logger.info(f"✅ Endstats embed posted for {filename}")
+            return True
 
         except Exception as e:
             logger.error(f"❌ Error publishing endstats: {e}", exc_info=True)
+            return False

@@ -3,7 +3,7 @@
 -- ============================================================================
 -- Generated from production database: 2026-02-08
 -- PostgreSQL 14 | Database: etlegacy
--- Total tables: 36 (excluding one-off backup tables)
+-- Total tables: 37 (excluding one-off backup tables)
 --
 -- Sections:
 --   1. Core Bot Tables (7)
@@ -191,6 +191,16 @@ CREATE TABLE IF NOT EXISTS player_aliases (
     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     times_seen INTEGER DEFAULT 1,
     UNIQUE(guid, alias)
+);
+
+-- Achievement notification ledger: Restart-safe dedupe for live milestone posts
+CREATE TABLE IF NOT EXISTS achievement_notification_ledger (
+    id SERIAL PRIMARY KEY,
+    achievement_id TEXT UNIQUE NOT NULL,
+    player_guid TEXT NOT NULL,
+    achievement_type VARCHAR(16) NOT NULL,
+    milestone_threshold TEXT NOT NULL,
+    claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 
@@ -803,6 +813,8 @@ CREATE INDEX IF NOT EXISTS idx_round_awards_name ON round_awards(award_name);
 CREATE INDEX IF NOT EXISTS idx_round_vs_stats_round ON round_vs_stats(round_id);
 CREATE INDEX IF NOT EXISTS idx_round_vs_stats_player ON round_vs_stats(player_guid);
 CREATE INDEX IF NOT EXISTS idx_processed_endstats_filename ON processed_endstats_files(filename);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_processed_endstats_round_id ON processed_endstats_files(round_id) WHERE round_id IS NOT NULL AND success = TRUE;
+CREATE INDEX IF NOT EXISTS idx_achievement_ledger_player_guid ON achievement_notification_ledger(player_guid);
 
 -- Predictions indexes
 CREATE INDEX IF NOT EXISTS idx_predictions_session_date ON match_predictions(session_date);
