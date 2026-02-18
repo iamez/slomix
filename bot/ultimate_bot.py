@@ -4593,12 +4593,45 @@ class UltimateETLegacyBot(commands.Bot):
             detail,
         )
 
+    def _summarize_endstats_quality(self, endstats_data: dict | None) -> tuple[int, int]:
+        if not isinstance(endstats_data, dict):
+            return (0, 0)
+        awards = endstats_data.get("awards")
+        vs_stats = endstats_data.get("vs_stats")
+        awards_count = len(awards) if isinstance(awards, list) else 0
+        vs_count = len(vs_stats) if isinstance(vs_stats, list) else 0
+        return (awards_count, vs_count)
+
+    def _is_endstats_quality_better(
+        self,
+        incoming_quality: tuple[int, int],
+        existing_quality: tuple[int, int],
+    ) -> bool:
+        return incoming_quality > existing_quality
+
+    async def _get_round_endstats_quality(self, round_id: int) -> tuple[int, int]:
+        row = await self.db_adapter.fetch_one(
+            """
+            SELECT
+                (SELECT COUNT(*) FROM round_awards WHERE round_id = $1) AS awards_count,
+                (SELECT COUNT(*) FROM round_vs_stats WHERE round_id = $1) AS vs_count
+            """,
+            (round_id,),
+        )
+        if not row:
+            return (0, 0)
+        try:
+            return (int(row[0] or 0), int(row[1] or 0))
+        except (TypeError, ValueError, IndexError):
+            return (0, 0)
+
     async def _is_endstats_round_already_processed(
         self,
         round_id: int,
         filename: str,
         source: str,
         log,
+        endstats_data: dict | None = None,
     ) -> bool:
         existing = await self.db_adapter.fetch_one(
             """
@@ -4616,13 +4649,46 @@ class UltimateETLegacyBot(commands.Bot):
 
         existing_filename = existing[0]
         processed_at = existing[1]
+
+        if existing_filename == filename:
+            self._log_endstats_transition(
+                log,
+                source,
+                "duplicate_round_skip",
+                filename,
+                round_id=round_id,
+                detail=f"existing_filename={existing_filename} processed_at={processed_at}",
+                level="warning",
+            )
+            return True
+
+        incoming_quality = self._summarize_endstats_quality(endstats_data)
+        existing_quality = await self._get_round_endstats_quality(round_id)
+        if self._is_endstats_quality_better(incoming_quality, existing_quality):
+            self._log_endstats_transition(
+                log,
+                source,
+                "duplicate_round_upgrade_candidate",
+                filename,
+                round_id=round_id,
+                detail=(
+                    f"existing_filename={existing_filename} existing_quality={existing_quality} "
+                    f"incoming_quality={incoming_quality}"
+                ),
+                level="warning",
+            )
+            return False
+
         self._log_endstats_transition(
             log,
             source,
             "duplicate_round_skip",
             filename,
             round_id=round_id,
-            detail=f"existing_filename={existing_filename} processed_at={processed_at}",
+            detail=(
+                f"existing_filename={existing_filename} processed_at={processed_at} "
+                f"existing_quality={existing_quality} incoming_quality={incoming_quality}"
+            ),
             level="warning",
         )
         return True
@@ -4708,7 +4774,8 @@ class UltimateETLegacyBot(commands.Bot):
     def _clear_endstats_retry_state(self, filename: str) -> None:
         self.endstats_retry_counts.pop(filename, None)
         task = self.endstats_retry_tasks.pop(filename, None)
-        if task and not task.done():
+        current_task = asyncio.current_task()
+        if task and not task.done() and task is not current_task:
             task.cancel()
 
     async def _schedule_endstats_retry(
@@ -4720,8 +4787,13 @@ class UltimateETLegacyBot(commands.Bot):
     ) -> None:
         existing = self.endstats_retry_tasks.get(filename)
         if existing and not existing.done():
-            webhook_logger.debug(f"⏳ Retry already scheduled for endstats: {filename}")
-            return
+            current_task = asyncio.current_task()
+            if existing is current_task:
+                # Called from inside the active retry task; allow scheduling the next attempt.
+                self.endstats_retry_tasks.pop(filename, None)
+            else:
+                webhook_logger.debug(f"⏳ Retry already scheduled for endstats: {filename}")
+                return
 
         attempt = self.endstats_retry_counts.get(filename, 0) + 1
         self.endstats_retry_counts[filename] = attempt
@@ -4826,7 +4898,7 @@ class UltimateETLegacyBot(commands.Bot):
             )
 
             if await self._is_endstats_round_already_processed(
-                round_id, filename, source, webhook_logger
+                round_id, filename, source, webhook_logger, endstats_data
             ):
                 self._clear_endstats_retry_state(filename)
                 return
@@ -4881,6 +4953,8 @@ class UltimateETLegacyBot(commands.Bot):
     ) -> bool:
         awards = endstats_data.get('awards', [])
         vs_stats = endstats_data.get('vs_stats', [])
+        incoming_quality = self._summarize_endstats_quality(endstats_data)
+        should_publish = True
 
         async with self.db_adapter.transaction():
             # If this round already has a successful endstats post, skip.
@@ -4895,17 +4969,61 @@ class UltimateETLegacyBot(commands.Bot):
                 """,
                 (round_id,),
             )
-            if existing_success and existing_success[0] != filename:
+            if existing_success:
+                existing_filename = existing_success[0]
+                processed_at = existing_success[1]
+                if existing_filename == filename:
+                    self._log_endstats_transition(
+                        log,
+                        source,
+                        "claim_conflict_skip",
+                        filename,
+                        round_id=round_id,
+                        detail=f"existing_filename={existing_filename} processed_at={processed_at}",
+                        level="warning",
+                    )
+                    return True
+
+                existing_quality = await self._get_round_endstats_quality(round_id)
+                if not self._is_endstats_quality_better(incoming_quality, existing_quality):
+                    self._log_endstats_transition(
+                        log,
+                        source,
+                        "duplicate_poorer_skip",
+                        filename,
+                        round_id=round_id,
+                        detail=(
+                            f"existing_filename={existing_filename} processed_at={processed_at} "
+                            f"existing_quality={existing_quality} incoming_quality={incoming_quality}"
+                        ),
+                        level="warning",
+                    )
+                    return True
+
+                should_publish = False
+                await self.db_adapter.execute(
+                    """
+                    UPDATE processed_endstats_files
+                    SET success = FALSE,
+                        error_message = $2,
+                        processed_at = CURRENT_TIMESTAMP
+                    WHERE round_id = $1
+                      AND success = TRUE
+                    """,
+                    (round_id, f"superseded_by_richer_payload:{filename}"),
+                )
                 self._log_endstats_transition(
                     log,
                     source,
-                    "claim_conflict_skip",
+                    "duplicate_richer_selected",
                     filename,
                     round_id=round_id,
-                    detail=f"existing_filename={existing_success[0]} processed_at={existing_success[1]}",
+                    detail=(
+                        f"replacing_filename={existing_filename} "
+                        f"existing_quality={existing_quality} incoming_quality={incoming_quality}"
+                    ),
                     level="warning",
                 )
-                return True
 
             # Claim processing slot first so duplicate filenames/round_ids short-circuit.
             claim_row = await self.db_adapter.fetch_one(
@@ -5013,9 +5131,21 @@ class UltimateETLegacyBot(commands.Bot):
             detail=f"awards={len(awards)} vs_rows={len(vs_stats)}",
         )
 
-        published = await self.round_publisher.publish_endstats(
-            filename, endstats_data, round_id, map_name, round_number
-        )
+        published = True
+        if should_publish:
+            published = await self.round_publisher.publish_endstats(
+                filename, endstats_data, round_id, map_name, round_number
+            )
+        else:
+            self._log_endstats_transition(
+                log,
+                source,
+                "publish_skipped_round_already_posted",
+                filename,
+                round_id=round_id,
+                detail="richer_payload_applied_db_only",
+                level="warning",
+            )
 
         if not published:
             await self.db_adapter.execute(
@@ -5164,7 +5294,7 @@ class UltimateETLegacyBot(commands.Bot):
             )
 
             if await self._is_endstats_round_already_processed(
-                round_id, filename, source, logger
+                round_id, filename, source, logger, endstats_data
             ):
                 return
 
@@ -5339,7 +5469,7 @@ class UltimateETLegacyBot(commands.Bot):
             )
 
             if await self._is_endstats_round_already_processed(
-                round_id, filename, source, webhook_logger
+                round_id, filename, source, webhook_logger, endstats_data
             ):
                 try:
                     await trigger_message.delete()
