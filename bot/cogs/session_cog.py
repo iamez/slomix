@@ -40,7 +40,6 @@ from bot.services.player_display_name_service import PlayerDisplayNameService
 
 # Import shared utilities
 from bot.stats import StatsCalculator
-from tools.stopwatch_scoring import StopwatchScoring
 
 logger = logging.getLogger("UltimateBot.SessionCog")
 
