@@ -16,6 +16,9 @@ _WINNER_MAP = {
     "axis": "axis",
     "2": "allies",
     "1": "axis",
+    "0": "draw",
+    "draw": "draw",
+    "none": "draw",
 }
 
 
@@ -62,6 +65,11 @@ async def _resolve_kd_ratio_column(db) -> str:
     if _KD_RATIO_COLUMN_CACHE:
         return _KD_RATIO_COLUMN_CACHE
 
+    # Test doubles may only implement fetch_all; default safely.
+    if not hasattr(db, "fetch_one"):
+        _KD_RATIO_COLUMN_CACHE = "kd_ratio"
+        return _KD_RATIO_COLUMN_CACHE
+
     for column in _KD_RATIO_COLUMN_CANDIDATES:
         row = await db.fetch_one(
             """
@@ -106,8 +114,8 @@ async def _calculate_player_overlap(
     if not db_result:
         return 0.0
 
-    db_players = set([row[0].lower().strip() for row in db_result])
-    demo_players = set([name.lower().strip() for name in demo_player_names])
+    db_players = set([str(row[0]).lower().strip() for row in db_result if row[0] is not None])
+    demo_players = set([str(name).lower().strip() for name in demo_player_names if name is not None])
 
     overlap_count = len(demo_players & db_players)
     return overlap_count / len(demo_players)

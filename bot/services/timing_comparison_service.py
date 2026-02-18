@@ -229,6 +229,11 @@ class TimingComparisonService:
                 LIMIT 1
             """
             row = await self.db_adapter.fetch_one(direct_query, (round_id,))
+            if not row:
+                logger.info(
+                    "round_id join miss: round_id=%d map=%s rn=%d — falling back to fuzzy match",
+                    round_id, map_name, round_number,
+                )
             if row:
                 (id_, match_id, rn, mn, start_unix, end_unix, duration,
                  pause_sec, pause_count, end_reason, winner, defender, timelimit,
@@ -353,6 +358,18 @@ class TimingComparisonService:
                     'match_confidence': 'high' if time_diff < timedelta(minutes=10) else 'medium'
                 }
 
+        if best_match:
+            logger.info(
+                "fuzzy match hit: round_id=%s map=%s rn=%d confidence=%s diff=%ds",
+                round_id, map_name, round_number,
+                best_match['match_confidence'],
+                int(min_diff.total_seconds()),
+            )
+        else:
+            logger.warning(
+                "fuzzy match miss: round_id=%s map=%s rn=%d — no lua_round_teams row within 30min window",
+                round_id, map_name, round_number,
+            )
         return best_match
 
     def _parse_round_datetime(self, round_date: str, round_time: str) -> Optional[datetime]:

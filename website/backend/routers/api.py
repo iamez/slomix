@@ -571,6 +571,9 @@ async def get_lua_webhook_diagnostics(db: DatabaseAdapter = Depends(get_db)):
     payload = {
         "status": "ok",
         "counts": {},
+        "linkage_health": {},
+        "r1_r2_coverage": [],
+        "orphans": [],
         "latest": None,
         "recent": [],
         "trends": {
@@ -601,6 +604,72 @@ async def get_lua_webhook_diagnostics(db: DatabaseAdapter = Depends(get_db)):
         payload["counts"]["unlinked_24h"] = int(unlinked_24h or 0)
     except Exception as e:
         payload["errors"].append(f"count_24h_failed: {e}")
+
+    # --- Linkage health summary ---
+    try:
+        total_count = payload["counts"].get("total", 0)
+        unlinked_count = payload["counts"].get("unlinked_total", 0)
+        linked_count = total_count - unlinked_count
+        pct = round(100.0 * linked_count / total_count, 1) if total_count else 0.0
+        payload["linkage_health"] = {
+            "linked": linked_count,
+            "orphans": unlinked_count,
+            "linkage_pct": pct,
+            "status": "healthy" if pct >= 90 else ("degraded" if pct >= 50 else "poor"),
+        }
+    except Exception as e:
+        payload["errors"].append(f"linkage_health_failed: {e}")
+
+    # --- R1/R2 coverage ---
+    try:
+        coverage_rows = await db.fetch_all(
+            """
+            SELECT
+                r.round_number,
+                COUNT(*) AS total_rounds,
+                COUNT(l.id) AS with_lua,
+                COUNT(*) - COUNT(l.id) AS without_lua,
+                ROUND(100.0 * COUNT(l.id) / NULLIF(COUNT(*), 0), 1) AS coverage_pct
+            FROM rounds r
+            LEFT JOIN lua_round_teams l ON l.round_id = r.id
+            WHERE r.round_number IN (1, 2)
+            GROUP BY r.round_number
+            ORDER BY r.round_number
+            """
+        )
+        for rn, total_r, with_lua, without_lua, cov_pct in coverage_rows:
+            payload["r1_r2_coverage"].append({
+                "round_number": int(rn),
+                "total_rounds": int(total_r or 0),
+                "with_lua": int(with_lua or 0),
+                "without_lua": int(without_lua or 0),
+                "coverage_pct": float(cov_pct or 0),
+            })
+    except Exception as e:
+        payload["errors"].append(f"r1_r2_coverage_failed: {e}")
+
+    # --- Orphan details ---
+    try:
+        orphan_rows = await db.fetch_all(
+            """
+            SELECT id, match_id, map_name, round_number, round_start_unix, captured_at
+            FROM lua_round_teams
+            WHERE round_id IS NULL
+            ORDER BY id
+            LIMIT 20
+            """
+        )
+        for oid, mid, mname, rnum, rstart, cap_at in orphan_rows:
+            payload["orphans"].append({
+                "id": int(oid),
+                "match_id": mid,
+                "map_name": mname,
+                "round_number": int(rnum),
+                "round_start_unix": int(rstart or 0),
+                "captured_at": cap_at.isoformat() if cap_at else None,
+            })
+    except Exception as e:
+        payload["errors"].append(f"orphans_failed: {e}")
 
     try:
         row = await db.fetch_one(
@@ -7061,7 +7130,7 @@ async def get_proximity_movers(
         )
         sprint_rows = await db.fetch_all(
             "SELECT player_guid, player_name, AVG(sprint_percentage) AS sprint_pct, COUNT(*) AS tracks "
-            f"FROM player_track {where_sql} "
+            f"FROM player_track {where_sql} AND sprint_percentage IS NOT NULL "
             "GROUP BY player_guid, player_name "
             f"ORDER BY sprint_pct DESC NULLS LAST LIMIT ${limit_placeholder}",
             query_params,
@@ -7610,3 +7679,469 @@ async def get_proximity_event(event_id: int, db: DatabaseAdapter = Depends(get_d
         response["strafe"] = None
 
     return response
+
+
+# ========================================
+# HALL OF FAME
+# ========================================
+
+
+@router.get("/hall-of-fame")
+async def get_hall_of_fame(
+    period: str = "all_time",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    season_id: Optional[int] = None,
+    limit: int = 10,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Hall of Fame: top players across multiple stat categories."""
+    limit = max(1, min(limit, 100))
+
+    # Build date filter
+    date_filter = ""
+    params: list = []
+    param_idx = 1
+
+    if period == "season" or season_id is not None:
+        sm = SeasonManager()
+        season_start, season_end = sm.get_season_dates(season_id)
+        date_filter = f"AND pcs.round_date >= ${param_idx} AND pcs.round_date <= ${param_idx + 1}"
+        params.extend([season_start.strftime("%Y-%m-%d"), season_end.strftime("%Y-%m-%d")])
+        param_idx += 2
+    elif period == "custom" and start_date and end_date:
+        try:
+            datetime.strptime(start_date, "%Y-%m-%d")
+            datetime.strptime(end_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+        date_filter = f"AND pcs.round_date >= ${param_idx} AND pcs.round_date <= ${param_idx + 1}"
+        params.extend([start_date, end_date])
+        param_idx += 2
+    elif period == "7d":
+        cutoff = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        date_filter = f"AND pcs.round_date >= ${param_idx}"
+        params.append(cutoff)
+        param_idx += 1
+    elif period == "14d":
+        cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
+        date_filter = f"AND pcs.round_date >= ${param_idx}"
+        params.append(cutoff)
+        param_idx += 1
+    elif period == "30d":
+        cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        date_filter = f"AND pcs.round_date >= ${param_idx}"
+        params.append(cutoff)
+        param_idx += 1
+    elif period == "90d":
+        cutoff = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+        date_filter = f"AND pcs.round_date >= ${param_idx}"
+        params.append(cutoff)
+        param_idx += 1
+    # else: all_time - no date filter
+
+    limit_param = f"${param_idx}"
+    params.append(limit)
+
+    try:
+        categories = {}
+
+        # --- Simple aggregation categories ---
+        simple_cats = {
+            "most_active": ("COUNT(*)", "rounds"),
+            "most_damage": ("SUM(pcs.damage_given)", "damage"),
+            "most_kills": ("SUM(pcs.kills)", "kills"),
+            "most_revives": ("SUM(pcs.revives_given)", "revives"),
+            "most_xp": ("SUM(pcs.xp)", "xp"),
+            "most_assists": ("SUM(pcs.kill_assists)", "assists"),
+            "most_deaths": ("SUM(pcs.deaths)", "deaths"),
+            "most_selfkills": ("SUM(pcs.self_kills)", "selfkills"),
+            "most_full_selfkills": ("SUM(pcs.full_selfkills)", "full_selfkills"),
+        }
+
+        for cat_name, (agg_expr, unit) in simple_cats.items():
+            # nosec B608 - agg_expr and date_filter are static/controlled strings
+            query = f"""
+                SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
+                       {agg_expr} as value
+                FROM player_comprehensive_stats pcs
+                WHERE pcs.time_played_seconds > 0 {date_filter}
+                GROUP BY pcs.player_guid
+                ORDER BY value DESC
+                LIMIT {limit_param}
+            """
+            rows = await db.fetch_all(query, tuple(params))
+            entries = []
+            for rank, row in enumerate(rows, 1):
+                name = await resolve_display_name(db, row[0], row[1] or "Unknown")
+                entries.append({
+                    "rank": rank,
+                    "player_guid": row[0],
+                    "player_name": name,
+                    "value": int(row[2]) if row[2] is not None else 0,
+                    "unit": unit,
+                })
+            categories[cat_name] = entries
+
+        # --- most_wins: join with rounds to check winner_team ---
+        wins_query = f"""
+            SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
+                   COUNT(*) as value
+            FROM player_comprehensive_stats pcs
+            JOIN rounds r ON pcs.round_id = r.id
+            WHERE pcs.time_played_seconds > 0
+              AND r.winner_team != 0
+              AND pcs.team = r.winner_team
+              {date_filter}
+            GROUP BY pcs.player_guid
+            ORDER BY value DESC
+            LIMIT {limit_param}
+        """
+        rows = await db.fetch_all(wins_query, tuple(params))
+        entries = []
+        for rank, row in enumerate(rows, 1):
+            name = await resolve_display_name(db, row[0], row[1] or "Unknown")
+            entries.append({
+                "rank": rank,
+                "player_guid": row[0],
+                "player_name": name,
+                "value": int(row[2]) if row[2] is not None else 0,
+                "unit": "wins",
+            })
+        categories["most_wins"] = entries
+
+        # --- most_dpm: damage per minute with min 10 rounds ---
+        dpm_min_rounds_param = f"${param_idx + 1}"
+        dpm_params = list(params) + [10]
+        dpm_query = f"""
+            SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
+                   ROUND((SUM(pcs.damage_given)::numeric / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0)), 2) as value,
+                   COUNT(*) as rounds_played
+            FROM player_comprehensive_stats pcs
+            WHERE pcs.time_played_seconds > 0 {date_filter}
+            GROUP BY pcs.player_guid
+            HAVING COUNT(*) >= {dpm_min_rounds_param}
+            ORDER BY value DESC
+            LIMIT {limit_param}
+        """
+        rows = await db.fetch_all(dpm_query, tuple(dpm_params))
+        entries = []
+        for rank, row in enumerate(rows, 1):
+            name = await resolve_display_name(db, row[0], row[1] or "Unknown")
+            entries.append({
+                "rank": rank,
+                "player_guid": row[0],
+                "player_name": name,
+                "value": float(row[2]) if row[2] is not None else 0.0,
+                "unit": "dpm",
+            })
+        categories["most_dpm"] = entries
+
+        # --- most_consecutive_games: consecutive gaming sessions ---
+        # gaming_session_id lives on rounds, not player_comprehensive_stats
+        consec_query = f"""
+            WITH player_sessions AS (
+                SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
+                       r.gaming_session_id
+                FROM player_comprehensive_stats pcs
+                JOIN rounds r ON pcs.round_id = r.id
+                WHERE pcs.time_played_seconds > 0
+                  AND r.gaming_session_id IS NOT NULL
+                  {date_filter}
+                GROUP BY pcs.player_guid, r.gaming_session_id
+            ),
+            all_sessions AS (
+                SELECT DISTINCT r2.gaming_session_id
+                FROM rounds r2
+                JOIN player_comprehensive_stats pcs2 ON pcs2.round_id = r2.id
+                WHERE r2.gaming_session_id IS NOT NULL
+                  AND pcs2.time_played_seconds > 0
+                  {date_filter.replace('pcs.', 'pcs2.')}
+                ORDER BY r2.gaming_session_id
+            ),
+            numbered AS (
+                SELECT ps.player_guid, ps.player_name, ps.gaming_session_id,
+                       ROW_NUMBER() OVER (ORDER BY a.gaming_session_id) as global_rank,
+                       ROW_NUMBER() OVER (PARTITION BY ps.player_guid ORDER BY ps.gaming_session_id) as player_rank
+                FROM player_sessions ps
+                JOIN all_sessions a ON ps.gaming_session_id = a.gaming_session_id
+            ),
+            streaks AS (
+                SELECT player_guid, MAX(player_name) as player_name,
+                       COUNT(*) as streak_len
+                FROM numbered
+                GROUP BY player_guid, (global_rank - player_rank)
+            )
+            SELECT player_guid, MAX(player_name) as player_name,
+                   MAX(streak_len) as value
+            FROM streaks
+            GROUP BY player_guid
+            ORDER BY value DESC
+            LIMIT {limit_param}
+        """
+        rows = await db.fetch_all(consec_query, tuple(params))
+        entries = []
+        for rank, row in enumerate(rows, 1):
+            name = await resolve_display_name(db, row[0], row[1] or "Unknown")
+            entries.append({
+                "rank": rank,
+                "player_guid": row[0],
+                "player_name": name,
+                "value": int(row[2]) if row[2] is not None else 0,
+                "unit": "sessions",
+            })
+        categories["most_consecutive_games"] = entries
+
+        return {
+            "categories": categories,
+            "period": period,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(f"Hall of Fame query failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate Hall of Fame data")
+
+
+# ========================================
+# STATS TRENDS
+# ========================================
+
+
+@router.get("/stats/trends")
+async def get_stats_trends(
+    days: int = 14,
+    metrics: str = "rounds,active_players,kills,maps",
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Time-series trends for activity metrics."""
+    days = max(1, min(days, 90))
+    requested = {m.strip() for m in metrics.split(",")}
+
+    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    end_date = datetime.now().strftime("%Y-%m-%d")
+
+    try:
+        # Generate full date range
+        date_list = []
+        current = datetime.now() - timedelta(days=days)
+        while current.date() <= datetime.now().date():
+            date_list.append(current.strftime("%Y-%m-%d"))
+            current += timedelta(days=1)
+
+        result: Dict[str, Any] = {"dates": date_list}
+
+        if "rounds" in requested or "active_players" in requested or "kills" in requested:
+            query = """
+                SELECT SUBSTR(CAST(r.round_date AS TEXT), 1, 10) as day,
+                       COUNT(DISTINCT r.id) as round_count,
+                       COUNT(DISTINCT pcs.player_guid) as player_count,
+                       COALESCE(SUM(pcs.kills), 0) as total_kills
+                FROM rounds r
+                LEFT JOIN player_comprehensive_stats pcs ON pcs.round_id = r.id
+                WHERE SUBSTR(CAST(r.round_date AS TEXT), 1, 10) >= $1
+                  AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) <= $2
+                  AND r.round_number IN (1, 2)
+                GROUP BY day
+                ORDER BY day
+            """
+            rows = await db.fetch_all(query, (start_date, end_date))
+
+            day_data = {}
+            for row in rows:
+                day_data[row[0]] = {
+                    "rounds": int(row[1]),
+                    "active_players": int(row[2]),
+                    "kills": int(row[3]),
+                }
+
+            if "rounds" in requested:
+                result["rounds"] = [day_data.get(d, {}).get("rounds", 0) for d in date_list]
+            if "active_players" in requested:
+                result["active_players"] = [day_data.get(d, {}).get("active_players", 0) for d in date_list]
+            if "kills" in requested:
+                result["kills"] = [day_data.get(d, {}).get("kills", 0) for d in date_list]
+
+        if "maps" in requested:
+            map_query = """
+                SELECT r.map_name, COUNT(*) as play_count
+                FROM rounds r
+                WHERE SUBSTR(CAST(r.round_date AS TEXT), 1, 10) >= $1
+                  AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) <= $2
+                  AND r.round_number IN (1, 2)
+                  AND r.map_name IS NOT NULL
+                GROUP BY r.map_name
+                ORDER BY play_count DESC
+            """
+            map_rows = await db.fetch_all(map_query, (start_date, end_date))
+            result["map_distribution"] = {row[0]: int(row[1]) for row in map_rows}
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Stats trends query failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate trends data")
+
+
+# ========================================
+# RETRO-VIZ GALLERY
+# ========================================
+
+
+@router.get("/retro-viz/gallery")
+async def get_retro_viz_gallery():
+    """List PNG files in the retro-viz output directory."""
+    gallery_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data", "retro-viz")
+    gallery_dir = os.path.normpath(gallery_dir)
+
+    if not os.path.isdir(gallery_dir):
+        return {"images": []}
+
+    images = []
+    try:
+        for fname in sorted(os.listdir(gallery_dir)):
+            if not fname.lower().endswith(".png"):
+                continue
+            fpath = os.path.join(gallery_dir, fname)
+            if not os.path.isfile(fpath):
+                continue
+            # Prevent symlink traversal outside gallery directory
+            if not os.path.realpath(fpath).startswith(os.path.realpath(gallery_dir)):
+                continue
+            stat = os.stat(fpath)
+            images.append({
+                "filename": fname,
+                "url": f"/data/retro-viz/{fname}",
+                "size": stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+            })
+    except Exception as e:
+        logger.error(f"Retro-viz gallery listing failed: {e}")
+
+    return {"images": images}
+
+
+# ========================================
+# ROUND VISUALIZATION
+# ========================================
+
+
+@router.get("/rounds/recent")
+async def get_recent_rounds(
+    limit: int = 20,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Return recent rounds for the round picker dropdown."""
+    if limit < 1 or limit > 100:
+        limit = 20
+
+    rows = await db.fetch_all(
+        """
+        SELECT r.id, r.map_name, r.round_date, r.round_number,
+               COUNT(pcs.id) AS player_count
+        FROM rounds r
+        JOIN player_comprehensive_stats pcs ON pcs.round_id = r.id
+        GROUP BY r.id, r.map_name, r.round_date, r.round_number
+        ORDER BY r.id DESC
+        LIMIT $1
+        """,
+        (limit,),
+    )
+
+    return [
+        {
+            "id": row[0],
+            "map_name": row[1],
+            "round_date": str(row[2]) if row[2] else None,
+            "round_number": row[3],
+            "player_count": row[4],
+        }
+        for row in rows
+    ]
+
+
+@router.get("/rounds/{round_id}/viz")
+async def get_round_viz(
+    round_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Return all player data for a single round, shaped for the 6 chart components."""
+
+    # Get round info
+    round_row = await db.fetch_one(
+        """
+        SELECT id, map_name, round_date, round_number, winner_team,
+               actual_duration_seconds
+        FROM rounds WHERE id = $1
+        """,
+        (round_id,),
+    )
+    if not round_row:
+        raise HTTPException(status_code=404, detail="Round not found")
+
+    # Get all player stats for this round
+    rows = await db.fetch_all(
+        """
+        SELECT player_name, player_guid, kills, deaths,
+               damage_given, damage_received, team_damage_given,
+               team_damage_received, time_played_seconds,
+               ROUND(COALESCE(time_dead_minutes, 0) * 60)::int AS time_dead_seconds,
+               COALESCE(revives_given, 0) AS revives_given,
+               COALESCE(gibs, 0) AS gibs,
+               COALESCE(self_kills, 0) AS self_kills,
+               COALESCE(denied_playtime, 0) AS denied_playtime,
+               COALESCE(xp, 0) AS xp,
+               COALESCE(kill_assists, 0) AS kill_assists,
+               COALESCE(efficiency, 0) AS efficiency,
+               COALESCE(dpm, 0) AS dpm
+        FROM player_comprehensive_stats
+        WHERE round_id = $1
+        ORDER BY kills DESC
+        """,
+        (round_id,),
+    )
+
+    players = []
+    for r in rows:
+        players.append({
+            "name": r[0],
+            "guid": r[1],
+            "kills": r[2] or 0,
+            "deaths": r[3] or 0,
+            "damage_given": r[4] or 0,
+            "damage_received": r[5] or 0,
+            "team_damage_given": r[6] or 0,
+            "team_damage_received": r[7] or 0,
+            "time_played_seconds": r[8] or 0,
+            "time_dead_seconds": r[9] or 0,
+            "revives_given": r[10],
+            "gibs": r[11],
+            "self_kills": r[12],
+            "denied_playtime": r[13],
+            "xp": r[14],
+            "kill_assists": r[15],
+            "efficiency": float(r[16]),
+            "dpm": float(r[17]),
+        })
+
+    # Compute highlights
+    highlights = {}
+    if players:
+        mvp = max(players, key=lambda p: p["dpm"])
+        highlights["mvp"] = {"name": mvp["name"], "dpm": mvp["dpm"]}
+        top_kills = max(players, key=lambda p: p["kills"])
+        highlights["most_kills"] = {"name": top_kills["name"], "kills": top_kills["kills"]}
+        top_dmg = max(players, key=lambda p: p["damage_given"])
+        highlights["most_damage"] = {"name": top_dmg["name"], "damage_given": top_dmg["damage_given"]}
+
+    return {
+        "round_id": round_row[0],
+        "map_name": round_row[1],
+        "round_date": str(round_row[2]) if round_row[2] else None,
+        "round_number": round_row[3],
+        "winner_team": round_row[4],
+        "duration_seconds": round_row[5],
+        "player_count": len(players),
+        "players": players,
+        "highlights": highlights,
+    }

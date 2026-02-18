@@ -99,12 +99,17 @@ async def resolve_round_id_with_reason(
     }
     if not map_name or not round_number:
         diag["reason_code"] = "invalid_input"
+        logger.warning("round_linker: reason=invalid_input map=%s rn=%s", map_name, round_number)
         return None, diag
 
     if not target_dt and round_date and round_time:
         target_dt = _parse_round_datetime(round_date, round_time)
         if not target_dt:
             diag["reason_code"] = "time_parse_failed"
+            logger.warning(
+                "round_linker: reason=time_parse_failed map=%s rn=%d date=%s time=%s",
+                map_name, round_number, round_date, round_time,
+            )
 
     if not round_date and target_dt:
         round_date = target_dt.strftime("%Y-%m-%d")
@@ -140,13 +145,26 @@ async def resolve_round_id_with_reason(
             )
             if date_free_rows:
                 diag["reason_code"] = "date_filter_excluded_rows"
+                logger.warning(
+                    "round_linker: reason=date_filter_excluded_rows map=%s rn=%d date=%s "
+                    "(rows exist for map+rn but not on this date)",
+                    map_name, round_number, round_date,
+                )
                 return None, diag
         diag["reason_code"] = "no_rows_for_map_round"
+        logger.warning(
+            "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s",
+            map_name, round_number, round_date,
+        )
         return None, diag
 
     if not target_dt:
         diag["candidate_count"] = len(rows)
         diag["reason_code"] = "resolved"
+        logger.debug(
+            "round_linker: reason=resolved (no target_dt, first candidate) map=%s rn=%d round_id=%d",
+            map_name, round_number, rows[0][0],
+        )
         return rows[0][0], diag
 
     best_id = None
@@ -181,12 +199,26 @@ async def resolve_round_id_with_reason(
     if best_id is not None:
         diag["reason_code"] = "resolved"
         diag["best_diff_seconds"] = int(best_diff.total_seconds())
+        logger.debug(
+            "round_linker: reason=resolved map=%s rn=%d round_id=%d diff=%ds candidates=%d",
+            map_name, round_number, best_id, diag["best_diff_seconds"], diag["candidate_count"],
+        )
         return best_id, diag
 
     if diag["parsed_candidate_count"] == 0:
         diag["reason_code"] = "time_parse_failed"
+        logger.warning(
+            "round_linker: reason=time_parse_failed (no parseable candidates) map=%s rn=%d candidates=%d",
+            map_name, round_number, diag["candidate_count"],
+        )
     else:
         diag["reason_code"] = "all_candidates_outside_window"
         if parsed_diffs_seconds:
             diag["best_diff_seconds"] = int(min(parsed_diffs_seconds))
+        logger.warning(
+            "round_linker: reason=all_candidates_outside_window map=%s rn=%d "
+            "window=%dmin best_diff=%ss parsed=%d/%d",
+            map_name, round_number, window_minutes,
+            diag["best_diff_seconds"], diag["parsed_candidate_count"], diag["candidate_count"],
+        )
     return None, diag

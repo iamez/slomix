@@ -1,6 +1,7 @@
 """
 Bot Configuration System
-Supports both SQLite and PostgreSQL with environment variables or config file.
+Supports PostgreSQL (primary) with environment variables or config file.
+SQLite settings are retained for legacy/fallback compatibility only.
 Consolidates all configuration from environment variables into a single object.
 """
 import os
@@ -251,6 +252,15 @@ class BotConfig:
         # ==================== VOICE SESSION SUMMARY ====================
         # Enable automatic session summary embeds after voice session ends
         self.enable_voice_auto_summary: bool = self._get_config('ENABLE_VOICE_AUTO_SUMMARY', 'false').lower() == 'true'
+
+        # ==================== AVAILABILITY POLL ====================
+        # Daily "Who can play tonight?" poll system
+        self.availability_poll_enabled: bool = self._get_config('AVAILABILITY_POLL_ENABLED', 'false').lower() == 'true'
+        self.availability_poll_channel_id: int = int(self._get_config('AVAILABILITY_POLL_CHANNEL_ID', '0'))
+        self.availability_poll_post_time: str = self._get_config('AVAILABILITY_POLL_POST_TIME', '10:00')
+        self.availability_poll_timezone: str = self._get_config('AVAILABILITY_POLL_TIMEZONE', 'Europe/Ljubljana')
+        self.availability_poll_threshold: int = int(self._get_config('AVAILABILITY_POLL_THRESHOLD', '6'))
+        self.availability_poll_reminder_times: str = self._get_config('AVAILABILITY_POLL_REMINDER_TIMES', '20:45,21:00')
 
         # ==================== TEAM MAP PERFORMANCE ====================
         # Enable TeamManager.get_map_performance (experimental)
