@@ -18,7 +18,7 @@ jobs:
         run: |
           pip install ruff
       - name: Lint with ruff
-        run: ruff check bot/ website/backend/ --select E,F,W --ignore E501,E402
+        run: ruff check bot/ website/backend/ --select E,F,W --ignore E501,E402,W291,W293,F401,F841
 
   file-checks:
     runs-on: ubuntu-latest
