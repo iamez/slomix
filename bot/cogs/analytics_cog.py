@@ -299,7 +299,7 @@ class AnalyticsCog(commands.Cog):
                 stats = await self.analytics.get_session_fatigue(guid, gaming_session_id)
 
                 if not stats:
-                    await ctx.send(f"Not enough rounds in session for fatigue analysis (need 6+)")
+                    await ctx.send("Not enough rounds in session for fatigue analysis (need 6+)")
                     return
             except Exception as e:
                 logger.error(f"Error in fatigue command: {e}", exc_info=True)

@@ -168,6 +168,10 @@ class PostgreSQLAdapter(DatabaseAdapter):
             self.pool = None
             logger.info("🔌 PostgreSQL pool closed")
 
+    def is_connected(self) -> bool:
+        """Return True when the adapter has an active connection pool."""
+        return self.pool is not None
+
     @asynccontextmanager
     async def connection(self):
         """Provide PostgreSQL connection from pool."""
@@ -182,6 +186,13 @@ class PostgreSQLAdapter(DatabaseAdapter):
             yield conn
         finally:
             await self.pool.release(conn)
+
+    @asynccontextmanager
+    async def transaction(self):
+        """Provide a connection-scoped transaction context."""
+        async with self.connection() as conn:
+            async with conn.transaction():
+                yield conn
 
     async def execute(self, query: str, params: Optional[Tuple] = None, *extra):
         """Execute query on PostgreSQL."""
@@ -209,8 +220,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         params = self._normalize_params(params)
 
         async with self.connection() as conn:
-            row = await conn.fetchrow(query, *(params or ()))
-            return tuple(row.values()) if row else None
+            return await conn.fetchrow(query, *(params or ()))
 
     async def fetch_all(self, query: str, params: Optional[Tuple] = None) -> List[Any]:
         """Fetch all rows from PostgreSQL."""
@@ -219,8 +229,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         params = self._normalize_params(params)
 
         async with self.connection() as conn:
-            rows = await conn.fetch(query, *(params or ()))
-            return [tuple(row.values()) for row in rows]
+            return await conn.fetch(query, *(params or ()))
 
     async def fetch_val(self, query: str, params: Optional[Tuple] = None) -> Any:
         """Fetch single value from PostgreSQL."""

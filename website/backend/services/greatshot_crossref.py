@@ -65,6 +65,11 @@ async def _resolve_kd_ratio_column(db) -> str:
     if _KD_RATIO_COLUMN_CACHE:
         return _KD_RATIO_COLUMN_CACHE
 
+    # Test doubles may only implement fetch_all; default safely.
+    if not hasattr(db, "fetch_one"):
+        _KD_RATIO_COLUMN_CACHE = "kd_ratio"
+        return _KD_RATIO_COLUMN_CACHE
+
     for column in _KD_RATIO_COLUMN_CANDIDATES:
         row = await db.fetch_one(
             """

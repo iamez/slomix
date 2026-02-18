@@ -10,6 +10,7 @@ Provides a unified interface for team detection that:
 
 import json
 import logging
+import sqlite3
 from typing import Dict, Tuple
 
 from bot.core.advanced_team_detector import AdvancedTeamDetector
