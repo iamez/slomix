@@ -311,7 +311,9 @@ class TestDatabaseIntegrity:
 
         except Exception as e:
             # Unique constraint violation expected
-            assert "unique" in str(e).lower() or "duplicate" in str(e).lower()
+            err = str(e).lower()
+            if "unique" not in err and "duplicate" not in err:
+                raise AssertionError(f"Expected unique/duplicate violation, got: {e}")
 
 
 class TestDatabaseErrorHandling:
