@@ -21,9 +21,51 @@ logger = logging.getLogger("bot.services.session_embed_builder")
 class SessionEmbedBuilder:
     """Service for building Discord embeds for session data"""
 
+    # Discord embed field value limit
+    MAX_FIELD_VALUE = 1024
+
     def __init__(self):
         """Initialize the session embed builder"""
         pass
+
+    @staticmethod
+    def _safe_field_value(text: str, max_chars: int = 1024) -> str:
+        """Truncate a field value to fit within Discord's 1024-char limit."""
+        if len(text) <= max_chars:
+            return text
+        return text[:max_chars - 4] + "\n..."
+
+    @staticmethod
+    def _chunk_field_lines(lines: List[str], separator: str = "\n", max_chars: int = 1024) -> List[str]:
+        """Split lines into chunks that fit within Discord's field value limit.
+
+        Each individual line that exceeds max_chars is truncated.
+        Returns a list of joined chunks, each within the limit.
+        """
+        if not lines:
+            return []
+
+        chunks = []
+        current = []
+
+        for line in lines:
+            safe_line = line if len(line) <= max_chars else line[:max_chars - 3] + "..."
+
+            if not current:
+                current = [safe_line]
+                continue
+
+            candidate = separator.join(current + [safe_line])
+            if len(candidate) <= max_chars:
+                current.append(safe_line)
+            else:
+                chunks.append(separator.join(current))
+                current = [safe_line]
+
+        if current:
+            chunks.append(separator.join(current))
+
+        return chunks
 
     async def build_session_overview_embed(
         self,
@@ -231,13 +273,22 @@ class SessionEmbedBuilder:
                     f"⏱{time_display} 💀{time_dead_display}({dead_pct:.0f}%) ⏳{time_denied_display}({denied_pct:.0f}%){multikills_display}\n\n"
                 )
             
-            # Add field with appropriate name
+            # Add field with appropriate name, chunk if needed
             if field_idx == 0:
                 field_name = "🏆 All Players"
             else:
                 field_name = "\u200b"  # Invisible character for continuation fields
-            
-            embed.add_field(name=field_name, value=field_text.rstrip(), inline=False)
+
+            field_value = field_text.rstrip()
+            if len(field_value) <= self.MAX_FIELD_VALUE:
+                embed.add_field(name=field_name, value=field_value, inline=False)
+            else:
+                # Field exceeds limit even with 3 players — split into per-player chunks
+                player_blocks = field_value.split("\n\n")
+                chunks = self._chunk_field_lines(player_blocks, separator="\n\n", max_chars=self.MAX_FIELD_VALUE)
+                for ci, chunk in enumerate(chunks):
+                    name = field_name if ci == 0 else "\u200b"
+                    embed.add_field(name=name, value=chunk, inline=False)
 
         footer = f"Round: {latest_date}"
         if not full_selfkills_available:
@@ -373,7 +424,6 @@ class SessionEmbedBuilder:
             return None
 
         awards_by_category = endstats_data.get("awards_by_category", {})
-        vs_stats = endstats_data.get("vs_stats", [])
         rounds_with = endstats_data.get("rounds_with_endstats", 0)
         total_rounds = endstats_data.get("total_rounds", 0)
 
@@ -430,9 +480,10 @@ class SessionEmbedBuilder:
                     lines.append(f"**{short_name}**: {player_name} ({formatted_value}, {win_count}x)")
 
             if lines:
+                field_value = self._safe_field_value("\n".join(lines))
                 embed.add_field(
                     name=f"{display_name}",
-                    value="\n".join(lines),
+                    value=field_value,
                     inline=True
                 )
 
@@ -565,7 +616,7 @@ class SessionEmbedBuilder:
             if len(team_1_players_list) > 15:
                 more_count = len(team_1_players_list) - 15
                 team_1_text += f"\n*...and {more_count} more*"
-            embed.add_field(name=f"🔴 {team_1_name} Roster", value=team_1_text.rstrip(), inline=True)
+            embed.add_field(name=f"🔴 {team_1_name} Roster", value=self._safe_field_value(team_1_text.rstrip()), inline=True)
 
         # Team 2 roster
         if team_2_players_list:
@@ -575,7 +626,7 @@ class SessionEmbedBuilder:
             if len(team_2_players_list) > 15:
                 more_count = len(team_2_players_list) - 15
                 team_2_text += f"\n*...and {more_count} more*"
-            embed.add_field(name=f"🔵 {team_2_name} Roster", value=team_2_text.rstrip(), inline=True)
+            embed.add_field(name=f"🔵 {team_2_name} Roster", value=self._safe_field_value(team_2_text.rstrip()), inline=True)
 
         # Session info with match score
         session_info = f"📍 **{total_rounds} rounds** played ({total_maps} maps)\n"
@@ -612,7 +663,7 @@ class SessionEmbedBuilder:
                 kd = kills / deaths if deaths else kills
                 dpm_text += f"{i}. **{player}**\n"
                 dpm_text += f"   💥 `{dpm:.0f} DPM` • 💀 `{kd:.1f} K/D` ({kills}K/{deaths}D)\n"
-            embed.add_field(name="🏆 Enhanced DPM Leaderboard", value=dpm_text.rstrip(), inline=False)
+            embed.add_field(name="🏆 Enhanced DPM Leaderboard", value=self._safe_field_value(dpm_text.rstrip()), inline=False)
 
             # DPM Insights
             avg_dpm = sum(p[1] for p in dpm_leaders) / len(dpm_leaders)
@@ -677,7 +728,7 @@ class SessionEmbedBuilder:
             if revives > 0:
                 weapon_text += f"\n💉 **Teammates Revived**: `{revives}`"
 
-            embed.add_field(name=f"{player} ({total_kills} total kills)", value=weapon_text, inline=False)
+            embed.add_field(name=f"{player} ({total_kills} total kills)", value=self._safe_field_value(weapon_text), inline=False)
 
         embed.set_footer(text=f"Round: {latest_date}")
         return embed
@@ -837,7 +888,7 @@ class SessionEmbedBuilder:
             awards_text.append(f"💀 **Worst Death Spree:** `{player}` ({count} consecutive deaths)")
 
         if awards_text:
-            embed.add_field(name="🎖️ Special Awards", value="\n".join(awards_text), inline=False)
+            embed.add_field(name="🎖️ Special Awards", value=self._safe_field_value("\n".join(awards_text)), inline=False)
         else:
             embed.add_field(name="🎖️ Special Awards", value="*No notable achievements this session*", inline=False)
 
@@ -847,4 +898,3 @@ class SessionEmbedBuilder:
     # ═══════════════════════════════════════════════════════
     # PHASE 5: GRAPH GENERATION
     # ═══════════════════════════════════════════════════════
-

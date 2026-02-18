@@ -4,10 +4,16 @@ Team History Helper Functions
 
 Utility functions for querying and displaying team history data.
 These can be imported and used by bot commands or analysis scripts.
+
+NOTE: This module uses synchronous sqlite3 connections and is ONLY usable
+in SQLite mode. All methods return empty/None when the db_path does not
+exist (i.e. when running against PostgreSQL). The async bot cogs should
+use the database adapter instead.
 """
 
 import json
 import logging
+import os
 import sqlite3
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
@@ -16,22 +22,37 @@ logger = logging.getLogger(__name__)
 
 
 class TeamHistoryManager:
-    """Manages team history queries and analytics"""
-    
+    """Manages team history queries and analytics.
+
+    WARNING: SQLite-only module. Methods return empty results when the
+    configured db_path does not point to an existing SQLite file (e.g.
+    when the system uses PostgreSQL).
+    """
+
     def __init__(self, db_path: str = "bot/etlegacy_production.db"):
         self.db_path = db_path
-    
+
+    def _get_connection(self) -> Optional[sqlite3.Connection]:
+        """Return a sqlite3 connection, or None if the DB file is missing (PostgreSQL mode)."""
+        if not self.db_path or not os.path.exists(self.db_path):
+            logger.debug("TeamHistoryManager: SQLite DB not available (PostgreSQL mode), skipping")
+            return None
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
     def get_lineup_stats(self, lineup_id: int) -> Optional[Dict]:
         """
         Get detailed stats for a specific lineup.
-        
+
         Returns:
             Dict with lineup info, roster, and performance stats
         """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self._get_connection()
+        if conn is None:
+            return None
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             SELECT * FROM team_lineups WHERE id = ?
         """, (lineup_id,))
@@ -66,8 +87,9 @@ class TeamHistoryManager:
     
     def get_lineup_sessions(self, lineup_id: int) -> List[Dict]:
         """Get all sessions played by a lineup"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self._get_connection()
+        if conn is None:
+            return []
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -100,16 +122,17 @@ class TeamHistoryManager:
     def find_similar_lineups(self, player_guids: List[str], min_overlap: int = 3) -> List[Dict]:
         """
         Find lineups with significant player overlap.
-        
+
         Args:
             player_guids: List of player GUIDs to match
             min_overlap: Minimum number of shared players
-        
+
         Returns:
             List of matching lineups with overlap count
         """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self._get_connection()
+        if conn is None:
+            return []
         cursor = conn.cursor()
         
         cursor.execute("SELECT * FROM team_lineups")
@@ -133,12 +156,13 @@ class TeamHistoryManager:
     def get_head_to_head(self, lineup1_id: int, lineup2_id: int) -> Dict:
         """
         Get head-to-head record between two lineups.
-        
+
         Returns:
             Dict with wins/losses/ties for each lineup
         """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self._get_connection()
+        if conn is None:
+            return {'total_matches': 0, 'lineup1_wins': 0, 'lineup2_wins': 0, 'ties': 0, 'matches': []}
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -175,8 +199,9 @@ class TeamHistoryManager:
     
     def get_recent_lineups(self, days: int = 30, min_sessions: int = 1) -> List[Dict]:
         """Get lineups active in recent period"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self._get_connection()
+        if conn is None:
+            return []
         cursor = conn.cursor()
         
         cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
@@ -220,8 +245,9 @@ class TeamHistoryManager:
     
     def get_best_lineups(self, min_sessions: int = 3, limit: int = 10) -> List[Dict]:
         """Get top performing lineups by win rate"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self._get_connection()
+        if conn is None:
+            return []
         cursor = conn.cursor()
         
         cursor.execute("""

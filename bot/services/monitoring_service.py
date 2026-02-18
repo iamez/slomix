@@ -53,7 +53,7 @@ class MonitoringService:
             getattr(config, "monitoring_server_interval_seconds", 300)
         )
         self.voice_interval = int(
-            getattr(config, "monitoring_voice_interval_seconds", 60)
+            getattr(config, "monitoring_voice_interval_seconds", 300)
         )
         # Data retention: delete records older than this many days (default 30)
         self.retention_days = int(

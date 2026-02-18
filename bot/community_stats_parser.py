@@ -329,11 +329,16 @@ class C0RNP0RN3StatsParser:
                 multikills_text = ""
                 if double_kills or triple_kills or quad_kills or penta_kills or mega_kills:
                     multikill_parts = []
-                    if double_kills: multikill_parts.append(f"{double_kills} DOUBLE")
-                    if triple_kills: multikill_parts.append(f"{triple_kills} TRIPLE")
-                    if quad_kills: multikill_parts.append(f"{quad_kills} QUAD")
-                    if penta_kills: multikill_parts.append(f"{penta_kills} PENTA")
-                    if mega_kills: multikill_parts.append(f"{mega_kills} MEGA")
+                    if double_kills:
+                        multikill_parts.append(f"{double_kills} DOUBLE")
+                    if triple_kills:
+                        multikill_parts.append(f"{triple_kills} TRIPLE")
+                    if quad_kills:
+                        multikill_parts.append(f"{quad_kills} QUAD")
+                    if penta_kills:
+                        multikill_parts.append(f"{penta_kills} PENTA")
+                    if mega_kills:
+                        multikill_parts.append(f"{mega_kills} MEGA")
                     multikills_text = f"🔥 `{' • '.join(multikill_parts)}` • "
 
                 player_text += f"{multikills_text}💀 `{time_dead_display}` • ⏳ `{denied_display}`"
@@ -648,15 +653,29 @@ class C0RNP0RN3StatsParser:
                 continue
 
             reset_fields = self._detect_player_counter_reset(r1_player, r2_player)
-            use_r2_raw = len(reset_fields) > 0
+            # Require at least 2 dropped cumulative fields to confirm a reconnect.
+            # A single field anomaly could be noise; multiple drops strongly indicate
+            # the player's counters were reset mid-round (reconnect scenario).
+            use_r2_raw = len(reset_fields) >= 2
             if use_r2_raw:
                 r1_obj = r1_player.get('objective_stats', {}) or {}
                 r2_obj = r2_player.get('objective_stats', {}) or {}
                 logger.warning(
-                    "[R2 RESET FALLBACK] player=%s fields=%s mode=use_r2_raw "
-                    "r1_time=%.2f r2_time=%.2f",
+                    "[R2 RESET FALLBACK] player=%s guid=%s dropped_fields=%s "
+                    "dropped_count=%d mode=use_r2_raw "
+                    "r1_kills=%d r2_kills=%d r1_deaths=%d r2_deaths=%d "
+                    "r1_dmg=%d r2_dmg=%d r1_time=%.2f r2_time=%.2f "
+                    "| fallback: using R2 raw values instead of differential",
                     player_name,
+                    r2_player.get('guid', 'UNKNOWN'),
                     ",".join(reset_fields),
+                    len(reset_fields),
+                    r1_player.get('kills', 0),
+                    r2_player.get('kills', 0),
+                    r1_player.get('deaths', 0),
+                    r2_player.get('deaths', 0),
+                    r1_player.get('damage_given', 0),
+                    r2_player.get('damage_given', 0),
                     float(r1_obj.get('time_played_minutes', 0) or 0),
                     float(r2_obj.get('time_played_minutes', 0) or 0),
                 )

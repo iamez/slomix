@@ -43,6 +43,8 @@ env/
 *.backup
 *BACKUP*
 *.sql
+!schema.sql
+!bot/schema.sql
 !migrations/*.sql
 !website/*.sql
 !proximity/**/*.sql
@@ -181,18 +183,27 @@ check_before_commit.sh
 /local_stats/
 /node_modules/
 /prompt_instructions/
-/scripts/
+/scripts/*
 /server/
 /temp/
 # /tests/ - Removed: Tests need to be tracked for CI
 /test_files/
 /test_suite/
 /tmp/
-/tools/
+/tools/*
 /publish_temp/
 /publish_clean/
 /github/
 /performance_updates/
+
+# CI-required script/tool modules used by tests
+!/scripts/
+!/tools/
+!/scripts/__init__.py
+!/scripts/backfill_gametimes.py
+!/tools/__init__.py
+!/tools/simple_bulk_import.py
+!/tools/verify_pipeline.py
 
 # Prototype projects
 # /website/      # ENABLED - Added in v1.1.0
@@ -274,6 +285,7 @@ bot/config.json
 bot/fiveeyes_config.json
 bot/schema.json
 bot/schema.sql
+!bot/schema.sql
 bot/README_AUTOMATION.md
 
 # ============================================
@@ -281,6 +293,7 @@ bot/README_AUTOMATION.md
 # ============================================
 tools/*
 !tools/__init__.py
+!tools/simple_bulk_import.py
 !tools/stopwatch_scoring.py
 !tools/schema_postgresql.sql
 
@@ -308,9 +321,10 @@ docs/TODO_*.md
 docs/TODO-*.md
 docs/HANDOFF_*.md
 docs/CRASH_PROOF_*.md
-docs/TWO_WEEK_*.md
-docs/ROAD_AHEAD_*.md
-docs/WEBHOOK_TRIAGE_*.md
+# Recovered planning docs — DO NOT re-ignore (see ROAD_AHEAD runbook rule #5)
+# docs/TWO_WEEK_*.md
+# docs/ROAD_AHEAD_*.md
+# docs/WEBHOOK_TRIAGE_*.md
 docs/MISSION_*.md
 docs/LIVE_MONITORING_*.md
 docs/WEEK_HANDOFF_*.md

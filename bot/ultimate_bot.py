@@ -83,7 +83,7 @@ logger.info(f"📦 Discord.py: {discord.__version__}")
 # ======================================================================
 
 
-async def ensure_player_name_alias(db: "aiosqlite.Connection") -> None:
+async def ensure_player_name_alias(db) -> None:
     """Create a TEMP VIEW aliasing an existing name column to `player_name`.
 
     This standalone helper mirrors the Cog method and can be used by
@@ -775,6 +775,15 @@ class UltimateETLegacyBot(commands.Bot):
             logger.warning(f"⚠️  Could not load Admin Predictions cog: {e}")
             logger.warning("Bot will continue without admin prediction commands")
 
+        # 📊 AVAILABILITY POLL: Daily gaming availability tracking
+        try:
+            from bot.cogs.availability_poll_cog import AvailabilityPollCog
+            await self.add_cog(AvailabilityPollCog(self))
+            status = "ENABLED" if self.config.availability_poll_enabled else "disabled"
+            logger.info(f"✅ Availability Poll cog loaded ({status})")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load Availability Poll cog: {e}")
+
         # 🤖 AUTOMATION: Initialize automation services
         try:
             from bot.services.automation import SSHMonitor, HealthMonitor, MetricsLogger, DatabaseMaintenance
@@ -1447,7 +1456,7 @@ class UltimateETLegacyBot(commands.Bot):
             # This helps verify the surrender fix is working correctly
             # Query current values from DB (from stats file)
             compare_query = """
-                SELECT round_time_seconds, time_limit_seconds, winner_team
+                SELECT actual_duration_seconds, time_limit, winner_team
                 FROM rounds WHERE id = $1
             """
             current_values = await self.db_adapter.fetch_one(compare_query, (round_id,))
@@ -1756,8 +1765,10 @@ class UltimateETLegacyBot(commands.Bot):
             # Calculate gaming_session_id (60-minute gap logic)
             gaming_session_id = await self._calculate_gaming_session_id(date_part, round_time)
 
-            # Discover rounds table columns once (cache)
-            if not hasattr(self, "_rounds_columns"):
+            # Discover rounds table columns (cached, refreshed every 100 imports)
+            import_count = getattr(self, "_rounds_col_import_count", 0) + 1
+            self._rounds_col_import_count = import_count
+            if not hasattr(self, "_rounds_columns") or import_count % 100 == 1:
                 try:
                     if self.config.database_type == 'sqlite':
                         cols = await self.db_adapter.fetch_all("PRAGMA table_info(rounds)")
@@ -1772,7 +1783,8 @@ class UltimateETLegacyBot(commands.Bot):
                         )
                         self._rounds_columns = {c[0] for c in cols}
                 except Exception:
-                    self._rounds_columns = set()
+                    if not hasattr(self, "_rounds_columns"):
+                        self._rounds_columns = set()
 
             defender_team = stats_data.get("defender_team", 0)
             winner_team = stats_data.get("winner_team", 0)
@@ -2078,7 +2090,7 @@ class UltimateETLegacyBot(commands.Bot):
             if not existing_teams:
                 # No teams yet - this is likely the first round of a new session
                 if round_num == 1:
-                    logger.info(f"🎯 R1 of new session - creating initial teams...")
+                    logger.info("🎯 R1 of new session - creating initial teams...")
                     await self.team_manager.create_initial_teams_from_round(
                         round_id=round_id,
                         session_date=session_date,
@@ -2086,7 +2098,7 @@ class UltimateETLegacyBot(commands.Bot):
                     )
                 else:
                     # R2 came before R1 in import order - detect teams from all data
-                    logger.info(f"🎯 R2 without R1 teams - running full detection...")
+                    logger.info("🎯 R2 without R1 teams - running full detection...")
                     teams = await self.team_manager.detect_session_teams(
                         session_date,
                         gaming_session_id=gaming_session_id,
@@ -2731,7 +2743,7 @@ class UltimateETLegacyBot(commands.Bot):
 
                         # Route endstats files to dedicated processor
                         if is_endstats:
-                            logger.info(f"🏆 Detected endstats file, using endstats processor")
+                            logger.info("🏆 Detected endstats file, using endstats processor")
                             await self._process_endstats_file(local_path, filename)
                             process_time = time.time() - process_start
                             logger.info(f"⚙️ Processing completed in {process_time:.2f}s")
@@ -2755,7 +2767,7 @@ class UltimateETLegacyBot(commands.Bot):
                             else:
                                 error_msg = result.get('error', 'Unknown error') if result else 'No result'
                                 logger.warning(f"⚠️ Processing failed for {filename}: {error_msg}")
-                                logger.warning(f"⚠️ Skipping Discord post")
+                                logger.warning("⚠️ Skipping Discord post")
                     else:
                         logger.error(f"❌ Download failed for {filename}")
 
@@ -2873,6 +2885,28 @@ class UltimateETLegacyBot(commands.Bot):
 
         except Exception as e:
             logger.error(f"Voice monitor error: {e}")
+
+    async def _auto_end_session(self):
+        """Auto-end session via voice session service.
+
+        Delegates to VoiceSessionService which handles:
+        - Session state cleanup
+        - Discord notification
+        - Session results finalization (team W/L tracking)
+        """
+        try:
+            if hasattr(self, 'voice_session_service') and self.voice_session_service:
+                await self.voice_session_service.auto_end_session()
+            else:
+                logger.warning("Voice session service not available for auto-end")
+
+            # Reset local state
+            self.session_active = False
+            self.session_end_timer = None
+        except Exception as e:
+            logger.error(f"Error in _auto_end_session: {e}", exc_info=True)
+            self.session_active = False
+            self.session_end_timer = None
 
     @voice_session_monitor.before_loop
     async def before_voice_monitor(self):
@@ -3625,7 +3659,8 @@ class UltimateETLegacyBot(commands.Bot):
                 footer_text = embed.footer.text
             round_metadata = self._build_round_metadata_from_map(metadata, footer_text=footer_text)
 
-            if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", 0) == 0:
+            # round_number 0 is valid in ET:Legacy (g_currentRound=0 means R2 in stopwatch)
+            if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", -1) < 0:
                 webhook_logger.warning("STATS_READY webhook missing map/round metadata; skipping")
                 return
 
@@ -4321,7 +4356,7 @@ class UltimateETLegacyBot(commands.Bot):
             )
 
             if result and result.get('success'):
-                webhook_logger.info(f"📊 Posting stats with accurate timing data")
+                webhook_logger.info("📊 Posting stats with accurate timing data")
                 await self.round_publisher.publish_round_stats(filename, result)
                 webhook_logger.info(f"✅ Successfully processed: {filename}")
             else:

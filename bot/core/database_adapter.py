@@ -3,6 +3,7 @@ Database Abstraction Layer for PostgreSQL
 Simplified to PostgreSQL-only (SQLite support removed)
 """
 import asyncio
+import contextvars
 import logging
 from typing import Any, Optional, List, Tuple
 from abc import ABC, abstractmethod
@@ -104,6 +105,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         self.ssl_root_cert = ssl_root_cert
         self.pool = None
         self._pool_lock = asyncio.Lock()  # Prevents race condition on pool init
+        self._active_tx_conn = contextvars.ContextVar("active_tx_conn", default=None)
 
         ssl_status = "SSL disabled" if ssl_mode == 'disable' else f"SSL mode: {ssl_mode}"
         logger.debug(f"📦 PostgreSQL Adapter initialized: {host}:{port}/{database} ({ssl_status})")
@@ -168,9 +170,18 @@ class PostgreSQLAdapter(DatabaseAdapter):
             self.pool = None
             logger.info("🔌 PostgreSQL pool closed")
 
+    def is_connected(self) -> bool:
+        """Return True when the adapter has an active connection pool."""
+        return self.pool is not None
+
     @asynccontextmanager
     async def connection(self):
         """Provide PostgreSQL connection from pool."""
+        active_conn = self._active_tx_conn.get()
+        if active_conn is not None:
+            yield active_conn
+            return
+
         # Thread-safe pool initialization with double-check locking
         if not self.pool:
             async with self._pool_lock:
@@ -181,6 +192,32 @@ class PostgreSQLAdapter(DatabaseAdapter):
         try:
             yield conn
         finally:
+            await self.pool.release(conn)
+
+    @asynccontextmanager
+    async def transaction(self):
+        """Provide a connection-scoped transaction context."""
+        active_conn = self._active_tx_conn.get()
+
+        # Nested transaction: use savepoint on the same connection.
+        if active_conn is not None:
+            async with active_conn.transaction():
+                yield active_conn
+            return
+
+        # Thread-safe pool initialization with double-check locking
+        if not self.pool:
+            async with self._pool_lock:
+                if not self.pool:
+                    await self.connect()
+
+        conn = await self.pool.acquire()
+        token = self._active_tx_conn.set(conn)
+        try:
+            async with conn.transaction():
+                yield conn
+        finally:
+            self._active_tx_conn.reset(token)
             await self.pool.release(conn)
 
     async def execute(self, query: str, params: Optional[Tuple] = None, *extra):
@@ -209,8 +246,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         params = self._normalize_params(params)
 
         async with self.connection() as conn:
-            row = await conn.fetchrow(query, *(params or ()))
-            return tuple(row.values()) if row else None
+            return await conn.fetchrow(query, *(params or ()))
 
     async def fetch_all(self, query: str, params: Optional[Tuple] = None) -> List[Any]:
         """Fetch all rows from PostgreSQL."""
@@ -219,8 +255,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         params = self._normalize_params(params)
 
         async with self.connection() as conn:
-            rows = await conn.fetch(query, *(params or ()))
-            return [tuple(row.values()) for row in rows]
+            return await conn.fetch(query, *(params or ()))
 
     async def fetch_val(self, query: str, params: Optional[Tuple] = None) -> Any:
         """Fetch single value from PostgreSQL."""

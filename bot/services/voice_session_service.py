@@ -356,6 +356,9 @@ class VoiceSessionService:
                     embed.set_footer(text="Thanks for playing! GG! 🎮")
                     await channel.send(embed=embed)
 
+            # Finalize session results for team W/L tracking
+            await self._finalize_session_results()
+
             # Reset session state
             self.session_active = False
             self.session_start_time = None
@@ -364,6 +367,63 @@ class VoiceSessionService:
 
         except Exception as e:
             logger.error(f"Error ending gaming session: {e}", exc_info=True)
+
+    async def _finalize_session_results(self):
+        """Save session results to database for team W/L tracking.
+
+        Queries the latest gaming session, calculates scores, and persists
+        them to the session_results table. Called automatically when a
+        session ends (both manual and auto-end paths).
+        """
+        try:
+            scoring_service = StopwatchScoringService(self.db_adapter)
+            data_service = SessionDataService(
+                self.db_adapter,
+                self.bot.db_path if hasattr(self.bot, "db_path") else None
+            )
+
+            latest_date = await data_service.get_latest_session_date()
+            if not latest_date:
+                logger.debug("No session date found for finalization")
+                return
+
+            sessions, session_ids, session_ids_str, player_count = await data_service.fetch_session_data(
+                latest_date
+            )
+            if not sessions or not session_ids:
+                logger.debug("No session data found for finalization")
+                return
+
+            # Try team-aware scoring first
+            hardcoded_teams = await data_service.get_hardcoded_teams(session_ids)
+            scoring_result = None
+
+            if hardcoded_teams and len(hardcoded_teams) >= 2:
+                team_rosters = {
+                    name: data.get("guids", [])
+                    for name, data in hardcoded_teams.items()
+                }
+                scoring_result = await scoring_service.calculate_session_scores_with_teams(
+                    latest_date, session_ids, team_rosters
+                )
+
+            # Fallback to non-team-aware scoring
+            if not scoring_result:
+                scoring_result = await scoring_service.calculate_session_scores(
+                    latest_date, session_ids
+                )
+
+            if scoring_result:
+                saved = await scoring_service.save_session_results(scoring_result)
+                if saved:
+                    logger.info(f"✅ Session results finalized for {latest_date}")
+                else:
+                    logger.warning(f"⚠️ Failed to finalize session results for {latest_date}")
+            else:
+                logger.debug(f"No scoring data available for session {latest_date}")
+
+        except Exception as e:
+            logger.error(f"❌ Error finalizing session results: {e}", exc_info=True)
 
     async def auto_end_session(self):
         """
@@ -444,6 +504,29 @@ class VoiceSessionService:
                                     scoring_result = await scoring_service.calculate_session_scores_with_teams(
                                         latest_date, session_ids, team_rosters
                                     )
+
+                                # Save session results to database for team W/L tracking
+                                if scoring_result:
+                                    try:
+                                        saved = await scoring_service.save_session_results(scoring_result)
+                                        if saved:
+                                            logger.info(f"✅ Auto-saved session results for {latest_date}")
+                                        else:
+                                            logger.warning(f"⚠️ Failed to auto-save session results for {latest_date}")
+                                    except Exception as save_err:
+                                        logger.error(f"❌ Error saving session results: {save_err}", exc_info=True)
+                                elif not scoring_result and session_ids:
+                                    # Fallback: try non-team-aware scoring
+                                    try:
+                                        fallback_scores = await scoring_service.calculate_session_scores(
+                                            latest_date, session_ids
+                                        )
+                                        if fallback_scores:
+                                            saved = await scoring_service.save_session_results(fallback_scores)
+                                            if saved:
+                                                logger.info(f"✅ Auto-saved session results (fallback) for {latest_date}")
+                                    except Exception as fb_err:
+                                        logger.error(f"❌ Fallback session results save failed: {fb_err}", exc_info=True)
 
                                 maps_played = ", ".join(
                                     sorted({s[1] for s in sessions})

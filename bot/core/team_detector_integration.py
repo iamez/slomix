@@ -10,6 +10,7 @@ Provides a unified interface for team detection that:
 
 import json
 import logging
+import sqlite3
 from typing import Dict, Tuple
 
 from bot.core.advanced_team_detector import AdvancedTeamDetector
@@ -289,34 +290,45 @@ class TeamDetectorIntegration:
 
 
 # Convenience function for quick integration
+# NOTE: SQLite-only — requires a local .db file path. Not used in PostgreSQL mode.
 def detect_session_teams_smart(
     db_path: str,
     session_date: str,
     auto_store: bool = True
 ) -> Dict:
     """
-    Quick function to detect teams using the advanced system
-    
+    Quick function to detect teams using the advanced system.
+
+    WARNING: SQLite-only convenience function. Will raise FileNotFoundError
+    if the db_path does not exist (e.g. when running in PostgreSQL mode).
+    For async/PostgreSQL usage, use TeamManager via the bot's database adapter.
+
     Args:
-        db_path: Database path
+        db_path: Path to SQLite database file
         session_date: Session date (YYYY-MM-DD)
         auto_store: Automatically store results
-        
+
     Returns:
         Teams dictionary
     """
-    import sqlite3
-    
+    import os
+
+    if not db_path or not os.path.exists(db_path):
+        raise FileNotFoundError(
+            f"SQLite DB not found at '{db_path}'. "
+            "This function is SQLite-only; use TeamManager for PostgreSQL."
+        )
+
     conn = sqlite3.connect(db_path)
     detector = TeamDetectorIntegration(db_path)
-    
+
     result = detector.get_or_detect_teams(
         conn,
         session_date,
         auto_detect=True,
         force_redetect=False
     )
-    
+
     conn.close()
-    
+
     return result
