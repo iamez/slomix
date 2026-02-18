@@ -424,7 +424,6 @@ class SessionEmbedBuilder:
             return None
 
         awards_by_category = endstats_data.get("awards_by_category", {})
-        vs_stats = endstats_data.get("vs_stats", [])
         rounds_with = endstats_data.get("rounds_with_endstats", 0)
         total_rounds = endstats_data.get("total_rounds", 0)
 
@@ -899,4 +898,3 @@ class SessionEmbedBuilder:
     # ═══════════════════════════════════════════════════════
     # PHASE 5: GRAPH GENERATION
     # ═══════════════════════════════════════════════════════
-

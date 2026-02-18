@@ -547,8 +547,8 @@ class ProximityParserV4:
                     'axis_kills': int(parts[2]),
                     'allies_kills': int(parts[3])
                 })
-            except ValueError:
-                pass
+            except ValueError as exc:
+                self.logger.debug("Skipping invalid kill heatmap entry: %s (%s)", line, exc)
     
     def _parse_movement_heatmap_line(self, line: str):
         """Parse movement heatmap line"""
@@ -562,8 +562,8 @@ class ProximityParserV4:
                     'combat': int(parts[3]),
                     'escape': int(parts[4])
                 })
-            except ValueError:
-                pass
+            except ValueError as exc:
+                self.logger.debug("Skipping invalid movement heatmap entry: %s (%s)", line, exc)
 
     def _parse_objective_focus_line(self, line: str):
         """Parse objective focus line (optional section)"""
@@ -579,8 +579,8 @@ class ProximityParserV4:
                     'time_within_radius_ms': int(parts[5]),
                     'samples': int(parts[6]),
                 })
-            except ValueError:
-                pass
+            except ValueError as exc:
+                self.logger.debug("Skipping invalid objective focus entry: %s (%s)", line, exc)
     
     async def import_file(self, filepath: str, session_date) -> bool:
         """Parse and import to database
@@ -1295,7 +1295,6 @@ class ProximityParserV4:
         if not await self._table_has_column('proximity_trade_event', 'victim_guid'):
             self.logger.info("proximity_trade_event table not found; skipping trade import")
             return
-        supports_round_start = await self._table_has_column('proximity_trade_event', 'round_start_unix')
         supports_round_end = await self._table_has_column('proximity_trade_event', 'round_end_unix')
         for event in self.trade_events:
             columns = [
@@ -1351,7 +1350,6 @@ class ProximityParserV4:
         if not await self._table_has_column('proximity_support_summary', 'support_samples'):
             self.logger.info("proximity_support_summary table not found; skipping support summary import")
             return
-        supports_round_start = await self._table_has_column('proximity_support_summary', 'round_start_unix')
         supports_round_end = await self._table_has_column('proximity_support_summary', 'round_end_unix')
 
         columns = [
