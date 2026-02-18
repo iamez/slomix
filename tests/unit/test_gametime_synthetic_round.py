@@ -103,6 +103,10 @@ async def test_process_gametimes_file_with_synthetic_round_payload(tmp_path):
     assert len(bot.stored_spawn_batches) == 1
     assert bot.stored_spawn_batches[0][1][0]["guid"] == "A1"
     pending_bucket = bot._pending_round_metadata["supply_R2"]
-    assert len(pending_bucket) == 1
-    assert pending_bucket[0]["source"] == "gametime"
-    assert pending_bucket[0]["metadata"]["round_end_unix"] == 1770843722
+    if len(pending_bucket) != 1:
+        pytest.fail("expected one pending metadata entry for supply_R2")
+    pending_entry = pending_bucket[0]
+    if pending_entry.get("source") != "gametime":
+        pytest.fail("expected gametime source for queued metadata")
+    if (pending_entry.get("metadata") or {}).get("round_end_unix") != 1770843722:
+        pytest.fail("expected queued metadata round_end_unix to match payload")
