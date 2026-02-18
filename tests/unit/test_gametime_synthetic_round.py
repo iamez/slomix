@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 
 import pytest
 
@@ -11,11 +12,19 @@ class _FakeBot:
     _fields_to_metadata_map = UltimateETLegacyBot._fields_to_metadata_map
     _parse_lua_version_from_footer = UltimateETLegacyBot._parse_lua_version_from_footer
     _build_round_metadata_from_map = UltimateETLegacyBot._build_round_metadata_from_map
+    _normalize_lua_round_for_metadata_paths = UltimateETLegacyBot._normalize_lua_round_for_metadata_paths
+    _normalize_metadata_map_name = UltimateETLegacyBot._normalize_metadata_map_name
+    _pending_metadata_key = UltimateETLegacyBot._pending_metadata_key
+    _prune_pending_round_metadata = UltimateETLegacyBot._prune_pending_round_metadata
+    _queue_pending_metadata = UltimateETLegacyBot._queue_pending_metadata
 
     def __init__(self):
         self.ssh_enabled = False
         self.stored_rounds = []
         self.stored_spawn_batches = []
+        self._pending_round_metadata = defaultdict(list)
+        self._pending_metadata_ttl_seconds = 3 * 3600
+        self._pending_metadata_max_per_key = 8
 
     async def _store_lua_round_teams(self, round_metadata: dict):
         self.stored_rounds.append(round_metadata)
@@ -93,4 +102,7 @@ async def test_process_gametimes_file_with_synthetic_round_payload(tmp_path):
     assert bot.stored_rounds[0]["lua_version"] == "1.6.0"
     assert len(bot.stored_spawn_batches) == 1
     assert bot.stored_spawn_batches[0][1][0]["guid"] == "A1"
-    assert bot._pending_round_metadata["supply_R2"]["round_end_unix"] == 1770843722
+    pending_bucket = bot._pending_round_metadata["supply_R2"]
+    assert len(pending_bucket) == 1
+    assert pending_bucket[0]["source"] == "gametime"
+    assert pending_bucket[0]["metadata"]["round_end_unix"] == 1770843722
