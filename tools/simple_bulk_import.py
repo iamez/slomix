@@ -270,8 +270,11 @@ class SimpleBulkImporter:
                 try:
                     self.mark_file_processed(conn, filename, success=False, error_msg=str(sys.exc_info()[1]))
                     conn.commit()
-                except Exception:
-                    pass
+                except Exception as mark_exc:
+                    print(
+                        f"⚠️ Failed to record import failure for {filename}: {mark_exc}",
+                        file=sys.stderr,
+                    )
                 raise
 
         except Exception as e:

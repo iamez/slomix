@@ -312,7 +312,6 @@ def detect_session_teams_smart(
         Teams dictionary
     """
     import os
-    import sqlite3
 
     if not db_path or not os.path.exists(db_path):
         raise FileNotFoundError(

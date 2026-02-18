@@ -12,6 +12,7 @@ let _charts = [];
 
 function _sanitizeHtmlTree(root) {
     const blockedTags = new Set(['SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'STYLE', 'LINK']);
+    const blockedUrlSchemes = ['javascript:', 'data:', 'vbscript:'];
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
     const toRemove = [];
 
@@ -29,7 +30,10 @@ function _sanitizeHtmlTree(root) {
                 el.removeAttribute(attr.name);
                 continue;
             }
-            if ((name === 'href' || name === 'src' || name === 'xlink:href') && value.startsWith('javascript:')) {
+            if (
+                (name === 'href' || name === 'src' || name === 'xlink:href')
+                && blockedUrlSchemes.some((scheme) => value.startsWith(scheme))
+            ) {
                 el.removeAttribute(attr.name);
             }
         }
