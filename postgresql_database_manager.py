@@ -353,7 +353,7 @@ class PostgreSQLDatabaseManager:
                 logger.info("🏗️  Creating database schema...")
 
             # =====================================================================
-            # CORE TABLES (1-7) - Original schema
+            # CORE TABLES (1-8) - Original schema
             # =====================================================================
 
             # 1. Rounds table
@@ -532,11 +532,23 @@ class PostgreSQLDatabaseManager:
                 )
             ''')
 
+            # 8. Achievement notification ledger (restart-safe live dedupe)
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS achievement_notification_ledger (
+                    id SERIAL PRIMARY KEY,
+                    achievement_id TEXT UNIQUE NOT NULL,
+                    player_guid TEXT NOT NULL,
+                    achievement_type VARCHAR(16) NOT NULL,
+                    milestone_threshold TEXT NOT NULL,
+                    claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
             # =====================================================================
-            # LUA WEBHOOK TABLES (8-9)
+            # LUA WEBHOOK TABLES (9-10)
             # =====================================================================
 
-            # 8. Lua round teams - Real-time webhook data from game server
+            # 9. Lua round teams - Real-time webhook data from game server
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS lua_round_teams (
                     id SERIAL PRIMARY KEY,
@@ -569,7 +581,7 @@ class PostgreSQLDatabaseManager:
                 )
             ''')
 
-            # 9. Lua spawn stats - Per-player spawn/death timing from Lua
+            # 10. Lua spawn stats - Per-player spawn/death timing from Lua
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS lua_spawn_stats (
                     id SERIAL PRIMARY KEY,
@@ -890,6 +902,7 @@ class PostgreSQLDatabaseManager:
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_player_stats_guid ON player_comprehensive_stats(player_guid)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_weapon_stats_round ON weapon_comprehensive_stats(round_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_processed_files_filename ON processed_files(filename)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_achievement_ledger_player_guid ON achievement_notification_ledger(player_guid)')
 
             # Lua webhook indexes
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_lua_round_teams_match_id ON lua_round_teams(match_id)')
@@ -907,6 +920,10 @@ class PostgreSQLDatabaseManager:
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_round_vs_stats_round ON round_vs_stats(round_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_round_vs_stats_player ON round_vs_stats(player_guid)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_processed_endstats_filename ON processed_endstats_files(filename)')
+            await conn.execute(
+                'CREATE UNIQUE INDEX IF NOT EXISTS uq_processed_endstats_round_id '
+                'ON processed_endstats_files(round_id) WHERE round_id IS NOT NULL AND success = TRUE'
+            )
 
             # Predictions indexes
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_predictions_session_date ON match_predictions(session_date)')
@@ -1270,6 +1287,59 @@ class PostgreSQLDatabaseManager:
                     )
                     logger.info("   ✅ Added WS0 score/stopwatch contract columns")
 
+            # Migration 10: Add achievement_notification_ledger for restart-safe live dedupe
+            has_achievement_ledger = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'achievement_notification_ledger'
+                )
+            """)
+            if not has_achievement_ledger:
+                logger.info("   ➕ Creating achievement_notification_ledger table...")
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS achievement_notification_ledger (
+                        id SERIAL PRIMARY KEY,
+                        achievement_id TEXT UNIQUE NOT NULL,
+                        player_guid TEXT NOT NULL,
+                        achievement_type VARCHAR(16) NOT NULL,
+                        milestone_threshold TEXT NOT NULL,
+                        claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                logger.info("   ✅ Created achievement_notification_ledger table")
+
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_achievement_ledger_player_guid
+                ON achievement_notification_ledger(player_guid)
+            """)
+
+            # Migration 11: Enforce endstats idempotency at round level
+            has_processed_endstats = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'processed_endstats_files'
+                )
+            """)
+            if has_processed_endstats:
+                # Keep only the newest row per round_id before creating unique index.
+                dedupe_result = await conn.execute("""
+                    DELETE FROM processed_endstats_files older
+                    USING processed_endstats_files newer
+                    WHERE older.round_id IS NOT NULL
+                      AND newer.round_id = older.round_id
+                      AND older.success = TRUE
+                      AND newer.success = TRUE
+                      AND newer.id > older.id
+                """)
+                logger.info(f"   🔧 processed_endstats_files round-id dedupe: {dedupe_result}")
+
+                await conn.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_processed_endstats_round_id
+                    ON processed_endstats_files(round_id)
+                    WHERE round_id IS NOT NULL AND success = TRUE
+                """)
+                logger.info("   ✅ Ensured uq_processed_endstats_round_id")
+
             logger.info("   ✅ Schema migrations complete!")
     
     async def _wipe_all_tables(self):
@@ -1290,6 +1360,7 @@ class PostgreSQLDatabaseManager:
             'round_awards',
             'round_vs_stats',
             'processed_endstats_files',
+            'achievement_notification_ledger',
             # Greatshot pipeline (children before parents)
             'greatshot_renders',
             'greatshot_highlights',
