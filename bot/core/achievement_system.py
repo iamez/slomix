@@ -96,7 +96,45 @@ class AchievementSystem:
         """
         self.bot = bot
         self.notified_achievements: Set[str] = set()  # Track what we've already notified
+        self._persistent_ledger_enabled = True
         logger.info("🏆 AchievementSystem initialized")
+
+    async def _claim_achievement_ledger(
+        self,
+        achievement_id: str,
+        player_guid: str,
+        achievement_type: str,
+        threshold: Any,
+    ) -> bool:
+        """
+        Atomically claim an achievement notification slot in PostgreSQL.
+
+        Returns:
+            True if this process should announce the achievement.
+            False if it was already claimed earlier (including across restarts).
+        """
+        if not self._persistent_ledger_enabled:
+            return True
+
+        try:
+            row = await self.bot.db_adapter.fetch_one(
+                """
+                INSERT INTO achievement_notification_ledger
+                    (achievement_id, player_guid, achievement_type, milestone_threshold)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (achievement_id) DO NOTHING
+                RETURNING achievement_id
+                """,
+                (achievement_id, player_guid, achievement_type, str(threshold)),
+            )
+            return bool(row)
+        except Exception as e:
+            # Keep legacy behavior if migration has not been applied yet.
+            logger.warning(
+                f"Achievement ledger unavailable, falling back to in-memory dedupe: {e}"
+            )
+            self._persistent_ledger_enabled = False
+            return True
 
     async def check_player_achievements(
         self, 
@@ -173,60 +211,75 @@ class AchievementSystem:
             # Check kill milestones
             for threshold, achievement in self.KILL_MILESTONES.items():
                 achievement_id = f"{player_guid}_kills_{threshold}"
-                if (
-                    kills >= threshold
-                    and achievement_id not in self.notified_achievements
+                if kills < threshold:
+                    continue
+                if achievement_id in self.notified_achievements:
+                    continue
+                if not await self._claim_achievement_ledger(
+                    achievement_id, player_guid, "kills", threshold
                 ):
-                    new_achievements.append(
-                        {
-                            "type": "kills",
-                            "threshold": threshold,
-                            "achievement": achievement,
-                            "player_name": player_name,
-                            "discord_id": discord_id,
-                            "value": kills,
-                        }
-                    )
-                    self.notified_achievements.add(achievement_id)
+                    continue
+
+                new_achievements.append(
+                    {
+                        "type": "kills",
+                        "threshold": threshold,
+                        "achievement": achievement,
+                        "player_name": player_name,
+                        "discord_id": discord_id,
+                        "value": kills,
+                    }
+                )
+                self.notified_achievements.add(achievement_id)
 
             # Check game milestones
             for threshold, achievement in self.GAME_MILESTONES.items():
                 achievement_id = f"{player_guid}_games_{threshold}"
-                if (
-                    games >= threshold
-                    and achievement_id not in self.notified_achievements
+                if games < threshold:
+                    continue
+                if achievement_id in self.notified_achievements:
+                    continue
+                if not await self._claim_achievement_ledger(
+                    achievement_id, player_guid, "games", threshold
                 ):
-                    new_achievements.append(
-                        {
-                            "type": "games",
-                            "threshold": threshold,
-                            "achievement": achievement,
-                            "player_name": player_name,
-                            "discord_id": discord_id,
-                            "value": games,
-                        }
-                    )
-                    self.notified_achievements.add(achievement_id)
+                    continue
+
+                new_achievements.append(
+                    {
+                        "type": "games",
+                        "threshold": threshold,
+                        "achievement": achievement,
+                        "player_name": player_name,
+                        "discord_id": discord_id,
+                        "value": games,
+                    }
+                )
+                self.notified_achievements.add(achievement_id)
 
             # Check K/D milestones (only if player has 20+ games)
             if games >= 20:
                 for threshold, achievement in self.KD_MILESTONES.items():
                     achievement_id = f"{player_guid}_kd_{threshold}"
-                    if (
-                        kd_ratio >= threshold
-                        and achievement_id not in self.notified_achievements
+                    if kd_ratio < threshold:
+                        continue
+                    if achievement_id in self.notified_achievements:
+                        continue
+                    if not await self._claim_achievement_ledger(
+                        achievement_id, player_guid, "kd", threshold
                     ):
-                        new_achievements.append(
-                            {
-                                "type": "kd",
-                                "threshold": threshold,
-                                "achievement": achievement,
-                                "player_name": player_name,
-                                "discord_id": discord_id,
-                                "value": kd_ratio,
-                            }
-                        )
-                        self.notified_achievements.add(achievement_id)
+                        continue
+
+                    new_achievements.append(
+                        {
+                            "type": "kd",
+                            "threshold": threshold,
+                            "achievement": achievement,
+                            "player_name": player_name,
+                            "discord_id": discord_id,
+                            "value": kd_ratio,
+                        }
+                    )
+                    self.notified_achievements.add(achievement_id)
 
             # Send notifications for new achievements
             if new_achievements and channel:

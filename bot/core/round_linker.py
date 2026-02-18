@@ -91,6 +91,7 @@ async def resolve_round_id_with_reason(
         "candidate_count": 0,
         "parsed_candidate_count": 0,
         "best_diff_seconds": None,
+        "date_filter_relaxed": False,
         "map_name": map_name,
         "round_number": round_number,
         "round_date": round_date,
@@ -116,12 +117,13 @@ async def resolve_round_id_with_reason(
         diag["round_date"] = round_date
 
     params: Tuple = (map_name, round_number)
-    query = """
+    base_query = """
         SELECT id, round_date, round_time, created_at
         FROM rounds
         WHERE map_name = ?
           AND round_number = ?
     """
+    query = base_query
 
     if round_date:
         query += " AND round_date = ?"
@@ -133,30 +135,40 @@ async def resolve_round_id_with_reason(
     if not rows:
         if round_date:
             date_free_rows = await db_adapter.fetch_all(
-                """
-                SELECT id
-                FROM rounds
-                WHERE map_name = ?
-                  AND round_number = ?
-                ORDER BY created_at DESC
-                LIMIT 1
-                """,
+                f"{base_query} ORDER BY created_at DESC LIMIT 10",
                 (map_name, round_number),
             )
             if date_free_rows:
-                diag["reason_code"] = "date_filter_excluded_rows"
+                if target_dt:
+                    rows = date_free_rows
+                    diag["date_filter_relaxed"] = True
+                    logger.warning(
+                        "round_linker: reason=date_filter_relaxed map=%s rn=%d date=%s "
+                        "(rows exist for map+rn on nearby dates; continuing with time window)",
+                        map_name, round_number, round_date,
+                    )
+                else:
+                    diag["reason_code"] = "date_filter_excluded_rows"
+                    logger.warning(
+                        "round_linker: reason=date_filter_excluded_rows map=%s rn=%d date=%s "
+                        "(rows exist for map+rn but no target_dt to safely relax date filter)",
+                        map_name, round_number, round_date,
+                    )
+                    return None, diag
+            else:
+                diag["reason_code"] = "no_rows_for_map_round"
                 logger.warning(
-                    "round_linker: reason=date_filter_excluded_rows map=%s rn=%d date=%s "
-                    "(rows exist for map+rn but not on this date)",
+                    "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s",
                     map_name, round_number, round_date,
                 )
                 return None, diag
-        diag["reason_code"] = "no_rows_for_map_round"
-        logger.warning(
-            "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s",
-            map_name, round_number, round_date,
-        )
-        return None, diag
+        else:
+            diag["reason_code"] = "no_rows_for_map_round"
+            logger.warning(
+                "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s",
+                map_name, round_number, round_date,
+            )
+            return None, diag
 
     if not target_dt:
         diag["candidate_count"] = len(rows)
@@ -174,7 +186,12 @@ async def resolve_round_id_with_reason(
     diag["candidate_count"] = len(rows)
 
     for row in rows:
-        round_id, r_date, r_time, created_at = row
+        round_id = row[0] if len(row) > 0 else None
+        r_date = row[1] if len(row) > 1 else None
+        r_time = row[2] if len(row) > 2 else None
+        created_at = row[3] if len(row) > 3 else None
+        if round_id is None:
+            continue
         candidate_dt = _parse_round_datetime(r_date, r_time)
 
         if not candidate_dt and created_at:
@@ -206,11 +223,19 @@ async def resolve_round_id_with_reason(
         return best_id, diag
 
     if diag["parsed_candidate_count"] == 0:
-        diag["reason_code"] = "time_parse_failed"
-        logger.warning(
-            "round_linker: reason=time_parse_failed (no parseable candidates) map=%s rn=%d candidates=%d",
-            map_name, round_number, diag["candidate_count"],
-        )
+        if diag.get("date_filter_relaxed"):
+            diag["reason_code"] = "date_filter_excluded_rows"
+            logger.warning(
+                "round_linker: reason=date_filter_excluded_rows map=%s rn=%d date=%s "
+                "(date filter relaxed but candidates had no parseable timestamps)",
+                map_name, round_number, round_date,
+            )
+        else:
+            diag["reason_code"] = "time_parse_failed"
+            logger.warning(
+                "round_linker: reason=time_parse_failed (no parseable candidates) map=%s rn=%d candidates=%d",
+                map_name, round_number, diag["candidate_count"],
+            )
     else:
         diag["reason_code"] = "all_candidates_outside_window"
         if parsed_diffs_seconds:
