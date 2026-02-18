@@ -10,6 +10,49 @@ import { PageHeader, LoadingSkeleton, EmptyState } from './components.js';
 // Chart instances for cleanup
 let _charts = [];
 
+function _sanitizeHtmlTree(root) {
+    const blockedTags = new Set(['SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'STYLE', 'LINK']);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    const toRemove = [];
+
+    while (walker.nextNode()) {
+        const el = walker.currentNode;
+        if (blockedTags.has(el.tagName)) {
+            toRemove.push(el);
+            continue;
+        }
+
+        for (const attr of Array.from(el.attributes)) {
+            const name = attr.name.toLowerCase();
+            const value = attr.value.trim().toLowerCase();
+            if (name.startsWith('on')) {
+                el.removeAttribute(attr.name);
+                continue;
+            }
+            if ((name === 'href' || name === 'src' || name === 'xlink:href') && value.startsWith('javascript:')) {
+                el.removeAttribute(attr.name);
+            }
+        }
+    }
+
+    toRemove.forEach((el) => el.remove());
+}
+
+function _createSanitizedFragment(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    _sanitizeHtmlTree(doc.body);
+    const fragment = document.createDocumentFragment();
+    while (doc.body.firstChild) {
+        fragment.appendChild(doc.body.firstChild);
+    }
+    return fragment;
+}
+
+function replaceElementHtml(element, html) {
+    if (!element) return;
+    element.replaceChildren(_createSanitizedFragment(html));
+}
+
 // ============================================================================
 // LOAD VIEW
 // ============================================================================
@@ -18,7 +61,7 @@ export async function loadRetroVizView() {
     const container = document.getElementById('retro-viz-container');
     if (!container) return;
 
-    container.innerHTML = PageHeader(
+    replaceElementHtml(container, PageHeader(
         'Round Visualizer',
         'Interactive round-by-round combat analytics'
     ) + `
@@ -29,7 +72,7 @@ export async function loadRetroVizView() {
             </select>
         </div>
         <div id="retro-viz-panels">${LoadingSkeleton('card', 6)}</div>
-    `;
+    `);
 
     // Load round picker
     try {
@@ -38,17 +81,22 @@ export async function loadRetroVizView() {
         if (!picker) return;
 
         if (!rounds || rounds.length === 0) {
-            picker.innerHTML = '<option value="">No rounds available</option>';
-            document.getElementById('retro-viz-panels').innerHTML =
-                EmptyState('No round data found. Play some rounds first!');
+            picker.replaceChildren(new Option('No rounds available', ''));
+            replaceElementHtml(
+                document.getElementById('retro-viz-panels'),
+                EmptyState('No round data found. Play some rounds first!')
+            );
             return;
         }
 
-        picker.innerHTML = rounds.map(r => {
+        picker.replaceChildren(...rounds.map((r) => {
             const dateStr = r.round_date ? new Date(r.round_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
             const label = `${r.map_name || 'Unknown'} R${r.round_number ?? '?'} — ${dateStr} (${r.player_count} players)`;
-            return `<option value="${r.id}">${escapeHtml(label)}</option>`;
-        }).join('');
+            const option = document.createElement('option');
+            option.value = String(r.id ?? '');
+            option.textContent = label;
+            return option;
+        }));
 
         picker.addEventListener('change', () => {
             const id = picker.value;
@@ -58,8 +106,7 @@ export async function loadRetroVizView() {
         // Load most recent round
         loadRound(rounds[0].id);
     } catch {
-        document.getElementById('retro-viz-panels').innerHTML =
-            EmptyState('Failed to load rounds.');
+        replaceElementHtml(document.getElementById('retro-viz-panels'), EmptyState('Failed to load rounds.'));
     }
 }
 
@@ -75,22 +122,22 @@ async function loadRound(roundId) {
     _charts.forEach(c => c.destroy());
     _charts = [];
 
-    panels.innerHTML = LoadingSkeleton('card', 6);
+    replaceElementHtml(panels, LoadingSkeleton('card', 6));
 
     try {
         const data = await fetchJSON(`${API_BASE}/rounds/${roundId}/viz`);
         if (!data || !data.players || data.players.length === 0) {
-            panels.innerHTML = EmptyState('No player data for this round.');
+            replaceElementHtml(panels, EmptyState('No player data for this round.'));
             return;
         }
         renderPanels(panels, data);
     } catch {
-        panels.innerHTML = EmptyState('Failed to load round data.');
+        replaceElementHtml(panels, EmptyState('Failed to load round data.'));
     }
 }
 
 function renderPanels(container, data) {
-    container.innerHTML = `
+    replaceElementHtml(container, `
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Row 1: Match Summary + Combat Overview -->
             <div id="rv-summary" class="glass-card rounded-xl p-5 cursor-pointer hover:ring-1 hover:ring-brand-cyan/30 transition"></div>
@@ -123,7 +170,7 @@ function renderPanels(container, data) {
                 <div class="chart-container" style="height:${Math.max(200, data.players.length * 32)}px"><canvas id="rv-time"></canvas></div>
             </div>
         </div>
-    `;
+    `);
 
     renderMatchSummary(data);
     renderCombatRadar(data);
@@ -165,7 +212,7 @@ function renderMatchSummary(data) {
     const winnerColor = data.winner_team === 1 ? 'text-red-400' : data.winner_team === 2 ? 'text-blue-400' : 'text-slate-400';
     const durationStr = data.duration_seconds ? `${Math.round(data.duration_seconds / 60)}m` : '—';
 
-    el.innerHTML = `
+    replaceElementHtml(el, `
         <h3 class="text-sm font-bold text-white mb-4">Match Summary</h3>
         <div class="grid grid-cols-2 gap-3 text-sm">
             <div class="glass-panel rounded-lg p-3">
@@ -211,7 +258,7 @@ function renderMatchSummary(data) {
                 <div class="text-[10px] text-slate-400">${formatNumber(h.most_damage.damage_given)}</div>
             </div>` : ''}
         </div>` : ''}
-    `;
+    `);
 }
 
 // ============================================================================
@@ -338,7 +385,7 @@ function renderTopFraggers(data, canvasOverride) {
 function renderDamageBreakdown(data) {
     const el = document.getElementById('rv-damage-table');
     if (!el) return;
-    el.innerHTML = buildDamageTableHtml(data);
+    replaceElementHtml(el, buildDamageTableHtml(data));
 }
 
 function buildDamageTableHtml(data) {
@@ -483,7 +530,7 @@ function openChartLightbox(title, renderFn) {
     modal.id = 'retro-viz-lightbox';
     modal.className = 'fixed inset-0 z-50 flex items-center justify-center';
     modal.style.cssText = 'background: rgba(0,0,0,0); transition: background 0.3s ease;';
-    modal.innerHTML = `
+    replaceElementHtml(modal, `
         <div class="absolute inset-0 backdrop-blur-md"></div>
         <div class="relative w-[90vw] h-[80vh] mx-4" style="transform: scale(0.95); opacity: 0; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
             <button class="absolute -top-10 right-0 w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition" id="rv-lightbox-close">
@@ -494,7 +541,7 @@ function openChartLightbox(title, renderFn) {
                 <div class="flex-1 relative"><canvas id="rv-lightbox-canvas"></canvas></div>
             </div>
         </div>
-    `;
+    `);
 
     modal.addEventListener('click', (e) => {
         if (e.target === modal || e.target.classList.contains('backdrop-blur-md')) closeLightbox();
@@ -531,7 +578,7 @@ function openHtmlLightbox(title, buildHtmlFn) {
     modal.id = 'retro-viz-lightbox';
     modal.className = 'fixed inset-0 z-50 flex items-center justify-center';
     modal.style.cssText = 'background: rgba(0,0,0,0); transition: background 0.3s ease;';
-    modal.innerHTML = `
+    replaceElementHtml(modal, `
         <div class="absolute inset-0 backdrop-blur-md"></div>
         <div class="relative w-[90vw] max-h-[85vh] mx-4 overflow-auto" style="transform: scale(0.95); opacity: 0; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
             <button class="absolute -top-10 right-0 w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition" id="rv-lightbox-close">
@@ -542,7 +589,7 @@ function openHtmlLightbox(title, buildHtmlFn) {
                 <div id="rv-lightbox-content"></div>
             </div>
         </div>
-    `;
+    `);
 
     modal.addEventListener('click', (e) => {
         if (e.target === modal || e.target.classList.contains('backdrop-blur-md')) closeLightbox();
@@ -561,7 +608,7 @@ function openHtmlLightbox(title, buildHtmlFn) {
             inner.style.opacity = '1';
         }
         const content = document.getElementById('rv-lightbox-content');
-        if (content) content.innerHTML = buildHtmlFn();
+        if (content) replaceElementHtml(content, buildHtmlFn());
     });
 
     document.addEventListener('keydown', handleLightboxEscape);

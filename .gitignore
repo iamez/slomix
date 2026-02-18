@@ -181,18 +181,27 @@ check_before_commit.sh
 /local_stats/
 /node_modules/
 /prompt_instructions/
-/scripts/
+/scripts/*
 /server/
 /temp/
 # /tests/ - Removed: Tests need to be tracked for CI
 /test_files/
 /test_suite/
 /tmp/
-/tools/
+/tools/*
 /publish_temp/
 /publish_clean/
 /github/
 /performance_updates/
+
+# CI-required script/tool modules used by tests
+!/scripts/
+!/tools/
+!/scripts/__init__.py
+!/scripts/backfill_gametimes.py
+!/tools/__init__.py
+!/tools/simple_bulk_import.py
+!/tools/verify_pipeline.py
 
 # Prototype projects
 # /website/      # ENABLED - Added in v1.1.0
@@ -281,6 +290,7 @@ bot/README_AUTOMATION.md
 # ============================================
 tools/*
 !tools/__init__.py
+!tools/simple_bulk_import.py
 !tools/stopwatch_scoring.py
 !tools/schema_postgresql.sql
 
