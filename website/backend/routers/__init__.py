@@ -51,4 +51,3 @@ Usage:
     app.include_router(uploads.router, prefix="/api/uploads")
     app.include_router(availability.router, prefix="/api/availability")
 """
-__all__ = ["api", "auth", "predictions", "greatshot", "greatshot_topshots", "uploads", "availability"]

@@ -251,8 +251,8 @@ class FakeAvailabilityDB:
             user_id = int(params[0])
             channel_type = str(params[1])
             channel_address = params[2]
-            enabled = bool(params[3])
-            verified_at = params[4] if len(params) > 4 else None
+            enabled = bool(params[3]) if len(params) > 3 else True
+            verified_at = params[4] if len(params) > 4 else self._now()
             preferences = params[5] if len(params) > 5 else {}
             if isinstance(preferences, str):
                 try:
