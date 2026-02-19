@@ -159,7 +159,8 @@ class HealthMonitor:
             import psutil
             process = psutil.Process()
             health['memory_mb'] = round(process.memory_info().rss / (1024 * 1024), 2)
-            health['cpu_percent'] = process.cpu_percent(interval=1)
+            loop = asyncio.get_running_loop()
+            health['cpu_percent'] = await loop.run_in_executor(None, process.cpu_percent, 1)
         except Exception:
             health['memory_mb'] = 0
             health['cpu_percent'] = 0

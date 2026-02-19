@@ -3,7 +3,7 @@
 > **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Version](https://img.shields.io/badge/version-1.0.8-blue)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.8-blue)](CHANGELOG.md)
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_14-336791)](https://www.postgresql.org/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
@@ -78,7 +78,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 - 💬 **Discord Follow-Up Embeds** — Awards posted automatically after round stats
 - 🗄️ **3 New Tables** — `round_awards`, `round_vs_stats`, `processed_endstats_files`
 
-**[📖 Full Changelog](docs/CHANGELOG.md)**
+**[📖 Full Changelog](CHANGELOG.md)**
 
 ---
 
@@ -94,7 +94,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 - 🏆 **EndStats Awards** — Post-round awards with 7 categories
 - 🌐 **Web Dashboard** — FastAPI + vanilla JS SPA with auth, profiles, leaderboards, admin panel
 
-**[📊 Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation](docs/SAFETY_VALIDATION_SYSTEMS.md)** | **[📖 Changelog](docs/CHANGELOG.md)**
+**[📊 Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation](docs/SAFETY_VALIDATION_SYSTEMS.md)** | **[📖 Changelog](CHANGELOG.md)**
 
 ---
 
@@ -316,10 +316,33 @@ Upload ET:Legacy `.dm_84` demo files through the website. The system will:
 
 ## 🚀 Quick Start
 
+### **One-Command Dev Stack (Recommended)**
+
+```bash
+git clone https://github.com/iamez/slomix.git
+cd slomix
+make dev
+```
+
+This starts:
+- PostgreSQL (`localhost:5432`)
+- Redis cache (`localhost:6379`)
+- FastAPI backend (`localhost:8001`)
+- Website (`http://localhost:8000`)
+
+Optional observability stack:
+
+```bash
+docker compose --profile observability up --build
+```
+
+This also starts Prometheus (`http://localhost:9090`) and Grafana (`http://localhost:3000`).
+
 ### **Prerequisites**
 
 - Python 3.11+
 - PostgreSQL 12+
+- Docker + Docker Compose (for `make dev` workflow)
 - Discord Bot Token
 - (Optional) SSH access to ET:Legacy game server
 
@@ -330,6 +353,7 @@ Upload ET:Legacy `.dm_84` demo files through the website. The system will:
 git clone https://github.com/iamez/slomix.git
 cd slomix
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 # Configure
 cp .env.example .env
@@ -580,7 +604,7 @@ pytest tests/test_greatshot_scanner_golden.py
 
 ### **Reference**
 - [docs/COMMANDS.md](docs/COMMANDS.md) — All ~99 bot commands
-- [docs/CHANGELOG.md](docs/CHANGELOG.md) — Version history
+- [CHANGELOG.md](CHANGELOG.md) — Version history (canonical)
 - [docs/CLAUDE.md](docs/CLAUDE.md) — Full technical reference
 
 ---

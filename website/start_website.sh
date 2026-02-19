@@ -1,6 +1,6 @@
 #!/bin/bash
 # ET:Legacy Stats Website - Linux Startup Script
-# Run this script to start the website backend on port 8000
+# Run this script to start the website backend on port 7000
 
 set -e
 
@@ -40,7 +40,7 @@ fi
 
 # Default values
 WEBSITE_HOST="${WEBSITE_HOST:-0.0.0.0}"
-WEBSITE_PORT="${WEBSITE_PORT:-8000}"
+WEBSITE_PORT="${WEBSITE_PORT:-7000}"
 WEBSITE_RELOAD="${WEBSITE_RELOAD:-false}"
 
 echo ""

@@ -16,11 +16,13 @@ Commands:
 """
 
 import asyncio
+import json
+import re
 
 import discord
 from discord.ext import commands, tasks
 import logging
-from datetime import datetime, date as dt_date, time as dt_time, timedelta
+from datetime import datetime, date as dt_date, time as dt_time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Optional, Dict, Set
 
@@ -29,8 +31,10 @@ from bot.services.availability_notifier_service import (
     EVENT_DAILY_REMINDER,
     EVENT_SESSION_READY,
 )
+from website.backend.services.contact_handle_crypto import ContactHandleCrypto
 
 logger = logging.getLogger("bot.cogs.availability_poll")
+REMOVE_STATUS_KEYWORDS = {"REMOVE", "DELETE", "CLEAR", "UNSET", "NONE"}
 
 
 class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
@@ -60,6 +64,30 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
         self.scheduler_lock_key = int(getattr(self.bot.config, 'availability_scheduler_lock_key', 875211))
         reminder_str = getattr(self.bot.config, 'availability_poll_reminder_times', '20:45,21:00')
         self.reminder_times = [t.strip() for t in reminder_str.split(',')]
+        self.promotion_enabled = bool(getattr(self.bot.config, "availability_promotion_enabled", True))
+        self.promotion_timezone = str(
+            getattr(self.bot.config, "availability_promotion_timezone", "Europe/Ljubljana")
+        )
+        self.promotion_reminder_time = str(
+            getattr(self.bot.config, "availability_promotion_reminder_time", "20:45")
+        )
+        self.promotion_start_time = str(
+            getattr(self.bot.config, "availability_promotion_start_time", "21:00")
+        )
+        self.promotion_followup_channel_id = int(
+            getattr(self.bot.config, "availability_promotion_followup_channel_id", 0)
+        )
+        self.promotion_voice_check_enabled = bool(
+            getattr(self.bot.config, "availability_promotion_voice_check_enabled", True)
+        )
+        self.promotion_server_check_enabled = bool(
+            getattr(self.bot.config, "availability_promotion_server_check_enabled", True)
+        )
+        self.promotion_job_max_attempts = max(
+            1,
+            int(getattr(self.bot.config, "availability_promotion_job_max_attempts", 5)),
+        )
+        self.contact_crypto = ContactHandleCrypto.from_env()
 
         self.notifier = UnifiedAvailabilityNotifier(self.bot, self.bot.db_adapter, self.bot.config)
 
@@ -704,6 +732,91 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
         await self.bot.db_adapter.execute(
             "CREATE INDEX IF NOT EXISTS idx_availability_entries_date ON availability_entries(entry_date)"
         )
+        await self.bot.db_adapter.execute(
+            """
+            CREATE TABLE IF NOT EXISTS availability_promotion_campaigns (
+                id BIGSERIAL PRIMARY KEY,
+                campaign_date DATE NOT NULL,
+                target_timezone TEXT NOT NULL DEFAULT 'Europe/Ljubljana',
+                target_start_time TIME NOT NULL DEFAULT '21:00',
+                initiated_by_user_id BIGINT NOT NULL,
+                initiated_by_discord_id BIGINT NOT NULL,
+                include_maybe BOOLEAN NOT NULL DEFAULT FALSE,
+                include_available BOOLEAN NOT NULL DEFAULT FALSE,
+                dry_run BOOLEAN NOT NULL DEFAULT FALSE,
+                status TEXT NOT NULL DEFAULT 'scheduled' CHECK (
+                    status IN ('scheduled', 'running', 'sent', 'followup_sent', 'partial', 'failed', 'cancelled')
+                ),
+                idempotency_key TEXT NOT NULL,
+                recipient_count INTEGER NOT NULL DEFAULT 0,
+                channels_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+                recipients_snapshot JSONB NOT NULL DEFAULT '[]'::jsonb,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (campaign_date, initiated_by_user_id),
+                UNIQUE (campaign_date, idempotency_key)
+            )
+            """
+        )
+        await self.bot.db_adapter.execute(
+            """
+            CREATE TABLE IF NOT EXISTS availability_promotion_jobs (
+                id BIGSERIAL PRIMARY KEY,
+                campaign_id BIGINT NOT NULL REFERENCES availability_promotion_campaigns(id) ON DELETE CASCADE,
+                job_type TEXT NOT NULL CHECK (
+                    job_type IN ('send_reminder_2045', 'send_start_2100', 'voice_check_2100')
+                ),
+                run_at TIMESTAMPTZ NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending' CHECK (
+                    status IN ('pending', 'running', 'sent', 'skipped', 'failed')
+                ),
+                attempts INTEGER NOT NULL DEFAULT 0,
+                max_attempts INTEGER NOT NULL DEFAULT 5,
+                last_error TEXT,
+                payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                sent_at TIMESTAMPTZ,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (campaign_id, job_type)
+            )
+            """
+        )
+        await self.bot.db_adapter.execute(
+            """
+            CREATE TABLE IF NOT EXISTS availability_promotion_send_logs (
+                id BIGSERIAL PRIMARY KEY,
+                campaign_id BIGINT NOT NULL REFERENCES availability_promotion_campaigns(id) ON DELETE CASCADE,
+                job_id BIGINT REFERENCES availability_promotion_jobs(id) ON DELETE SET NULL,
+                user_id BIGINT NOT NULL,
+                channel_type TEXT NOT NULL CHECK (channel_type IN ('discord', 'telegram', 'signal')),
+                status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'failed', 'skipped')),
+                message_id TEXT,
+                error TEXT,
+                payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await self.bot.db_adapter.execute(
+            """
+            CREATE TABLE IF NOT EXISTS subscription_preferences (
+                user_id BIGINT PRIMARY KEY,
+                allow_promotions BOOLEAN NOT NULL DEFAULT FALSE,
+                preferred_channel TEXT NOT NULL DEFAULT 'any'
+                    CHECK (preferred_channel IN ('discord', 'telegram', 'signal', 'any')),
+                telegram_handle_encrypted TEXT,
+                signal_handle_encrypted TEXT,
+                quiet_hours JSONB NOT NULL DEFAULT '{}'::jsonb,
+                timezone TEXT NOT NULL DEFAULT 'Europe/Ljubljana',
+                notify_threshold INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await self.bot.db_adapter.execute(
+            "CREATE INDEX IF NOT EXISTS idx_availability_promotion_jobs_due ON availability_promotion_jobs(status, run_at)"
+        )
 
     async def _is_discord_linked(self, discord_user_id: int) -> bool:
         row = await self.bot.db_adapter.fetch_one(
@@ -746,6 +859,229 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
             return dt_date.fromisoformat(raw_date.strip())
         except ValueError:
             return None
+
+    @staticmethod
+    def _normalize_operation_input(raw_status: str) -> tuple[Optional[str], Optional[str]]:
+        if not raw_status:
+            return None, None
+        normalized = (
+            str(raw_status)
+            .strip()
+            .upper()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
+        if normalized in REMOVE_STATUS_KEYWORDS:
+            return "REMOVE", None
+        status = AvailabilityPollCog._normalize_status_input(normalized)
+        if status:
+            return "SET", status
+        return None, None
+
+    @staticmethod
+    def _parse_availability_operation(args: list[str], now_date: dt_date) -> tuple[Optional[dt_date], Optional[str], Optional[str]]:
+        """
+        Parse date + status/remove operation from command args.
+
+        Supported forms:
+        - <today|tomorrow|YYYY-MM-DD> <STATUS>
+        - <today|tomorrow|YYYY-MM-DD> <REMOVE|DELETE|CLEAR>
+        - <REMOVE|DELETE|CLEAR> <today|tomorrow|YYYY-MM-DD>
+        """
+        if len(args) < 2:
+            return None, None, None
+
+        first = args[0].strip()
+        second = args[1].strip()
+        first_op, _ = AvailabilityPollCog._normalize_operation_input(first)
+
+        if first_op == "REMOVE":
+            target_date = AvailabilityPollCog._parse_date_arg(second, now_date)
+            if target_date is None:
+                return None, None, None
+            return target_date, "REMOVE", None
+
+        target_date = AvailabilityPollCog._parse_date_arg(first, now_date)
+        if target_date is None:
+            return None, None, None
+
+        status_text = " ".join(args[1:]).strip()
+        operation, status = AvailabilityPollCog._normalize_operation_input(status_text)
+        if operation is None:
+            return None, None, None
+        return target_date, operation, status
+
+    async def _resolve_linked_user_from_channel(self, *, channel_type: str, channel_address: str) -> Optional[int]:
+        row = await self.bot.db_adapter.fetch_one(
+            """
+            SELECT user_id
+            FROM availability_channel_links
+            WHERE channel_type = $1
+              AND destination = $2
+              AND verified_at IS NOT NULL
+            LIMIT 1
+            """,
+            (str(channel_type).strip().lower(), str(channel_address).strip()),
+        )
+        if not row:
+            return None
+
+        user_id = int(row[0])
+        if not await self._is_discord_linked(user_id):
+            return None
+        return user_id
+
+    async def _delete_user_availability(
+        self,
+        *,
+        user_id: int,
+        entry_date: dt_date,
+    ) -> bool:
+        existing = await self.bot.db_adapter.fetch_one(
+            """
+            SELECT id
+            FROM availability_entries
+            WHERE user_id = $1
+              AND entry_date = $2
+            LIMIT 1
+            """,
+            (int(user_id), entry_date),
+        )
+        if not existing:
+            return False
+
+        await self.bot.db_adapter.execute(
+            """
+            DELETE FROM availability_entries
+            WHERE user_id = $1
+              AND entry_date = $2
+            """,
+            (int(user_id), entry_date),
+        )
+        return True
+
+    @staticmethod
+    def _format_external_usage() -> str:
+        return (
+            "Commands:\n"
+            "/avail <today|tomorrow|YYYY-MM-DD> <LOOKING|AVAILABLE|MAYBE|NOT_PLAYING>\n"
+            "/avail <today|tomorrow|YYYY-MM-DD> <remove>\n"
+            "/avail remove <today|tomorrow|YYYY-MM-DD>\n"
+            "/today <status>  |  /tomorrow <status>\n"
+            "/avail status"
+        )
+
+    async def _format_external_status_summary(self, *, user_id: int, now_date: dt_date) -> str:
+        tomorrow = now_date + timedelta(days=1)
+        rows = await self.bot.db_adapter.fetch_all(
+            """
+            SELECT entry_date, status
+            FROM availability_entries
+            WHERE user_id = $1
+              AND entry_date BETWEEN $2 AND $3
+            ORDER BY entry_date ASC
+            """,
+            (int(user_id), now_date, tomorrow),
+        )
+        by_date = {
+            row[0].isoformat() if hasattr(row[0], "isoformat") else str(row[0])[:10]: str(row[1] or "")
+            for row in (rows or [])
+        }
+        today_status = by_date.get(now_date.isoformat(), "not set")
+        tomorrow_status = by_date.get(tomorrow.isoformat(), "not set")
+        return (
+            f"Your availability:\n"
+            f"- Today ({now_date.isoformat()}): {today_status}\n"
+            f"- Tomorrow ({tomorrow.isoformat()}): {tomorrow_status}"
+        )
+
+    async def _apply_external_availability_command(
+        self,
+        *,
+        channel_type: str,
+        channel_address: str,
+        command_text: str,
+    ) -> str:
+        await self._ensure_multichannel_tables()
+
+        now_date = datetime.now(self.timezone).date()
+        tokens = [token for token in str(command_text or "").strip().split() if token]
+        if not tokens:
+            return self._format_external_usage()
+
+        head = tokens[0].lower()
+        if head in {"/today", "today"}:
+            args = ["today", *tokens[1:]]
+        elif head in {"/tomorrow", "tomorrow"}:
+            args = ["tomorrow", *tokens[1:]]
+        elif head in {"/avail", "!avail", "avail"}:
+            if len(tokens) >= 2 and tokens[1].strip().lower() in {"status"}:
+                linked_user_id = await self._resolve_linked_user_from_channel(
+                    channel_type=channel_type,
+                    channel_address=channel_address,
+                )
+                if linked_user_id is None:
+                    return (
+                        "❌ This channel is not linked to a Discord player profile yet.\n"
+                        "Generate a token on Discord with `!avail_link telegram` (or signal) and run `/link <token>`."
+                    )
+                return await self._format_external_status_summary(
+                    user_id=linked_user_id,
+                    now_date=now_date,
+                )
+            if len(tokens) == 1:
+                return self._format_external_usage()
+            args = tokens[1:]
+        else:
+            return self._format_external_usage()
+
+        target_date, operation, status = self._parse_availability_operation(args, now_date)
+        if target_date is None or operation is None:
+            return self._format_external_usage()
+
+        if target_date < now_date:
+            return "❌ Past dates are read-only."
+        if target_date > now_date + timedelta(days=90):
+            return "❌ Date must be within 90 days."
+
+        linked_user_id = await self._resolve_linked_user_from_channel(
+            channel_type=channel_type,
+            channel_address=channel_address,
+        )
+        if linked_user_id is None:
+            return (
+                "❌ This channel is not linked to a Discord player profile yet.\n"
+                "Generate a token on Discord with `!avail_link telegram` (or signal) and run `/link <token>`."
+            )
+
+        link_row = await self.bot.db_adapter.fetch_one(
+            "SELECT player_name, discord_username FROM player_links WHERE discord_id = $1 LIMIT 1",
+            (int(linked_user_id),),
+        )
+        user_name = (
+            str(link_row[0] or "").strip()
+            if link_row and link_row[0]
+            else str(link_row[1] or "").strip()
+            if link_row and link_row[1]
+            else f"User {linked_user_id}"
+        )
+
+        if operation == "REMOVE":
+            removed = await self._delete_user_availability(
+                user_id=linked_user_id,
+                entry_date=target_date,
+            )
+            if removed:
+                return f"✅ Availability cleared for {target_date.isoformat()}."
+            return f"ℹ️ No availability entry existed for {target_date.isoformat()}."
+
+        await self._upsert_user_availability(
+            user_id=linked_user_id,
+            user_name=user_name,
+            entry_date=target_date,
+            status=str(status),
+        )
+        return f"✅ Availability set: {target_date.isoformat()} -> {status}."
 
     async def _upsert_user_availability(
         self,
@@ -790,6 +1126,8 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
                     await self._send_daily_reminder(today)
                     self.last_daily_reminder_date = today
             await self._check_session_ready(today)
+            if self.promotion_enabled:
+                await self._process_promotion_jobs(now)
         finally:
             try:
                 await self.bot.db_adapter.fetch_one(
@@ -893,6 +1231,603 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
             result.skipped,
         )
 
+    @staticmethod
+    def _decode_json_dict(value) -> dict:
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            try:
+                loaded = json.loads(value)
+                if isinstance(loaded, dict):
+                    return loaded
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    @staticmethod
+    def _decode_json_list(value) -> list[dict]:
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+        if isinstance(value, str):
+            try:
+                loaded = json.loads(value)
+                if isinstance(loaded, list):
+                    return [item for item in loaded if isinstance(item, dict)]
+            except json.JSONDecodeError:
+                return []
+        return []
+
+    @staticmethod
+    def _normalize_name_for_match(name: str | None) -> str:
+        text = str(name or "").strip().lower()
+        text = re.sub(r"\^[0-9]", "", text)
+        text = re.sub(r"[^a-z0-9]+", "", text)
+        return text
+
+    @staticmethod
+    def _is_time_in_quiet_window(local_time: dt_time, quiet_start: dt_time, quiet_end: dt_time) -> bool:
+        """Evaluate quiet-hours windows, including overnight ranges (e.g. 23:00-08:00)."""
+        current_minutes = (local_time.hour * 60) + local_time.minute
+        start_minutes = (quiet_start.hour * 60) + quiet_start.minute
+        end_minutes = (quiet_end.hour * 60) + quiet_end.minute
+
+        if start_minutes == end_minutes:
+            return True
+        if start_minutes < end_minutes:
+            return start_minutes <= current_minutes < end_minutes
+        return current_minutes >= start_minutes or current_minutes < end_minutes
+
+    def _recipient_in_quiet_hours_now(self, recipient: dict, *, now_utc: datetime | None = None) -> bool:
+        quiet_hours = recipient.get("quiet_hours")
+        if not isinstance(quiet_hours, dict):
+            quiet_hours = self._decode_json_dict(quiet_hours)
+
+        start_raw = str(quiet_hours.get("start") or "").strip()
+        end_raw = str(quiet_hours.get("end") or "").strip()
+        if not start_raw or not end_raw:
+            return False
+        if not re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", start_raw):
+            return False
+        if not re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", end_raw):
+            return False
+
+        start_hour, start_minute = map(int, start_raw.split(":"))
+        end_hour, end_minute = map(int, end_raw.split(":"))
+        quiet_start = dt_time(hour=start_hour, minute=start_minute)
+        quiet_end = dt_time(hour=end_hour, minute=end_minute)
+
+        timezone_name = str(recipient.get("timezone") or self.promotion_timezone or "Europe/Ljubljana").strip()
+        try:
+            recipient_tz = ZoneInfo(timezone_name)
+        except Exception:
+            recipient_tz = self.timezone
+
+        reference_utc = now_utc or datetime.now(timezone.utc)
+        if reference_utc.tzinfo is None:
+            reference_utc = reference_utc.replace(tzinfo=timezone.utc)
+        local_now = reference_utc.astimezone(recipient_tz).time().replace(tzinfo=None)
+
+        return self._is_time_in_quiet_window(local_now, quiet_start, quiet_end)
+
+    @staticmethod
+    def _coerce_campaign_date(value) -> dt_date:
+        if isinstance(value, dt_date):
+            return value
+        return dt_date.fromisoformat(str(value)[:10])
+
+    @staticmethod
+    def _promotion_event_key(*, campaign_date: dt_date, phase: str) -> str:
+        return f"PROMOTE:{phase}:{campaign_date.isoformat()}"
+
+    async def _process_promotion_jobs(self, now: datetime) -> None:
+        now_utc = now.astimezone(timezone.utc)
+        rows = await self.bot.db_adapter.fetch_all(
+            """
+            SELECT id, campaign_id, job_type
+            FROM availability_promotion_jobs
+            WHERE status = 'pending'
+              AND run_at <= $1
+            ORDER BY run_at ASC, id ASC
+            LIMIT 20
+            """,
+            (now_utc,),
+        )
+        if not rows:
+            return
+
+        for row in rows:
+            job_id = int(row[0])
+            campaign_id = int(row[1])
+            job_type = str(row[2])
+
+            claim = await self.bot.db_adapter.fetch_one(
+                """
+                UPDATE availability_promotion_jobs
+                SET status = 'running',
+                    attempts = COALESCE(attempts, 0) + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1
+                  AND status = 'pending'
+                RETURNING attempts, max_attempts
+                """,
+                (job_id,),
+            )
+            if not claim:
+                continue
+
+            attempts = int(claim[0] or 0)
+            max_attempts = int(claim[1] or self.promotion_job_max_attempts)
+
+            try:
+                campaign = await self.bot.db_adapter.fetch_one(
+                    """
+                    SELECT id,
+                           campaign_date,
+                           initiated_by_user_id,
+                           initiated_by_discord_id,
+                           dry_run,
+                           status,
+                           recipients_snapshot
+                    FROM availability_promotion_campaigns
+                    WHERE id = $1
+                    LIMIT 1
+                    """,
+                    (campaign_id,),
+                )
+                if not campaign:
+                    await self.bot.db_adapter.execute(
+                        """
+                        UPDATE availability_promotion_jobs
+                        SET status = 'skipped',
+                            sent_at = CURRENT_TIMESTAMP,
+                            last_error = 'campaign not found',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $1
+                        """,
+                        (job_id,),
+                    )
+                    continue
+
+                campaign_date = self._coerce_campaign_date(campaign[1])
+                recipients = self._decode_json_list(campaign[6])
+                if job_type in {"send_reminder_2045", "send_start_2100"}:
+                    sent, failed = await self._dispatch_promotion_notification(
+                        campaign_id=campaign_id,
+                        job_id=job_id,
+                        job_type=job_type,
+                        campaign_date=campaign_date,
+                        recipients=recipients,
+                    )
+                    await self.bot.db_adapter.execute(
+                        """
+                        UPDATE availability_promotion_jobs
+                        SET status = $1,
+                            sent_at = CURRENT_TIMESTAMP,
+                            last_error = NULL,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $2
+                        """,
+                        ("failed" if sent == 0 and failed > 0 else "sent", job_id),
+                    )
+                    if job_type == "send_start_2100":
+                        campaign_status = "sent" if failed == 0 else ("partial" if sent > 0 else "failed")
+                        await self.bot.db_adapter.execute(
+                            """
+                            UPDATE availability_promotion_campaigns
+                            SET status = $1,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = $2
+                            """,
+                            (campaign_status, campaign_id),
+                        )
+                elif job_type == "voice_check_2100":
+                    await self._dispatch_voice_check_followup(
+                        campaign_id=campaign_id,
+                        job_id=job_id,
+                        campaign_date=campaign_date,
+                        recipients=recipients,
+                        initiated_by_discord_id=int(campaign[3]),
+                    )
+                    await self.bot.db_adapter.execute(
+                        """
+                        UPDATE availability_promotion_jobs
+                        SET status = 'sent',
+                            sent_at = CURRENT_TIMESTAMP,
+                            last_error = NULL,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $1
+                        """,
+                        (job_id,),
+                    )
+                    await self.bot.db_adapter.execute(
+                        """
+                        UPDATE availability_promotion_campaigns
+                        SET status = 'followup_sent',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $1
+                        """,
+                        (campaign_id,),
+                    )
+                else:
+                    await self.bot.db_adapter.execute(
+                        """
+                        UPDATE availability_promotion_jobs
+                        SET status = 'skipped',
+                            sent_at = CURRENT_TIMESTAMP,
+                            last_error = 'unsupported job type',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $1
+                        """,
+                        (job_id,),
+                    )
+            except Exception as exc:
+                error_text = str(exc).strip()[:1200]
+                retry_status = "pending" if attempts < max_attempts else "failed"
+                await self.bot.db_adapter.execute(
+                    """
+                    UPDATE availability_promotion_jobs
+                    SET status = $1,
+                        last_error = $2,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $3
+                    """,
+                    (retry_status, error_text, job_id),
+                )
+                logger.warning(
+                    "Promotion job failed id=%s campaign=%s type=%s attempts=%s/%s error=%s",
+                    job_id,
+                    campaign_id,
+                    job_type,
+                    attempts,
+                    max_attempts,
+                    error_text,
+                )
+
+    async def _dispatch_promotion_notification(
+        self,
+        *,
+        campaign_id: int,
+        job_id: int,
+        job_type: str,
+        campaign_date: dt_date,
+        recipients: list[dict],
+    ) -> tuple[int, int]:
+        sent = 0
+        failed = 0
+        phase = "T-15" if job_type == "send_reminder_2045" else "T0"
+        event_key = self._promotion_event_key(campaign_date=campaign_date, phase=phase)
+        message = (
+            "Session reminder: kickoff is at 21:00 CET (in 15 minutes). "
+            "Join voice if you're available."
+            if job_type == "send_reminder_2045"
+            else "Session starts now (21:00 CET). Join voice and game server when ready."
+        )
+
+        for recipient in recipients:
+            user_id = int(recipient.get("user_id") or 0)
+            channel_type = str(recipient.get("selected_channel") or "discord").lower()
+            if self._recipient_in_quiet_hours_now(recipient):
+                await self._log_promotion_send(
+                    campaign_id=campaign_id,
+                    job_id=job_id,
+                    user_id=user_id,
+                    channel_type=channel_type,
+                    status="skipped",
+                    message_id=None,
+                    error="recipient in quiet hours",
+                    payload={"job_type": job_type},
+                )
+                continue
+            target = self._promotion_target_for_recipient(recipient, channel_type)
+            if not target:
+                await self._log_promotion_send(
+                    campaign_id=campaign_id,
+                    job_id=job_id,
+                    user_id=user_id,
+                    channel_type=channel_type,
+                    status="skipped",
+                    message_id=None,
+                    error="missing delivery target",
+                    payload={"job_type": job_type},
+                )
+                continue
+
+            try:
+                status, message_id = await self.notifier.send_via_channel_idempotent(
+                    user_id=user_id,
+                    event_key=event_key,
+                    channel_type=channel_type,
+                    target=target,
+                    message=message,
+                    payload={
+                        "campaign_id": int(campaign_id),
+                        "job_type": job_type,
+                    },
+                )
+                if status == "sent":
+                    sent += 1
+                elif status == "failed":
+                    failed += 1
+                await self._log_promotion_send(
+                    campaign_id=campaign_id,
+                    job_id=job_id,
+                    user_id=user_id,
+                    channel_type=channel_type,
+                    status=status,
+                    message_id=str(message_id or ""),
+                    error=None if status != "skipped" else "idempotent skip",
+                    payload={"job_type": job_type, "event_key": event_key},
+                )
+            except Exception as exc:
+                failed += 1
+                await self._log_promotion_send(
+                    campaign_id=campaign_id,
+                    job_id=job_id,
+                    user_id=user_id,
+                    channel_type=channel_type,
+                    status="failed",
+                    message_id=None,
+                    error=str(exc)[:1200],
+                    payload={"job_type": job_type, "event_key": event_key},
+                )
+        return sent, failed
+
+    def _promotion_target_for_recipient(self, recipient: dict, channel_type: str) -> Optional[str]:
+        if channel_type == "discord":
+            user_id = int(recipient.get("user_id") or 0)
+            return str(user_id) if user_id > 0 else None
+
+        if channel_type == "telegram":
+            encrypted = recipient.get("telegram_handle_encrypted")
+            return self.contact_crypto.decrypt(encrypted)
+        if channel_type == "signal":
+            encrypted = recipient.get("signal_handle_encrypted")
+            return self.contact_crypto.decrypt(encrypted)
+        return None
+
+    async def _dispatch_voice_check_followup(
+        self,
+        *,
+        campaign_id: int,
+        job_id: int,
+        campaign_date: dt_date,
+        recipients: list[dict],
+        initiated_by_discord_id: int,
+    ) -> None:
+        if not self.promotion_voice_check_enabled:
+            return
+
+        expected_by_id: dict[int, dict] = {}
+        for recipient in recipients:
+            user_id = int(recipient.get("user_id") or 0)
+            if user_id > 0:
+                expected_by_id[user_id] = recipient
+        if not expected_by_id:
+            return
+
+        voice_row = await self.bot.db_adapter.fetch_one(
+            """
+            SELECT status_data
+            FROM live_status
+            WHERE status_type = 'voice_channel'
+            LIMIT 1
+            """
+        )
+        voice_members = []
+        if voice_row and voice_row[0]:
+            voice_payload = self._decode_json_dict(voice_row[0])
+            voice_members = voice_payload.get("members") if isinstance(voice_payload.get("members"), list) else []
+
+        voice_member_ids: set[int] = set()
+        voice_member_names: list[str] = []
+        for member in voice_members:
+            if not isinstance(member, dict):
+                continue
+            raw_id = member.get("id") or member.get("discord_id")
+            try:
+                member_id = int(raw_id)
+            except (TypeError, ValueError):
+                member_id = None
+            if member_id is not None:
+                voice_member_ids.add(member_id)
+            name = str(member.get("name") or "").strip()
+            if name:
+                voice_member_names.append(name)
+
+        missing_ids = sorted(user_id for user_id in expected_by_id if user_id not in voice_member_ids)
+        if not missing_ids:
+            return
+
+        missing_names = [
+            str(expected_by_id[user_id].get("display_name") or f"User {user_id}")
+            for user_id in missing_ids
+        ]
+
+        in_server_not_voice: list[str] = []
+        if self.promotion_server_check_enabled:
+            server_row = await self.bot.db_adapter.fetch_one(
+                """
+                SELECT status_data
+                FROM live_status
+                WHERE status_type = 'game_server'
+                LIMIT 1
+                """
+            )
+            server_names: set[str] = set()
+            if server_row and server_row[0]:
+                server_payload = self._decode_json_dict(server_row[0])
+                players = server_payload.get("players") if isinstance(server_payload.get("players"), list) else []
+                for player in players:
+                    if isinstance(player, dict):
+                        server_names.add(self._normalize_name_for_match(player.get("name")))
+            for name in missing_names:
+                if self._normalize_name_for_match(name) in server_names:
+                    in_server_not_voice.append(name)
+
+        targeted_message_base = "We're starting now (21:00 CET). Join voice if you can."
+        targeted_sent = 0
+        followup_event_key = self._promotion_event_key(campaign_date=campaign_date, phase="FOLLOWUP")
+        for user_id in missing_ids:
+            recipient = expected_by_id[user_id]
+            channel_type = str(recipient.get("selected_channel") or "discord").lower()
+
+            if self._recipient_in_quiet_hours_now(recipient):
+                await self._log_promotion_send(
+                    campaign_id=campaign_id,
+                    job_id=job_id,
+                    user_id=user_id,
+                    channel_type=channel_type,
+                    status="skipped",
+                    message_id=None,
+                    error="recipient in quiet hours",
+                    payload={"job_type": "voice_check_2100"},
+                )
+                continue
+
+            target = self._promotion_target_for_recipient(recipient, channel_type)
+            if not target:
+                await self._log_promotion_send(
+                    campaign_id=campaign_id,
+                    job_id=job_id,
+                    user_id=user_id,
+                    channel_type=channel_type,
+                    status="skipped",
+                    message_id=None,
+                    error="missing delivery target",
+                    payload={"job_type": "voice_check_2100"},
+                )
+                continue
+
+            display_name = str(recipient.get("display_name") or f"User {user_id}")
+            direct_message = targeted_message_base
+            if display_name in in_server_not_voice:
+                direct_message += " You're in server but not in voice."
+
+            try:
+                status, message_id = await self.notifier.send_via_channel_idempotent(
+                    user_id=user_id,
+                    event_key=followup_event_key,
+                    channel_type=channel_type,
+                    target=target,
+                    message=direct_message,
+                    payload={
+                        "campaign_id": int(campaign_id),
+                        "job_type": "voice_check_2100",
+                    },
+                )
+                if status == "sent":
+                    targeted_sent += 1
+                await self._log_promotion_send(
+                    campaign_id=campaign_id,
+                    job_id=job_id,
+                    user_id=user_id,
+                    channel_type=channel_type,
+                    status=status,
+                    message_id=str(message_id or ""),
+                    error=None if status != "skipped" else "idempotent skip",
+                    payload={"job_type": "voice_check_2100", "event_key": followup_event_key},
+                )
+            except Exception as exc:
+                await self._log_promotion_send(
+                    campaign_id=campaign_id,
+                    job_id=job_id,
+                    user_id=user_id,
+                    channel_type=channel_type,
+                    status="failed",
+                    message_id=None,
+                    error=str(exc)[:1200],
+                    payload={"job_type": "voice_check_2100", "event_key": followup_event_key},
+                )
+
+        followup_parts = [f"We're waiting on: {', '.join(missing_names)}."]
+        if voice_member_names:
+            followup_parts.append(f"In voice now: {', '.join(voice_member_names[:12])}.")
+        if in_server_not_voice:
+            followup_parts.append(f"In server but not in voice: {', '.join(in_server_not_voice)}.")
+        followup_parts.append(f"Direct follow-up sent: {targeted_sent}/{len(missing_ids)}.")
+        message = " ".join(followup_parts)
+
+        channel_id = int(
+            self.promotion_followup_channel_id
+            or self.notifier.discord_announce_channel_id
+            or self.channel_id
+            or 0
+        )
+        if channel_id > 0:
+            try:
+                summary_status, summary_message_id = await self.notifier.send_discord_channel_idempotent(
+                    channel_id=channel_id,
+                    event_key=followup_event_key,
+                    message=message,
+                    payload={
+                        "campaign_id": int(campaign_id),
+                        "job_type": "voice_check_2100",
+                        "missing_count": len(missing_names),
+                        "targeted_sent": targeted_sent,
+                    },
+                )
+                await self._log_promotion_send(
+                    campaign_id=campaign_id,
+                    job_id=job_id,
+                    user_id=int(initiated_by_discord_id),
+                    channel_type="discord",
+                    status=summary_status,
+                    message_id=str(summary_message_id or ""),
+                    error=None if summary_status != "skipped" else "idempotent skip",
+                    payload={
+                        "job_type": "voice_check_2100",
+                        "event_key": followup_event_key,
+                        "missing_count": len(missing_names),
+                        "targeted_sent": targeted_sent,
+                    },
+                )
+            except Exception as exc:
+                await self._log_promotion_send(
+                    campaign_id=campaign_id,
+                    job_id=job_id,
+                    user_id=int(initiated_by_discord_id),
+                    channel_type="discord",
+                    status="failed",
+                    message_id=None,
+                    error=str(exc)[:1200],
+                    payload={
+                        "job_type": "voice_check_2100",
+                        "missing_count": len(missing_names),
+                        "targeted_sent": targeted_sent,
+                    },
+                )
+
+    async def _log_promotion_send(
+        self,
+        *,
+        campaign_id: int,
+        job_id: int,
+        user_id: int,
+        channel_type: str,
+        status: str,
+        message_id: str | None,
+        error: str | None,
+        payload: dict,
+    ) -> None:
+        payload_json = json.dumps(payload or {}, ensure_ascii=True)
+        await self.bot.db_adapter.execute(
+            """
+            INSERT INTO availability_promotion_send_logs
+                (campaign_id, job_id, user_id, channel_type, status, message_id, error, payload, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, CAST($8 AS JSONB), CURRENT_TIMESTAMP)
+            """,
+            (
+                int(campaign_id),
+                int(job_id),
+                int(user_id or 0),
+                str(channel_type),
+                str(status),
+                message_id,
+                error,
+                payload_json,
+            ),
+        )
+
     @tasks.loop(minutes=1)
     async def availability_scheduler_loop(self):
         if not self.multichannel_enabled:
@@ -984,9 +1919,33 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
                 await connector.send_message(chat_id, "ℹ️ No active Telegram availability subscription found.")
             return
 
+        if lower.startswith("/help"):
+            await connector.send_message(chat_id, self._format_external_usage())
+            return
+
+        if lower.startswith("/avail") or lower.startswith("/today") or lower.startswith("/tomorrow"):
+            reply = await self._apply_external_availability_command(
+                channel_type="telegram",
+                channel_address=chat_id,
+                command_text=command,
+            )
+            await connector.send_message(chat_id, reply)
+            return
+
         await connector.send_message(
             chat_id,
-            "Commands: /link <token> to subscribe, /unlink to unsubscribe.",
+            "Commands: /link <token>, /unlink, /avail, /today, /tomorrow, /help.",
+        )
+
+    async def handle_signal_gateway_command(self, sender: str, text: str) -> str:
+        """
+        Entry-point for Signal gateway integrations (webhook/operator wrappers).
+        Returns response text so caller can relay it back to Signal user.
+        """
+        return await self._apply_external_availability_command(
+            channel_type="signal",
+            channel_address=str(sender or "").strip(),
+            command_text=text,
         )
 
     @tasks.loop(seconds=8)
@@ -1003,7 +1962,7 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
 
     @commands.command(name="avail")
     @commands.cooldown(2, 15, commands.BucketType.user)
-    async def set_availability_command(self, ctx, date_arg: str = None, status_arg: str = None):
+    async def set_availability_command(self, ctx, *args):
         """
         Set date-based availability.
 
@@ -1012,11 +1971,10 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
             !avail tomorrow MAYBE
             !avail 2026-02-20 AVAILABLE
             !avail 2026-02-20 NOT_PLAYING
+            !avail today remove
+            !avail remove tomorrow
+            !avail status
         """
-        if not date_arg or not status_arg:
-            await ctx.send("Usage: `!avail <today|tomorrow|YYYY-MM-DD> <LOOKING|AVAILABLE|MAYBE|NOT_PLAYING>`")
-            return
-
         await self._ensure_multichannel_tables()
 
         user_id = int(ctx.author.id)
@@ -1025,9 +1983,18 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
             return
 
         now_date = datetime.now(self.timezone).date()
-        target_date = self._parse_date_arg(date_arg, now_date)
-        if target_date is None:
-            await ctx.send("❌ Invalid date. Use `today`, `tomorrow`, or `YYYY-MM-DD`.")
+
+        if args and str(args[0]).strip().lower() == "status":
+            await ctx.send(await self._format_external_status_summary(user_id=user_id, now_date=now_date))
+            return
+
+        parsed_args = [str(arg) for arg in args]
+        target_date, operation, status = self._parse_availability_operation(parsed_args, now_date)
+        if target_date is None or operation is None:
+            await ctx.send(
+                "Usage: `!avail <today|tomorrow|YYYY-MM-DD> <LOOKING|AVAILABLE|MAYBE|NOT_PLAYING|remove>`\n"
+                "Also: `!avail remove <today|tomorrow|YYYY-MM-DD>` or `!avail status`."
+            )
             return
         if target_date < now_date:
             await ctx.send("❌ Past dates are read-only.")
@@ -1036,9 +2003,15 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
             await ctx.send("❌ Date must be within 90 days.")
             return
 
-        status = self._normalize_status_input(status_arg)
-        if status is None:
-            await ctx.send("❌ Invalid status. Use LOOKING, AVAILABLE, MAYBE, or NOT_PLAYING.")
+        if operation == "REMOVE":
+            removed = await self._delete_user_availability(
+                user_id=user_id,
+                entry_date=target_date,
+            )
+            if removed:
+                await ctx.send(f"✅ Availability cleared for **{target_date.isoformat()}**.")
+            else:
+                await ctx.send(f"ℹ️ No availability entry existed for **{target_date.isoformat()}**.")
             return
 
         username = (
@@ -1050,7 +2023,7 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
             user_id=user_id,
             user_name=username,
             entry_date=target_date,
-            status=status,
+            status=str(status),
         )
 
         await ctx.send(f"✅ Availability set: **{target_date.isoformat()}** → **{status}**")

@@ -19,10 +19,15 @@ SSH polling is kept as fallback (every 10 min) if WebSocket disconnects.
 
 import asyncio
 import logging
+import re
 from datetime import datetime
 from typing import Optional, Callable, Awaitable
 
 logger = logging.getLogger('WebSocketClient')
+
+SAFE_WS_STATS_FILENAME_PATTERN = re.compile(
+    r"^\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-\d+(?:-endstats)?(?:_ws)?\.txt$"
+)
 
 # Try to import websockets library
 try:
@@ -31,7 +36,7 @@ try:
     WEBSOCKETS_AVAILABLE = True
 except ImportError:
     WEBSOCKETS_AVAILABLE = False
-    logger.warning("⚠️ websockets library not installed. Run: pip install websockets")
+    logger.debug("websockets library not installed; WebSocket push client unavailable")
 
 
 class StatsWebSocketClient:
@@ -71,7 +76,12 @@ class StatsWebSocketClient:
         self.reconnect_count = 0
         
         # Build URI
-        self.uri = f"ws://{config.ws_host}:{config.ws_port}"
+        ws_scheme = str(getattr(config, "ws_scheme", "wss") or "wss").strip().lower()
+        if ws_scheme not in {"ws", "wss"}:
+            ws_scheme = "wss"
+        self.uri = f"{ws_scheme}://{config.ws_host}:{config.ws_port}"
+        if ws_scheme == "ws":
+            logger.warning("⚠️ Insecure WebSocket scheme configured (ws://). Prefer wss:// in production.")
         
         logger.info(f"✅ StatsWebSocketClient initialized (target: {self.uri})")
     
@@ -208,7 +218,7 @@ class StatsWebSocketClient:
             return
         
         # Treat as filename notification
-        if message.endswith('.txt'):
+        if self._is_valid_stats_filename(message):
             logger.info(f"📥 NEW FILE notification: {message}")
             self.files_received += 1
             self.last_notification = datetime.now()
@@ -217,8 +227,19 @@ class StatsWebSocketClient:
                 await self.on_new_file(message)
             except Exception as e:
                 logger.error(f"❌ Error processing file notification: {e}", exc_info=True)
+        elif message.endswith('.txt'):
+            logger.warning(f"⚠️ Rejected unsafe filename from VPS: {message[:100]}")
         else:
             logger.warning(f"⚠️ Unknown message from VPS: {message[:100]}")
+
+    @staticmethod
+    def _is_valid_stats_filename(filename: str) -> bool:
+        candidate = str(filename or "").strip()
+        if not candidate or len(candidate) > 255:
+            return False
+        if "/" in candidate or "\\" in candidate or ".." in candidate:
+            return False
+        return SAFE_WS_STATS_FILENAME_PATTERN.match(candidate) is not None
     
     def get_status(self) -> dict:
         """

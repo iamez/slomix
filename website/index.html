@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'">
     <meta name="slomix-admin-discord-ids" content="231165917604741121">
     <title>Slomix | The Ultimate ET:Legacy Platform</title>
 
@@ -14,46 +16,7 @@
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
-                        reactor: ['Space Grotesk', 'sans-serif'],
-                        reactorMono: ['Space Mono', 'monospace']
-                    },
-                    colors: {
-                        slate: { 850: '#151e2e', 900: '#0f172a', 950: '#020617' },
-                        brand: {
-                            blue: '#3b82f6',
-                            cyan: '#06b6d4',
-                            purple: '#8b5cf6',
-                            emerald: '#10b981',
-                            rose: '#f43f5e',
-                            amber: '#f59e0b',
-                            gold: '#fbbf24'
-                        }
-                    },
-                    backgroundImage: {
-                        'hero-pattern': "radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.15) 0%, transparent 50%), radial-gradient(circle at 100% 0%, rgba(6, 182, 212, 0.1) 0%, transparent 50%)",
-                        'grid-pattern': "linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)"
-                    },
-                    animation: {
-                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                        'float': 'float 6s ease-in-out infinite',
-                    },
-                    keyframes: {
-                        float: {
-                            '0%, 100%': { transform: 'translateY(0)' },
-                            '50%': { transform: 'translateY(-10px)' },
-                        }
-                    }
-                }
-            }
-        }
-    </script>
+    <script src="js/tailwind-config.js"></script>
 
     <style>
         body {
@@ -1162,6 +1125,33 @@
             60% { opacity: 1; }
             80% { opacity: 0.7; }
         }
+        /* Upload Library Styles */
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .upload-drop-zone.upload-drop-active {
+            border-color: rgba(59, 130, 246, 0.6) !important;
+            background: rgba(59, 130, 246, 0.08) !important;
+            box-shadow: inset 0 0 30px rgba(59, 130, 246, 0.1);
+        }
+
+        .upload-filter-btn {
+            border-color: rgba(255, 255, 255, 0.08);
+            color: #94a3b8;
+            background: transparent;
+        }
+        .upload-filter-btn:hover {
+            border-color: rgba(59, 130, 246, 0.3);
+            color: #e2e8f0;
+            background: rgba(59, 130, 246, 0.05);
+        }
+        .upload-filter-btn.upload-filter-active {
+            border-color: rgba(59, 130, 246, 0.4);
+            color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
     </style>
 
     <!-- Icons -->
@@ -1180,19 +1170,16 @@
         <div class="max-w-7xl mx-auto px-4 md:px-6 h-16 flex justify-between items-center">
 
             <!-- Logo -->
-            <div class="flex items-center gap-3 cursor-pointer" onclick="navigateTo('home')">
+            <div class="flex items-center gap-3 cursor-pointer" data-click-action="navigateTo('home')">
                 <div
                     class="w-8 h-8 bg-gradient-to-br from-brand-blue to-brand-cyan rounded-lg flex items-center justify-center font-black text-white text-xs shadow-[0_0_15px_rgba(59,130,246,0.6)]">
                     LS
                 </div>
-                <div class="font-black text-white text-lg">slomix<span class="text-brand-blue">.gg</span></div>
+                <div class="font-black text-white text-lg">slomix<span class="text-brand-blue">.fyi</span></div>
             </div>
 
             <!-- Navigation Links -->
             <div class="hidden md:flex items-center gap-1">
-                <button id="link-home" onclick="navigateTo('home')"
-                    class="nav-link active px-4 py-2 rounded-lg text-sm font-bold">Home</button>
-
                 <div class="relative">
                     <button
                         id="link-stats"
@@ -1206,29 +1193,40 @@
                     </button>
                     <div id="nav-stats-menu" role="menu"
                         class="hidden absolute top-12 left-0 min-w-[240px] glass-panel rounded-xl border border-white/10 p-2 shadow-2xl z-50">
-                        <button id="link-sessions-stats" role="menuitem" tabindex="-1" onclick="navigateTo('sessions')"
+                        <button id="link-sessions-stats" role="menuitem" tabindex="-1" data-click-action="navigateTo('sessions')"
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Sessions</button>
-                        <button id="link-leaderboards" role="menuitem" tabindex="-1" onclick="navigateTo('leaderboards')"
+                        <button id="link-leaderboards" role="menuitem" tabindex="-1" data-click-action="navigateTo('leaderboards')"
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Leaderboards</button>
-                        <button id="link-maps" role="menuitem" tabindex="-1" onclick="navigateTo('maps')"
+                        <button id="link-maps" role="menuitem" tabindex="-1" data-click-action="navigateTo('maps')"
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Maps</button>
-                        <button id="link-weapons" role="menuitem" tabindex="-1" onclick="navigateTo('weapons')"
+                        <button id="link-weapons" role="menuitem" tabindex="-1" data-click-action="navigateTo('weapons')"
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Weapons</button>
-                        <button id="link-records" role="menuitem" tabindex="-1" onclick="navigateTo('records')"
+                        <button id="link-records" role="menuitem" tabindex="-1" data-click-action="navigateTo('records')"
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Records</button>
-                        <button id="link-awards" role="menuitem" tabindex="-1" onclick="navigateTo('awards')"
+                        <button id="link-awards" role="menuitem" tabindex="-1" data-click-action="navigateTo('awards')"
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Achievements</button>
+                        <button id="link-retro-viz" role="menuitem" tabindex="-1" data-click-action="navigateTo('retro-viz')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Retro Viz</button>
                     </div>
                 </div>
 
-                <button id="link-proximity" onclick="navigateTo('proximity')"
+                <button id="link-proximity" data-click-action="navigateTo('proximity')"
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Proximity</button>
-                <button id="link-greatshot" onclick="navigateTo('greatshot')"
+                <button id="link-greatshot" data-click-action="navigateTo('greatshot')"
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Greatshot</button>
-                <button id="link-sessions" onclick="navigateTo('sessions')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Sessions</button>
-                <button id="link-availability" onclick="navigateTo('availability')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Availability</button>
+                <button id="link-hall-of-fame" data-click-action="navigateTo('hall-of-fame')"
+                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Hall of Fame</button>
+                <button id="link-uploads" data-click-action="navigateTo('uploads')"
+                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Uploads</button>
+                <button id="link-availability" data-click-action="navigateTo('availability')"
+                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
+                    Availability
+                    <span id="availability-nav-badge" class="hidden rounded-full bg-brand-amber/20 text-brand-amber px-1.5 py-0.5 text-[10px] font-bold">Link</span>
+                </button>
+                <button id="link-admin" data-click-action="navigateTo('admin')"
+                    class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">
+                    System Overview
+                </button>
             </div>
 
             <!-- Right Side: Auth -->
@@ -1242,7 +1240,7 @@
 
                 <!-- Login Button -->
                 <div id="auth-guest" class="flex items-center gap-4">
-                    <button onclick="loginWithDiscord()"
+                    <button data-click-action="loginWithDiscord()"
                         class="bg-brand-blue hover:bg-blue-600 text-white text-sm font-bold px-4 py-2 rounded-lg shadow-[0_0_15px_rgba(59,130,246,0.4)] transition">
                         Connect ID
                     </button>
@@ -1250,14 +1248,12 @@
 
                 <!-- User Profile (Hidden by default) -->
                 <div id="auth-user" class="hidden items-center gap-3">
-                    <button id="link-admin" onclick="navigateTo('admin')"
-                        class="hidden nav-link px-3 py-1 rounded-lg text-xs font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">System Overview</button>
                     <button class="relative text-slate-400 hover:text-white transition" aria-label="Notifications">
                         <i data-lucide="bell" class="w-5 h-5"></i>
                         <span class="absolute -top-1 -right-1 w-2 h-2 bg-brand-rose rounded-full"></span>
                     </button>
                     <div class="flex items-center gap-3 pl-3 border-l border-white/10 cursor-pointer group"
-                        onclick="navigateTo('profile')">
+                        data-click-action="navigateTo('profile')">
                         <div class="text-right hidden sm:block">
                             <div id="nav-username" class="text-xs font-bold text-white group-hover:text-brand-cyan transition">User
                             </div>
@@ -1268,7 +1264,7 @@
                             ?
                         </div>
                     </div>
-                    <button onclick="logout()"
+                    <button data-click-action="logout()"
                         class="text-slate-400 hover:text-brand-rose transition ml-2 p-1"
                         aria-label="Logout" title="Logout">
                         <i data-lucide="log-out" class="w-5 h-5 pointer-events-none"></i>
@@ -1307,8 +1303,7 @@
                     </h1>
 
                     <p class="text-lg text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-                        The most advanced analytics platform for ET: Legacy. Track your stats, compare with rivals, and
-                        climb the global leaderboards.
+                        Track every frag, analyze every round, celebrate every victory.
                     </p>
 
                     <!-- Hero Search Bar -->
@@ -1336,37 +1331,37 @@
                     </div>
 
                     <!-- Stats Preview - Dynamic -->
-                    <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mt-16 max-w-6xl mx-auto">
-                        <div class="stat-card p-4 rounded-xl">
-                            <div id="stat-rounds" class="text-2xl font-black text-white">--</div>
-                            <div class="stat-title">Rounds Tracked</div>
-                            <div id="stat-rounds-since" class="stat-sub">Since --</div>
-                            <div id="stat-rounds-14d" class="stat-sub">Last 14d: --</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-16 max-w-5xl mx-auto">
+                        <div class="glass-panel p-4 rounded-xl border-l-4 border-brand-blue/60 hover:border-brand-blue transition-colors">
+                            <div class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Rounds Tracked</div>
+                            <div id="stat-rounds" class="text-2xl font-black font-mono text-white">--</div>
+                            <div id="stat-rounds-since" class="text-[11px] text-slate-500 mt-1">Since --</div>
+                            <div id="stat-rounds-14d" class="text-[11px] text-slate-500">Last 14d: --</div>
                         </div>
-                        <div class="stat-card p-4 rounded-xl">
-                            <div id="stat-players" class="text-2xl font-black text-brand-blue">--</div>
-                            <div class="stat-title">Active Players (14d)</div>
-                            <div id="stat-players-all" class="stat-sub">All-time: --</div>
+                        <div class="glass-panel p-4 rounded-xl border-l-4 border-brand-cyan/60 hover:border-brand-cyan transition-colors">
+                            <div class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Active Players (14d)</div>
+                            <div id="stat-players" class="text-2xl font-black font-mono text-brand-blue">--</div>
+                            <div id="stat-players-all" class="text-[11px] text-slate-500 mt-1">All-time: --</div>
                         </div>
-                        <div class="stat-card stat-card--highlight p-4 rounded-xl">
+                        <div class="glass-panel p-4 rounded-xl border-l-4 border-brand-amber/60 hover:border-brand-amber transition-colors">
+                            <div class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Most Active (All-time)</div>
                             <div id="stat-active-all-name" class="text-lg font-black text-brand-amber">--</div>
-                            <div class="stat-title">Most Active (All-time)</div>
-                            <div id="stat-active-all-count" class="stat-sub">-- rounds</div>
+                            <div id="stat-active-all-count" class="text-[11px] text-slate-500 mt-1">-- rounds</div>
                         </div>
-                        <div class="stat-card stat-card--cool p-4 rounded-xl">
+                        <div class="glass-panel p-4 rounded-xl border-l-4 border-brand-emerald/60 hover:border-brand-emerald transition-colors">
+                            <div class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Most Active (14d)</div>
                             <div id="stat-active-14d-name" class="text-lg font-black text-brand-cyan">--</div>
-                            <div class="stat-title">Most Active (14d)</div>
-                            <div id="stat-active-14d-count" class="stat-sub">-- rounds</div>
+                            <div id="stat-active-14d-count" class="text-[11px] text-slate-500 mt-1">-- rounds</div>
                         </div>
-                        <div class="stat-card p-4 rounded-xl">
-                            <div id="stat-sessions" class="text-2xl font-black text-brand-purple">--</div>
-                            <div class="stat-title">Gaming Sessions</div>
-                            <div id="stat-sessions-14d" class="stat-sub">Last 14d: --</div>
+                        <div class="glass-panel p-4 rounded-xl border-l-4 border-brand-purple/60 hover:border-brand-purple transition-colors">
+                            <div class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Gaming Sessions</div>
+                            <div id="stat-sessions" class="text-2xl font-black font-mono text-brand-purple">--</div>
+                            <div id="stat-sessions-14d" class="text-[11px] text-slate-500 mt-1">Last 14d: --</div>
                         </div>
-                        <div class="stat-card p-4 rounded-xl">
-                            <div id="stat-kills" class="text-2xl font-black text-brand-rose">--</div>
-                            <div class="stat-title">Total Kills</div>
-                            <div id="stat-kills-14d" class="stat-sub">Last 14d: --</div>
+                        <div class="glass-panel p-4 rounded-xl border-l-4 border-brand-rose/60 hover:border-brand-rose transition-colors">
+                            <div class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Total Kills</div>
+                            <div id="stat-kills" class="text-2xl font-black font-mono text-brand-rose">--</div>
+                            <div id="stat-kills-14d" class="text-[11px] text-slate-500 mt-1">Last 14d: --</div>
                         </div>
                     </div>
                 </div>
@@ -1378,7 +1373,7 @@
                     <!-- Game Server Status (Expandable) -->
                     <div id="live-server-status" class="glass-card rounded-xl border border-white/10 overflow-hidden">
                         <!-- Collapsed view (always visible) -->
-                        <div class="p-4 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition" onclick="toggleServerDetails()">
+                        <div class="p-4 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition" data-click-action="toggleServerDetails()">
                             <div class="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center">
                                 <i data-lucide="server" class="w-6 h-6 text-slate-400"></i>
                             </div>
@@ -1405,10 +1400,10 @@
                             <div class="flex justify-between items-center mb-3">
                                 <span class="text-sm font-bold text-slate-400">Server Activity</span>
                                 <div class="flex gap-1" id="time-range-buttons">
-                                    <button onclick="loadServerActivity(24)" class="time-range-btn px-2 py-1 text-xs rounded bg-slate-700 text-slate-400 hover:bg-slate-600">24h</button>
-                                    <button onclick="loadServerActivity(72)" class="time-range-btn px-2 py-1 text-xs rounded bg-slate-700 text-slate-400 hover:bg-slate-600">3d</button>
-                                    <button onclick="loadServerActivity(168)" class="time-range-btn px-2 py-1 text-xs rounded bg-slate-700 text-slate-400 hover:bg-slate-600">7d</button>
-                                    <button onclick="loadServerActivity(720)" class="time-range-btn px-2 py-1 text-xs rounded bg-brand-emerald/20 text-brand-emerald active">30d</button>
+                                    <button data-click-action="loadServerActivity(24)" class="time-range-btn px-2 py-1 text-xs rounded bg-slate-700 text-slate-400 hover:bg-slate-600">24h</button>
+                                    <button data-click-action="loadServerActivity(72)" class="time-range-btn px-2 py-1 text-xs rounded bg-slate-700 text-slate-400 hover:bg-slate-600">3d</button>
+                                    <button data-click-action="loadServerActivity(168)" class="time-range-btn px-2 py-1 text-xs rounded bg-slate-700 text-slate-400 hover:bg-slate-600">7d</button>
+                                    <button data-click-action="loadServerActivity(720)" class="time-range-btn px-2 py-1 text-xs rounded bg-brand-emerald/20 text-brand-emerald active">30d</button>
                                 </div>
                             </div>
                             <div class="h-32 mb-3">
@@ -1441,7 +1436,7 @@
                     <!-- Voice Channel Status (Expandable) -->
                     <div id="live-voice-status" class="glass-card rounded-xl border border-white/10 overflow-hidden">
                         <!-- Collapsed view (always visible) -->
-                        <div class="p-4 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition" onclick="toggleVoiceDetails()">
+                        <div class="p-4 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition" data-click-action="toggleVoiceDetails()">
                             <div class="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center">
                                 <i data-lucide="mic" class="w-6 h-6 text-slate-400"></i>
                             </div>
@@ -1483,10 +1478,10 @@
                                 <div class="flex justify-between items-center mb-3">
                                     <span class="text-sm font-bold text-white">Voice Activity</span>
                                     <div class="flex gap-1">
-                                        <button onclick="loadVoiceActivity(24)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">24h</button>
-                                        <button onclick="loadVoiceActivity(72)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">3d</button>
-                                        <button onclick="loadVoiceActivity(168)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">7d</button>
-                                        <button onclick="loadVoiceActivity(720)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-brand-purple/20 text-brand-purple transition active">30d</button>
+                                        <button data-click-action="loadVoiceActivity(24)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">24h</button>
+                                        <button data-click-action="loadVoiceActivity(72)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">3d</button>
+                                        <button data-click-action="loadVoiceActivity(168)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-brand-purple/20 hover:text-brand-purple transition">7d</button>
+                                        <button data-click-action="loadVoiceActivity(720)" class="voice-time-range-btn px-2 py-1 rounded text-xs font-bold bg-brand-purple/20 text-brand-purple transition active">30d</button>
                                     </div>
                                 </div>
                                 <div class="relative h-32">
@@ -1521,6 +1516,71 @@
                 </div>
             </div>
 
+            <!-- Insights Charts Strip -->
+            <div id="insights-strip" class="max-w-7xl mx-auto px-6 mb-8 relative z-20">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Community Insights</h2>
+                        <span class="text-[10px] text-slate-600 uppercase tracking-widest">Trends</span>
+                    </div>
+                    <div id="insights-timeframe-btns" class="flex gap-1">
+                        <button data-click-action="window.loadInsightsCharts(14)" class="insights-tf-btn px-2.5 py-1 rounded text-xs font-bold bg-brand-blue/20 text-brand-blue transition active" data-days="14">14d</button>
+                        <button data-click-action="window.loadInsightsCharts(30)" class="insights-tf-btn px-2.5 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-slate-600 transition" data-days="30">30d</button>
+                        <button data-click-action="window.loadInsightsCharts(90)" class="insights-tf-btn px-2.5 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-slate-600 transition" data-days="90">90d</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Rounds per Day -->
+                    <div class="glass-card rounded-xl p-5">
+                        <div class="mb-3">
+                            <h3 class="text-sm font-bold text-white">Rounds per Day</h3>
+                            <p class="text-[11px] text-slate-500 mt-0.5">Daily round activity</p>
+                        </div>
+                        <div class="h-[200px] relative">
+                            <canvas id="insights-rounds-chart"></canvas>
+                            <div id="insights-rounds-empty" class="hidden absolute inset-0 flex items-center justify-center">
+                                <div class="text-center">
+                                    <i data-lucide="bar-chart-2" class="w-6 h-6 text-slate-600 mx-auto mb-2"></i>
+                                    <p class="text-xs text-slate-500">Insights coming soon</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Active Players per Day -->
+                    <div class="glass-card rounded-xl p-5">
+                        <div class="mb-3">
+                            <h3 class="text-sm font-bold text-white">Active Players per Day</h3>
+                            <p class="text-[11px] text-slate-500 mt-0.5">Unique players each day</p>
+                        </div>
+                        <div class="h-[200px] relative">
+                            <canvas id="insights-players-chart"></canvas>
+                            <div id="insights-players-empty" class="hidden absolute inset-0 flex items-center justify-center">
+                                <div class="text-center">
+                                    <i data-lucide="users" class="w-6 h-6 text-slate-600 mx-auto mb-2"></i>
+                                    <p class="text-xs text-slate-500">Insights coming soon</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Map Distribution -->
+                    <div class="glass-card rounded-xl p-5">
+                        <div class="mb-3">
+                            <h3 class="text-sm font-bold text-white">Map Distribution</h3>
+                            <p class="text-[11px] text-slate-500 mt-0.5">Most played maps</p>
+                        </div>
+                        <div class="h-[200px] relative">
+                            <canvas id="insights-maps-chart"></canvas>
+                            <div id="insights-maps-empty" class="hidden absolute inset-0 flex items-center justify-center">
+                                <div class="text-center">
+                                    <i data-lucide="map" class="w-6 h-6 text-slate-600 mx-auto mb-2"></i>
+                                    <p class="text-xs text-slate-500">Insights coming soon</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Live Stats Section - 3 WIDGETS -->
             <div class="max-w-7xl mx-auto px-6 -mt-2 relative z-20 pb-20">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1534,7 +1594,7 @@
                                 <div id="current-season-display" class="text-2xl font-black text-white mt-1">Loading...
                                 </div>
                             </div>
-                            <button onclick="toggleSeasonDetails()" class="flex items-center gap-2 text-[11px] font-bold text-brand-amber hover:text-white transition">
+                            <button data-click-action="toggleSeasonDetails()" class="flex items-center gap-2 text-[11px] font-bold text-brand-amber hover:text-white transition">
                                 <i data-lucide="calendar" class="w-5 h-5"></i>
                                 <span>Details</span>
                                 <i id="season-expand-icon" data-lucide="chevron-down" class="w-4 h-4 transition-transform"></i>
@@ -1623,7 +1683,7 @@
                                 </div>
                                 <div class="text-xl font-black text-white mt-1">Recent Matches</div>
                             </div>
-                            <button onclick="navigateTo('sessions')"
+                            <button data-click-action="navigateTo('sessions')"
                                 class="text-xs font-bold text-brand-purple hover:text-white transition">VIEW
                                 ALL</button>
                         </div>
@@ -1643,7 +1703,7 @@
                                 </div>
                                 <div class="text-xl font-black text-white mt-1">Quick Leaders</div>
                             </div>
-                            <button onclick="navigateTo('leaderboards')"
+                            <button data-click-action="navigateTo('leaderboards')"
                                 class="text-xs font-bold text-brand-emerald hover:text-white transition">VIEW
                                 ALL</button>
                         </div>
@@ -1655,6 +1715,25 @@
                         </div>
                     </div>
 
+                </div>
+            </div>
+
+            <!-- Retro Viz Teaser -->
+            <div class="max-w-7xl mx-auto px-6 pb-20 relative z-20">
+                <div class="glass-card rounded-xl p-6 border border-brand-purple/20 hover:border-brand-purple/40 transition-colors group cursor-pointer" data-click-action="navigateTo('retro-viz')">
+                    <div class="flex items-center gap-5">
+                        <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-brand-purple/30 to-brand-cyan/20 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                            <i data-lucide="sparkles" class="w-7 h-7 text-brand-purple"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <h3 class="text-base font-bold text-white">Retro Viz Gallery</h3>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-purple/20 text-brand-purple uppercase">New</span>
+                            </div>
+                            <p class="text-sm text-slate-400">Pixel-art visualizations, ASCII stats, and retro-styled match summaries from your gaming sessions.</p>
+                        </div>
+                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-brand-purple group-hover:translate-x-1 transition-all shrink-0"></i>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1678,7 +1757,7 @@
 
                 <!-- Load More Button -->
                 <div id="sessions-load-more" class="text-center mt-8 hidden">
-                    <button onclick="loadMoreSessions()"
+                    <button data-click-action="loadMoreSessions()"
                         class="px-6 py-3 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-bold text-slate-300 transition">
                         Load More Sessions
                     </button>
@@ -1698,34 +1777,34 @@
                 <div class="glass-panel p-4 rounded-xl mb-8 space-y-4">
                     <!-- Stat Categories -->
                     <div class="flex flex-wrap gap-2 justify-center">
-                        <button id="btn-stat-dpm" onclick="updateLeaderboardFilter('stat', 'dpm')"
+                        <button id="btn-stat-dpm" data-click-action="updateLeaderboardFilter('stat', 'dpm')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">DPM</button>
-                        <button id="btn-stat-kills" onclick="updateLeaderboardFilter('stat', 'kills')"
+                        <button id="btn-stat-kills" data-click-action="updateLeaderboardFilter('stat', 'kills')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Kills</button>
-                        <button id="btn-stat-kd" onclick="updateLeaderboardFilter('stat', 'kd')"
+                        <button id="btn-stat-kd" data-click-action="updateLeaderboardFilter('stat', 'kd')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">K/D</button>
-                        <button id="btn-stat-damage" onclick="updateLeaderboardFilter('stat', 'damage')"
+                        <button id="btn-stat-damage" data-click-action="updateLeaderboardFilter('stat', 'damage')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Damage</button>
-                        <button id="btn-stat-headshots" onclick="updateLeaderboardFilter('stat', 'headshots')"
+                        <button id="btn-stat-headshots" data-click-action="updateLeaderboardFilter('stat', 'headshots')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Headshots</button>
-                        <button id="btn-stat-accuracy" onclick="updateLeaderboardFilter('stat', 'accuracy')"
+                        <button id="btn-stat-accuracy" data-click-action="updateLeaderboardFilter('stat', 'accuracy')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Accuracy</button>
-                        <button id="btn-stat-revives" onclick="updateLeaderboardFilter('stat', 'revives')"
+                        <button id="btn-stat-revives" data-click-action="updateLeaderboardFilter('stat', 'revives')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Revives</button>
-                        <button id="btn-stat-gibs" onclick="updateLeaderboardFilter('stat', 'gibs')"
+                        <button id="btn-stat-gibs" data-click-action="updateLeaderboardFilter('stat', 'gibs')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">Gibs</button>
-                        <button id="btn-stat-games" onclick="updateLeaderboardFilter('stat', 'games')"
+                        <button id="btn-stat-games" data-click-action="updateLeaderboardFilter('stat', 'games')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold bg-brand-blue text-white shadow-lg transition">Rounds</button>
                     </div>
                     <!-- Time Period -->
                     <div class="flex flex-wrap gap-2 justify-center border-t border-white/5 pt-4">
-                        <button id="btn-period-7d" onclick="updateLeaderboardFilter('period', '7d')"
+                        <button id="btn-period-7d" data-click-action="updateLeaderboardFilter('period', '7d')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">7 Days</button>
-                        <button id="btn-period-30d" onclick="updateLeaderboardFilter('period', '30d')"
+                        <button id="btn-period-30d" data-click-action="updateLeaderboardFilter('period', '30d')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">30 Days</button>
-                        <button id="btn-period-season" onclick="updateLeaderboardFilter('period', 'season')"
+                        <button id="btn-period-season" data-click-action="updateLeaderboardFilter('period', 'season')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold bg-brand-purple text-white shadow-lg transition">Season</button>
-                        <button id="btn-period-all" onclick="updateLeaderboardFilter('period', 'all')"
+                        <button id="btn-period-all" data-click-action="updateLeaderboardFilter('period', 'all')"
                             class="px-3 py-1.5 rounded-md text-sm font-bold text-slate-400 hover:text-white transition">All Time</button>
                     </div>
                 </div>
@@ -1765,11 +1844,11 @@
                 </div>
 
                 <div class="flex flex-wrap items-center justify-center gap-2 mb-8">
-                    <button data-map-sort="most-played" onclick="setMapsSort('most-played')" class="px-3 py-2 rounded-full text-xs font-bold bg-brand-cyan/20 text-brand-cyan active">Most Played</button>
-                    <button data-map-sort="fastest" onclick="setMapsSort('fastest')" class="px-3 py-2 rounded-full text-xs font-bold bg-slate-800 text-slate-400">Fastest Avg</button>
-                    <button data-map-sort="longest" onclick="setMapsSort('longest')" class="px-3 py-2 rounded-full text-xs font-bold bg-slate-800 text-slate-400">Longest Avg</button>
-                    <button data-map-sort="last-played" onclick="setMapsSort('last-played')" class="px-3 py-2 rounded-full text-xs font-bold bg-slate-800 text-slate-400">Last Played</button>
-                    <button data-map-sort="grenade-spam" onclick="setMapsSort('grenade-spam')" class="px-3 py-2 rounded-full text-xs font-bold bg-slate-800 text-slate-400">Nade Spam</button>
+                    <button data-map-sort="most-played" data-click-action="setMapsSort('most-played')" class="px-3 py-2 rounded-full text-xs font-bold bg-brand-cyan/20 text-brand-cyan active">Most Played</button>
+                    <button data-map-sort="fastest" data-click-action="setMapsSort('fastest')" class="px-3 py-2 rounded-full text-xs font-bold bg-slate-800 text-slate-400">Fastest Avg</button>
+                    <button data-map-sort="longest" data-click-action="setMapsSort('longest')" class="px-3 py-2 rounded-full text-xs font-bold bg-slate-800 text-slate-400">Longest Avg</button>
+                    <button data-map-sort="last-played" data-click-action="setMapsSort('last-played')" class="px-3 py-2 rounded-full text-xs font-bold bg-slate-800 text-slate-400">Last Played</button>
+                    <button data-map-sort="grenade-spam" data-click-action="setMapsSort('grenade-spam')" class="px-3 py-2 rounded-full text-xs font-bold bg-slate-800 text-slate-400">Nade Spam</button>
                 </div>
 
                 <!-- Maps Grid -->
@@ -1883,6 +1962,49 @@
                     <span>Prototype mode: waiting for proximity data ingestion.</span>
                 </div>
 
+                <div class="glass-panel p-4 rounded-xl mb-8 border border-brand-cyan/20">
+                    <details id="proximity-metric-guide">
+                        <summary class="cursor-pointer list-none flex items-center justify-between">
+                            <span class="inline-flex items-center gap-2 text-sm font-bold text-slate-200">
+                                <i data-lucide="circle-help" class="w-4 h-4 text-brand-cyan"></i>
+                                How to read these stats
+                            </span>
+                            <span class="text-[10px] uppercase tracking-wide text-slate-500">Toggle guide</span>
+                        </summary>
+                        <div class="mt-3 space-y-3 text-[11px] text-slate-400 leading-relaxed">
+                            <p>
+                                Metrics come from sub-second Lua proximity telemetry, then parser aggregation into engagements, teamplay, and trade/support summaries.
+                                Scope filters (session, map, round) always control what is counted.
+                            </p>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div class="glass-card p-3 rounded-lg border border-white/5">
+                                    <div class="text-[10px] font-bold uppercase tracking-wide text-brand-cyan mb-1">Summary Cards</div>
+                                    <div>Engagements = detected combat windows.</div>
+                                    <div>Avg Distance = target movement during those windows.</div>
+                                    <div>Crossfire Events = engagements with overlapping pressure.</div>
+                                    <div>Hot Zones = map bins with concentrated kill activity.</div>
+                                </div>
+                                <div class="glass-card p-3 rounded-lg border border-white/5">
+                                    <div class="text-[10px] font-bold uppercase tracking-wide text-brand-emerald mb-1">Team Dynamics</div>
+                                    <div>Synergy Duos combine crossfire volume and delay.</div>
+                                    <div>Best Sync tracks lower teammate delay (ms).</div>
+                                    <div>Focus Survivors = survival rate when under focus.</div>
+                                    <div>Support Uptime = % time within support radius.</div>
+                                </div>
+                            </div>
+                            <div class="glass-card p-3 rounded-lg border border-white/5">
+                                <div class="text-[10px] font-bold uppercase tracking-wide text-brand-amber mb-1">Formula + Capture Source</div>
+                                <div>Engagements = count(`combat_engagement`) from Lua `ENGAGEMENTS` output.</div>
+                                <div>Spawn Reaction = avg(`player_track.time_to_first_move_ms`) from `PLAYER_TRACKS` path.</div>
+                                <div>Trade Attempt Rate = `trade_attempts / trade_opportunities` from `proximity_trade_event`.</div>
+                                <div>Support Uptime = `support_samples / total_samples` from `proximity_support_summary`.</div>
+                                <div>Return Fire / Dodge / Support Reaction = Lua `REACTION_METRICS` first-hit deltas.</div>
+                            </div>
+                            <div class="text-[10px] text-slate-500">Confidence tags use sample size: High ≥ 20, Medium 8-19, Low 1-7.</div>
+                        </div>
+                    </details>
+                </div>
+
                 <div class="glass-panel p-4 rounded-xl mb-8">
                     <div class="flex items-center justify-between gap-3">
                         <div class="text-sm font-bold text-slate-300">Scope</div>
@@ -1913,22 +2035,22 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div class="glass-card p-6 rounded-xl border-l-4 border-brand-cyan">
-                        <div class="text-xs font-bold text-slate-500 uppercase">Engagements</div>
+                        <div class="text-xs font-bold text-slate-500 uppercase" title="Count of detected combat engagement windows in the selected scope.">Engagements</div>
                         <div id="proximity-total-engagements" class="text-3xl font-black text-white mt-2">--</div>
                         <div id="proximity-window-label" class="text-xs text-slate-500 mt-1">Last 30 days</div>
                     </div>
                     <div class="glass-card p-6 rounded-xl border-l-4 border-brand-emerald">
-                        <div class="text-xs font-bold text-slate-500 uppercase">Avg Distance</div>
+                        <div class="text-xs font-bold text-slate-500 uppercase" title="Average target distance moved during each engagement window.">Avg Distance</div>
                         <div id="proximity-avg-distance" class="text-3xl font-black text-brand-emerald mt-2">--</div>
                         <div class="text-xs text-slate-500 mt-1">Units per duel</div>
                     </div>
                     <div class="glass-card p-6 rounded-xl border-l-4 border-brand-amber">
-                        <div class="text-xs font-bold text-slate-500 uppercase">Crossfire Events</div>
+                        <div class="text-xs font-bold text-slate-500 uppercase" title="Engagements where two or more attackers overlap pressure on one target.">Crossfire Events</div>
                         <div id="proximity-crossfire" class="text-3xl font-black text-brand-amber mt-2">--</div>
                         <div class="text-xs text-slate-500 mt-1">Team overlap windows</div>
                     </div>
                     <div class="glass-card p-6 rounded-xl border-l-4 border-brand-rose">
-                        <div class="text-xs font-bold text-slate-500 uppercase">Hot Zones</div>
+                        <div class="text-xs font-bold text-slate-500 uppercase" title="Spatial bins with concentrated engagement kills for the selected scope.">Hot Zones</div>
                         <div id="proximity-hotzones" class="text-3xl font-black text-brand-rose mt-2">--</div>
                         <div class="text-xs text-slate-500 mt-1">Active map areas</div>
                     </div>
@@ -1936,22 +2058,22 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
                     <div class="glass-card p-5 rounded-xl border-l-4 border-brand-emerald/70">
-                        <div class="text-[11px] font-bold text-slate-500 uppercase">Escape Rate</div>
+                        <div class="text-[11px] font-bold text-slate-500 uppercase" title="Percent of engagements where the target escapes instead of dying.">Escape Rate</div>
                         <div id="proximity-escape-rate" class="text-2xl font-black text-white mt-2">--</div>
-                        <div class="text-xs text-slate-500 mt-1">Escapes / engagements</div>
+                        <div class="text-xs text-slate-500 mt-1">Escapes per engagement</div>
                     </div>
                     <div class="glass-card p-5 rounded-xl border-l-4 border-brand-cyan/70">
-                        <div class="text-[11px] font-bold text-slate-500 uppercase">Avg Duration</div>
+                        <div class="text-[11px] font-bold text-slate-500 uppercase" title="Average duration of each engagement window.">Avg Duration</div>
                         <div id="proximity-avg-duration" class="text-2xl font-black text-brand-cyan mt-2">--</div>
                         <div class="text-xs text-slate-500 mt-1">Fight length</div>
                     </div>
                     <div class="glass-card p-5 rounded-xl border-l-4 border-brand-amber/70">
-                        <div class="text-[11px] font-bold text-slate-500 uppercase">Avg Attackers</div>
+                        <div class="text-[11px] font-bold text-slate-500 uppercase" title="Average number of unique attackers involved per engagement.">Avg Attackers</div>
                         <div id="proximity-avg-attackers" class="text-2xl font-black text-brand-amber mt-2">--</div>
                         <div class="text-xs text-slate-500 mt-1">Pressure per duel</div>
                     </div>
                     <div class="glass-card p-5 rounded-xl border-l-4 border-brand-rose/70">
-                        <div class="text-[11px] font-bold text-slate-500 uppercase">Avg Sprint</div>
+                        <div class="text-[11px] font-bold text-slate-500 uppercase" title="Average sprint percentage observed for tracked targets during engagements.">Avg Sprint</div>
                         <div id="proximity-avg-sprint" class="text-2xl font-black text-brand-rose mt-2">--</div>
                         <div class="text-xs text-slate-500 mt-1">Movement tempo</div>
                     </div>
@@ -2017,9 +2139,10 @@
 
                 <div class="glass-panel p-6 rounded-xl mt-8">
                     <div class="flex items-center justify-between mb-4">
-                        <div class="text-sm font-bold text-slate-400">Top Synergy Duos</div>
+                        <div class="text-sm font-bold text-slate-400" title="Duo ranking from crossfire kills, overlap count, and average delay.">Top Synergy Duos</div>
                         <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-emerald/10 text-brand-emerald">Live</span>
                     </div>
+                    <div class="text-[11px] text-slate-500 mb-3">Crossfires = shared pressure events. Lower Δ means tighter teammate timing.</div>
                     <div id="proximity-top-duos" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div class="glass-card p-4 rounded-lg text-center">
                             <div class="text-sm font-bold text-white">--</div>
@@ -2042,21 +2165,22 @@
                             <div class="text-sm font-bold text-slate-400">Movement Leaders</div>
                             <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">Live</span>
                         </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Derived from per-player movement tracks in the selected scope.</div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Top Distance</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Highest total movement distance while tracked.">Top Distance</div>
                                 <div id="proximity-distance-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
                             </div>
                             <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Top Sprint %</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Highest sprint-time share while tracked.">Top Sprint %</div>
                                 <div id="proximity-sprint-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
                             </div>
                             <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Fastest Reaction</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Spawn-to-first-movement reaction time (ms), lower is faster.">Spawn Reaction Time</div>
                                 <div id="proximity-reaction-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
                             </div>
                             <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Longest Survival</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Longest average survival duration in tracked windows.">Longest Survival</div>
                                 <div id="proximity-survival-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
                             </div>
                         </div>
@@ -2067,18 +2191,58 @@
                             <div class="text-sm font-bold text-slate-400">Teamplay Signals</div>
                             <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-emerald/10 text-brand-emerald">Live</span>
                         </div>
+                        <div class="text-[11px] text-slate-500 mb-3">These ranks focus on coordinated pressure and survival under focus fire.</div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Crossfire Kills</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Kills produced while teammate crossfire overlap is active.">Crossfire Kills</div>
                                 <div id="proximity-crossfire-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
                             </div>
                             <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Best Sync</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Average teammate delay in crossfire actions (ms), lower is better.">Best Sync</div>
                                 <div id="proximity-sync-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
                             </div>
                             <div class="glass-card p-4 rounded-lg md:col-span-2">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Focus Survivors</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Survival rate for players when targeted by focused pressure.">Focus Survivors</div>
                                 <div id="proximity-focus-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Class Signals</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-amber/10 text-brand-amber">Live</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Class composition from `player_track` (C0RN does not provide this view).</div>
+                        <div id="proximity-class-summary" class="space-y-2 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">No class metrics yet.</div>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mt-4 mb-2">Class reaction baselines from `REACTION_METRICS` (lower is faster).</div>
+                        <div id="proximity-class-reaction-summary" class="space-y-2 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">No class reaction baselines yet.</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Combat Reaction Signals</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">Beta</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Tier-B timing metrics from first incoming hit: return fire, dodge turn, teammate support.</div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Time to first damage dealt by the targeted player after initial incoming hit.">Return Fire</div>
+                                <div id="proximity-returnfire-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
+                            </div>
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Time to first significant movement direction change after first incoming hit.">Dodge Reaction</div>
+                                <div id="proximity-dodge-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
+                            </div>
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Time to first teammate damage on an attacker after ally takes first hit.">Support Reaction</div>
+                                <div id="proximity-support-reaction-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
                             </div>
                         </div>
                     </div>
@@ -2090,36 +2254,54 @@
                             <div class="text-sm font-bold text-slate-400">Trade & Support Signals</div>
                             <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">Prototype</span>
                         </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Trade windows track teammate response opportunity after a death; support tracks nearby cover presence.</div>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="glass-card p-4 rounded-lg border-l-4 border-brand-cyan/70">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Trade Opps</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Deaths where a teammate had a valid chance to retaliate in the trade window.">Trade Opps</div>
                                 <div id="proximity-trade-opportunities" class="text-2xl font-black text-white mt-2">--</div>
-                                <div class="text-xs text-slate-500 mt-1">Opportunities logged</div>
+                                <div class="text-xs text-slate-500 mt-1">Valid trade windows detected</div>
                             </div>
                             <div class="glass-card p-4 rounded-lg border-l-4 border-brand-emerald/70">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Trade Attempts</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Trade windows where a teammate landed damage on the killer.">Trade Attempts</div>
                                 <div id="proximity-trade-attempts" class="text-2xl font-black text-brand-emerald mt-2">--</div>
-                                <div class="text-xs text-slate-500 mt-1">Damage on killer</div>
+                                <div class="text-xs text-slate-500 mt-1">Teammate damaged the killer</div>
                             </div>
                             <div class="glass-card p-4 rounded-lg border-l-4 border-brand-amber/70">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Trade Success</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Trade windows where the killer was eliminated in time.">Trade Success</div>
                                 <div id="proximity-trade-success" class="text-2xl font-black text-brand-amber mt-2">--</div>
-                                <div class="text-xs text-slate-500 mt-1">Kills traded</div>
+                                <div class="text-xs text-slate-500 mt-1">Killer eliminated in window</div>
                             </div>
                             <div class="glass-card p-4 rounded-lg border-l-4 border-brand-rose/70">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Missed Trades</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Potential trade windows that ended without a successful trade kill.">Missed Trades</div>
                                 <div id="proximity-trade-missed" class="text-2xl font-black text-brand-rose mt-2">--</div>
-                                <div class="text-xs text-slate-500 mt-1">Candidate flags</div>
+                                <div class="text-xs text-slate-500 mt-1">No successful conversion</div>
                             </div>
                             <div class="glass-card p-4 rounded-lg border-l-4 border-brand-blue/70">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Support Uptime</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Share of tracked time where teammate support radius was active.">Support Uptime</div>
                                 <div id="proximity-support-uptime" class="text-2xl font-black text-brand-blue mt-2">--</div>
                                 <div class="text-xs text-slate-500 mt-1">% time in support radius</div>
                             </div>
                             <div class="glass-card p-4 rounded-lg border-l-4 border-slate-500/70">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase">Isolation Deaths</div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Deaths where no nearby teammate support/trade window was available.">Isolation Deaths</div>
                                 <div id="proximity-isolation-deaths" class="text-2xl font-black text-slate-200 mt-2">--</div>
-                                <div class="text-xs text-slate-500 mt-1">No trade window</div>
+                                <div class="text-xs text-slate-500 mt-1">No support/trade window</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+                            <div class="glass-card p-3 rounded-lg border border-white/5">
+                                <div class="text-[10px] font-bold uppercase tracking-wide text-slate-500" title="Trade attempts divided by trade opportunities.">Attempt Rate</div>
+                                <div id="proximity-trade-attempt-rate" class="text-lg font-black text-brand-cyan mt-1">--</div>
+                                <div class="text-[10px] text-slate-500 mt-1">Attempts / opportunities</div>
+                            </div>
+                            <div class="glass-card p-3 rounded-lg border border-white/5">
+                                <div class="text-[10px] font-bold uppercase tracking-wide text-slate-500" title="Successful trades divided by trade opportunities.">Conversion Rate</div>
+                                <div id="proximity-trade-conversion-rate" class="text-lg font-black text-brand-emerald mt-1">--</div>
+                                <div class="text-[10px] text-slate-500 mt-1">Success / opportunities</div>
+                            </div>
+                            <div class="glass-card p-3 rounded-lg border border-white/5">
+                                <div class="text-[10px] font-bold uppercase tracking-wide text-slate-500" title="Missed trade windows divided by trade opportunities.">Miss Rate</div>
+                                <div id="proximity-trade-miss-rate" class="text-lg font-black text-brand-rose mt-1">--</div>
+                                <div class="text-[10px] text-slate-500 mt-1">Missed / opportunities</div>
                             </div>
                         </div>
                     </div>
@@ -2251,7 +2433,7 @@
                         <div class="lg:col-span-2">
                             <div class="flex items-center justify-between mb-4">
                                 <h2 class="text-lg font-black text-white">My Recent Demos</h2>
-                                <button onclick="navigateTo('greatshot', true, { section: 'demos' })" class="text-xs px-3 py-1 rounded-md border border-white/10 text-slate-400 hover:text-white hover:border-brand-cyan/40 transition">
+                                <button data-click-action="navigateTo('greatshot', true, { section: 'demos' })" class="text-xs px-3 py-1 rounded-md border border-white/10 text-slate-400 hover:text-white hover:border-brand-cyan/40 transition">
                                     Refresh
                                 </button>
                             </div>
@@ -2266,7 +2448,7 @@
                     <div class="glass-panel rounded-2xl p-6">
                         <div class="flex items-center justify-between mb-4">
                             <h2 class="text-lg font-black text-white">Highlights</h2>
-                            <button onclick="navigateTo('greatshot', true, { section: 'highlights' })"
+                            <button data-click-action="navigateTo('greatshot', true, { section: 'highlights' })"
                                 class="text-xs px-3 py-1 rounded-md border border-white/10 text-slate-400 hover:text-white hover:border-brand-cyan/40 transition">
                                 Refresh
                             </button>
@@ -2281,7 +2463,7 @@
                     <div class="glass-panel rounded-2xl p-6">
                         <div class="flex items-center justify-between mb-4">
                             <h2 class="text-lg font-black text-white">Clips</h2>
-                            <button onclick="navigateTo('greatshot', true, { section: 'clips' })"
+                            <button data-click-action="navigateTo('greatshot', true, { section: 'clips' })"
                                 class="text-xs px-3 py-1 rounded-md border border-white/10 text-slate-400 hover:text-white hover:border-brand-cyan/40 transition">
                                 Refresh
                             </button>
@@ -2296,7 +2478,7 @@
                     <div class="glass-panel rounded-2xl p-6">
                         <div class="flex items-center justify-between mb-4">
                             <h2 class="text-lg font-black text-white">Renders</h2>
-                            <button onclick="navigateTo('greatshot', true, { section: 'renders' })"
+                            <button data-click-action="navigateTo('greatshot', true, { section: 'renders' })"
                                 class="text-xs px-3 py-1 rounded-md border border-white/10 text-slate-400 hover:text-white hover:border-brand-cyan/40 transition">
                                 Refresh
                             </button>
@@ -2313,7 +2495,7 @@
         <div id="view-greatshot-demo" class="view-section">
             <div class="max-w-7xl mx-auto px-6 py-12">
                 <div class="flex items-center justify-between mb-6">
-                    <button onclick="navigateTo('greatshot', true, { section: 'demos' })" class="px-3 py-2 rounded-lg border border-white/10 text-slate-300 hover:text-white hover:border-brand-cyan/40 transition text-xs font-bold">
+                    <button data-click-action="navigateTo('greatshot', true, { section: 'demos' })" class="px-3 py-2 rounded-lg border border-white/10 text-slate-300 hover:text-white hover:border-brand-cyan/40 transition text-xs font-bold">
                         ← Back to Greatshot
                     </button>
                     <div id="demo-detail-status" class="px-3 py-1 rounded-md text-xs font-bold border border-white/10 text-slate-300">--</div>
@@ -2362,6 +2544,132 @@
             </div>
         </div>
 
+        <!-- UPLOADS VIEW -->
+        <div id="view-uploads" class="view-section">
+            <div class="max-w-7xl mx-auto px-6 py-12">
+                <div class="glass-panel rounded-2xl p-8 lg:p-10">
+                    <!-- Header -->
+                    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-8">
+                        <div class="space-y-2">
+                            <h1 class="text-3xl md:text-4xl font-black text-white tracking-tight">Upload Library</h1>
+                            <p class="text-sm text-slate-400 max-w-xl">
+                                Share configs, HUDs, archives, and clips with the community.
+                                <span class="text-slate-600 text-xs ml-1">Clips up to 500MB, configs up to 2MB.</span>
+                            </p>
+                        </div>
+                        <div id="upload-auth-actions"></div>
+                    </div>
+
+                    <!-- Upload Form (hidden by default, shown when logged in) -->
+                    <div id="upload-form-section" class="hidden mb-8">
+                        <form id="upload-form" class="space-y-4">
+                            <!-- Drag & Drop Zone -->
+                            <div id="upload-drop-zone"
+                                class="upload-drop-zone border-2 border-dashed border-slate-700/60 rounded-xl p-8 text-center cursor-pointer transition-all duration-300 hover:border-brand-blue/50 hover:bg-brand-blue/5">
+                                <div class="mb-3 inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-blue/10 border border-brand-blue/20">
+                                    <svg class="w-6 h-6 text-brand-blue" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+                                </div>
+                                <p class="text-sm font-medium text-slate-300">Drop files here or click to browse</p>
+                                <p class="text-[11px] text-slate-600 mt-1">.cfg .hud .zip .rar .mp4 .avi .mkv</p>
+                                <div id="upload-drop-filename" class="hidden mt-2 text-xs font-bold text-brand-cyan font-mono"></div>
+                                <input type="file" id="upload-file-input" required accept=".cfg,.hud,.zip,.rar,.mp4,.avi,.mkv" class="hidden">
+                            </div>
+
+                            <!-- Fields row -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-[10px] uppercase tracking-widest font-bold text-slate-600 mb-1.5">Title</label>
+                                    <input type="text" id="upload-title-input" maxlength="200" placeholder="Optional title..."
+                                        class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-brand-blue/40 focus:outline-none transition">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase tracking-widest font-bold text-slate-600 mb-1.5">Description</label>
+                                    <input type="text" id="upload-desc-input" maxlength="2000" placeholder="Optional description..."
+                                        class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-brand-blue/40 focus:outline-none transition">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase tracking-widest font-bold text-slate-600 mb-1.5">Tags</label>
+                                    <input type="text" id="upload-tags-input" maxlength="200" placeholder="etpro, competitive..."
+                                        class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-brand-blue/40 focus:outline-none transition">
+                                </div>
+                            </div>
+
+                            <!-- Progress bar -->
+                            <div id="upload-progress-wrap" class="hidden">
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <span class="text-[10px] uppercase tracking-widest font-bold text-slate-600">Uploading</span>
+                                    <span id="upload-progress-text" class="text-xs font-bold text-brand-blue font-mono">0%</span>
+                                </div>
+                                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div id="upload-progress-bar" class="h-full rounded-full bg-gradient-to-r from-brand-blue to-brand-cyan transition-all duration-300 ease-out" style="width: 0%;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Submit -->
+                            <button type="submit" id="upload-submit-btn"
+                                class="bg-brand-blue hover:bg-blue-600 text-white text-sm font-bold px-6 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(59,130,246,0.3)] hover:shadow-[0_0_25px_rgba(59,130,246,0.5)]">
+                                Upload
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Filter Tabs -->
+                    <div class="flex flex-wrap items-center gap-2 mb-6" role="tablist">
+                        <button data-click-action="window.filterUploads('')" role="tab" aria-selected="true"
+                            class="upload-filter-btn upload-filter-active px-3.5 py-1.5 rounded-lg text-xs font-bold border transition-all duration-200" data-category="">
+                            All
+                        </button>
+                        <button data-click-action="window.filterUploads('config')" role="tab" aria-selected="false"
+                            class="upload-filter-btn px-3.5 py-1.5 rounded-lg text-xs font-bold border transition-all duration-200" data-category="config">
+                            Configs
+                        </button>
+                        <button data-click-action="window.filterUploads('hud')" role="tab" aria-selected="false"
+                            class="upload-filter-btn px-3.5 py-1.5 rounded-lg text-xs font-bold border transition-all duration-200" data-category="hud">
+                            HUDs
+                        </button>
+                        <button data-click-action="window.filterUploads('archive')" role="tab" aria-selected="false"
+                            class="upload-filter-btn px-3.5 py-1.5 rounded-lg text-xs font-bold border transition-all duration-200" data-category="archive">
+                            Archives
+                        </button>
+                        <button data-click-action="window.filterUploads('clip')" role="tab" aria-selected="false"
+                            class="upload-filter-btn px-3.5 py-1.5 rounded-lg text-xs font-bold border transition-all duration-200" data-category="clip">
+                            Clips
+                        </button>
+                        <div class="flex-1"></div>
+                        <div class="relative">
+                            <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+                            <input type="text" id="upload-search-input" placeholder="Search..."
+                                class="bg-slate-900/50 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-slate-600 w-44 focus:border-brand-blue/40 focus:outline-none transition">
+                        </div>
+                    </div>
+
+                    <!-- Popular Tags -->
+                    <div id="upload-popular-tags" class="flex flex-wrap gap-2 mb-6"></div>
+
+                    <!-- Upload Grid -->
+                    <div id="upload-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+                    <!-- Pagination -->
+                    <div id="upload-pagination" class="flex items-center justify-between mt-6"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- UPLOAD DETAIL VIEW (shareable link destination) -->
+        <div id="view-upload-detail" class="view-section">
+            <div class="max-w-4xl mx-auto px-6 py-12">
+                <div class="glass-panel rounded-2xl p-8 lg:p-10">
+                    <!-- Back link -->
+                    <a href="#/uploads" class="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-brand-cyan transition-colors duration-200 mb-6 group">
+                        <svg class="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/></svg>
+                        Back to Uploads
+                    </a>
+                    <!-- Detail content loaded dynamically -->
+                    <div id="upload-detail-content"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- AVAILABILITY VIEW -->
         <div id="view-availability" class="view-section">
             <div class="max-w-7xl mx-auto px-6 py-12">
@@ -2369,8 +2677,8 @@
                     <div class="space-y-2 mb-8">
                         <h1 class="text-3xl md:text-4xl font-black text-white tracking-tight">Daily Availability</h1>
                         <p class="text-sm text-slate-400 max-w-3xl">
-                            Calendar-first view of squad readiness. Browse aggregate counts for any day, then set your own status for
-                            today or tomorrow after login and Discord player linking.
+                            Today-first view of squad readiness. Set your status quickly for today or tomorrow, check who is currently
+                            looking, then open the calendar when you need deeper day-by-day detail.
                         </p>
                     </div>
 
@@ -2382,11 +2690,15 @@
                                 <p class="text-xs text-slate-500 mt-1">Statuses: Looking to play, Available, Maybe, Not playing.</p>
                             </div>
                             <div class="flex flex-wrap items-center gap-2">
-                                <button id="availability-create-today-btn" onclick="window.createTodayPoll()"
+                                <button id="availability-create-today-btn" data-click-action="window.createTodayPoll()"
                                     class="hidden px-3 py-1.5 rounded-lg text-xs font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">
                                     Create Today (Fallback)
                                 </button>
-                                <button id="availability-refresh-btn" onclick="window.refreshAvailabilityView()"
+                                <button id="availability-promote-btn" data-click-action="window.openAvailabilityPromoteModal()"
+                                    class="hidden px-3 py-1.5 rounded-lg text-xs font-bold border border-brand-purple/40 text-brand-purple hover:bg-brand-purple/15 transition">
+                                    Promote
+                                </button>
+                                <button id="availability-refresh-btn" data-click-action="window.refreshAvailabilityView()"
                                     class="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/15 text-slate-300 hover:border-brand-cyan/40 hover:text-brand-cyan transition">
                                     Refresh
                                 </button>
@@ -2400,55 +2712,158 @@
                                 <div class="text-center py-6 text-slate-500 text-sm">Loading your availability controls...</div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Calendar + Quick View -->
-                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-                        <div class="xl:col-span-2 glass-panel rounded-2xl p-6 border border-brand-blue/20">
-                            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-                                <h2 class="text-lg font-bold text-white">Calendar</h2>
-                                <div class="flex items-center gap-2">
-                                    <button id="availability-month-prev" onclick="window.availabilityPrevMonth()"
-                                        class="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/15 text-slate-300 hover:border-brand-cyan/40 hover:text-brand-cyan transition">
-                                        Prev
+                        <div class="mt-5 pt-4 border-t border-white/10">
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <h3 class="text-sm font-bold text-white">Current queue</h3>
+                                <span class="text-[11px] text-slate-500">Today / Looking</span>
+                            </div>
+                            <div id="availability-current-queue" class="space-y-2">
+                                <div class="text-xs text-slate-500">Loading current queue...</div>
+                            </div>
+                        </div>
+                        <div id="availability-campaign-status" class="hidden mt-4 rounded-lg border border-brand-purple/35 bg-brand-purple/10 px-3 py-2 text-xs text-brand-purple">
+                            Loading campaign status...
+                        </div>
+                        <div id="availability-planning-room" class="mt-4 rounded-lg border border-brand-cyan/30 bg-brand-cyan/5 px-3 py-3">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <div class="text-sm font-bold text-white">Planning Room</div>
+                                    <div class="text-[11px] text-slate-500 mt-0.5">Unlocks when the session-ready threshold is reached.</div>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button id="availability-planning-join-btn" data-click-action="window.joinAvailabilityPlanningRoom()"
+                                        class="hidden px-3 py-1.5 rounded-lg text-xs font-bold border border-brand-emerald/40 text-brand-emerald hover:bg-brand-emerald/10 transition">
+                                        Join
                                     </button>
-                                    <div id="availability-calendar-month-label"
-                                        class="min-w-[180px] text-center text-sm font-semibold text-white">Loading...</div>
-                                    <button id="availability-month-next" onclick="window.availabilityNextMonth()"
-                                        class="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/15 text-slate-300 hover:border-brand-cyan/40 hover:text-brand-cyan transition">
-                                        Next
+                                    <button id="availability-planning-open-btn" data-click-action="window.openAvailabilityPlanningRoom()"
+                                        class="px-3 py-1.5 rounded-lg text-xs font-bold border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition">
+                                        Open planning room
                                     </button>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-7 gap-2 mb-2 text-[11px] uppercase tracking-wide text-slate-500">
-                                <div class="text-center">Sun</div>
-                                <div class="text-center">Mon</div>
-                                <div class="text-center">Tue</div>
-                                <div class="text-center">Wed</div>
-                                <div class="text-center">Thu</div>
-                                <div class="text-center">Fri</div>
-                                <div class="text-center">Sat</div>
-                            </div>
-                            <div id="availability-calendar-grid" class="grid grid-cols-7 gap-2">
-                                <div class="col-span-7 text-center py-8 text-slate-500 text-sm">Loading calendar...</div>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-3 mt-4 text-[11px] text-slate-500">
-                                <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-cyan"></span>Looking</span>
-                                <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-emerald"></span>Available</span>
-                                <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-amber"></span>Maybe</span>
-                                <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-rose"></span>Not playing</span>
+                            <div id="availability-planning-status" class="text-xs text-slate-400 mt-2">Loading planning state...</div>
+                            <div id="availability-planning-error" class="hidden text-xs text-brand-rose mt-2"></div>
+                            <div id="availability-planning-panel" class="hidden mt-3 rounded-lg border border-white/10 bg-slate-950/30 p-3">
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    <div>
+                                        <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Committed players</div>
+                                        <div id="availability-planning-participants" class="space-y-1.5">
+                                            <div class="text-xs text-slate-500">No participants loaded.</div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Team name voting</div>
+                                        <div class="flex items-center gap-2 mb-2">
+                                            <input id="availability-planning-suggestion-input" type="text" maxlength="48"
+                                                placeholder="Suggest a team name"
+                                                class="flex-1 bg-slate-900/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:border-brand-cyan/40 focus:outline-none transition" />
+                                            <button id="availability-planning-suggest-btn" data-click-action="window.submitAvailabilityPlanningSuggestion()"
+                                                class="px-3 py-1.5 rounded-lg text-xs font-bold border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition">
+                                                Add
+                                            </button>
+                                        </div>
+                                        <div id="availability-planning-suggestions" class="space-y-1.5">
+                                            <div class="text-xs text-slate-500">No suggestions yet.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-4 pt-3 border-t border-white/10">
+                                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                        <div class="text-xs uppercase tracking-wide text-slate-500">Team draft</div>
+                                        <div class="flex items-center gap-2">
+                                            <button id="availability-planning-auto-draft-btn" data-click-action="window.autoDraftAvailabilityPlanningTeams()"
+                                                class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">
+                                                Auto draft
+                                            </button>
+                                            <button id="availability-planning-save-teams-btn" data-click-action="window.saveAvailabilityPlanningTeams()"
+                                                class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-brand-purple/40 text-brand-purple hover:bg-brand-purple/10 transition">
+                                                Save teams
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div id="availability-planning-draft-pool" class="flex flex-wrap gap-1.5 mb-3">
+                                        <span class="text-[11px] text-slate-500">Click player chips to cycle: Unassigned → A → B.</span>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div class="rounded-lg border border-white/10 bg-slate-950/35 p-2">
+                                            <div class="text-[11px] font-semibold text-brand-cyan mb-1.5">Team A</div>
+                                            <div id="availability-planning-team-a" class="space-y-1">
+                                                <div class="text-[11px] text-slate-500">No members.</div>
+                                            </div>
+                                        </div>
+                                        <div class="rounded-lg border border-white/10 bg-slate-950/35 p-2">
+                                            <div class="text-[11px] font-semibold text-brand-emerald mb-1.5">Team B</div>
+                                            <div id="availability-planning-team-b" class="space-y-1">
+                                                <div class="text-[11px] text-slate-500">No members.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="availability-planning-action-status" class="text-xs text-slate-400 mt-3"></div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Upcoming Days + Calendar -->
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
                         <div class="glass-panel rounded-2xl p-6 border border-brand-purple/20">
-                            <h2 class="text-lg font-bold text-white mb-4">Next 14 Days</h2>
+                            <h2 class="text-lg font-bold text-white mb-4">Upcoming days</h2>
                             <div id="availability-quick-view" class="space-y-2">
-                                <div class="text-center py-8 text-slate-500 text-sm">Loading quick view...</div>
+                                <div class="text-center py-8 text-slate-500 text-sm">Loading upcoming days...</div>
+                            </div>
+                        </div>
+                        <div class="xl:col-span-2 glass-panel rounded-2xl p-6 border border-brand-blue/20">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <h2 class="text-lg font-bold text-white">Calendar</h2>
+                                    <p class="text-[11px] text-slate-500 mt-1">Secondary view for broader planning windows.</p>
+                                </div>
+                                <button id="availability-calendar-toggle" data-click-action="window.toggleAvailabilityCalendar()"
+                                    class="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/15 text-slate-300 hover:border-brand-cyan/40 hover:text-brand-cyan transition"
+                                    aria-expanded="false">
+                                    Open calendar
+                                </button>
+                            </div>
+                            <div id="availability-calendar-body" class="hidden mt-4">
+                                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                                    <div class="text-[11px] uppercase tracking-wide text-slate-500">Month view</div>
+                                    <div class="flex items-center gap-2">
+                                        <button id="availability-month-prev" data-click-action="window.availabilityPrevMonth()"
+                                            class="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/15 text-slate-300 hover:border-brand-cyan/40 hover:text-brand-cyan transition">
+                                            Prev
+                                        </button>
+                                        <div id="availability-calendar-month-label"
+                                            class="min-w-[180px] text-center text-sm font-semibold text-white">Loading...</div>
+                                        <button id="availability-month-next" data-click-action="window.availabilityNextMonth()"
+                                            class="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/15 text-slate-300 hover:border-brand-cyan/40 hover:text-brand-cyan transition">
+                                            Next
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-7 gap-2 mb-2 text-[11px] uppercase tracking-wide text-slate-500">
+                                    <div class="text-center">Sun</div>
+                                    <div class="text-center">Mon</div>
+                                    <div class="text-center">Tue</div>
+                                    <div class="text-center">Wed</div>
+                                    <div class="text-center">Thu</div>
+                                    <div class="text-center">Fri</div>
+                                    <div class="text-center">Sat</div>
+                                </div>
+                                <div id="availability-calendar-grid" class="grid grid-cols-7 gap-2">
+                                    <div class="col-span-7 text-center py-8 text-slate-500 text-sm">Loading calendar...</div>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-3 mt-4 text-[11px] text-slate-500">
+                                    <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-cyan"></span>Looking</span>
+                                    <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-emerald"></span>Available</span>
+                                    <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-amber"></span>Maybe</span>
+                                    <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-rose"></span>Not playing</span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Selected Day -->
-                    <div class="glass-panel rounded-2xl p-6 border border-white/10 mb-8">
+                    <div id="availability-selected-day-panel" class="glass-panel rounded-2xl p-6 border border-white/10 mb-8">
                         <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
                             <div>
                                 <h2 id="availability-selected-date-title" class="text-lg font-bold text-white">Selected Day</h2>
@@ -2508,7 +2923,7 @@
                                 </label>
                             </div>
                             <div class="mt-4 flex flex-wrap items-center gap-3">
-                                <button onclick="window.saveAvailabilityPrefs()" id="save-prefs-btn"
+                                <button data-click-action="window.saveAvailabilityPrefs()" id="save-prefs-btn"
                                     class="bg-brand-cyan hover:bg-cyan-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition">
                                     Save Settings
                                 </button>
@@ -2520,18 +2935,18 @@
             </div>
         </div>
 
-        <!-- ADMIN PANEL VIEW -->
+        <!-- SYSTEM OVERVIEW VIEW -->
         <div id="view-admin" class="view-section">
             <div class="admin-reactor">
                 <div class="max-w-7xl mx-auto px-6 py-12">
                     <div class="reactor-shell reactor-panel-strong rounded-[28px] p-8 lg:p-10">
                         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
                             <div class="space-y-3">
-                                <div class="reactor-title">Admin Panel</div>
+                                <div class="reactor-title">System Overview</div>
                                 <h1 class="text-4xl md:text-5xl font-black text-white tracking-tight">Systems Overview</h1>
                                 <p class="reactor-subtitle text-sm md:text-base max-w-2xl">
-                                    Full stack visibility across every bot system, data pipeline, and prototype module.
-                                    Use manual overrides to mark reality, even when automation is optimistic.
+                                    Full stack visibility across bot runtime, website APIs, and delivery paths for availability alerts.
+                                    Track live architecture while manually overriding status when reality drifts from automation.
                                 </p>
                                 <div class="flex flex-wrap items-center gap-4 pt-2 text-xs text-slate-400">
                                     <div class="flex items-center gap-2">
@@ -2956,21 +3371,21 @@
                                                 <span class="status-light" data-status="blue" data-mode="auto"></span>
                                                 <div class="text-sm font-semibold text-white">Website API</div>
                                             </div>
-                                            <div class="text-[11px] text-slate-500 mt-1">FastAPI layer</div>
+                                            <div class="text-[11px] text-slate-500 mt-1">FastAPI + availability endpoints</div>
                                         </div>
                                         <div class="reactor-node rounded-xl p-3 min-w-[170px]" data-node="website_frontend" data-auto-status="green">
                                             <div class="flex items-center gap-2">
                                                 <span class="status-light" data-status="green" data-mode="auto"></span>
                                                 <div class="text-sm font-semibold text-white">Website UI</div>
                                             </div>
-                                            <div class="text-[11px] text-slate-500 mt-1">SPA frontend</div>
+                                            <div class="text-[11px] text-slate-500 mt-1">SPA + calendar availability UX</div>
                                         </div>
                                         <div class="reactor-node rounded-xl p-3 min-w-[170px]" data-node="admin_panel" data-auto-status="green">
                                             <div class="flex items-center gap-2">
                                                 <span class="status-light" data-status="green" data-mode="auto"></span>
-                                                <div class="text-sm font-semibold text-white">Admin Panel</div>
+                                                <div class="text-sm font-semibold text-white">System Overview</div>
                                             </div>
-                                            <div class="text-[11px] text-slate-500 mt-1">This view</div>
+                                            <div class="text-[11px] text-slate-500 mt-1">Architecture + notification control view</div>
                                         </div>
                                         <div class="reactor-node rounded-xl p-3 min-w-[190px]" data-node="proximity_api" data-auto-status="blue" data-prototype="true">
                                             <div class="flex items-center gap-2">
@@ -3969,7 +4384,7 @@
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center gap-2">
                                         <span class="status-light" data-status="green" data-mode="auto"></span>
-                                        <div class="text-sm font-semibold text-white">Admin Panel</div>
+                                        <div class="text-sm font-semibold text-white">System Overview</div>
                                         <span class="node-tag px-2 py-0.5 rounded-full">Web</span>
                                     </div>
                                     <button class="control-chip px-3 py-1.5 rounded-full node-toggle">Override</button>
@@ -4167,11 +4582,11 @@
 
                 <!-- Tabs -->
                 <div class="flex justify-center gap-2 mb-8">
-                    <button id="awards-tab-round" onclick="switchAwardsTab('round')"
+                    <button id="awards-tab-round" data-click-action="switchAwardsTab('round')"
                         class="awards-tab-btn px-6 py-3 rounded-lg font-bold text-sm transition bg-brand-blue text-white">
                         📋 By Round
                     </button>
-                    <button id="awards-tab-player" onclick="switchAwardsTab('player')"
+                    <button id="awards-tab-player" data-click-action="switchAwardsTab('player')"
                         class="awards-tab-btn px-6 py-3 rounded-lg font-bold text-sm transition bg-slate-700 text-slate-300 hover:bg-slate-600">
                         👤 By Player
                     </button>
@@ -4245,7 +4660,7 @@
                         <div class="text-center md:text-left flex-1">
                             <div class="flex items-center justify-center md:justify-start gap-3 mb-2">
                                 <h1 id="profile-name" class="text-4xl font-black text-white">--</h1>
-                                <button id="profile-compare-btn" onclick="openCompareModal(document.getElementById('profile-name').textContent)"
+                                <button id="profile-compare-btn" data-click-action="openCompareModal(document.getElementById('profile-name').textContent)"
                                         class="px-3 py-1.5 rounded-lg text-sm font-bold bg-brand-purple/20 hover:bg-brand-purple/40 text-brand-purple border border-brand-purple/30 transition flex items-center gap-1.5">
                                     <i data-lucide="git-compare" class="w-4 h-4"></i>
                                     Compare
@@ -4315,9 +4730,33 @@
                     <div class="glass-card p-5 rounded-xl">
                         <div class="flex items-center gap-3 mb-3">
                             <i data-lucide="link" class="w-5 h-5 text-brand-purple"></i>
-                            <div class="text-xs text-slate-500 uppercase font-bold">Discord Status</div>
+                            <div class="text-xs text-slate-500 uppercase font-bold">Discord Link Status</div>
                         </div>
                         <div id="profile-discord-status" class="text-xl font-black text-slate-400">Not Linked</div>
+                        <div id="profile-discord-meta" class="text-xs text-slate-500 mt-1">Link your Discord account to set availability and subscribe.</div>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <button id="profile-discord-link-btn" data-click-action="window.startAvailabilityLinkFlow()"
+                                class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-brand-purple/50 text-brand-purple hover:bg-brand-purple/20 transition">
+                                Link Discord
+                            </button>
+                            <button id="profile-player-change-btn" data-click-action="window.openPlayerLinkPicker()"
+                                class="hidden px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-brand-cyan/45 text-brand-cyan hover:bg-brand-cyan/15 transition">
+                                Change Player
+                            </button>
+                            <button id="profile-player-unlink-btn" data-click-action="window.unlinkPlayerProfile()"
+                                class="hidden px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-brand-rose/45 text-brand-rose hover:bg-brand-rose/15 transition">
+                                Unlink Player
+                            </button>
+                            <button id="profile-discord-unlink-btn" data-click-action="window.unlinkDiscordAccount()"
+                                class="hidden px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-white/20 text-slate-300 hover:bg-white/10 transition">
+                                Unlink Discord
+                            </button>
+                        </div>
+                        <div id="profile-link-picker" class="hidden mt-3 space-y-2">
+                            <input id="profile-link-search-input" type="text" placeholder="Search player..."
+                                class="w-full rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-cyan/60">
+                            <div id="profile-link-search-results" class="space-y-1 text-xs"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -4348,6 +4787,84 @@
                             <span class="text-slate-500 text-sm">No other aliases</span>
                         </div>
                     </div>
+                </div>
+
+                <div class="glass-panel p-6 rounded-xl mb-8">
+                    <h3 class="font-bold text-white mb-4 flex items-center gap-2">
+                        <i data-lucide="megaphone" class="w-5 h-5 text-brand-purple"></i> Promotion Ping Settings
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label class="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3 cursor-pointer">
+                            <span class="text-sm text-slate-300">Allow promotion pings</span>
+                            <input type="checkbox" id="profile-allow-promotions"
+                                class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-purple focus:ring-brand-purple">
+                        </label>
+                        <div class="rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3">
+                            <label class="text-[11px] text-slate-500 uppercase font-bold">Preferred channel</label>
+                            <select id="profile-preferred-channel"
+                                class="mt-1 w-full rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-purple/60">
+                                <option value="any">Any (Telegram > Signal > Discord)</option>
+                                <option value="discord">Discord</option>
+                                <option value="telegram">Telegram</option>
+                                <option value="signal">Signal</option>
+                            </select>
+                        </div>
+                        <div class="rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3">
+                            <label class="text-[11px] text-slate-500 uppercase font-bold">Telegram handle</label>
+                            <input id="profile-telegram-handle" type="text" placeholder="@username"
+                                class="mt-1 w-full rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-purple/60">
+                            <div class="mt-2 flex flex-wrap items-center gap-2">
+                                <button data-click-action="window.createAvailabilityLinkToken('telegram')"
+                                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition">
+                                    Generate Link Token
+                                </button>
+                                <button data-click-action="window.unlinkAvailabilityChannel('telegram')"
+                                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-brand-rose/40 text-brand-rose hover:bg-brand-rose/10 transition">
+                                    Unlink Telegram
+                                </button>
+                            </div>
+                        </div>
+                        <div class="rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3">
+                            <label class="text-[11px] text-slate-500 uppercase font-bold">Signal handle</label>
+                            <input id="profile-signal-handle" type="text" placeholder="+386..."
+                                class="mt-1 w-full rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-purple/60">
+                            <div class="mt-2 flex flex-wrap items-center gap-2">
+                                <button data-click-action="window.createAvailabilityLinkToken('signal')"
+                                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition">
+                                    Generate Link Token
+                                </button>
+                                <button data-click-action="window.unlinkAvailabilityChannel('signal')"
+                                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-brand-rose/40 text-brand-rose hover:bg-brand-rose/10 transition">
+                                    Unlink Signal
+                                </button>
+                            </div>
+                        </div>
+                        <div class="rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3">
+                            <label class="text-[11px] text-slate-500 uppercase font-bold">Quiet hours start/end (HH:MM)</label>
+                            <div class="mt-1 grid grid-cols-2 gap-2">
+                                <input id="profile-quiet-start" type="text" placeholder="23:00"
+                                    class="rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-purple/60">
+                                <input id="profile-quiet-end" type="text" placeholder="08:00"
+                                    class="rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-purple/60">
+                            </div>
+                        </div>
+                        <div class="rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3">
+                            <label class="text-[11px] text-slate-500 uppercase font-bold">Timezone</label>
+                            <input id="profile-promotions-timezone" type="text" value="Europe/Ljubljana"
+                                class="mt-1 w-full rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-purple/60">
+                        </div>
+                    </div>
+                    <div class="mt-4 flex flex-wrap items-center gap-3">
+                        <button id="profile-save-promotions-btn" data-click-action="window.savePromotionPreferences()"
+                            class="px-3 py-2 rounded-lg bg-brand-purple/80 hover:bg-brand-purple text-white text-xs font-bold transition">
+                            Save Promotion Settings
+                        </button>
+                        <span id="profile-promotions-status" class="text-xs text-slate-400"></span>
+                    </div>
+                    <div id="profile-channel-link-status" class="mt-2 text-xs text-slate-400"></div>
+                    <p class="mt-3 text-[11px] text-slate-500">
+                        Telegram/Signal handles are stored encrypted and only shown to you on this profile page.
+                    </p>
                 </div>
 
                 <!-- Achievements Section -->
@@ -4436,11 +4953,74 @@
             </div>
         </div>
 
+        <!-- HALL OF FAME VIEW -->
+        <div id="view-hall-of-fame" class="view-section hidden">
+            <div class="max-w-7xl mx-auto px-6 py-12" id="hall-of-fame-container">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
+        <!-- RETRO VIZ VIEW -->
+        <div id="view-retro-viz" class="view-section hidden">
+            <div class="max-w-7xl mx-auto px-6 py-12" id="retro-viz-container">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
     </main>
 
     <!-- ====================================== -->
     <!-- MODALS -->
     <!-- ====================================== -->
+
+    <div id="modal-availability-promote" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
+        <div class="w-full max-w-xl glass-panel rounded-2xl border border-brand-purple/30 shadow-2xl">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-white/10">
+                <div>
+                    <h3 class="text-lg font-black text-white">Promote Tonight</h3>
+                    <p class="text-xs text-slate-400">Schedule outreach for 20:45 CET and 21:00 CET.</p>
+                </div>
+                <button data-click-action="window.closeAvailabilityPromoteModal()"
+                    class="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition flex items-center justify-center">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="flex items-center gap-2 text-sm text-slate-300">
+                        <input type="checkbox" id="availability-promote-include-available"
+                            class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-purple focus:ring-brand-purple" checked>
+                        Include Available users
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-slate-300">
+                        <input type="checkbox" id="availability-promote-include-maybe"
+                            class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-purple focus:ring-brand-purple">
+                        Include Maybe users
+                    </label>
+                </div>
+                <label class="flex items-center gap-2 text-sm text-slate-300">
+                    <input type="checkbox" id="availability-promote-dry-run"
+                        class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-purple focus:ring-brand-purple">
+                    Dry run (send to me only)
+                </label>
+                <div id="availability-promote-preview"
+                    class="rounded-lg border border-white/10 bg-slate-950/40 px-3 py-3 text-xs text-slate-300">
+                    Loading recipient preview...
+                </div>
+                <div id="availability-promote-error" class="hidden text-xs text-brand-rose"></div>
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button data-click-action="window.closeAvailabilityPromoteModal()"
+                        class="px-3 py-2 rounded-lg border border-white/15 text-slate-300 text-xs font-bold hover:border-white/30 transition">
+                        Cancel
+                    </button>
+                    <button id="availability-promote-confirm-btn" data-click-action="window.confirmAvailabilityPromote()"
+                        class="px-3 py-2 rounded-lg bg-brand-purple/80 hover:bg-brand-purple text-white text-xs font-bold transition">
+                        Schedule Promote
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Match Details Modal -->
     <div id="modal-match-details" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
@@ -4451,7 +5031,7 @@
                     <h2 class="text-2xl font-black text-white mb-1" id="match-modal-title">Match Details</h2>
                     <p class="text-sm text-slate-400" id="match-modal-subtitle">Loading...</p>
                 </div>
-                <button onclick="closeModal('modal-match-details')" class="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition flex items-center justify-center">
+                <button data-click-action="closeModal('modal-match-details')" class="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition flex items-center justify-center">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -4476,7 +5056,7 @@
                     <h2 class="text-2xl font-black text-white mb-1">Player Comparison</h2>
                     <p class="text-sm text-slate-400">Head-to-head stats analysis</p>
                 </div>
-                <button onclick="closeModal('modal-player-compare')" class="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition flex items-center justify-center">
+                <button data-click-action="closeModal('modal-player-compare')" class="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition flex items-center justify-center">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -4492,7 +5072,7 @@
                         <input type="text" id="compare-player2" class="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-slate-500" placeholder="Enter player name...">
                     </div>
                 </div>
-                <button onclick="comparePlayers()" class="w-full py-3 rounded-lg bg-brand-purple hover:bg-brand-purple/80 text-white font-bold transition mb-6">
+                <button data-click-action="comparePlayers()" class="w-full py-3 rounded-lg bg-brand-purple hover:bg-brand-purple/80 text-white font-bold transition mb-6">
                     <i data-lucide="git-compare" class="w-4 h-4 inline mr-2"></i> Compare Players
                 </button>
                 <div id="compare-results"></div>
@@ -4507,7 +5087,7 @@
                 <h3 id="modal-title" class="text-xl font-black text-white flex items-center">
                     <!-- Title set by JS -->
                 </h3>
-                <button onclick="closeRecordModal()" class="text-slate-400 hover:text-white transition">
+                <button data-click-action="closeRecordModal()" class="text-slate-400 hover:text-white transition">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -4539,11 +5119,9 @@
     <!-- JavaScript (ES6 Modules) -->
     <script type="module" src="js/app.js"></script>
     <script type="module" src="js/records.js"></script>
+    <script type="module" src="js/inline-actions.js"></script>
     <script src="js/diagnostics.js"></script>
-    <script>
-        // Initialize Lucide icons
-        lucide.createIcons();
-    </script>
+    <script src="js/lucide-init.js"></script>
 
 </body>
 

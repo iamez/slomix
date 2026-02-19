@@ -4616,6 +4616,36 @@ class UltimateETLegacyBot(commands.Bot):
             and "duplicate key value violates unique constraint" in text
         )
 
+    async def _mark_endstats_filename_handled(
+        self,
+        filename: str,
+        reason: str,
+    ) -> None:
+        """
+        Persist filename-level dedupe so polling does not re-emit the same skip after restart.
+
+        Store as success=TRUE with round_id=NULL to avoid round_id unique-index conflicts.
+        """
+        try:
+            await self.db_adapter.execute(
+                """
+                INSERT INTO processed_endstats_files (filename, round_id, success, error_message, processed_at)
+                VALUES ($1, NULL, TRUE, $2, CURRENT_TIMESTAMP)
+                ON CONFLICT (filename) DO UPDATE SET
+                    round_id = NULL,
+                    success = TRUE,
+                    error_message = EXCLUDED.error_message,
+                    processed_at = CURRENT_TIMESTAMP
+                """,
+                (filename, reason),
+            )
+        except Exception as e:
+            logger.debug(
+                "Failed to persist endstats filename dedupe marker for %s: %s",
+                filename,
+                e,
+            )
+
     async def _get_round_endstats_quality(self, round_id: int) -> tuple[int, int]:
         row = await self.db_adapter.fetch_one(
             """
@@ -4697,6 +4727,13 @@ class UltimateETLegacyBot(commands.Bot):
                 f"existing_quality={existing_quality} incoming_quality={incoming_quality}"
             ),
             level="warning",
+        )
+        await self._mark_endstats_filename_handled(
+            filename,
+            (
+                f"duplicate_round_skip_existing:{existing_filename} "
+                f"existing_quality={existing_quality} incoming_quality={incoming_quality}"
+            ),
         )
         return True
 
@@ -5005,6 +5042,13 @@ class UltimateETLegacyBot(commands.Bot):
                         ),
                         level="warning",
                     )
+                    await self._mark_endstats_filename_handled(
+                        filename,
+                        (
+                            f"duplicate_poorer_skip_existing:{existing_filename} "
+                            f"existing_quality={existing_quality} incoming_quality={incoming_quality}"
+                        ),
+                    )
                     return True
 
                 should_publish = False
@@ -5231,6 +5275,10 @@ class UltimateETLegacyBot(commands.Bot):
                 round_id=round_id,
                 detail=f"existing_filename={existing_filename} processed_at={processed_at}",
                 level="warning",
+            )
+            await self._mark_endstats_filename_handled(
+                filename,
+                f"duplicate_round_conflict_existing_success:{existing_filename}",
             )
             return True
 
@@ -5744,8 +5792,26 @@ class UltimateETLegacyBot(commands.Bot):
 
 
 # 🚀 BOT STARTUP
-def main():
-    """🚀 Start the Ultimate ET:Legacy Discord Bot"""
+def main() -> int:
+    """🚀 Start the Ultimate ET:Legacy Discord Bot."""
+
+    validate_only = os.getenv("BOT_STARTUP_VALIDATE_ONLY", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if validate_only:
+        try:
+            config = load_config()
+            logger.info(
+                "✅ BOT_STARTUP_VALIDATE_ONLY enabled; config validated (database_type=%s).",
+                config.database_type,
+            )
+            return 0
+        except Exception as exc:
+            logger.error("❌ BOT_STARTUP_VALIDATE_ONLY failed: %s", exc)
+            return 1
 
     # Create bot (config is loaded in __init__)
     bot = UltimateETLegacyBot()
@@ -5755,16 +5821,19 @@ def main():
     if not token:
         logger.error("❌ DISCORD_BOT_TOKEN not found in environment variables!")
         logger.info("Please set your Discord bot token in the .env file")
-        return
+        return 4
 
     try:
         logger.info("🚀 Starting Ultimate ET:Legacy Bot...")
         bot.run(token)
+        return 0
     except discord.LoginFailure:
         logger.error("❌ Invalid Discord token!")
+        return 2
     except Exception as e:
         logger.error(f"❌ Bot startup failed: {e}")
+        return 3
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

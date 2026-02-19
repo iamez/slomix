@@ -51,6 +51,40 @@ class _FakeStatsDB:
         ]
 
 
+class _SchemaAwareFakeStatsDB:
+    def __init__(self):
+        self.last_query = ""
+
+    async def fetch_one(self, query, params):
+        column = params[0]
+        if column == "dpm":
+            return (1,)
+        return None
+
+    async def fetch_all(self, query, params):
+        self.last_query = query
+        return [
+            (
+                "Bravo",
+                "GUID-2",
+                7,
+                5,
+                1800,
+                1700,
+                36.8,
+                2,
+                2,
+                1,
+                360,
+                "axis",
+                58.1,
+                None,   # kdr projected as NULL
+                None,   # skill_rating projected as NULL
+                240.0,  # dpm present
+            )
+        ]
+
+
 def test_normalize_winner_handles_mixed_types():
     assert _normalize_winner("allies") == "allies"
     assert _normalize_winner("axis") == "axis"
@@ -94,3 +128,18 @@ async def test_enrich_with_db_stats_includes_tpm_and_time_minutes():
     assert alpha["time_played_seconds"] == 450
     assert alpha["time_played_minutes"] == 7.5
     assert alpha["tpm"] == 7.5
+
+
+@pytest.mark.asyncio
+async def test_enrich_with_db_stats_handles_missing_optional_columns():
+    db = _SchemaAwareFakeStatsDB()
+
+    players = await enrich_with_db_stats(round_id=456, db=db)
+    bravo = players["Bravo"]
+
+    assert "NULL AS kdr" in db.last_query
+    assert "NULL AS skill_rating" in db.last_query
+    assert "dpm" in db.last_query
+    assert bravo["kdr"] is None
+    assert bravo["skill_rating"] is None
+    assert bravo["dpm"] == 240.0

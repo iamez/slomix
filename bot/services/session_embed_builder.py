@@ -24,9 +24,10 @@ class SessionEmbedBuilder:
     # Discord embed field value limit
     MAX_FIELD_VALUE = 1024
 
-    def __init__(self):
+    def __init__(self, timing_shadow_service=None, show_timing_dual: bool = False):
         """Initialize the session embed builder"""
-        pass
+        self.timing_shadow_service = timing_shadow_service
+        self.show_timing_dual = bool(show_timing_dual)
 
     @staticmethod
     def _safe_field_value(text: str, max_chars: int = 1024) -> str:
@@ -67,6 +68,17 @@ class SessionEmbedBuilder:
 
         return chunks
 
+    @staticmethod
+    def _format_delta_seconds(delta_seconds: int) -> str:
+        """Format signed delta as MM:SS."""
+        total = abs(int(delta_seconds or 0))
+        minutes = total // 60
+        seconds = total % 60
+        if total == 0:
+            return "0:00"
+        sign = "+" if delta_seconds > 0 else "-"
+        return f"{sign}{minutes}:{seconds:02d}"
+
     async def build_session_overview_embed(
         self,
         latest_date: str,
@@ -82,11 +94,19 @@ class SessionEmbedBuilder:
         scoring_result: Optional[Dict] = None,
         player_badges: Optional[Dict[str, str]] = None,
         full_selfkills_available: bool = True,
-        bot_session_summary: Optional[Dict[str, Any]] = None
+        bot_session_summary: Optional[Dict[str, Any]] = None,
+        timing_dual_by_guid: Optional[Dict[str, Dict[str, Any]]] = None,
+        timing_dual_meta: Optional[Dict[str, Any]] = None,
+        show_timing_dual: Optional[bool] = None,
     ) -> discord.Embed:
         """Build main session overview embed with all players and match score."""
         # Build description with match score
         desc = f"**{player_count} players** • **{rounds_played} rounds** • **Maps**: {maps_played}"
+        effective_show_timing_dual = (
+            self.show_timing_dual if show_timing_dual is None else bool(show_timing_dual)
+        )
+        timing_dual_by_guid = timing_dual_by_guid or {}
+        timing_dual_meta = timing_dual_meta or {}
 
         # Optional bot-only / mixed session label
         if bot_session_summary:
@@ -97,6 +117,14 @@ class SessionEmbedBuilder:
                 desc += f"\n🤖 **BOT-ONLY SESSION** • Rounds: {bot_rounds}/{total_rounds}"
             elif bot_rounds > 0 and total_rounds > 0:
                 desc += f"\n🤖 **Mixed Session** • Bot rounds: {bot_rounds}/{total_rounds}"
+        if effective_show_timing_dual:
+            desc += "\n⏱️ **Timing:** O=legacy, N=shadow (Δ=N-O)"
+            rounds_total = int(timing_dual_meta.get("rounds_total", 0) or 0)
+            rounds_with_telemetry = int(timing_dual_meta.get("rounds_with_telemetry", 0) or 0)
+            if rounds_total > 0 and rounds_with_telemetry < rounds_total:
+                desc += f" • Lua {rounds_with_telemetry}/{rounds_total} rounds"
+            elif rounds_total > 0 and rounds_with_telemetry == 0:
+                desc += " • fallback N=O"
         if hardcoded_teams and team_1_score + team_2_score > 0:
             if team_1_score == team_2_score:
                 desc += f"\n\n🤝 **Match Result: {team_1_score} - {team_2_score} (PERFECT TIE)**"
@@ -267,11 +295,38 @@ class SessionEmbedBuilder:
                 )
 
                 # Line 3: Support/meta stats (UK, revives, times, multikills)
-                field_text += (
-                    f"   {total_useful_kills} UK • {total_self_kills} SK • {total_full_selfkills} FSK • "
-                    f"{total_revives_given}↑/{total_times_revived}↓ • "
-                    f"⏱{time_display} 💀{time_dead_display}({dead_pct:.0f}%) ⏳{time_denied_display}({denied_pct:.0f}%){multikills_display}\n\n"
-                )
+                if effective_show_timing_dual:
+                    timing_shadow = timing_dual_by_guid.get(player_guid, {})
+                    dead_new = int(timing_shadow.get("new_time_dead_seconds", total_time_dead) or 0)
+                    denied_new = int(timing_shadow.get("new_denied_seconds", total_denied) or 0)
+                    dead_new = max(0, dead_new)
+                    denied_new = max(0, denied_new)
+                    dead_new_display = f"{int(dead_new // 60)}:{int(dead_new % 60):02d}"
+                    denied_new_display = f"{int(denied_new // 60)}:{int(denied_new % 60):02d}"
+                    dead_delta_display = self._format_delta_seconds(dead_new - int(total_time_dead))
+                    denied_delta_display = self._format_delta_seconds(denied_new - int(total_denied))
+
+                    missing_reason = (timing_shadow.get("missing_reason") or "").lower()
+                    telemetry_note = ""
+                    if missing_reason.startswith("no lua"):
+                        telemetry_note = " ⚠️no-lua"
+                    elif "partial" in missing_reason:
+                        telemetry_note = " ⚠️partial"
+
+                    field_text += (
+                        f"   {total_useful_kills} UK • {total_self_kills} SK • {total_full_selfkills} FSK • "
+                        f"{total_revives_given}↑/{total_times_revived}↓ • "
+                        f"⏱{time_display} 💀O{time_dead_display}/N{dead_new_display}(Δ{dead_delta_display}) "
+                        f"⏳O{time_denied_display}/N{denied_new_display}(Δ{denied_delta_display})"
+                        f"{telemetry_note}{multikills_display}\n\n"
+                    )
+                else:
+                    field_text += (
+                        f"   {total_useful_kills} UK • {total_self_kills} SK • {total_full_selfkills} FSK • "
+                        f"{total_revives_given}↑/{total_times_revived}↓ • "
+                        f"⏱{time_display} 💀{time_dead_display}({dead_pct:.0f}%) "
+                        f"⏳{time_denied_display}({denied_pct:.0f}%){multikills_display}\n\n"
+                    )
             
             # Add field with appropriate name, chunk if needed
             if field_idx == 0:
@@ -293,6 +348,16 @@ class SessionEmbedBuilder:
         footer = f"Round: {latest_date}"
         if not full_selfkills_available:
             footer += " • FSK unavailable (missing column)"
+        if effective_show_timing_dual:
+            rounds_total = int(timing_dual_meta.get("rounds_total", 0) or 0)
+            rounds_with_telemetry = int(timing_dual_meta.get("rounds_with_telemetry", 0) or 0)
+            reason = timing_dual_meta.get("reason") or ""
+            if rounds_total > 0 and rounds_with_telemetry < rounds_total:
+                footer += f" • Lua timing {rounds_with_telemetry}/{rounds_total}"
+            elif rounds_total > 0 and rounds_with_telemetry == 0:
+                footer += " • Lua timing missing (N=O)"
+            if reason and reason != "OK":
+                footer += f" • {reason}"
         embed.set_footer(text=footer)
         return embed
 
