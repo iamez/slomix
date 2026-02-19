@@ -22,6 +22,7 @@ import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
 import { loadProximityView } from './proximity.js';
 import { loadAdminPanelView } from './admin-panel.js';
+import { loadAvailabilityView } from './availability.js';
 import {
     initGreatshotModule,
     loadGreatshotView,
@@ -290,6 +291,8 @@ export function navigateTo(viewId, updateHistory = true, params = {}) {
         if (params.demoId) {
             loadGreatshotDemoDetail(params.demoId);
         }
+    } else if (viewId === 'availability') {
+        loadAvailabilityView();
     } else if (viewId === 'admin') {
         loadAdminPanelView();
     }
