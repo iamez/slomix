@@ -1227,6 +1227,8 @@
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Greatshot</button>
                 <button id="link-sessions" onclick="navigateTo('sessions')"
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Sessions</button>
+                <button id="link-availability" onclick="navigateTo('availability')"
+                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Availability</button>
             </div>
 
             <!-- Right Side: Auth -->
@@ -1249,9 +1251,7 @@
                 <!-- User Profile (Hidden by default) -->
                 <div id="auth-user" class="hidden items-center gap-3">
                     <button id="link-admin" onclick="navigateTo('admin')"
-                        class="hidden nav-link px-3 py-1 rounded-lg text-xs font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">
-                        Admin
-                    </button>
+                        class="hidden nav-link px-3 py-1 rounded-lg text-xs font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">System Overview</button>
                     <button class="relative text-slate-400 hover:text-white transition" aria-label="Notifications">
                         <i data-lucide="bell" class="w-5 h-5"></i>
                         <span class="absolute -top-1 -right-1 w-2 h-2 bg-brand-rose rounded-full"></span>
@@ -2357,6 +2357,164 @@
                     <div class="glass-card p-4 rounded-xl mt-6">
                         <div class="text-xs font-bold uppercase text-slate-500 mb-2">Player Stats</div>
                         <div id="demo-detail-playerstats" class="overflow-x-auto"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AVAILABILITY VIEW -->
+        <div id="view-availability" class="view-section">
+            <div class="max-w-7xl mx-auto px-6 py-12">
+                <div class="reactor-shell reactor-panel-strong rounded-[28px] p-8 lg:p-10">
+                    <div class="space-y-2 mb-8">
+                        <h1 class="text-3xl md:text-4xl font-black text-white tracking-tight">Daily Availability</h1>
+                        <p class="text-sm text-slate-400 max-w-3xl">
+                            Calendar-first view of squad readiness. Browse aggregate counts for any day, then set your own status for
+                            today or tomorrow after login and Discord player linking.
+                        </p>
+                    </div>
+
+                    <!-- Today / Tomorrow Controls -->
+                    <div class="glass-panel rounded-2xl p-6 border border-brand-cyan/20 mb-8">
+                        <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                            <div>
+                                <h2 class="text-lg font-bold text-white">Today + Tomorrow</h2>
+                                <p class="text-xs text-slate-500 mt-1">Statuses: Looking to play, Available, Maybe, Not playing.</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button id="availability-create-today-btn" onclick="window.createTodayPoll()"
+                                    class="hidden px-3 py-1.5 rounded-lg text-xs font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">
+                                    Create Today (Fallback)
+                                </button>
+                                <button id="availability-refresh-btn" onclick="window.refreshAvailabilityView()"
+                                    class="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/15 text-slate-300 hover:border-brand-cyan/40 hover:text-brand-cyan transition">
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+                        <div id="availability-admin-msg" class="text-xs text-slate-500 mb-2"></div>
+                        <div id="availability-response-status" class="text-xs text-slate-500 mb-3"></div>
+                        <div id="availability-anon-message" class="hidden mb-4 text-xs rounded-lg border px-3 py-2"></div>
+                        <div id="availability-actions-section" class="mb-1">
+                            <div id="availability-actions" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="text-center py-6 text-slate-500 text-sm">Loading your availability controls...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Calendar + Quick View -->
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+                        <div class="xl:col-span-2 glass-panel rounded-2xl p-6 border border-brand-blue/20">
+                            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                                <h2 class="text-lg font-bold text-white">Calendar</h2>
+                                <div class="flex items-center gap-2">
+                                    <button id="availability-month-prev" onclick="window.availabilityPrevMonth()"
+                                        class="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/15 text-slate-300 hover:border-brand-cyan/40 hover:text-brand-cyan transition">
+                                        Prev
+                                    </button>
+                                    <div id="availability-calendar-month-label"
+                                        class="min-w-[180px] text-center text-sm font-semibold text-white">Loading...</div>
+                                    <button id="availability-month-next" onclick="window.availabilityNextMonth()"
+                                        class="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/15 text-slate-300 hover:border-brand-cyan/40 hover:text-brand-cyan transition">
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-7 gap-2 mb-2 text-[11px] uppercase tracking-wide text-slate-500">
+                                <div class="text-center">Sun</div>
+                                <div class="text-center">Mon</div>
+                                <div class="text-center">Tue</div>
+                                <div class="text-center">Wed</div>
+                                <div class="text-center">Thu</div>
+                                <div class="text-center">Fri</div>
+                                <div class="text-center">Sat</div>
+                            </div>
+                            <div id="availability-calendar-grid" class="grid grid-cols-7 gap-2">
+                                <div class="col-span-7 text-center py-8 text-slate-500 text-sm">Loading calendar...</div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-3 mt-4 text-[11px] text-slate-500">
+                                <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-cyan"></span>Looking</span>
+                                <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-emerald"></span>Available</span>
+                                <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-amber"></span>Maybe</span>
+                                <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full bg-brand-rose"></span>Not playing</span>
+                            </div>
+                        </div>
+                        <div class="glass-panel rounded-2xl p-6 border border-brand-purple/20">
+                            <h2 class="text-lg font-bold text-white mb-4">Next 14 Days</h2>
+                            <div id="availability-quick-view" class="space-y-2">
+                                <div class="text-center py-8 text-slate-500 text-sm">Loading quick view...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Selected Day -->
+                    <div class="glass-panel rounded-2xl p-6 border border-white/10 mb-8">
+                        <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                            <div>
+                                <h2 id="availability-selected-date-title" class="text-lg font-bold text-white">Selected Day</h2>
+                                <p id="availability-selected-date-subtitle" class="text-xs text-slate-500 mt-1">Loading...</p>
+                            </div>
+                            <div id="availability-selected-date-total" class="text-sm text-slate-400">-- responses</div>
+                        </div>
+                        <div id="availability-selected-date-counts" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                            <div class="glass-card rounded-lg p-3 text-center">
+                                <div class="text-xs text-slate-500">Looking</div>
+                                <div class="text-2xl font-black text-brand-cyan">0</div>
+                            </div>
+                            <div class="glass-card rounded-lg p-3 text-center">
+                                <div class="text-xs text-slate-500">Available</div>
+                                <div class="text-2xl font-black text-brand-emerald">0</div>
+                            </div>
+                            <div class="glass-card rounded-lg p-3 text-center">
+                                <div class="text-xs text-slate-500">Maybe</div>
+                                <div class="text-2xl font-black text-brand-amber">0</div>
+                            </div>
+                            <div class="glass-card rounded-lg p-3 text-center">
+                                <div class="text-xs text-slate-500">Not playing</div>
+                                <div class="text-2xl font-black text-brand-rose">0</div>
+                            </div>
+                        </div>
+                        <div id="availability-selected-date-actions" class="mb-3"></div>
+                        <div id="availability-selected-date-notes" class="text-xs text-slate-500"></div>
+                    </div>
+
+                    <!-- Notification Preferences -->
+                    <div id="availability-prefs-section" class="hidden mb-8">
+                        <h2 class="text-lg font-bold text-white mb-4">Notification Settings</h2>
+                        <div class="glass-panel rounded-xl p-6 border border-brand-cyan/20">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <label class="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3 cursor-pointer">
+                                    <span class="text-sm text-slate-300">Discord notifications</span>
+                                    <input type="checkbox" id="pref-discord"
+                                        class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-cyan focus:ring-brand-cyan">
+                                </label>
+                                <label class="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3 cursor-pointer">
+                                    <span class="text-sm text-slate-300">Telegram notifications</span>
+                                    <input type="checkbox" id="pref-telegram"
+                                        class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-cyan focus:ring-brand-cyan">
+                                </label>
+                                <label class="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3 cursor-pointer">
+                                    <span class="text-sm text-slate-300">Signal notifications</span>
+                                    <input type="checkbox" id="pref-signal"
+                                        class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-cyan focus:ring-brand-cyan">
+                                </label>
+                                <label class="flex items-center justify-between gap-4 rounded-lg border border-brand-amber/20 bg-brand-amber/5 px-4 py-3 cursor-pointer">
+                                    <span>
+                                        <span class="text-sm text-slate-200">Get-ready sound</span>
+                                        <span class="block text-[11px] text-slate-500">Plays only while this page is open.</span>
+                                    </span>
+                                    <input type="checkbox" id="pref-ready-sound"
+                                        class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-amber focus:ring-brand-amber">
+                                </label>
+                            </div>
+                            <div class="mt-4 flex flex-wrap items-center gap-3">
+                                <button onclick="window.saveAvailabilityPrefs()" id="save-prefs-btn"
+                                    class="bg-brand-cyan hover:bg-cyan-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition">
+                                    Save Settings
+                                </button>
+                                <span id="prefs-status-msg" class="text-xs text-slate-400"></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
