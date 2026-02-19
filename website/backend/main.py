@@ -37,7 +37,7 @@ setup_logging(
 
 logger = get_app_logger(__name__)
 
-from website.backend.routers import api, auth, predictions, greatshot, greatshot_topshots
+from website.backend.routers import api, auth, predictions, greatshot, greatshot_topshots, availability
 from website.backend.dependencies import init_db_pool, close_db_pool, get_db_pool
 from website.backend.services.greatshot_store import get_greatshot_storage
 from website.backend.services.greatshot_jobs import (
@@ -101,6 +101,7 @@ app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(predictions.router, prefix="/api/predictions", tags=["Predictions"])
 app.include_router(greatshot.router, prefix="/api", tags=["Greatshot"])
 app.include_router(greatshot_topshots.router, prefix="/api", tags=["Greatshot Topshots"])
+app.include_router(availability.router, prefix="/api/availability", tags=["Availability"])
 
 
 @app.get("/greatshot", include_in_schema=False)

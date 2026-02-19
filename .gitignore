@@ -146,6 +146,9 @@ package-lock.json
 
 # Migrations (DB-specific, not needed in repo)
 migrations/
+!website/migrations/
+website/migrations/*
+!website/migrations/005_date_based_availability.sql
 
 # Deprecated install docs
 INSTALL_*.md
