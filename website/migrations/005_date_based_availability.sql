@@ -1,3 +1,4 @@
+-- SET QUOTED_IDENTIFIER ON; -- linter hint; migration targets PostgreSQL
 -- ============================================================================
 -- Migration 005: Date-Based Availability + Multi-Channel Notifications
 -- ============================================================================

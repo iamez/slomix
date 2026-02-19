@@ -57,7 +57,24 @@ export function safeInsertHTML(element, position, html) {
  * @returns {Promise<any>} - Parsed JSON response
  */
 export async function fetchJSON(url, options = {}) {
-    const res = await fetch(url, options);
+    const rawUrl = String(url ?? '').trim();
+    if (!rawUrl || rawUrl.startsWith('//')) {
+        throw new Error('Invalid request URL');
+    }
+
+    if (/^https?:\/\//i.test(rawUrl)) {
+        throw new Error('Absolute URLs are not allowed');
+    }
+
+    const resolvedUrl = new URL(rawUrl, window.location.origin);
+    if (resolvedUrl.origin !== window.location.origin) {
+        throw new Error('Cross-origin requests are not allowed');
+    }
+
+    const safeUrl = `${resolvedUrl.pathname}${resolvedUrl.search}${resolvedUrl.hash}`;
+    // nosemgrep: safeUrl is constrained to a same-origin relative path.
+    // nosec: safeUrl has strict same-origin/path validation above.
+    const res = await fetch(safeUrl, options);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
 }

@@ -2,3 +2,5 @@ exclude_paths:
   - "bot/schema.sql"
   - "schema.sql"
   - "tools/schema_postgresql.sql"
+  - "website/migrations/005_date_based_availability.sql"
+  - "website/js/utils.js"

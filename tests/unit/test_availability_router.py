@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
 import json
+import secrets
 from typing import Any
 
 import pytest
@@ -296,7 +297,7 @@ class FakeAvailabilityDB:
 
 def _build_app(db: FakeAvailabilityDB) -> FastAPI:
     app = FastAPI()
-    app.add_middleware(SessionMiddleware, secret_key="availability-test-secret")
+    app.add_middleware(SessionMiddleware, secret_key=secrets.token_urlsafe(32))
 
     async def _db_override():
         yield db
@@ -322,7 +323,7 @@ def _login(client: TestClient, user_id: int, username: str = "tester", *, linked
     if linked:
         payload["linked_player"] = "LinkedPlayer"
     response = client.post("/_test/login", json=payload)
-    assert response.status_code == 200
+    assert response.status_code == 200  # nosec B101
 
 
 def _day_lookup(days: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -338,16 +339,16 @@ def test_get_availability_returns_aggregates_for_anonymous():
     client = TestClient(_build_app(db))
     response = client.get("/api/availability?from=2026-02-18&to=2026-02-19")
 
-    assert response.status_code == 200
+    assert response.status_code == 200  # nosec B101
     body = response.json()
     days = _day_lookup(body["days"])
 
-    assert body["statuses"] == ["LOOKING", "AVAILABLE", "MAYBE", "NOT_PLAYING"]
-    assert body["viewer"]["authenticated"] is False
-    assert days["2026-02-18"]["counts"]["LOOKING"] == 1
-    assert days["2026-02-18"]["counts"]["AVAILABLE"] == 1
-    assert days["2026-02-19"]["counts"]["NOT_PLAYING"] == 1
-    assert "my_status" not in days["2026-02-18"]
+    assert body["statuses"] == ["LOOKING", "AVAILABLE", "MAYBE", "NOT_PLAYING"]  # nosec B101
+    assert body["viewer"]["authenticated"] is False  # nosec B101
+    assert days["2026-02-18"]["counts"]["LOOKING"] == 1  # nosec B101
+    assert days["2026-02-18"]["counts"]["AVAILABLE"] == 1  # nosec B101
+    assert days["2026-02-19"]["counts"]["NOT_PLAYING"] == 1  # nosec B101
+    assert "my_status" not in days["2026-02-18"]  # nosec B101
 
 
 def test_get_availability_includes_my_status_and_optional_users_for_logged_in():
@@ -360,15 +361,15 @@ def test_get_availability_includes_my_status_and_optional_users_for_logged_in():
     _login(client, user_id=42, username="bob", linked=True)
 
     response = client.get("/api/availability?from=2026-02-18&to=2026-02-19&include_users=true")
-    assert response.status_code == 200
+    assert response.status_code == 200  # nosec B101
 
     body = response.json()
     days = _day_lookup(body["days"])
 
-    assert body["viewer"]["authenticated"] is True
-    assert body["viewer"]["linked_discord"] is True
-    assert days["2026-02-18"]["my_status"] == "MAYBE"
-    assert days["2026-02-18"]["users_by_status"]["AVAILABLE"][0]["display_name"] == "alice"
+    assert body["viewer"]["authenticated"] is True  # nosec B101
+    assert body["viewer"]["linked_discord"] is True  # nosec B101
+    assert days["2026-02-18"]["my_status"] == "MAYBE"  # nosec B101
+    assert days["2026-02-18"]["users_by_status"]["AVAILABLE"][0]["display_name"] == "alice"  # nosec B101
 
 
 def test_post_availability_requires_authentication_and_linked_discord():
@@ -379,14 +380,14 @@ def test_post_availability_requires_authentication_and_linked_discord():
         "/api/availability",
         json={"date": "2026-02-18", "status": "AVAILABLE"},
     )
-    assert anonymous.status_code == 401
+    assert anonymous.status_code == 401  # nosec B101
 
     _login(client, user_id=42, username="bob", linked=False)
     unlinked = client.post(
         "/api/availability",
         json={"date": "2026-02-18", "status": "AVAILABLE"},
     )
-    assert unlinked.status_code == 403
+    assert unlinked.status_code == 403  # nosec B101
 
 
 def test_post_availability_rejects_invalid_dates_and_upserts():
@@ -412,13 +413,13 @@ def test_post_availability_rejects_invalid_dates_and_upserts():
         json={"date": "2026-02-20", "status": "AVAILABLE"},
     )
 
-    assert past.status_code == 400
-    assert far.status_code == 400
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert len(db.availability_entries) == 1
+    assert past.status_code == 400  # nosec B101
+    assert far.status_code == 400  # nosec B101
+    assert first.status_code == 200  # nosec B101
+    assert second.status_code == 200  # nosec B101
+    assert len(db.availability_entries) == 1  # nosec B101
     entry = next(iter(db.availability_entries.values()))
-    assert entry["status"] == "AVAILABLE"
+    assert entry["status"] == "AVAILABLE"  # nosec B101
 
 
 def test_get_me_requires_authentication_and_returns_entries():
@@ -427,12 +428,12 @@ def test_get_me_requires_authentication_and_returns_entries():
 
     client = TestClient(_build_app(db))
     unauth = client.get("/api/availability/me?from=2026-02-18&to=2026-02-20")
-    assert unauth.status_code == 401
+    assert unauth.status_code == 401  # nosec B101
 
     _login(client, user_id=88, username="echo", linked=True)
     auth = client.get("/api/availability/me?from=2026-02-18&to=2026-02-20")
-    assert auth.status_code == 200
-    assert auth.json()["entries"][0]["status"] == "LOOKING"
+    assert auth.status_code == 200  # nosec B101
+    assert auth.json()["entries"][0]["status"] == "LOOKING"  # nosec B101
 
 
 def test_settings_defaults_updates_and_preferences_alias():
@@ -442,20 +443,20 @@ def test_settings_defaults_updates_and_preferences_alias():
     _login(client, user_id=55, username="delta", linked=True)
 
     defaults = client.get("/api/availability/settings")
-    assert defaults.status_code == 200
-    assert defaults.json()["sound_enabled"] is True
-    assert defaults.json()["sound_cooldown_seconds"] == 480
+    assert defaults.status_code == 200  # nosec B101
+    assert defaults.json()["sound_enabled"] is True  # nosec B101
+    assert defaults.json()["sound_cooldown_seconds"] == 480  # nosec B101
 
     blocked = client.post(
         "/api/availability/preferences",
         json={"telegram_notify": True},
     )
-    assert blocked.status_code == 403
+    assert blocked.status_code == 403  # nosec B101
 
     unchanged = client.get("/api/availability/settings")
-    assert unchanged.status_code == 200
-    assert unchanged.json()["sound_enabled"] is True
-    assert unchanged.json()["sound_cooldown_seconds"] == 480
+    assert unchanged.status_code == 200  # nosec B101
+    assert unchanged.json()["sound_enabled"] is True  # nosec B101
+    assert unchanged.json()["sound_cooldown_seconds"] == 480  # nosec B101
 
     updated = client.post(
         "/api/availability/preferences",
@@ -467,10 +468,10 @@ def test_settings_defaults_updates_and_preferences_alias():
             "discord_notify": True,
         },
     )
-    assert updated.status_code == 200
-    assert updated.json()["sound_enabled"] is False
-    assert updated.json()["availability_reminders_enabled"] is False
-    assert updated.json()["sound_cooldown_seconds"] == 300
+    assert updated.status_code == 200  # nosec B101
+    assert updated.json()["sound_enabled"] is False  # nosec B101
+    assert updated.json()["availability_reminders_enabled"] is False  # nosec B101
+    assert updated.json()["sound_cooldown_seconds"] == 300  # nosec B101
 
 
 def test_subscriptions_require_verified_telegram_and_signal_links():
@@ -483,7 +484,7 @@ def test_subscriptions_require_verified_telegram_and_signal_links():
         "/api/availability/subscriptions",
         json={"channel_type": "telegram", "enabled": True, "channel_address": "@bob"},
     )
-    assert telegram_fail.status_code == 403
+    assert telegram_fail.status_code == 403  # nosec B101
 
     db.channel_links[(42, "telegram")] = {
         "verified_at": datetime(2026, 2, 18, 12, 30, 0),
@@ -493,13 +494,13 @@ def test_subscriptions_require_verified_telegram_and_signal_links():
         "/api/availability/subscriptions",
         json={"channel_type": "telegram", "enabled": True, "channel_address": "@bob"},
     )
-    assert telegram_ok.status_code == 200
+    assert telegram_ok.status_code == 200  # nosec B101
 
     rows = client.get("/api/availability/subscriptions")
-    assert rows.status_code == 200
+    assert rows.status_code == 200  # nosec B101
     by_channel = {row["channel_type"]: row for row in rows.json()["subscriptions"]}
-    assert by_channel["telegram"]["enabled"] is True
-    assert by_channel["telegram"]["verified"] is True
+    assert by_channel["telegram"]["enabled"] is True  # nosec B101
+    assert by_channel["telegram"]["verified"] is True  # nosec B101
 
 
 def test_link_token_create_and_confirm_flow_activates_subscription():
@@ -512,7 +513,7 @@ def test_link_token_create_and_confirm_flow_activates_subscription():
         "/api/availability/link-token",
         json={"channel_type": "telegram", "ttl_minutes": 30},
     )
-    assert token_resp.status_code == 200
+    assert token_resp.status_code == 200  # nosec B101
 
     token = token_resp.json()["token"]
     confirm = client.post(
@@ -523,9 +524,9 @@ def test_link_token_create_and_confirm_flow_activates_subscription():
             "channel_address": "123456789",
         },
     )
-    assert confirm.status_code == 200
+    assert confirm.status_code == 200  # nosec B101
 
     subs = client.get("/api/availability/subscriptions")
     by_channel = {row["channel_type"]: row for row in subs.json()["subscriptions"]}
-    assert by_channel["telegram"]["enabled"] is True
-    assert by_channel["telegram"]["channel_address"] == "123456789"
+    assert by_channel["telegram"]["enabled"] is True  # nosec B101
+    assert by_channel["telegram"]["channel_address"] == "123456789"  # nosec B101

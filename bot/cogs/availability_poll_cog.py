@@ -20,9 +20,9 @@ import asyncio
 import discord
 from discord.ext import commands, tasks
 import logging
-from datetime import datetime, date as dt_date, time as dt_time, timedelta
+from datetime import datetime, date as dt_date, timedelta
 from zoneinfo import ZoneInfo
-from typing import Optional, Dict, Set
+from typing import Optional, Set
 
 from bot.services.availability_notifier_service import (
     UnifiedAvailabilityNotifier,
@@ -796,8 +796,11 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
                     "SELECT pg_advisory_unlock($1)",
                     (self.scheduler_lock_key,),
                 )
-            except Exception:
-                pass
+            except Exception as unlock_err:
+                logger.debug(
+                    "Availability scheduler advisory unlock skipped/fallback (%s)",
+                    unlock_err,
+                )
 
     def _is_reminder_due(self, now: datetime) -> bool:
         try:
