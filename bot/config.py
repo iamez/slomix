@@ -261,6 +261,98 @@ class BotConfig:
         self.availability_poll_timezone: str = self._get_config('AVAILABILITY_POLL_TIMEZONE', 'Europe/Ljubljana')
         self.availability_poll_threshold: int = int(self._get_config('AVAILABILITY_POLL_THRESHOLD', '6'))
         self.availability_poll_reminder_times: str = self._get_config('AVAILABILITY_POLL_REMINDER_TIMES', '20:45,21:00')
+        self.availability_multichannel_enabled: bool = (
+            self._get_config('AVAILABILITY_MULTICHANNEL_ENABLED', 'true').lower() == 'true'
+        )
+        self.availability_daily_reminder_time: str = self._get_config(
+            'AVAILABILITY_DAILY_REMINDER_TIME',
+            '16:00'
+        )
+
+        # ==================== AVAILABILITY NOTIFICATIONS (MULTI-CHANNEL) ====================
+        # Session-ready scheduler threshold override (falls back to poll threshold)
+        self.availability_session_ready_threshold: int = int(
+            self._get_config('AVAILABILITY_SESSION_READY_THRESHOLD', str(self.availability_poll_threshold))
+        )
+        # Singleton scheduler lock key for advisory lock
+        self.availability_scheduler_lock_key: int = int(
+            self._get_config('AVAILABILITY_SCHEDULER_LOCK_KEY', '875211')
+        )
+        # Notification ledger retry behavior
+        self.availability_notification_max_attempts: int = int(
+            self._get_config('AVAILABILITY_NOTIFICATION_MAX_ATTEMPTS', '5')
+        )
+        self.availability_notification_retry_backoff_seconds: int = int(
+            self._get_config('AVAILABILITY_NOTIFICATION_RETRY_BACKOFF_SECONDS', '120')
+        )
+        self.availability_notification_max_retry_backoff_seconds: int = int(
+            self._get_config('AVAILABILITY_NOTIFICATION_MAX_RETRY_BACKOFF_SECONDS', '900')
+        )
+        self.availability_notification_claim_timeout_seconds: int = int(
+            self._get_config('AVAILABILITY_NOTIFICATION_CLAIM_TIMEOUT_SECONDS', '300')
+        )
+
+        # Discord notification channels
+        self.availability_discord_dm_enabled: bool = (
+            self._get_config('AVAILABILITY_DISCORD_DM_ENABLED', 'true').lower() == 'true'
+        )
+        self.availability_discord_channel_announce_enabled: bool = (
+            self._get_config('AVAILABILITY_DISCORD_CHANNEL_ANNOUNCE_ENABLED', 'false').lower() == 'true'
+        )
+        self.availability_discord_announce_channel_id: int = int(
+            self._get_config(
+                'AVAILABILITY_DISCORD_ANNOUNCE_CHANNEL_ID',
+                str(self.availability_poll_channel_id or 0)
+            )
+        )
+
+        # Link-token flow for Telegram/Signal subscription commands
+        self.availability_link_token_ttl_minutes: int = int(
+            self._get_config('AVAILABILITY_LINK_TOKEN_TTL_MINUTES', '30')
+        )
+
+        # Telegram connector (feature-flagged)
+        self.availability_telegram_enabled: bool = (
+            self._get_config('AVAILABILITY_TELEGRAM_ENABLED', 'false').lower() == 'true'
+        )
+        self.availability_telegram_bot_token: str = self._get_config(
+            'AVAILABILITY_TELEGRAM_BOT_TOKEN',
+            self._get_config('TELEGRAM_BOT_TOKEN', '')
+        )
+        self.availability_telegram_api_base_url: str = self._get_config(
+            'AVAILABILITY_TELEGRAM_API_BASE_URL',
+            'https://api.telegram.org'
+        )
+        self.availability_telegram_min_interval_seconds: float = float(
+            self._get_config('AVAILABILITY_TELEGRAM_MIN_INTERVAL_SECONDS', '0.25')
+        )
+        self.availability_telegram_max_retries: int = int(
+            self._get_config('AVAILABILITY_TELEGRAM_MAX_RETRIES', '3')
+        )
+        self.availability_telegram_request_timeout_seconds: int = int(
+            self._get_config('AVAILABILITY_TELEGRAM_REQUEST_TIMEOUT_SECONDS', '15')
+        )
+
+        # Signal connector (feature-flagged)
+        self.availability_signal_enabled: bool = (
+            self._get_config('AVAILABILITY_SIGNAL_ENABLED', 'false').lower() == 'true'
+        )
+        self.availability_signal_mode: str = self._get_config('AVAILABILITY_SIGNAL_MODE', 'cli').strip().lower()
+        self.availability_signal_cli_path: str = self._get_config('AVAILABILITY_SIGNAL_CLI_PATH', 'signal-cli')
+        self.availability_signal_sender: str = self._get_config('AVAILABILITY_SIGNAL_SENDER', '')
+        self.availability_signal_daemon_url: str = self._get_config(
+            'AVAILABILITY_SIGNAL_DAEMON_URL',
+            'http://127.0.0.1:8080'
+        )
+        self.availability_signal_min_interval_seconds: float = float(
+            self._get_config('AVAILABILITY_SIGNAL_MIN_INTERVAL_SECONDS', '0.25')
+        )
+        self.availability_signal_max_retries: int = int(
+            self._get_config('AVAILABILITY_SIGNAL_MAX_RETRIES', '2')
+        )
+        self.availability_signal_request_timeout_seconds: int = int(
+            self._get_config('AVAILABILITY_SIGNAL_REQUEST_TIMEOUT_SECONDS', '20')
+        )
 
         # ==================== TEAM MAP PERFORMANCE ====================
         # Enable TeamManager.get_map_performance (experimental)
@@ -290,6 +382,10 @@ class BotConfig:
         self.proximity_startup_lookback_hours: int = int(
             self._get_config('PROXIMITY_STARTUP_LOOKBACK_HOURS', str(self.ssh_startup_lookback_hours))
         )
+
+        # ==================== SESSION TIMING DUAL MODE ====================
+        # Show legacy (old) and shadow-corrected (new) timing side-by-side in last_session views/graphs
+        self.show_timing_dual: bool = self._get_config('SHOW_TIMING_DUAL', 'false').lower() == 'true'
 
         # ==================== TIMING DEBUG ====================
         # Compare stats file timing vs Lua webhook timing for validation
@@ -448,6 +544,13 @@ class BotConfig:
                 errors.append("RCON_HOST is required when RCON_ENABLED=true")
             if not self.rcon_password:
                 errors.append("RCON_PASSWORD is required when RCON_ENABLED=true")
+
+        # Availability connector configuration (if enabled)
+        if self.availability_telegram_enabled and not self.availability_telegram_bot_token:
+            errors.append("AVAILABILITY_TELEGRAM_BOT_TOKEN is required when AVAILABILITY_TELEGRAM_ENABLED=true")
+
+        if self.availability_signal_enabled and not self.availability_signal_sender:
+            errors.append("AVAILABILITY_SIGNAL_SENDER is required when AVAILABILITY_SIGNAL_ENABLED=true")
 
         return errors
 
