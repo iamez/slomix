@@ -53,10 +53,11 @@ export function safeInsertHTML(element, position, html) {
 /**
  * Fetch JSON from an API endpoint
  * @param {string} url - The URL to fetch
+ * @param {object} options - Optional fetch options
  * @returns {Promise<any>} - Parsed JSON response
  */
-export async function fetchJSON(url) {
-    const res = await fetch(url);
+export async function fetchJSON(url, options = {}) {
+    const res = await fetch(url, options);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
 }

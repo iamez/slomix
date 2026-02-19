@@ -511,8 +511,8 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
                 try:
                     user = await self.bot.fetch_user(user_id)
                     await user.send(
-                        f"⏰ **Game time reminder!** Don't forget about tonight's gaming session. "
-                        f"See you soon! 🎮"
+                        "⏰ **Game time reminder!** Don't forget about tonight's gaming session. "
+                        "See you soon! 🎮"
                     )
                     reminder_count += 1
                     await asyncio.sleep(0.25)  # Rate limit protection
