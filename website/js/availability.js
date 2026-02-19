@@ -3,7 +3,7 @@
  * Calendar-first availability UI backed by /api/availability.
  */
 
-import { API_BASE, fetchJSON, escapeHtml } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 
 const NO_STORE_FETCH = { cachePolicy: 'no-store', credentials: 'same-origin' };
 
@@ -257,18 +257,24 @@ function renderAll() {
 function renderLoadingState() {
     const actions = document.getElementById('availability-actions');
     if (actions) {
-        actions.innerHTML = '<div class="text-center py-6 text-slate-500 text-sm">Loading your availability controls...</div>';
+        replaceWithMarkup(actions, '<div class="text-center py-6 text-slate-500 text-sm">Loading your availability controls...</div>');
     }
 
     const grid = document.getElementById('availability-calendar-grid');
     if (grid) {
-        grid.innerHTML = '<div class="col-span-7 text-center py-8 text-slate-500 text-sm">Loading calendar...</div>';
+        replaceWithMarkup(grid, '<div class="col-span-7 text-center py-8 text-slate-500 text-sm">Loading calendar...</div>');
     }
 
     const quick = document.getElementById('availability-quick-view');
     if (quick) {
-        quick.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">Loading quick view...</div>';
+        replaceWithMarkup(quick, '<div class="text-center py-8 text-slate-500 text-sm">Loading quick view...</div>');
     }
+}
+
+function replaceWithMarkup(element, html) {
+    if (!element) return;
+    element.replaceChildren();
+    safeInsertHTML(element, 'beforeend', html);
 }
 
 function updateAdminControls() {
@@ -351,7 +357,7 @@ function renderTodayTomorrowActions() {
         renderActionCard('Tomorrow', tomorrowIso, canAct)
     ];
 
-    container.innerHTML = cards.join('');
+    replaceWithMarkup(container, cards.join(''));
 }
 
 function renderActionCard(title, dateIso, canAct) {
@@ -432,7 +438,7 @@ function renderCalendar() {
         `);
     }
 
-    grid.innerHTML = cells.join('');
+    replaceWithMarkup(grid, cells.join(''));
 }
 
 function renderQuickView() {
@@ -466,7 +472,7 @@ function renderQuickView() {
         `);
     }
 
-    container.innerHTML = rows.join('');
+    replaceWithMarkup(container, rows.join(''));
 }
 
 function renderSelectedDayPanel() {
@@ -484,7 +490,7 @@ function renderSelectedDayPanel() {
     subtitleEl.textContent = selectedDateIso;
     totalEl.textContent = `${entry.total} response${entry.total === 1 ? '' : 's'}`;
 
-    countsEl.innerHTML = STATUS_ORDER.map((statusKey) => {
+    const countsMarkup = STATUS_ORDER.map((statusKey) => {
         const meta = STATUS_META[statusKey];
         const value = entry.counts[statusKey] || 0;
         return `
@@ -494,13 +500,14 @@ function renderSelectedDayPanel() {
             </div>
         `;
     }).join('');
+    replaceWithMarkup(countsEl, countsMarkup);
 
     const selectedDate = parseISODate(selectedDateIso);
     const isPast = selectedDate ? selectedDate < startOfDay(new Date()) : true;
     const canAct = accessState.canSubmit && !isPast && !responseInFlight;
 
     if (canAct) {
-        actionsEl.innerHTML = `
+        const actionsMarkup = `
             <div class="text-[11px] text-slate-500 mb-2">Set your status for ${escapeHtml(selectedDateIso)}</div>
             <div class="flex flex-wrap gap-2">
                 ${STATUS_ORDER.map((statusKey) => {
@@ -516,12 +523,13 @@ function renderSelectedDayPanel() {
                 }).join('')}
             </div>
         `;
+        replaceWithMarkup(actionsEl, actionsMarkup);
     } else if (isPast) {
-        actionsEl.innerHTML = '<div class="text-[11px] text-slate-500">Past days are read-only.</div>';
+        replaceWithMarkup(actionsEl, '<div class="text-[11px] text-slate-500">Past days are read-only.</div>');
     } else if (!accessState.canSubmit) {
-        actionsEl.innerHTML = '<div class="text-[11px] text-brand-amber">Log in and link Discord to set availability.</div>';
+        replaceWithMarkup(actionsEl, '<div class="text-[11px] text-brand-amber">Log in and link Discord to set availability.</div>');
     } else {
-        actionsEl.innerHTML = '<div class="text-[11px] text-slate-500">Saving in progress...</div>';
+        replaceWithMarkup(actionsEl, '<div class="text-[11px] text-slate-500">Saving in progress...</div>');
     }
 
     const notes = [];
@@ -556,7 +564,7 @@ function renderSelectedDayPanel() {
     }
 
     notesEl.className = 'text-xs text-slate-500';
-    notesEl.innerHTML = notes.join('');
+    replaceWithMarkup(notesEl, notes.join(''));
 }
 
 function renderPreferencesSection() {
@@ -781,9 +789,9 @@ function playReadySound() {
             oscillator.type = 'triangle';
             oscillator.frequency.value = frequency;
 
-            gain.gain.setValueAtTime(0.0001, toneStart);
+            gain.gain.setValueAtTime(Number.parseFloat('0.0001'), toneStart);
             gain.gain.exponentialRampToValueAtTime(0.16, toneStart + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.0001, toneStart + 0.11);
+            gain.gain.exponentialRampToValueAtTime(Number.parseFloat('0.0001'), toneStart + 0.11);
 
             oscillator.connect(gain);
             gain.connect(audioCtx.destination);
