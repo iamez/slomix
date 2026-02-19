@@ -6,8 +6,21 @@
 import { API_BASE, fetchJSON, escapeHtml, formatTimeAgo } from './utils.js';
 
 // Polling configuration
-const LIVE_POLL_INTERVAL = 10000; // 10 seconds
+const LIVE_POLL_INTERVAL = 60000; // 60 seconds
+const LIVE_STATUS_POLL_INTERVAL = 300000; // 5 minutes
 let liveSessionInterval = null;
+let liveStatusInterval = null;
+let liveLifecycleBound = false;
+
+function isHomeViewActive() {
+    const view = document.getElementById('view-home');
+    if (!view) return false;
+    return view.classList.contains('active') && !view.classList.contains('hidden');
+}
+
+function isLivePollingAllowed() {
+    return !document.hidden && isHomeViewActive();
+}
 
 function refreshLucideIcons() {
     if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
@@ -187,11 +200,10 @@ export async function updateLiveSession() {
  * Start live session polling
  */
 export function startLivePolling() {
-    if (!liveSessionInterval) {
-        updateLiveSession();
-        liveSessionInterval = setInterval(updateLiveSession, LIVE_POLL_INTERVAL);
-        console.log('🟢 Live session polling started');
-    }
+    if (!isLivePollingAllowed() || liveSessionInterval) return;
+    updateLiveSession();
+    liveSessionInterval = setInterval(updateLiveSession, LIVE_POLL_INTERVAL);
+    console.log('🟢 Live session polling started');
 }
 
 /**
@@ -201,23 +213,73 @@ export function stopLivePolling() {
     if (liveSessionInterval) {
         clearInterval(liveSessionInterval);
         liveSessionInterval = null;
-        console.log('🔴 Live session polling paused (tab hidden)');
+        console.log('🔴 Live session polling paused');
     }
 }
 
 /**
  * Initialize visibility change listener for polling
  */
-export function initLivePolling() {
-    startLivePolling();
+export function startLiveStatusPolling() {
+    if (!isLivePollingAllowed() || liveStatusInterval) return;
+    loadLiveStatus();
+    liveStatusInterval = setInterval(loadLiveStatus, LIVE_STATUS_POLL_INTERVAL);
+}
+
+/**
+ * Stop live status polling when tab is hidden
+ */
+export function stopLiveStatusPolling() {
+    if (!liveStatusInterval) return;
+    clearInterval(liveStatusInterval);
+    liveStatusInterval = null;
+}
+
+/**
+ * Keep polling lifecycle aligned with active route/tab visibility.
+ */
+export function syncLivePollingLifecycle() {
+    if (isLivePollingAllowed()) {
+        startLivePolling();
+        startLiveStatusPolling();
+    } else {
+        stopLivePolling();
+        stopLiveStatusPolling();
+    }
+}
+
+function bindLiveLifecycleListeners() {
+    if (liveLifecycleBound) return;
 
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            stopLivePolling();
-        } else {
-            startLivePolling();
-        }
+        syncLivePollingLifecycle();
     });
+    window.addEventListener('hashchange', () => {
+        syncLivePollingLifecycle();
+    });
+
+    const homeView = document.getElementById('view-home');
+    if (homeView && typeof MutationObserver !== 'undefined') {
+        const observer = new MutationObserver(() => {
+            syncLivePollingLifecycle();
+        });
+        observer.observe(homeView, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    liveLifecycleBound = true;
+}
+
+export function initLivePolling() {
+    bindLiveLifecycleListeners();
+    syncLivePollingLifecycle();
+}
+
+/**
+ * Initialize polling for live status cards.
+ */
+export function initLiveStatusPolling() {
+    bindLiveLifecycleListeners();
+    syncLivePollingLifecycle();
 }
 
 // ==================== SERVER ACTIVITY CHART ====================

@@ -3,6 +3,7 @@ import json
 from typing import Any
 
 import pytest
+import httpx
 from fastapi import FastAPI, Request
 
 from website.backend.dependencies import get_db
@@ -10,14 +11,13 @@ from website.backend.routers import availability as availability_router
 
 pytest.importorskip("httpx")
 pytest.importorskip("itsdangerous")
-
-from fastapi.testclient import TestClient
 from starlette.middleware.sessions import SessionMiddleware
 
 
 class FakeAvailabilityDB:
     def __init__(self):
         self.current_date = date(2026, 2, 18)
+        self._clock_start = datetime.utcnow().replace(microsecond=0)
         self.player_links: set[int] = set()
         self.availability_entries: dict[tuple[int, date], dict[str, Any]] = {}
         self.settings: dict[int, dict[str, Any]] = {}
@@ -37,7 +37,7 @@ class FakeAvailabilityDB:
 
     def _now(self) -> datetime:
         self._tick += 1
-        return datetime(2026, 2, 18, 12, 0, 0) + timedelta(seconds=self._tick)
+        return self._clock_start + timedelta(seconds=self._tick)
 
     def seed_entry(self, user_id: int, entry_date: date, status: str, user_name: str = "seed") -> None:
         now = self._now()
@@ -102,6 +102,17 @@ class FakeAvailabilityDB:
             if not row:
                 return None
             return (row.get("verified_at"),)
+
+        if (
+            "select verification_requested_at from availability_channel_links" in normalized
+            and "where user_id = $1 and channel_type = $2" in normalized
+        ):
+            user_id = int(params[0])
+            channel_type = str(params[1])
+            row = self.channel_links.get((user_id, channel_type))
+            if not row:
+                return None
+            return (row.get("verification_requested_at"),)
 
         if (
             "select user_id from availability_channel_links" in normalized
@@ -251,9 +262,15 @@ class FakeAvailabilityDB:
             user_id = int(params[0])
             channel_type = str(params[1])
             channel_address = params[2]
-            enabled = bool(params[3])
-            verified_at = params[4] if len(params) > 4 else None
-            preferences = params[5] if len(params) > 5 else {}
+            if len(params) >= 4:
+                enabled = bool(params[3])
+                verified_at = params[4] if len(params) > 4 else None
+                preferences = params[5] if len(params) > 5 else {}
+            else:
+                # /link-confirm upsert uses SQL constants for enabled/verified_at/preferences.
+                enabled = True
+                verified_at = self._now()
+                preferences = {}
             if isinstance(preferences, str):
                 try:
                     preferences = json.loads(preferences)
@@ -291,6 +308,22 @@ class FakeAvailabilityDB:
             row["updated_at"] = self._now()
             return
 
+        if "delete from availability_subscriptions where user_id = $1 and channel_type = $2" in normalized:
+            user_id, channel_type = params
+            self.subscriptions.pop((int(user_id), str(channel_type)), None)
+            return
+
+        if "delete from availability_channel_links where user_id = $1 and channel_type = $2" in normalized:
+            user_id, channel_type = params
+            self.channel_links.pop((int(user_id), str(channel_type)), None)
+            return
+
+        if "update subscription_preferences set telegram_handle_encrypted = null" in normalized:
+            return
+
+        if "update subscription_preferences set signal_handle_encrypted = null" in normalized:
+            return
+
         raise AssertionError(f"Unsupported execute query: {normalized}")
 
 
@@ -317,215 +350,360 @@ def _build_app(db: FakeAvailabilityDB) -> FastAPI:
     return app
 
 
-def _login(client: TestClient, user_id: int, username: str = "tester", *, linked: bool = False) -> None:
+async def _login(client: httpx.AsyncClient, user_id: int, username: str = "tester", *, linked: bool = False) -> None:
     payload = {"id": str(user_id), "username": username}
     if linked:
         payload["linked_player"] = "LinkedPlayer"
-    response = client.post("/_test/login", json=payload)
+    response = await client.post("/_test/login", json=payload)
     assert response.status_code == 200
+
+
+def _xhr_headers() -> dict[str, str]:
+    return {"X-Requested-With": "XMLHttpRequest"}
 
 
 def _day_lookup(days: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {day["date"]: day for day in days}
 
 
-def test_get_availability_returns_aggregates_for_anonymous():
+@pytest.mark.asyncio
+async def test_get_availability_returns_aggregates_for_anonymous():
     db = FakeAvailabilityDB()
     db.seed_entry(1, date(2026, 2, 18), "LOOKING")
     db.seed_entry(2, date(2026, 2, 18), "AVAILABLE")
     db.seed_entry(3, date(2026, 2, 19), "NOT_PLAYING")
 
-    client = TestClient(_build_app(db))
-    response = client.get("/api/availability?from=2026-02-18&to=2026-02-19")
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/api/availability?from=2026-02-18&to=2026-02-19")
 
-    assert response.status_code == 200
-    body = response.json()
-    days = _day_lookup(body["days"])
+        assert response.status_code == 200
+        body = response.json()
+        days = _day_lookup(body["days"])
 
-    assert body["statuses"] == ["LOOKING", "AVAILABLE", "MAYBE", "NOT_PLAYING"]
-    assert body["viewer"]["authenticated"] is False
-    assert days["2026-02-18"]["counts"]["LOOKING"] == 1
-    assert days["2026-02-18"]["counts"]["AVAILABLE"] == 1
-    assert days["2026-02-19"]["counts"]["NOT_PLAYING"] == 1
-    assert "my_status" not in days["2026-02-18"]
+        assert body["statuses"] == ["LOOKING", "AVAILABLE", "MAYBE", "NOT_PLAYING"]
+        assert body["viewer"]["authenticated"] is False
+        assert days["2026-02-18"]["counts"]["LOOKING"] == 1
+        assert days["2026-02-18"]["counts"]["AVAILABLE"] == 1
+        assert days["2026-02-19"]["counts"]["NOT_PLAYING"] == 1
+        assert "my_status" not in days["2026-02-18"]
 
 
-def test_get_availability_includes_my_status_and_optional_users_for_logged_in():
+@pytest.mark.asyncio
+async def test_get_availability_includes_my_status_and_optional_users_for_logged_in():
     db = FakeAvailabilityDB()
     db.player_links.add(42)
     db.seed_entry(42, date(2026, 2, 18), "MAYBE", user_name="bob")
     db.seed_entry(99, date(2026, 2, 18), "AVAILABLE", user_name="alice")
 
-    client = TestClient(_build_app(db))
-    _login(client, user_id=42, username="bob", linked=True)
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        await _login(client, user_id=42, username="bob", linked=True)
 
-    response = client.get("/api/availability?from=2026-02-18&to=2026-02-19&include_users=true")
-    assert response.status_code == 200
+        response = await client.get("/api/availability?from=2026-02-18&to=2026-02-19&include_users=true")
+        assert response.status_code == 200
 
-    body = response.json()
-    days = _day_lookup(body["days"])
+        body = response.json()
+        days = _day_lookup(body["days"])
 
-    assert body["viewer"]["authenticated"] is True
-    assert body["viewer"]["linked_discord"] is True
-    assert days["2026-02-18"]["my_status"] == "MAYBE"
-    assert days["2026-02-18"]["users_by_status"]["AVAILABLE"][0]["display_name"] == "alice"
+        assert body["viewer"]["authenticated"] is True
+        assert body["viewer"]["linked_discord"] is True
+        assert days["2026-02-18"]["my_status"] == "MAYBE"
+        assert days["2026-02-18"]["users_by_status"]["AVAILABLE"][0]["display_name"] == "alice"
 
 
-def test_post_availability_requires_authentication_and_linked_discord():
+@pytest.mark.asyncio
+async def test_post_availability_requires_authentication_and_linked_discord():
     db = FakeAvailabilityDB()
-    client = TestClient(_build_app(db))
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        anonymous = await client.post(
+            "/api/availability",
+            json={"date": "2026-02-18", "status": "AVAILABLE"},
+        )
+        assert anonymous.status_code == 401
 
-    anonymous = client.post(
-        "/api/availability",
-        json={"date": "2026-02-18", "status": "AVAILABLE"},
-    )
-    assert anonymous.status_code == 401
-
-    _login(client, user_id=42, username="bob", linked=False)
-    unlinked = client.post(
-        "/api/availability",
-        json={"date": "2026-02-18", "status": "AVAILABLE"},
-    )
-    assert unlinked.status_code == 403
+        await _login(client, user_id=42, username="bob", linked=False)
+        unlinked = await client.post(
+            "/api/availability",
+            json={"date": "2026-02-18", "status": "AVAILABLE"},
+        )
+        assert unlinked.status_code == 403
 
 
-def test_post_availability_rejects_invalid_dates_and_upserts():
+@pytest.mark.asyncio
+async def test_post_availability_rejects_invalid_dates_and_upserts():
     db = FakeAvailabilityDB()
     db.player_links.add(42)
-    client = TestClient(_build_app(db))
-    _login(client, user_id=42, username="bob", linked=True)
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        await _login(client, user_id=42, username="bob", linked=True)
 
-    past = client.post(
-        "/api/availability",
-        json={"date": "2026-02-17", "status": "AVAILABLE"},
-    )
-    far = client.post(
-        "/api/availability",
-        json={"date": "2026-06-30", "status": "AVAILABLE"},
-    )
-    first = client.post(
-        "/api/availability",
-        json={"date": "2026-02-20", "status": "LOOKING"},
-    )
-    second = client.post(
-        "/api/availability",
-        json={"date": "2026-02-20", "status": "AVAILABLE"},
-    )
+        past = await client.post(
+            "/api/availability",
+            json={"date": "2026-02-17", "status": "AVAILABLE"},
+            headers=_xhr_headers(),
+        )
+        far = await client.post(
+            "/api/availability",
+            json={"date": "2026-06-30", "status": "AVAILABLE"},
+            headers=_xhr_headers(),
+        )
+        first = await client.post(
+            "/api/availability",
+            json={"date": "2026-02-20", "status": "LOOKING"},
+            headers=_xhr_headers(),
+        )
+        second = await client.post(
+            "/api/availability",
+            json={"date": "2026-02-20", "status": "AVAILABLE"},
+            headers=_xhr_headers(),
+        )
 
-    assert past.status_code == 400
-    assert far.status_code == 400
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert len(db.availability_entries) == 1
-    entry = next(iter(db.availability_entries.values()))
-    assert entry["status"] == "AVAILABLE"
+        assert past.status_code == 400
+        assert far.status_code == 400
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert len(db.availability_entries) == 1
+        entry = next(iter(db.availability_entries.values()))
+        assert entry["status"] == "AVAILABLE"
 
 
-def test_get_me_requires_authentication_and_returns_entries():
+@pytest.mark.asyncio
+async def test_get_me_requires_authentication_and_returns_entries():
     db = FakeAvailabilityDB()
     db.seed_entry(88, date(2026, 2, 18), "LOOKING", user_name="echo")
 
-    client = TestClient(_build_app(db))
-    unauth = client.get("/api/availability/me?from=2026-02-18&to=2026-02-20")
-    assert unauth.status_code == 401
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        unauth = await client.get("/api/availability/me?from=2026-02-18&to=2026-02-20")
+        assert unauth.status_code == 401
 
-    _login(client, user_id=88, username="echo", linked=True)
-    auth = client.get("/api/availability/me?from=2026-02-18&to=2026-02-20")
-    assert auth.status_code == 200
-    assert auth.json()["entries"][0]["status"] == "LOOKING"
+        await _login(client, user_id=88, username="echo", linked=True)
+        auth = await client.get("/api/availability/me?from=2026-02-18&to=2026-02-20")
+        assert auth.status_code == 200
+        assert auth.json()["entries"][0]["status"] == "LOOKING"
 
 
-def test_settings_defaults_updates_and_preferences_alias():
+@pytest.mark.asyncio
+async def test_settings_defaults_updates_and_preferences_alias():
     db = FakeAvailabilityDB()
     db.player_links.add(55)
-    client = TestClient(_build_app(db))
-    _login(client, user_id=55, username="delta", linked=True)
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        await _login(client, user_id=55, username="delta", linked=True)
 
-    defaults = client.get("/api/availability/settings")
-    assert defaults.status_code == 200
-    assert defaults.json()["sound_enabled"] is True
-    assert defaults.json()["sound_cooldown_seconds"] == 480
+        defaults = await client.get("/api/availability/settings")
+        assert defaults.status_code == 200
+        assert defaults.json()["sound_enabled"] is True
+        assert defaults.json()["sound_cooldown_seconds"] == 480
 
-    blocked = client.post(
-        "/api/availability/preferences",
-        json={"telegram_notify": True},
-    )
-    assert blocked.status_code == 403
+        blocked = await client.post(
+            "/api/availability/preferences",
+            json={"telegram_notify": True},
+            headers=_xhr_headers(),
+        )
+        assert blocked.status_code == 403
 
-    unchanged = client.get("/api/availability/settings")
-    assert unchanged.status_code == 200
-    assert unchanged.json()["sound_enabled"] is True
-    assert unchanged.json()["sound_cooldown_seconds"] == 480
+        unchanged = await client.get("/api/availability/settings")
+        assert unchanged.status_code == 200
+        assert unchanged.json()["sound_enabled"] is True
+        assert unchanged.json()["sound_cooldown_seconds"] == 480
 
-    updated = client.post(
-        "/api/availability/preferences",
-        json={
-            "sound_enabled": False,
-            "availability_reminders_enabled": False,
-            "sound_cooldown_seconds": 300,
-            "timezone": "Europe/Ljubljana",
-            "discord_notify": True,
-        },
-    )
-    assert updated.status_code == 200
-    assert updated.json()["sound_enabled"] is False
-    assert updated.json()["availability_reminders_enabled"] is False
-    assert updated.json()["sound_cooldown_seconds"] == 300
+        updated = await client.post(
+            "/api/availability/preferences",
+            json={
+                "sound_enabled": False,
+                "availability_reminders_enabled": False,
+                "sound_cooldown_seconds": 300,
+                "timezone": "Europe/Ljubljana",
+                "discord_notify": True,
+            },
+            headers=_xhr_headers(),
+        )
+        assert updated.status_code == 200
+        assert updated.json()["sound_enabled"] is False
+        assert updated.json()["availability_reminders_enabled"] is False
+        assert updated.json()["sound_cooldown_seconds"] == 300
 
 
-def test_subscriptions_require_verified_telegram_and_signal_links():
+@pytest.mark.asyncio
+async def test_subscriptions_require_verified_telegram_and_signal_links():
     db = FakeAvailabilityDB()
     db.player_links.add(42)
-    client = TestClient(_build_app(db))
-    _login(client, user_id=42, username="bob", linked=True)
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        await _login(client, user_id=42, username="bob", linked=True)
 
-    telegram_fail = client.post(
-        "/api/availability/subscriptions",
-        json={"channel_type": "telegram", "enabled": True, "channel_address": "@bob"},
-    )
-    assert telegram_fail.status_code == 403
+        telegram_fail = await client.post(
+            "/api/availability/subscriptions",
+            json={"channel_type": "telegram", "enabled": True, "channel_address": "@bob"},
+            headers=_xhr_headers(),
+        )
+        assert telegram_fail.status_code == 403
 
-    db.channel_links[(42, "telegram")] = {
-        "verified_at": datetime(2026, 2, 18, 12, 30, 0),
-        "destination": "@bob",
-    }
-    telegram_ok = client.post(
-        "/api/availability/subscriptions",
-        json={"channel_type": "telegram", "enabled": True, "channel_address": "@bob"},
-    )
-    assert telegram_ok.status_code == 200
+        db.channel_links[(42, "telegram")] = {
+            "verified_at": datetime(2026, 2, 18, 12, 30, 0),
+            "destination": "@bob",
+        }
+        telegram_ok = await client.post(
+            "/api/availability/subscriptions",
+            json={"channel_type": "telegram", "enabled": True, "channel_address": "@bob"},
+            headers=_xhr_headers(),
+        )
+        assert telegram_ok.status_code == 200
 
-    rows = client.get("/api/availability/subscriptions")
-    assert rows.status_code == 200
-    by_channel = {row["channel_type"]: row for row in rows.json()["subscriptions"]}
-    assert by_channel["telegram"]["enabled"] is True
-    assert by_channel["telegram"]["verified"] is True
+        rows = await client.get("/api/availability/subscriptions")
+        assert rows.status_code == 200
+        by_channel = {row["channel_type"]: row for row in rows.json()["subscriptions"]}
+        assert by_channel["telegram"]["enabled"] is True
+        assert by_channel["telegram"]["verified"] is True
 
 
-def test_link_token_create_and_confirm_flow_activates_subscription():
+@pytest.mark.asyncio
+async def test_link_token_create_and_confirm_flow_activates_subscription():
     db = FakeAvailabilityDB()
     db.player_links.add(101)
-    client = TestClient(_build_app(db))
-    _login(client, user_id=101, username="foxtrot", linked=True)
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        await _login(client, user_id=101, username="foxtrot", linked=True)
 
-    token_resp = client.post(
-        "/api/availability/link-token",
-        json={"channel_type": "telegram", "ttl_minutes": 30},
-    )
-    assert token_resp.status_code == 200
+        token_resp = await client.post(
+            "/api/availability/link-token",
+            json={"channel_type": "telegram", "ttl_minutes": 30},
+            headers=_xhr_headers(),
+        )
+        assert token_resp.status_code == 200
 
-    token = token_resp.json()["token"]
-    confirm = client.post(
-        "/api/availability/link-confirm",
-        json={
-            "channel_type": "telegram",
-            "token": token,
-            "channel_address": "123456789",
-        },
-    )
-    assert confirm.status_code == 200
+        token = token_resp.json()["token"]
+        confirm = await client.post(
+            "/api/availability/link-confirm",
+            json={
+                "channel_type": "telegram",
+                "token": token,
+                "channel_address": "123456789",
+            },
+        )
+        assert confirm.status_code == 200
 
-    subs = client.get("/api/availability/subscriptions")
-    by_channel = {row["channel_type"]: row for row in subs.json()["subscriptions"]}
-    assert by_channel["telegram"]["enabled"] is True
-    assert by_channel["telegram"]["channel_address"] == "123456789"
+        subs = await client.get("/api/availability/subscriptions")
+        by_channel = {row["channel_type"]: row for row in subs.json()["subscriptions"]}
+        assert by_channel["telegram"]["enabled"] is True
+        assert by_channel["telegram"]["channel_address"] == "123456789"
+
+
+@pytest.mark.asyncio
+async def test_state_changing_availability_routes_require_csrf_header():
+    db = FakeAvailabilityDB()
+    db.player_links.add(44)
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        await _login(client, user_id=44, username="charlie", linked=True)
+
+        missing_header = await client.post(
+            "/api/availability",
+            json={"date": "2026-02-20", "status": "AVAILABLE"},
+        )
+        assert missing_header.status_code == 403
+        assert missing_header.json()["detail"] == "Missing required CSRF header"
+
+        with_header = await client.post(
+            "/api/availability",
+            json={"date": "2026-02-20", "status": "AVAILABLE"},
+            headers=_xhr_headers(),
+        )
+        assert with_header.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_link_confirm_token_replay_fails_after_first_use():
+    db = FakeAvailabilityDB()
+    db.player_links.add(121)
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        await _login(client, user_id=121, username="hotel", linked=True)
+
+        token_resp = await client.post(
+            "/api/availability/link-token",
+            json={"channel_type": "telegram", "ttl_minutes": 30},
+            headers=_xhr_headers(),
+        )
+        assert token_resp.status_code == 200
+
+        token = token_resp.json()["token"]
+        first_confirm = await client.post(
+            "/api/availability/link-confirm",
+            json={
+                "channel_type": "telegram",
+                "token": token,
+                "channel_address": "chat-abc",
+            },
+        )
+        assert first_confirm.status_code == 200
+
+        replay_confirm = await client.post(
+            "/api/availability/link-confirm",
+            json={
+                "channel_type": "telegram",
+                "token": token,
+                "channel_address": "chat-abc",
+            },
+        )
+        assert replay_confirm.status_code == 404
+        assert replay_confirm.json()["detail"] == "Invalid or expired token"
+
+
+@pytest.mark.asyncio
+async def test_link_token_generation_is_rate_limited():
+    db = FakeAvailabilityDB()
+    db.player_links.add(131)
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        await _login(client, user_id=131, username="india", linked=True)
+
+        first = await client.post(
+            "/api/availability/link-token",
+            json={"channel_type": "signal", "ttl_minutes": 30},
+            headers=_xhr_headers(),
+        )
+        assert first.status_code == 200
+
+        second = await client.post(
+            "/api/availability/link-token",
+            json={"channel_type": "signal", "ttl_minutes": 30},
+            headers=_xhr_headers(),
+        )
+        assert second.status_code == 429
+        assert "generated recently" in second.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_unlink_subscription_channel_removes_subscription_and_link_row():
+    db = FakeAvailabilityDB()
+    db.player_links.add(142)
+    db.channel_links[(142, "telegram")] = {
+        "verified_at": datetime(2026, 2, 18, 12, 30, 0),
+        "destination": "@delta",
+    }
+    db.subscriptions[(142, "telegram")] = {
+        "enabled": True,
+        "channel_address": "@delta",
+        "verified_at": datetime(2026, 2, 18, 12, 30, 0),
+        "preferences": {},
+    }
+
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        await _login(client, user_id=142, username="juliet", linked=True)
+
+        response = await client.delete(
+            "/api/availability/subscriptions/telegram",
+            headers=_xhr_headers(),
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["success"] is True
+        assert body["channel_type"] == "telegram"
+
+        assert (142, "telegram") not in db.subscriptions
+        assert (142, "telegram") not in db.channel_links

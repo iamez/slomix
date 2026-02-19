@@ -14,7 +14,7 @@ Available Routers:
     auth: Authentication endpoints
         - GET /auth/discord: Discord OAuth login
         - GET /auth/callback: OAuth callback handler
-        - GET /auth/logout: Session logout
+        - POST /auth/logout: Session logout
 
     predictions: Match prediction endpoints
         - GET /api/predictions: List recent predictions
@@ -42,13 +42,22 @@ Available Routers:
         - GET/POST /api/availability/settings
         - GET/POST /api/availability/subscriptions
 
+    planning: Planning room API
+        - GET /api/planning/today
+        - POST /api/planning/today/create
+        - POST /api/planning/today/join
+        - POST /api/planning/today/suggestions
+        - POST /api/planning/today/vote
+        - POST /api/planning/today/teams
+
 Usage:
-    from website.backend.routers import api, auth, predictions, greatshot, uploads, availability
+    from website.backend.routers import api, auth, predictions, greatshot, uploads, availability, planning
 
     app.include_router(api.router, prefix="/api")
     app.include_router(auth.router, prefix="/auth")
     app.include_router(predictions.router, prefix="/api")
     app.include_router(uploads.router, prefix="/api/uploads")
     app.include_router(availability.router, prefix="/api/availability")
+    app.include_router(planning.router, prefix="/api/planning")
 """
-__all__ = ["api", "auth", "predictions", "greatshot", "greatshot_topshots", "uploads", "availability"]
+__all__ = ["api", "auth", "predictions", "greatshot", "greatshot_topshots", "uploads", "availability", "planning"]

@@ -1,5 +1,5 @@
 """
-PROXIMITY TRACKER v4.1 - FULL PLAYER TRACKING PARSER
+PROXIMITY TRACKER v4.2 - FULL PLAYER TRACKING PARSER
 Parse engagement-centric data AND full player tracks
 
 Features:
@@ -9,17 +9,22 @@ Features:
 - Update player teamplay stats (aggregated forever)
 - Update crossfire pair stats
 - Update per-map heatmaps
+- Parse reaction telemetry (return fire / dodge / support reaction)
 
-v4.1 Output Format:
+v4.2 Output Format:
 - PLAYER_TRACKS: guid;name;team;class;spawn_time;death_time;first_move_time;death_type;samples;path
 - death_type: killed|selfkill|fallen|world|teamkill|round_end|disconnect|unknown
 - path format: time,x,y,z,health,speed,weapon,stance,sprint,event separated by |
+- REACTION_METRICS:
+  engagement_id;target_guid;target_name;target_team;target_class;outcome;num_attackers;
+  return_fire_ms;dodge_reaction_ms;support_reaction_ms;start_time;end_time;duration
 """
 
 import os
 import json
 import logging
 import re
+from bisect import bisect_left
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -143,6 +148,23 @@ class PlayerTrack:
         return (sprinting / len(self.path)) * 100
 
 
+@dataclass
+class ReactionMetric:
+    engagement_id: int
+    target_guid: str
+    target_name: str
+    target_team: str
+    target_class: str
+    outcome: str
+    num_attackers: int
+    return_fire_ms: Optional[int]
+    dodge_reaction_ms: Optional[int]
+    support_reaction_ms: Optional[int]
+    start_time_ms: int
+    end_time_ms: int
+    duration_ms: int
+
+
 class ProximityParserV4:
     """Parser for proximity_tracker v4 output files with full player tracking"""
 
@@ -155,6 +177,7 @@ class ProximityParserV4:
         # Parsed data
         self.engagements: List[Engagement] = []
         self.player_tracks: List[PlayerTrack] = []  # v4: Full player tracks
+        self.reaction_metrics: List[ReactionMetric] = []
         self.kill_heatmap: List[Dict] = []
         self.movement_heatmap: List[Dict] = []
         self.trade_events: List[Dict] = []
@@ -264,6 +287,7 @@ class ProximityParserV4:
         self.metadata = self._metadata_defaults()
         self.engagements = []
         self.player_tracks = []
+        self.reaction_metrics = []
         self.kill_heatmap = []
         self.movement_heatmap = []
         self.objective_focus = []
@@ -330,6 +354,9 @@ class ProximityParserV4:
                     if line.startswith('# OBJECTIVE_FOCUS'):
                         section = 'objective_focus'
                         continue
+                    if line.startswith('# REACTION_METRICS'):
+                        section = 'reaction_metrics'
+                        continue
 
                     # Skip other comments
                     if line.startswith('#'):
@@ -346,9 +373,17 @@ class ProximityParserV4:
                         self._parse_movement_heatmap_line(line)
                     elif section == 'objective_focus':
                         self._parse_objective_focus_line(line)
+                    elif section == 'reaction_metrics':
+                        self._parse_reaction_metric_line(line)
 
             self._normalize_round_metadata(filepath)
-            self.logger.info(f"Parsed {len(self.engagements)} engagements, {len(self.player_tracks)} tracks from {filepath}")
+            self.logger.info(
+                "Parsed %d engagements, %d tracks, %d reaction rows from %s",
+                len(self.engagements),
+                len(self.player_tracks),
+                len(self.reaction_metrics),
+                filepath,
+            )
             return True
 
         except Exception as e:
@@ -581,6 +616,48 @@ class ProximityParserV4:
                 })
             except ValueError as exc:
                 self.logger.debug("Skipping invalid objective focus entry: %s (%s)", line, exc)
+
+    @staticmethod
+    def _parse_optional_int(value: str) -> Optional[int]:
+        text = str(value or '').strip()
+        if not text:
+            return None
+        try:
+            return int(text)
+        except ValueError:
+            return None
+
+    def _parse_reaction_metric_line(self, line: str):
+        """
+        Parse REACTION_METRICS line:
+        engagement_id;target_guid;target_name;target_team;target_class;outcome;num_attackers;
+        return_fire_ms;dodge_reaction_ms;support_reaction_ms;start_time;end_time;duration
+        """
+        parts = line.split(';')
+        if len(parts) < 13:
+            self.logger.debug("Skipping invalid reaction metric entry (columns): %s", line[:120])
+            return
+
+        try:
+            self.reaction_metrics.append(
+                ReactionMetric(
+                    engagement_id=int(parts[0]),
+                    target_guid=parts[1],
+                    target_name=parts[2],
+                    target_team=parts[3],
+                    target_class=parts[4] or "UNKNOWN",
+                    outcome=parts[5] or "unknown",
+                    num_attackers=int(parts[6]) if parts[6] else 0,
+                    return_fire_ms=self._parse_optional_int(parts[7]),
+                    dodge_reaction_ms=self._parse_optional_int(parts[8]),
+                    support_reaction_ms=self._parse_optional_int(parts[9]),
+                    start_time_ms=int(parts[10]) if parts[10] else 0,
+                    end_time_ms=int(parts[11]) if parts[11] else 0,
+                    duration_ms=int(parts[12]) if parts[12] else 0,
+                )
+            )
+        except ValueError as exc:
+            self.logger.debug("Skipping invalid reaction metric entry: %s (%s)", line[:120], exc)
     
     async def import_file(self, filepath: str, session_date) -> bool:
         """Parse and import to database
@@ -601,7 +678,7 @@ class ProximityParserV4:
             from datetime import datetime
             session_date = datetime.strptime(session_date, '%Y-%m-%d').date()
 
-        try:
+        async def _run_import_steps():
             # Import engagements
             await self._import_engagements(session_date)
 
@@ -622,6 +699,10 @@ class ProximityParserV4:
             if self.objective_focus:
                 await self._import_objective_focus(session_date)
 
+            # Import reaction telemetry (optional)
+            if self.reaction_metrics:
+                await self._import_reaction_metrics(session_date)
+
             # Compute + import trade events (v1)
             if self.engagements and self.player_tracks:
                 self._compute_trade_events()
@@ -632,6 +713,15 @@ class ProximityParserV4:
                 self.support_summary = self._compute_support_uptime()
                 if self.support_summary:
                     await self._import_support_summary(session_date)
+
+        try:
+            tx_context = getattr(self.db_adapter, "transaction", None)
+            if callable(tx_context):
+                async with tx_context():
+                    await _run_import_steps()
+            else:
+                self.logger.warning("DB adapter has no transaction() context; import is non-transactional")
+                await _run_import_steps()
 
             self.logger.info(f"Successfully imported {filepath}")
             return True
@@ -1070,9 +1160,37 @@ class ProximityParserV4:
         dy = (a[1] or 0) - (b[1] or 0)
         return (dx * dx + dy * dy) ** 0.5
 
-    def _closest_track_point(self, track: PlayerTrack, target_time: int, max_delta_ms: int) -> Optional[PathPoint]:
+    def _closest_track_point(
+        self,
+        track: PlayerTrack,
+        target_time: int,
+        max_delta_ms: int,
+        point_times: Optional[List[int]] = None,
+    ) -> Optional[PathPoint]:
         if not track.path:
             return None
+        if point_times and len(point_times) == len(track.path):
+            idx = bisect_left(point_times, target_time)
+            candidate_indexes = []
+            if idx < len(point_times):
+                candidate_indexes.append(idx)
+            if idx > 0:
+                candidate_indexes.append(idx - 1)
+            if not candidate_indexes:
+                return None
+
+            best_idx = candidate_indexes[0]
+            best_delta = abs(point_times[best_idx] - target_time)
+            for cand_idx in candidate_indexes[1:]:
+                cand_delta = abs(point_times[cand_idx] - target_time)
+                if cand_delta < best_delta or (cand_delta == best_delta and cand_idx < best_idx):
+                    best_idx = cand_idx
+                    best_delta = cand_delta
+
+            if best_delta > max_delta_ms:
+                return None
+            return track.path[best_idx]
+
         closest = None
         best_delta = None
         for p in track.path:
@@ -1106,9 +1224,18 @@ class ProximityParserV4:
     def _is_in_combat(self, intervals: List[Tuple[int, int]], time_ms: int) -> bool:
         if not intervals:
             return False
-        for start, end in intervals:
-            if start <= time_ms <= end:
-                return True
+        left = 0
+        right = len(intervals) - 1
+        while left <= right:
+            mid = (left + right) // 2
+            start, end = intervals[mid]
+            if time_ms < start:
+                right = mid - 1
+                continue
+            if time_ms > end:
+                left = mid + 1
+                continue
+            return True
         return False
 
     def _compute_support_uptime(self) -> Optional[Dict]:
@@ -1118,6 +1245,9 @@ class ProximityParserV4:
         support_dist = float(os.getenv("PROXIMITY_SUPPORT_DIST", "600"))
         combat_recent_ms = int(os.getenv("PROXIMITY_COMBAT_RECENT_MS", "1500"))
         max_pos_delta = int(os.getenv("PROXIMITY_SUPPORT_POS_DELTA_MS", "1500"))
+        max_samples_per_track = max(
+            200, int(os.getenv("PROXIMITY_SUPPORT_MAX_SAMPLES_PER_TRACK", "1200"))
+        )
 
         combat_intervals_by_guid: Dict[str, List[Tuple[int, int]]] = {}
 
@@ -1136,23 +1266,52 @@ class ProximityParserV4:
             combat_intervals_by_guid[guid] = self._merge_intervals(intervals)
 
         tracks = list(self.player_tracks)
+        teammates_by_team: Dict[str, List[PlayerTrack]] = {}
+        path_times_by_track_id: Dict[int, List[int]] = {}
+        for track in tracks:
+            teammates_by_team.setdefault(track.team, []).append(track)
+            if track.path:
+                point_times = [p.time for p in track.path]
+                is_sorted = True
+                for idx in range(1, len(point_times)):
+                    if point_times[idx] < point_times[idx - 1]:
+                        is_sorted = False
+                        break
+                if is_sorted:
+                    path_times_by_track_id[id(track)] = point_times
+
         support_samples = 0
         total_samples = 0
 
         for track in tracks:
             if not track.path:
                 continue
-            for point in track.path:
+            teammates = teammates_by_team.get(track.team, [])
+            sample_points = track.path
+            if len(sample_points) > max_samples_per_track:
+                # Keep runtime bounded on very long rounds by sampling points uniformly.
+                stride = max(1, len(sample_points) // max_samples_per_track)
+                sample_points = sample_points[::stride]
+
+            for point in sample_points:
                 total_samples += 1
                 in_support = False
-                for teammate in tracks:
-                    if teammate.guid == track.guid or teammate.team != track.team:
+                for teammate in teammates:
+                    if teammate is track:
+                        continue
+                    teammate_combat = combat_intervals_by_guid.get(teammate.guid, [])
+                    if not teammate_combat:
                         continue
                     if not (teammate.spawn_time <= point.time and (teammate.death_time is None or teammate.death_time >= point.time)):
                         continue
-                    if not self._is_in_combat(combat_intervals_by_guid.get(teammate.guid, []), point.time):
+                    if not self._is_in_combat(teammate_combat, point.time):
                         continue
-                    teammate_point = self._closest_track_point(teammate, point.time, max_pos_delta)
+                    teammate_point = self._closest_track_point(
+                        teammate,
+                        point.time,
+                        max_pos_delta,
+                        point_times=path_times_by_track_id.get(id(teammate)),
+                    )
                     if not teammate_point:
                         continue
                     dist = self._distance2d((point.x, point.y, point.z), (teammate_point.x, teammate_point.y, teammate_point.z))
@@ -1344,6 +1503,67 @@ class ProximityParserV4:
             """
             await self.db_adapter.execute(query, tuple(values))
 
+    async def _import_reaction_metrics(self, session_date: str):
+        if not self.reaction_metrics:
+            return
+        if not await self._table_has_column('proximity_reaction_metric', 'engagement_id'):
+            self.logger.info("proximity_reaction_metric table not found; skipping reaction import")
+            return
+
+        supports_round_end = await self._table_has_column('proximity_reaction_metric', 'round_end_unix')
+        for metric in self.reaction_metrics:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "engagement_id",
+                "target_guid", "target_name", "target_team", "target_class",
+                "outcome", "num_attackers",
+                "return_fire_ms", "dodge_reaction_ms", "support_reaction_ms",
+                "start_time_ms", "end_time_ms", "duration_ms",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                metric.engagement_id,
+                metric.target_guid,
+                metric.target_name,
+                metric.target_team,
+                metric.target_class,
+                metric.outcome,
+                metric.num_attackers,
+                metric.return_fire_ms,
+                metric.dodge_reaction_ms,
+                metric.support_reaction_ms,
+                metric.start_time_ms,
+                metric.end_time_ms,
+                metric.duration_ms,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_reaction_metric ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, engagement_id, target_guid)
+                DO UPDATE SET
+                    target_name = EXCLUDED.target_name,
+                    target_team = EXCLUDED.target_team,
+                    target_class = EXCLUDED.target_class,
+                    outcome = EXCLUDED.outcome,
+                    num_attackers = EXCLUDED.num_attackers,
+                    return_fire_ms = EXCLUDED.return_fire_ms,
+                    dodge_reaction_ms = EXCLUDED.dodge_reaction_ms,
+                    support_reaction_ms = EXCLUDED.support_reaction_ms,
+                    start_time_ms = EXCLUDED.start_time_ms,
+                    end_time_ms = EXCLUDED.end_time_ms,
+                    duration_ms = EXCLUDED.duration_ms
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
     async def _import_support_summary(self, session_date: str):
         if not self.support_summary:
             return
@@ -1410,7 +1630,8 @@ class ProximityParserV4:
             'total_tracks': len(self.player_tracks),
             'total_samples': total_samples,
             'total_distance': total_distance,
-            'avg_life_ms': avg_life
+            'avg_life_ms': avg_life,
+            'reaction_metrics': len(self.reaction_metrics),
         }
 
 

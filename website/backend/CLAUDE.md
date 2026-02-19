@@ -41,6 +41,8 @@ FastAPI (main.py)
 | `predictions.py` | `/api/predictions` | Prediction endpoints |
 | `greatshot.py` | `/api` | Greatshot import/crossref endpoints |
 | `greatshot_topshots.py` | `/api` | Greatshot topshots endpoints |
+| `uploads.py` | `/api/uploads` | Community file upload library |
+| `availability.py` | `/api/availability` | Daily availability poll API |
 
 ### Services
 
@@ -49,6 +51,8 @@ FastAPI (main.py)
 | `website_session_data_service.py` | Session data aggregation |
 | `greatshot_crossref.py` | Greatshot cross-reference matching |
 | `greatshot_jobs.py` | Greatshot background job orchestration |
+| `upload_store.py` | Upload file storage (UUID paths, streaming, SHA256) |
+| `upload_validators.py` | Upload security (extension allowlists, magic bytes, size limits) |
 | `greatshot_store.py` | Greatshot storage and schema helpers |
 | `voice_channel_tracker.py` | Voice activity tracking helpers |
 | `game_server_query.py` | Game-server query helpers |

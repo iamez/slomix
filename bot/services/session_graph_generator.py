@@ -10,13 +10,14 @@ This service generates 5 themed graph images:
 """
 
 import io
+import inspect
 import logging
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from bot.core.frag_potential import FragPotentialCalculator
 
@@ -42,9 +43,17 @@ class SessionGraphGenerator:
         'gray': '#95A5A6',
     }
 
-    def __init__(self, db_adapter, timing_debug_service=None):
+    def __init__(
+        self,
+        db_adapter,
+        timing_debug_service=None,
+        timing_shadow_service=None,
+        show_timing_dual: bool = False
+    ):
         self.db_adapter = db_adapter
         self.timing_debug_service = timing_debug_service
+        self.timing_shadow_service = timing_shadow_service
+        self.show_timing_dual = bool(show_timing_dual)
 
     async def _get_player_stats_columns(self):
         """Get columns for player_comprehensive_stats (cached)."""
@@ -71,6 +80,312 @@ class SessionGraphGenerator:
         except Exception:
             self._player_stats_columns = set()
             return self._player_stats_columns
+
+    @staticmethod
+    def _parse_time_to_seconds(time_value: Any) -> int:
+        """Parse MM:SS / HH:MM:SS / numeric to seconds."""
+        if time_value is None:
+            return 0
+        text = str(time_value).strip()
+        if not text:
+            return 0
+        try:
+            parts = text.split(":")
+            if len(parts) == 2:
+                return int(parts[0]) * 60 + int(parts[1])
+            if len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            if "." in text:
+                return int(float(text) * 60)
+            return int(float(text))
+        except (ValueError, TypeError):
+            return 0
+
+    @staticmethod
+    def _row_get(row: Any, idx: int, key: str, default: Any = None) -> Any:
+        """Read tuple/dict row values safely."""
+        if isinstance(row, dict):
+            return row.get(key, default)
+        try:
+            return row[idx]
+        except Exception:
+            return default
+
+    async def _call_service_method(self, method_name: str, *args, **kwargs) -> Tuple[bool, Any]:
+        """Call timing shadow service method if it exists."""
+        if not self.timing_shadow_service:
+            return False, None
+        method = getattr(self.timing_shadow_service, method_name, None)
+        if not method:
+            return False, None
+        result = method(*args, **kwargs)
+        if inspect.isawaitable(result):
+            result = await result
+        return True, result
+
+    def _normalize_round_factor_payload(self, payload: Any) -> Dict[int, float]:
+        """Normalize service payload into round_id->factor mapping."""
+        factors: Dict[int, float] = {}
+        if payload is None:
+            return factors
+
+        raw = payload
+        if isinstance(payload, dict):
+            for key in ("round_factors", "factors", "by_round"):
+                if key in payload and isinstance(payload[key], (dict, list)):
+                    raw = payload[key]
+                    break
+
+        if isinstance(raw, dict):
+            for round_id, factor in raw.items():
+                try:
+                    rid = int(round_id)
+                    fval = float(factor)
+                except (TypeError, ValueError):
+                    continue
+                if fval > 0:
+                    factors[rid] = max(0.0, min(2.0, fval))
+            return factors
+
+        if isinstance(raw, list):
+            for item in raw:
+                if not isinstance(item, dict):
+                    continue
+                round_id = item.get("round_id") or item.get("id")
+                factor = (
+                    item.get("factor")
+                    or item.get("correction_factor")
+                    or item.get("duration_factor")
+                )
+                try:
+                    rid = int(round_id)
+                    fval = float(factor)
+                except (TypeError, ValueError):
+                    continue
+                if fval > 0:
+                    factors[rid] = max(0.0, min(2.0, fval))
+        return factors
+
+    async def _get_round_timing_shadow(self, session_ids: List[int]) -> Dict[str, Any]:
+        """Build round-level timing correction factors from shadow/comparison service."""
+        result: Dict[str, Any] = {
+            "factors": {},
+            "rounds_total": len(session_ids or []),
+            "rounds_with_telemetry": 0,
+            "reason": "",
+            "source": "none",
+        }
+        if not session_ids:
+            result["reason"] = "No rounds provided"
+            return result
+        if not self.timing_shadow_service:
+            result["reason"] = "Timing shadow service unavailable"
+            return result
+
+        for method_name in (
+            "get_session_round_timing_factors",
+            "get_round_timing_factors_for_session",
+            "get_session_round_factors",
+        ):
+            called, payload = await self._call_service_method(method_name, session_ids=session_ids)
+            if not called:
+                continue
+            factors = self._normalize_round_factor_payload(payload)
+            if factors:
+                result["factors"] = factors
+                result["rounds_with_telemetry"] = len(factors)
+                if len(factors) < len(session_ids):
+                    result["reason"] = f"Lua timing missing for {len(session_ids) - len(factors)}/{len(session_ids)} rounds"
+                else:
+                    result["reason"] = "OK"
+                result["source"] = method_name
+                return result
+
+        if not hasattr(self.timing_shadow_service, "_fetch_lua_data"):
+            result["reason"] = "Timing service does not expose round comparison data"
+            return result
+
+        placeholders = ",".join("?" for _ in session_ids)
+        rounds_query = f"""
+            SELECT r.id, r.map_name, r.round_number, r.round_date, r.round_time, r.actual_time
+            FROM rounds r
+            WHERE r.id IN ({placeholders})
+        """
+        round_rows = await self.db_adapter.fetch_all(rounds_query, tuple(session_ids))
+        for row in round_rows:
+            round_id = int(self._row_get(row, 0, "id", 0) or 0)
+            map_name = self._row_get(row, 1, "map_name", "unknown") or "unknown"
+            round_number = int(self._row_get(row, 2, "round_number", 0) or 0)
+            round_date = self._row_get(row, 3, "round_date", "")
+            round_time = self._row_get(row, 4, "round_time", "")
+            actual_time = self._row_get(row, 5, "actual_time", "")
+
+            stats_seconds = self._parse_time_to_seconds(actual_time)
+            if hasattr(self.timing_shadow_service, "_fetch_stats_file_data"):
+                try:
+                    stats_data = await self.timing_shadow_service._fetch_stats_file_data(round_id)
+                except Exception:  # nosec B110
+                    stats_data = None
+                if isinstance(stats_data, dict):
+                    map_name = stats_data.get("map_name") or map_name
+                    round_number = int(stats_data.get("round_number") or round_number or 0)
+                    round_date = stats_data.get("round_date") or round_date
+                    round_time = stats_data.get("round_time") or round_time
+                    stats_seconds = int(stats_data.get("stats_duration_seconds") or stats_seconds or 0)
+
+            try:
+                lua_data = await self.timing_shadow_service._fetch_lua_data(
+                    round_id,
+                    map_name,
+                    round_number,
+                    round_date,
+                    round_time,
+                )
+            except Exception:  # nosec B110
+                lua_data = None
+
+            lua_seconds = None
+            if isinstance(lua_data, dict):
+                try:
+                    lua_seconds_raw = lua_data.get("lua_duration_seconds")
+                    lua_seconds = int(lua_seconds_raw) if lua_seconds_raw is not None else None
+                except (TypeError, ValueError):
+                    lua_seconds = None
+
+            if stats_seconds > 0 and lua_seconds and lua_seconds > 0:
+                factor = max(0.0, min(2.0, float(lua_seconds) / float(stats_seconds)))
+                result["factors"][round_id] = factor
+                result["rounds_with_telemetry"] += 1
+
+        missing_rounds = len(session_ids) - result["rounds_with_telemetry"]
+        if result["rounds_with_telemetry"] == 0:
+            result["reason"] = "No Lua timing telemetry linked to this session"
+        elif missing_rounds > 0:
+            result["reason"] = f"Lua timing missing for {missing_rounds}/{len(session_ids)} rounds"
+        else:
+            result["reason"] = "OK"
+        result["source"] = "compat_fetch"
+        return result
+
+    async def _get_session_timing_dual_by_guid(self, session_ids: List[int]) -> Dict[str, Any]:
+        """Build per-player old/new timing aggregates for graph dual-mode."""
+        payload: Dict[str, Any] = {
+            "players": {},
+            "meta": {
+                "rounds_total": len(session_ids or []),
+                "rounds_with_telemetry": 0,
+                "reason": "",
+                "source": "none",
+            },
+        }
+        if not session_ids:
+            payload["meta"]["reason"] = "No rounds provided"
+            return payload
+
+        called, shadow_result = await self._call_service_method("compare_session", session_ids)
+        if called and shadow_result is not None:
+            players: Dict[str, Dict[str, Any]] = {}
+            round_diagnostics = tuple(getattr(shadow_result, "round_diagnostics", ()) or ())
+            rounds_total = len(round_diagnostics)
+            rounds_with_telemetry = sum(
+                1 for diag in round_diagnostics if int(getattr(diag, "players_with_lua", 0) or 0) > 0
+            )
+
+            for summary in tuple(getattr(shadow_result, "player_summaries", ()) or ()):
+                guid_key = str(getattr(summary, "player_guid", "") or "")
+                entry = {
+                    "old_time_dead_seconds": int(getattr(summary, "old_dead_seconds", 0) or 0),
+                    "new_time_dead_seconds": int(getattr(summary, "new_dead_seconds", 0) or 0),
+                    "old_denied_seconds": int(getattr(summary, "old_denied_playtime", 0) or 0),
+                    "new_denied_seconds": int(getattr(summary, "new_denied_playtime", 0) or 0),
+                }
+                players[guid_key] = entry
+                guid_prefix = guid_key[:8]
+                if guid_prefix and guid_prefix not in players:
+                    players[guid_prefix] = entry
+
+            if rounds_total == 0:
+                reason = "No round diagnostics"
+            elif rounds_with_telemetry == 0:
+                reason = "No Lua telemetry linked to this session"
+            elif rounds_with_telemetry < rounds_total:
+                reason = f"Lua timing partial {rounds_with_telemetry}/{rounds_total} rounds"
+            else:
+                reason = "OK"
+
+            payload["players"] = players
+            payload["meta"] = {
+                "rounds_total": rounds_total,
+                "rounds_with_telemetry": rounds_with_telemetry,
+                "reason": reason,
+                "source": "compare_session",
+                "overall_coverage_percent": float(
+                    getattr(shadow_result, "overall_coverage_percent", 0.0) or 0.0
+                ),
+                "artifact_path": getattr(shadow_result, "artifact_path", None),
+            }
+            return payload
+
+        shadow = await self._get_round_timing_shadow(session_ids)
+        round_factors = shadow.get("factors", {}) or {}
+        payload["meta"]["rounds_with_telemetry"] = int(shadow.get("rounds_with_telemetry") or 0)
+        payload["meta"]["reason"] = shadow.get("reason") or ""
+        payload["meta"]["source"] = shadow.get("source") or "none"
+
+        placeholders = ",".join("?" for _ in session_ids)
+        query = f"""
+            SELECT p.player_guid,
+                p.round_id,
+                SUM(COALESCE(p.time_played_seconds, 0)) as time_played_seconds,
+                SUM(
+                    LEAST(
+                        COALESCE(p.time_dead_minutes, 0) * 60,
+                        COALESCE(p.time_played_seconds, 0)
+                    )
+                ) as time_dead_old_seconds,
+                SUM(COALESCE(p.denied_playtime, 0)) as denied_old_seconds
+            FROM player_comprehensive_stats p
+            WHERE p.round_id IN ({placeholders})
+            GROUP BY p.player_guid, p.round_id
+        """
+        rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
+
+        for row in rows:
+            guid = self._row_get(row, 0, "player_guid")
+            if not guid:
+                continue
+            round_id = int(self._row_get(row, 1, "round_id", 0) or 0)
+            played = int(self._row_get(row, 2, "time_played_seconds", 0) or 0)
+            dead_old = int(round(float(self._row_get(row, 3, "time_dead_old_seconds", 0) or 0)))
+            denied_old = int(round(float(self._row_get(row, 4, "denied_old_seconds", 0) or 0)))
+            dead_old = max(0, min(dead_old, played if played > 0 else dead_old))
+            denied_old = max(0, min(denied_old, played if played > 0 else denied_old))
+
+            factor = round_factors.get(round_id)
+            if factor is not None:
+                dead_new = int(round(dead_old * factor))
+                denied_new = int(round(denied_old * factor))
+                dead_new = max(0, min(dead_new, played if played > 0 else dead_new))
+                denied_new = max(0, min(denied_new, played if played > 0 else denied_new))
+            else:
+                dead_new = dead_old
+                denied_new = denied_old
+
+            entry = payload["players"].setdefault(
+                guid,
+                {
+                    "old_time_dead_seconds": 0,
+                    "new_time_dead_seconds": 0,
+                    "old_denied_seconds": 0,
+                    "new_denied_seconds": 0,
+                },
+            )
+            entry["old_time_dead_seconds"] += dead_old
+            entry["new_time_dead_seconds"] += dead_new
+            entry["old_denied_seconds"] += denied_old
+            entry["new_denied_seconds"] += denied_new
+
+        return payload
 
     def _style_axis(self, ax, title: str, title_size: int = 13):
         """Apply beautiful dark theme styling"""
@@ -210,6 +525,7 @@ class SessionGraphGenerator:
             # Handle None names - use player_guid as fallback
             names = [(p[0] or p[16] or f"Player_{i}") for i, p in enumerate(top_players)]
             display_names = [str(n)[:12] for n in names]
+            player_guids = [p[16] or "" for p in top_players]
             kills = [p[1] or 0 for p in top_players]
             deaths = [p[2] or 0 for p in top_players]
             damage_given = [p[3] or 0 for p in top_players]
@@ -217,29 +533,76 @@ class SessionGraphGenerator:
             dpm = [p[5] or 0 for p in top_players]
             time_played_sec = [p[6] or 0 for p in top_players]
             time_played = [t / 60 for t in time_played_sec]
-            time_dead_minutes = [p[7] or 0 for p in top_players]
+            time_dead_old_minutes = [p[7] or 0 for p in top_players]
             revives_given = [p[8] or 0 for p in top_players]
             times_revived = [p[9] or 0 for p in top_players]
             gibs = [p[10] or 0 for p in top_players]
             headshots = [p[11] or 0 for p in top_players]
-            denied_playtime_sec = [p[12] or 0 for p in top_players]
+            denied_playtime_old_sec = [p[12] or 0 for p in top_players]
             useful_kills = [p[13] or 0 for p in top_players]
             self_kills = [p[14] or 0 for p in top_players]
             full_selfkills = [p[15] or 0 for p in top_players]
             rounds_played = [p[17] or 1 for p in top_players]
-            
-            # Calculate denied playtime as percentage of total time played
-            denied_playtime_pct = [
-                (dp / max(1, tp)) * 100 
-                for dp, tp in zip(denied_playtime_sec, time_played_sec)
+
+            # Shadow timing payload for dual-mode graphs
+            dual_shadow_note = ""
+            dual_players: Dict[str, Dict[str, Any]] = {}
+            if self.show_timing_dual:
+                dual_payload = await self._get_session_timing_dual_by_guid(session_ids)
+                dual_players = dual_payload.get("players", {}) or {}
+                dual_meta = dual_payload.get("meta", {}) or {}
+                rounds_total = int(dual_meta.get("rounds_total") or len(session_ids or []))
+                rounds_with_telemetry = int(dual_meta.get("rounds_with_telemetry") or 0)
+                if rounds_with_telemetry <= 0:
+                    dual_shadow_note = "No Lua telemetry linked; New mirrors Old."
+                elif rounds_with_telemetry < rounds_total:
+                    dual_shadow_note = (
+                        f"Lua telemetry for {rounds_with_telemetry}/{rounds_total} rounds; "
+                        "missing rounds mirror Old."
+                    )
+
+            time_dead_old_sec = [int(round((v or 0) * 60)) for v in time_dead_old_minutes]
+            time_dead_new_sec = []
+            denied_playtime_new_sec = []
+            for idx, guid in enumerate(player_guids):
+                old_dead_sec = time_dead_old_sec[idx]
+                old_denied_sec = int(denied_playtime_old_sec[idx] or 0)
+                played_sec = int(time_played_sec[idx] or 0)
+                shadow = dual_players.get(guid, {}) if self.show_timing_dual else {}
+
+                dead_new = int(shadow.get("new_time_dead_seconds", old_dead_sec) or 0)
+                denied_new = int(shadow.get("new_denied_seconds", old_denied_sec) or 0)
+                if played_sec > 0:
+                    dead_new = max(0, min(dead_new, played_sec))
+                    denied_new = max(0, min(denied_new, played_sec))
+                else:
+                    dead_new = max(0, dead_new)
+                    denied_new = max(0, denied_new)
+
+                time_dead_new_sec.append(dead_new)
+                denied_playtime_new_sec.append(denied_new)
+
+            time_dead_new_minutes = [v / 60.0 for v in time_dead_new_sec]
+            denied_playtime_pct_old = [
+                (dp / max(1, tp)) * 100 for dp, tp in zip(denied_playtime_old_sec, time_played_sec)
+            ]
+            denied_playtime_pct_new = [
+                (dp / max(1, tp)) * 100 for dp, tp in zip(denied_playtime_new_sec, time_played_sec)
             ]
 
-            # Calculate derived metrics
+            # Baseline metrics keep legacy timing to preserve existing behavior when flag is off
             kd_ratios = [k / max(1, d) for k, d in zip(kills, deaths)]
-            time_dead = time_dead_minutes  # Already calculated correctly from time_dead_ratio
-            # FIX: Calculate actual time ALIVE (total time - time dead)
-            # Previously was showing time_played as "Alive" which is TOTAL time, not alive time
+            time_dead_minutes = time_dead_old_minutes
+            time_dead = time_dead_minutes
             time_alive = [max(0, tp - td) for tp, td in zip(time_played, time_dead)]
+            survival_rate = [
+                100 - (td / max(0.01, tp) * 100) if tp > 0 else 0
+                for td, tp in zip(time_dead_old_minutes, time_played)
+            ]
+            survival_rate_new = [
+                100 - (td / max(0.01, tp) * 100) if tp > 0 else 0
+                for td, tp in zip(time_dead_new_minutes, time_played)
+            ]
 
             # ═══════════════════════════════════════════════════════════════════
             # TIME DEBUG: Validate time values are consistent
@@ -269,11 +632,6 @@ class SessionGraphGenerator:
             dmg_eff = [
                 dg / max(1, dr)
                 for dg, dr in zip(damage_given, damage_received)
-            ]
-            # Calculate survival rate from time_dead
-            survival_rate = [
-                100 - (td / max(0.01, tp) * 100) if tp > 0 else 0
-                for td, tp in zip(time_dead_minutes, time_played)
             ]
 
             # Calculate FragPotential and Playstyles
@@ -417,21 +775,57 @@ class SessionGraphGenerator:
             self._add_grouped_bar_labels(axes2[0, 0], bars1, bars2,
                                           revives_given, times_revived)
 
-            # Time Alive vs Time Dead (grouped)
-            # FIX: Use time_alive (time_played - time_dead), not time_played (total)
-            bars1 = axes2[0, 1].bar(x - bar_width/2, time_alive, bar_width,
-                                     color=self.COLORS['cyan'], label='Alive',
-                                     edgecolor='white', linewidth=0.5)
-            bars2 = axes2[0, 1].bar(x + bar_width/2, time_dead, bar_width,
-                                     color=self.COLORS['pink'], label='Dead',
-                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes2[0, 1], "TIME ALIVE vs DEAD (minutes)")
-            axes2[0, 1].set_xticks(x)
-            axes2[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
-            axes2[0, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
-                               edgecolor='white', labelcolor='white')
-            self._add_grouped_bar_labels(axes2[0, 1], bars1, bars2,
-                                          time_alive, time_dead, "{:.1f}")
+            if self.show_timing_dual:
+                bars1 = axes2[0, 1].bar(
+                    x - bar_width/2,
+                    time_dead_old_minutes,
+                    bar_width,
+                    color=self.COLORS['pink'],
+                    label='Dead (Old)',
+                    edgecolor='white',
+                    linewidth=0.5,
+                )
+                bars2 = axes2[0, 1].bar(
+                    x + bar_width/2,
+                    time_dead_new_minutes,
+                    bar_width,
+                    color=self.COLORS['cyan'],
+                    label='Dead (New)',
+                    edgecolor='white',
+                    linewidth=0.5,
+                )
+                self._style_axis(axes2[0, 1], "TIME DEAD OLD vs NEW (minutes)")
+                axes2[0, 1].set_xticks(x)
+                axes2[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                axes2[0, 1].legend(
+                    loc='upper right',
+                    facecolor=self.COLORS['bg_panel'],
+                    edgecolor='white',
+                    labelcolor='white',
+                )
+                self._add_grouped_bar_labels(
+                    axes2[0, 1],
+                    bars1,
+                    bars2,
+                    time_dead_old_minutes,
+                    time_dead_new_minutes,
+                    "{:.1f}",
+                )
+            else:
+                # Legacy graph behavior (flag off): Alive vs Dead
+                bars1 = axes2[0, 1].bar(x - bar_width/2, time_alive, bar_width,
+                                         color=self.COLORS['cyan'], label='Alive',
+                                         edgecolor='white', linewidth=0.5)
+                bars2 = axes2[0, 1].bar(x + bar_width/2, time_dead, bar_width,
+                                         color=self.COLORS['pink'], label='Dead',
+                                         edgecolor='white', linewidth=0.5)
+                self._style_axis(axes2[0, 1], "TIME ALIVE vs DEAD (minutes)")
+                axes2[0, 1].set_xticks(x)
+                axes2[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                axes2[0, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                                   edgecolor='white', labelcolor='white')
+                self._add_grouped_bar_labels(axes2[0, 1], bars1, bars2,
+                                              time_alive, time_dead, "{:.1f}")
 
             # Gibs
             bars = axes2[1, 0].bar(x, gibs, color=self.COLORS['red'],
@@ -448,6 +842,9 @@ class SessionGraphGenerator:
             axes2[1, 1].set_xticks(x)
             axes2[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
             self._add_bar_labels(axes2[1, 1], bars, headshots)
+            if self.show_timing_dual and dual_shadow_note:
+                fig2.text(0.01, 0.01, f"Dual timing note: {dual_shadow_note}",
+                          color='#B0B0B0', fontsize=8)
 
             plt.tight_layout(rect=(0, 0, 1, 0.96))
             buf2 = io.BytesIO()
@@ -491,38 +888,111 @@ class SessionGraphGenerator:
             axes3[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
             self._add_bar_labels(axes3[0, 1], bars, dmg_eff, fmt="{:.2f}x")
 
-            # Denied Playtime (as percentage)
-            denied_colors = [
-                self.COLORS['red'] if d >= 30
-                else self.COLORS['orange'] if d >= 15
-                else self.COLORS['green']
-                for d in denied_playtime_pct
-            ]
-            bars = axes3[1, 0].bar(x, denied_playtime_pct, color=denied_colors,
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes3[1, 0], "TIME DENIED (%)")
-            axes3[1, 0].set_ylim(0, max(50, max(denied_playtime_pct) * 1.2))
-            axes3[1, 0].set_xticks(x)
-            axes3[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
-            self._add_bar_labels(axes3[1, 0], bars, denied_playtime_pct, 
-                                 fmt="{:.1f}%")
+            if self.show_timing_dual:
+                timing_bar_width = 0.35
+                bars1 = axes3[1, 0].bar(
+                    x - timing_bar_width/2,
+                    denied_playtime_pct_old,
+                    timing_bar_width,
+                    color=self.COLORS['orange'],
+                    label='Old',
+                    edgecolor='white',
+                    linewidth=0.5,
+                )
+                bars2 = axes3[1, 0].bar(
+                    x + timing_bar_width/2,
+                    denied_playtime_pct_new,
+                    timing_bar_width,
+                    color=self.COLORS['teal'],
+                    label='New',
+                    edgecolor='white',
+                    linewidth=0.5,
+                )
+                self._style_axis(axes3[1, 0], "TIME DENIED % (OLD vs NEW)")
+                max_denied = max(max(denied_playtime_pct_old), max(denied_playtime_pct_new), 1)
+                axes3[1, 0].set_ylim(0, max(50, max_denied * 1.2))
+                axes3[1, 0].set_xticks(x)
+                axes3[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
+                axes3[1, 0].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                                   edgecolor='white', labelcolor='white')
+                self._add_grouped_bar_labels(
+                    axes3[1, 0],
+                    bars1,
+                    bars2,
+                    denied_playtime_pct_old,
+                    denied_playtime_pct_new,
+                    fmt="{:.1f}%",
+                )
+            else:
+                # Denied Playtime (as percentage)
+                denied_colors = [
+                    self.COLORS['red'] if d >= 30
+                    else self.COLORS['orange'] if d >= 15
+                    else self.COLORS['green']
+                    for d in denied_playtime_pct_old
+                ]
+                bars = axes3[1, 0].bar(x, denied_playtime_pct_old, color=denied_colors,
+                                        edgecolor='white', linewidth=0.5)
+                self._style_axis(axes3[1, 0], "TIME DENIED (%)")
+                axes3[1, 0].set_ylim(0, max(50, max(denied_playtime_pct_old) * 1.2))
+                axes3[1, 0].set_xticks(x)
+                axes3[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
+                self._add_bar_labels(axes3[1, 0], bars, denied_playtime_pct_old,
+                                     fmt="{:.1f}%")
 
-            # Survival Rate
-            surv_colors = [
-                self.COLORS['green'] if s >= 70
-                else self.COLORS['yellow'] if s >= 50
-                else self.COLORS['red']
-                for s in survival_rate
-            ]
-            bars = axes3[1, 1].bar(x, survival_rate, color=surv_colors,
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes3[1, 1], "SURVIVAL RATE (%)")
-            axes3[1, 1].set_ylim(0, 100)
-            axes3[1, 1].axhline(y=50, color="white", linestyle="--",
-                                 alpha=0.5, linewidth=1)
-            axes3[1, 1].set_xticks(x)
-            axes3[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
-            self._add_bar_labels(axes3[1, 1], bars, survival_rate, fmt="{:.0f}%")
+            if self.show_timing_dual:
+                timing_bar_width = 0.35
+                bars1 = axes3[1, 1].bar(
+                    x - timing_bar_width/2,
+                    survival_rate,
+                    timing_bar_width,
+                    color=self.COLORS['yellow'],
+                    label='Old',
+                    edgecolor='white',
+                    linewidth=0.5,
+                )
+                bars2 = axes3[1, 1].bar(
+                    x + timing_bar_width/2,
+                    survival_rate_new,
+                    timing_bar_width,
+                    color=self.COLORS['green'],
+                    label='New',
+                    edgecolor='white',
+                    linewidth=0.5,
+                )
+                self._style_axis(axes3[1, 1], "SURVIVAL RATE % (OLD vs NEW)")
+                axes3[1, 1].set_ylim(0, 100)
+                axes3[1, 1].axhline(y=50, color="white", linestyle="--",
+                                     alpha=0.5, linewidth=1)
+                axes3[1, 1].set_xticks(x)
+                axes3[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                axes3[1, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                                   edgecolor='white', labelcolor='white')
+                self._add_grouped_bar_labels(
+                    axes3[1, 1],
+                    bars1,
+                    bars2,
+                    survival_rate,
+                    survival_rate_new,
+                    fmt="{:.0f}%",
+                )
+            else:
+                # Survival Rate
+                surv_colors = [
+                    self.COLORS['green'] if s >= 70
+                    else self.COLORS['yellow'] if s >= 50
+                    else self.COLORS['red']
+                    for s in survival_rate
+                ]
+                bars = axes3[1, 1].bar(x, survival_rate, color=surv_colors,
+                                        edgecolor='white', linewidth=0.5)
+                self._style_axis(axes3[1, 1], "SURVIVAL RATE (%)")
+                axes3[1, 1].set_ylim(0, 100)
+                axes3[1, 1].axhline(y=50, color="white", linestyle="--",
+                                     alpha=0.5, linewidth=1)
+                axes3[1, 1].set_xticks(x)
+                axes3[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                self._add_bar_labels(axes3[1, 1], bars, survival_rate, fmt="{:.0f}%")
 
             # Useful Kills (UK)
             bars = axes3[2, 0].bar(x, useful_kills, color=self.COLORS['teal'],
@@ -547,6 +1017,9 @@ class SessionGraphGenerator:
                                edgecolor='white', labelcolor='white')
             self._add_grouped_bar_labels(axes3[2, 1], bars1, bars2,
                                          self_kills, full_selfkills)
+            if self.show_timing_dual and dual_shadow_note:
+                fig3.text(0.01, 0.01, f"Dual timing note: {dual_shadow_note}",
+                          color='#B0B0B0', fontsize=8)
 
             plt.tight_layout(rect=(0, 0, 1, 0.96))
             buf3 = io.BytesIO()

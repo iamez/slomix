@@ -2,6 +2,8 @@
 
 Known limitations and planned improvements for the proximity tracking system.
 
+Status note (2026-02-19): objective focus export and reaction telemetry are now implemented in v4.2. Remaining gaps below are post-v4.2 items.
+
 ---
 
 ## The Goal
@@ -22,13 +24,14 @@ Transform the proximity tracker from a "player position logger" into a "team che
 | Gap | Impact | Difficulty |
 |-----|--------|------------|
 | No round/match outcomes | Can't track wins/losses | Medium |
-| No objective tracking | Can't measure objective focus | Medium |
+| Partial objective coverage | Objective focus works only for maps with configured coordinates | Medium |
 | No "team" identity | Only knows Axis/Allies, not persistent team | Low (needs bot integration) |
 | Crossfire lacks pair structure | Have participants list, but not optimized for pair queries | Low |
-| No objective positions | Can't calculate player-to-objective distance | Medium (needs map configs) |
+| Incomplete objective positions | Some maps still missing objective coordinate blocks | Medium (needs map configs) |
 | No game phase detection | Can't distinguish early round vs objective push | Medium |
 | No damage direction | Can't analyze flanking patterns | Low priority |
-| No means of death | Can't distinguish headshots vs body shots | Low priority |
+| No full MOD taxonomy | Tracker has `death_type`, but not fine-grained hit-location or full MOD analytics | Low priority |
+| No class-switch timeline | Class is captured per life/engagement, but mid-life class switch history is not modeled | Low |
 
 ### Upstream Systems (Bot/Database)
 
@@ -66,9 +69,10 @@ Transform the proximity tracker from a "player position logger" into a "team che
 |------|----------|-------------|
 | Track round outcomes | P1 | Capture who won the round in Lua |
 | Add map objective configs | P1 | Define objective positions per map |
-| Calculate objective distance | P1 | Track player distance to active objective |
+| Expand objective map coverage | P1 | Fill remaining map coordinate blocks |
 | Enrich crossfire pairs | P2 | Structure data for efficient pair queries |
 | Add game phase detection | P2 | Detect early/mid/late round phases |
+| Add class-switch timeline | P2 | Capture class transitions inside round/life windows |
 
 ### Phase 3: Team Chemistry Metrics
 

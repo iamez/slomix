@@ -352,6 +352,134 @@ class UnifiedAvailabilityNotifier:
 
         return result
 
+    async def send_discord(self, user_or_channel: int | str, message: str) -> str:
+        """Public channel adapter for promotion workflows."""
+        raw_target = str(user_or_channel).strip()
+        if not raw_target or not raw_target.lstrip("-").isdigit():
+            raise RuntimeError("Discord target must be numeric user/channel id")
+        target_id = int(raw_target)
+        if target_id <= 0:
+            raise RuntimeError("Discord target id must be positive")
+        return await self._send_discord_dm(target_id, message)
+
+    async def send_discord_channel(self, channel_id: int | str, message: str) -> str:
+        raw_target = str(channel_id).strip()
+        if not raw_target or not raw_target.lstrip("-").isdigit():
+            raise RuntimeError("Discord channel id must be numeric")
+        target_id = int(raw_target)
+        if target_id <= 0:
+            raise RuntimeError("Discord channel id must be positive")
+        return await self._send_discord_channel(target_id, message)
+
+    async def send_telegram(self, handle: str, message: str) -> str:
+        if not self.telegram_connector.enabled:
+            raise RuntimeError("Telegram connector is disabled")
+        target = str(handle or "").strip()
+        if not target:
+            raise RuntimeError("Telegram handle is required")
+        return await self.telegram_connector.send_message(target, message)
+
+    async def send_signal(self, handle: str, message: str) -> str:
+        if not self.signal_connector.enabled:
+            raise RuntimeError("Signal connector is disabled")
+        target = str(handle or "").strip()
+        if not target:
+            raise RuntimeError("Signal handle is required")
+        return await self.signal_connector.send_message(target, message)
+
+    async def send_via_channel(self, *, channel_type: str, target: str, message: str) -> str:
+        normalized = str(channel_type or "").strip().lower()
+        if normalized == "discord":
+            return await self.send_discord(target, message)
+        if normalized == "telegram":
+            return await self.send_telegram(target, message)
+        if normalized == "signal":
+            return await self.send_signal(target, message)
+        raise RuntimeError(f"Unsupported channel_type: {channel_type}")
+
+    async def send_via_channel_idempotent(
+        self,
+        *,
+        user_id: int,
+        event_key: str,
+        channel_type: str,
+        target: str,
+        message: str,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> tuple[str, str | None]:
+        """
+        Idempotent one-shot send for promotion workflows.
+        Returns (status, message_id) where status is sent|skipped|failed.
+        """
+        await self.ensure_tables()
+
+        normalized_channel = str(channel_type or "").strip().lower()
+        if normalized_channel not in {"discord", "telegram", "signal"}:
+            raise RuntimeError(f"Unsupported channel_type: {channel_type}")
+
+        status = await self._send_with_ledger(
+            user_id=int(user_id),
+            event_key=str(event_key),
+            channel_type=normalized_channel,
+            payload=payload,
+            send_callable=lambda: self.send_via_channel(
+                channel_type=normalized_channel,
+                target=str(target),
+                message=message,
+            ),
+        )
+
+        row = await self.db_adapter.fetch_one(
+            """
+            SELECT message_id
+            FROM notifications_ledger
+            WHERE user_id = $1 AND event_key = $2 AND channel_type = $3
+            LIMIT 1
+            """,
+            (int(user_id), str(event_key), normalized_channel),
+        )
+        message_id = str(row[0]) if row and row[0] else None
+        return status, message_id
+
+    async def send_discord_channel_idempotent(
+        self,
+        *,
+        channel_id: int,
+        event_key: str,
+        message: str,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> tuple[str, str | None]:
+        """
+        Idempotent Discord channel send for campaign summaries/followups.
+        Uses negative pseudo-user IDs so it shares the same ledger table.
+        """
+        await self.ensure_tables()
+
+        target_channel_id = int(channel_id)
+        if target_channel_id <= 0:
+            raise RuntimeError("Discord channel id must be positive")
+        pseudo_user_id = -target_channel_id
+
+        status = await self._send_with_ledger(
+            user_id=pseudo_user_id,
+            event_key=str(event_key),
+            channel_type="discord",
+            payload=payload,
+            send_callable=lambda: self._send_discord_channel(target_channel_id, message),
+        )
+
+        row = await self.db_adapter.fetch_one(
+            """
+            SELECT message_id
+            FROM notifications_ledger
+            WHERE user_id = $1 AND event_key = $2 AND channel_type = 'discord'
+            LIMIT 1
+            """,
+            (pseudo_user_id, str(event_key)),
+        )
+        message_id = str(row[0]) if row and row[0] else None
+        return status, message_id
+
     async def _notify_single_user(
         self,
         *,
