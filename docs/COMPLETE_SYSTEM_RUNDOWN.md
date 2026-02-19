@@ -3,6 +3,13 @@
 **Date:** November 2, 2025  
 **Status:** Production-Ready, Modular Architecture
 
+> Update (February 18, 2026): Availability and multi-channel notification details are maintained in:
+> - `docs/AVAILABILITY_SYSTEM.md`
+> - `docs/NOTIFICATIONS_DISCORD.md`
+> - `docs/NOTIFICATIONS_TELEGRAM.md`
+> - `docs/NOTIFICATIONS_SIGNAL.md`
+> - `docs/GET_READY_SOUND.md`
+
 ---
 
 ## 📋 Table of Contents
@@ -1011,7 +1018,7 @@ LOG_LEVEL=INFO
 **Check logs:**
 
 ```powershell
-tail -f logs/discord_bot.log
+tail -f logs/bot.log
 ```text
 
 **Key log messages:**

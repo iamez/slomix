@@ -6,7 +6,7 @@
 
 ## Overview
 
-The **Slomix Website** is a modern, responsive web frontend for the ET:Legacy stats tracking system. It provides real-time player statistics, leaderboards, match histories, and live server status.
+The **Slomix Website** is a modern, responsive web frontend for the ET:Legacy stats tracking system. It provides real-time player statistics, leaderboards, match histories, live server status, and a date-based availability planner.
 
 **Stack**: FastAPI (Python) + Vanilla JavaScript + Tailwind CSS + Chart.js
 **Database**: PostgreSQL (read-only user, shared with bot)
@@ -27,7 +27,26 @@ PostgreSQL (shared with bot)
 Discord Bot
 ```
 
-**Key Pattern**: Website is READ-ONLY. Bot writes all data, website only queries.
+**Key Pattern**: Website is mostly read-only for stats surfaces, with authenticated write paths for account linking and availability.
+
+## Availability Update (2026-02-18)
+
+`/api/availability` now uses date-based entries as source of truth.
+
+Primary endpoints:
+- `GET /api/availability?from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `POST /api/availability`
+- `GET /api/availability/me`
+
+Settings/subscription endpoints:
+- `GET/POST /api/availability/settings`
+- `GET/POST /api/availability/subscriptions`
+- `POST /api/availability/link-token`
+- `POST /api/availability/link-confirm`
+
+Gating:
+- Anonymous users can view aggregates.
+- Only authenticated + linked Discord users can submit or subscribe.
 
 ---
 
@@ -64,7 +83,7 @@ website/
 
 ---
 
-## API Endpoints (19 total)
+## API Endpoints (Core + Availability)
 
 ### Status
 - `GET /api/status` - Health check
@@ -100,6 +119,13 @@ website/
 - `GET /auth/callback` - OAuth callback
 - `GET /auth/me` - Current user
 - `POST /auth/link` - Link Discord to player
+
+### Availability (date-based)
+- `GET /api/availability?from=...&to=...`
+- `POST /api/availability`
+- `GET /api/availability/me`
+- `GET/POST /api/availability/settings`
+- `GET/POST /api/availability/subscriptions`
 
 ---
 
