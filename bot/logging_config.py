@@ -111,9 +111,14 @@ def setup_logging(log_level=logging.INFO):
     error_file_handler.setFormatter(DetailedFormatter(use_colors=False))
     root_logger.addHandler(error_file_handler)
 
+    def _reset_child_logger(logger_obj):
+        """Clear child logger handlers so setup stays idempotent."""
+        logger_obj.handlers.clear()
+
     # ==================== COMMAND LOG FILE ====================
     # Track all command executions
     command_logger = logging.getLogger('bot.commands')
+    _reset_child_logger(command_logger)
     command_log_file = LOGS_DIR / "commands.log"
     command_file_handler = logging.handlers.RotatingFileHandler(
         command_log_file,
@@ -128,6 +133,7 @@ def setup_logging(log_level=logging.INFO):
     # ==================== DATABASE LOG FILE ====================
     # Track database operations
     db_logger = logging.getLogger('bot.database')
+    _reset_child_logger(db_logger)
     db_log_file = LOGS_DIR / "database.log"
     db_file_handler = logging.handlers.RotatingFileHandler(
         db_log_file,
@@ -142,6 +148,7 @@ def setup_logging(log_level=logging.INFO):
     # ==================== WEBHOOK LOG FILE ====================
     # Track webhook notifications and processing
     webhook_logger = logging.getLogger('bot.webhook')
+    _reset_child_logger(webhook_logger)
     webhook_log_file = LOGS_DIR / "webhook.log"
     webhook_file_handler = logging.handlers.RotatingFileHandler(
         webhook_log_file,

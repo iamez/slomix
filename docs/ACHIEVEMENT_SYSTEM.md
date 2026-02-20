@@ -181,7 +181,7 @@ await self.achievements.check_player_achievements(
 
 **Monitor notifications:**
 
-- All achievement notifications logged: `logs/ultimate_bot.log`
+- Achievement notifications logged in `logs/bot.log` (errors in `logs/errors.log`)
 - Format: `🏆 Achievement notification sent: PlayerName - Achievement Title`
 
 ---

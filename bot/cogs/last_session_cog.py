@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Tuple
 import discord
 from discord.ext import commands
 
-from bot.core.checks import is_public_channel
+from bot.core.checks import is_admin, is_admin_channel, is_public_channel
 from bot.core.database_adapter import ensure_player_name_alias
 from bot.core.endstats_pagination_view import EndstatsPaginationView
 from bot.core.utils import sanitize_error_message
@@ -30,6 +30,7 @@ from bot.services.session_view_handlers import SessionViewHandlers
 from bot.services.player_badge_service import PlayerBadgeService
 from bot.services.player_display_name_service import PlayerDisplayNameService
 from bot.services.endstats_aggregator import EndstatsAggregator
+from bot.services.session_timing_shadow_service import SessionTimingShadowService
 
 logger = logging.getLogger("bot.cogs.last_session")
 
@@ -40,16 +41,30 @@ class LastSessionCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         logger.info("🎮 LastSessionCog initializing with service architecture...")
+        self.show_timing_dual = bool(getattr(bot.config, "show_timing_dual", False))
+        if not hasattr(bot, "session_timing_shadow_service"):
+            bot.session_timing_shadow_service = SessionTimingShadowService(bot.db_adapter)
+        self.timing_shadow_service = bot.session_timing_shadow_service
 
         # Initialize services
         self.data_service = SessionDataService(bot.db_adapter, bot.db_path if hasattr(bot, 'db_path') else None)
         self.stats_aggregator = SessionStatsAggregator(bot.db_adapter)
-        self.embed_builder = SessionEmbedBuilder()
+        self.embed_builder = SessionEmbedBuilder(
+            timing_shadow_service=self.timing_shadow_service,
+            show_timing_dual=self.show_timing_dual,
+        )
         self.graph_generator = SessionGraphGenerator(
             bot.db_adapter,
-            timing_debug_service=getattr(bot, 'timing_debug_service', None)
+            timing_debug_service=getattr(bot, 'timing_debug_service', None),
+            timing_shadow_service=self.timing_shadow_service,
+            show_timing_dual=self.show_timing_dual,
         )
-        self.view_handlers = SessionViewHandlers(bot.db_adapter, StatsCalculator)
+        self.view_handlers = SessionViewHandlers(
+            bot.db_adapter,
+            StatsCalculator,
+            timing_shadow_service=self.timing_shadow_service,
+            show_timing_dual=self.show_timing_dual,
+        )
         self.badge_service = PlayerBadgeService(bot.db_adapter)
         self.display_name_service = PlayerDisplayNameService(bot.db_adapter)
         self.endstats_aggregator = EndstatsAggregator(bot.db_adapter)
@@ -414,12 +429,26 @@ class LastSessionCog(commands.Cog):
                 all_players_with_display_names.append(tuple(player_list))
 
             full_selfkills_available = await self.stats_aggregator.has_full_selfkills_column()
+            timing_dual_by_guid = None
+            timing_dual_meta = None
+            if self.show_timing_dual:
+                try:
+                    timing_dual_payload = await self.view_handlers.get_session_timing_dual_by_guid(session_ids)
+                    timing_dual_by_guid = timing_dual_payload.get("players", {})
+                    timing_dual_meta = timing_dual_payload.get("meta", {})
+                except Exception as e:  # nosec B110
+                    logger.warning("Could not build timing dual payload: %s", e)
+                    timing_dual_by_guid = {}
+                    timing_dual_meta = {"reason": "Shadow timing unavailable"}
 
             # DEFAULT VIEW: ONLY SESSION OVERVIEW
             embed1 = await self.embed_builder.build_session_overview_embed(
                 latest_date, all_players_with_display_names, maps_played, rounds_played, player_count,
                 team_1_name, team_2_name, team_1_score, team_2_score, hardcoded_teams is not None,
-                scoring_result, player_badges, full_selfkills_available
+                scoring_result, player_badges, full_selfkills_available,
+                timing_dual_by_guid=timing_dual_by_guid,
+                timing_dual_meta=timing_dual_meta,
+                show_timing_dual=self.show_timing_dual,
             )
 
             # Try to send the embed, handle size limit errors
@@ -460,6 +489,100 @@ class LastSessionCog(commands.Cog):
             await ctx.send(
                 f"❌ Error retrieving last session: {sanitize_error_message(e)}"
             )
+
+    @is_admin_channel()
+    @is_admin()
+    @commands.command(name="last_session_debug", aliases=["last_debug", "ls_debug"])
+    async def last_session_debug(self, ctx, top_n: int = 8):
+        """Admin debug: compact top-N timing diffs (old vs shadow/new)."""
+        try:
+            top_n = max(1, min(int(top_n or 8), 20))
+
+            latest_date = await self.data_service.get_latest_session_date()
+            if not latest_date:
+                await ctx.send("❌ No rounds found in database")
+                return
+
+            sessions, session_ids, _session_ids_str, _player_count = await self.data_service.fetch_session_data(
+                latest_date
+            )
+            if not sessions:
+                await ctx.send("❌ No rounds found for latest date")
+                return
+
+            summary = await self.view_handlers.get_timing_diff_summary(session_ids, top_n=top_n)
+            rows = summary.get("rows", [])
+            meta = summary.get("meta", {})
+            rounds_total = int(meta.get("rounds_total") or len(session_ids))
+            rounds_with_telemetry = int(meta.get("rounds_with_telemetry") or 0)
+            reason = meta.get("reason") or ""
+            source = meta.get("source") or "none"
+
+            embed = discord.Embed(
+                title=f"🧪 Last Session Timing Debug - {latest_date}",
+                description=(
+                    f"Top `{top_n}` timing diffs (`O` old stats vs `N` shadow/Lua)\n"
+                    f"Lua coverage: `{rounds_with_telemetry}/{rounds_total}` rounds"
+                ),
+                color=0x95A5A6,
+                timestamp=datetime.now(),
+            )
+
+            if rows:
+                lines = []
+                for idx, item in enumerate(rows, start=1):
+                    map_name = str(item.get("map_name") or "unknown")[:14]
+                    round_number = int(item.get("round_number") or 0)
+                    player_name = str(item.get("player_name") or "").strip()
+                    if "old_dead_seconds" in item:
+                        old_dead = int(item.get("old_dead_seconds") or 0)
+                        new_dead = int(item.get("new_dead_seconds") or 0)
+                        old_denied = int(item.get("old_denied_seconds") or 0)
+                        new_denied = int(item.get("new_denied_seconds") or 0)
+                        dead_diff = int(item.get("dead_diff_seconds") or (new_dead - old_dead))
+                        denied_diff = int(item.get("denied_diff_seconds") or (new_denied - old_denied))
+                        fallback_reason = str(item.get("fallback_reason") or "")
+                        fallback_note = f" ⚠️{fallback_reason}" if fallback_reason and fallback_reason != "none" else ""
+                        player_segment = f" `{player_name[:12]}`" if player_name else ""
+                        lines.append(
+                            f"`{idx:>2}.` **{map_name} R{round_number}**{player_segment} "
+                            f"💀O`{self.view_handlers._format_seconds(old_dead)}` "
+                            f"N`{self.view_handlers._format_seconds(new_dead)}` "
+                            f"Δ`{dead_diff:+d}s` "
+                            f"⏳O`{self.view_handlers._format_seconds(old_denied)}` "
+                            f"N`{self.view_handlers._format_seconds(new_denied)}` "
+                            f"Δ`{denied_diff:+d}s`{fallback_note}"
+                        )
+                    else:
+                        stats_seconds = int(item.get("stats_seconds") or 0)
+                        lua_seconds_val = item.get("lua_seconds")
+                        lua_seconds = int(lua_seconds_val) if lua_seconds_val is not None else stats_seconds
+                        diff_seconds = int(item.get("diff_seconds") or 0)
+                        lines.append(
+                            f"`{idx:>2}.` **{map_name} R{round_number}** "
+                            f"O`{self.view_handlers._format_seconds(stats_seconds)}` "
+                            f"N`{self.view_handlers._format_seconds(lua_seconds)}` "
+                            f"Δ`{diff_seconds:+d}s`"
+                        )
+
+                embed.add_field(
+                    name="Round Diffs",
+                    value="\n".join(lines),
+                    inline=False,
+                )
+            else:
+                no_data_reason = reason or "No comparable Lua timing rows were found."
+                embed.add_field(
+                    name="Round Diffs",
+                    value=f"⚠️ {no_data_reason}",
+                    inline=False,
+                )
+
+            embed.set_footer(text=f"source={source}" + (f" • {reason}" if reason and reason != "OK" else ""))
+            await ctx.send(embed=embed)
+        except Exception as e:
+            logger.error("Error in last_session_debug command: %s", e, exc_info=True)
+            await ctx.send(f"❌ Error retrieving timing debug: {sanitize_error_message(e)}")
 
     @is_public_channel()
     @commands.command(name="team_history")

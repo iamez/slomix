@@ -11,6 +11,8 @@ Scope: Runtime implementation and verification checklist
 6. `docs/SESSION_2026-02-12_WEBHOOK_PROXIMITY_GREATSHOT_INVESTIGATION.md`
 7. `docs/ROAD_AHEAD_EXECUTION_RUNBOOK_2026-02-12.md`
 8. `docs/KILL_ASSISTS_VISIBILITY_IMPLEMENTATION_PLAN_2026-02-12.md`
+9. `docs/TWO_WEEK_LIVE_MONITOR_MISSION_2026-02-18.md`
+10. `docs/WS1_R2_MISSING_INVESTIGATION_2026-02-18.md`
 
 ## Status Legend
 - `todo`
@@ -22,6 +24,16 @@ Scope: Runtime implementation and verification checklist
 1. WS2 and WS3 cannot close before WS1 source-health gate passes.
 2. A task is only `done` with code/config + runtime evidence + doc closure.
 3. No Lua file edits unless explicitly approved for that step.
+
+## Post-Closeout Monitoring Extension (2026-02-18)
+1. Original sprint closeout on `2026-02-16` remains valid, but live-session monitoring continues as a dedicated mission through `2026-03-03`.
+2. Active mission runbook: `docs/TWO_WEEK_LIVE_MONITOR_MISSION_2026-02-18.md`.
+3. Current baseline for follow-up:
+   - Session window on `2026-02-16` had `12` rounds and `4` missing Lua-linked rounds.
+   - Missing rounds were R2: `9856`, `9865`, `9868`, `9871`.
+   - For those rounds, file-trigger ingestion happened, but no `STATS_READY` and no gametime fallback artifact were observed.
+4. Investigation details and reproducible commands are in:
+   - `docs/WS1_R2_MISSING_INVESTIGATION_2026-02-18.md`
 
 ## Live Snapshot (2026-02-11 21:19 UTC, during active test)
 1. Server Lua script is loaded and logs show round-start events (`stats_discord_webhook v1.6.0`).

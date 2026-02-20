@@ -505,7 +505,10 @@ If you run into issues:
 1. **Check the logs:**
 
    ```powershell
-   Get-Content logs\ultimate_bot.log -Tail 50
+   Get-Content logs\bot.log -Tail 50
+   Get-Content logs\webhook.log -Tail 50
+   Get-Content logs\database.log -Tail 50
+   Get-Content logs\errors.log -Tail 50
    Get-Content logs\server_control_access.log -Tail 20
    ```text
 

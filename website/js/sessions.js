@@ -117,6 +117,18 @@ function mapTile(mapName) {
     `;
 }
 
+function sessionDomKey(date) {
+    const raw = String(date ?? '').trim();
+    const normalized = raw.replace(/[^A-Za-z0-9_-]/g, '_');
+    return normalized || 'session';
+}
+
+function coerceRoundId(roundId) {
+    const parsed = Number.parseInt(String(roundId), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return parsed;
+}
+
 function formatDuration(seconds) {
     const total = Number(seconds || 0);
     if (!total || total < 0) return "0:00";
@@ -1206,10 +1218,13 @@ export function loadMoreSessions() {
  * Render a single session card
  */
 function renderSessionCard(session) {
-    const safeDate = escapeHtml(session.date);
+    const rawDate = String(session.date ?? '');
+    const dateKey = sessionDomKey(rawDate);
+    const safeDate = escapeHtml(rawDate);
+    const safeDateJs = escapeJsString(rawDate);
     const safeTimeAgo = escapeHtml(session.time_ago);
     const safeFormattedDate = escapeHtml(session.formatted_date);
-    const isExpanded = expandedSessions.has(session.date);
+    const isExpanded = expandedSessions.has(rawDate);
     const missingRounds = session.rounds % 2 !== 0;
     const sessionId = session.session_id;
 
@@ -1220,9 +1235,9 @@ function renderSessionCard(session) {
         : '';
 
     return `
-        <div class="glass-panel rounded-xl overflow-hidden session-card" data-date="${safeDate}">
+        <div class="glass-panel rounded-xl overflow-hidden session-card" data-date="${safeDate}" data-date-key="${dateKey}">
             <!-- Session Header (clickable) -->
-            <div class="p-6 cursor-pointer hover:bg-white/5 transition" onclick="toggleSession('${safeDate}')">
+            <div class="p-6 cursor-pointer hover:bg-white/5 transition" onclick="toggleSession('${safeDateJs}')">
                 <div class="flex flex-wrap items-center justify-between gap-4">
                     <!-- Left: Date & Time Ago -->
                     <div class="flex items-center gap-4">
@@ -1274,7 +1289,7 @@ function renderSessionCard(session) {
             </div>
 
             <!-- Session Details (expandable) -->
-            <div class="session-details ${isExpanded ? '' : 'hidden'}" id="session-details-${safeDate}">
+            <div class="session-details ${isExpanded ? '' : 'hidden'}" id="session-details-${dateKey}">
                 <div class="border-t border-white/5 p-6 bg-black/20">
                     <div class="text-center py-8 text-slate-500">
                         <i data-lucide="loader" class="w-6 h-6 animate-spin mx-auto mb-2"></i>
@@ -1290,8 +1305,9 @@ function renderSessionCard(session) {
  * Toggle session details expansion
  */
 export async function toggleSession(date) {
-    const detailsEl = document.getElementById(`session-details-${date}`);
-    const cardEl = document.querySelector(`.session-card[data-date="${date}"]`);
+    const dateKey = sessionDomKey(date);
+    const detailsEl = document.getElementById(`session-details-${dateKey}`);
+    const cardEl = document.querySelector(`.session-card[data-date-key="${dateKey}"]`);
     const chevron = cardEl?.querySelector('.session-chevron');
 
     if (!detailsEl) return;
@@ -1330,7 +1346,9 @@ let currentGraphTab = 'offense';
  * Load expanded session details
  */
 async function loadSessionDetailsExpanded(date) {
-    const detailsEl = document.getElementById(`session-details-${date}`);
+    const dateKey = sessionDomKey(date);
+    const safeDateJs = escapeJsString(date);
+    const detailsEl = document.getElementById(`session-details-${dateKey}`);
     if (!detailsEl) return;
 
     try {
@@ -1379,12 +1397,14 @@ async function loadSessionDetailsExpanded(date) {
                     </div>
                   `;
             const roundsHtml = mapMatch.rounds.map(round => {
+                const roundId = coerceRoundId(round.id);
+                if (!roundId) return '';
                 const safeWinner = escapeHtml(round.winner);
                 const winnerColor = round.winner === 'Allies' ? 'text-brand-blue' :
                                    round.winner === 'Axis' ? 'text-brand-rose' : 'text-slate-400';
                 return `
                     <div class="flex items-center justify-between p-2 rounded bg-black/30 cursor-pointer hover:bg-black/50 transition"
-                         onclick="loadMatchDetails(${round.id})">
+                         onclick="loadMatchDetails(${roundId})">
                         <div class="flex items-center gap-3">
                             <span class="text-xs text-slate-500">R${round.round_number}</span>
                             <span class="text-sm ${winnerColor} font-bold">${safeWinner} Win</span>
@@ -1420,7 +1440,7 @@ async function loadSessionDetailsExpanded(date) {
             <div class="border-t border-white/5 p-6 bg-black/20">
                 <!-- Session Graphs Toggle -->
                 <div class="mb-6">
-                    <button id="toggle-graphs-${date}" onclick="toggleSessionGraphs('${date}')"
+                    <button id="toggle-graphs-${dateKey}" onclick="toggleSessionGraphs('${safeDateJs}')"
                         class="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-bold text-slate-300 transition">
                         <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
                         <span>Show Session Graphs</span>
@@ -1429,26 +1449,26 @@ async function loadSessionDetailsExpanded(date) {
                 </div>
 
                 <!-- Session Graphs Section (hidden by default) -->
-                <div id="session-graphs-${date}" class="hidden mb-6">
+                <div id="session-graphs-${dateKey}" class="hidden mb-6">
                     <!-- Graph Tabs -->
                     <div class="flex flex-wrap gap-2 mb-4">
-                        <button onclick="switchGraphTab('${date}', 'offense')" 
+                        <button onclick="switchGraphTab('${safeDateJs}', 'offense')" 
                             class="graph-tab px-4 py-2 rounded-lg text-sm font-bold transition" data-tab="offense">
                             Combat (Offense)
                         </button>
-                        <button onclick="switchGraphTab('${date}', 'defense')" 
+                        <button onclick="switchGraphTab('${safeDateJs}', 'defense')" 
                             class="graph-tab px-4 py-2 rounded-lg text-sm font-bold transition" data-tab="defense">
                             Combat (Defense)
                         </button>
-                        <button onclick="switchGraphTab('${date}', 'advanced')" 
+                        <button onclick="switchGraphTab('${safeDateJs}', 'advanced')" 
                             class="graph-tab px-4 py-2 rounded-lg text-sm font-bold transition" data-tab="advanced">
                             Advanced Metrics
                         </button>
-                        <button onclick="switchGraphTab('${date}', 'playstyle')" 
+                        <button onclick="switchGraphTab('${safeDateJs}', 'playstyle')" 
                             class="graph-tab px-4 py-2 rounded-lg text-sm font-bold transition" data-tab="playstyle">
                             Playstyle
                         </button>
-                        <button onclick="switchGraphTab('${date}', 'timeline')" 
+                        <button onclick="switchGraphTab('${safeDateJs}', 'timeline')" 
                             class="graph-tab px-4 py-2 rounded-lg text-sm font-bold transition" data-tab="timeline">
                             DPM Timeline
                         </button>
@@ -1456,19 +1476,19 @@ async function loadSessionDetailsExpanded(date) {
 
                     <!-- Graph Container -->
                     <div class="glass-panel rounded-xl p-6">
-                        <div id="graph-title-${date}" class="flex items-center gap-2 mb-4">
+                        <div id="graph-title-${dateKey}" class="flex items-center gap-2 mb-4">
                             <i data-lucide="sword" class="w-5 h-5 text-brand-rose"></i>
                             <h3 class="text-lg font-bold text-white">Combat Stats (Offense)</h3>
                         </div>
                         
                         <!-- Player Legend -->
-                        <div id="graph-legend-${date}" class="flex flex-wrap justify-center gap-4 mb-4">
+                        <div id="graph-legend-${dateKey}" class="flex flex-wrap justify-center gap-4 mb-4">
                             <!-- Populated dynamically -->
                         </div>
 
                         <!-- Chart Canvas -->
                         <div class="relative h-80">
-                            <canvas id="session-graph-${date}"></canvas>
+                            <canvas id="session-graph-${dateKey}"></canvas>
                         </div>
                     </div>
                 </div>
@@ -1518,8 +1538,9 @@ async function loadSessionDetailsExpanded(date) {
  * Toggle session graphs visibility
  */
 async function toggleSessionGraphs(date) {
-    const graphsEl = document.getElementById(`session-graphs-${date}`);
-    const toggleBtn = document.getElementById(`toggle-graphs-${date}`);
+    const dateKey = sessionDomKey(date);
+    const graphsEl = document.getElementById(`session-graphs-${dateKey}`);
+    const toggleBtn = document.getElementById(`toggle-graphs-${dateKey}`);
     const chevron = toggleBtn?.querySelector('.graphs-chevron');
     
     if (!graphsEl) return;
@@ -1635,7 +1656,8 @@ async function loadSessionGraphData(date) {
         renderPlayerLegend(date);
     } catch (e) {
         console.error('Failed to load session graphs:', e);
-        const graphsEl = document.getElementById(`session-graphs-${date}`);
+        const dateKey = sessionDomKey(date);
+        const graphsEl = document.getElementById(`session-graphs-${dateKey}`);
         if (graphsEl) {
             graphsEl.innerHTML = `
                 <div class="text-center text-red-500 py-8">
@@ -1650,7 +1672,8 @@ async function loadSessionGraphData(date) {
  * Render player legend for graphs
  */
 function renderPlayerLegend(date) {
-    const legendEl = document.getElementById(`graph-legend-${date}`);
+    const dateKey = sessionDomKey(date);
+    const legendEl = document.getElementById(`graph-legend-${dateKey}`);
     const data = sessionGraphsData[date];
     
     if (!legendEl || !data?.players) return;
@@ -1676,7 +1699,8 @@ function switchGraphTab(date, tab) {
  * Update graph tab button styles
  */
 function updateGraphTabStyles(date, activeTab) {
-    const container = document.getElementById(`session-graphs-${date}`)?.parentElement;
+    const dateKey = sessionDomKey(date);
+    const container = document.getElementById(`session-graphs-${dateKey}`)?.parentElement;
     if (!container) return;
     
     container.querySelectorAll('.graph-tab').forEach(btn => {
@@ -1701,11 +1725,12 @@ function renderSessionGraph(date, tab) {
         sessionGraphCharts[date].destroy();
     }
 
-    const canvas = document.getElementById(`session-graph-${date}`);
+    const dateKey = sessionDomKey(date);
+    const canvas = document.getElementById(`session-graph-${dateKey}`);
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
-    const titleEl = document.getElementById(`graph-title-${date}`);
+    const titleEl = document.getElementById(`graph-title-${dateKey}`);
     
     // Chart configurations based on tab
     const chartConfigs = {

@@ -19,12 +19,12 @@
 
 **If your database is gone or corrupted, do this:**
 
-```powershell
+```bash
 # 1. Navigate to project directory
-cd C:\Users\seareal\Documents\stats
+cd /home/samba/share/slomix_discord
 
 # 2. Activate virtual environment
-.\.venv\Scripts\Activate.ps1
+source .venv/bin/activate
 
 # 3. Run database manager
 python database_manager.py
@@ -33,7 +33,7 @@ python database_manager.py
 # 5. Type: YES DELETE EVERYTHING
 # 6. Wait 5-10 minutes
 # 7. Done! ✅
-```python
+```
 
 That's it. No AI needed. No token waste.
 
@@ -234,10 +234,10 @@ If you see orphan sessions, run **Option 3 (Rebuild from scratch)**.
 
 **Solution:** Make sure you're in the project root directory
 
-```powershell
-cd C:\Users\seareal\Documents\stats
+```bash
+cd /home/samba/share/slomix_discord
 python database_manager.py
-```yaml
+```
 
 ---
 
@@ -245,10 +245,10 @@ python database_manager.py
 
 **Solution:** Activate virtual environment first
 
-```powershell
-.\.venv\Scripts\Activate.ps1
+```bash
+source .venv/bin/activate
 python database_manager.py
-```yaml
+```
 
 ---
 
@@ -337,14 +337,15 @@ python database_manager.py
 
 If this guide doesn't solve your problem:
 
-1. Check `database_manager.log` for detailed error messages
+1. Check `logs/database.log` and `logs/errors.log` for detailed error messages
 2. Run with validation to see what's wrong
 3. Look for error patterns in recent log entries
 
 **Common log locations:**
 
-- `C:\Users\seareal\Documents\stats\database_manager.log`
-- Check last 50 lines: `Get-Content database_manager.log -Tail 50`
+- `logs/database.log`
+- `logs/errors.log`
+- Check last 50 lines: `tail -n 50 logs/database.log && tail -n 50 logs/errors.log`
 
 ---
 

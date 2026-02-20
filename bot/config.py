@@ -19,6 +19,21 @@ except ImportError:  # nosec B110
 logger = logging.getLogger('BotConfig')
 
 
+def _strip_inline_env_comment(value: str) -> str:
+    """
+    Normalize .env values that may include inline comments.
+
+    Example: "27960  # ET:Legacy game port" -> "27960"
+    """
+    trimmed = value.strip()
+    comment_start = trimmed.find("#")
+    if comment_start <= 0:
+        return trimmed
+    if not trimmed[comment_start - 1].isspace():
+        return trimmed
+    return trimmed[:comment_start].strip()
+
+
 class BotConfig:
     """
     Centralized bot configuration supporting multiple database backends.
@@ -354,6 +369,38 @@ class BotConfig:
             self._get_config('AVAILABILITY_SIGNAL_REQUEST_TIMEOUT_SECONDS', '20')
         )
 
+        # Promotion campaign scheduler
+        self.availability_promotion_enabled: bool = (
+            self._get_config('AVAILABILITY_PROMOTION_ENABLED', 'true').lower() == 'true'
+        )
+        self.availability_promotion_timezone: str = self._get_config(
+            'AVAILABILITY_PROMOTION_TIMEZONE',
+            self.availability_poll_timezone,
+        )
+        self.availability_promotion_reminder_time: str = self._get_config(
+            'AVAILABILITY_PROMOTION_REMINDER_TIME',
+            '20:45',
+        )
+        self.availability_promotion_start_time: str = self._get_config(
+            'AVAILABILITY_PROMOTION_START_TIME',
+            '21:00',
+        )
+        self.availability_promotion_followup_channel_id: int = int(
+            self._get_config(
+                'AVAILABILITY_PROMOTION_FOLLOWUP_CHANNEL_ID',
+                str(self.availability_discord_announce_channel_id or self.availability_poll_channel_id or 0),
+            )
+        )
+        self.availability_promotion_voice_check_enabled: bool = (
+            self._get_config('AVAILABILITY_PROMOTION_VOICE_CHECK_ENABLED', 'true').lower() == 'true'
+        )
+        self.availability_promotion_server_check_enabled: bool = (
+            self._get_config('AVAILABILITY_PROMOTION_SERVER_CHECK_ENABLED', 'true').lower() == 'true'
+        )
+        self.availability_promotion_job_max_attempts: int = int(
+            self._get_config('AVAILABILITY_PROMOTION_JOB_MAX_ATTEMPTS', '5')
+        )
+
         # ==================== TEAM MAP PERFORMANCE ====================
         # Enable TeamManager.get_map_performance (experimental)
         self.enable_team_map_performance: bool = self._get_config('ENABLE_TEAM_MAP_PERFORMANCE', 'false').lower() == 'true'
@@ -362,6 +409,7 @@ class BotConfig:
         # Bot connects OUT to VPS WebSocket server (no ports needed on bot machine)
         # NOTE: Replaced by webhook trigger approach (Dec 2025)
         self.ws_enabled: bool = self._get_config('WS_ENABLED', 'false').lower() == 'true'
+        self.ws_scheme: str = self._get_config('WS_SCHEME', 'wss').strip().lower()  # wss (recommended) or ws
         self.ws_host: str = self._get_config('WS_HOST', '')  # VPS hostname/IP
         self.ws_port: int = int(self._get_config('WS_PORT', '8765'))
         self.ws_auth_token: str = self._get_config('WS_AUTH_TOKEN', '')  # Shared secret for authentication
@@ -418,7 +466,7 @@ class BotConfig:
         # 1. Check environment variables
         env_value = os.getenv(key)
         if env_value is not None:
-            return env_value
+            return _strip_inline_env_comment(env_value)
 
         # 2. Check config file
         if key in self._config_data:

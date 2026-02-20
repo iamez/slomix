@@ -61,7 +61,7 @@ class PermissionManagement(commands.Cog):
             # Check if user already exists
             existing = await db.fetch_one(
                 "SELECT tier FROM user_permissions WHERE discord_id = $1",
-                user.id
+                (user.id,)
             )
 
             if existing:
@@ -125,7 +125,7 @@ class PermissionManagement(commands.Cog):
             # Check if user exists
             existing = await db.fetch_one(
                 "SELECT tier FROM user_permissions WHERE discord_id = $1",
-                user.id
+                (user.id,)
             )
 
             if not existing:

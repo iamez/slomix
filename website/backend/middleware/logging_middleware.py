@@ -12,6 +12,8 @@ Logs all HTTP requests/responses with:
 import time
 import uuid
 import logging
+import ipaddress
+import os
 from typing import Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -30,6 +32,11 @@ QUIET_PATHS = {
     "/health",
     "/favicon.ico",
     "/static",
+}
+
+# Expected auth failures for background/polling reads should stay informational.
+INFO_AUTH_FAILURE_PATHS = {
+    "/api/availability/promotions/campaign",
 }
 
 # Paths that should trigger security logging
@@ -52,6 +59,14 @@ SUSPICIOUS_PATTERNS = [
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware for comprehensive request/response logging."""
+
+    _DEFAULT_TRUSTED_PROXIES = "127.0.0.1,::1"
+
+    def __init__(self, app):
+        super().__init__(app)
+        self._trusted_proxy_networks, self._trusted_proxy_hosts = self._load_trusted_proxies(
+            os.getenv("RATE_LIMIT_TRUSTED_PROXIES", self._DEFAULT_TRUSTED_PROXIES)
+        )
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Generate unique request ID
@@ -106,7 +121,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
             # Log response (unless quiet and successful)
             if not (is_quiet and status_code < 400):
-                log_func = access_logger.info if status_code < 400 else access_logger.warning
+                expected_auth_failure = (
+                    request.method == "GET"
+                    and status_code in {401, 403}
+                    and request.url.path in INFO_AUTH_FAILURE_PATHS
+                )
+                log_func = access_logger.info if status_code < 400 or expected_auth_failure else access_logger.warning
 
                 log_func(
                     f"← {request.method} {request.url.path} → {status_code} ({duration_ms:.1f}ms)",
@@ -136,24 +156,72 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
     def _get_client_ip(self, request: Request) -> str:
         """
-        Extract real client IP, accounting for reverse proxies.
-
-        Checks headers in order of trust:
-        1. X-Real-IP (nginx)
-        2. X-Forwarded-For (first IP)
-        3. Direct client IP
+        Extract real client IP, accounting for trusted reverse proxies only.
         """
-        # X-Real-IP (most reliable when set by trusted proxy)
-        if x_real_ip := request.headers.get("x-real-ip"):
-            return x_real_ip.strip()
+        direct_client = request.client.host if request.client else "unknown"
+        if not self._is_trusted_proxy(direct_client):
+            return direct_client
 
-        # X-Forwarded-For (may contain chain: client, proxy1, proxy2)
-        if x_forwarded_for := request.headers.get("x-forwarded-for"):
-            # First IP in chain is the original client
-            return x_forwarded_for.split(",")[0].strip()
+        if forwarded := request.headers.get("x-forwarded-for"):
+            for candidate in forwarded.split(","):
+                normalized = self._normalize_forwarded_ip(candidate)
+                if normalized:
+                    return normalized
 
-        # Fall back to direct client
-        return request.client.host if request.client else "unknown"
+        if real_ip := request.headers.get("x-real-ip"):
+            normalized = self._normalize_forwarded_ip(real_ip)
+            if normalized:
+                return normalized
+
+        return direct_client
+
+    @staticmethod
+    def _load_trusted_proxies(
+        raw_value: str,
+    ) -> tuple[tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...], tuple[str, ...]]:
+        networks = []
+        hosts = []
+        for raw_entry in raw_value.split(","):
+            entry = raw_entry.strip()
+            if not entry:
+                continue
+            try:
+                if "/" in entry:
+                    networks.append(ipaddress.ip_network(entry, strict=False))
+                else:
+                    ip = ipaddress.ip_address(entry)
+                    prefix = 32 if ip.version == 4 else 128
+                    networks.append(ipaddress.ip_network(f"{entry}/{prefix}", strict=False))
+                continue
+            except ValueError:
+                hosts.append(entry.lower())
+        return tuple(networks), tuple(hosts)
+
+    @staticmethod
+    def _normalize_forwarded_ip(raw_value: str | None) -> str:
+        if not raw_value:
+            return ""
+        value = raw_value.strip().strip("\"")
+        if not value or value.lower() == "unknown":
+            return ""
+        if value.startswith("[") and "]" in value:
+            return value[1 : value.index("]")]
+        if value.count(":") == 1:
+            host, port = value.rsplit(":", 1)
+            if host and port.isdigit():
+                return host
+        return value
+
+    def _is_trusted_proxy(self, client_host: str) -> bool:
+        if not client_host:
+            return False
+        if client_host.lower() in self._trusted_proxy_hosts:
+            return True
+        try:
+            client_ip = ipaddress.ip_address(client_host)
+        except ValueError:
+            return False
+        return any(client_ip in network for network in self._trusted_proxy_networks)
 
     async def _check_security(
         self,

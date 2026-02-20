@@ -1,7 +1,7 @@
 # Website - CLAUDE.md
 
 > **Status**: Production-Ready | **Version**: 1.0.0
-> **Last Updated**: 2026-01-26
+> **Last Updated**: 2026-02-19
 > **Move to**: `website/CLAUDE.md` after permissions restart
 
 ## Overview
@@ -29,7 +29,7 @@ Discord Bot
 
 **Key Pattern**: Website is mostly read-only for stats surfaces, with authenticated write paths for account linking and availability.
 
-## Availability Update (2026-02-18)
+## Availability Update (2026-02-19)
 
 `/api/availability` now uses date-based entries as source of truth.
 
@@ -44,9 +44,20 @@ Settings/subscription endpoints:
 - `POST /api/availability/link-token`
 - `POST /api/availability/link-confirm`
 
+Promotion endpoints:
+- `GET/POST /api/availability/promotion-preferences`
+- `GET /api/availability/promotions/preview`
+- `POST /api/availability/promotions/campaigns`
+- `GET /api/availability/promotions/campaign`
+
+Default promotion schedule:
+- `20:45 CET` reminder
+- `21:00 CET` start
+
 Gating:
 - Anonymous users can view aggregates.
 - Only authenticated + linked Discord users can submit or subscribe.
+- Promote action also requires promoter/admin permission.
 
 ---
 
@@ -118,7 +129,23 @@ website/
 - `GET /auth/login` - Discord OAuth start
 - `GET /auth/callback` - OAuth callback
 - `GET /auth/me` - Current user
-- `POST /auth/link` - Link Discord to player
+- `GET /auth/link/start` - Redirect entry point for UI CTA
+- `GET /auth/link/status` - Discord + player link status
+- `GET /auth/players/suggestions` - Suggested player matches
+- `POST /auth/link` - Link Discord user to player
+- `DELETE /auth/link` - Unlink player mapping
+- `POST /auth/discord/unlink` - Unlink Discord account
+
+### Availability (date-based)
+- `GET /api/availability?from=...&to=...`
+- `POST /api/availability`
+- `GET /api/availability/me`
+- `GET/POST /api/availability/settings`
+- `GET/POST /api/availability/subscriptions`
+- `GET/POST /api/availability/promotion-preferences`
+- `GET /api/availability/promotions/preview`
+- `POST /api/availability/promotions/campaigns`
+- `GET /api/availability/promotions/campaign`
 
 ### Availability (date-based)
 - `GET /api/availability?from=...&to=...`
@@ -184,10 +211,22 @@ SESSION_SECRET=<generate-with-secrets.token_urlsafe(32)>
 DISCORD_CLIENT_ID=...
 DISCORD_CLIENT_SECRET=...
 DISCORD_REDIRECT_URI=http://localhost:8000/auth/callback
+DISCORD_REDIRECT_URI_ALLOWLIST=http://localhost:8000/auth/callback
+DISCORD_OAUTH_STATE_TTL_SECONDS=600
+DISCORD_OAUTH_RATE_LIMIT_WINDOW_SECONDS=60
+DISCORD_OAUTH_RATE_LIMIT_MAX_REQUESTS=40
+
+# Promote + linking controls
+PROMOTER_DISCORD_IDS=
+AVAILABILITY_PROMOTION_TIMEZONE=Europe/Ljubljana
+AVAILABILITY_PROMOTION_DRY_RUN_DEFAULT=false
+AVAILABILITY_PROMOTION_GLOBAL_COOLDOWN=false
+CONTACT_DATA_ENCRYPTION_KEY=
 
 # Server
 WEBSITE_PORT=8000
 WEBSITE_HOST=0.0.0.0
+GREATSHOT_STARTUP_TIMEOUT_SECONDS=20
 ```
 
 ---
@@ -208,6 +247,8 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO website_readonly;
 | `player_comprehensive_stats` | Bot | Website |
 | `weapon_comprehensive_stats` | Bot | Website |
 | `player_links` | Bot + Website | Both |
+| `user_player_links` | Website | Website/Bot bridge |
+| `discord_accounts` | Website | Website |
 | `lua_round_teams` | Bot | Website |
 
 ---

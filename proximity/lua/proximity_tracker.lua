@@ -4,7 +4,7 @@
 --
 -- KEY FEATURES (v4):
 --   • FULL PLAYER TRACKING - All players, spawn to death
---   • Position + velocity + health + weapon every 500ms
+--   • Position + velocity + health + weapon every 200ms
 --   • Stance tracking (standing/crouching/prone)
 --   • Sprint detection
 --   • First movement time after spawn
@@ -50,14 +50,20 @@ local config = {
     escape_time_ms = 5000,          -- 5 seconds no damage
     escape_distance = 300,          -- 300 units minimum travel
 
-    -- Position sampling (v4: 500ms for better movement capture)
-    position_sample_interval = 500,  -- 2 samples per second - captures strafe/dodge patterns
+    -- Position sampling (v5: 200ms for high-fidelity movement capture)
+    position_sample_interval = 200,  -- 5 samples per second - captures strafe/dodge patterns
 
     -- Heatmap
     grid_size = 512,
 
     -- Minimum damage to count
     min_damage = 1,
+
+    -- Combat reaction tracking (Tier-B)
+    -- Captures first return fire, first dodge turn, and first teammate support reaction after initial hit.
+    reaction_window_ms = 5000,
+    dodge_angle_threshold_deg = 45,
+    dodge_min_step_units = 24,
 
     -- Objective tracking (optional)
     objective_tracking = true,
@@ -203,6 +209,7 @@ local config = {
         crossfire_detection = true,   -- Multi-attacker coordination detection
         escape_detection = true,      -- Escape timeout/distance detection
         heatmap_generation = true,    -- Spatial heatmap aggregation
+        reaction_tracking = true,     -- Damage-triggered reaction telemetry
     }
 }
 
@@ -343,6 +350,9 @@ local tracker = {
 
     -- Completed engagements for output
     completed = {},
+
+    -- Per-engagement reaction telemetry for parser import
+    reaction_metrics = {},
 
     -- Heatmaps (aggregated during round)
     kill_heatmap = {},      -- grid_key -> {axis, allies}
@@ -865,8 +875,10 @@ local function createEngagement(target_slot)
         target_guid = getPlayerGUID(target_slot),
         target_name = getPlayerName(target_slot),
         target_team = getPlayerTeam(target_slot),
-        
+        target_class = getPlayerClass(target_slot),
+
         start_time = now,
+        first_hit_time = now,
         last_hit_time = now,
         last_sample_time = now,
         
@@ -883,7 +895,12 @@ local function createEngagement(target_slot)
         total_damage = 0,
         outcome = nil,
         killer_guid = nil,
-        killer_name = nil
+        killer_name = nil,
+
+        -- Tier-B reaction metrics (ms since first incoming hit)
+        return_fire_ms = nil,
+        dodge_reaction_ms = nil,
+        support_reaction_ms = nil
     }
     
     -- Record starting position
@@ -1001,6 +1018,108 @@ local function detectCrossfire(engagement)
     return false, nil, nil
 end
 
+local function clamp(value, min_v, max_v)
+    if value < min_v then return min_v end
+    if value > max_v then return max_v end
+    return value
+end
+
+local function computeDodgeReactionMs(engagement)
+    if not engagement or not engagement.position_path then
+        return nil
+    end
+
+    local first_hit = engagement.first_hit_time or engagement.start_time
+    if not first_hit then
+        return nil
+    end
+
+    local points = {}
+    for _, point in ipairs(engagement.position_path) do
+        if point.time and point.time >= first_hit then
+            table.insert(points, point)
+        end
+    end
+
+    if #points < 3 then
+        return nil
+    end
+
+    local min_step = config.dodge_min_step_units or 24
+    local angle_threshold = math.rad(config.dodge_angle_threshold_deg or 45)
+    local base_dx, base_dy = nil, nil
+
+    local function normalizeSegment(a, b)
+        if not a or not b then
+            return nil, nil, nil
+        end
+        local dx = (b.x or 0) - (a.x or 0)
+        local dy = (b.y or 0) - (a.y or 0)
+        local mag = math.sqrt(dx * dx + dy * dy)
+        if mag < min_step then
+            return nil, nil, nil
+        end
+        return dx / mag, dy / mag, mag
+    end
+
+    for idx = 2, #points do
+        local ndx, ndy = normalizeSegment(points[idx - 1], points[idx])
+        if ndx and ndy then
+            if not base_dx then
+                base_dx = ndx
+                base_dy = ndy
+            else
+                local dot = clamp(base_dx * ndx + base_dy * ndy, -1, 1)
+                local angle = math.acos(dot)
+                if angle >= angle_threshold then
+                    local delta = (points[idx].time or first_hit) - first_hit
+                    if delta >= 0 and delta <= (config.reaction_window_ms or 5000) then
+                        return delta
+                    end
+                    return nil
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function registerReactionSignals(damage_target_slot, damage_attacker_slot, event_time_ms)
+    if not isFeatureEnabled("reaction_tracking") then
+        return
+    end
+    if not isValidClient(damage_target_slot) or not isValidClient(damage_attacker_slot) then
+        return
+    end
+
+    local damage_target_guid = getPlayerGUID(damage_target_slot)
+    local attacker_team = getPlayerTeam(damage_attacker_slot)
+
+    for _, engagement in pairs(tracker.engagements) do
+        local first_hit = engagement.first_hit_time or engagement.start_time
+        if first_hit and event_time_ms >= first_hit then
+            local delta_ms = event_time_ms - first_hit
+            if delta_ms <= (config.reaction_window_ms or 5000) then
+                -- Return fire: tracked target damages one of the attackers that damaged them.
+                if (not engagement.return_fire_ms) and damage_attacker_slot == engagement.target_slot then
+                    if engagement.attackers[damage_target_guid] then
+                        engagement.return_fire_ms = delta_ms
+                    end
+                end
+
+                -- Support reaction: teammate damages one of the original attackers.
+                if (not engagement.support_reaction_ms)
+                    and damage_attacker_slot ~= engagement.target_slot
+                    and attacker_team == engagement.target_team
+                    and engagement.attackers[damage_target_guid] then
+                    engagement.support_reaction_ms = delta_ms
+                end
+            end
+        end
+    end
+end
+
 local function closeEngagement(engagement, outcome, killer_slot)
     local now = gameTime()
     local end_pos = getPlayerPos(engagement.target_slot) or engagement.last_hit_pos
@@ -1073,6 +1192,25 @@ local function closeEngagement(engagement, outcome, killer_slot)
     engagement.is_crossfire = is_crossfire
     engagement.crossfire_delay = delay
     engagement.crossfire_participants = participants
+
+    if isFeatureEnabled("reaction_tracking") then
+        engagement.dodge_reaction_ms = computeDodgeReactionMs(engagement)
+        table.insert(tracker.reaction_metrics, {
+            engagement_id = engagement.id,
+            target_guid = engagement.target_guid,
+            target_name = engagement.target_name,
+            target_team = engagement.target_team,
+            target_class = engagement.target_class or getPlayerClass(engagement.target_slot),
+            outcome = engagement.outcome or "unknown",
+            num_attackers = #engagement.attacker_order,
+            return_fire_ms = engagement.return_fire_ms,
+            dodge_reaction_ms = engagement.dodge_reaction_ms,
+            support_reaction_ms = engagement.support_reaction_ms,
+            start_time = engagement.start_time or 0,
+            end_time = engagement.end_time or 0,
+            duration = engagement.duration or 0
+        })
+    end
     
     -- Move to completed
     table.insert(tracker.completed, engagement)
@@ -1354,6 +1492,32 @@ local function outputData()
             et.trap_FS_Write(line, string.len(line), fd)
         end
     end
+
+    if isFeatureEnabled("reaction_tracking") and #tracker.reaction_metrics > 0 then
+        local reaction_header = "\n# REACTION_METRICS\n" ..
+            "# engagement_id;target_guid;target_name;target_team;target_class;outcome;num_attackers;" ..
+            "return_fire_ms;dodge_reaction_ms;support_reaction_ms;start_time;end_time;duration\n"
+        et.trap_FS_Write(reaction_header, string.len(reaction_header), fd)
+
+        for _, metric in ipairs(tracker.reaction_metrics) do
+            local line = string.format("%d;%s;%s;%s;%s;%s;%d;%s;%s;%s;%d;%d;%d\n",
+                metric.engagement_id or 0,
+                metric.target_guid or "",
+                metric.target_name or "",
+                metric.target_team or "",
+                metric.target_class or "UNKNOWN",
+                metric.outcome or "unknown",
+                metric.num_attackers or 0,
+                metric.return_fire_ms ~= nil and tostring(metric.return_fire_ms) or "",
+                metric.dodge_reaction_ms ~= nil and tostring(metric.dodge_reaction_ms) or "",
+                metric.support_reaction_ms ~= nil and tostring(metric.support_reaction_ms) or "",
+                metric.start_time or 0,
+                metric.end_time or 0,
+                metric.duration or 0
+            )
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
     
     et.trap_FS_FCloseFile(fd)
 
@@ -1369,6 +1533,9 @@ local function outputData()
 
     proxPrint(string.format("[PROX] Saved: %d tracks (%d samples), %d engagements (%d crossfire)\n",
         #tracker.completed_tracks, total_samples, #tracker.completed, crossfire_count))
+    if isFeatureEnabled("reaction_tracking") then
+        proxPrint(string.format("[PROX] Reaction metrics: %d engagement rows\n", #tracker.reaction_metrics))
+    end
     proxPrint(string.format("[PROX] Output: %s\n", filename))
 
     -- v4.1: Output lifecycle log if test mode enabled
@@ -1558,6 +1725,7 @@ function et_InitGame(levelTime, randomSeed, restart)
     tracker.last_stamina = {}
     tracker.action_buffer = {}  -- v4.1: Reset action buffer
     tracker.objective_stats = {}
+    tracker.reaction_metrics = {}
 
     et.G_Print(">>> Proximity Tracker v" .. version .. " initialized\n")
     et.G_Print(">>> Map: " .. tracker.round.map_name .. ", Round: " .. tracker.round.round_num .. "\n")
@@ -1688,6 +1856,10 @@ function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
         -- Record the hit
         local weapon = safe_gentity_get(attacker, "ps.weapon") or 0
         recordHit(engagement, attacker, damage, weapon)
+    end
+
+    if isFeatureEnabled("reaction_tracking") then
+        registerReactionSignals(target, attacker, gameTime())
     end
 
     -- v4.1: Action annotation for test mode (record damage received/dealt)

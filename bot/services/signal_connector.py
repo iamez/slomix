@@ -34,16 +34,7 @@ class SignalConnector:
         if self.mode not in {"cli", "daemon"}:
             self.mode = "cli"
 
-        requested_cli_path = (signal_cli_path or "signal-cli").strip()
-        allowed_cli_paths = {"signal-cli", "/usr/bin/signal-cli", "/usr/local/bin/signal-cli"}
-        if requested_cli_path in allowed_cli_paths:
-            self.signal_cli_path = requested_cli_path
-        else:
-            logger.warning(
-                "Unsupported signal-cli path '%s'; falling back to PATH lookup",
-                requested_cli_path,
-            )
-            self.signal_cli_path = "signal-cli"
+        self.signal_cli_path = (signal_cli_path or "signal-cli").strip()
         self.sender_number = (sender_number or "").strip()
         self.daemon_url = (daemon_url or "http://127.0.0.1:8080").rstrip("/")
         self.min_interval_seconds = max(0.0, float(min_interval_seconds))
@@ -130,43 +121,22 @@ class SignalConnector:
         return "ok"
 
     async def _send_via_cli(self, recipient: str, message: str) -> str:
+        command = [
+            self.signal_cli_path,
+            "-u",
+            self.sender_number,
+            "send",
+            "-m",
+            message,
+            recipient,
+        ]
+
         try:
-            if self.signal_cli_path == "/usr/bin/signal-cli":
-                process = await asyncio.create_subprocess_exec(
-                    "/usr/bin/signal-cli",
-                    "-u",
-                    self.sender_number,
-                    "send",
-                    "-m",
-                    message,
-                    recipient,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-            elif self.signal_cli_path == "/usr/local/bin/signal-cli":
-                process = await asyncio.create_subprocess_exec(
-                    "/usr/local/bin/signal-cli",
-                    "-u",
-                    self.sender_number,
-                    "send",
-                    "-m",
-                    message,
-                    recipient,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-            else:
-                process = await asyncio.create_subprocess_exec(
-                    "signal-cli",
-                    "-u",
-                    self.sender_number,
-                    "send",
-                    "-m",
-                    message,
-                    recipient,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
         except FileNotFoundError as exc:
             raise RuntimeError(f"signal-cli not found at '{self.signal_cli_path}'") from exc
 

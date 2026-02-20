@@ -37,6 +37,7 @@ from bot.services.session_graph_generator import SessionGraphGenerator
 from bot.services.session_view_handlers import SessionViewHandlers
 from bot.services.player_badge_service import PlayerBadgeService
 from bot.services.player_display_name_service import PlayerDisplayNameService
+from bot.services.session_timing_shadow_service import SessionTimingShadowService
 
 # Import shared utilities
 from bot.stats import StatsCalculator
@@ -66,16 +67,30 @@ class SessionCog(commands.Cog, name="Session Commands"):
     def __init__(self, bot):
         self.bot = bot
         logger.info("🎮 SessionCog initializing with service architecture...")
+        self.show_timing_dual = bool(getattr(bot.config, "show_timing_dual", False))
+        if not hasattr(bot, "session_timing_shadow_service"):
+            bot.session_timing_shadow_service = SessionTimingShadowService(bot.db_adapter)
+        self.timing_shadow_service = bot.session_timing_shadow_service
 
         # Initialize all services (same as LastSessionCog)
         self.data_service = SessionDataService(bot.db_adapter, bot.db_path if hasattr(bot, 'db_path') else None)
         self.stats_aggregator = SessionStatsAggregator(bot.db_adapter)
-        self.embed_builder = SessionEmbedBuilder()
+        self.embed_builder = SessionEmbedBuilder(
+            timing_shadow_service=self.timing_shadow_service,
+            show_timing_dual=self.show_timing_dual,
+        )
         self.graph_generator = SessionGraphGenerator(
             bot.db_adapter,
-            timing_debug_service=getattr(bot, 'timing_debug_service', None)
+            timing_debug_service=getattr(bot, 'timing_debug_service', None),
+            timing_shadow_service=self.timing_shadow_service,
+            show_timing_dual=self.show_timing_dual,
         )
-        self.view_handlers = SessionViewHandlers(bot.db_adapter, StatsCalculator)
+        self.view_handlers = SessionViewHandlers(
+            bot.db_adapter,
+            StatsCalculator,
+            timing_shadow_service=self.timing_shadow_service,
+            show_timing_dual=self.show_timing_dual,
+        )
         self.badge_service = PlayerBadgeService(bot.db_adapter)
         self.display_name_service = PlayerDisplayNameService(bot.db_adapter)
 

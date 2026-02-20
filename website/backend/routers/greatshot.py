@@ -550,14 +550,13 @@ async def get_crossref(demo_id: str, request: Request, db=Depends(get_db)):
     demo_player_stats = {}
     analysis_path_row = await _safe_fetch_one(
         db,
-        "SELECT analysis_json_path FROM greatshot_demos WHERE id = $1",
-        (demo_id,),
+        "SELECT analysis_json_path FROM greatshot_demos WHERE id = $1 AND user_id = $2",
+        (demo_id, user_id),
     )
     if analysis_path_row and analysis_path_row[0]:
         import json as json_mod
-        from pathlib import Path as PathLib
         try:
-            analysis_file = PathLib(analysis_path_row[0])
+            analysis_file = storage.resolve_checked_path(str(analysis_path_row[0]))
             if analysis_file.is_file():
                 with analysis_file.open() as f:
                     full_analysis = json_mod.load(f)
