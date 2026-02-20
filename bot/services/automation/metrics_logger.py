@@ -70,6 +70,8 @@ class MetricsLogger:
         # Lazy one-time initialization guard
         self._is_initialized = False
         self._init_lock = asyncio.Lock()
+        self._db_lock = asyncio.Lock()
+        self._db_connection: Optional[aiosqlite.Connection] = None
 
         logger.info(
             f"📊 Metrics Logger initialized: log_dir={self.log_dir}, db={self.metrics_db_path}"
@@ -78,7 +80,8 @@ class MetricsLogger:
     async def initialize_metrics_db(self):
         """Create metrics database tables"""
         try:
-            async with aiosqlite.connect(self.metrics_db_path) as db:
+            db = await self._get_db_connection()
+            async with self._db_lock:
                 # Events table
                 await db.execute("""
                     CREATE TABLE IF NOT EXISTS events (
@@ -130,8 +133,8 @@ class MetricsLogger:
                 """)
 
                 await db.commit()
-                self._is_initialized = True
-                logger.info("✅ Metrics database initialized")
+            self._is_initialized = True
+            logger.info("✅ Metrics database initialized")
 
         except Exception as e:
             logger.error(f"❌ Failed to initialize metrics DB: {e}")
@@ -145,6 +148,28 @@ class MetricsLogger:
                 return
             await self.initialize_metrics_db()
 
+    async def _get_db_connection(self) -> aiosqlite.Connection:
+        if self._db_connection is not None:
+            return self._db_connection
+        self._db_connection = await aiosqlite.connect(self.metrics_db_path)
+        return self._db_connection
+
+    async def _execute_write(self, query: str, params: tuple) -> None:
+        await self._ensure_initialized()
+        db = await self._get_db_connection()
+        async with self._db_lock:
+            await db.execute(query, params)
+            await db.commit()
+
+    async def close(self) -> None:
+        if self._db_connection is None:
+            return
+        async with self._db_lock:
+            if self._db_connection is not None:
+                await self._db_connection.close()
+                self._db_connection = None
+        self._is_initialized = False
+
     async def log_event(self, event_type: str, event_data: Optional[Dict] = None,
                        duration_ms: Optional[float] = None, success: bool = True):
         """
@@ -157,7 +182,6 @@ class MetricsLogger:
             success: Whether the event succeeded
         """
         try:
-            await self._ensure_initialized()
             timestamp = datetime.now().isoformat()
 
             # Store in memory
@@ -176,18 +200,19 @@ class MetricsLogger:
                 self.events.pop(0)
 
             # Store in database
-            async with aiosqlite.connect(self.metrics_db_path) as db:
-                await db.execute("""
+            await self._execute_write(
+                """
                     INSERT INTO events (timestamp, event_type, event_data, duration_ms, success)
                     VALUES (?, ?, ?, ?, ?)
-                """, (
+                """,
+                (
                     timestamp,
                     event_type,
                     json.dumps(event_data) if event_data else None,
                     duration_ms,
                     1 if success else 0
-                ))
-                await db.commit()
+                ),
+            )
 
             logger.debug(f"📝 Event logged: {event_type} (success={success})")
 
@@ -206,7 +231,6 @@ class MetricsLogger:
             context: Additional context about when/where error occurred
         """
         try:
-            await self._ensure_initialized()
             timestamp = datetime.now().isoformat()
 
             # Store in memory
@@ -225,18 +249,19 @@ class MetricsLogger:
                 self.errors.pop(0)
 
             # Store in database
-            async with aiosqlite.connect(self.metrics_db_path) as db:
-                await db.execute("""
+            await self._execute_write(
+                """
                     INSERT INTO errors (timestamp, error_type, error_message, stack_trace, context)
                     VALUES (?, ?, ?, ?, ?)
-                """, (
+                """,
+                (
                     timestamp,
                     error_type,
                     error_message,
                     stack_trace,
                     json.dumps(context) if context else None
-                ))
-                await db.commit()
+                ),
+            )
 
             logger.warning(f"⚠️ Error logged: {error_type} - {error_message}")
 
@@ -253,7 +278,6 @@ class MetricsLogger:
             unit: Unit of measurement (e.g., 'ms', 'seconds', 'bytes')
         """
         try:
-            await self._ensure_initialized()
             timestamp = datetime.now().isoformat()
 
             # Store in memory
@@ -270,12 +294,13 @@ class MetricsLogger:
                 self.performance.pop(0)
 
             # Store in database
-            async with aiosqlite.connect(self.metrics_db_path) as db:
-                await db.execute("""
+            await self._execute_write(
+                """
                     INSERT INTO performance (timestamp, metric_name, metric_value, unit)
                     VALUES (?, ?, ?, ?)
-                """, (timestamp, metric_name, value, unit))
-                await db.commit()
+                """,
+                (timestamp, metric_name, value, unit),
+            )
 
             logger.debug(f"📊 Performance logged: {metric_name} = {value} {unit}")
 
@@ -297,16 +322,16 @@ class MetricsLogger:
             cpu_percent: CPU usage percentage
         """
         try:
-            await self._ensure_initialized()
             timestamp = datetime.now().isoformat()
 
-            async with aiosqlite.connect(self.metrics_db_path) as db:
-                await db.execute("""
+            await self._execute_write(
+                """
                     INSERT INTO health_checks
                     (timestamp, status, uptime_seconds, error_count, ssh_status, db_size_mb, memory_mb, cpu_percent)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (timestamp, status, uptime_seconds, error_count, ssh_status, db_size_mb, memory_mb, cpu_percent))
-                await db.commit()
+                """,
+                (timestamp, status, uptime_seconds, error_count, ssh_status, db_size_mb, memory_mb, cpu_percent),
+            )
 
             logger.debug(f"💚 Health check logged: {status}")
 
@@ -328,6 +353,7 @@ class MetricsLogger:
                 await self._ensure_initialized()
                 cutoff_time = datetime.now() - timedelta(hours=hours)
                 cutoff_str = cutoff_time.isoformat()
+                db = await self._get_db_connection()
 
                 report = {
                     'generated_at': datetime.now().isoformat(),
@@ -339,7 +365,7 @@ class MetricsLogger:
                     'health': {}
                 }
 
-                async with aiosqlite.connect(self.metrics_db_path) as db:
+                async with self._db_lock:
                     # Event summary
                     cursor = await db.execute("""
                         SELECT event_type, COUNT(*), AVG(duration_ms), SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END)

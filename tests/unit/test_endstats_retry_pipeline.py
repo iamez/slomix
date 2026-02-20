@@ -60,6 +60,7 @@ class _QualityDbAdapter:
         self.existing_filename = existing_filename
         self.awards_count = awards_count
         self.vs_count = vs_count
+        self.executed_queries = []
 
     async def fetch_one(self, query, _params):
         normalized = " ".join(str(query).split())
@@ -69,11 +70,16 @@ class _QualityDbAdapter:
             return (self.awards_count, self.vs_count)
         return None
 
+    async def execute(self, query, params):
+        normalized = " ".join(str(query).split())
+        self.executed_queries.append((normalized, params))
+
 
 class _QualityBot:
     _log_endstats_transition = UltimateETLegacyBot._log_endstats_transition
     _summarize_endstats_quality = UltimateETLegacyBot._summarize_endstats_quality
     _is_endstats_quality_better = UltimateETLegacyBot._is_endstats_quality_better
+    _mark_endstats_filename_handled = UltimateETLegacyBot._mark_endstats_filename_handled
     _get_round_endstats_quality = UltimateETLegacyBot._get_round_endstats_quality
     _is_endstats_round_already_processed = (
         UltimateETLegacyBot._is_endstats_round_already_processed
@@ -128,6 +134,7 @@ class _StoreBot:
     _log_endstats_transition = UltimateETLegacyBot._log_endstats_transition
     _summarize_endstats_quality = UltimateETLegacyBot._summarize_endstats_quality
     _is_endstats_quality_better = UltimateETLegacyBot._is_endstats_quality_better
+    _mark_endstats_filename_handled = UltimateETLegacyBot._mark_endstats_filename_handled
     _is_endstats_round_unique_violation = (
         UltimateETLegacyBot._is_endstats_round_unique_violation
     )
@@ -216,6 +223,19 @@ async def test_poorer_duplicate_is_skipped_when_round_already_has_richer_payload
 
     if not should_skip:
         pytest.fail("poorer duplicate payload should be skipped when richer payload exists")
+
+    has_dedupe_marker = any(
+        (
+            "INSERT INTO processed_endstats_files" in query
+            and isinstance(params, tuple)
+            and len(params) >= 2
+            and params[0] == "2026-02-18-215112-etl_adlernest-round-2-endstats.txt"
+            and str(params[1]).startswith("duplicate_round_skip_existing:")
+        )
+        for query, params in db_adapter.executed_queries
+    )
+    if not has_dedupe_marker:
+        pytest.fail("expected poorer duplicate skip to persist filename dedupe marker")
 
 
 @pytest.mark.asyncio

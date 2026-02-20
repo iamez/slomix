@@ -24,19 +24,20 @@ from typing import Any
 # Configuration
 # =============================================================================
 
-# Log directory - relative to project root
-LOG_DIR = Path(__file__).parent.parent / "logs"
+# Log directory (default: repository root logs/). Override with WEB_LOG_DIR.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+LOG_DIR = Path(os.getenv("WEB_LOG_DIR", str(PROJECT_ROOT / "logs"))).resolve()
 
 # Log levels for different files
 LOG_FILES = {
     "app": {
-        "filename": "app.log",
+        "filename": "web.log",
         "level": logging.INFO,
         "max_bytes": 10 * 1024 * 1024,  # 10 MB
         "backup_count": 5,
     },
     "error": {
-        "filename": "error.log",
+        "filename": "errors.log",
         "level": logging.ERROR,
         "max_bytes": 10 * 1024 * 1024,  # 10 MB
         "backup_count": 10,  # Keep more error logs

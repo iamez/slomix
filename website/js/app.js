@@ -12,7 +12,7 @@
 
 import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js';
 import { checkLoginStatus, initSearchListeners, setLoadPlayerProfile } from './auth.js';
-import { loadLiveStatus, initLivePolling, updateLiveSession } from './live-status.js';
+import { initLivePolling, initLiveStatusPolling, updateLiveSession } from './live-status.js';
 import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js';
 import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo, initLeaderboardDefaults } from './leaderboard.js';
 import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js';
@@ -22,6 +22,7 @@ import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
 import { loadProximityView } from './proximity.js';
 import { loadAdminPanelView } from './admin-panel.js';
+import { loadUploadsView, loadUploadDetail } from './uploads.js';
 import { loadAvailabilityView } from './availability.js';
 import {
     initGreatshotModule,
@@ -31,6 +32,8 @@ import {
 import './compare.js'; // Self-registers to window
 import { getBadgesForPlayer, renderBadges, renderBadge } from './badges.js';
 import { loadSeasonLeaders, loadActivityCalendar, loadSeasonSummary } from './season-stats.js';
+import { loadHallOfFameView } from './hall-of-fame.js';
+import { loadRetroVizView } from './retro-viz.js';
 
 // ============================================================================
 // NAVIGATION
@@ -66,8 +69,9 @@ const PROTOTYPE_TONE_STYLES = {
 function parseHashRoute() {
     const cleanHash = window.location.hash.replace(/^#\/?/, '');
     if (!cleanHash) return { viewId: 'home', params: {} };
+    const routePath = cleanHash.split('?')[0];
 
-    const segments = cleanHash.split('/').filter(Boolean);
+    const segments = routePath.split('/').filter(Boolean);
     if (segments[0] === 'greatshot') {
         if (segments[1] === 'demo' && segments[2]) {
             return {
@@ -81,6 +85,13 @@ function parseHashRoute() {
         return {
             viewId: 'greatshot',
             params: { section }
+        };
+    }
+
+    if (segments[0] === 'uploads' && segments[1]) {
+        return {
+            viewId: 'upload-detail',
+            params: { uploadId: decodeURIComponent(segments[1]) }
         };
     }
 
@@ -233,8 +244,8 @@ export function navigateTo(viewId, updateHistory = true, params = {}) {
 
     // Update Nav Links
     document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-    const navKey = viewId === 'greatshot-demo' ? 'greatshot' : viewId;
-    const statsViews = new Set(['leaderboards', 'maps', 'weapons', 'records', 'awards']);
+    const navKey = viewId === 'greatshot-demo' ? 'greatshot' : viewId === 'upload-detail' ? 'uploads' : viewId;
+    const statsViews = new Set(['leaderboards', 'maps', 'weapons', 'records', 'awards', 'retro-viz']);
     const activeKeys = [`link-${navKey}`];
     if (statsViews.has(viewId)) {
         activeKeys.push('link-stats');
@@ -247,7 +258,9 @@ export function navigateTo(viewId, updateHistory = true, params = {}) {
     // Update URL hash
     if (updateHistory) {
         let hash = '';
-        if (viewId === 'greatshot-demo' && params.demoId) {
+        if (viewId === 'upload-detail' && params.uploadId) {
+            hash = `#/uploads/${encodeURIComponent(params.uploadId)}`;
+        } else if (viewId === 'greatshot-demo' && params.demoId) {
             hash = `#/greatshot/demo/${encodeURIComponent(params.demoId)}`;
         } else if (viewId === 'greatshot') {
             const section = ['demos', 'highlights', 'clips', 'renders'].includes(params.section)
@@ -291,10 +304,20 @@ export function navigateTo(viewId, updateHistory = true, params = {}) {
         if (params.demoId) {
             loadGreatshotDemoDetail(params.demoId);
         }
+    } else if (viewId === 'upload-detail') {
+        if (params.uploadId) {
+            loadUploadDetail(params.uploadId);
+        }
+    } else if (viewId === 'uploads') {
+        loadUploadsView();
     } else if (viewId === 'availability') {
         loadAvailabilityView();
     } else if (viewId === 'admin') {
         loadAdminPanelView();
+    } else if (viewId === 'hall-of-fame') {
+        loadHallOfFameView();
+    } else if (viewId === 'retro-viz') {
+        loadRetroVizView();
     }
 }
 
@@ -410,8 +433,257 @@ async function loadPredictions() {
 
 
 // ============================================================================
+// INSIGHTS CHARTS
+// ============================================================================
+
+/** Chart.js instances for insights strip */
+let insightsRoundsChart = null;
+let insightsPlayersChart = null;
+let insightsMapsChart = null;
+
+const INSIGHTS_MAP_STATE_MESSAGES = {
+    loading: 'Loading map distribution...',
+    empty: 'No data yet. No rounds recorded in this period.',
+    error: 'Could not load map distribution right now.',
+};
+
+function setInsightsMapState(state, message = '') {
+    const emptyEl = document.getElementById('insights-maps-empty');
+    const canvas = document.getElementById('insights-maps-chart');
+    if (!emptyEl || !canvas) return;
+
+    const textEl = emptyEl.querySelector('p');
+    const iconEl = emptyEl.querySelector('svg, i');
+
+    if (state === 'ready') {
+        emptyEl.classList.add('hidden');
+        canvas.style.display = '';
+    } else {
+        emptyEl.classList.remove('hidden');
+        canvas.style.display = 'none';
+        if (textEl) {
+            textEl.textContent = message || INSIGHTS_MAP_STATE_MESSAGES[state] || INSIGHTS_MAP_STATE_MESSAGES.empty;
+        }
+    }
+
+    if (iconEl) {
+        iconEl.classList.toggle('animate-spin', state === 'loading');
+    }
+}
+
+/**
+ * Load community insights charts from /api/stats/trends
+ * @param {number} days - Timeframe in days (14, 30, 90)
+ */
+async function loadInsightsCharts(days = 14) {
+    // Update timeframe button states
+    document.querySelectorAll('.insights-tf-btn').forEach(btn => {
+        const btnDays = parseInt(btn.dataset.days, 10);
+        if (btnDays === days) {
+            btn.className = 'insights-tf-btn px-2.5 py-1 rounded text-xs font-bold bg-brand-blue/20 text-brand-blue transition active';
+        } else {
+            btn.className = 'insights-tf-btn px-2.5 py-1 rounded text-xs font-bold bg-slate-700 text-slate-400 hover:bg-slate-600 transition';
+        }
+    });
+
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js not loaded, skipping insights charts');
+        showInsightsEmpty();
+        setInsightsMapState('error', 'Chart rendering is unavailable.');
+        return;
+    }
+
+    try {
+        setInsightsMapState('loading');
+        const data = await fetchJSON(`${API_BASE}/stats/trends?days=${days}`);
+        if (!data || !data.dates) throw new Error('Invalid response');
+        renderInsightsCharts(data, days);
+    } catch (e) {
+        console.warn('Insights endpoint not available:', e.message);
+        showInsightsEmpty();
+        setInsightsMapState('error');
+    }
+}
+
+function showInsightsEmpty() {
+    ['insights-rounds-empty', 'insights-players-empty', 'insights-maps-empty'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('hidden');
+    });
+    ['insights-rounds-chart', 'insights-players-chart', 'insights-maps-chart'].forEach(id => {
+        const canvas = document.getElementById(id);
+        if (canvas) canvas.style.display = 'none';
+    });
+    setInsightsMapState('empty');
+}
+
+function renderInsightsCharts(data, days) {
+    // Show canvases for rounds/players and hide their empty states.
+    // Map state is handled separately so we can show loading/empty/error precisely.
+    ['insights-rounds-empty', 'insights-players-empty'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+    ['insights-rounds-chart', 'insights-players-chart'].forEach(id => {
+        const canvas = document.getElementById(id);
+        if (canvas) canvas.style.display = '';
+    });
+
+    const chartDefaults = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: 'rgba(15,23,42,0.9)',
+                borderColor: 'rgba(255,255,255,0.1)',
+                borderWidth: 1,
+                titleFont: { family: 'Inter', size: 11, weight: 'bold' },
+                bodyFont: { family: 'JetBrains Mono', size: 11 },
+                padding: 8,
+                cornerRadius: 6,
+            },
+        },
+        scales: {
+            x: {
+                grid: { color: 'rgba(255,255,255,0.04)' },
+                ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 7 },
+            },
+            y: {
+                grid: { color: 'rgba(255,255,255,0.04)' },
+                ticks: { color: '#64748b', font: { size: 10 } },
+                beginAtZero: true,
+            },
+        },
+    };
+
+    // Build labels from dates array
+    const labels = (data.dates || []).map(d => {
+        const dt = new Date(d + 'T00:00:00');
+        return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    });
+
+    // Rounds per Day (line)
+    if (insightsRoundsChart) insightsRoundsChart.destroy();
+    const roundsCtx = document.getElementById('insights-rounds-chart');
+    if (roundsCtx && data.rounds) {
+        insightsRoundsChart = new Chart(roundsCtx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    data: data.rounds,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59,130,246,0.1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: days <= 14 ? 3 : 0,
+                    pointBackgroundColor: '#3b82f6',
+                }],
+            },
+            options: chartDefaults,
+        });
+    }
+
+    // Active Players per Day (area)
+    if (insightsPlayersChart) insightsPlayersChart.destroy();
+    const playersCtx = document.getElementById('insights-players-chart');
+    if (playersCtx && data.active_players) {
+        insightsPlayersChart = new Chart(playersCtx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    data: data.active_players,
+                    borderColor: '#06b6d4',
+                    backgroundColor: 'rgba(6,182,212,0.12)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: days <= 14 ? 3 : 0,
+                    pointBackgroundColor: '#06b6d4',
+                }],
+            },
+            options: chartDefaults,
+        });
+    }
+
+    // Map Distribution (horizontal bar)
+    if (insightsMapsChart) insightsMapsChart.destroy();
+    const mapsCtx = document.getElementById('insights-maps-chart');
+    const rawMapDistribution = data.map_distribution && typeof data.map_distribution === 'object'
+        ? data.map_distribution
+        : {};
+    const mapEntries = Object.entries(rawMapDistribution)
+        .map(([name, count]) => [name, Number(count)])
+        .filter(([name, count]) => name.trim().length > 0 && Number.isFinite(count) && count > 0)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8);
+
+    if (!mapsCtx) return;
+
+    if (!mapEntries.length) {
+        setInsightsMapState('empty');
+        return;
+    }
+
+    setInsightsMapState('ready');
+    const barColors = ['#3b82f6','#06b6d4','#8b5cf6','#10b981','#f43f5e','#f59e0b','#ec4899','#6366f1'];
+    insightsMapsChart = new Chart(mapsCtx, {
+        type: 'bar',
+        data: {
+            labels: mapEntries.map(([name]) => name),
+            datasets: [{
+                data: mapEntries.map(([, count]) => count),
+                backgroundColor: mapEntries.map((_, i) => barColors[i % barColors.length] + '66'),
+                borderColor: mapEntries.map((_, i) => barColors[i % barColors.length]),
+                borderWidth: 1,
+                borderRadius: 4,
+            }],
+        },
+        options: {
+            ...chartDefaults,
+            indexAxis: 'y',
+            scales: {
+                ...chartDefaults.scales,
+                x: { ...chartDefaults.scales.x, ticks: { ...chartDefaults.scales.x.ticks, maxTicksLimit: 5 } },
+                y: { ...chartDefaults.scales.y, beginAtZero: undefined, ticks: { color: '#94a3b8', font: { size: 11, family: 'JetBrains Mono' } } },
+            },
+        },
+    });
+}
+
+// Expose to onclick handlers in HTML
+window.loadInsightsCharts = loadInsightsCharts;
+
+// ============================================================================
 // APPLICATION INITIALIZATION
 // ============================================================================
+
+function runDeferredLoad(task, label) {
+    try {
+        const maybePromise = task();
+        if (maybePromise && typeof maybePromise.catch === 'function') {
+            maybePromise.catch((err) => {
+                console.warn(`Deferred load failed (${label}):`, err);
+            });
+        }
+    } catch (err) {
+        console.warn(`Deferred load failed (${label}):`, err);
+    }
+}
+
+function scheduleDeferredLoads(tasks) {
+    const run = () => {
+        tasks.forEach(({ task, label }) => runDeferredLoad(task, label));
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: 1500 });
+        return;
+    }
+    window.setTimeout(run, 0);
+}
 
 /**
  * Initialize the application
@@ -446,29 +718,22 @@ async function initApp() {
         if (statusText) statusText.textContent = 'Offline';
     }
 
-    // Load Data
-    loadOverviewStats();
-    loadSeasonInfo();
-    loadLastSession();
-    loadPredictions();
-    updateLiveSession();
-    loadQuickLeaders();
-    loadRecentMatches();
-    loadMatchesView();
-    checkLoginStatus();
-    loadLiveStatus();
-    loadSeasonLeaders();
-    loadActivityCalendar();
-    loadSeasonSummary();
+    // Load first-screen data first; defer secondary views until browser idle.
+    const criticalLoads = [
+        loadOverviewStats,
+        updateLiveSession,
+        loadQuickLeaders,
+        loadRecentMatches,
+        checkLoginStatus,
+    ];
+    await Promise.allSettled(criticalLoads.map((task) => task()));
 
     // Initialize search listeners
     initSearchListeners();
 
     // Initialize live polling
     initLivePolling();
-
-    // Refresh live status every 30 seconds
-    setInterval(loadLiveStatus, 30000);
+    initLiveStatusPolling();
 
     // Handle initial URL hash
     const route = parseHashRoute();
@@ -476,8 +741,22 @@ async function initApp() {
         navigateTo(route.viewId, false, route.params);
     }
 
+    scheduleDeferredLoads([
+        { task: loadInsightsCharts, label: 'insights-charts' },
+        { task: loadSeasonInfo, label: 'season-info' },
+        { task: loadLastSession, label: 'last-session' },
+        { task: loadPredictions, label: 'predictions' },
+        { task: loadMatchesView, label: 'matches-view' },
+        { task: loadSeasonLeaders, label: 'season-leaders' },
+        { task: loadActivityCalendar, label: 'activity-calendar' },
+        { task: loadSeasonSummary, label: 'season-summary' },
+    ]);
+
     console.log('✅ Slomix App Ready');
 }
+
+// Expose API_BASE on window so classic (non-module) scripts like diagnostics.js can use it
+window.API_BASE = API_BASE;
 
 // Start the app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
@@ -490,6 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 export {
     loadOverviewStats,
+    loadInsightsCharts,
     loadPredictions,
     initApp
 };

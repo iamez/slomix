@@ -1,15 +1,16 @@
 /**
  * Availability Module
- * Calendar-first availability UI backed by /api/availability.
+ * Today-first availability UI backed by /api/availability.
  */
 
-import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
+import { API_BASE, AUTH_BASE, fetchJSON, escapeHtml } from './utils.js';
 
 const NO_STORE_FETCH = { cachePolicy: 'no-store', credentials: 'same-origin' };
 
 const LOOKBACK_DAYS = 31;
 const LOOKAHEAD_DAYS = 90;
-const QUICK_DAYS = 14;
+const UPCOMING_DAYS = 3;
+const UPCOMING_START_OFFSET = 2;
 
 const POLL_INTERVAL_MS = 45_000;
 const LOCAL_PREFS_KEY = 'availability_local_prefs_v3';
@@ -68,12 +69,14 @@ let accessState = {
     authenticated: false,
     linkedDiscord: false,
     canSubmit: false,
-    isAdmin: false
+    isAdmin: false,
+    canPromote: false
 };
 
 let availabilityByDate = new Map();
 let selectedDateIso = toISODate(new Date());
 let visibleMonth = startOfMonth(new Date());
+let calendarExpanded = false;
 let sessionReadyState = {
     ready: false,
     eventKey: null,
@@ -86,6 +89,21 @@ let responseInFlight = false;
 let prefsInFlight = false;
 let createTodayInFlight = false;
 let refreshInFlight = false;
+let promoteInFlight = false;
+let promotePreviewInFlight = false;
+let planningActionInFlight = false;
+
+let promoteState = {
+    campaign: null,
+    preview: null
+};
+let planningState = {
+    data: null,
+    panelOpen: false,
+    assignments: new Map(),
+    actionStatus: { message: '', error: false },
+    error: ''
+};
 
 let responseStatus = { message: '', error: false };
 let prefsStatus = { message: '', error: false };
@@ -131,6 +149,8 @@ async function refreshAvailabilityView() {
         await loadCurrentUser();
         await loadAccessState();
         await loadAvailabilityRange();
+        await loadPromotionCampaignState();
+        await loadPlanningState();
 
         if (accessState.authenticated && accessState.linkedDiscord) {
             await loadSettings();
@@ -165,7 +185,8 @@ async function loadAccessState() {
         authenticated: false,
         linkedDiscord: false,
         canSubmit: false,
-        isAdmin: false
+        isAdmin: false,
+        canPromote: false
     };
 
     try {
@@ -174,6 +195,7 @@ async function loadAccessState() {
         accessState.linkedDiscord = Boolean(payload?.linked_discord);
         accessState.canSubmit = Boolean(payload?.can_submit);
         accessState.isAdmin = Boolean(payload?.is_admin);
+        accessState.canPromote = Boolean(payload?.can_promote);
     } catch (_err) {
         // Keep defaults.
     }
@@ -219,6 +241,32 @@ async function loadAvailabilityRange() {
     }
 }
 
+async function loadPromotionCampaignState() {
+    promoteState.campaign = null;
+    if (!accessState.authenticated) return;
+    try {
+        const payload = await fetchJSON(`${API_BASE}/availability/promotions/campaign`, NO_STORE_FETCH);
+        promoteState.campaign = payload?.campaign || null;
+    } catch (_err) {
+        promoteState.campaign = null;
+    }
+}
+
+async function loadPlanningState() {
+    planningState.error = '';
+    planningState.actionStatus = { message: '', error: false };
+
+    try {
+        const payload = await fetchJSON(`${API_BASE}/planning/today`, NO_STORE_FETCH);
+        planningState.data = payload || null;
+        reconcilePlanningAssignments();
+    } catch (err) {
+        planningState.data = null;
+        planningState.assignments = new Map();
+        planningState.error = formatErrorMessage(err, 'Failed to load planning room');
+    }
+}
+
 async function loadSettings() {
     try {
         const payload = await fetchJSON(`${API_BASE}/availability/settings`, NO_STORE_FETCH);
@@ -248,6 +296,11 @@ function renderAll() {
     renderAnonMessage();
     renderStatusMessages();
     renderTodayTomorrowActions();
+    renderCurrentQueue();
+    renderPromoteControls();
+    renderCampaignStatus();
+    renderPlanningRoom();
+    renderCalendarVisibility();
     renderCalendar();
     renderQuickView();
     renderSelectedDayPanel();
@@ -257,24 +310,25 @@ function renderAll() {
 function renderLoadingState() {
     const actions = document.getElementById('availability-actions');
     if (actions) {
-        replaceWithMarkup(actions, '<div class="text-center py-6 text-slate-500 text-sm">Loading your availability controls...</div>');
+        actions.innerHTML = '<div class="text-center py-6 text-slate-500 text-sm">Loading your availability controls...</div>';
     }
 
     const grid = document.getElementById('availability-calendar-grid');
     if (grid) {
-        replaceWithMarkup(grid, '<div class="col-span-7 text-center py-8 text-slate-500 text-sm">Loading calendar...</div>');
+        grid.innerHTML = '<div class="col-span-7 text-center py-8 text-slate-500 text-sm">Loading calendar...</div>';
     }
 
     const quick = document.getElementById('availability-quick-view');
     if (quick) {
-        replaceWithMarkup(quick, '<div class="text-center py-8 text-slate-500 text-sm">Loading quick view...</div>');
+        quick.innerHTML = '<div class="text-center py-8 text-slate-500 text-sm">Loading upcoming days...</div>';
     }
-}
 
-function replaceWithMarkup(element, html) {
-    if (!element) return;
-    element.replaceChildren();
-    safeInsertHTML(element, 'beforeend', html);
+    const queue = document.getElementById('availability-current-queue');
+    if (queue) {
+        queue.innerHTML = '<div class="text-xs text-slate-500">Loading current queue...</div>';
+    }
+
+    renderCalendarVisibility();
 }
 
 function updateAdminControls() {
@@ -302,18 +356,40 @@ function renderAnonMessage() {
 
     if (accessState.canSubmit) {
         msg.classList.add('hidden');
-        msg.textContent = '';
+        msg.innerHTML = '';
         return;
     }
 
-    const copy = accessState.authenticated
-        ? 'Aggregate view only. Link your Discord account to a player profile to submit or subscribe.'
-        : 'Aggregate view only. Log in with Discord and link your profile to participate.';
+    const copy = 'Aggregate view only. Link your Discord account to a player profile to submit or subscribe.';
 
-    msg.textContent = copy;
+    msg.innerHTML = `
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <span>${escapeHtml(copy)}</span>
+            <button
+                type="button"
+                data-av-action="start-link"
+                class="w-full sm:w-auto px-3 py-1.5 rounded-lg text-xs font-bold border border-brand-amber/60 text-brand-amber hover:bg-brand-amber/20 transition">
+                Link Discord
+            </button>
+        </div>
+    `;
     msg.classList.remove('hidden');
     msg.classList.remove('border-brand-rose/40', 'text-brand-rose');
     msg.classList.add('border-brand-amber/40', 'text-brand-amber', 'bg-brand-amber/10');
+}
+
+function startAvailabilityLinkFlow() {
+    if (accessState.authenticated && !accessState.linkedDiscord) {
+        window.location.href = `${AUTH_BASE}/link/start`;
+        return;
+    }
+
+    if (!accessState.authenticated) {
+        window.location.href = `${AUTH_BASE}/login`;
+        return;
+    }
+
+    window.location.href = `${AUTH_BASE}/link/start`;
 }
 
 function renderStatusMessages() {
@@ -357,7 +433,361 @@ function renderTodayTomorrowActions() {
         renderActionCard('Tomorrow', tomorrowIso, canAct)
     ];
 
-    replaceWithMarkup(container, cards.join(''));
+    container.innerHTML = cards.join('');
+}
+
+function renderCurrentQueue() {
+    const container = document.getElementById('availability-current-queue');
+    if (!container) return;
+
+    const todayIso = toISODate(new Date());
+    const entry = getEntry(todayIso);
+    const lookingUsers = Array.isArray(entry.usersByStatus?.LOOKING) ? entry.usersByStatus.LOOKING : [];
+
+    if (!entry.usersByStatus || !lookingUsers.length) {
+        container.innerHTML = '<div class="text-xs text-slate-500">Queue is empty</div>';
+        return;
+    }
+
+    const maxRows = 12;
+    const rows = lookingUsers.slice(0, maxRows).map((user) => {
+        const displayName = escapeHtml(user?.display_name || (user?.user_id ? `User ${user.user_id}` : 'Player'));
+        const timeWindow = escapeHtml(extractQueueTimeWindow(user));
+        const timeHtml = timeWindow
+            ? `<div class="text-[11px] text-slate-400 whitespace-nowrap">${timeWindow}</div>`
+            : '';
+        return `
+            <div class="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/35 px-3 py-2">
+                <div class="text-sm font-semibold text-slate-100 truncate">${displayName}</div>
+                ${timeHtml}
+            </div>
+        `;
+    });
+
+    const remaining = Math.max(0, lookingUsers.length - maxRows);
+    const moreHtml = remaining > 0
+        ? `<div class="text-[11px] text-slate-500">+${remaining} more in queue</div>`
+        : '';
+
+    container.innerHTML = `${rows.join('')}${moreHtml}`;
+}
+
+function renderPromoteControls() {
+    const promoteBtn = document.getElementById('availability-promote-btn');
+    if (!promoteBtn) return;
+
+    const eligible = accessState.authenticated && accessState.linkedDiscord && accessState.canPromote;
+    if (eligible) {
+        promoteBtn.classList.remove('hidden', 'opacity-60', 'cursor-not-allowed');
+        promoteBtn.disabled = promoteInFlight;
+        return;
+    }
+
+    if (accessState.authenticated && accessState.linkedDiscord && !accessState.canPromote) {
+        promoteBtn.classList.remove('hidden');
+        promoteBtn.disabled = true;
+        promoteBtn.classList.add('opacity-60', 'cursor-not-allowed');
+        promoteBtn.title = 'Promote requires promoter/admin permission.';
+        return;
+    }
+
+    if (accessState.authenticated && !accessState.linkedDiscord) {
+        promoteBtn.classList.remove('hidden');
+        promoteBtn.disabled = true;
+        promoteBtn.classList.add('opacity-60', 'cursor-not-allowed');
+        promoteBtn.title = 'Link Discord to promote.';
+        return;
+    }
+
+    promoteBtn.classList.add('hidden');
+}
+
+function renderCampaignStatus() {
+    const statusEl = document.getElementById('availability-campaign-status');
+    if (!statusEl) return;
+
+    const campaign = promoteState.campaign;
+    if (!campaign) {
+        statusEl.classList.add('hidden');
+        statusEl.textContent = '';
+        return;
+    }
+
+    const jobs = Array.isArray(campaign.jobs) ? campaign.jobs : [];
+    const jobSummary = jobs.map((job) => `${job.job_type}:${job.status}`).join(' | ');
+    const channels = campaign.channels_summary || {};
+    const channelBits = ['discord', 'telegram', 'signal']
+        .map((channel) => `${channel}: ${Number(channels[channel] || 0)}`)
+        .join(', ');
+
+    statusEl.classList.remove('hidden');
+    statusEl.innerHTML = `
+        <div class="font-semibold text-brand-purple">Campaign: ${escapeHtml(String(campaign.status || 'scheduled'))}</div>
+        <div class="text-slate-300 mt-1">${escapeHtml(`Recipients: ${campaign.recipient_count || 0} (${channelBits})`)}</div>
+        <div class="text-slate-400 mt-1 text-[11px]">${escapeHtml(jobSummary || 'No jobs')}</div>
+    `;
+}
+
+function renderPlanningRoom() {
+    const statusEl = document.getElementById('availability-planning-status');
+    const errorEl = document.getElementById('availability-planning-error');
+    const openBtn = document.getElementById('availability-planning-open-btn');
+    const joinBtn = document.getElementById('availability-planning-join-btn');
+    const panel = document.getElementById('availability-planning-panel');
+    const actionStatusEl = document.getElementById('availability-planning-action-status');
+
+    if (!statusEl || !openBtn || !panel || !actionStatusEl) return;
+
+    const data = planningState.data || {};
+    const session = data.session || null;
+    const participants = Array.isArray(data.participants) ? data.participants : [];
+    const sessionReady = data.session_ready || {};
+    const unlocked = Boolean(data.unlocked || session);
+    const linked = accessState.linkedDiscord;
+    const authenticated = accessState.authenticated;
+    const participantIds = new Set(participants.map((row) => Number(row?.user_id || 0)).filter((value) => value > 0));
+    const meDiscordId = Number(currentUser?.id || 0);
+    const iAmParticipant = meDiscordId > 0 && participantIds.has(meDiscordId);
+
+    if (planningState.error) {
+        errorEl?.classList.remove('hidden');
+        if (errorEl) errorEl.textContent = planningState.error;
+    } else if (errorEl) {
+        errorEl.classList.add('hidden');
+        errorEl.textContent = '';
+    }
+
+    if (!authenticated) {
+        openBtn.disabled = false;
+        openBtn.textContent = 'Log in to plan';
+        openBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+        statusEl.textContent = 'Planning room is available to linked users once session-ready threshold is met.';
+    } else if (!linked) {
+        openBtn.disabled = false;
+        openBtn.textContent = 'Link Discord';
+        openBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+        statusEl.textContent = 'Link Discord to create or join planning room.';
+    } else if (session) {
+        openBtn.disabled = false;
+        openBtn.textContent = planningState.panelOpen ? 'Hide planning room' : 'Open planning room';
+        openBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+        const threadSuffix = session.discord_thread_id ? `, thread: ${session.discord_thread_id}` : '';
+        statusEl.textContent = `Session active for ${String(data.date || '--')} (${participants.length} participants${threadSuffix}).`;
+    } else if (unlocked) {
+        openBtn.disabled = false;
+        openBtn.textContent = 'Create planning room';
+        openBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+        statusEl.textContent = 'Session-ready threshold reached. Create the planning room to start drafting.';
+    } else {
+        openBtn.disabled = true;
+        openBtn.textContent = 'Planning locked';
+        openBtn.classList.add('opacity-60', 'cursor-not-allowed');
+        statusEl.textContent = `Waiting for Looking threshold: ${Number(sessionReady.looking_count || 0)}/${Number(sessionReady.threshold || 0)}.`;
+    }
+
+    if (joinBtn) {
+        const canShowJoin = authenticated && linked && Boolean(session) && !iAmParticipant;
+        joinBtn.classList.toggle('hidden', !canShowJoin);
+        joinBtn.disabled = planningActionInFlight;
+        joinBtn.classList.toggle('opacity-60', planningActionInFlight);
+        joinBtn.classList.toggle('cursor-not-allowed', planningActionInFlight);
+    }
+
+    if (!planningState.actionStatus.message) {
+        actionStatusEl.textContent = '';
+        actionStatusEl.classList.remove('text-brand-rose', 'text-brand-emerald');
+        actionStatusEl.classList.add('text-slate-400');
+    } else {
+        actionStatusEl.textContent = planningState.actionStatus.message;
+        actionStatusEl.classList.remove('text-slate-400', 'text-brand-rose', 'text-brand-emerald');
+        actionStatusEl.classList.add(planningState.actionStatus.error ? 'text-brand-rose' : 'text-brand-emerald');
+    }
+
+    if (!planningState.panelOpen || !session) {
+        panel.classList.add('hidden');
+        return;
+    }
+
+    panel.classList.remove('hidden');
+    renderPlanningParticipants(participants);
+    renderPlanningSuggestions(session);
+    renderPlanningDraft(participants, session);
+}
+
+function renderPlanningParticipants(participants) {
+    const container = document.getElementById('availability-planning-participants');
+    if (!container) return;
+    if (!Array.isArray(participants) || !participants.length) {
+        container.innerHTML = '<div class="text-xs text-slate-500">No participants yet.</div>';
+        return;
+    }
+
+    container.innerHTML = participants.map((row) => {
+        const status = String(row?.status || '').toUpperCase();
+        const statusClass = status === 'LOOKING'
+            ? 'text-brand-cyan'
+            : status === 'AVAILABLE'
+                ? 'text-brand-emerald'
+                : 'text-brand-amber';
+        return `
+            <div class="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-slate-950/35 px-2.5 py-1.5">
+                <span class="text-xs text-slate-200">${escapeHtml(row?.display_name || `User ${row?.user_id || '?'}`)}</span>
+                <span class="text-[11px] font-semibold ${statusClass}">${escapeHtml(status)}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderPlanningSuggestions(session) {
+    const container = document.getElementById('availability-planning-suggestions');
+    const suggestInput = document.getElementById('availability-planning-suggestion-input');
+    const suggestBtn = document.getElementById('availability-planning-suggest-btn');
+    if (!container) return;
+
+    const suggestions = Array.isArray(session?.suggestions) ? session.suggestions : [];
+    const canSubmit = accessState.canSubmit && !planningActionInFlight;
+    if (suggestInput) suggestInput.disabled = !canSubmit;
+    if (suggestBtn) {
+        suggestBtn.disabled = !canSubmit;
+        suggestBtn.classList.toggle('opacity-60', !canSubmit);
+        suggestBtn.classList.toggle('cursor-not-allowed', !canSubmit);
+    }
+
+    if (!suggestions.length) {
+        container.innerHTML = '<div class="text-xs text-slate-500">No suggestions yet.</div>';
+        return;
+    }
+
+    container.innerHTML = suggestions.map((row) => {
+        const voted = Boolean(row?.voted_by_me);
+        const voteDisabled = accessState.canSubmit && !planningActionInFlight ? '' : 'disabled';
+        const voteClass = voted
+            ? 'border-brand-purple/50 text-brand-purple bg-brand-purple/10'
+            : 'border-white/15 text-slate-300 hover:border-brand-purple/40 hover:text-brand-purple';
+        return `
+            <div class="rounded-lg border border-white/10 bg-slate-950/30 px-2.5 py-2">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="text-sm font-semibold text-slate-100 truncate">${escapeHtml(String(row?.name || 'Unnamed'))}</div>
+                        <div class="text-[11px] text-slate-500">by ${escapeHtml(String(row?.suggested_by_name || 'Unknown'))}</div>
+                    </div>
+                    <div class="text-xs text-slate-300 font-semibold">${Number(row?.votes || 0)} vote${Number(row?.votes || 0) === 1 ? '' : 's'}</div>
+                </div>
+                <div class="mt-2">
+                    <button
+                        type="button"
+                        data-av-action="vote-suggestion"
+                        data-suggestion-id="${Number(row?.id || 0)}"
+                        ${voteDisabled}
+                        class="px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${voteClass}">
+                        ${voted ? 'Voted' : 'Vote'}
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderPlanningDraft(participants, session) {
+    const poolEl = document.getElementById('availability-planning-draft-pool');
+    const teamAEl = document.getElementById('availability-planning-team-a');
+    const teamBEl = document.getElementById('availability-planning-team-b');
+    const autoBtn = document.getElementById('availability-planning-auto-draft-btn');
+    const saveBtn = document.getElementById('availability-planning-save-teams-btn');
+    if (!poolEl || !teamAEl || !teamBEl || !autoBtn || !saveBtn) return;
+
+    const canManage = canManagePlanningTeams(session);
+    const disableManage = !canManage || planningActionInFlight;
+
+    autoBtn.disabled = disableManage;
+    autoBtn.classList.toggle('opacity-60', disableManage);
+    autoBtn.classList.toggle('cursor-not-allowed', disableManage);
+    saveBtn.disabled = disableManage;
+    saveBtn.classList.toggle('opacity-60', disableManage);
+    saveBtn.classList.toggle('cursor-not-allowed', disableManage);
+
+    if (!Array.isArray(participants) || !participants.length) {
+        poolEl.innerHTML = '<span class="text-[11px] text-slate-500">No participants available for drafting.</span>';
+        teamAEl.innerHTML = '<div class="text-[11px] text-slate-500">No members.</div>';
+        teamBEl.innerHTML = '<div class="text-[11px] text-slate-500">No members.</div>';
+        return;
+    }
+
+    const assignment = planningState.assignments;
+    poolEl.innerHTML = participants.map((row) => {
+        const userId = Number(row?.user_id || 0);
+        const side = String(assignment.get(userId) || '');
+        const chipClass = side === 'A'
+            ? 'border-brand-cyan/50 text-brand-cyan bg-brand-cyan/10'
+            : side === 'B'
+                ? 'border-brand-emerald/50 text-brand-emerald bg-brand-emerald/10'
+                : 'border-white/15 text-slate-300 bg-slate-950/40';
+        const disabled = disableManage ? 'disabled' : '';
+        const sideLabel = side ? ` · ${side}` : '';
+        return `
+            <button
+                type="button"
+                data-av-action="cycle-assignment"
+                data-user-id="${userId}"
+                ${disabled}
+                class="px-2.5 py-1 rounded-full text-[11px] font-semibold border transition ${chipClass}">
+                ${escapeHtml(String(row?.display_name || `User ${userId}`))}${escapeHtml(sideLabel)}
+            </button>
+        `;
+    }).join('');
+
+    const teamA = participants.filter((row) => String(assignment.get(Number(row?.user_id || 0))) === 'A');
+    const teamB = participants.filter((row) => String(assignment.get(Number(row?.user_id || 0))) === 'B');
+    teamAEl.innerHTML = renderPlanningTeamMembers(teamA);
+    teamBEl.innerHTML = renderPlanningTeamMembers(teamB);
+}
+
+function renderPlanningTeamMembers(rows) {
+    if (!Array.isArray(rows) || !rows.length) {
+        return '<div class="text-[11px] text-slate-500">No members.</div>';
+    }
+    return rows.map((row) => `
+        <div class="text-xs text-slate-200 rounded-md border border-white/10 bg-slate-950/35 px-2 py-1">
+            ${escapeHtml(String(row?.display_name || `User ${row?.user_id || '?'}`))}
+        </div>
+    `).join('');
+}
+
+function reconcilePlanningAssignments() {
+    const participants = Array.isArray(planningState.data?.participants) ? planningState.data.participants : [];
+    const participantIds = new Set(participants.map((row) => Number(row?.user_id || 0)).filter((value) => value > 0));
+
+    const serverAssignments = new Map();
+    const teams = planningState.data?.session?.teams || {};
+    ['A', 'B'].forEach((side) => {
+        const members = Array.isArray(teams?.[side]?.members) ? teams[side].members : [];
+        members.forEach((member) => {
+            const memberId = Number(member?.user_id || 0);
+            if (memberId > 0) serverAssignments.set(memberId, side);
+        });
+    });
+
+    if (serverAssignments.size > 0) {
+        planningState.assignments = serverAssignments;
+        return;
+    }
+
+    const next = new Map();
+    for (const [rawId, side] of planningState.assignments.entries()) {
+        const userId = Number(rawId);
+        if (!participantIds.has(userId)) continue;
+        if (side !== 'A' && side !== 'B') continue;
+        next.set(userId, side);
+    }
+    planningState.assignments = next;
+}
+
+function canManagePlanningTeams(session) {
+    if (!session) return false;
+    if (!accessState.canSubmit) return false;
+    const viewerWebsiteId = Number(planningState.data?.viewer?.website_user_id || currentUser?.id || 0);
+    if (viewerWebsiteId > 0 && viewerWebsiteId === Number(session.created_by_user_id || 0)) return true;
+    return Boolean(accessState.canPromote);
 }
 
 function renderActionCard(title, dateIso, canAct) {
@@ -372,7 +802,10 @@ function renderActionCard(title, dateIso, canAct) {
 
         return `
             <button
-                onclick="window.setAvailabilityForDate('${dateIso}', '${statusKey}')"
+                type="button"
+                data-av-action="set-status"
+                data-date-iso="${escapeHtml(dateIso)}"
+                data-status-key="${escapeHtml(statusKey)}"
                 ${disabled}
                 class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition ${selectedClass} ${disabledClass}">
                 ${meta.shortLabel}
@@ -427,7 +860,9 @@ function renderCalendar() {
 
         cells.push(`
             <button
-                onclick="window.selectAvailabilityDate('${dateIso}')"
+                type="button"
+                data-av-action="select-date"
+                data-date-iso="${escapeHtml(dateIso)}"
                 class="rounded-xl border p-2 text-left transition min-h-[90px] ${toneClass} ${selectedClass} ${todayClass}">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-semibold ${dayClass}">${cellDate.getDate()}</span>
@@ -438,7 +873,28 @@ function renderCalendar() {
         `);
     }
 
-    replaceWithMarkup(grid, cells.join(''));
+    grid.innerHTML = cells.join('');
+}
+
+function renderCalendarVisibility() {
+    const body = document.getElementById('availability-calendar-body');
+    if (body) {
+        body.classList.toggle('hidden', !calendarExpanded);
+    }
+
+    const toggleBtn = document.getElementById('availability-calendar-toggle');
+    if (toggleBtn) {
+        toggleBtn.textContent = calendarExpanded ? 'Close calendar' : 'Open calendar';
+        toggleBtn.setAttribute('aria-expanded', calendarExpanded ? 'true' : 'false');
+    }
+}
+
+function toggleAvailabilityCalendar() {
+    calendarExpanded = !calendarExpanded;
+    renderCalendarVisibility();
+    if (calendarExpanded) {
+        renderCalendar();
+    }
 }
 
 function renderQuickView() {
@@ -446,33 +902,42 @@ function renderQuickView() {
     if (!container) return;
 
     const rows = [];
-    for (let i = 0; i < QUICK_DAYS; i += 1) {
-        const dayDate = addDays(new Date(), i);
+    for (let i = 0; i < UPCOMING_DAYS; i += 1) {
+        const dayDate = addDays(new Date(), UPCOMING_START_OFFSET + i);
         const dateIso = toISODate(dayDate);
         const entry = getEntry(dateIso);
         const selected = selectedDateIso === dateIso;
 
-        let title = formatDate(dateIso, { weekday: 'short' });
-        if (i === 0) title = 'Today';
-        if (i === 1) title = 'Tomorrow';
-
         rows.push(`
             <button
-                onclick="window.selectAvailabilityDate('${dateIso}')"
+                type="button"
+                data-av-action="select-upcoming-date"
+                data-date-iso="${escapeHtml(dateIso)}"
                 class="w-full rounded-xl border p-3 text-left transition ${selected ? 'border-brand-cyan/50 bg-brand-cyan/10' : 'border-white/10 bg-slate-950/30 hover:border-brand-cyan/35'}">
                 <div class="flex items-center justify-between gap-2 mb-1">
                     <div>
-                        <div class="text-xs font-bold text-white">${escapeHtml(title)}</div>
+                        <div class="text-xs font-bold text-white">${escapeHtml(formatDate(dateIso, { weekday: 'short' }))}</div>
                         <div class="text-[11px] text-slate-500">${escapeHtml(formatDate(dateIso, { month: 'short', day: 'numeric' }))}</div>
                     </div>
-                    <div class="text-xs text-slate-300">${entry.total}</div>
+                    <div class="text-[11px] text-slate-300">${entry.total} total</div>
+                </div>
+                <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                    <span class="text-brand-cyan">Looking: ${entry.counts.looking}</span>
+                    <span class="text-brand-emerald">Available: ${entry.counts.available}</span>
+                    <span class="text-brand-amber">Maybe: ${entry.counts.maybe}</span>
+                    <span class="text-brand-rose">Not playing: ${entry.counts.not_playing}</span>
                 </div>
                 ${renderStackedBar(entry.counts, entry.total, 'h-1.5')}
             </button>
         `);
     }
 
-    replaceWithMarkup(container, rows.join(''));
+    if (!rows.length) {
+        container.innerHTML = '<div class="text-xs text-slate-500">No upcoming days available.</div>';
+        return;
+    }
+
+    container.innerHTML = rows.join('');
 }
 
 function renderSelectedDayPanel() {
@@ -490,7 +955,7 @@ function renderSelectedDayPanel() {
     subtitleEl.textContent = selectedDateIso;
     totalEl.textContent = `${entry.total} response${entry.total === 1 ? '' : 's'}`;
 
-    const countsMarkup = STATUS_ORDER.map((statusKey) => {
+    countsEl.innerHTML = STATUS_ORDER.map((statusKey) => {
         const meta = STATUS_META[statusKey];
         const value = entry.counts[statusKey] || 0;
         return `
@@ -500,14 +965,13 @@ function renderSelectedDayPanel() {
             </div>
         `;
     }).join('');
-    replaceWithMarkup(countsEl, countsMarkup);
 
     const selectedDate = parseISODate(selectedDateIso);
     const isPast = selectedDate ? selectedDate < startOfDay(new Date()) : true;
     const canAct = accessState.canSubmit && !isPast && !responseInFlight;
 
     if (canAct) {
-        const actionsMarkup = `
+        actionsEl.innerHTML = `
             <div class="text-[11px] text-slate-500 mb-2">Set your status for ${escapeHtml(selectedDateIso)}</div>
             <div class="flex flex-wrap gap-2">
                 ${STATUS_ORDER.map((statusKey) => {
@@ -515,7 +979,10 @@ function renderSelectedDayPanel() {
                     const selected = entry.myStatus === statusKey;
                     return `
                         <button
-                            onclick="window.setAvailabilityForDate('${selectedDateIso}', '${statusKey}')"
+                            type="button"
+                            data-av-action="set-status"
+                            data-date-iso="${escapeHtml(selectedDateIso)}"
+                            data-status-key="${escapeHtml(statusKey)}"
                             class="px-3 py-1.5 rounded-lg text-xs font-bold border transition ${selected ? meta.selectedClass : meta.idleClass}">
                             ${meta.emoji} ${meta.shortLabel}
                         </button>
@@ -523,13 +990,12 @@ function renderSelectedDayPanel() {
                 }).join('')}
             </div>
         `;
-        replaceWithMarkup(actionsEl, actionsMarkup);
     } else if (isPast) {
-        replaceWithMarkup(actionsEl, '<div class="text-[11px] text-slate-500">Past days are read-only.</div>');
+        actionsEl.innerHTML = '<div class="text-[11px] text-slate-500">Past days are read-only.</div>';
     } else if (!accessState.canSubmit) {
-        replaceWithMarkup(actionsEl, '<div class="text-[11px] text-brand-amber">Log in and link Discord to set availability.</div>');
+        actionsEl.innerHTML = '<div class="text-[11px] text-brand-amber">Log in and link Discord to set availability.</div>';
     } else {
-        replaceWithMarkup(actionsEl, '<div class="text-[11px] text-slate-500">Saving in progress...</div>');
+        actionsEl.innerHTML = '<div class="text-[11px] text-slate-500">Saving in progress...</div>';
     }
 
     const notes = [];
@@ -564,7 +1030,7 @@ function renderSelectedDayPanel() {
     }
 
     notesEl.className = 'text-xs text-slate-500';
-    replaceWithMarkup(notesEl, notes.join(''));
+    notesEl.innerHTML = notes.join('');
 }
 
 function renderPreferencesSection() {
@@ -600,6 +1066,380 @@ function setCheckboxState(id, checked, enabled) {
     el.disabled = !enabled;
 }
 
+async function openAvailabilityPromoteModal() {
+    if (!accessState.canPromote || promoteInFlight) return;
+    const modal = document.getElementById('modal-availability-promote');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    await refreshPromotePreview();
+}
+
+function closeAvailabilityPromoteModal() {
+    const modal = document.getElementById('modal-availability-promote');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    setPromoteError('');
+}
+
+function setPromoteError(message) {
+    const errorEl = document.getElementById('availability-promote-error');
+    if (!errorEl) return;
+    const text = String(message || '').trim();
+    if (!text) {
+        errorEl.classList.add('hidden');
+        errorEl.textContent = '';
+        return;
+    }
+    errorEl.classList.remove('hidden');
+    errorEl.textContent = text;
+}
+
+function promoteOptionsFromUi() {
+    const includeAvailable = document.getElementById('availability-promote-include-available')?.checked !== false;
+    const includeMaybe = Boolean(document.getElementById('availability-promote-include-maybe')?.checked);
+    const dryRun = Boolean(document.getElementById('availability-promote-dry-run')?.checked);
+    return { includeAvailable, includeMaybe, dryRun };
+}
+
+async function refreshPromotePreview() {
+    if (promotePreviewInFlight) return;
+    promotePreviewInFlight = true;
+
+    const previewEl = document.getElementById('availability-promote-preview');
+    if (previewEl) {
+        previewEl.textContent = 'Loading recipient preview...';
+    }
+    setPromoteError('');
+
+    try {
+        const opts = promoteOptionsFromUi();
+        const query = new URLSearchParams({
+            include_available: opts.includeAvailable ? 'true' : 'false',
+            include_maybe: opts.includeMaybe ? 'true' : 'false'
+        }).toString();
+        const payload = await fetchJSON(`${API_BASE}/availability/promotions/preview?${query}`, NO_STORE_FETCH);
+        promoteState.preview = payload;
+
+        if (!previewEl) return;
+        const channels = payload?.channels_summary || {};
+        const channelSummary = ['discord', 'telegram', 'signal']
+            .map((channel) => `${channel}: ${Number(channels[channel] || 0)}`)
+            .join(', ');
+        previewEl.innerHTML = `
+            <div class="font-semibold text-slate-200">Date: ${escapeHtml(String(payload?.campaign_date || '--'))} (21:00 CET)</div>
+            <div class="mt-1">Recipients: <span class="text-brand-purple font-bold">${Number(payload?.recipient_count || 0)}</span></div>
+            <div class="mt-1 text-slate-400">${escapeHtml(channelSummary)}</div>
+        `;
+    } catch (err) {
+        setPromoteError(formatErrorMessage(err, 'Failed to load preview'));
+        if (previewEl) {
+            previewEl.textContent = 'Could not load preview.';
+        }
+    } finally {
+        promotePreviewInFlight = false;
+    }
+}
+
+async function confirmAvailabilityPromote() {
+    if (promoteInFlight) return;
+    promoteInFlight = true;
+    setPromoteError('');
+
+    const confirmBtn = document.getElementById('availability-promote-confirm-btn');
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.classList.add('opacity-60', 'cursor-not-allowed');
+    }
+
+    try {
+        const opts = promoteOptionsFromUi();
+        const resp = await fetch(`${API_BASE}/availability/promotions/campaigns`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                include_available: opts.includeAvailable,
+                include_maybe: opts.includeMaybe,
+                dry_run: opts.dryRun
+            })
+        });
+
+        let payload = null;
+        try {
+            payload = await resp.json();
+        } catch (_err) {
+            payload = null;
+        }
+
+        if (!resp.ok) {
+            throw new Error(payload?.detail || `HTTP ${resp.status}`);
+        }
+
+        responseStatus = {
+            message: 'Scheduled: 20:45 CET and 21:00 CET promotion jobs.',
+            error: false
+        };
+        renderStatusMessages();
+        closeAvailabilityPromoteModal();
+        await loadPromotionCampaignState();
+        renderCampaignStatus();
+    } catch (err) {
+        setPromoteError(formatErrorMessage(err, 'Failed to schedule campaign'));
+    } finally {
+        promoteInFlight = false;
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+        }
+        renderPromoteControls();
+    }
+}
+
+async function openAvailabilityPlanningRoom() {
+    if (!accessState.authenticated) {
+        window.location.href = `${AUTH_BASE}/login`;
+        return;
+    }
+    if (!accessState.linkedDiscord) {
+        startAvailabilityLinkFlow();
+        return;
+    }
+    if (planningActionInFlight) return;
+
+    const data = planningState.data || {};
+    const session = data.session || null;
+
+    if (session) {
+        planningState.panelOpen = !planningState.panelOpen;
+        planningState.actionStatus = { message: '', error: false };
+        renderPlanningRoom();
+        return;
+    }
+
+    if (!data.unlocked) {
+        planningState.actionStatus = {
+            message: 'Planning room is still locked until readiness threshold is reached.',
+            error: true
+        };
+        renderPlanningRoom();
+        return;
+    }
+
+    planningActionInFlight = true;
+    planningState.actionStatus = { message: 'Creating planning room...', error: false };
+    renderPlanningRoom();
+
+    try {
+        const payload = await postPlanningJson('/today/create', {});
+        planningState.data = payload?.state || planningState.data;
+        planningState.panelOpen = true;
+        reconcilePlanningAssignments();
+        planningState.actionStatus = {
+            message: payload?.thread_created
+                ? 'Planning room created with Discord thread.'
+                : 'Planning room created.',
+            error: false
+        };
+    } catch (err) {
+        planningState.actionStatus = {
+            message: formatErrorMessage(err, 'Failed to create planning room'),
+            error: true
+        };
+    } finally {
+        planningActionInFlight = false;
+        renderPlanningRoom();
+    }
+}
+
+async function joinAvailabilityPlanningRoom() {
+    if (!accessState.canSubmit || planningActionInFlight) return;
+    planningActionInFlight = true;
+    planningState.actionStatus = { message: 'Joining planning room...', error: false };
+    renderPlanningRoom();
+
+    try {
+        const payload = await postPlanningJson('/today/join', {});
+        planningState.data = payload?.state || planningState.data;
+        planningState.panelOpen = true;
+        reconcilePlanningAssignments();
+        planningState.actionStatus = { message: 'Joined planning room and marked as Looking.', error: false };
+    } catch (err) {
+        planningState.actionStatus = {
+            message: formatErrorMessage(err, 'Failed to join planning room'),
+            error: true
+        };
+    } finally {
+        planningActionInFlight = false;
+        renderPlanningRoom();
+    }
+}
+
+async function submitAvailabilityPlanningSuggestion() {
+    if (!accessState.canSubmit || planningActionInFlight) return;
+    const input = document.getElementById('availability-planning-suggestion-input');
+    const value = String(input?.value || '').trim();
+    if (value.length < 2) {
+        planningState.actionStatus = { message: 'Suggestion must be at least 2 characters.', error: true };
+        renderPlanningRoom();
+        return;
+    }
+
+    planningActionInFlight = true;
+    planningState.actionStatus = { message: 'Saving suggestion...', error: false };
+    renderPlanningRoom();
+
+    try {
+        const payload = await postPlanningJson('/today/suggestions', { name: value });
+        planningState.data = payload?.state || planningState.data;
+        planningState.panelOpen = true;
+        reconcilePlanningAssignments();
+        planningState.actionStatus = { message: 'Suggestion added.', error: false };
+        if (input) input.value = '';
+    } catch (err) {
+        planningState.actionStatus = {
+            message: formatErrorMessage(err, 'Failed to save suggestion'),
+            error: true
+        };
+    } finally {
+        planningActionInFlight = false;
+        renderPlanningRoom();
+    }
+}
+
+async function voteAvailabilityPlanningSuggestion(suggestionId) {
+    if (!accessState.canSubmit || planningActionInFlight) return;
+    const numericId = Number(suggestionId);
+    if (!Number.isInteger(numericId) || numericId <= 0) return;
+
+    planningActionInFlight = true;
+    planningState.actionStatus = { message: 'Saving vote...', error: false };
+    renderPlanningRoom();
+
+    try {
+        const payload = await postPlanningJson('/today/vote', { suggestion_id: numericId });
+        planningState.data = payload?.state || planningState.data;
+        planningState.panelOpen = true;
+        reconcilePlanningAssignments();
+        planningState.actionStatus = { message: 'Vote saved.', error: false };
+    } catch (err) {
+        planningState.actionStatus = {
+            message: formatErrorMessage(err, 'Failed to save vote'),
+            error: true
+        };
+    } finally {
+        planningActionInFlight = false;
+        renderPlanningRoom();
+    }
+}
+
+function cycleAvailabilityPlanningAssignment(userId) {
+    if (planningActionInFlight) return;
+    const numericId = Number(userId);
+    if (!Number.isInteger(numericId) || numericId <= 0) return;
+    const participants = Array.isArray(planningState.data?.participants) ? planningState.data.participants : [];
+    const allowedIds = new Set(participants.map((row) => Number(row?.user_id || 0)));
+    if (!allowedIds.has(numericId)) return;
+    if (!canManagePlanningTeams(planningState.data?.session)) return;
+
+    const current = String(planningState.assignments.get(numericId) || '');
+    if (current === 'A') {
+        planningState.assignments.set(numericId, 'B');
+    } else if (current === 'B') {
+        planningState.assignments.delete(numericId);
+    } else {
+        planningState.assignments.set(numericId, 'A');
+    }
+    renderPlanningRoom();
+}
+
+function autoDraftAvailabilityPlanningTeams() {
+    if (!canManagePlanningTeams(planningState.data?.session) || planningActionInFlight) return;
+    const participants = Array.isArray(planningState.data?.participants) ? planningState.data.participants : [];
+    if (!participants.length) return;
+
+    const pool = participants.map((row) => Number(row?.user_id || 0)).filter((value) => value > 0);
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = pool[i];
+        pool[i] = pool[j];
+        pool[j] = tmp;
+    }
+
+    planningState.assignments = new Map();
+    pool.forEach((userId, idx) => {
+        planningState.assignments.set(userId, idx % 2 === 0 ? 'A' : 'B');
+    });
+    planningState.actionStatus = { message: 'Auto draft generated. Save to persist.', error: false };
+    renderPlanningRoom();
+}
+
+async function saveAvailabilityPlanningTeams() {
+    if (!canManagePlanningTeams(planningState.data?.session) || planningActionInFlight) return;
+    const participants = Array.isArray(planningState.data?.participants) ? planningState.data.participants : [];
+    if (!participants.length) return;
+
+    const sideA = [];
+    const sideB = [];
+    for (const row of participants) {
+        const userId = Number(row?.user_id || 0);
+        const side = String(planningState.assignments.get(userId) || '');
+        if (side === 'A') sideA.push(userId);
+        if (side === 'B') sideB.push(userId);
+    }
+
+    planningActionInFlight = true;
+    planningState.actionStatus = { message: 'Saving teams...', error: false };
+    renderPlanningRoom();
+
+    try {
+        const payload = await postPlanningJson('/today/teams', {
+            side_a: sideA,
+            side_b: sideB,
+            captain_a: sideA.length ? sideA[0] : null,
+            captain_b: sideB.length ? sideB[0] : null
+        });
+        planningState.data = payload?.state || planningState.data;
+        planningState.panelOpen = true;
+        reconcilePlanningAssignments();
+        planningState.actionStatus = { message: 'Teams saved.', error: false };
+    } catch (err) {
+        planningState.actionStatus = {
+            message: formatErrorMessage(err, 'Failed to save teams'),
+            error: true
+        };
+    } finally {
+        planningActionInFlight = false;
+        renderPlanningRoom();
+    }
+}
+
+async function postPlanningJson(path, body) {
+    const response = await fetch(`${API_BASE}/planning${path}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(body || {})
+    });
+
+    let payload = null;
+    try {
+        payload = await response.json();
+    } catch (_err) {
+        payload = null;
+    }
+
+    if (!response.ok) {
+        throw new Error(payload?.detail || `HTTP ${response.status}`);
+    }
+    return payload;
+}
+
 // ============================================================================
 // ACTIONS
 // ============================================================================
@@ -623,7 +1463,10 @@ async function setAvailabilityForDate(dateIso, statusKey) {
     try {
         const resp = await fetch(`${API_BASE}/availability`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
             credentials: 'same-origin',
             body: JSON.stringify({
                 date: dateIso,
@@ -684,7 +1527,10 @@ async function saveAvailabilityPrefs() {
     try {
         const resp = await fetch(`${API_BASE}/availability/settings`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
             credentials: 'same-origin',
             body: JSON.stringify({
                 sound_enabled: Boolean(getReadySound),
@@ -789,9 +1635,9 @@ function playReadySound() {
             oscillator.type = 'triangle';
             oscillator.frequency.value = frequency;
 
-            gain.gain.setValueAtTime(Number.parseFloat('0.0001'), toneStart);
+            gain.gain.setValueAtTime(0.0001, toneStart);
             gain.gain.exponentialRampToValueAtTime(0.16, toneStart + 0.02);
-            gain.gain.exponentialRampToValueAtTime(Number.parseFloat('0.0001'), toneStart + 0.11);
+            gain.gain.exponentialRampToValueAtTime(0.0001, toneStart + 0.11);
 
             oscillator.connect(gain);
             gain.connect(audioCtx.destination);
@@ -895,23 +1741,125 @@ function isAvailabilityViewActive() {
     return view.classList.contains('active') && !view.classList.contains('hidden');
 }
 
-function ensureRefreshTimer() {
-    if (refreshTimer) return;
+function isAvailabilityRefreshAllowed() {
+    return isAvailabilityViewActive() && document.visibilityState === 'visible';
+}
+
+function handleDelegatedAvailabilityAction(event) {
+    const trigger = event.target?.closest?.('[data-av-action]');
+    if (!trigger) return;
+
+    const action = String(trigger.dataset.avAction || '').trim();
+    if (!action) return;
+    event.preventDefault();
+
+    if (action === 'start-link') {
+        startAvailabilityLinkFlow();
+        return;
+    }
+
+    if (action === 'set-status') {
+        const dateIso = String(trigger.dataset.dateIso || '').trim();
+        const statusKey = String(trigger.dataset.statusKey || '').trim();
+        if (!dateIso || !statusKey) return;
+        void setAvailabilityForDate(dateIso, statusKey);
+        return;
+    }
+
+    if (action === 'select-date') {
+        const dateIso = String(trigger.dataset.dateIso || '').trim();
+        if (!dateIso) return;
+        selectAvailabilityDate(dateIso);
+        return;
+    }
+
+    if (action === 'select-upcoming-date') {
+        const dateIso = String(trigger.dataset.dateIso || '').trim();
+        if (!dateIso) return;
+        selectUpcomingAvailabilityDate(dateIso);
+        return;
+    }
+
+    if (action === 'vote-suggestion') {
+        const suggestionId = Number(trigger.dataset.suggestionId || 0);
+        if (!Number.isFinite(suggestionId) || suggestionId <= 0) return;
+        void voteAvailabilityPlanningSuggestion(suggestionId);
+        return;
+    }
+
+    if (action === 'cycle-assignment') {
+        const userId = Number(trigger.dataset.userId || 0);
+        if (!Number.isFinite(userId) || userId <= 0) return;
+        cycleAvailabilityPlanningAssignment(userId);
+    }
+}
+
+function stopRefreshTimer() {
+    if (!refreshTimer) return;
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+}
+
+function startRefreshTimer() {
+    if (refreshTimer || !isAvailabilityRefreshAllowed()) return;
 
     refreshTimer = window.setInterval(() => {
-        if (!isAvailabilityViewActive()) return;
+        if (!isAvailabilityRefreshAllowed()) {
+            stopRefreshTimer();
+            return;
+        }
         void refreshAvailabilityView();
     }, POLL_INTERVAL_MS);
+}
+
+function syncRefreshTimer() {
+    if (isAvailabilityRefreshAllowed()) {
+        startRefreshTimer();
+    } else {
+        stopRefreshTimer();
+    }
+}
+
+function ensureRefreshTimer() {
+    syncRefreshTimer();
 }
 
 function ensureRuntimeListeners() {
     if (runtimeListenersBound) return;
 
+    const availabilityView = document.getElementById('view-availability');
+    if (availabilityView) {
+        availabilityView.addEventListener('click', handleDelegatedAvailabilityAction);
+        if (typeof window.bindInlineClickActions === 'function') {
+            window.bindInlineClickActions(availabilityView);
+        }
+    }
+
     document.addEventListener('visibilitychange', () => {
+        syncRefreshTimer();
         if (document.visibilityState === 'visible' && isAvailabilityViewActive()) {
-            maybePlayGetReadySound();
+            void refreshAvailabilityView();
         }
     });
+
+    if (availabilityView && typeof MutationObserver !== 'undefined') {
+        const viewObserver = new MutationObserver(() => {
+            syncRefreshTimer();
+        });
+        viewObserver.observe(availabilityView, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    ['availability-promote-include-available', 'availability-promote-include-maybe', 'availability-promote-dry-run']
+        .forEach((id) => {
+            const element = document.getElementById(id);
+            if (!element) return;
+            element.addEventListener('change', () => {
+                const modal = document.getElementById('modal-availability-promote');
+                if (modal && !modal.classList.contains('hidden')) {
+                    void refreshPromotePreview();
+                }
+            });
+        });
 
     runtimeListenersBound = true;
 }
@@ -928,6 +1876,14 @@ function selectAvailabilityDate(dateIso) {
     renderSelectedDayPanel();
 }
 
+function selectUpcomingAvailabilityDate(dateIso) {
+    selectAvailabilityDate(dateIso);
+    const detailPanel = document.getElementById('availability-selected-day-panel');
+    if (detailPanel && typeof detailPanel.scrollIntoView === 'function') {
+        detailPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
 function availabilityPrevMonth() {
     visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1);
     renderCalendar();
@@ -936,6 +1892,48 @@ function availabilityPrevMonth() {
 function availabilityNextMonth() {
     visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1);
     renderCalendar();
+}
+
+function extractQueueTimeWindow(user) {
+    if (!user || typeof user !== 'object') return '';
+
+    const direct = firstNonEmptyString([
+        user.time_window,
+        user.timeWindow,
+        user.window,
+        user.availability_window,
+        user.time_range
+    ]);
+    if (direct) return direct;
+
+    const start = firstNonEmptyString([
+        user.start_time,
+        user.startTime,
+        user.window_start,
+        user.from,
+        user.from_time
+    ]);
+    const end = firstNonEmptyString([
+        user.end_time,
+        user.endTime,
+        user.window_end,
+        user.to,
+        user.to_time
+    ]);
+
+    if (start && end) return `${start} - ${end}`;
+    if (start) return `from ${start}`;
+    if (end) return `until ${end}`;
+    return '';
+}
+
+function firstNonEmptyString(values) {
+    if (!Array.isArray(values)) return '';
+    for (const value of values) {
+        const normalized = String(value || '').trim();
+        if (normalized) return normalized;
+    }
+    return '';
 }
 
 function toISODate(dateObj) {
@@ -1029,6 +2027,19 @@ window.submitAvailabilityResponse = submitAvailabilityResponse;
 window.setAvailabilityForDate = setAvailabilityForDate;
 window.refreshAvailabilityView = refreshAvailabilityView;
 window.selectAvailabilityDate = selectAvailabilityDate;
+window.selectUpcomingAvailabilityDate = selectUpcomingAvailabilityDate;
+window.toggleAvailabilityCalendar = toggleAvailabilityCalendar;
+window.startAvailabilityLinkFlow = startAvailabilityLinkFlow;
+window.openAvailabilityPromoteModal = openAvailabilityPromoteModal;
+window.closeAvailabilityPromoteModal = closeAvailabilityPromoteModal;
+window.confirmAvailabilityPromote = confirmAvailabilityPromote;
+window.openAvailabilityPlanningRoom = openAvailabilityPlanningRoom;
+window.joinAvailabilityPlanningRoom = joinAvailabilityPlanningRoom;
+window.submitAvailabilityPlanningSuggestion = submitAvailabilityPlanningSuggestion;
+window.voteAvailabilityPlanningSuggestion = voteAvailabilityPlanningSuggestion;
+window.cycleAvailabilityPlanningAssignment = cycleAvailabilityPlanningAssignment;
+window.autoDraftAvailabilityPlanningTeams = autoDraftAvailabilityPlanningTeams;
+window.saveAvailabilityPlanningTeams = saveAvailabilityPlanningTeams;
 window.availabilityPrevMonth = availabilityPrevMonth;
 window.availabilityNextMonth = availabilityNextMonth;
 window.loadAvailabilityHistory = refreshAvailabilityView;

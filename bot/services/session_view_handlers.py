@@ -15,11 +15,12 @@ This service manages:
 
 import asyncio
 import csv
+import inspect
 import io
 import discord
 import logging
 from datetime import datetime
-from typing import List
+from typing import Any, Dict, List, Optional, Tuple
 
 from bot.stats import StatsCalculator
 
@@ -29,16 +30,26 @@ logger = logging.getLogger("bot.services.session_view_handlers")
 class SessionViewHandlers:
     """Service for handling different view modes"""
 
-    def __init__(self, db_adapter, stats_calculator):
+    def __init__(
+        self,
+        db_adapter,
+        stats_calculator,
+        timing_shadow_service=None,
+        show_timing_dual: bool = False
+    ):
         """
         Initialize the view handlers
 
         Args:
             db_adapter: Database adapter for queries
             stats_calculator: StatsCalculator instance for calculations
+            timing_shadow_service: Optional shadow/comparison service for timing dual-mode
+            show_timing_dual: Feature flag for old vs new timing display
         """
         self.db_adapter = db_adapter
         self.stats_calculator = stats_calculator
+        self.timing_shadow_service = timing_shadow_service
+        self.show_timing_dual = bool(show_timing_dual)
 
     @staticmethod
     def _format_seconds(seconds: float) -> str:
@@ -50,6 +61,496 @@ class SessionViewHandlers:
         minutes = total // 60
         secs = total % 60
         return f"{minutes}:{secs:02d}"
+
+    @staticmethod
+    def _format_delta_seconds(delta_seconds: int) -> str:
+        """Format a signed delta in MM:SS format."""
+        sign = "+" if delta_seconds > 0 else "-"
+        total = abs(int(delta_seconds or 0))
+        minutes = total // 60
+        secs = total % 60
+        if total == 0:
+            return "0:00"
+        return f"{sign}{minutes}:{secs:02d}"
+
+    @staticmethod
+    def _parse_time_to_seconds(time_value: Any) -> int:
+        """Parse a time value (MM:SS, HH:MM:SS, or numeric) into seconds."""
+        if time_value is None:
+            return 0
+        text = str(time_value).strip()
+        if not text:
+            return 0
+        try:
+            parts = text.split(":")
+            if len(parts) == 2:
+                return int(parts[0]) * 60 + int(parts[1])
+            if len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            if "." in text:
+                return int(float(text) * 60)
+            return int(float(text))
+        except (ValueError, TypeError):
+            return 0
+
+    @staticmethod
+    def _row_get(row: Any, idx: int, key: str, default: Any = None) -> Any:
+        """Read tuple/dict row values safely."""
+        if isinstance(row, dict):
+            return row.get(key, default)
+        try:
+            return row[idx]
+        except Exception:
+            return default
+
+    async def _call_service_method(self, method_name: str, *args, **kwargs) -> Tuple[bool, Any]:
+        """Call timing shadow service method if it exists."""
+        if not self.timing_shadow_service:
+            return False, None
+        method = getattr(self.timing_shadow_service, method_name, None)
+        if not method:
+            return False, None
+        result = method(*args, **kwargs)
+        if inspect.isawaitable(result):
+            result = await result
+        return True, result
+
+    def _normalize_round_factor_payload(self, payload: Any) -> Dict[int, float]:
+        """Normalize service payload into round_id->factor mapping."""
+        factors: Dict[int, float] = {}
+        if payload is None:
+            return factors
+
+        raw = payload
+        if isinstance(payload, dict):
+            for key in ("round_factors", "factors", "by_round"):
+                if key in payload and isinstance(payload[key], (dict, list)):
+                    raw = payload[key]
+                    break
+
+        if isinstance(raw, dict):
+            for round_id, factor in raw.items():
+                try:
+                    rid = int(round_id)
+                    fval = float(factor)
+                except (TypeError, ValueError):
+                    continue
+                if fval > 0:
+                    factors[rid] = max(0.0, min(2.0, fval))
+            return factors
+
+        if isinstance(raw, list):
+            for item in raw:
+                if not isinstance(item, dict):
+                    continue
+                round_id = item.get("round_id") or item.get("id")
+                factor = (
+                    item.get("factor")
+                    or item.get("correction_factor")
+                    or item.get("duration_factor")
+                )
+                try:
+                    rid = int(round_id)
+                    fval = float(factor)
+                except (TypeError, ValueError):
+                    continue
+                if fval > 0:
+                    factors[rid] = max(0.0, min(2.0, fval))
+
+        return factors
+
+    async def _get_round_timing_shadow(self, session_ids: List[int]) -> Dict[str, Any]:
+        """
+        Build round-level timing correction factors from shadow/comparison service.
+
+        Returns:
+            {
+              factors: {round_id: factor},
+              round_rows: {round_id: {map_name, round_number, stats_seconds, lua_seconds, diff_seconds}},
+              rounds_total: int,
+              rounds_with_telemetry: int,
+              reason: str
+            }
+        """
+        result: Dict[str, Any] = {
+            "factors": {},
+            "round_rows": {},
+            "rounds_total": len(session_ids or []),
+            "rounds_with_telemetry": 0,
+            "reason": "",
+            "source": "none",
+        }
+
+        if not session_ids:
+            result["reason"] = "No rounds provided"
+            return result
+
+        if not self.timing_shadow_service:
+            result["reason"] = "Timing shadow service unavailable"
+            return result
+
+        # Preferred API path if the shadow service exposes round factors directly
+        for method_name in (
+            "get_session_round_timing_factors",
+            "get_round_timing_factors_for_session",
+            "get_session_round_factors",
+        ):
+            called, payload = await self._call_service_method(method_name, session_ids=session_ids)
+            if not called:
+                continue
+            factors = self._normalize_round_factor_payload(payload)
+            if factors:
+                result["factors"] = factors
+                result["rounds_with_telemetry"] = len(factors)
+                if isinstance(payload, dict):
+                    payload_rows = payload.get("round_rows") or payload.get("rows") or {}
+                    if isinstance(payload_rows, dict):
+                        result["round_rows"] = payload_rows
+                    elif isinstance(payload_rows, list):
+                        for item in payload_rows:
+                            if not isinstance(item, dict):
+                                continue
+                            rid = item.get("round_id") or item.get("id")
+                            try:
+                                rid_int = int(rid)
+                            except (TypeError, ValueError):
+                                continue
+                            result["round_rows"][rid_int] = item
+                result["reason"] = (
+                    f"Lua timing unavailable for {len(session_ids) - len(factors)}/{len(session_ids)} rounds"
+                    if len(factors) < len(session_ids) else "OK"
+                )
+                result["source"] = method_name
+                return result
+
+        # Compatibility path: derive factors from timing comparison service internals
+        has_fetch_lua = hasattr(self.timing_shadow_service, "_fetch_lua_data")
+        if not has_fetch_lua:
+            result["reason"] = "Timing service does not expose round comparison data"
+            return result
+
+        placeholders = ",".join("?" for _ in session_ids)
+        rounds_query = f"""
+            SELECT r.id, r.map_name, r.round_number, r.round_date, r.round_time, r.actual_time
+            FROM rounds r
+            WHERE r.id IN ({placeholders})
+            ORDER BY r.round_date, r.round_time, r.round_number
+        """
+        round_rows = await self.db_adapter.fetch_all(rounds_query, tuple(session_ids))
+        if not round_rows:
+            result["reason"] = "No rounds found"
+            return result
+
+        for row in round_rows:
+            round_id = int(self._row_get(row, 0, "id", 0) or 0)
+            map_name = self._row_get(row, 1, "map_name", "unknown") or "unknown"
+            round_number = int(self._row_get(row, 2, "round_number", 0) or 0)
+            round_date = self._row_get(row, 3, "round_date", "")
+            round_time = self._row_get(row, 4, "round_time", "")
+            actual_time = self._row_get(row, 5, "actual_time", "")
+
+            stats_seconds = self._parse_time_to_seconds(actual_time)
+            if hasattr(self.timing_shadow_service, "_fetch_stats_file_data"):
+                try:
+                    stats_data = await self.timing_shadow_service._fetch_stats_file_data(round_id)
+                except Exception as e:  # nosec B110
+                    stats_data = None
+                    logger.debug("shadow _fetch_stats_file_data failed for round %s: %s", round_id, e)
+                if isinstance(stats_data, dict):
+                    map_name = stats_data.get("map_name") or map_name
+                    round_number = int(stats_data.get("round_number") or round_number or 0)
+                    round_date = stats_data.get("round_date") or round_date
+                    round_time = stats_data.get("round_time") or round_time
+                    stats_seconds = int(stats_data.get("stats_duration_seconds") or stats_seconds or 0)
+
+            lua_seconds: Optional[int] = None
+            try:
+                lua_data = await self.timing_shadow_service._fetch_lua_data(
+                    round_id,
+                    map_name,
+                    round_number,
+                    round_date,
+                    round_time,
+                )
+            except Exception as e:  # nosec B110
+                lua_data = None
+                logger.debug("shadow _fetch_lua_data failed for round %s: %s", round_id, e)
+
+            if isinstance(lua_data, dict):
+                lua_seconds_raw = lua_data.get("lua_duration_seconds")
+                try:
+                    lua_seconds = int(lua_seconds_raw) if lua_seconds_raw is not None else None
+                except (TypeError, ValueError):
+                    lua_seconds = None
+
+            diff_seconds: Optional[int] = None
+            if stats_seconds > 0 and lua_seconds and lua_seconds > 0:
+                factor = max(0.0, min(2.0, float(lua_seconds) / float(stats_seconds)))
+                result["factors"][round_id] = factor
+                result["rounds_with_telemetry"] += 1
+                diff_seconds = int(stats_seconds - lua_seconds)
+
+            result["round_rows"][round_id] = {
+                "round_id": round_id,
+                "map_name": map_name,
+                "round_number": round_number,
+                "stats_seconds": int(stats_seconds or 0),
+                "lua_seconds": int(lua_seconds or 0) if lua_seconds else None,
+                "diff_seconds": diff_seconds,
+            }
+
+        missing_rounds = len(session_ids) - result["rounds_with_telemetry"]
+        if result["rounds_with_telemetry"] == 0:
+            result["reason"] = "No Lua timing telemetry linked to this session"
+        elif missing_rounds > 0:
+            result["reason"] = f"Lua timing missing for {missing_rounds}/{len(session_ids)} rounds"
+        else:
+            result["reason"] = "OK"
+        result["source"] = "compat_fetch"
+        return result
+
+    async def get_session_timing_dual_by_guid(self, session_ids: List[int]) -> Dict[str, Any]:
+        """Build per-player old/new timing aggregates for dual-mode displays."""
+        payload: Dict[str, Any] = {
+            "players": {},
+            "meta": {
+                "rounds_total": len(session_ids or []),
+                "rounds_with_telemetry": 0,
+                "reason": "",
+                "source": "none",
+            },
+        }
+        if not session_ids:
+            payload["meta"]["reason"] = "No rounds provided"
+            return payload
+
+        # Preferred path: dedicated session shadow service
+        called, shadow_result = await self._call_service_method("compare_session", session_ids)
+        if called and shadow_result is not None:
+            players: Dict[str, Dict[str, Any]] = {}
+            round_diagnostics = tuple(getattr(shadow_result, "round_diagnostics", ()) or ())
+            rounds_total = len(round_diagnostics)
+            rounds_with_telemetry = sum(
+                1 for diag in round_diagnostics if int(getattr(diag, "players_with_lua", 0) or 0) > 0
+            )
+
+            for summary in tuple(getattr(shadow_result, "player_summaries", ()) or ()):
+                rounds_played = int(getattr(summary, "rounds", 0) or 0)
+                telemetry_rounds = int(getattr(summary, "rounds_with_lua", 0) or 0)
+                if rounds_played == 0:
+                    missing_reason = "No timing rows"
+                elif telemetry_rounds == 0:
+                    missing_reason = "No Lua telemetry"
+                elif telemetry_rounds < rounds_played:
+                    missing_reason = f"Lua partial {telemetry_rounds}/{rounds_played}"
+                else:
+                    missing_reason = ""
+
+                entry = {
+                    "player_guid": getattr(summary, "player_guid", ""),
+                    "player_name": getattr(summary, "player_name", "Unknown"),
+                    "time_played_seconds": int(getattr(summary, "old_time_played_seconds", 0) or 0),
+                    "old_time_dead_seconds": int(getattr(summary, "old_dead_seconds", 0) or 0),
+                    "new_time_dead_seconds": int(getattr(summary, "new_dead_seconds", 0) or 0),
+                    "old_denied_seconds": int(getattr(summary, "old_denied_playtime", 0) or 0),
+                    "new_denied_seconds": int(getattr(summary, "new_denied_playtime", 0) or 0),
+                    "rounds_played": rounds_played,
+                    "telemetry_rounds": telemetry_rounds,
+                    "missing_reason": missing_reason,
+                }
+
+                guid_key = str(entry["player_guid"])
+                players[guid_key] = entry
+                guid_prefix = guid_key[:8]
+                if guid_prefix and guid_prefix not in players:
+                    players[guid_prefix] = entry
+
+            if rounds_total == 0:
+                reason = "No round diagnostics"
+            elif rounds_with_telemetry == 0:
+                reason = "No Lua telemetry linked to this session"
+            elif rounds_with_telemetry < rounds_total:
+                reason = f"Lua timing partial {rounds_with_telemetry}/{rounds_total} rounds"
+            else:
+                reason = "OK"
+
+            payload["players"] = players
+            payload["meta"] = {
+                "rounds_total": rounds_total,
+                "rounds_with_telemetry": rounds_with_telemetry,
+                "overall_coverage_percent": float(
+                    getattr(shadow_result, "overall_coverage_percent", 0.0) or 0.0
+                ),
+                "reason": reason,
+                "source": "compare_session",
+                "artifact_path": getattr(shadow_result, "artifact_path", None),
+            }
+            return payload
+
+        shadow = await self._get_round_timing_shadow(session_ids)
+        round_factors: Dict[int, float] = shadow.get("factors", {}) or {}
+        payload["meta"]["rounds_with_telemetry"] = int(shadow.get("rounds_with_telemetry") or 0)
+        payload["meta"]["reason"] = shadow.get("reason", "")
+        payload["meta"]["source"] = shadow.get("source", "none")
+
+        placeholders = ",".join("?" for _ in session_ids)
+        query = f"""
+            SELECT p.player_guid,
+                MAX(COALESCE(p.clean_name, p.player_name)) as player_name,
+                p.round_id,
+                SUM(COALESCE(p.time_played_seconds, 0)) as time_played_seconds,
+                SUM(
+                    LEAST(
+                        COALESCE(p.time_dead_minutes, 0) * 60,
+                        COALESCE(p.time_played_seconds, 0)
+                    )
+                ) as time_dead_old_seconds,
+                SUM(COALESCE(p.denied_playtime, 0)) as denied_old_seconds
+            FROM player_comprehensive_stats p
+            WHERE p.round_id IN ({placeholders})
+            GROUP BY p.player_guid, p.round_id
+        """
+        rows = await self.db_adapter.fetch_all(query, tuple(session_ids))
+
+        for row in rows:
+            guid = self._row_get(row, 0, "player_guid")
+            if not guid:
+                continue
+            name = self._row_get(row, 1, "player_name", "Unknown") or "Unknown"
+            round_id = int(self._row_get(row, 2, "round_id", 0) or 0)
+            played = int(self._row_get(row, 3, "time_played_seconds", 0) or 0)
+            dead_old = int(round(float(self._row_get(row, 4, "time_dead_old_seconds", 0) or 0)))
+            denied_old = int(round(float(self._row_get(row, 5, "denied_old_seconds", 0) or 0)))
+            dead_old = max(0, min(dead_old, played if played > 0 else dead_old))
+            denied_old = max(0, min(denied_old, played if played > 0 else denied_old))
+
+            factor = round_factors.get(round_id)
+            telemetry_hit = factor is not None
+            if telemetry_hit:
+                dead_new = int(round(dead_old * factor))
+                denied_new = int(round(denied_old * factor))
+                dead_new = max(0, min(dead_new, played if played > 0 else dead_new))
+                denied_new = max(0, min(denied_new, played if played > 0 else denied_new))
+            else:
+                dead_new = dead_old
+                denied_new = denied_old
+
+            player_entry = payload["players"].setdefault(
+                guid,
+                {
+                    "player_guid": guid,
+                    "player_name": name,
+                    "time_played_seconds": 0,
+                    "old_time_dead_seconds": 0,
+                    "new_time_dead_seconds": 0,
+                    "old_denied_seconds": 0,
+                    "new_denied_seconds": 0,
+                    "rounds_played": 0,
+                    "telemetry_rounds": 0,
+                },
+            )
+
+            player_entry["player_name"] = name
+            player_entry["time_played_seconds"] += played
+            player_entry["old_time_dead_seconds"] += dead_old
+            player_entry["new_time_dead_seconds"] += dead_new
+            player_entry["old_denied_seconds"] += denied_old
+            player_entry["new_denied_seconds"] += denied_new
+            player_entry["rounds_played"] += 1
+            if telemetry_hit:
+                player_entry["telemetry_rounds"] += 1
+
+        for player_entry in payload["players"].values():
+            rounds_played = int(player_entry.get("rounds_played", 0) or 0)
+            telemetry_rounds = int(player_entry.get("telemetry_rounds", 0) or 0)
+            if rounds_played == 0:
+                player_entry["missing_reason"] = "No timing rows"
+            elif telemetry_rounds == 0:
+                player_entry["missing_reason"] = "No Lua telemetry"
+            elif telemetry_rounds < rounds_played:
+                player_entry["missing_reason"] = f"Lua partial {telemetry_rounds}/{rounds_played}"
+            else:
+                player_entry["missing_reason"] = ""
+
+        return payload
+
+    async def get_timing_diff_summary(self, session_ids: List[int], top_n: int = 8) -> Dict[str, Any]:
+        """Return compact top-N round timing diffs for admin debug output."""
+        top_n = max(1, min(int(top_n or 8), 20))
+
+        called, shadow_result = await self._call_service_method("compare_session", session_ids)
+        if called and shadow_result is not None:
+            round_rows = tuple(getattr(shadow_result, "player_rounds", ()) or ())
+            rows_sorted = sorted(
+                round_rows,
+                key=lambda row: abs(int(getattr(row, "dead_diff_seconds", 0) or 0))
+                + abs(int(getattr(row, "denied_diff_seconds", 0) or 0)),
+                reverse=True,
+            )
+            rows = []
+            for row in rows_sorted[:top_n]:
+                rows.append(
+                    {
+                        "round_id": int(getattr(row, "round_id", 0) or 0),
+                        "map_name": getattr(row, "map_name", "unknown"),
+                        "round_number": int(getattr(row, "round_number", 0) or 0),
+                        "player_name": getattr(row, "player_name", "Unknown"),
+                        "old_dead_seconds": int(getattr(row, "old_dead_seconds", 0) or 0),
+                        "new_dead_seconds": int(getattr(row, "new_dead_seconds", 0) or 0),
+                        "dead_diff_seconds": int(getattr(row, "dead_diff_seconds", 0) or 0),
+                        "old_denied_seconds": int(getattr(row, "old_denied_playtime", 0) or 0),
+                        "new_denied_seconds": int(getattr(row, "new_denied_playtime", 0) or 0),
+                        "denied_diff_seconds": int(getattr(row, "denied_diff_seconds", 0) or 0),
+                        "fallback_reason": getattr(row, "fallback_reason", ""),
+                    }
+                )
+
+            round_diagnostics = tuple(getattr(shadow_result, "round_diagnostics", ()) or ())
+            rounds_total = len(round_diagnostics)
+            rounds_with_telemetry = sum(
+                1 for diag in round_diagnostics if int(getattr(diag, "players_with_lua", 0) or 0) > 0
+            )
+            if rounds_total == 0:
+                reason = "No round diagnostics"
+            elif rounds_with_telemetry == 0:
+                reason = "No Lua telemetry linked to this session"
+            elif rounds_with_telemetry < rounds_total:
+                reason = f"Lua timing partial {rounds_with_telemetry}/{rounds_total} rounds"
+            else:
+                reason = "OK"
+
+            return {
+                "rows": rows,
+                "meta": {
+                    "rounds_total": rounds_total,
+                    "rounds_with_telemetry": rounds_with_telemetry,
+                    "overall_coverage_percent": float(
+                        getattr(shadow_result, "overall_coverage_percent", 0.0) or 0.0
+                    ),
+                    "reason": reason,
+                    "source": "compare_session",
+                    "artifact_path": getattr(shadow_result, "artifact_path", None),
+                },
+            }
+
+        shadow = await self._get_round_timing_shadow(session_ids)
+        rows = []
+        for round_row in (shadow.get("round_rows") or {}).values():
+            diff_seconds = round_row.get("diff_seconds")
+            if diff_seconds is None:
+                continue
+            rows.append(round_row)
+
+        rows.sort(key=lambda r: abs(int(r.get("diff_seconds") or 0)), reverse=True)
+        return {
+            "rows": rows[:top_n],
+            "meta": {
+                "rounds_total": int(shadow.get("rounds_total") or len(session_ids or [])),
+                "rounds_with_telemetry": int(shadow.get("rounds_with_telemetry") or 0),
+                "reason": shadow.get("reason", ""),
+                "source": shadow.get("source", "none"),
+            },
+        }
 
     async def _get_player_stats_columns(self):
         """Get columns for player_comprehensive_stats (cached)."""
@@ -916,12 +1417,31 @@ class SessionViewHandlers:
             return
 
         # Build embed
+        dual_payload = None
+        dual_players = {}
+        dual_meta = {}
+        if self.show_timing_dual:
+            try:
+                dual_payload = await self.get_session_timing_dual_by_guid(session_ids)
+            except Exception as e:  # nosec B110
+                logger.warning("Dual timing payload failed: %s", e)
+                dual_payload = {"players": {}, "meta": {"reason": "Shadow timing lookup failed"}}
+            dual_players = dual_payload.get("players", {}) if dual_payload else {}
+            dual_meta = dual_payload.get("meta", {}) if dual_payload else {}
+
+        description = (
+            "Units: time played/dead/denied are seconds (displayed MM:SS). "
+            "Time dead comes from `time_dead_minutes` (Lua), time denied from `denied_playtime`."
+        )
+        if self.show_timing_dual:
+            description = (
+                "Dual mode: `O` = legacy stored values, `N` = shadow-corrected values "
+                "(Δ = N-O, MM:SS)."
+            )
+
         embed = discord.Embed(
             title=f"⏱️ Time Audit - {latest_date}",
-            description=(
-                "Units: time played/dead/denied are seconds (displayed MM:SS). "
-                "Time dead comes from `time_dead_minutes` (Lua), time denied from `denied_playtime`."
-            ),
+            description=description,
             color=discord.Color.blurple(),
             timestamp=datetime.now()
         )
@@ -929,6 +1449,8 @@ class SessionViewHandlers:
         total_played = 0
         total_dead = 0
         total_denied = 0
+        total_dead_new = 0
+        total_denied_new = 0
         cap_hits = 0
         cap_seconds = 0
 
@@ -937,7 +1459,7 @@ class SessionViewHandlers:
 
         lines = []
         for row in rows:
-            name, _guid, tp, td_raw, td_cap, denied, avg_ratio, rounds = row
+            name, guid, tp, td_raw, td_cap, denied, avg_ratio, rounds = row
             name = (name or "Unknown")[:16]
             tp = int(tp or 0)
             td_raw = int(round(td_raw or 0))
@@ -950,6 +1472,25 @@ class SessionViewHandlers:
             total_dead += td_cap
             total_denied += denied
 
+            dead_new = td_cap
+            denied_new = denied
+            telemetry_note = ""
+            if self.show_timing_dual:
+                player_shadow = dual_players.get(guid, {})
+                if player_shadow:
+                    dead_new = int(player_shadow.get("new_time_dead_seconds", td_cap) or 0)
+                    denied_new = int(player_shadow.get("new_denied_seconds", denied) or 0)
+                    missing_reason = (player_shadow.get("missing_reason") or "").lower()
+                    if missing_reason.startswith("no lua"):
+                        telemetry_note = " ⚠️no-lua"
+                    elif "partial" in missing_reason:
+                        telemetry_note = " ⚠️partial"
+                else:
+                    telemetry_note = " ⚠️shadow"
+
+            total_dead_new += dead_new
+            total_denied_new += denied_new
+
             diff = td_raw - td_cap
             if diff >= 5:
                 cap_hits += 1
@@ -961,12 +1502,24 @@ class SessionViewHandlers:
             cap_note = f" ⚠️cap-{diff}s" if diff >= 5 else ""
             ratio_note = f" r{avg_ratio:.1f}%" if avg_ratio > 0 else ""
 
-            lines.append(
-                f"**{name}** ⏱`{self._format_seconds(tp)}` "
-                f"💀`{self._format_seconds(td_cap)}`({dead_pct:.0f}%) "
-                f"⏳`{self._format_seconds(denied)}`({denied_pct:.0f}%)"
-                f"{cap_note}{ratio_note} ({rounds}r)"
-            )
+            if self.show_timing_dual:
+                delta_dead = dead_new - td_cap
+                delta_denied = denied_new - denied
+                lines.append(
+                    f"**{name}** ⏱`{self._format_seconds(tp)}` "
+                    f"💀O`{self._format_seconds(td_cap)}` N`{self._format_seconds(dead_new)}`"
+                    f"(Δ{self._format_delta_seconds(delta_dead)}) "
+                    f"⏳O`{self._format_seconds(denied)}` N`{self._format_seconds(denied_new)}`"
+                    f"(Δ{self._format_delta_seconds(delta_denied)})"
+                    f"{telemetry_note}{cap_note}{ratio_note} ({rounds}r)"
+                )
+            else:
+                lines.append(
+                    f"**{name}** ⏱`{self._format_seconds(tp)}` "
+                    f"💀`{self._format_seconds(td_cap)}`({dead_pct:.0f}%) "
+                    f"⏳`{self._format_seconds(denied)}`({denied_pct:.0f}%)"
+                    f"{cap_note}{ratio_note} ({rounds}r)"
+                )
 
         # Chunk into fields (6 per field)
         chunk_size = 6
@@ -981,22 +1534,54 @@ class SessionViewHandlers:
         # Totals summary
         total_dead_pct = (total_dead / total_played * 100) if total_played > 0 else 0
         total_denied_pct = (total_denied / total_played * 100) if total_played > 0 else 0
-        embed.add_field(
-            name="Totals",
-            value=(
-                f"⏱`{self._format_seconds(total_played)}` "
-                f"💀`{self._format_seconds(total_dead)}`({total_dead_pct:.0f}%) "
-                f"⏳`{self._format_seconds(total_denied)}`({total_denied_pct:.0f}%)"
-            ),
-            inline=False
-        )
-
-        if cap_hits > 0:
-            embed.set_footer(
-                text=f"Cap applied for {cap_hits} player(s), {cap_seconds}s trimmed"
+        if self.show_timing_dual:
+            total_dead_new_pct = (total_dead_new / total_played * 100) if total_played > 0 else 0
+            total_denied_new_pct = (total_denied_new / total_played * 100) if total_played > 0 else 0
+            embed.add_field(
+                name="Totals",
+                value=(
+                    f"OLD: ⏱`{self._format_seconds(total_played)}` "
+                    f"💀`{self._format_seconds(total_dead)}`({total_dead_pct:.0f}%) "
+                    f"⏳`{self._format_seconds(total_denied)}`({total_denied_pct:.0f}%)\n"
+                    f"NEW: ⏱`{self._format_seconds(total_played)}` "
+                    f"💀`{self._format_seconds(total_dead_new)}`({total_dead_new_pct:.0f}%) "
+                    f"⏳`{self._format_seconds(total_denied_new)}`({total_denied_new_pct:.0f}%)\n"
+                    f"Δ: 💀`{self._format_delta_seconds(total_dead_new - total_dead)}` "
+                    f"⏳`{self._format_delta_seconds(total_denied_new - total_denied)}`"
+                ),
+                inline=False
             )
+
+            rounds_total = int(dual_meta.get("rounds_total") or len(session_ids or []))
+            rounds_with_telemetry = int(dual_meta.get("rounds_with_telemetry") or 0)
+            reason = dual_meta.get("reason") or ""
+            if rounds_with_telemetry <= 0:
+                footer = "Dual mode fallback: no Lua telemetry (N=O)"
+            elif rounds_with_telemetry < rounds_total:
+                footer = f"Dual mode partial: Lua {rounds_with_telemetry}/{rounds_total} rounds"
+            else:
+                footer = "Dual mode active: all rounds have Lua timing telemetry"
+            if reason and reason != "OK":
+                footer += f" • {reason}"
+            if cap_hits > 0:
+                footer += f" • cap-{cap_seconds}s"
+            embed.set_footer(text=footer)
         else:
-            embed.set_footer(text="No time_dead caps applied")
+            embed.add_field(
+                name="Totals",
+                value=(
+                    f"⏱`{self._format_seconds(total_played)}` "
+                    f"💀`{self._format_seconds(total_dead)}`({total_dead_pct:.0f}%) "
+                    f"⏳`{self._format_seconds(total_denied)}`({total_denied_pct:.0f}%)"
+                ),
+                inline=False
+            )
+            if cap_hits > 0:
+                embed.set_footer(
+                    text=f"Cap applied for {cap_hits} player(s), {cap_seconds}s trimmed"
+                )
+            else:
+                embed.set_footer(text="No time_dead caps applied")
 
         await ctx.send(embed=embed)
 

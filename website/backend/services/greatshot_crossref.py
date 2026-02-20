@@ -56,21 +56,16 @@ def _extract_date_from_filename(filename: str) -> Optional[str]:
     return None
 
 
-_KD_RATIO_COLUMN_CACHE: Optional[str] = None
 _KD_RATIO_COLUMN_CANDIDATES = ("kd_ratio", "kdr")
+_OPTIONAL_STATS_COLUMNS = ("skill_rating", "dpm")
 
 
-async def _resolve_kd_ratio_column(db) -> str:
-    global _KD_RATIO_COLUMN_CACHE
-    if _KD_RATIO_COLUMN_CACHE:
-        return _KD_RATIO_COLUMN_CACHE
-
-    # Test doubles may only implement fetch_all; default safely.
+async def _column_exists(db, column_name: str) -> bool:
+    # Test doubles may only implement fetch_all; assume modern schema in that case.
     if not hasattr(db, "fetch_one"):
-        _KD_RATIO_COLUMN_CACHE = "kd_ratio"
-        return _KD_RATIO_COLUMN_CACHE
+        return True
 
-    for column in _KD_RATIO_COLUMN_CANDIDATES:
+    try:
         row = await db.fetch_one(
             """
             SELECT 1
@@ -80,17 +75,33 @@ async def _resolve_kd_ratio_column(db) -> str:
               AND column_name = $1
             LIMIT 1
             """,
-            (column,),
+            (column_name,),
         )
-        if row:
-            _KD_RATIO_COLUMN_CACHE = column
-            break
+    except Exception:
+        logger.warning(
+            "Greatshot crossref: failed to probe column %s; falling back to NULL-safe projection",
+            column_name,
+            exc_info=True,
+        )
+        return False
 
-    if not _KD_RATIO_COLUMN_CACHE:
-        logger.warning("Greatshot crossref: no kd_ratio/kdr column found, defaulting to kd_ratio")
-        _KD_RATIO_COLUMN_CACHE = "kd_ratio"
+    return bool(row)
 
-    return _KD_RATIO_COLUMN_CACHE
+
+async def _resolve_kd_ratio_column(db) -> Optional[str]:
+    for column in _KD_RATIO_COLUMN_CANDIDATES:
+        if await _column_exists(db, column):
+            return column
+
+    logger.warning("Greatshot crossref: no kd_ratio/kdr column found; emitting NULL kdr")
+    return None
+
+
+async def _resolve_optional_stat_columns(db) -> Dict[str, bool]:
+    return {
+        column: await _column_exists(db, column)
+        for column in _OPTIONAL_STATS_COLUMNS
+    }
 
 
 async def _calculate_player_overlap(
@@ -433,6 +444,11 @@ async def enrich_with_db_stats(
 ) -> Dict[str, Any]:
     """Fetch full player stats from player_comprehensive_stats for a matched round."""
     kd_column = await _resolve_kd_ratio_column(db)
+    optional_columns = await _resolve_optional_stat_columns(db)
+    kdr_expr = f"{kd_column} AS kdr" if kd_column else "NULL AS kdr"
+    skill_rating_expr = "skill_rating" if optional_columns.get("skill_rating") else "NULL AS skill_rating"
+    dpm_expr = "dpm" if optional_columns.get("dpm") else "NULL AS dpm"
+
     rows = await db.fetch_all(
         f"""
         SELECT
@@ -449,9 +465,9 @@ async def enrich_with_db_stats(
             time_played_seconds,
             team,
             efficiency,
-            {kd_column} AS kdr,
-            skill_rating,
-            dpm
+            {kdr_expr},
+            {skill_rating_expr},
+            {dpm_expr}
         FROM player_comprehensive_stats
         WHERE round_id = $1
         ORDER BY kills DESC

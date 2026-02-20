@@ -52,7 +52,7 @@ A comprehensive Discord bot that tracks, analyzes, and displays ET:Legacy game s
 stats/
 ├── bot/
 │   ├── ultimate_bot.py           # Main bot (4,371 lines) - Core logic
-│   ├── etlegacy_production.db    # SQLite database (unified schema)
+│   ├── postgresql_database_manager.py  # PostgreSQL schema/import management
 │   │
 │   ├── cogs/                      # Modular command groups
 │   │   ├── player_cog.py         # Player stats commands (16 commands)
@@ -80,7 +80,7 @@ stats/
 
 - **Language:** Python 3.x
 - **Discord:** discord.py (commands framework)
-- **Database:** SQLite with aiosqlite (async operations)
+- **Database:** PostgreSQL with asyncpg (production), SQLite fallback only for local/dev edge cases
 - **SSH:** paramiko + scp (remote file access)
 - **Parser:** Custom C0RNP0RN3StatsParser
 - **Task Scheduling:** discord.ext.tasks (background loops)
@@ -1054,7 +1054,7 @@ tail -f logs/bot.log
 - Memory: 50-150 MB (Python process)
 - CPU: < 1% idle, 5-10% during file processing
 - Database size: ~50KB per round (~5MB per 100 rounds)
-- Disk I/O: Minimal (SQLite + file downloads)
+- Disk I/O: Minimal (PostgreSQL network + file downloads)
 
 ### Scalability
 
@@ -1185,7 +1185,7 @@ Stats Parser (C0RNP0RN3StatsParser)
     ↓
 Team Detection (5-layer algorithm)
     ↓
-SQLite Database (unified 53-column schema)
+PostgreSQL Database (production schema, connection pooling)
     ↓
 Discord Embeds (auto-posted stats)
 

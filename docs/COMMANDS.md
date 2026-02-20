@@ -65,6 +65,15 @@ This document lists the Discord bot commands found in the repository, their alia
 
 ---
 
+## Availability poll cog (`bot/cogs/availability_poll_cog.py`) - NEW
+
+| Command | Aliases | Description |
+|---|---|---|
+| `poll_notify` | (none) | Toggle availability poll notification preferences (on/off/threshold/reminder) |
+| `poll_status` | (none) | Show today's poll results (yes/no/maybe counts and threshold progress) |
+
+---
+
 ## Server control cog (e.g. `bot/cogs/server_control.py`)
 
 | Command | Aliases | Description |

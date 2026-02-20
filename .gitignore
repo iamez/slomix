@@ -149,6 +149,15 @@ migrations/
 !website/migrations/
 website/migrations/*
 !website/migrations/005_date_based_availability.sql
+!website/migrations/006_discord_linking_and_promotions.sql
+!website/migrations/006_discord_linking_and_promotions_down.sql
+!website/migrations/007_planning_room_mvp.sql
+!website/migrations/007_planning_room_mvp_down.sql
+!website/migrations/008_website_app_availability_grants.sql
+!website/migrations/008_website_app_availability_grants_down.sql
+!proximity/schema/migrations/
+proximity/schema/migrations/*
+!proximity/schema/migrations/*.sql
 
 # Deprecated install docs
 INSTALL_*.md

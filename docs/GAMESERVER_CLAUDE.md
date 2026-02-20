@@ -18,6 +18,7 @@ The ET:Legacy game server runs on a VPS container and uses **screen sessions**, 
 |------|-------|
 | **Host** | puran.hehe.si |
 | **SSH** | `ssh -p 48101 et@puran.hehe.si` |
+| **SSH (DNS fallback)** | `ssh -p 48101 et@91.185.207.163` |
 | **SSH Key** | `~/.ssh/etlegacy_bot` |
 | **Game Version** | ET:Legacy v2.83.1-x86_64 |
 | **Screen Session** | `vektor` |
@@ -135,7 +136,27 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-**Status**: DISABLED (keep it this way)
+**Status target**: DISABLED (keep it this way)
+
+### Preflight Checks (Before Live Monitoring)
+```bash
+# Deprecated service must stay disabled (or systemctl unavailable on this host)
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl is-enabled et-stats-webhook.service
+  systemctl is-active et-stats-webhook.service
+else
+  echo "systemctl unavailable"
+fi
+
+# Exactly one voice log monitor should be running
+pgrep -af "/home/et/scripts/log_monitor.sh"
+pgrep -fc "/home/et/scripts/log_monitor.sh"  # expect: 1
+```
+
+If `et-stats-webhook.service` shows active/enabled, disable it:
+```bash
+sudo systemctl disable --now et-stats-webhook.service
+```
 
 **Why deprecated?** The Lua webhook (`stats_discord_webhook.lua`) replaced this:
 - Lua fires INSTANTLY at round end (before file fully written)
@@ -496,8 +517,9 @@ cd ~/etlegacy-v2.83.1-x86_64
 
 ### Webhook Not Working
 ```bash
-# Check log_monitor is running
-pgrep -f log_monitor
+# Check exactly one log_monitor is running
+pgrep -af "/home/et/scripts/log_monitor.sh"
+pgrep -fc "/home/et/scripts/log_monitor.sh"  # expect: 1
 
 # Check webhook log
 tail -f ~/scripts/webhook.log

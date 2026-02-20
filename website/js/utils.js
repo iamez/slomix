@@ -3,9 +3,16 @@
  * @module utils
  */
 
-// API endpoints
-export const API_BASE = window.location.origin + '/api';
-export const AUTH_BASE = window.location.origin + '/auth';
+// API endpoints – use relative paths so browser extensions that block
+// absolute-URL fetch() calls (uBlock Origin, Privacy Badger, etc.) don't
+// interfere with same-origin requests.
+export const API_BASE = '/api';
+export const AUTH_BASE = '/auth';
+
+const DEFAULT_CACHE_TTL_MS = 30_000;
+const DEFAULT_STALE_TTL_MS = 120_000;
+const responseCache = new Map();
+const inFlightRequests = new Map();
 
 /**
  * Escape HTML special characters to prevent XSS attacks.
@@ -53,30 +60,73 @@ export function safeInsertHTML(element, position, html) {
 /**
  * Fetch JSON from an API endpoint
  * @param {string} url - The URL to fetch
- * @param {object} options - Optional fetch options
  * @returns {Promise<any>} - Parsed JSON response
  */
 export async function fetchJSON(url, options = {}) {
-    const rawUrl = String(url ?? '').trim();
-    if (!rawUrl || rawUrl.startsWith('//')) {
-        throw new Error('Invalid request URL');
+    const method = (options.method || 'GET').toUpperCase();
+    const cachePolicy = options.cachePolicy || 'swr';
+    const cacheKey = `${method}:${url}`;
+    const now = Date.now();
+    const ttlMs = Number(options.cacheTtlMs || DEFAULT_CACHE_TTL_MS);
+    const staleTtlMs = Number(options.staleTtlMs || DEFAULT_STALE_TTL_MS);
+
+    if (method !== 'GET' || cachePolicy === 'no-store') {
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
     }
 
-    if (/^https?:\/\//i.test(rawUrl)) {
-        throw new Error('Absolute URLs are not allowed');
+    const cached = responseCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+        return cached.data;
     }
 
-    const resolvedUrl = new URL(rawUrl, window.location.origin);
-    if (resolvedUrl.origin !== window.location.origin) {
-        throw new Error('Cross-origin requests are not allowed');
+    if (cached && cachePolicy === 'swr' && cached.staleUntil > now) {
+        if (!inFlightRequests.has(cacheKey)) {
+            const refreshPromise = fetch(url, options)
+                .then(async (res) => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    responseCache.set(cacheKey, {
+                        data,
+                        expiresAt: Date.now() + ttlMs,
+                        staleUntil: Date.now() + staleTtlMs
+                    });
+                    return data;
+                })
+                .catch((err) => {
+                    console.warn(`Background refresh failed for ${url}:`, err);
+                    return cached.data;
+                })
+                .finally(() => {
+                    inFlightRequests.delete(cacheKey);
+                });
+            inFlightRequests.set(cacheKey, refreshPromise);
+        }
+        return cached.data;
     }
 
-    const safeUrl = `${resolvedUrl.pathname}${resolvedUrl.search}${resolvedUrl.hash}`;
-    // nosemgrep: safeUrl is constrained to a same-origin relative path.
-    // nosec: safeUrl has strict same-origin/path validation above.
-    const res = await fetch(safeUrl, options);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    if (inFlightRequests.has(cacheKey)) {
+        return inFlightRequests.get(cacheKey);
+    }
+
+    const requestPromise = fetch(url, options)
+        .then(async (res) => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            responseCache.set(cacheKey, {
+                data,
+                expiresAt: Date.now() + ttlMs,
+                staleUntil: Date.now() + staleTtlMs
+            });
+            return data;
+        })
+        .finally(() => {
+            inFlightRequests.delete(cacheKey);
+        });
+
+    inFlightRequests.set(cacheKey, requestPromise);
+    return requestPromise;
 }
 
 /**

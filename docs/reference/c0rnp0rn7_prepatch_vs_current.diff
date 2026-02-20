@@ -1,0 +1,154 @@
+--- docs/reference/c0rnp0rn7_prepatch_from_git_history.lua	2026-02-19 13:26:24.094615370 +0100
++++ c0rnp0rn7.lua	2026-02-19 12:37:34.598075144 +0100
+@@ -80,6 +80,8 @@
+ 
+ gamestate = 69
+ round = 69
++paused = false
++paused_death = {}
+ 
+ function et_InitGame()
+ 	et.RegisterModname(modname .. " " .. version)
+@@ -96,6 +98,7 @@
+ 		death_sprees[i] = 0
+ 		topshots[i] = { [1]=0, [2]=0, [3]=0, [4]=0, [5]=0, [6]=0, [7]=0, [8]=0, [9]=0, [10]=0, [11]=0, [12]=0, [13]=0, [14]=0, [15]=0, [16]=0, [17]=0, [18]=0, [19]=0, [20]=0} -- [1]=killing spree, [2]=death spree, [3]=kill assists, [4]=kill steals, [5]=headshot kills, [6]=objectives stolen, [7]=objectives returned, [8]=dynamites planted, [9]=dynamites defused, [10]=number of times revived, [11]=bullets fired, [12]=DPM, [13]=tank/meatshield, [14]=time dead ratio, [15]=most useful kills, [16]=denied playtime, [17]=useless kills, [18]=full selfkills, [19]=repairs/constructions, [20]=revives
+ 		denies[i] = { [1]=false, [2]=-1, [3]=0 }
++		paused_death[i] = { [1]=0, [2]=0 }
+ 		players[i] = nil
+ 		kmulti[i] = { [1]=0, [2]=0 }
+ 		multikills[i] = { [1]=0, [2]=0, [3]=0, [4]=0, [5]=0 } -- 2 kills, 3 kills, 4 kills, 5 kills, 6 kills
+@@ -114,8 +117,8 @@
+     end
+ 
+     local offsets = {}
+-    offsets[et.TEAM_ALLIES] = reinfSeeds[1] >> REINF_BLUEDELT
+-    offsets[et.TEAM_AXIS]   = math.floor(reinfSeeds[2] / (1 << REINF_REDDELT))
++    offsets[et.TEAM_ALLIES] = bit.rshift(reinfSeeds[1], REINF_BLUEDELT)
++    offsets[et.TEAM_AXIS]   = bit.rshift(reinfSeeds[2], REINF_REDDELT)
+ 
+     for i = et.TEAM_AXIS, et.TEAM_ALLIES do
+         for j = 1, MAX_REINFSEEDS do
+@@ -197,7 +200,7 @@
+ 
+ 				if atts ~= 0 or hits ~= 0 or deaths ~= 0 or kills ~= 0 then
+ 					weaponStats  = string.format("%s %d %d %d %d %d", weaponStats, hits, atts, kills, deaths, headshots)
+-					dwWeaponMask = dwWeaponMask | (1 << j)
++					dwWeaponMask = bit.bor(dwWeaponMask, bit.lshift(1, j))
+ 				end
+ 				if atts ~= 0 then
+ 					topshots[i][11] = topshots[i][11] + atts
+@@ -400,7 +403,7 @@
+ 					local team = et.gentity_get(i, "sess.sessionTeam")
+ 					if team == 1 or team == 2 then
+ 						if denies[i][1] == true then
+-							topshots[denies[i][2]][16] = topshots[denies[i][2]][16] + (et.trap_Milliseconds() - denies[i][3])
++							topshots[denies[i][2]][16] = topshots[denies[i][2]][16] + (et.trap_Milliseconds() - denies[i][3] - (paused_death[i][2] - paused_death[i][1]))
+ 							denies[i] = { [1]=false, [2]=-1, [3]=0 }
+ 						end
+ 					end
+@@ -463,6 +466,37 @@
+ 				wait_table[id] = nil
+ 			end
+ 		end
++		
++		local cs = tonumber(et.trap_GetConfigstring(et.CS_SERVERTOGGLES))
++		if paused == false then
++			if bit.band(bit.lshift(1, 4), cs) == 1 then
++				paused = true
++				for i = 0, max_clients - 1 do
++					if et.gentity_get(i, "pers.connected") == 2 then
++						local team = et.gentity_get(i, "sess.sessionTeam")
++						if team == 1 or team == 2 then
++							if denies[i][1] == true then
++								paused_death[i][1] = et.trap_Milliseconds()
++							end
++						end
++					end
++				end
++			end
++		elseif paused == true then
++			if bit.band(bit.lshift(1, 4), cs) == 0 then
++				paused = false
++				for i = 0, max_clients - 1 do
++					if et.gentity_get(i, "pers.connected") == 2 then
++						local team = et.gentity_get(i, "sess.sessionTeam")
++						if team == 1 or team == 2 then
++							if denies[i][1] == true then
++								paused_death[i][2] = et.trap_Milliseconds()
++							end
++						end
++					end
++				end
++			end
++		end
+ 	end
+ end
+ 
+@@ -644,13 +678,14 @@
+ 	hitRegionsData[id] = getAllHitRegions(id)
+ 	if team == 1 or team == 2 then
+ 		if death_time[id] ~= 0 then
+-			local diff = et.trap_Milliseconds() - death_time[id]
++			local diff = et.trap_Milliseconds() - death_time[id] - (paused_death[id][2] - paused_death[id][1])
+ 			death_time_total[id] = death_time_total[id] + diff
+ 		end
+ 		if denies[id][1] == true then
+-			topshots[denies[id][2]][16] = topshots[denies[id][2]][16] + (et.trap_Milliseconds() - denies[id][3])
++			topshots[denies[id][2]][16] = topshots[denies[id][2]][16] + (et.trap_Milliseconds() - denies[id][3] - (paused_death[id][2] - paused_death[id][1]))
+ 			denies[id] = { [1]=false, [2]=-1, [3]=0 }
+ 		end
++		paused_death[id] = { [1]=0, [2]=0 }
+ 	end
+ 	death_time[id] = 0
+ end
+@@ -669,6 +704,7 @@
+ 	hitters[id] = {nil, nil, nil, nil}
+ 	death_time[id] = 0
+ 	death_time_total[id] = 0
++	paused_death[id] = { [1]=0, [2]=0 }
+ end
+ 
+ function et_ClientUserinfoChanged(id)
+@@ -678,10 +714,16 @@
+ 	end
+     if players[id] ~= team then
+         if team == 3 then
++       	if death_time[id] ~= 0 then
++				local diff = et.trap_Milliseconds() - death_time[id] - (paused_death[id][2] - paused_death[id][1])
++				death_time_total[id] = death_time_total[id] + diff
++			end
+             if denies[id][1] == true then
+-				topshots[denies[id][2]][16] = topshots[denies[id][2]][16] + (et.trap_Milliseconds() - denies[id][3])
++				topshots[denies[id][2]][16] = topshots[denies[id][2]][16] + (et.trap_Milliseconds() - denies[id][3] - (paused_death[id][2] - paused_death[id][1]))
+ 			end
+ 			denies[id] = { [1]=false, [2]=-1, [3]=0 }
++			paused_death[id] = { [1]=0, [2]=0 }
++			death_time[id] = 0 
+         end
+     end
+     players[id] = team
+@@ -719,7 +761,7 @@
+ 				local team = tonumber(et.gentity_get(id, "sess.sessionTeam"))
+ 				if team == 2 then
+ 					local red = et.gentity_get(id, "ps.powerups", 5)
+-					if red == 0 then
++					if red ~= 0 then
+ 						topshots[id][6] = topshots[id][6] + 1
+ 					end
+ 				elseif team == 1 then
+@@ -729,7 +771,7 @@
+ 				local team = tonumber(et.gentity_get(id, "sess.sessionTeam"))
+ 				if team == 1 then
+ 					local blue = et.gentity_get(id, "ps.powerups", 6)
+-					if blue == 0 then
++					if blue ~= 0 then
+ 						topshots[id][6] = topshots[id][6] + 1
+ 					end
+ 				elseif team == 2 then
+@@ -789,4 +831,4 @@
+ 		end
+ 	end
+ 	return(0)
+-end
+\ No newline at end of file
++end
