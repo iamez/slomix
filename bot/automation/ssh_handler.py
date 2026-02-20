@@ -10,17 +10,20 @@ All methods use paramiko for SSH/SFTP operations.
 """
 
 # SECURITY NOTE: SSH host key verification
-# By default, this module uses paramiko.RejectPolicy() which requires known_hosts.
-# Set SSH_STRICT_HOST_KEY=false to use AutoAddPolicy (accepts any host key).
-# See: https://docs.paramiko.org/en/stable/api/client.html#paramiko.client.AutoAddPolicy
+# This module enforces paramiko.RejectPolicy() and known_hosts validation.
 
 import asyncio
 import logging
 import os
+import posixpath
 import re
 from typing import Dict, List, Optional
 
 logger = logging.getLogger("bot.automation.ssh")
+
+SAFE_STATS_FILENAME_PATTERN = re.compile(
+    r"^\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-\d+(?:-endstats)?(?:_ws)?\.txt$"
+)
 
 
 class SSHConnectionError(Exception):
@@ -28,51 +31,68 @@ class SSHConnectionError(Exception):
     pass
 
 # Security: SSH host key verification mode
-# Set SSH_STRICT_HOST_KEY=true to require known_hosts verification
+# Strict verification is always enforced.
 SSH_STRICT_HOST_KEY = os.getenv('SSH_STRICT_HOST_KEY', 'true').lower() == 'true'
+SSH_ALLOW_INSECURE_HOST_KEY = os.getenv('SSH_ALLOW_INSECURE_HOST_KEY', 'false').lower() == 'true'
 
 
 def configure_ssh_host_key_policy(ssh_client):
     """
     Configure SSH host key verification policy.
 
-    If SSH_STRICT_HOST_KEY=true:
-        Uses RejectPolicy - only connects to hosts in ~/.ssh/known_hosts
-        More secure but requires manual host key setup
-
-    If SSH_STRICT_HOST_KEY=false:
-        Uses AutoAddPolicy - accepts any host key on first connect
-        Less secure but works out of the box for trusted VPS
+    Uses RejectPolicy only - connects exclusively to hosts in known_hosts.
+    Insecure host-key auto-accept mode is intentionally disabled.
 
     Args:
         ssh_client: paramiko.SSHClient instance to configure
     """
     import paramiko
 
-    if SSH_STRICT_HOST_KEY:
-        # Strict mode: only connect to known hosts
-        ssh_client.set_missing_host_key_policy(paramiko.RejectPolicy())
-        known_hosts_path = os.path.expanduser('~/.ssh/known_hosts')
-        if os.path.exists(known_hosts_path):
-            ssh_client.load_host_keys(known_hosts_path)
-            logger.debug("🔒 SSH strict mode: loaded known_hosts")
-        else:
-            logger.warning(
-                "⚠️ SSH_STRICT_HOST_KEY=true but ~/.ssh/known_hosts not found. "
-                "SSH connections may fail. Run 'ssh-keyscan <host> >> ~/.ssh/known_hosts' "
-                "to add your server's host key."
-            )
-    else:
-        # Permissive mode: auto-accept host keys (explicit opt-in only)
+    if not SSH_STRICT_HOST_KEY:
         logger.warning(
-            "SSH host key validation DISABLED (SSH_STRICT_HOST_KEY=false). "
-            "Set SSH_STRICT_HOST_KEY=true and populate ~/.ssh/known_hosts for production."
+            "SSH_STRICT_HOST_KEY=false requested, but strict host-key verification remains enforced."
         )
-        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    if SSH_ALLOW_INSECURE_HOST_KEY:
+        logger.warning(
+            "SSH_ALLOW_INSECURE_HOST_KEY=true requested, but insecure mode is disabled."
+        )
+
+    ssh_client.set_missing_host_key_policy(paramiko.RejectPolicy())
+    known_hosts_path = os.path.expanduser('~/.ssh/known_hosts')
+    if os.path.exists(known_hosts_path):
+        ssh_client.load_host_keys(known_hosts_path)
+        logger.debug("🔒 SSH strict mode: loaded known_hosts")
+    else:
+        logger.warning(
+            "⚠️ ~/.ssh/known_hosts not found. "
+            "SSH connections may fail. Run 'ssh-keyscan <host> >> ~/.ssh/known_hosts' "
+            "to add your server's host key."
+        )
 
 
 class SSHHandler:
     """SSH operations for remote stats file management"""
+
+    @staticmethod
+    def _sanitize_stats_filename(filename: str) -> str:
+        """
+        Validate incoming filename from webhook/websocket before filesystem use.
+
+        Rejects path separators/traversal and allows only expected stats patterns.
+        """
+        candidate = str(filename or "").strip()
+        if not candidate:
+            raise ValueError("Filename is required")
+
+        basename = os.path.basename(candidate)
+        if basename != candidate or "/" in candidate or "\\" in candidate:
+            raise ValueError("Unsafe filename path")
+        if ".." in basename:
+            raise ValueError("Path traversal detected in filename")
+        if not SAFE_STATS_FILENAME_PATTERN.match(basename):
+            raise ValueError(f"Unexpected stats filename format: {basename}")
+
+        return basename
 
     @staticmethod
     def parse_gamestats_filename(filename: str) -> Optional[Dict]:
@@ -222,6 +242,7 @@ class SSHHandler:
             Local file path if successful, None if failed
         """
         try:
+            safe_filename = SSHHandler._sanitize_stats_filename(filename)
             # Ensure local directory exists
             os.makedirs(local_dir, exist_ok=True)
 
@@ -231,7 +252,7 @@ class SSHHandler:
                 None,
                 SSHHandler._download_file_sync,
                 ssh_config,
-                filename,
+                safe_filename,
                 local_dir,
             )
             return local_path
@@ -249,6 +270,7 @@ class SSHHandler:
         configure_ssh_host_key_policy(ssh)
 
         key_path = os.path.expanduser(ssh_config["key_path"])
+        sftp = None
 
         try:
             ssh.connect(
@@ -264,20 +286,27 @@ class SSHHandler:
             # Set timeout for SFTP operations (30 seconds for file transfers)
             sftp.get_channel().settimeout(30.0)
 
-            remote_file = f"{ssh_config['remote_path']}/{filename}"
-            local_file = os.path.join(local_dir, filename)
+            safe_filename = SSHHandler._sanitize_stats_filename(filename)
+            remote_base = str(ssh_config["remote_path"]).rstrip("/")
+            remote_file = posixpath.join(remote_base, safe_filename)
 
-            logger.info(f"📥 Downloading {filename}...")
+            local_base = os.path.abspath(local_dir)
+            local_file = os.path.abspath(os.path.join(local_base, safe_filename))
+            if not local_file.startswith(local_base + os.sep):
+                raise ValueError(f"Unsafe local destination for filename: {safe_filename}")
+
+            logger.info(f"📥 Downloading {safe_filename}...")
             sftp.get(remote_file, local_file)
 
             return local_file
 
         finally:
             # Ensure connections are closed even on error
-            try:
-                sftp.close()
-            except Exception as e:  # nosec B110 - intentional cleanup suppression
-                logger.debug(f"SFTP close ignored: {e}")
+            if sftp:
+                try:
+                    sftp.close()
+                except Exception as e:  # nosec B110 - intentional cleanup suppression
+                    logger.debug(f"SFTP close ignored: {e}")
             try:
                 ssh.close()
             except Exception as e:  # nosec B110 - intentional cleanup suppression

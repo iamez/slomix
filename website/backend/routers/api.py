@@ -5,7 +5,7 @@ import math
 import json
 from collections import defaultdict
 from itertools import combinations
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -21,15 +21,16 @@ from website.backend.services.game_server_query import query_game_server
 from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.stopwatch_scoring_service import StopwatchScoringService
 from website.backend.logging_config import get_app_logger
+from website.backend.env_utils import getenv_int
 
 router = APIRouter()
 logger = get_app_logger("api")
 
 # Game server configuration (for direct UDP query)
 GAME_SERVER_HOST = os.getenv("SERVER_HOST", "puran.hehe.si")
-GAME_SERVER_PORT = int(os.getenv("SERVER_PORT", "27960"))
+GAME_SERVER_PORT = getenv_int("SERVER_PORT", 27960)
 
-MONITORING_STALE_THRESHOLD_SECONDS = int(os.getenv("MONITORING_STALE_THRESHOLD_SECONDS", "300"))
+MONITORING_STALE_THRESHOLD_SECONDS = getenv_int("MONITORING_STALE_THRESHOLD_SECONDS", 300)
 
 
 def _normalize_monitoring_timestamp(value: Any) -> datetime | None:
@@ -69,6 +70,28 @@ def _clean_weapon_name(weapon_name: Any) -> str:
     elif lower_name.startswith("ws "):
         clean_name = clean_name[3:]
     return clean_name.replace("_", " ").title()
+
+
+def _normalize_map_name(map_name: Any) -> str:
+    """Normalize map names for stable grouping/display in trend responses."""
+    if map_name is None:
+        return ""
+
+    normalized = str(map_name).strip()
+    if not normalized:
+        return ""
+
+    normalized = normalized.replace("\\", "/")
+    if "/" in normalized:
+        normalized = normalized.rsplit("/", 1)[-1]
+
+    lower = normalized.lower()
+    for ext in (".bsp", ".pk3", ".arena"):
+        if lower.endswith(ext):
+            normalized = normalized[: -len(ext)]
+            break
+
+    return normalized.strip()
 
 
 # ========================================
@@ -804,8 +827,8 @@ async def get_lua_webhook_diagnostics(db: DatabaseAdapter = Depends(get_db)):
 
 @router.get("/diagnostics/time-audit")
 async def get_time_audit(
-    limit: int = 250,
-    ratio_diff: float = 5.0,
+    limit: int = Query(default=250, ge=1, le=1000),
+    ratio_diff: float = Query(default=5.0, ge=0.0, le=500.0),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -920,8 +943,8 @@ async def get_time_audit(
 
 @router.get("/diagnostics/spawn-audit")
 async def get_spawn_audit(
-    limit: int = 200,
-    diff_seconds: int = 30,
+    limit: int = Query(default=200, ge=1, le=1000),
+    diff_seconds: int = Query(default=30, ge=0, le=3600),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -2980,6 +3003,11 @@ class LinkPlayerRequest(BaseModel):
     player_name: str
 
 
+def _require_ajax_csrf_header(request: Request) -> None:
+    if request.headers.get("x-requested-with", "").lower() != "xmlhttprequest":
+        raise HTTPException(status_code=403, detail="Missing required CSRF header")
+
+
 @router.get("/player/search")
 async def search_player(query: str, db: DatabaseAdapter = Depends(get_db)):
     """Search for player aliases"""
@@ -3010,6 +3038,7 @@ async def link_player(
     request: Request, payload: LinkPlayerRequest, db: DatabaseAdapter = Depends(get_db)
 ):
     """Link Discord account to player alias"""
+    _require_ajax_csrf_header(request)
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -6798,7 +6827,7 @@ async def get_proximity_summary(
                 "AVG(total_distance) AS avg_track_distance, "
                 "AVG(avg_speed) AS avg_speed, "
                 "AVG(sprint_percentage) AS avg_sprint_pct, "
-                "AVG(time_to_first_move_ms) AS avg_time_to_first_move_ms "
+                "AVG(CASE WHEN spawn_time_ms >= 0 THEN time_to_first_move_ms END) AS avg_time_to_first_move_ms "
                 f"FROM player_track {where_sql}",
                 query_params,
             )
@@ -7137,7 +7166,7 @@ async def get_proximity_movers(
         )
         reaction_rows = await db.fetch_all(
             "SELECT player_guid, player_name, AVG(time_to_first_move_ms) AS reaction_ms, COUNT(*) AS tracks "
-            f"FROM player_track {where_sql} AND time_to_first_move_ms IS NOT NULL "
+            f"FROM player_track {where_sql} AND time_to_first_move_ms IS NOT NULL AND spawn_time_ms >= 0 "
             "GROUP BY player_guid, player_name "
             f"ORDER BY reaction_ms ASC NULLS LAST LIMIT ${limit_placeholder}",
             query_params,
@@ -7208,6 +7237,245 @@ async def get_proximity_movers(
                 "sprint": [],
                 "reaction": [],
                 "survival": [],
+            }
+        )
+    return payload
+
+
+@router.get("/proximity/classes")
+async def get_proximity_classes(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Class composition and class-level movement summary from scoped player_track rows.
+    """
+    payload = _proximity_stub_meta(range_days)
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days,
+        session_date,
+        map_name,
+        round_number,
+        round_start_unix,
+    )
+    query_params = tuple(params)
+    try:
+        rows = await db.fetch_all(
+            "SELECT player_class, "
+            "COUNT(*) AS track_count, "
+            "COUNT(DISTINCT player_guid) AS unique_players, "
+            "AVG(duration_ms) AS avg_duration_ms, "
+            "AVG(total_distance) AS avg_distance, "
+            "AVG(sprint_percentage) AS avg_sprint_pct, "
+            "AVG(CASE WHEN spawn_time_ms >= 0 THEN time_to_first_move_ms END) AS avg_spawn_reaction_ms "
+            f"FROM player_track {where_sql} "
+            "GROUP BY player_class "
+            "ORDER BY track_count DESC, player_class ASC",
+            query_params,
+        )
+
+        payload.update(
+            {
+                "status": "ok" if rows else "prototype",
+                "ready": bool(rows),
+                "message": None if rows else payload["message"],
+                "scope": scope,
+                "classes": [
+                    {
+                        "player_class": row[0] or "UNKNOWN",
+                        "tracks": int(row[1] or 0),
+                        "players": int(row[2] or 0),
+                        "avg_duration_ms": round(row[3], 0) if row[3] is not None else None,
+                        "avg_distance": round(row[4], 1) if row[4] is not None else None,
+                        "avg_sprint_pct": round(row[5], 1) if row[5] is not None else None,
+                        "avg_spawn_reaction_ms": round(row[6], 0) if row[6] is not None else None,
+                    }
+                    for row in rows
+                ],
+            }
+        )
+    except Exception as e:
+        payload.update(
+            {
+                "status": "error",
+                "ready": False,
+                "message": f"Proximity query failed: {e}",
+                "scope": scope,
+                "classes": [],
+            }
+        )
+    return payload
+
+
+@router.get("/proximity/reactions")
+async def get_proximity_reactions(
+    range_days: int = 30,
+    limit: int = 5,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Combat reaction leaders from proximity_reaction_metric (return fire / dodge / support).
+    """
+    payload = _proximity_stub_meta(range_days)
+    safe_limit = max(1, min(int(limit or 5), 25))
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days,
+        session_date,
+        map_name,
+        round_number,
+        round_start_unix,
+        alias="r",
+    )
+    query_params = tuple(params)
+    try:
+        table_exists = await db.fetch_val(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_name = 'proximity_reaction_metric'
+            )
+            """
+        )
+        if not table_exists:
+            payload.update(
+                {
+                    "status": "prototype",
+                    "ready": False,
+                    "scope": scope,
+                    "limit": safe_limit,
+                    "message": "Reaction telemetry table not migrated yet.",
+                    "return_fire": [],
+                    "dodge": [],
+                    "support": [],
+                    "class_summary": [],
+                }
+            )
+            return payload
+
+        scoped_params = list(params)
+        scoped_params.append(safe_limit)
+        limit_placeholder = len(scoped_params)
+
+        return_rows = await db.fetch_all(
+            "SELECT r.target_guid, r.target_name, r.target_class, "
+            "AVG(r.return_fire_ms) AS avg_return_fire_ms, "
+            "COUNT(r.return_fire_ms) AS samples "
+            "FROM proximity_reaction_metric r "
+            f"{where_sql} AND r.return_fire_ms IS NOT NULL "
+            "GROUP BY r.target_guid, r.target_name, r.target_class "
+            "ORDER BY avg_return_fire_ms ASC NULLS LAST "
+            f"LIMIT ${limit_placeholder}",
+            tuple(scoped_params),
+        )
+        dodge_rows = await db.fetch_all(
+            "SELECT r.target_guid, r.target_name, r.target_class, "
+            "AVG(r.dodge_reaction_ms) AS avg_dodge_reaction_ms, "
+            "COUNT(r.dodge_reaction_ms) AS samples "
+            "FROM proximity_reaction_metric r "
+            f"{where_sql} AND r.dodge_reaction_ms IS NOT NULL "
+            "GROUP BY r.target_guid, r.target_name, r.target_class "
+            "ORDER BY avg_dodge_reaction_ms ASC NULLS LAST "
+            f"LIMIT ${limit_placeholder}",
+            tuple(scoped_params),
+        )
+        support_rows = await db.fetch_all(
+            "SELECT r.target_guid, r.target_name, r.target_class, "
+            "AVG(r.support_reaction_ms) AS avg_support_reaction_ms, "
+            "COUNT(r.support_reaction_ms) AS samples "
+            "FROM proximity_reaction_metric r "
+            f"{where_sql} AND r.support_reaction_ms IS NOT NULL "
+            "GROUP BY r.target_guid, r.target_name, r.target_class "
+            "ORDER BY avg_support_reaction_ms ASC NULLS LAST "
+            f"LIMIT ${limit_placeholder}",
+            tuple(scoped_params),
+        )
+        class_rows = await db.fetch_all(
+            "SELECT r.target_class, "
+            "COUNT(*) AS events, "
+            "COUNT(r.return_fire_ms) AS return_samples, AVG(r.return_fire_ms) AS avg_return_fire_ms, "
+            "COUNT(r.dodge_reaction_ms) AS dodge_samples, AVG(r.dodge_reaction_ms) AS avg_dodge_reaction_ms, "
+            "COUNT(r.support_reaction_ms) AS support_samples, AVG(r.support_reaction_ms) AS avg_support_reaction_ms "
+            "FROM proximity_reaction_metric r "
+            f"{where_sql} "
+            "GROUP BY r.target_class "
+            "ORDER BY events DESC, r.target_class ASC",
+            query_params,
+        )
+
+        ready = bool(return_rows or dodge_rows or support_rows or class_rows)
+        payload.update(
+            {
+                "status": "ok" if ready else "prototype",
+                "ready": ready,
+                "message": None if ready else payload["message"],
+                "scope": scope,
+                "limit": safe_limit,
+                "return_fire": [
+                    {
+                        "guid": row[0],
+                        "name": row[1],
+                        "player_class": row[2] or "UNKNOWN",
+                        "reaction_ms": round(row[3], 0) if row[3] is not None else None,
+                        "samples": int(row[4] or 0),
+                    }
+                    for row in return_rows
+                ],
+                "dodge": [
+                    {
+                        "guid": row[0],
+                        "name": row[1],
+                        "player_class": row[2] or "UNKNOWN",
+                        "reaction_ms": round(row[3], 0) if row[3] is not None else None,
+                        "samples": int(row[4] or 0),
+                    }
+                    for row in dodge_rows
+                ],
+                "support": [
+                    {
+                        "guid": row[0],
+                        "name": row[1],
+                        "player_class": row[2] or "UNKNOWN",
+                        "reaction_ms": round(row[3], 0) if row[3] is not None else None,
+                        "samples": int(row[4] or 0),
+                    }
+                    for row in support_rows
+                ],
+                "class_summary": [
+                    {
+                        "player_class": row[0] or "UNKNOWN",
+                        "events": int(row[1] or 0),
+                        "return_samples": int(row[2] or 0),
+                        "avg_return_fire_ms": round(row[3], 0) if row[3] is not None else None,
+                        "dodge_samples": int(row[4] or 0),
+                        "avg_dodge_reaction_ms": round(row[5], 0) if row[5] is not None else None,
+                        "support_samples": int(row[6] or 0),
+                        "avg_support_reaction_ms": round(row[7], 0) if row[7] is not None else None,
+                    }
+                    for row in class_rows
+                ],
+            }
+        )
+    except Exception as e:
+        payload.update(
+            {
+                "status": "error",
+                "ready": False,
+                "message": f"Proximity query failed: {e}",
+                "scope": scope,
+                "limit": safe_limit,
+                "return_fire": [],
+                "dodge": [],
+                "support": [],
+                "class_summary": [],
             }
         )
     return payload
@@ -7916,7 +8184,7 @@ async def get_stats_trends(
 ):
     """Time-series trends for activity metrics."""
     days = max(1, min(days, 90))
-    requested = {m.strip() for m in metrics.split(",")}
+    requested = {m.strip().lower() for m in metrics.split(",") if m.strip()}
 
     start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     end_date = datetime.now().strftime("%Y-%m-%d")
@@ -7970,11 +8238,32 @@ async def get_stats_trends(
                   AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) <= $2
                   AND r.round_number IN (1, 2)
                   AND r.map_name IS NOT NULL
+                  AND TRIM(CAST(r.map_name AS TEXT)) <> ''
                 GROUP BY r.map_name
                 ORDER BY play_count DESC
             """
             map_rows = await db.fetch_all(map_query, (start_date, end_date))
-            result["map_distribution"] = {row[0]: int(row[1]) for row in map_rows}
+            map_distribution: Dict[str, int] = {}
+            for row in map_rows:
+                normalized_map_name = _normalize_map_name(row[0])
+                if not normalized_map_name:
+                    continue
+
+                play_count = int(row[1]) if row[1] is not None else 0
+                if play_count <= 0:
+                    continue
+
+                map_distribution[normalized_map_name] = (
+                    map_distribution.get(normalized_map_name, 0) + play_count
+                )
+
+            result["map_distribution"] = dict(
+                sorted(
+                    map_distribution.items(),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )
+            )
 
         return result
 
@@ -8026,6 +8315,19 @@ async def get_retro_viz_gallery():
 # ========================================
 
 
+def _serialize_round_label(round_number: Any) -> str:
+    """Convert round numbers to UI-safe labels."""
+    if round_number is None:
+        return "R?"
+    try:
+        normalized = int(round_number)
+    except (TypeError, ValueError):
+        return "R?"
+    if normalized == 0:
+        return "Match Summary"
+    return f"R{normalized}"
+
+
 @router.get("/rounds/recent")
 async def get_recent_rounds(
     limit: int = 20,
@@ -8041,6 +8343,7 @@ async def get_recent_rounds(
                COUNT(pcs.id) AS player_count
         FROM rounds r
         JOIN player_comprehensive_stats pcs ON pcs.round_id = r.id
+        WHERE r.round_number > 0
         GROUP BY r.id, r.map_name, r.round_date, r.round_number
         ORDER BY r.id DESC
         LIMIT $1
@@ -8054,6 +8357,7 @@ async def get_recent_rounds(
             "map_name": row[1],
             "round_date": str(row[2]) if row[2] else None,
             "round_number": row[3],
+            "round_label": _serialize_round_label(row[3]),
             "player_count": row[4],
         }
         for row in rows
@@ -8139,6 +8443,7 @@ async def get_round_viz(
         "map_name": round_row[1],
         "round_date": str(round_row[2]) if round_row[2] else None,
         "round_number": round_row[3],
+        "round_label": _serialize_round_label(round_row[3]),
         "winner_team": round_row[4],
         "duration_seconds": round_row[5],
         "player_count": len(players),

@@ -1,5 +1,7 @@
 # Changelog
 
+> Historical long-form notes. Canonical release changelog: `../CHANGELOG.md`.
+
 All notable changes to Slomix are documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).

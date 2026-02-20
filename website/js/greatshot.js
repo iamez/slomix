@@ -216,6 +216,7 @@ function renderGreatshotHubPanels(items) {
 let analysisPollingTimer = null;
 let analysisStartTime = null;
 let analysisElapsedTimer = null;
+let analysisLifecycleListenersBound = false;
 /** @type {Map<string, {filename: string, status: string, data: object|null}>} */
 let pendingDemos = new Map();
 
@@ -258,10 +259,89 @@ function updateElapsedTime() {
     el.textContent = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
 }
 
-function stopAnalysisPolling() {
+function hasPendingAnalysisWork() {
+    for (const [, entry] of pendingDemos) {
+        if (entry.status !== 'analyzed' && entry.status !== 'failed') {
+            return true;
+        }
+    }
+    return false;
+}
+
+function isGreatshotViewActive() {
+    const view = document.getElementById('view-greatshot');
+    if (!view) return false;
+    return view.classList.contains('active') && !view.classList.contains('hidden');
+}
+
+function isAnalysisPollingAllowed() {
+    return document.visibilityState === 'visible' && isGreatshotViewActive();
+}
+
+function clearAnalysisTimers() {
     if (analysisPollingTimer) { clearInterval(analysisPollingTimer); analysisPollingTimer = null; }
     if (analysisElapsedTimer) { clearInterval(analysisElapsedTimer); analysisElapsedTimer = null; }
-    pendingDemos.clear();
+}
+
+function stopAnalysisPolling(options = {}) {
+    const clearPending = options.clearPending !== false;
+    clearAnalysisTimers();
+    if (clearPending) {
+        pendingDemos.clear();
+    }
+}
+
+function pauseAnalysisPolling() {
+    stopAnalysisPolling({ clearPending: false });
+}
+
+function startAnalysisPollingTimers() {
+    if (!isAnalysisPollingAllowed() || !hasPendingAnalysisWork()) return;
+
+    if (!analysisStartTime) {
+        analysisStartTime = Date.now();
+    }
+
+    if (!analysisElapsedTimer) {
+        updateElapsedTime();
+        analysisElapsedTimer = setInterval(updateElapsedTime, 1000);
+    }
+
+    if (!analysisPollingTimer) {
+        analysisPollingTimer = setInterval(() => {
+            void pollMultiAnalysisStatus();
+        }, 2000);
+    }
+}
+
+function syncAnalysisPollingLifecycle() {
+    if (isAnalysisPollingAllowed()) {
+        startAnalysisPollingTimers();
+    } else {
+        pauseAnalysisPolling();
+    }
+}
+
+function ensureAnalysisLifecycleListeners() {
+    if (analysisLifecycleListenersBound) return;
+
+    document.addEventListener('visibilitychange', () => {
+        syncAnalysisPollingLifecycle();
+    });
+
+    const greatshotView = document.getElementById('view-greatshot');
+    if (greatshotView && typeof MutationObserver !== 'undefined') {
+        const viewObserver = new MutationObserver(() => {
+            syncAnalysisPollingLifecycle();
+        });
+        viewObserver.observe(greatshotView, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    window.addEventListener('hashchange', () => {
+        syncAnalysisPollingLifecycle();
+    });
+
+    analysisLifecycleListenersBound = true;
 }
 
 function getSinglePendingDemoSnapshot() {
@@ -308,6 +388,11 @@ function renderMultiProgress() {
 
 /** Poll status for all pending demos. */
 async function pollMultiAnalysisStatus() {
+    if (!isAnalysisPollingAllowed()) {
+        pauseAnalysisPolling();
+        return;
+    }
+
     const stillPending = [];
     for (const [demoId, entry] of pendingDemos) {
         if (entry.status === 'analyzed' || entry.status === 'failed') continue;
@@ -467,19 +552,18 @@ async function uploadDemo(form) {
         // Show progress panel and start polling
         showAnalysisProgress(true);
         analysisStartTime = Date.now();
-        analysisElapsedTimer = setInterval(updateElapsedTime, 1000);
+        updateElapsedTime();
 
         if (totalFiles === 1) {
             // Single file: use original single-file UX
             setAnalysisPhase('queued');
-            analysisPollingTimer = setInterval(() => pollMultiAnalysisStatus(), 2000);
         } else {
             // Multi file: use list-based UX
             const phaseEl = document.getElementById('analysis-phase');
             if (phaseEl) phaseEl.textContent = `Analyzing 0/${pendingDemos.size} complete...`;
             renderMultiProgress();
-            analysisPollingTimer = setInterval(() => pollMultiAnalysisStatus(), 2000);
         }
+        startAnalysisPollingTimers();
 
         await loadGreatshotView('demos');
     } catch (error) {
@@ -639,15 +723,18 @@ async function renderCrossref(demoId) {
         const round = data.round || {};
         const confidence = Number(round.confidence || 0);
         const confColor = confidence >= 80 ? 'text-brand-emerald' : confidence >= 50 ? 'text-brand-amber' : 'text-brand-rose';
+        const safeMatchDetails = Array.isArray(round.match_details)
+            ? round.match_details.map((item) => escapeHtml(String(item || ''))).join(', ')
+            : '';
 
         let html = `
             <div class="flex items-center gap-3 mb-3">
                 <span class="text-xs font-bold ${confColor}">${confidence}% confidence</span>
-                <span class="text-xs text-slate-400">${(round.match_details || []).join(', ')}</span>
+                <span class="text-xs text-slate-400">${safeMatchDetails}</span>
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-4">
-                <div><span class="text-slate-500">Round ID:</span> <span class="text-white">${round.round_id || '--'}</span></div>
-                <div><span class="text-slate-500">Session:</span> <span class="text-white">${round.gaming_session_id || '--'}</span></div>
+                <div><span class="text-slate-500">Round ID:</span> <span class="text-white">${escapeHtml(String(round.round_id || '--'))}</span></div>
+                <div><span class="text-slate-500">Session:</span> <span class="text-white">${escapeHtml(String(round.gaming_session_id || '--'))}</span></div>
                 <div><span class="text-slate-500">Date:</span> <span class="text-white">${escapeHtml(round.round_date || '--')}</span></div>
                 <div><span class="text-slate-500">Winner:</span> <span class="text-white">${escapeHtml(round.winner_team || '--')}</span></div>
             </div>
@@ -865,6 +952,8 @@ export async function queueHighlightRender(demoId, highlightId) {
 }
 
 export function initGreatshotModule() {
+    ensureAnalysisLifecycleListeners();
+
     const form = document.getElementById('demo-upload-form');
     if (form && !form.dataset.bound) {
         form.dataset.bound = 'true';

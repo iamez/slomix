@@ -13,12 +13,15 @@ const REFRESH_MS = 10000;
 let adminInitialized = false;
 let autoRefreshTimer = null;
 let autoRefreshEnabled = true;
+let refreshLifecycleBound = false;
 let flowDrawPending = false;
 let flowInitialized = false;
 let fullMapReady = false;
 let fullMapNav = null;
 let luaMapReady = false;
 let luaMapNav = null;
+let statusElementCache = { nodes: new Map(), metrics: new Map() };
+let statusStateCache = { nodes: new Map(), metrics: new Map() };
 
 const FULL_MAP_STATE_KEY = 'slomix_full_map_state_v1';
 const FULL_MAP_COLLAPSED_KEY = 'slomix_full_map_collapsed_v1';
@@ -2960,17 +2963,54 @@ function ensureDefaultOverrides(overrides) {
     return overrides;
 }
 
+function rebuildStatusElementCache() {
+    const nodes = new Map();
+    document.querySelectorAll('[data-node]').forEach((element) => {
+        const id = element.dataset.node;
+        if (!id) return;
+        if (!nodes.has(id)) nodes.set(id, []);
+        nodes.get(id).push(element);
+    });
+
+    const metrics = new Map();
+    document.querySelectorAll('[data-metric]').forEach((element) => {
+        const id = element.dataset.metric;
+        if (!id) return;
+        if (!metrics.has(id)) metrics.set(id, []);
+        metrics.get(id).push(element);
+    });
+
+    statusElementCache = { nodes, metrics };
+    statusStateCache.nodes.clear();
+    statusStateCache.metrics.clear();
+}
+
+function getCachedStatusElements(kind, id) {
+    const key = kind === 'metric' ? 'metrics' : 'nodes';
+    if (statusElementCache.nodes.size === 0 && statusElementCache.metrics.size === 0) {
+        rebuildStatusElementCache();
+    }
+    return statusElementCache[key].get(id) || [];
+}
+
 function applyStatusToElement(element, status, mode) {
     if (!element) return;
     const light = element.querySelector('.status-light');
     if (light) {
-        light.dataset.status = status;
-        light.dataset.mode = mode;
+        if (light.dataset.status !== status) {
+            light.dataset.status = status;
+        }
+        if (light.dataset.mode !== mode) {
+            light.dataset.mode = mode;
+        }
     }
 
     const modeLabel = element.querySelector('.status-mode');
     if (modeLabel) {
-        modeLabel.textContent = mode === 'manual' ? 'MANUAL' : 'AUTO';
+        const label = mode === 'manual' ? 'MANUAL' : 'AUTO';
+        if (modeLabel.textContent !== label) {
+            modeLabel.textContent = label;
+        }
     }
 }
 
@@ -2994,22 +3034,30 @@ function setEntityStatus(kind, id, mode, status, overrides) {
 }
 
 function applyStatuses(overrides) {
-    const nodeElements = document.querySelectorAll('[data-node]');
-    nodeElements.forEach((element) => {
-        const id = element.dataset.node;
-        const override = overrides.nodes?.[id];
+    if (statusElementCache.nodes.size === 0 && statusElementCache.metrics.size === 0) {
+        rebuildStatusElementCache();
+    }
+
+    const nodeOverrides = overrides.nodes || {};
+    statusElementCache.nodes.forEach((elements, id) => {
+        const override = nodeOverrides[id];
         const mode = override?.mode || 'auto';
-        const status = override?.status || getAutoStatus(element);
-        applyStatusToElement(element, status, mode);
+        const status = override?.status || getAutoStatus(elements[0]);
+        const previous = statusStateCache.nodes.get(id);
+        if (previous && previous.mode === mode && previous.status === status) return;
+        statusStateCache.nodes.set(id, { mode, status });
+        elements.forEach((element) => applyStatusToElement(element, status, mode));
     });
 
-    const metricElements = document.querySelectorAll('[data-metric]');
-    metricElements.forEach((element) => {
-        const id = element.dataset.metric;
-        const override = overrides.metrics?.[id];
+    const metricOverrides = overrides.metrics || {};
+    statusElementCache.metrics.forEach((elements, id) => {
+        const override = metricOverrides[id];
         const mode = override?.mode || 'auto';
-        const status = override?.status || getAutoStatus(element);
-        applyStatusToElement(element, status, mode);
+        const status = override?.status || getAutoStatus(elements[0]);
+        const previous = statusStateCache.metrics.get(id);
+        if (previous && previous.mode === mode && previous.status === status) return;
+        statusStateCache.metrics.set(id, { mode, status });
+        elements.forEach((element) => applyStatusToElement(element, status, mode));
     });
 }
 
@@ -3068,6 +3116,7 @@ function renderFullMap() {
     }).join('');
 
     container.dataset.rendered = 'true';
+    rebuildStatusElementCache();
 
     syncFullMapStageSize();
     updateFullMapSearchIndex();
@@ -3104,6 +3153,7 @@ function renderLuaMap() {
     `).join('');
 
     container.dataset.rendered = 'true';
+    rebuildStatusElementCache();
 
     syncLuaMapStageSize();
     updateLuaMapSearchIndex();
@@ -5479,13 +5529,48 @@ function updateRefreshLabel() {
     label.textContent = now.toLocaleTimeString();
 }
 
+function isAdminViewActive() {
+    const view = document.getElementById('view-admin');
+    if (!view) return false;
+    return view.classList.contains('active') && !view.classList.contains('hidden');
+}
+
+function stopAutoRefreshTimer() {
+    if (autoRefreshTimer) {
+        clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+    }
+}
+
+function syncAdminRefreshLifecycle(refreshNow = false) {
+    const shouldRun = autoRefreshEnabled && !document.hidden && isAdminViewActive();
+    if (!shouldRun) {
+        stopAutoRefreshTimer();
+        return;
+    }
+    if (refreshNow) {
+        void refreshAutoStatus();
+    }
+    if (!autoRefreshTimer) {
+        autoRefreshTimer = setInterval(refreshAutoStatus, REFRESH_MS);
+    }
+}
+
 function setAutoStatus(id, status) {
-    document.querySelectorAll(`[data-node="${id}"]`).forEach((element) => {
-        element.dataset.autoStatus = status;
+    const elements = getCachedStatusElements('node', id);
+    elements.forEach((element) => {
+        if (element.dataset.autoStatus !== status) {
+            element.dataset.autoStatus = status;
+        }
     });
 }
 
 async function refreshAutoStatus() {
+    if (!isAdminViewActive() || document.hidden) {
+        stopAutoRefreshTimer();
+        return;
+    }
+
     try {
         const diag = await fetchJSON(`${API_BASE}/diagnostics`);
         if (diag?.database?.status === 'connected') {
@@ -5562,13 +5647,7 @@ function bindRefreshControls() {
             autoRefreshEnabled = !autoRefreshEnabled;
             toggle.textContent = autoRefreshEnabled ? 'On' : 'Off';
             toggle.classList.toggle('active', autoRefreshEnabled);
-            if (autoRefreshEnabled) {
-                refreshAutoStatus();
-                autoRefreshTimer = setInterval(refreshAutoStatus, REFRESH_MS);
-            } else if (autoRefreshTimer) {
-                clearInterval(autoRefreshTimer);
-                autoRefreshTimer = null;
-            }
+            syncAdminRefreshLifecycle(true);
         });
     }
 
@@ -5577,6 +5656,27 @@ function bindRefreshControls() {
             refreshAutoStatus();
         });
     }
+}
+
+function bindRefreshLifecycle() {
+    if (refreshLifecycleBound) return;
+
+    document.addEventListener('visibilitychange', () => {
+        syncAdminRefreshLifecycle(document.visibilityState === 'visible');
+    });
+    window.addEventListener('hashchange', () => {
+        syncAdminRefreshLifecycle(false);
+    });
+
+    const adminView = document.getElementById('view-admin');
+    if (adminView && typeof MutationObserver !== 'undefined') {
+        const observer = new MutationObserver(() => {
+            syncAdminRefreshLifecycle(false);
+        });
+        observer.observe(adminView, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    refreshLifecycleBound = true;
 }
 
 export function loadAdminPanelView() {
@@ -5593,6 +5693,7 @@ export function loadAdminPanelView() {
         bindOverrideControls();
         bindChecklist();
         bindRefreshControls();
+        bindRefreshLifecycle();
         bindStoryModeControls();
         bindAtlasGroupControls();
         bindFullLinesToggle();
@@ -5610,9 +5711,7 @@ export function loadAdminPanelView() {
     }
 
     refreshAutoStatus();
-    if (autoRefreshEnabled && !autoRefreshTimer) {
-        autoRefreshTimer = setInterval(refreshAutoStatus, REFRESH_MS);
-    }
+    syncAdminRefreshLifecycle(false);
 
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();

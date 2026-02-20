@@ -23,6 +23,8 @@ The file contains these sections in order:
 3. **PLAYER_TRACKS** - Full movement paths for all players
 4. **KILL_HEATMAP** - Kill locations grid
 5. **MOVEMENT_HEATMAP** - Movement density grid
+6. **OBJECTIVE_FOCUS** - Optional per-player objective proximity summary
+7. **REACTION_METRICS** - Per-engagement return fire / dodge / support reaction timings
 
 ---
 
@@ -37,7 +39,7 @@ Lines starting with `#` are comments/metadata.
 # crossfire_window=1000
 # escape_time=5000
 # escape_distance=300
-# position_sample_interval=500
+# position_sample_interval=200
 # round_start_unix=1704870000
 # round_end_unix=1704870720
 ```yaml
@@ -149,7 +151,8 @@ ABC123,Player1,AXIS,85,3,15000,15800,1,8:2;9:1|DEF456,Player2,AXIS,40,2,15100,15
 
 ```text
 # PLAYER_TRACKS
-# guid;name;team;class;spawn_time;death_time;first_move_time;samples;path
+# guid;name;team;class;spawn_time;death_time;first_move_time;death_type;samples;path
+# death_type: killed|selfkill|fallen|world|teamkill|round_end|disconnect|unknown
 # path format: time,x,y,z,health,speed,weapon,stance,sprint,event separated by |
 # stance: 0=standing, 1=crouching, 2=prone | sprint: 0=no, 1=yes
 ```python
@@ -165,8 +168,9 @@ ABC123,Player1,AXIS,85,3,15000,15800,1,8:2;9:1|DEF456,Player2,AXIS,40,2,15100,15
 | 5 | spawn_time | int | Game time when spawned (ms) |
 | 6 | death_time | int | Game time when died, or `0` if survived |
 | 7 | first_move_time | int | First time speed exceeded 10 units/sec |
-| 8 | samples | int | Number of path samples |
-| 9 | path | string | Full movement path (see below) |
+| 8 | death_type | string | Death/end category |
+| 9 | samples | int | Number of path samples |
+| 10 | path | string | Full movement path (see below) |
 
 ### Path Format (Field 9)
 
@@ -230,29 +234,12 @@ Example:
 ---
 
 ## 5. MOVEMENT_HEATMAP Section
-
 ### Format Header
 
 ```text
 # MOVEMENT_HEATMAP
 # grid_x;grid_y;traversal;combat;escape
-
----
-
-## 6. OBJECTIVE_FOCUS Section (Optional)
-
-```text
-# OBJECTIVE_FOCUS
-# guid;name;team;objective;avg_distance;time_within_radius_ms;samples
 ```
-
-| Field | Description |
-|-------|-------------|
-| `objective` | Most frequent nearest objective name |
-| `avg_distance` | Average distance to nearest objective (units) |
-| `time_within_radius_ms` | Time spent within objective radius (ms) |
-| `samples` | Sample count used for averages |
-```yaml
 
 ### Fields
 
@@ -269,7 +256,48 @@ Example:
 ```text
 2;4;150;45;12
 3;4;200;30;8
-```yaml
+```
+
+---
+
+## 6. OBJECTIVE_FOCUS Section (Optional)
+
+```text
+# OBJECTIVE_FOCUS
+# guid;name;team;objective;avg_distance;time_within_radius_ms;samples
+```
+
+| Field | Description |
+|-------|-------------|
+| `objective` | Most frequent nearest objective name |
+| `avg_distance` | Average distance to nearest objective (units) |
+| `time_within_radius_ms` | Time spent within objective radius (ms) |
+| `samples` | Sample count used for averages |
+
+---
+
+## 7. REACTION_METRICS Section
+
+```text
+# REACTION_METRICS
+# engagement_id;target_guid;target_name;target_team;target_class;outcome;num_attackers;return_fire_ms;dodge_reaction_ms;support_reaction_ms;start_time;end_time;duration
+```
+
+| Field | Description |
+|-------|-------------|
+| `engagement_id` | Engagement identifier from ENGAGEMENTS section |
+| `target_guid` / `target_name` | Target player identity |
+| `target_team` / `target_class` | Team and class at time of engagement |
+| `outcome` | `killed`, `escaped`, or `round_end` |
+| `num_attackers` | Unique attackers in the engagement |
+| `return_fire_ms` | First target damage to an attacker after first incoming hit |
+| `dodge_reaction_ms` | First significant movement-direction change after first hit |
+| `support_reaction_ms` | First teammate hit on an attacker after first hit |
+| `start_time`, `end_time`, `duration` | Engagement timing in ms |
+
+Notes:
+- Empty reaction fields mean no qualifying reaction observed in configured window.
+- Reaction fields are measured relative to engagement first-hit timestamp.
 
 ---
 

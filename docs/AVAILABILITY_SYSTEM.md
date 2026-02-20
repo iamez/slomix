@@ -1,118 +1,170 @@
 # Availability System
 
 ## Overview
-The availability system is now date-based and uses the website API as the source of truth. Users set one status per date:
+Availability is date-based with website API as the source of truth. Primary UX is Today/Tomorrow first, then compact upcoming days, with the full calendar behind an explicit toggle.
 
+Statuses:
 - `LOOKING`
 - `AVAILABLE`
 - `MAYBE`
 - `NOT_PLAYING`
 
-Anonymous users can read aggregated availability, but only authenticated users with a linked Discord account can submit entries or manage notification subscriptions.
+## Current Queue Definition
+`Current queue` is derived from **today's** pool:
+- include entries with status `LOOKING`
+- render names from `users_by_status.LOOKING`
+- if empty, show `Queue is empty`
+
+## Access Rules and Gating
+- Anonymous: aggregate read-only view.
+- Authenticated but not linked to a player: aggregate read-only view, no submit/subscribe/promote; UI shows actionable `Link Discord` CTA.
+- Authenticated + linked: can submit availability and manage subscription settings.
+- Promote action: requires authenticated + linked + promoter/admin permission.
+- State-changing website session routes require `X-Requested-With: XMLHttpRequest` for CSRF hardening.
 
 ## Data Model
-Migration: `website/migrations/005_date_based_availability.sql`
+Migrations:
+- `website/migrations/005_date_based_availability.sql`
+- `website/migrations/006_discord_linking_and_promotions.sql`
+- `website/migrations/007_planning_room_mvp.sql`
+- `website/migrations/008_website_app_availability_grants.sql`
 
-Core tables:
+Core availability:
 - `availability_entries`
-  - `id`, `user_id`, `user_name`, `entry_date`, `status`, `created_at`, `updated_at`
-  - unique `(user_id, entry_date)`
+- `availability_user_settings`
 - `availability_subscriptions`
-  - `id`, `user_id`, `channel_type`, `channel_address`, `enabled`, `verified_at`, `preferences`, timestamps
-  - `channel_type in ('discord','telegram','signal')`
-  - unique `(user_id, channel_type)`
+- `availability_channel_links`
 - `notifications_ledger`
-  - `id`, `user_id`, `event_key`, `channel_type`, `sent_at`, `message_id`, `error`, `retries`, `payload`, `updated_at`
-  - unique `(user_id, event_key, channel_type)`
 
-Supporting tables:
-- `availability_user_settings` (get-ready sound + reminder preferences)
-- `availability_channel_links` (one-time token verification for Telegram/Signal linking)
+Identity/linking:
+- `website_users`
+- `discord_accounts`
+- `user_player_links`
+- `account_link_audit_log`
 
-## API
+Promotion preferences and campaigns:
+- `subscription_preferences`
+- `availability_promotion_campaigns`
+- `availability_promotion_jobs`
+- `availability_promotion_send_logs`
+
+Planning room:
+- `planning_sessions`
+- `planning_team_names`
+- `planning_votes`
+- `planning_teams`
+- `planning_team_members`
+
+## API Surface
 Router: `website/backend/routers/availability.py`
 
-Primary endpoints:
+Read/write availability:
 - `GET /api/availability?from=YYYY-MM-DD&to=YYYY-MM-DD[&include_users=true]`
 - `POST /api/availability`
 - `GET /api/availability/me`
+- `GET /api/availability/access`
 
 Settings/subscriptions:
-- `GET /api/availability/access`
 - `GET /api/availability/settings`
 - `POST /api/availability/settings`
 - `GET /api/availability/subscriptions`
 - `POST /api/availability/subscriptions`
-
-Compatibility aliases:
-- `GET /api/availability/preferences`
-- `POST /api/availability/preferences`
-
-Link verification flow:
+- `GET /api/availability/preferences` (compat alias)
+- `POST /api/availability/preferences` (compat alias)
 - `POST /api/availability/link-token`
 - `POST /api/availability/link-confirm`
 
-## Rules
-- Past dates are read-only.
-- Submission horizon is capped at 90 days ahead.
-- Date-range reads are capped to prevent unbounded queries.
-- `include_users=true` only exposes per-user lists to authenticated users.
+Promotion preferences and campaigns:
+- `GET /api/availability/promotion-preferences`
+- `POST /api/availability/promotion-preferences`
+- `GET /api/availability/promotions/preview`
+- `POST /api/availability/promotions/campaigns`
+- `GET /api/availability/promotions/campaign`
 
-## Scheduler + Events
-Bot-side scheduler runs in `bot/cogs/availability_poll_cog.py` and uses advisory locking where available.
+Planning room:
+- `GET /api/planning/today`
+- `POST /api/planning/today/create`
+- `POST /api/planning/today/join`
+- `POST /api/planning/today/suggestions`
+- `POST /api/planning/today/vote`
+- `POST /api/planning/today/teams`
 
-Events:
-- `DAILY_REMINDER`
-- `SESSION_READY`
-- `FRIENDS_LOOKING` (reserved)
+## Promotion Schedule (CET)
+Default campaign schedule is:
+- **20:45 CET** reminder job (`send_reminder_2045`)
+- **21:00 CET** start job (`send_start_2100`)
+- voice follow-up shortly after 21:00 (`voice_check_2100`)
 
-Stable event keys are generated in `bot/services/availability_notifier_service.py`:
-- `DAILY_REMINDER:YYYY-MM-DD`
-- `SESSION_READY:YYYY-MM-DD:threshold=N`
+Campaign behavior:
+- recipients are snapshot at campaign creation
+- recipient eligibility requires `allow_promotions = true`
+- channel chosen by preference and available handle (`discord` / `telegram` / `signal`)
+- quiet hours are enforced at send time using recipient `quiet_hours` + `timezone`
+- anti-spam: one campaign per promoter per day (optional global cooldown)
+- notification ledger idempotency keys:
+  - `PROMOTE:T-15:<YYYY-MM-DD>`
+  - `PROMOTE:T0:<YYYY-MM-DD>`
+  - `PROMOTE:FOLLOWUP:<YYYY-MM-DD>`
+- all sends are logged in `availability_promotion_send_logs`
+- campaign status API returns aggregate-only campaign metadata (no recipient snapshot payload)
 
-## Bot Integration
-- Command: `!avail <today|tomorrow|YYYY-MM-DD> <LOOKING|AVAILABLE|MAYBE|NOT_PLAYING>`
-- Token command: `!avail_link <telegram|signal>`
-- Unsubscribe command: `!avail_unsubscribe <discord|telegram|signal>`
+## Planning Room MVP
+- Unlock: today `LOOKING` count reaches `AVAILABILITY_SESSION_READY_THRESHOLD`.
+- Create: linked user can create one planning session for today.
+- Join: linked user can join; if needed, join action upserts their today status to `LOOKING`.
+- Suggestions/votes: one vote per user per session (`planning_votes` upsert).
+- Team draft: two sides (`A`/`B`) with persisted membership in `planning_team_members`.
+- Team-save permissions: session creator or promoter/admin.
+- Optional Discord thread auto-create is best-effort (session creation still succeeds when Discord API call fails).
+- Detailed flow doc: `docs/PLANNING_ROOM.md`.
 
-Notifier service:
-- `bot/services/availability_notifier_service.py`
-- Enforces idempotency with `notifications_ledger`
-- Routes delivery to Discord DM, Telegram, Signal by subscription and feature flags
+## Bot and Notifier Integration
+- Scheduler: `bot/cogs/availability_poll_cog.py`
+- Channel adapters: `bot/services/availability_notifier_service.py`
+- Telegram/Signal are adapter-driven; Discord is fully integrated.
+- Voice and optional game-server cross-checks use `live_status` data.
 
-## How To Test
-1. Apply migration `website/migrations/005_date_based_availability.sql`.
-2. Log in to website, link Discord, open `#/availability`.
-3. Set statuses for today, tomorrow, and a future date (>7 days).
-4. Verify anonymous session can read aggregates but cannot submit.
-5. Toggle notification settings and get-ready sound in website settings block.
-6. Run `!avail today LOOKING` in Discord and verify website reflects the change.
-7. Trigger `SESSION_READY` threshold and confirm:
-   - no duplicate sends per user/channel/event_key
-   - `notifications_ledger` rows track `message_id` or `error/retries`
-8. Telegram link test:
-   - run `!avail_link telegram`
-   - in Telegram send `/link <token>`
-   - verify `availability_subscriptions` updated
-9. Signal link test:
-   - run `!avail_link signal`
-   - consume token through signal gateway flow
-   - verify subscription row and delivery behavior
+## Environment Variables
+Website/API:
+- `DISCORD_REDIRECT_URI_ALLOWLIST`
+- `DISCORD_OAUTH_STATE_TTL_SECONDS`
+- `DISCORD_OAUTH_RATE_LIMIT_WINDOW_SECONDS`
+- `DISCORD_OAUTH_RATE_LIMIT_MAX_REQUESTS`
+- `PROMOTER_DISCORD_IDS`
+- `AVAILABILITY_PROMOTION_TIMEZONE`
+- `AVAILABILITY_PROMOTION_DRY_RUN_DEFAULT`
+- `AVAILABILITY_PROMOTION_GLOBAL_COOLDOWN`
+- `AVAILABILITY_PLANNING_DISCORD_CREATE_THREAD`
+- `AVAILABILITY_PLANNING_THREAD_PARENT_CHANNEL_ID`
+- `AVAILABILITY_PLANNING_DISCORD_BOT_TOKEN`
+- `AVAILABILITY_LINK_TOKEN_MIN_INTERVAL_SECONDS`
+- `CONTACT_DATA_ENCRYPTION_KEY`
 
-### Local Dev Checklist
-1. Set env flags for Discord bot + website + optional Telegram/Signal.
-2. Apply migration in local Postgres.
-3. Run website and bot.
-4. Verify `GET /api/availability` returns `days[]` and `session_ready`.
-5. Verify `POST /api/availability` enforces linked Discord and 90-day horizon.
-6. Verify `notifications_ledger` updates after reminder/ready sends.
+Bot scheduler:
+- `AVAILABILITY_LINK_TOKEN_TTL_MINUTES`
+- `AVAILABILITY_PROMOTION_ENABLED`
+- `AVAILABILITY_PROMOTION_TIMEZONE`
+- `AVAILABILITY_PROMOTION_REMINDER_TIME`
+- `AVAILABILITY_PROMOTION_START_TIME`
+- `AVAILABILITY_PROMOTION_FOLLOWUP_CHANNEL_ID`
+- `AVAILABILITY_PROMOTION_VOICE_CHECK_ENABLED`
+- `AVAILABILITY_PROMOTION_SERVER_CHECK_ENABLED`
+- `AVAILABILITY_PROMOTION_JOB_MAX_ATTEMPTS`
 
-### Staging Checklist
-1. Enable feature flags incrementally:
-   - Discord first
-   - Telegram second
-   - Signal third
-2. Run a forced `SESSION_READY` dry run with low threshold in staging.
-3. Confirm idempotency by re-running same event key (no duplicates).
-4. Verify channel unlink flows disable future deliveries.
-5. Restore production thresholds and reminder time before promoting.
+## Dev Validation (Dry Run)
+1. Configure `CONTACT_DATA_ENCRYPTION_KEY` and OAuth env vars.
+2. Apply migrations `005` and `006`.
+   - for live/local PostgreSQL deployments, include `007` and `008` so planning tables exist and `website_app` table/sequence grants are present.
+3. Log in and link to a player profile.
+4. Open `#/availability`; verify default view = Today + Tomorrow + Upcoming(3) + `Open calendar`.
+5. Save promotion preferences.
+6. Open Promote modal, enable `Dry run`, confirm campaign.
+7. Verify campaign/job rows:
+   - `availability_promotion_campaigns`
+   - `availability_promotion_jobs`
+   - `availability_promotion_send_logs`
+8. Verify scheduled times correspond to **20:45 CET** and **21:00 CET**.
+9. Verify planning room flow:
+   - `GET /api/planning/today` unlock state
+   - create/join/suggest/vote/save teams
+   - optional thread id in `planning_sessions.discord_thread_id` when thread auto-create is enabled.

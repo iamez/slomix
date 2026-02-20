@@ -23,6 +23,7 @@ import logging
 import os
 import shlex
 from datetime import datetime, timedelta
+from pathlib import PurePosixPath
 from typing import Optional, Dict, Any, Tuple, List
 import discord
 
@@ -480,6 +481,11 @@ class SSHMonitor:
         ssh = None
 
         try:
+            safe_filename = self._sanitize_stats_filename(filename)
+            if not safe_filename:
+                logger.warning(f"⚠️ Rejecting unsafe stats filename: {filename!r}")
+                return None, 0.0
+
             # Create SSH client
             ssh = paramiko.SSHClient()
             configure_ssh_host_key_policy(ssh)
@@ -494,11 +500,16 @@ class SSHMonitor:
             )
 
             # Download using SCP
-            local_dir = "bot/local_stats"
+            local_dir = os.path.abspath("bot/local_stats")
             os.makedirs(local_dir, exist_ok=True)
 
-            local_path = os.path.join(local_dir, filename)
-            remote_path = f"{self.ssh_config['remote_path']}/{filename}"
+            local_path = os.path.abspath(os.path.join(local_dir, safe_filename))
+            if os.path.commonpath([local_dir, local_path]) != local_dir:
+                logger.warning(f"⚠️ Rejecting path traversal filename: {filename!r}")
+                return None, 0.0
+
+            remote_base = PurePosixPath(self.ssh_config["remote_path"])
+            remote_path = str(remote_base / safe_filename)
 
             with SCPClient(ssh.get_transport()) as scp:
                 scp.get(remote_path, local_path)
@@ -518,6 +529,19 @@ class SSHMonitor:
                 except Exception as e:
                     # Log SSH close errors during cleanup (debug level only)
                     logger.debug(f"SSH close error during cleanup: {e}")
+
+    @staticmethod
+    def _sanitize_stats_filename(filename: str) -> Optional[str]:
+        raw = (filename or "").strip()
+        safe = os.path.basename(raw)
+        if not safe or safe in {".", ".."}:
+            return None
+        if safe != raw:
+            return None
+        allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+        if any(char not in allowed for char in safe):
+            return None
+        return safe if len(safe) <= 255 else None
 
     async def _download_file(self, filename: str) -> Optional[str]:
         """Download file from remote server (async wrapper)"""

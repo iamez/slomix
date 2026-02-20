@@ -523,6 +523,10 @@ class ServerControl(commands.Cog):
 
         await ctx.send(f"📥 Downloading `{sanitized_name}`...")
 
+        temp_path = None
+        ssh = None
+        sftp = None
+
         try:
             # Download to secure temp file
             temp_fd, temp_path = tempfile.mkstemp(suffix=f"_{sanitized_name}", prefix="etlegacy_upload_")
@@ -546,12 +550,6 @@ class ServerControl(commands.Cog):
             safe_path = shlex.quote(remote_path)
             ssh.exec_command(f"chmod 644 {safe_path}")
             
-            sftp.close()
-            ssh.close()
-            
-            # Clean up temp file
-            os.remove(temp_path)
-            
             embed = discord.Embed(
                 title="✅ Map Uploaded",
                 description=f"`{sanitized_name}` has been uploaded to the server",
@@ -573,6 +571,22 @@ class ServerControl(commands.Cog):
             logger.error(f"Error uploading map: {e}", exc_info=True)
             await ctx.send(f"❌ Error uploading map: {sanitize_error_message(e)}")
             await self.log_action(ctx, "Map Upload Failed", f"❌ {sanitized_name}")
+        finally:
+            if sftp:
+                try:
+                    sftp.close()
+                except Exception:  # nosec B110 - best-effort cleanup
+                    pass
+            if ssh:
+                try:
+                    ssh.close()
+                except Exception:  # nosec B110 - best-effort cleanup
+                    pass
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except Exception:  # nosec B110 - best-effort cleanup
+                    pass
 
     @commands.command(name='map_change', aliases=['changemap', 'map'])
     @is_admin()

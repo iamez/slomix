@@ -63,9 +63,8 @@ const STYLES = {
  * Get API base URL
  */
 function getApiBase() {
-    // Try to get from utils module or fallback
-    if (typeof API_BASE !== 'undefined') return API_BASE;
-    return `${window.location.protocol}//${window.location.hostname}:8000`;
+    // Return empty string for relative URLs — test endpoints already include /api/ prefix
+    return '';
 }
 
 /**
