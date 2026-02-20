@@ -65,7 +65,7 @@
 ]]--
 
 local modname = "stats_discord_webhook"
-local version = "1.6.1"
+local version = "1.6.2"
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -164,9 +164,12 @@ local match_score = {
 -- ET:Legacy gamestate constants
 -- Note: et.GS_PLAYING = 0 exists in the API (confirmed in official docs)
 -- Using explicit constants for clarity and fallback safety
-local GS_WARMUP = et.GS_WARMUP or -1         -- Warmup state
-local GS_WARMUP_COUNTDOWN = et.GS_WARMUP_COUNTDOWN  -- Warmup countdown
-local GS_PLAYING = et.GS_PLAYING or 0        -- Playing state (value is 0)
+-- ET:Legacy gamestate values (from q_shared.h gamestate_t enum):
+--   GS_INITIALIZE=-1, GS_PLAYING=0, GS_WARMUP_COUNTDOWN=1,
+--   GS_WARMUP=2, GS_INTERMISSION=3, GS_WAITING_FOR_PLAYERS=4, GS_RESET=5
+local GS_WARMUP = et.GS_WARMUP or 2           -- Warmup/ready-up state
+local GS_WARMUP_COUNTDOWN = et.GS_WARMUP_COUNTDOWN or 1  -- Countdown before playing
+local GS_PLAYING = et.GS_PLAYING or 0         -- Playing state
 local GS_INTERMISSION = et.GS_INTERMISSION or 3  -- Intermission state
 
 -- Connection state
@@ -812,6 +815,22 @@ local function send_webhook()
         local time_limit_display = format_timelimit_minutes(time_limit)
         local surrendering_team = get_surrender_team()
 
+        -- v1.6.2: Timelimit sanity check — a round CANNOT exceed the timelimit.
+        -- If it does, the post-map_restart warmup was included in round_start_unix
+        -- (gamestate cvar reads GS_PLAYING before engine warmup completes).
+        -- Correct by shifting start time forward and attributing excess to warmup.
+        local time_limit_seconds = time_limit * 60
+        if time_limit_seconds > 0 and actual_duration > time_limit_seconds then
+            local overcounting = actual_duration - time_limit_seconds
+            log(string.format(
+                "Duration %ds exceeds timelimit %ds by %ds — warmup correction applied (v1.6.2)",
+                actual_duration, time_limit_seconds, overcounting
+            ))
+            warmup_seconds = warmup_seconds + overcounting
+            round_start_unix = round_start_unix + overcounting
+            actual_duration = time_limit_seconds
+        end
+
         log(string.format(
             "Timelimit raw=%s type=%s display=%s",
             tostring(time_limit),
@@ -1101,7 +1120,22 @@ function et_InitGame(levelTime, randomSeed, restart)
     reset_match_score_if_new_map()
 
     -- Initialize timing based on current gamestate
-    if last_gamestate == GS_PLAYING then
+    -- v1.6.2: For map_restart (restart=1, R2 in stopwatch), the gamestate cvar
+    -- may read GS_PLAYING before the engine finishes warmup. The round_start_unix
+    -- recorded here will be too early by the warmup duration (~15-40s), causing
+    -- overcounting that is corrected in send_webhook() via timelimit cap.
+    local is_restart = (tonumber(restart) == 1)
+
+    if last_gamestate == GS_PLAYING and is_restart then
+        -- map_restart from countdown→playing (R2 start, or R1 after warmup).
+        -- GS_PLAYING is correct, but os.time() here captures the Lua init moment
+        -- which may be ~15-40s before the engine's timelimit clock starts
+        -- (engine initialization gap). Corrected in send_webhook timelimit cap.
+        warmup_start_unix = os.time()
+        round_start_unix = os.time()
+        warmup_seconds = 0
+        log(string.format("Map restart -> GS_PLAYING, tracking from %d", warmup_start_unix))
+    elseif last_gamestate == GS_PLAYING then
         -- Server restart mid-round - record start time, warmup already passed
         round_start_unix = os.time()
         warmup_seconds = 0

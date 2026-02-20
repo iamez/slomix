@@ -749,10 +749,15 @@ local function samplePlayer(clientnum, track, event_type)
     local speed = getPlayerSpeed(clientnum)
     local stance, sprint = getPlayerMovementState(clientnum, speed)
 
-    -- Detect first movement
+    -- Detect first movement (only during live gameplay)
+    -- Guards: gamestate must be PLAYING, spawn_time must be non-negative (post-round-start),
+    -- and current time must be non-negative
     if not track.first_move_time and speed > 10 then
-        track.first_move_time = now
-        track.had_input = true
+        local gs = tonumber(et.trap_Cvar_Get("gamestate")) or -1
+        if gs == 0 and (track.spawn_time or 0) >= 0 and now >= 0 then
+            track.first_move_time = now
+            track.had_input = true
+        end
     end
 
     table.insert(track.path, {
@@ -1938,6 +1943,11 @@ end
 
 function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
     if not config.enabled then return end
+
+    -- Only track during live gameplay (gamestate 0 = PLAYING)
+    -- Skip warmup, intermission, and other non-play states
+    local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
+    if gamestate ~= 0 then return end
 
     -- Handle revives (v4.1: add revive action annotation but continue existing track)
     if revived == 1 then
