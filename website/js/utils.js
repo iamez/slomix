@@ -3,9 +3,11 @@
  * @module utils
  */
 
-// API endpoints
-export const API_BASE = window.location.origin + '/api';
-export const AUTH_BASE = window.location.origin + '/auth';
+// API endpoints – use relative paths so browser extensions that block
+// absolute-URL fetch() calls (uBlock Origin, Privacy Badger, etc.) don't
+// interfere with same-origin requests.
+export const API_BASE = '/api';
+export const AUTH_BASE = '/auth';
 
 const DEFAULT_CACHE_TTL_MS = 30_000;
 const DEFAULT_STALE_TTL_MS = 120_000;

@@ -6827,7 +6827,7 @@ async def get_proximity_summary(
                 "AVG(total_distance) AS avg_track_distance, "
                 "AVG(avg_speed) AS avg_speed, "
                 "AVG(sprint_percentage) AS avg_sprint_pct, "
-                "AVG(time_to_first_move_ms) AS avg_time_to_first_move_ms "
+                "AVG(CASE WHEN spawn_time_ms >= 0 THEN time_to_first_move_ms END) AS avg_time_to_first_move_ms "
                 f"FROM player_track {where_sql}",
                 query_params,
             )
@@ -7166,7 +7166,7 @@ async def get_proximity_movers(
         )
         reaction_rows = await db.fetch_all(
             "SELECT player_guid, player_name, AVG(time_to_first_move_ms) AS reaction_ms, COUNT(*) AS tracks "
-            f"FROM player_track {where_sql} AND time_to_first_move_ms IS NOT NULL "
+            f"FROM player_track {where_sql} AND time_to_first_move_ms IS NOT NULL AND spawn_time_ms >= 0 "
             "GROUP BY player_guid, player_name "
             f"ORDER BY reaction_ms ASC NULLS LAST LIMIT ${limit_placeholder}",
             query_params,
@@ -7271,7 +7271,7 @@ async def get_proximity_classes(
             "AVG(duration_ms) AS avg_duration_ms, "
             "AVG(total_distance) AS avg_distance, "
             "AVG(sprint_percentage) AS avg_sprint_pct, "
-            "AVG(time_to_first_move_ms) AS avg_spawn_reaction_ms "
+            "AVG(CASE WHEN spawn_time_ms >= 0 THEN time_to_first_move_ms END) AS avg_spawn_reaction_ms "
             f"FROM player_track {where_sql} "
             "GROUP BY player_class "
             "ORDER BY track_count DESC, player_class ASC",

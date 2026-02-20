@@ -755,6 +755,9 @@ async function initApp() {
     console.log('✅ Slomix App Ready');
 }
 
+// Expose API_BASE on window so classic (non-module) scripts like diagnostics.js can use it
+window.API_BASE = API_BASE;
+
 // Start the app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
