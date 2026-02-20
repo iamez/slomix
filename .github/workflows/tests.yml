@@ -1,22 +1,21 @@
-name: Python Tests
+name: CI
 
 on:
   push:
-    branches: [ main, develop, webhook-test ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  python:
+    name: Python Lint + Tests
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        python-version: ['3.10', '3.11']
-
     services:
       postgres:
-        image: postgres:14
+        image: postgres:14.15-alpine
         env:
           POSTGRES_USER: etlegacy_user
           POSTGRES_PASSWORD: etlegacy_test_password
@@ -24,76 +23,78 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U etlegacy_user -d etlegacy_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7.4.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Lint Python
+        run: ruff check bot/ website/backend/
 
-    - name: Set up test database
-      env:
-        PGPASSWORD: etlegacy_test_password
-      run: |
-        # Wait for PostgreSQL to be ready
-        until pg_isready -h localhost -p 5432 -U etlegacy_user; do
-          echo "Waiting for PostgreSQL..."
-          sleep 2
-        done
+      - name: Run tests
+        env:
+          POSTGRES_TEST_HOST: localhost
+          POSTGRES_TEST_PORT: 5432
+          POSTGRES_TEST_DATABASE: etlegacy_test
+          POSTGRES_TEST_USER: etlegacy_user
+          POSTGRES_TEST_PASSWORD: etlegacy_test_password
+          CACHE_BACKEND: memory
+          PROMETHEUS_ENABLED: "false"
+          SESSION_SECRET: ci-test-secret-not-for-production
+        run: pytest tests/ -v --tb=short --cov=bot --cov-report=xml --cov-report=term
 
-        # Create database tables (if schema file exists)
-        if [ -f "schema.sql" ]; then
-          psql -h localhost -p 5432 -U etlegacy_user -d etlegacy_test -f schema.sql
-        fi
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: true
 
-        echo "Test database ready"
+  javascript:
+    name: JavaScript Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.13.1"
+          cache: "npm"
+      - name: Install frontend tooling
+        run: npm ci
+      - name: Lint JavaScript
+        run: npm run lint:js
 
-    - name: Run Full Test Suite
-      env:
-        POSTGRES_TEST_HOST: localhost
-        POSTGRES_TEST_PORT: 5432
-        POSTGRES_TEST_DATABASE: etlegacy_test
-        POSTGRES_TEST_USER: etlegacy_user
-        POSTGRES_TEST_PASSWORD: etlegacy_test_password
-      run: |
-        set -o pipefail
-        pytest tests/ -v --tb=short --cov=bot --cov-report=xml --cov-report=term 2>&1 | tee test-output.txt
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673  # v5.4.1 - pinned SHA
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
-
-    - name: Test Summary
-      if: always()
-      run: |
-        echo "## Test Results" >> $GITHUB_STEP_SUMMARY
-        if [ -f test-output.txt ]; then
-          # Extract the pytest summary line (e.g., "=== 42 passed, 3 skipped ===")
-          SUMMARY=$(grep -E '(passed|failed|error|skipped)' test-output.txt | tail -1)
-          echo "**${SUMMARY}**" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "⚠️ No test output captured" >> $GITHUB_STEP_SUMMARY
-        fi
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [python, javascript]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Build Docker images
+        run: docker compose build api website

@@ -14,6 +14,7 @@ The Proximity Tracker is a Lua module for ET:Legacy that captures detailed playe
 | [OUTPUT_FORMAT.md](OUTPUT_FORMAT.md) | File format specification and parsing guide |
 | [INTEGRATION_STATUS.md](INTEGRATION_STATUS.md) | How proximity connects to the bot, database, and website |
 | [GAPS_AND_ROADMAP.md](GAPS_AND_ROADMAP.md) | Known limitations and planned improvements |
+| [FREEZE_RUNBOOK_2026-02-19.md](FREEZE_RUNBOOK_2026-02-19.md) | Resume/debug checklist after context break |
 
 ### Historical Design Docs
 
@@ -31,11 +32,13 @@ The Proximity Tracker is a Lua module for ET:Legacy that captures detailed playe
 
 The proximity tracker runs as a Lua module inside the ET:Legacy game server. It captures:
 
-- **Player Movement** - Position, velocity, stance, sprint state sampled every 500ms
-- **Combat Engagements** - Every damage event from first hit to death/escape
-- **Crossfire Detection** - When 2+ players damage the same target within 1 second
-- **Escape Detection** - When players survive combat (5s no damage + 300 units moved)
-- **Heatmaps** - Kill locations and movement density per map
+- **Player Movement** - Position, velocity, stance, sprint, class, and spawn reaction (default sample interval: 200ms)
+- **Combat Engagements** - Every damage event from first hit to death/escape/round end
+- **Crossfire Detection** - When 2+ players damage the same target within the configured window
+- **Escape Detection** - When players survive focus pressure after no-hit timeout + distance threshold
+- **Objective Focus (optional)** - Nearest objective distance and time within radius
+- **Reaction Metrics** - Return fire, dodge turn, and teammate support reaction timing
+- **Heatmaps** - Kill and movement density per map
 
 ### Data Flow
 
@@ -43,16 +46,16 @@ The proximity tracker runs as a Lua module inside the ET:Legacy game server. It 
 ET:Legacy Game Server
         |
         v
-proximity_tracker.lua (samples every 500ms)
+proximity/lua/proximity_tracker.lua
         |
         v (writes at round end)
 proximity/{timestamp}-{map}-round-{N}_engagements.txt
         |
-        v (parsed by parser.py)
+        v (parsed by proximity/parser/parser.py)
 PostgreSQL Database
         |
-        +---> Discord Bot (stats commands)
-        +---> Web Dashboard (visualizations)
+        +---> Website proximity API + UI
+        +---> Bot commands/tasks
 ```
 
 ### Key Files
@@ -78,12 +81,13 @@ Historical development session notes are in [session-notes/](session-notes/).
 - Full player movement tracking
 - Combat engagement detection with attacker details
 - Crossfire detection (2+ attackers)
+- Objective focus export (map config dependent)
+- Reaction telemetry export + import (`REACTION_METRICS`)
 - Heatmap generation
 
 **Not Yet Implemented:**
 
 - Round/match outcomes (who won)
-- Objective tracking (dynamite, constructions)
 - "Team" identity (currently only tracks Axis/Allies per round)
 
 See [GAPS_AND_ROADMAP.md](GAPS_AND_ROADMAP.md) for the full list.

@@ -205,6 +205,32 @@ function formatDurationMs(ms) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function extractSampleCount(row) {
+    if (!row || typeof row !== 'object') return null;
+    const candidates = [
+        row.sample_count,
+        row.samples,
+        row.tracks,
+        row.crossfire_participations,
+        row.crossfire_count,
+        row.times_focused,
+        row.events,
+    ];
+    for (const value of candidates) {
+        const num = Number(value);
+        if (Number.isFinite(num) && num > 0) return Math.round(num);
+    }
+    return null;
+}
+
+function getConfidenceFromSamples(sampleCount) {
+    const count = Number(sampleCount);
+    if (!Number.isFinite(count) || count <= 0) return null;
+    if (count >= 20) return 'High';
+    if (count >= 8) return 'Medium';
+    return 'Low';
+}
+
 function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data yet') {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -217,10 +243,18 @@ function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data ye
     container.innerHTML = rows.map((row, idx) => {
         const label = stripEtColors(row.name || row.player || `Player ${idx + 1}`);
         const value = formatter(row);
+        const sampleCount = extractSampleCount(row);
+        const confidence = getConfidenceFromSamples(sampleCount);
+        const sampleMeta = sampleCount
+            ? `n=${formatNumber(sampleCount)} • ${confidence || 'Low'}`
+            : '';
         return `
             <div class="flex items-center justify-between text-[11px] text-slate-300">
                 <span>${escapeHtml(label)}</span>
-                <span class="text-slate-500">${escapeHtml(value)}</span>
+                <span class="text-right">
+                    <span class="text-slate-500">${escapeHtml(value)}</span>
+                    ${sampleMeta ? `<span class="block text-[10px] text-slate-600">${escapeHtml(sampleMeta)}</span>` : ''}
+                </span>
             </div>
         `;
     }).join('');
@@ -239,8 +273,21 @@ function renderTradeSummary(summary) {
     setText('proximity-trade-attempts', attempts != null ? formatNumber(attempts) : '--');
     setText('proximity-trade-success', success != null ? formatNumber(success) : '--');
     setText('proximity-trade-missed', missed != null ? formatNumber(missed) : '--');
-    setText('proximity-support-uptime', support != null ? `${support.toFixed(1)}%` : '--');
+    const supportValue = Number(support);
+    setText('proximity-support-uptime', Number.isFinite(supportValue) ? `${supportValue.toFixed(1)}%` : '--');
     setText('proximity-isolation-deaths', isolation != null ? formatNumber(isolation) : '--');
+
+    const oppValue = Number(opportunities);
+    const attemptsValue = Number(attempts);
+    const successValue = Number(success);
+    const missedValue = Number(missed);
+    const hasOpps = Number.isFinite(oppValue) && oppValue > 0;
+    const attemptRate = hasOpps && Number.isFinite(attemptsValue) ? `${((attemptsValue / oppValue) * 100).toFixed(1)}%` : '--';
+    const conversionRate = hasOpps && Number.isFinite(successValue) ? `${((successValue / oppValue) * 100).toFixed(1)}%` : '--';
+    const missRate = hasOpps && Number.isFinite(missedValue) ? `${((missedValue / oppValue) * 100).toFixed(1)}%` : '--';
+    setText('proximity-trade-attempt-rate', attemptRate);
+    setText('proximity-trade-conversion-rate', conversionRate);
+    setText('proximity-trade-miss-rate', missRate);
 }
 
 function renderTradeEvents(events) {
@@ -311,12 +358,16 @@ function renderDuos(duos) {
         const players = player1 && player2 ? `${player1} + ${player2}` : (duo.label || `Duo ${idx + 1}`);
         const kills = duo.crossfire_kills != null ? formatNumber(duo.crossfire_kills) : '--';
         const count = duo.crossfire_count != null ? formatNumber(duo.crossfire_count) : '--';
+        const sampleCount = extractSampleCount(duo);
+        const confidence = getConfidenceFromSamples(sampleCount);
         const delay = duo.avg_delay_ms != null ? `${duo.avg_delay_ms.toFixed(0)}ms` : '--';
         const detail = `Kills ${kills} • Crossfires ${count} • Δ ${delay}`;
+        const confidenceMeta = sampleCount ? `n=${formatNumber(sampleCount)} • ${confidence || 'Low'}` : '';
         return `
             <div class="glass-card p-4 rounded-lg text-center">
                 <div class="text-sm font-bold text-white">${escapeHtml(players)}</div>
                 <div class="text-[10px] text-slate-500 mt-2">${detail}</div>
+                ${confidenceMeta ? `<div class="text-[10px] text-slate-600 mt-1">${escapeHtml(confidenceMeta)}</div>` : ''}
             </div>
         `;
     }).join('');
@@ -682,6 +733,72 @@ function renderSummary(data) {
     renderDuos(data.top_duos || []);
 }
 
+function renderClassSummary(payload) {
+    const container = document.getElementById('proximity-class-summary');
+    if (!container) return;
+    const rows = payload?.classes || [];
+    if (!rows.length) {
+        container.innerHTML = `<div class="text-[11px] text-slate-500">No class metrics yet.</div>`;
+        return;
+    }
+
+    container.innerHTML = rows.map((row) => {
+        const classLabel = stripEtColors(row.player_class || 'UNKNOWN');
+        const tracks = formatNumber(row.tracks || 0);
+        const players = formatNumber(row.players || 0);
+        const avgReaction = row.avg_spawn_reaction_ms != null ? formatMs(row.avg_spawn_reaction_ms) : '--';
+        const avgDuration = row.avg_duration_ms != null ? formatDurationMs(row.avg_duration_ms) : '--';
+        return `
+            <div class="glass-card p-3 rounded-lg border border-white/5">
+                <div class="flex items-center justify-between">
+                    <span class="font-bold text-white">${escapeHtml(classLabel)}</span>
+                    <span class="text-[10px] text-slate-500">tracks ${tracks}</span>
+                </div>
+                <div class="mt-1 text-[10px] text-slate-500">players ${players} • spawn react ${escapeHtml(avgReaction)} • avg life ${escapeHtml(avgDuration)}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderClassReactionSummary(rows) {
+    const container = document.getElementById('proximity-class-reaction-summary');
+    if (!container) return;
+    const list = Array.isArray(rows) ? rows : [];
+    if (!list.length) {
+        container.innerHTML = `<div class="text-[11px] text-slate-500">No class reaction baselines yet.</div>`;
+        return;
+    }
+    container.innerHTML = list.map((row) => {
+        const classLabel = stripEtColors(row.player_class || 'UNKNOWN');
+        const events = formatNumber(row.events || 0);
+        const returnMs = row.avg_return_fire_ms != null ? formatMs(row.avg_return_fire_ms) : '--';
+        const dodgeMs = row.avg_dodge_reaction_ms != null ? formatMs(row.avg_dodge_reaction_ms) : '--';
+        const supportMs = row.avg_support_reaction_ms != null ? formatMs(row.avg_support_reaction_ms) : '--';
+        return `
+            <div class="glass-card p-3 rounded-lg border border-white/5">
+                <div class="flex items-center justify-between">
+                    <span class="font-bold text-white">${escapeHtml(classLabel)}</span>
+                    <span class="text-[10px] text-slate-500">${events} events</span>
+                </div>
+                <div class="mt-1 text-[10px] text-slate-500">rf ${escapeHtml(returnMs)} • dodge ${escapeHtml(dodgeMs)} • support ${escapeHtml(supportMs)}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderReactionSignals(payload) {
+    const returnRows = payload?.return_fire || [];
+    const dodgeRows = payload?.dodge || [];
+    const supportRows = payload?.support || [];
+    const classRows = payload?.class_summary || [];
+    const formatWithClass = (row) => `${stripEtColors(row.player_class || 'UNKNOWN')} • ${formatMs(row.reaction_ms)}`;
+
+    renderLeaderList('proximity-returnfire-leaders', returnRows, formatWithClass);
+    renderLeaderList('proximity-dodge-leaders', dodgeRows, formatWithClass);
+    renderLeaderList('proximity-support-reaction-leaders', supportRows, formatWithClass);
+    renderClassReactionSummary(classRows);
+}
+
 function resetProximityValues() {
     setText('proximity-total-engagements', '--');
     setText('proximity-avg-distance', '--');
@@ -697,6 +814,9 @@ function resetProximityValues() {
     setText('proximity-trade-missed', '--');
     setText('proximity-support-uptime', '--');
     setText('proximity-isolation-deaths', '--');
+    setText('proximity-trade-attempt-rate', '--');
+    setText('proximity-trade-conversion-rate', '--');
+    setText('proximity-trade-miss-rate', '--');
     const defaultScope = `Last ${DEFAULT_RANGE_DAYS}d window`;
     setText('proximity-window-label', defaultScope);
     setText('proximity-scope-caption', defaultScope);
@@ -715,6 +835,11 @@ function resetProximityValues() {
     renderLeaderList('proximity-crossfire-leaders', [], () => '--');
     renderLeaderList('proximity-sync-leaders', [], () => '--');
     renderLeaderList('proximity-focus-leaders', [], () => '--');
+    renderLeaderList('proximity-returnfire-leaders', [], () => '--');
+    renderLeaderList('proximity-dodge-leaders', [], () => '--');
+    renderLeaderList('proximity-support-reaction-leaders', [], () => '--');
+    renderClassSummary({ classes: [] });
+    renderClassReactionSummary([]);
 
     const meta = document.getElementById('proximity-event-meta');
     const details = document.getElementById('proximity-event-details');
@@ -792,6 +917,8 @@ async function loadScopedProximityData() {
                 heatmapRes,
                 moversRes,
                 teamplayRes,
+                classRes,
+                reactionRes,
                 eventsRes,
                 tradesSummaryRes,
                 tradesEventsRes
@@ -800,6 +927,8 @@ async function loadScopedProximityData() {
                 fetchJSON(scopedUrl('/proximity/hotzones')),
                 fetchJSON(scopedUrl('/proximity/movers')),
                 fetchJSON(scopedUrl('/proximity/teamplay', { extra: { limit: 6 } })),
+                fetchJSON(scopedUrl('/proximity/classes')),
+                fetchJSON(scopedUrl('/proximity/reactions', { extra: { limit: 6 } })),
                 fetchJSON(scopedUrl('/proximity/events', { extra: { limit: DEFAULT_EVENTS_LIMIT } })),
                 fetchJSON(scopedUrl('/proximity/trades/summary')),
                 fetchJSON(scopedUrl('/proximity/trades/events', { extra: { limit: 10 } }))
@@ -847,6 +976,12 @@ async function loadScopedProximityData() {
                     const rate = row.survival_rate_pct != null ? `${row.survival_rate_pct.toFixed(1)}%` : '--';
                     return `${rate} (${row.focus_escapes || 0}/${row.times_focused || 0})`;
                 });
+            }
+            if (classRes.status === 'fulfilled') {
+                renderClassSummary(classRes.value);
+            }
+            if (reactionRes.status === 'fulfilled') {
+                renderReactionSignals(reactionRes.value);
             }
             if (tradesSummaryRes.status === 'fulfilled') {
                 renderTradeSummary(tradesSummaryRes.value);

@@ -3,6 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Session Memory:** Check `.claude/memories.md` for recent session context across sessions.
+> **Infra Handoff:** Read `docs/INFRA_HANDOFF_2026-02-18.md` before making infra/CI/deployment changes.
 
 ---
 
@@ -20,8 +21,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Database**: `etlegacy` on `localhost:5432` (user: `etlegacy_user`, password in `.env`)
 - Use `postgresql_database_manager.py` for ALL DB operations (NOT `database_manager.py`)
 - Use `?` for query parameters (NOT `{ph}` placeholders)
-- Schema: `tools/schema_postgresql.sql` (36 tables, 53+ columns in player_comprehensive_stats)
+- Schema: `tools/schema_postgresql.sql` (41 tables, 53+ columns in player_comprehensive_stats)
 - NEVER use SQLite syntax (`INSERT OR REPLACE`, `AUTOINCREMENT`, etc.)
+- `bot/core/database_adapter.py` may expose SQLite fallback paths for local/dev tooling, but production remains PostgreSQL-only.
 - See `docs/POSTGRESQL_MIGRATION_INDEX.md` for migration details
 
 ### Branch Policy
@@ -48,7 +50,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> Users
-                         (60s poll)    (53+ fields) (36 tables)  (80+ commands)
+                         (60s poll)    (53+ fields) (41 tables)  (80+ commands)
 ```
 
 ### Key Patterns
@@ -56,7 +58,7 @@ ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> U
 - **SSH Monitoring**: Only `endstats_monitor` task loop handles SSH (SSHMonitor disabled - race condition fix)
 - **R2 Differential**: Round 2 files contain CUMULATIVE stats; parser subtracts R1 values automatically
 - **Lua Webhook** (`vps_scripts/stats_discord_webhook.lua` v1.6.0): Real-time round notification, fixes surrender timing bug. Data stored in `lua_round_teams` table.
-- **Cog Pattern**: 20 Cogs in `bot/cogs/`, 18 core modules in `bot/core/`, services in `bot/services/`
+- **Cog Pattern**: 21 Cogs in `bot/cogs/`, 18 core modules in `bot/core/`, services in `bot/services/`
 
 ### Timing Configuration
 
@@ -72,15 +74,15 @@ ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> U
 
 ### Core Files
 
-- `bot/ultimate_bot.py` - Main bot entry point, loads 20 Cogs, on_ready handler
+- `bot/ultimate_bot.py` - Main bot entry point, loads 21 Cogs, on_ready handler
 - `bot/community_stats_parser.py` - R1/R2 differential parser
 - `postgresql_database_manager.py` - **ONLY tool for DB operations**
 - `bot/core/database_adapter.py` - Async PostgreSQL/SQLite abstraction
 - `bot/core/stats_cache.py` - 5-minute TTL query cache
 
-### 20 Cogs (Command Modules)
+### 21 Cogs (Command Modules)
 
-All in `bot/cogs/`: achievements, admin, admin_predictions, analytics, automation_commands, last_session, leaderboard, link, matchup, permission_management, predictions, proximity, server_control, session, session_management, stats, sync, synergy_analytics, team, team_management.
+All in `bot/cogs/`: achievements, admin, admin_predictions, analytics, availability_poll, automation_commands, last_session, leaderboard, link, matchup, permission_management, predictions, proximity, server_control, session, session_management, stats, sync, synergy_analytics, team, team_management.
 
 ### 18 Core Modules
 
@@ -175,8 +177,9 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 ## System Status (Version 1.0.6)
 
 - Parser: 100% functional, R2 differential validated
-- Database: PostgreSQL (36 tables), no corruption
-- Bot: 80+ commands across 20 Cogs, all functional
+- Database: PostgreSQL (41 tables), no corruption
+- Bot: 80+ commands across 21 Cogs, all functional
+- Website: Upload library, availability polls, greatshot, system overview
 - Automation: SSH monitoring, voice detection, Lua webhook (v1.6.0)
 - Production Ready: Fully tested and validated
 

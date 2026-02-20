@@ -2158,6 +2158,79 @@ class PostgreSQLDatabaseManager:
             logger.error(f"Failed to create round: {e}")
             return None
 
+    @staticmethod
+    def _parse_round_datetime(round_date: str, round_time: str) -> Optional[datetime]:
+        """Parse round date/time supporting both HHMMSS and HH:MM:SS formats."""
+        if not round_date or not round_time:
+            return None
+
+        raw_time = str(round_time).strip()
+        for fmt in ("%Y-%m-%d %H%M%S", "%Y-%m-%d %H:%M:%S"):
+            try:
+                return datetime.strptime(f"{round_date} {raw_time}", fmt)
+            except ValueError:
+                continue
+
+        return None
+
+    async def _has_valid_counterpart_round(
+        self,
+        conn,
+        gaming_session_id: int,
+        map_name: str,
+        round_number: int,
+        reference_round_id: int,
+        reference_date: str,
+        reference_time: str,
+        pair_window_minutes: int = 20
+    ) -> bool:
+        """
+        Return True when the reference round appears to belong to a valid R1/R2 map pair.
+
+        This guard prevents map replays from being incorrectly marked as restarts:
+        - For R1, look for a completed/substitution R2 shortly after it
+        - For R2, look for a completed/substitution R1 shortly before it
+        """
+        counterpart_round_number = 2 if round_number == 1 else 1
+        reference_dt = self._parse_round_datetime(reference_date, reference_time)
+        if reference_dt is None:
+            return False
+
+        counterpart_rows = await conn.fetch(
+            """
+            SELECT id, round_date, round_time
+            FROM rounds
+            WHERE gaming_session_id = $1
+              AND map_name = $2
+              AND round_number = $3
+              AND id != $4
+              AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)
+            ORDER BY round_date, round_time
+            """,
+            gaming_session_id, map_name, counterpart_round_number, reference_round_id
+        )
+
+        if not counterpart_rows:
+            return False
+
+        for row in counterpart_rows:
+            counterpart_dt = self._parse_round_datetime(row['round_date'], row['round_time'])
+            if counterpart_dt is None:
+                continue
+
+            delta_minutes = (counterpart_dt - reference_dt).total_seconds() / 60.0
+
+            if round_number == 1:
+                # In stopwatch, R2 should follow R1 within a reasonable map window.
+                if 0 <= delta_minutes <= pair_window_minutes:
+                    return True
+            else:
+                # In stopwatch, R1 should precede R2 within a reasonable map window.
+                if 0 <= -delta_minutes <= pair_window_minutes:
+                    return True
+
+        return False
+
     async def _detect_and_mark_restarts(self, conn, current_round_id: int, gaming_session_id: int,
                                         map_name: str, round_number: int, current_date: str, current_time: str,
                                         current_player_guids: set = None) -> None:
@@ -2169,7 +2242,7 @@ class PostgreSQLDatabaseManager:
         - Same map_name
         - Same round_number
         - Earlier timestamp
-        - Within reasonable timeframe (< 30 minutes apart)
+        - Within reasonable timeframe (< 15 minutes apart)
 
         Restart types:
         - 'cancelled': False start, same roster (or roster unknown)
@@ -2179,6 +2252,9 @@ class PostgreSQLDatabaseManager:
         Example substitution: adlernest R1 with ipkiss completed, he left, vid joined, restart
         """
         RESTART_THRESHOLD_MINUTES = 30
+        MAP_REPLAY_GAP_MINUTES = 15
+        QUICK_RESTART_MINUTES = 5
+        COUNTERPART_PAIR_WINDOW_MINUTES = 20
 
         try:
             # Find earlier rounds with same map/round in this gaming session
@@ -2200,10 +2276,15 @@ class PostgreSQLDatabaseManager:
                 return  # No duplicates found
 
             # Parse current round datetime
-            try:
-                current_dt = datetime.strptime(f"{current_date} {current_time}", "%Y-%m-%d %H%M%S")
-            except ValueError:
-                current_dt = datetime.strptime(f"{current_date} {current_time}", "%Y-%m-%d %H:%M:%S")
+            current_dt = self._parse_round_datetime(current_date, current_time)
+            if current_dt is None:
+                logger.warning(
+                    "Skipping restart detection: failed to parse current round datetime "
+                    "(date=%s, time=%s)",
+                    current_date,
+                    current_time,
+                )
+                return
 
             # Check each earlier round
             for earlier in earlier_rounds:
@@ -2213,23 +2294,52 @@ class PostgreSQLDatabaseManager:
                 earlier_match_id = earlier['match_id']
 
                 # Parse earlier datetime
-                try:
-                    earlier_dt = datetime.strptime(f"{earlier_date} {earlier_time}", "%Y-%m-%d %H%M%S")
-                except ValueError:
-                    earlier_dt = datetime.strptime(f"{earlier_date} {earlier_time}", "%Y-%m-%d %H:%M:%S")
+                earlier_dt = self._parse_round_datetime(earlier_date, earlier_time)
+                if earlier_dt is None:
+                    logger.debug(
+                        "Skipping restart check for round %s: failed to parse datetime (%s %s)",
+                        earlier_id,
+                        earlier_date,
+                        earlier_time,
+                    )
+                    continue
 
                 # Calculate time difference
                 time_diff_minutes = (current_dt - earlier_dt).total_seconds() / 60
 
-                # Skip if time gap is too large (map rotation replay, not a restart)
-                # A real restart has a very short gap (< 5 min typically).
-                # Map rotation replays of the same map happen 15-30+ min apart.
-                if time_diff_minutes > 15:
+                if time_diff_minutes <= 0:
+                    # Out-of-order import or same timestamp edge case.
+                    continue
+
+                # Skip if time gap is too large (map rotation replay, not a restart).
+                # A real restart has a very short gap (< 5 min typically). Same-map
+                # replays are usually much later, but can occasionally be ~10-15 min.
+                if time_diff_minutes > MAP_REPLAY_GAP_MINUTES:
                     logger.debug(
                         f"Skipping restart check for round {earlier_id}: "
                         f"time gap {time_diff_minutes:.1f}min too large (likely map rotation replay)"
                     )
                     continue
+
+                # For slower duplicates (5-15 min), keep valid completed map pairs and
+                # only treat unpaired rounds as restart candidates.
+                if time_diff_minutes > QUICK_RESTART_MINUTES:
+                    has_counterpart = await self._has_valid_counterpart_round(
+                        conn,
+                        gaming_session_id,
+                        map_name,
+                        round_number,
+                        earlier_id,
+                        earlier_date,
+                        earlier_time,
+                        pair_window_minutes=COUNTERPART_PAIR_WINDOW_MINUTES,
+                    )
+                    if has_counterpart:
+                        logger.debug(
+                            f"Skipping restart check for round {earlier_id}: "
+                            f"appears to be part of a valid R1/R2 map pair"
+                        )
+                        continue
 
                 # If within threshold, check for roster changes
                 if 0 < time_diff_minutes <= RESTART_THRESHOLD_MINUTES:

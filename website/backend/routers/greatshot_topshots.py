@@ -12,6 +12,8 @@ from website.backend.logging_config import get_app_logger
 
 router = APIRouter()
 logger = get_app_logger("greatshot.topshots")
+MAX_TOPSHOTS_LIMIT = 100
+MAX_DEMO_SCAN_LIMIT = 500
 
 
 def _require_user_id(request: Request) -> int:
@@ -36,6 +38,19 @@ def _safe_json_field(value: Any) -> Optional[Dict]:
         return None
 
 
+def _safe_limit(value: int, default: int = 10, maximum: int = MAX_TOPSHOTS_LIMIT) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(parsed, maximum))
+
+
+def _scan_limit(result_limit: int) -> int:
+    # Read enough demos for useful rankings, but cap expensive JSON parsing.
+    return min(max(result_limit * 20, 100), MAX_DEMO_SCAN_LIMIT)
+
+
 @router.get("/greatshot/topshots/kills")
 async def get_top_kills(request: Request, limit: int = 10, db=Depends(get_db)):
     """Get demos with highest total kills.
@@ -45,6 +60,7 @@ async def get_top_kills(request: Request, limit: int = 10, db=Depends(get_db)):
     """
     # Optimized query using total_kills column (avoids N+1 file reads)
     user_id = _require_user_id(request)
+    safe_limit = _safe_limit(limit)
     rows = await db.fetch_all(
         """
         SELECT
@@ -62,7 +78,7 @@ async def get_top_kills(request: Request, limit: int = 10, db=Depends(get_db)):
         ORDER BY a.total_kills DESC
         LIMIT $2
         """,
-        (user_id, limit),
+        (user_id, safe_limit),
     )
 
     results = []
@@ -97,6 +113,8 @@ async def get_top_players(request: Request, limit: int = 10, db=Depends(get_db))
         List of player performances ranked by kills
     """
     user_id = _require_user_id(request)
+    safe_limit = _safe_limit(limit)
+    demo_scan_limit = _scan_limit(safe_limit)
     rows = await db.fetch_all(
         """
         SELECT
@@ -110,8 +128,9 @@ async def get_top_players(request: Request, limit: int = 10, db=Depends(get_db))
           AND d.user_id = $1
           AND d.analysis_json_path IS NOT NULL
         ORDER BY d.created_at DESC
+        LIMIT $2
         """,
-        (user_id,)
+        (user_id, demo_scan_limit),
     )
 
     performances = []
@@ -161,7 +180,7 @@ async def get_top_players(request: Request, limit: int = 10, db=Depends(get_db))
 
     # Sort by kills and return top N
     performances.sort(key=lambda x: x["kills"], reverse=True)
-    return performances[:limit]
+    return performances[:safe_limit]
 
 
 @router.get("/greatshot/topshots/accuracy")
@@ -181,6 +200,8 @@ async def get_top_accuracy(
         List of player performances ranked by accuracy
     """
     user_id = _require_user_id(request)
+    safe_limit = _safe_limit(limit)
+    demo_scan_limit = _scan_limit(safe_limit)
     rows = await db.fetch_all(
         """
         SELECT
@@ -194,8 +215,9 @@ async def get_top_accuracy(
           AND d.user_id = $1
           AND d.analysis_json_path IS NOT NULL
         ORDER BY d.created_at DESC
+        LIMIT $2
         """,
-        (user_id,)
+        (user_id, demo_scan_limit),
     )
 
     performances = []
@@ -240,7 +262,7 @@ async def get_top_accuracy(
 
     # Sort by accuracy and return top N
     performances.sort(key=lambda x: x["accuracy"], reverse=True)
-    return performances[:limit]
+    return performances[:safe_limit]
 
 
 @router.get("/greatshot/topshots/damage")
@@ -251,6 +273,8 @@ async def get_top_damage(request: Request, limit: int = 10, db=Depends(get_db)):
         List of player performances ranked by damage
     """
     user_id = _require_user_id(request)
+    safe_limit = _safe_limit(limit)
+    demo_scan_limit = _scan_limit(safe_limit)
     rows = await db.fetch_all(
         """
         SELECT
@@ -264,8 +288,9 @@ async def get_top_damage(request: Request, limit: int = 10, db=Depends(get_db)):
           AND d.user_id = $1
           AND d.analysis_json_path IS NOT NULL
         ORDER BY d.created_at DESC
+        LIMIT $2
         """,
-        (user_id,)
+        (user_id, demo_scan_limit),
     )
 
     performances = []
@@ -306,7 +331,7 @@ async def get_top_damage(request: Request, limit: int = 10, db=Depends(get_db)):
 
     # Sort by damage and return top N
     performances.sort(key=lambda x: x["damage"], reverse=True)
-    return performances[:limit]
+    return performances[:safe_limit]
 
 
 @router.get("/greatshot/topshots/multikills")
@@ -317,6 +342,7 @@ async def get_top_multikills(request: Request, limit: int = 10, db=Depends(get_d
         List of highlights ranked by kill count
     """
     user_id = _require_user_id(request)
+    safe_limit = _safe_limit(limit)
     rows = await db.fetch_all(
         """
         SELECT
@@ -337,7 +363,7 @@ async def get_top_multikills(request: Request, limit: int = 10, db=Depends(get_d
         ORDER BY h.score DESC
         LIMIT $2
         """,
-        (user_id, limit * 2)  # Get more to filter later
+        (user_id, min(safe_limit * 2, MAX_TOPSHOTS_LIMIT * 2))  # Get more to filter later
     )
 
     highlights = []
@@ -368,4 +394,4 @@ async def get_top_multikills(request: Request, limit: int = 10, db=Depends(get_d
             "created_at": str(created_at),
         })
 
-    return highlights[:limit]
+    return highlights[:safe_limit]

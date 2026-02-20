@@ -253,16 +253,13 @@ class LinkCog(commands.Cog, name="Link"):
             players_per_page = 10
             total_pages = (total_players + players_per_page - 1) // players_per_page
 
-            # Generate ONLY requested pages for button navigation (lazy loading)
-            # Pre-generate first 5 pages for immediate navigation
-            max_pregenerate = min(5, total_pages)
+            # Build page embeds from the in-memory result set to avoid redundant DB queries.
+            max_pregenerate = total_pages
             pages = []
 
             for page_num in range(1, max_pregenerate + 1):
                 offset = (page_num - 1) * players_per_page
-                # NOTE: Safe concatenation - filter_clause from hardcoded strings, offset computed from page_num
-                page_query = base_query + filter_clause + f" ORDER BY sessions_played DESC, total_kills DESC LIMIT {players_per_page} OFFSET {offset}"
-                page_players = await self.bot.db_adapter.fetch_all(page_query)
+                page_players = players[offset: offset + players_per_page]
 
                 # Create embed for this page
                 start_idx = offset

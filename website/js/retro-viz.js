@@ -57,6 +57,19 @@ function replaceElementHtml(element, html) {
     element.replaceChildren(_createSanitizedFragment(html));
 }
 
+function isRoundZero(roundNumber) {
+    const parsed = Number.parseInt(String(roundNumber), 10);
+    return Number.isInteger(parsed) && parsed === 0;
+}
+
+function formatRoundLabel(roundNumber) {
+    const parsed = Number.parseInt(String(roundNumber), 10);
+    if (Number.isInteger(parsed)) {
+        return parsed === 0 ? 'Match Summary' : `R${parsed}`;
+    }
+    return 'R?';
+}
+
 // ============================================================================
 // LOAD VIEW
 // ============================================================================
@@ -81,10 +94,13 @@ export async function loadRetroVizView() {
     // Load round picker
     try {
         const rounds = await fetchJSON(`${API_BASE}/rounds/recent?limit=50`);
+        const selectableRounds = Array.isArray(rounds)
+            ? rounds.filter((round) => !isRoundZero(round?.round_number))
+            : [];
         const picker = document.getElementById('retro-viz-picker');
         if (!picker) return;
 
-        if (!rounds || rounds.length === 0) {
+        if (selectableRounds.length === 0) {
             picker.replaceChildren(new Option('No rounds available', ''));
             replaceElementHtml(
                 document.getElementById('retro-viz-panels'),
@@ -93,9 +109,10 @@ export async function loadRetroVizView() {
             return;
         }
 
-        picker.replaceChildren(...rounds.map((r) => {
+        picker.replaceChildren(...selectableRounds.map((r) => {
             const dateStr = r.round_date ? new Date(r.round_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-            const label = `${r.map_name || 'Unknown'} R${r.round_number ?? '?'} — ${dateStr} (${r.player_count} players)`;
+            const roundLabel = r.round_label || formatRoundLabel(r.round_number);
+            const label = `${r.map_name || 'Unknown'} ${roundLabel} — ${dateStr} (${r.player_count} players)`;
             const option = document.createElement('option');
             option.value = String(r.id ?? '');
             option.textContent = label;
@@ -108,7 +125,7 @@ export async function loadRetroVizView() {
         });
 
         // Load most recent round
-        loadRound(rounds[0].id);
+        loadRound(selectableRounds[0].id);
     } catch {
         replaceElementHtml(document.getElementById('retro-viz-panels'), EmptyState('Failed to load rounds.'));
     }
@@ -215,6 +232,7 @@ function renderMatchSummary(data) {
     const winnerLabel = data.winner_team === 1 ? 'Axis' : data.winner_team === 2 ? 'Allies' : 'Tied';
     const winnerColor = data.winner_team === 1 ? 'text-red-400' : data.winner_team === 2 ? 'text-blue-400' : 'text-slate-400';
     const durationStr = data.duration_seconds ? `${Math.round(data.duration_seconds / 60)}m` : '—';
+    const roundLabel = data.round_label || formatRoundLabel(data.round_number);
 
     replaceElementHtml(el, `
         <h3 class="text-sm font-bold text-white mb-4">Match Summary</h3>
@@ -225,7 +243,7 @@ function renderMatchSummary(data) {
             </div>
             <div class="glass-panel rounded-lg p-3">
                 <div class="text-[11px] text-slate-500">Round</div>
-                <div class="text-white font-bold">R${data.round_number ?? '?'}</div>
+                <div class="text-white font-bold">${escapeHtml(roundLabel)}</div>
             </div>
             <div class="glass-panel rounded-lg p-3">
                 <div class="text-[11px] text-slate-500">Date</div>
