@@ -4602,6 +4602,57 @@ class UltimateETLegacyBot(commands.Bot):
         vs_count = len(vs_stats) if isinstance(vs_stats, list) else 0
         return (awards_count, vs_count)
 
+    def _select_richest_endstats(
+        self,
+        endstats_data: dict,
+        local_path: str,
+        filename: str,
+        parse_fn,
+        log,
+    ) -> tuple:
+        """When split endstats files exist, select the richer file by awards, vs_stats, then size."""
+        import glob as globmod
+
+        local_dir = os.path.dirname(local_path)
+        base = filename.replace("-endstats.txt", "-endstats")
+        candidates = globmod.glob(os.path.join(local_dir, base + "*.txt"))
+
+        if len(candidates) <= 1:
+            return endstats_data, local_path, filename
+
+        best_data = endstats_data
+        best_path = local_path
+        best_filename = filename
+        best_quality = self._summarize_endstats_quality(endstats_data)
+        best_size = os.path.getsize(local_path) if os.path.exists(local_path) else 0
+
+        for candidate_path in candidates:
+            if candidate_path == local_path:
+                continue
+            try:
+                candidate_data = parse_fn(candidate_path)
+                if not candidate_data:
+                    continue
+                candidate_quality = self._summarize_endstats_quality(candidate_data)
+                candidate_size = os.path.getsize(candidate_path)
+                if (candidate_quality, candidate_size) > (best_quality, best_size):
+                    best_data = candidate_data
+                    best_path = candidate_path
+                    best_filename = os.path.basename(candidate_path)
+                    best_quality = candidate_quality
+                    best_size = candidate_size
+            except Exception as e:
+                log.debug(f"Could not evaluate candidate endstats {candidate_path}: {e}")
+
+        if best_path != local_path:
+            log.info(
+                f"Selecting richer endstats: {best_filename} "
+                f"({best_size}b, {best_quality[0]} awards)"
+            )
+            self.processed_endstats_files.add(best_filename)
+
+        return best_data, best_path, best_filename
+
     def _is_endstats_quality_better(
         self,
         incoming_quality: tuple[int, int],
@@ -4838,6 +4889,9 @@ class UltimateETLegacyBot(commands.Bot):
             else:
                 webhook_logger.debug(f"⏳ Retry already scheduled for endstats: {filename}")
                 return
+        else:
+            # Clear stale/done task reference so it doesn't block future scheduling
+            self.endstats_retry_tasks.pop(filename, None)
 
         attempt = self.endstats_retry_counts.get(filename, 0) + 1
         self.endstats_retry_counts[filename] = attempt
@@ -4878,12 +4932,16 @@ class UltimateETLegacyBot(commands.Bot):
     ) -> None:
         source = "webhook_retry"
         try:
+            attempt = self.endstats_retry_counts.get(filename, 0)
             self._log_endstats_transition(
                 webhook_logger,
                 source,
                 "retry_attempt",
                 filename,
-                detail=f"attempt={self.endstats_retry_counts.get(filename, 0)}",
+                detail=f"attempt={attempt}/{self.endstats_retry_max_attempts}",
+            )
+            webhook_logger.info(
+                f"🔄 Endstats retry attempt {attempt}/{self.endstats_retry_max_attempts} for {filename}"
             )
             # If already processed in DB, stop retrying
             check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
@@ -4982,7 +5040,8 @@ class UltimateETLegacyBot(commands.Bot):
 
         except Exception as e:
             webhook_logger.error(f"❌ Error during endstats retry: {e}", exc_info=True)
-            self._clear_endstats_retry_state(filename)
+            # Only clear task reference, preserve retry count so next attempt increments correctly
+            self.endstats_retry_tasks.pop(filename, None)
 
     async def _store_endstats_and_publish(
         self,
@@ -5348,6 +5407,11 @@ class UltimateETLegacyBot(commands.Bot):
                 logger.error(f"❌ Failed to parse endstats: {filename}")
                 return
 
+            # Select richest endstats when split files exist
+            endstats_data, local_path, filename = self._select_richest_endstats(
+                endstats_data, local_path, filename, parse_endstats_file, logger
+            )
+
             metadata = endstats_data['metadata']
             awards = endstats_data['awards']
             vs_stats = endstats_data['vs_stats']
@@ -5518,6 +5582,11 @@ class UltimateETLegacyBot(commands.Bot):
                 except discord.DiscordException:
                     logger.debug("Discord notification failed (non-critical)")
                 return
+
+            # Select richest endstats when split files exist
+            endstats_data, local_path, filename = self._select_richest_endstats(
+                endstats_data, local_path, filename, parse_endstats_file, webhook_logger
+            )
 
             metadata = endstats_data['metadata']
             awards = endstats_data['awards']

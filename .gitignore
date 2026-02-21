@@ -497,6 +497,11 @@ WEBSITE_STAT_BUGS_FOUND.md
 !update_bot.sh
 
 # ============================================
+# GEMINI WEBSITE (local dev, not part of this project)
+# ============================================
+gemini-website/
+
+# ============================================
 # COPILOT/AI INSTRUCTIONS (keep these)
 # ============================================
 !.github/copilot-instructions.md

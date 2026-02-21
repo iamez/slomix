@@ -701,7 +701,7 @@ end
 local function get_end_reason()
     local time_limit = get_time_limit()
     local actual_time = round_end_unix - round_start_unix
-    local time_limit_seconds = time_limit * 60
+    local time_limit_seconds = math.floor(time_limit * 60 + 0.5)
 
     -- If a surrender vote was active and round ended early, it was surrender
     if surrender_vote.active and surrender_vote.caller_team > 0 then
@@ -806,7 +806,7 @@ local function send_webhook()
         local round = get_current_round()
         local winner = get_winner_team()
         local defender = get_defender_team()
-        local actual_duration = round_end_unix - round_start_unix - total_pause_seconds
+        local actual_duration = math.floor(round_end_unix - round_start_unix - total_pause_seconds)
         if actual_duration < 0 then
             actual_duration = 0
         end
@@ -819,7 +819,8 @@ local function send_webhook()
         -- If it does, the post-map_restart warmup was included in round_start_unix
         -- (gamestate cvar reads GS_PLAYING before engine warmup completes).
         -- Correct by shifting start time forward and attributing excess to warmup.
-        local time_limit_seconds = time_limit * 60
+        local time_limit_seconds = math.floor(time_limit * 60 + 0.5)
+        et.G_Print(string.format("[stats_discord_webhook] timelimit raw=%s seconds=%s\n", tostring(time_limit), tostring(time_limit_seconds)))
         if time_limit_seconds > 0 and actual_duration > time_limit_seconds then
             local overcounting = actual_duration - time_limit_seconds
             log(string.format(
@@ -907,7 +908,7 @@ local function send_webhook()
             mapname, round,  -- title
             mapname, round, winner, defender,  -- first row
             actual_duration, time_limit_display,  -- second row
-            pause_count, total_pause_seconds, end_reason,  -- third row
+            pause_count, math.floor(total_pause_seconds), end_reason,  -- third row
             warmup_seconds,  -- warmup duration
             warmup_start_unix,  -- WarmupStart
             round_start_unix, round_end_unix,  -- RoundStart, RoundEnd
@@ -1094,7 +1095,7 @@ local function detect_pause(level_time)
             })
 
             log(string.format("Pause #%d ended, duration: %d sec (total: %d sec)",
-                #pause_events, pause_duration, total_pause_seconds))
+                #pause_events, math.floor(pause_duration), math.floor(total_pause_seconds)))
             pause_start_time = 0
             pause_start_unix = 0
         end

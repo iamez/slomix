@@ -544,10 +544,7 @@ end
 local function refreshRoundInfo()
     tracker.round.map_name = getMapName()
     local round_str = et.trap_Cvar_Get("g_currentRound")
-    local round_num = tonumber(round_str) or 1
-    if round_num < 1 then
-        round_num = 1
-    end
+    local round_num = (tonumber(round_str) or 0) + 1
     tracker.round.round_num = round_num
 end
 
