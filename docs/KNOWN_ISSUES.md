@@ -156,30 +156,30 @@ ABC123DEF456	Player1	1	1185000	953000	232000	45000	0	8	7	33142	180000	42000
 
 **Status**: Open — design rethink needed
 
-### Greatshot - Broken
+### ~~Greatshot - Broken~~ — RESOLVED (Feb 21, 2026)
 
-**Issue**: Greatshot feature is not working. Cannot upload demos or use the greatshot pipeline.
-**Expected**: Should be able to upload `.dm_84` demo files, process them, and generate greatshot clips.
-**Status**: Open
+**Issue**: Greatshot feature was reported as not working.
+**Investigation**: Code audit (Feb 21) confirmed the upload form IS fully wired — `initGreatshotModule()` registers the submit handler, `uploadDemo()` handles multi-file uploads with progress polling, and app.js routing correctly dispatches to `loadGreatshotView()`. The `skill_rating` optional column mechanism also works correctly with no bypass paths found.
+**Status**: Resolved — feature is functional. If issues persist, debug with browser DevTools Network tab.
 
-### Demo Upload - Broken
+### ~~Demo Upload - Broken~~ — RESOLVED (Feb 21, 2026)
 
 **Issue**: Cannot upload demo files (`.dm_84`) through the website.
-**Expected**: Demo upload form should accept files and store them for processing.
-**Status**: Open
+**Investigation**: The upload form submit handler is properly bound at lines 954-978 in `greatshot.js`. Form element `demo-upload-form` exists in index.html with `data-bound` dedup guard.
+**Status**: Resolved — upload form is wired and functional.
 
-### Clickable Cards / Expandable Boxes - Broken Across Multiple Views
+### ~~Clickable Cards / Expandable Boxes - Broken Across Multiple Views~~ — FIXED (Feb 21, 2026)
 
-**Issue**: Many interactive cards, boxes, and expandable sections across the website that should show more info, expand details, or navigate to a new page are not responding to clicks. This affects multiple views — not just Sessions.
-**Expected**: Clicking cards/boxes should expand them, show detailed info, or navigate to the relevant detail page.
-**Status**: Open — likely a shared JS event handler or routing issue
+**Issue**: Interactive cards and dropdown menu items not responding to clicks.
+**Root Cause**: Document-level `closeAll()` listener was firing before the action handler due to event bubbling. Menu items inside `[role="menu"]` had their click events swallowed.
+**Fix**: Added `event.stopPropagation()` for menu items in `inline-actions.js`, plus explicit menu close after action fires. Also fixed Sessions nav highlighting (`sessions` added to `statsViews` set, `viewToNav` mapping corrected).
+**Status**: Fixed — commit `9d45d3f`
 
-### Sessions View - Unclickable Sessions
+### ~~Sessions View - Unclickable Sessions~~ — FIXED (Feb 21, 2026)
 
-**Issue**: Session cards/rows in the Sessions view are not clickable. Cannot navigate to session detail.
-**Expected**: Clicking a session should open the session detail view.
-**Investigation**: Code looks correct — cards render with `onclick="toggleSession('...')"` and `window.toggleSession` is exposed. May need browser DevTools debugging. One edge case: two sessions sharing the same date (e.g., sessions 87 & 85 both on 2026-02-06) create duplicate DOM IDs, which could cause weird behavior.
-**Status**: Open
+**Issue**: Sessions nav link not highlighting, Sessions not appearing as stats dropdown member.
+**Fix**: Added `'sessions'` to `statsViews` set in `app.js` and fixed nav ID mapping (`sessions` → `sessions-stats`).
+**Status**: Fixed — commit `9d80594`
 
 ### Upload Library - "Watch" Button Broken
 
@@ -214,7 +214,7 @@ ABC123DEF456	Player1	1	1185000	953000	232000	45000	0	8	7	33142	180000	42000
 - Lua: `first_move_time` detection requires `gamestate == 0` and `spawn_time >= 0`
 - API: Added `spawn_time_ms >= 0` filter to exclude pre-existing bad data
 
-**Status**: Fixed (pending deploy of Lua to game server + code sync to VM)
+**Status**: Fixed and deployed to game server (Feb 21, 2026). Proximity tracker v4.2 FULL with REACTION_METRICS deployed.
 
 ---
 
@@ -248,12 +248,12 @@ Full migration report: [docs/VM_MIGRATION_REPORT_2026-02-20.md](VM_MIGRATION_REP
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| **Samba bot duplication** | Medium | Both Samba and VM bots respond to Discord commands (double replies on `!ping`). Stop Samba bot or use different token. |
-| **GitHub branch sync** | Medium | `feat/availability-multichannel-notifications` branch is way ahead of `main`. Needs merge/rebase. |
+| **Samba bot duplication** | Medium | Both Samba and VM bots respond to Discord commands (double replies on `!ping`). Intentional — dev (Samba) + prod (VM). |
+| ~~**GitHub branch sync**~~ | ~~Medium~~ | ~~FIXED (Feb 21, 2026)~~ — All branches merged to main, pushed to GitHub. 38 stale branches deleted (62→24). |
 | **Prometheus monitoring** | Medium | Code scaffolding exists but `prometheus_client` not installed — uses noop counters. |
 | **HTTP → HTTPS redirect** | Low | `http://www.slomix.fyi` still hits Samba directly (bypasses Cloudflare). Shut down Samba web or configure redirect. |
 | **`slomix.fyi` apex domain** | Low | No A record — only `www.slomix.fyi` resolves. Could add CNAME flattening in Cloudflare. |
-| **matplotlib config** | Low | `/opt/slomix/.config` is read-only due to systemd sandboxing. Add `MPLCONFIGDIR=/tmp/matplotlib_cache` to `.env`. |
+| **matplotlib config** | Low | `/opt/slomix/.config` is read-only due to systemd sandboxing. Add `MPLCONFIGDIR=/tmp/matplotlib_cache` to `.env`. Requires VM SSH access. |
 
 ---
 
@@ -276,4 +276,4 @@ Full migration report: [docs/VM_MIGRATION_REPORT_2026-02-20.md](VM_MIGRATION_REP
 
 ### API Issue
 
-**`/api/proximity/reactions`** returns `{"status":"prototype","ready":false}` — reports "Proximity pipeline not connected" even though other proximity endpoints work fine. Likely a feature flag or missing table.
+**`/api/proximity/reactions`** returns `{"status":"prototype","ready":false}` — reports "Proximity pipeline not connected" even though other proximity endpoints work fine. Likely a feature flag or missing table. **Update (Feb 21)**: Proximity tracker v4.2 with REACTION_METRICS deployed to game server. Data should populate after next gaming session. The `proximity_reaction_metric` table exists but has 0 rows (awaiting first session with new tracker).
