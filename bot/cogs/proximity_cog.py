@@ -17,7 +17,7 @@ import os
 import sys
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import json
 
@@ -307,18 +307,87 @@ class ProximityCog(commands.Cog, name="Proximity"):
     # IMPORT LOGIC
     # =========================================================================
 
+    async def _resolve_session_date(
+        self, file_date: str, file_time: str, parts: list, filename: str
+    ) -> str:
+        """Resolve the correct session date, handling midnight crossovers.
+
+        If a round starts before midnight (23:xx) on day N but the proximity
+        file is written after midnight on day N+1, we need to link it to
+        the session on day N. Strategy:
+        1. Check if a matching round exists on the file's date
+        2. If not and time is in the early hours (00:00-05:00), check previous date
+        3. Fall back to file date
+        """
+        # Extract map name from filename parts
+        # Format: YYYY-MM-DD-HHMMSS-mapname-round-N_engagements.txt
+        # parts[4:-1] could be mapname pieces, last part is "N_engagements.txt"
+        try:
+            # Find round number from the part containing "_engagements"
+            round_part = None
+            for p in parts:
+                if '_engagements' in p or '_proximity' in p:
+                    round_part = p.split('_')[0]
+                    break
+
+            map_parts = parts[4:]
+            # Remove the "round" keyword and everything after
+            map_name_parts = []
+            for i, p in enumerate(map_parts):
+                if p == 'round':
+                    break
+                map_name_parts.append(p)
+            map_name = '-'.join(map_name_parts) if map_name_parts else None
+
+            if not map_name:
+                return file_date
+
+            # Step 1: Check for round on same date
+            query = """
+                SELECT round_date FROM rounds
+                WHERE SUBSTR(round_date, 1, 10) = ?
+                AND map_name = ?
+                LIMIT 1
+            """
+            result = await self.bot.db_adapter.fetch_one(query, (file_date, map_name))
+            if result:
+                return file_date
+
+            # Step 2: If file time is early morning (00:00-05:00), check previous date
+            hour = int(file_time[:2]) if len(file_time) >= 2 else 99
+            if hour < 5:
+                prev_date = (
+                    datetime.strptime(file_date, '%Y-%m-%d') - timedelta(days=1)
+                ).strftime('%Y-%m-%d')
+
+                result = await self.bot.db_adapter.fetch_one(query, (prev_date, map_name))
+                if result:
+                    logger.info(
+                        f"🌙 Midnight crossing: linking {filename} to previous date {prev_date}"
+                    )
+                    return prev_date
+
+        except Exception as e:
+            logger.debug(f"Session date resolution failed for {filename}: {e}")
+
+        return file_date
+
     async def _import_engagement_file(self, filepath: Path) -> bool:
         """Import a single engagement file"""
         try:
             if self.debug_log:
                 logger.info(f"🎯 Importing: {filepath.name}")
 
-            # Extract session date from filename
+            # Extract session date from filename, with midnight-crossing support
             # Format: YYYY-MM-DD-HHMMSS-mapname-round-N_engagements.txt
             filename = filepath.name
             parts = filename.split('-')
-            if len(parts) >= 3:
-                session_date = f"{parts[0]}-{parts[1]}-{parts[2]}"
+            if len(parts) >= 4:
+                file_date = f"{parts[0]}-{parts[1]}-{parts[2]}"
+                file_time = parts[3]  # HHMMSS
+                session_date = await self._resolve_session_date(
+                    file_date, file_time, parts, filename
+                )
             else:
                 session_date = datetime.now().strftime("%Y-%m-%d")
 
