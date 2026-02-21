@@ -22,7 +22,11 @@ from typing import Dict, List, Optional
 logger = logging.getLogger("bot.automation.ssh")
 
 SAFE_STATS_FILENAME_PATTERN = re.compile(
-    r"^\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-\d+(?:-endstats)?(?:_ws)?\.txt$"
+    r"^\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-\d+(?:-endstats)?(?:_ws)?(?:_engagements)?\.txt$"
+)
+
+SAFE_GAMETIME_FILENAME_PATTERN = re.compile(
+    r"^gametime-[A-Za-z0-9_.+-]+-R\d+-\d+\.json$"
 )
 
 
@@ -89,7 +93,7 @@ class SSHHandler:
             raise ValueError("Unsafe filename path")
         if ".." in basename:
             raise ValueError("Path traversal detected in filename")
-        if not SAFE_STATS_FILENAME_PATTERN.match(basename):
+        if not (SAFE_STATS_FILENAME_PATTERN.match(basename) or SAFE_GAMETIME_FILENAME_PATTERN.match(basename)):
             raise ValueError(f"Unexpected stats filename format: {basename}")
 
         return basename

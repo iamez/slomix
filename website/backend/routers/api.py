@@ -4092,6 +4092,7 @@ async def get_weapon_stats(
         if total_kills <= 0:
             continue
 
+        # Weapon-level headshot kill rate: headshot_kills / total_kills * 100
         # In ET:Legacy, headshot count can exceed killing shots; cap display at 100%.
         hs_rate = min(100, round((total_headshots / total_kills * 100), 1))
         weapons.append(
@@ -4289,6 +4290,7 @@ async def get_weapon_stats_by_player(
         shots = int(row[5] or 0)
         hits = int(row[6] or 0)
         avg_accuracy = float(row[7] or 0)
+        # Player-level headshot kill rate: headshot_kills / kills * 100
         hs_rate = round((headshots / kills) * 100, 1) if kills > 0 else 0.0
 
         players[guid]["total_kills"] += kills
@@ -4891,22 +4893,21 @@ async def get_session_graph_stats(
         kd = stats["kills"] / stats["deaths"] if stats["deaths"] > 0 else stats["kills"]
         dpm = stats["damage_given"] / time_minutes
 
-        # Advanced metrics (similar to Discord bot's SessionGraphGenerator)
-        # FragPotential: (kills + kill_assists proxy) / time * scaling
-        frag_potential = (
-            (stats["kills"] + stats["kill_assists"] * 0.5) / time_minutes * 10
-        )
+        # Advanced metrics (aligned with Discord bot's frag_potential.py)
+        # FragPotential: DPM while alive = (damage_given / time_alive_seconds) * 60
+        time_dead_seconds = stats.get("time_dead_minutes", 0) * 60
+        time_alive_seconds = max(1, stats["time_played"] - time_dead_seconds)
+        frag_potential = (stats["damage_given"] / time_alive_seconds) * 60
 
-        # Damage Efficiency: damage_given / (damage_given + damage_received)
-        total_damage = stats["damage_given"] + stats["damage_received"]
-        damage_efficiency = (
-            (stats["damage_given"] / total_damage * 100) if total_damage > 0 else 50
-        )
+        # Damage Efficiency: ratio of damage given to received (>1 is good)
+        # Aligned with bot's frag_potential.py damage_ratio formula
+        damage_efficiency = stats["damage_given"] / max(1, stats["damage_received"])
 
-        # Survival Rate: time_alive / total_time (approximated by deaths)
-        # Lower deaths = higher survival
-        avg_death_time = stats["time_played"] / (stats["deaths"] + 1)
-        survival_rate = min(100, avg_death_time / 60 * 10)  # Scale to 0-100
+        # Survival Rate: percentage of time spent alive
+        # Aligned with bot formula: max(0, 100 - (time_dead_minutes / time_played_minutes * 100))
+        time_dead_min = stats.get("time_dead_minutes", 0)
+        time_played_min = max(0.01, time_minutes)
+        survival_rate = max(0, 100 - (time_dead_min / time_played_min * 100))
 
         # Time Denied (use Lua denied_playtime when available; normalize per minute)
         time_denied_raw = stats.get("denied_playtime", 0)

@@ -501,7 +501,7 @@ class SessionGraphGenerator:
                        SUM(p.revives_given) as revives_given,
                        SUM(p.times_revived) as times_revived,
                        SUM(p.gibs) as gibs,
-                       SUM(COALESCE(p.headshots, p.headshot_kills, 0)) as headshots,
+                       SUM(COALESCE(p.headshot_kills, 0)) as headshots,
                        SUM(COALESCE(p.denied_playtime, 0)) as denied_playtime,
                        SUM(COALESCE(p.most_useful_kills, 0)) as useful_kills,
                        SUM(COALESCE(p.self_kills, 0)) as self_kills,

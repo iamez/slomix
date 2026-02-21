@@ -634,16 +634,24 @@ class TimingDebugService:
             table_header = "| Map      | R# | Stats |  Lua | Diff | Fix? |"
             table_divider = "|----------|---:|------:|-----:|-----:|:----:|"
 
-            # Combine table (with code block for monospace)
-            table_content = f"```\n{table_header}\n{table_divider}\n"
-            table_content += "\n".join(table_lines)
-            table_content += "\n```"
+            # Split table into chunks that fit within Discord's 1024 char field limit
+            header_block = f"```\n{table_header}\n{table_divider}\n"
+            chunks = []
+            current_chunk_lines = []
+            for line in table_lines:
+                test = header_block + "\n".join(current_chunk_lines + [line]) + "\n```"
+                if len(test) >= 1024:
+                    chunks.append(current_chunk_lines)
+                    current_chunk_lines = [line]
+                else:
+                    current_chunk_lines.append(line)
+            if current_chunk_lines:
+                chunks.append(current_chunk_lines)
 
-            embed.add_field(
-                name="Round Comparison",
-                value=table_content if len(table_content) < 1024 else "Too many rounds to display",
-                inline=False
-            )
+            for i, chunk_lines in enumerate(chunks):
+                table_content = header_block + "\n".join(chunk_lines) + "\n```"
+                field_name = "Round Comparison" if i == 0 else f"Round Comparison (cont.)"
+                embed.add_field(name=field_name, value=table_content, inline=False)
 
             # Summary section
             summary_parts = [

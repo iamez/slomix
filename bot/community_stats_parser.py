@@ -985,22 +985,30 @@ class C0RNP0RN3StatsParser:
                 damage_given = player.get('damage_given', 0)
 
                 # Store time in SECONDS (integer)
-                # In stopwatch: everyone plays full round, so round_time_seconds is correct
+                # Default: round duration (in stopwatch, everyone plays full round)
                 player['time_played_seconds'] = round_time_seconds
 
+                # Override with actual per-player time from Lua TAB[22] when available
+                objective_stats = player.get('objective_stats', {})
+                lua_time_min = objective_stats.get('time_played_minutes', 0)
+                if lua_time_min > 0:
+                    player['time_played_seconds'] = int(lua_time_min * 60)
+
+                effective_time = player['time_played_seconds']
+
                 # Create display format (MM:SS)
-                minutes = round_time_seconds // 60
-                seconds = round_time_seconds % 60
+                minutes = effective_time // 60
+                seconds = effective_time % 60
                 player['time_display'] = f"{minutes}:{seconds:02d}"
 
                 # Calculate DPM: (damage * 60) / seconds = damage per 60 seconds
-                if round_time_seconds > 0:
-                    player['dpm'] = (damage_given * 60) / round_time_seconds
+                if effective_time > 0:
+                    player['dpm'] = (damage_given * 60) / effective_time
                 else:
                     player['dpm'] = 0.0
 
                 # Backward compatibility: keep decimal minutes (deprecated)
-                player['time_played_minutes'] = round_time_seconds / 60.0
+                player['time_played_minutes'] = effective_time / 60.0
 
             # Calculate MVP
             mvp = self.calculate_mvp(players)

@@ -572,19 +572,15 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             SELECT
                                 MAX(p.player_name) as primary_name,
                                 SUM(p.headshot_kills) as total_hs,
-                                SUM(w.hits) as total_hits,
                                 SUM(p.kills) as total_kills,
                                 COUNT(DISTINCT p.round_id) as games,
                                 p.player_guid
                             FROM player_comprehensive_stats p
                             JOIN rounds r ON p.round_id = r.id
-                            JOIN weapon_comprehensive_stats w
-                                ON p.round_id = w.round_id
-                                AND p.player_guid = w.player_guid
                             WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
-                            HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(w.hits) > 1000
-                            ORDER BY (CAST(SUM(p.headshot_kills) AS FLOAT) / SUM(w.hits)) DESC
+                            HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(p.kills) > 500
+                            ORDER BY (CAST(SUM(p.headshot_kills) AS FLOAT) / NULLIF(SUM(p.kills), 0)) DESC
                             LIMIT {players_per_page} OFFSET {offset}
                         """
                     title = f"🏆 Top Players by Headshot % (Page {page_num}/{total_pages})"
@@ -820,11 +816,11 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                         )
 
                     elif stat == "headshots":
-                        hs, hits, kills, games = row[1], row[2], row[3], row[4]
-                        hs_pct = (hs / hits * 100) if hits > 0 else 0
+                        hs, kills, games = row[1], row[2], row[3]
+                        hs_pct = (hs / kills * 100) if kills > 0 else 0
                         leaderboard_text += (
                             f"{medal} **{name}**\n"
-                            f"   `{hs_pct:.1f}%` HS rate • `{hs:,}` headshots • `{games}` games\n"
+                            f"   `{hs_pct:.1f}%` HS kill rate • `{hs:,}` HS kills • `{games}` games\n"
                         )
 
                     elif stat == "games":
