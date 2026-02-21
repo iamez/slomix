@@ -112,6 +112,12 @@ export function bindInlineClickActions(root = document) {
         if (!action) return;
 
         element.addEventListener('click', (event) => {
+            // For menu items: stop propagation so document-level closeAll()
+            // doesn't hide the menu before the action fires, then close after
+            const parentMenu = element.closest('[role="menu"]');
+            if (parentMenu) {
+                event.stopPropagation();
+            }
             if (element.tagName === 'A') {
                 const href = element.getAttribute('href') || '';
                 if (href.startsWith('#')) {
@@ -122,6 +128,12 @@ export function bindInlineClickActions(root = document) {
                 invokeAction(action, event);
             } catch (err) {
                 console.warn(`Failed to invoke click action: ${action}`, err);
+            }
+            // Close dropdown menu after action fires
+            if (parentMenu) {
+                parentMenu.classList.add('hidden');
+                const toggle = document.querySelector(`[aria-controls="${parentMenu.id}"]`);
+                if (toggle) toggle.setAttribute('aria-expanded', 'false');
             }
         });
 
