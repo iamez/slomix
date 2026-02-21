@@ -107,7 +107,7 @@ async def resolve_round_id_with_reason(
         target_dt = _parse_round_datetime(round_date, round_time)
         if not target_dt:
             diag["reason_code"] = "time_parse_failed"
-            logger.warning(
+            logger.debug(
                 "round_linker: reason=time_parse_failed map=%s rn=%d date=%s time=%s",
                 map_name, round_number, round_date, round_time,
             )
@@ -142,7 +142,7 @@ async def resolve_round_id_with_reason(
                 if target_dt:
                     rows = date_free_rows
                     diag["date_filter_relaxed"] = True
-                    logger.warning(
+                    logger.debug(
                         "round_linker: reason=date_filter_relaxed map=%s rn=%d date=%s "
                         "(rows exist for map+rn on nearby dates; continuing with time window)",
                         map_name, round_number, round_date,
@@ -240,7 +240,7 @@ async def resolve_round_id_with_reason(
         diag["reason_code"] = "all_candidates_outside_window"
         if parsed_diffs_seconds:
             diag["best_diff_seconds"] = int(min(parsed_diffs_seconds))
-        logger.warning(
+        logger.debug(
             "round_linker: reason=all_candidates_outside_window map=%s rn=%d "
             "window=%dmin best_diff=%ss parsed=%d/%d",
             map_name, round_number, window_minutes,

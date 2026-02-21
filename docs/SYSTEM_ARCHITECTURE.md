@@ -80,7 +80,7 @@ stats/
 
 - **Language:** Python 3.x
 - **Discord:** discord.py (commands framework)
-- **Database:** PostgreSQL with asyncpg (production), SQLite fallback only for local/dev edge cases
+- **Database:** PostgreSQL with asyncpg (production only — SQLite is not supported)
 - **SSH:** paramiko + scp (remote file access)
 - **Parser:** Custom C0RNP0RN3StatsParser
 - **Task Scheduling:** discord.ext.tasks (background loops)

@@ -69,15 +69,14 @@ print(f"Confidence: {teams['Team A']['confidence']:.1%}")
 ### Advanced Usage (Custom Detection)
 
 ```python
-import sqlite3
+# NOTE: Production uses PostgreSQL via database_adapter.py (not SQLite)
 from bot.core.team_detector_integration import TeamDetectorIntegration
 
-db = sqlite3.connect("bot/etlegacy_production.db")
 detector = TeamDetectorIntegration()
 
-# Detect with validation
-result, is_reliable = detector.detect_and_validate(
-    db,
+# Detect with validation (uses bot.db_adapter in async context)
+result, is_reliable = await detector.detect_and_validate(
+    db_adapter,
     round_date="2025-11-01",
     require_high_confidence=True  # Only accept high-quality detections
 )
@@ -218,8 +217,9 @@ python -m bot.core.test_advanced_detector 2025-11-01 --compare
 ### Step 1: Backup Current Data
 
 ```bash
-# Backup session_teams table
-sqlite3 bot/etlegacy_production.db "SELECT * FROM session_teams" > session_teams_backup.csv
+# Backup session_teams table (PostgreSQL)
+PGPASSWORD=$DB_PASSWORD psql -h localhost -U etlegacy_user -d etlegacy \
+  -c "COPY session_teams TO STDOUT WITH CSV HEADER" > session_teams_backup.csv
 ```text
 
 ### Step 2: Test New System
@@ -246,15 +246,12 @@ Update these files:
 ### Step 4: Re-detect All Historical Sessions
 
 ```python
-# Re-detect all rounds with new algorithm
+# Re-detect all rounds with new algorithm (PostgreSQL via database_adapter)
 from bot.core.team_detector_integration import TeamDetectorIntegration
-import sqlite3
 
-db = sqlite3.connect("bot/etlegacy_production.db")
-cursor = db.cursor()
-
+# Use bot.db_adapter in async context (not direct connection)
 # Get all session dates
-cursor.execute("""
+rows = await db_adapter.fetch_all("""
     SELECT DISTINCT SUBSTR(round_date, 1, 10) as date
     FROM rounds
     ORDER BY date DESC
