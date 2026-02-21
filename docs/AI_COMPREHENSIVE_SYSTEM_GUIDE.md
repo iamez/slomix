@@ -36,7 +36,7 @@ ET:Legacy Game Server → SSH/Local Files → Parser → PostgreSQL → Discord 
 ### Components
 
 1. **Stats Parser** (`community_stats_parser.py`) - Extracts 50+ fields per player
-2. **Database** (PostgreSQL primary, SQLite fallback) - 6 main tables
+2. **Database** (PostgreSQL only) - 41 tables, 53+ columns in player_comprehensive_stats
 3. **Bot Core** (`bot/ultimate_bot.py`) - 4,371 lines, 14 cogs
 4. **SSH Monitor** - 30-second polling for new stats files
 5. **Discord Interface** - 63 commands across 6 categories

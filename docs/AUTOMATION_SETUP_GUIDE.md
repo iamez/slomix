@@ -284,7 +284,7 @@ python bot/ultimate_bot.py
 1. **Check Database:** Verify files are being processed
 
    ```bash
-   python -c "import sqlite3; conn=sqlite3.connect('bot/etlegacy_production.db'); print(conn.execute('SELECT COUNT(*) FROM processed_files').fetchone())"
+   PGPASSWORD=$DB_PASSWORD psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT COUNT(*) FROM processed_files;"
    ```text
 
 2. **Check Stats Channel:** Verify `STATS_CHANNEL_ID` in .env is correct
@@ -306,7 +306,7 @@ python bot/ultimate_bot.py
 1. **Clear Processed Files (if testing):**
 
    ```bash
-   python -c "import sqlite3; conn=sqlite3.connect('bot/etlegacy_production.db'); conn.execute('DELETE FROM processed_files'); conn.commit()"
+   PGPASSWORD=$DB_PASSWORD psql -h localhost -U etlegacy_user -d etlegacy -c "DELETE FROM processed_files;"
    ```text
 
 2. **Check File Timestamps:** Bot tracks files by filename and timestamp

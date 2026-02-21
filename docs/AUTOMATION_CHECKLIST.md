@@ -14,7 +14,7 @@ Use this checklist to track your progress integrating the automation enhancement
   pip install psutil
   ```
 
-- [ ] Verified all other dependencies exist (discord.py, aiosqlite)
+- [ ] Verified all other dependencies exist (discord.py, asyncpg)
 - [ ] Ran `python bot/test_automation.py` successfully
 
 ### Configuration

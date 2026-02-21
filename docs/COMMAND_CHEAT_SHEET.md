@@ -137,10 +137,9 @@ python bot/ultimate_bot.py
 
 ### Add Performance Indexes
 
-```powershell
-# Open database
-cd g:\VisualStudio\Python\stats
-sqlite3 bot/etlegacy_production.db
+```bash
+# Open database (PostgreSQL)
+PGPASSWORD=$DB_PASSWORD psql -h localhost -U etlegacy_user -d etlegacy
 ```text
 
 ```sql
@@ -178,9 +177,9 @@ Get-Content bot.log -Tail 50
 
 ### Check Database
 
-```powershell
-cd g:\VisualStudio\Python\stats
-sqlite3 bot/etlegacy_production.db
+```bash
+# Check database (PostgreSQL)
+PGPASSWORD=$DB_PASSWORD psql -h localhost -U etlegacy_user -d etlegacy
 ```text
 
 ```sql
@@ -284,11 +283,11 @@ python -m py_compile bot/ultimate_bot.py
 ### Database Issues
 
 ```powershell
-# Backup database
-Copy-Item bot/etlegacy_production.db bot/etlegacy_production.db.backup
+# Backup database (PostgreSQL)
+pg_dump -h localhost -U etlegacy_user -d etlegacy > etlegacy_backup.sql
 
-# Check database integrity
-sqlite3 bot/etlegacy_production.db "PRAGMA integrity_check;"
+# Check database connectivity
+PGPASSWORD=$DB_PASSWORD psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT 1;"
 ```text
 
 ### SSH Connection Issues

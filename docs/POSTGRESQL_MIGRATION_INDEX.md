@@ -98,7 +98,7 @@ If you're new to this migration project, read documents in this order:
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `bot/core/database_adapter.py` | Abstraction layer for SQLite/PostgreSQL | ✅ Complete |
+| `bot/core/database_adapter.py` | Async PostgreSQL database adapter | ✅ Complete |
 | `bot/config.py` | Configuration management | ✅ Complete |
 | `schema_postgresql.sql` | PostgreSQL schema definition | ⏳ To be created |
 | `tools/migrate_to_postgresql.py` | Data migration script | ⏳ To be created |
@@ -308,7 +308,7 @@ Hours: 3 of 80 (4%)
 Migration is successful when:
 
 - ✅ All 132 connection points use adapter
-- ✅ Bot works with both SQLite AND PostgreSQL
+- ✅ Bot works with PostgreSQL (migration from SQLite complete)
 - ✅ All Discord commands function correctly
 - ✅ Data integrity maintained (100% match)
 - ✅ Performance equal or better

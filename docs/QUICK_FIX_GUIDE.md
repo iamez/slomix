@@ -282,8 +282,8 @@ git push origin main
 # Activate venv
 .venv\Scripts\Activate.ps1
 
-# Test database access
-python -c "import sqlite3; conn = sqlite3.connect('bot/etlegacy_production.db'); print('✅ Database accessible')"
+# Test database access (PostgreSQL)
+python -c "import asyncpg; print('✅ asyncpg available')"
 
 # Test parser
 python -c "from bot.community_stats_parser import C0RNP0RN3StatsParser; parser = C0RNP0RN3StatsParser(); print('✅ Parser loads')"

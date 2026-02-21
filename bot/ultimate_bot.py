@@ -1140,6 +1140,8 @@ class UltimateETLegacyBot(commands.Bot):
                 stats_data = parser.parse_stats_file(local_path)
 
                 # Resolve round_id for live posting (Postgres path)
+                # Brief delay lets the DB import commit before round_linker queries — MED-BOT-003
+                await asyncio.sleep(2)
                 resolved_round_id = None
                 if stats_data and not stats_data.get("error"):
                     round_meta = {
@@ -3867,6 +3869,15 @@ class UltimateETLegacyBot(commands.Bot):
 
             if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", 0) <= 0:
                 webhook_logger.warning("STATS_READY webhook missing map/round metadata; skipping")
+                return
+
+            # Filter ghost rounds (< 30 seconds) — MED-TIMING-002
+            actual_duration = round_metadata.get('lua_playtime_seconds', 0)
+            if actual_duration is not None and 0 < actual_duration < 30:
+                webhook_logger.info(
+                    f"⏭️ Skipping ghost round: {round_metadata['map_name']} R{round_metadata['round_number']} "
+                    f"(duration {actual_duration}s < 30s minimum)"
+                )
                 return
 
             # Human-readable team names (for logging)

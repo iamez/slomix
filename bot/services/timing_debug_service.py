@@ -170,7 +170,7 @@ class TimingDebugService:
 
         round_datetime = self._parse_round_datetime(round_date, round_time)
         if not round_datetime:
-            logger.warning(f"Could not parse round datetime: {round_date} {round_time}")
+            logger.debug(f"Could not parse round datetime: {round_date} {round_time}")
             return None
 
         query = """
