@@ -244,8 +244,9 @@ export function navigateTo(viewId, updateHistory = true, params = {}) {
 
     // Update Nav Links
     document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-    const navKey = viewId === 'greatshot-demo' ? 'greatshot' : viewId === 'upload-detail' ? 'uploads' : viewId;
-    const statsViews = new Set(['leaderboards', 'maps', 'weapons', 'records', 'awards', 'retro-viz']);
+    const viewToNav = { 'greatshot-demo': 'greatshot', 'upload-detail': 'uploads', 'sessions': 'sessions-stats' };
+    const navKey = viewToNav[viewId] || viewId;
+    const statsViews = new Set(['sessions', 'leaderboards', 'maps', 'weapons', 'records', 'awards', 'retro-viz']);
     const activeKeys = [`link-${navKey}`];
     if (statsViews.has(viewId)) {
         activeKeys.push('link-stats');
