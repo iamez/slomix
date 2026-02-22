@@ -132,6 +132,48 @@ class AdminCog(commands.Cog, name="Admin"):
             await ctx.send(f"❌ weapon_diag failed: {sanitize_error_message(e)}")
 
 
+    @is_admin()
+    @commands.command(name="correlation_status")
+    async def correlation_status(self, ctx):
+        """🔗 Show round correlation status (Admin only)."""
+        try:
+            svc = getattr(self.bot, 'correlation_service', None)
+            if not svc:
+                await ctx.send("❌ Correlation service not initialized.")
+                return
+
+            summary = await svc.get_status_summary()
+            counts = summary.get('counts', {})
+            total = summary.get('total', 0)
+            dry_run = summary.get('dry_run', True)
+
+            mode = "DRY-RUN (logging only)" if dry_run else "LIVE"
+            msg = f"🔗 **Round Correlation Status** ({mode})\n\n"
+
+            if total == 0:
+                msg += "No correlations tracked yet.\n"
+            else:
+                msg += f"**Total:** {total}\n"
+                for status, cnt in sorted(counts.items()):
+                    emoji = {'complete': '✅', 'partial': '🔶', 'pending': '⏳'}.get(status, '❓')
+                    msg += f"{emoji} **{status}:** {cnt}\n"
+
+            recent = summary.get('recent', [])
+            if recent:
+                msg += "\n**Recent (last 10):**\n```\n"
+                for row in recent:
+                    cid = row[0] if row[0] else '?'
+                    status = row[3] if row[3] else '?'
+                    pct = row[4] if row[4] else 0
+                    msg += f"{cid}: {status} ({pct}%)\n"
+                msg += "```"
+
+            await ctx.send(msg)
+        except Exception as e:
+            logger.error(f"Error in correlation_status: {e}", exc_info=True)
+            await ctx.send(f"❌ correlation_status failed: {sanitize_error_message(e)}")
+
+
 async def setup(bot):
     """Load the Admin Cog."""
     await bot.add_cog(AdminCog(bot))

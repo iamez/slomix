@@ -7,7 +7,7 @@
 --
 -- Sections:
 --   1. Core Bot Tables (7)
---   2. Lua Webhook Tables (2)
+--   2. Lua Webhook Tables (2) + Round Correlations (1)
 --   3. Round Detail Tables (3)
 --   4. Competitive Analytics Tables (3)
 --   5. Permission & Team Management Tables (3)
@@ -257,6 +257,49 @@ CREATE TABLE IF NOT EXISTS lua_spawn_stats (
     captured_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(match_id, round_number, player_guid)
 );
+
+
+-- Round correlations: Links R1+R2 rounds with Lua/gametime/endstats data
+CREATE TABLE IF NOT EXISTS round_correlations (
+    id SERIAL PRIMARY KEY,
+    correlation_id VARCHAR(64) UNIQUE NOT NULL,
+
+    -- Match identification
+    match_id VARCHAR(128) NOT NULL,
+    map_name VARCHAR(64) NOT NULL,
+
+    -- Round linkage (FKs to rounds.id)
+    r1_round_id INTEGER REFERENCES rounds(id),
+    r2_round_id INTEGER REFERENCES rounds(id),
+    summary_round_id INTEGER REFERENCES rounds(id),
+
+    -- Lua data linkage (FKs to lua_round_teams.id)
+    r1_lua_teams_id INTEGER REFERENCES lua_round_teams(id),
+    r2_lua_teams_id INTEGER REFERENCES lua_round_teams(id),
+
+    -- Data completeness flags
+    has_r1_stats BOOLEAN DEFAULT FALSE,
+    has_r2_stats BOOLEAN DEFAULT FALSE,
+    has_r1_lua_teams BOOLEAN DEFAULT FALSE,
+    has_r2_lua_teams BOOLEAN DEFAULT FALSE,
+    has_r1_gametime BOOLEAN DEFAULT FALSE,
+    has_r2_gametime BOOLEAN DEFAULT FALSE,
+    has_r1_endstats BOOLEAN DEFAULT FALSE,
+    has_r2_endstats BOOLEAN DEFAULT FALSE,
+
+    -- Status
+    status VARCHAR(20) DEFAULT 'pending',
+    completeness_pct INTEGER DEFAULT 0,
+
+    -- Timing
+    r1_arrived_at TIMESTAMP,
+    r2_arrived_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_round_corr_match_id ON round_correlations(match_id);
+CREATE INDEX IF NOT EXISTS idx_round_corr_status ON round_correlations(status);
 
 
 -- ============================================================================
