@@ -10,6 +10,42 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — 2026-02-22
+
+- **Round Correlation System** — Event-driven service that tracks data completeness for each match (R1+R2). Correlates stats files, Lua webhook data, gametime files, and endstats into a single `round_correlations` row per match with 8 boolean flags and completeness percentage.
+  - New table: `round_correlations` (23 columns, 8 completeness flags, status tracking)
+  - New service: `bot/services/round_correlation_service.py` (270 lines, UPSERT pattern)
+  - 5 hooks wired into existing import paths (4 in `ultimate_bot.py`, 1 in `postgresql_database_manager.py`)
+  - Admin command: `!correlation_status` shows pending/partial/complete counts and recent correlations
+  - **Starts in DRY-RUN mode** — logs events but does not write to DB. Flip `dry_run=False` after verification week.
+  - Schema: `tools/schema_postgresql.sql` updated with table definition and indexes
+
+- **ET:Legacy Server Research Document** — `docs/ET_LEGACY_SERVER_RESEARCH.md` (~500 lines) covering stopwatch mode internals, Lua stats generation (`c0rnp0rn7.lua` v3.0), `g_currentRound` inversion (engine 1=R1/0=R2, Lua inverts for filenames), R2 cumulative stats behavior, 3-second save delay, webhook vs stats file timing, and complete round lifecycle timeline. Sourced from ET:Legacy GitHub, Lua API docs, and local codebase analysis.
+
+### Fixed — 2026-02-22
+
+- **CRITICAL: match_id generation inconsistency** — `postgresql_database_manager.py:2112` used `filename.replace('.txt', '')` as match_id, producing unique IDs per round (e.g. `2026-02-20-235813-erdenberg_t2-round-1`). R1 and R2 of the same match never shared a match_id. Only 122/1767 rounds had correct R1+R2 pairs (485 orphan R1s, 477 orphan R2s). Fixed to extract `{date}-{time}` format (e.g. `2026-02-20-235813`) shared by R1+R2, matching the working logic in `ultimate_bot.py:1744-1755`. R2 uses R1's timestamp via `r1_filename` from the parser.
+
+- **Completeness weight comment mismatch** — `round_correlation_service.py:219` comment said endstats weighed 5% each but code correctly used 10% each (total 100%). Fixed comment to match code: R1/R2 stats 25% each, lua 10% each, gametime 5% each, endstats 10% each = 100%.
+
+- **Gametime hook timezone documentation** — `ultimate_bot.py:4059` uses `fromtimestamp()` (local time) to reconstruct match_id from `round_end_unix`. This is correct because stats file names use Lua's `os.date()` which also uses local time on the game server. Added clarifying comment to prevent future "fix" to UTC that would break correlation matching.
+
+### Added — 2026-02-20
+
+- **Super-Prompt Master Guide** — `docs/SUPER_PROMPT_2026-02-20.md` (~970 lines) synthesized from 51 docs, verified against codebase using 5 parallel agents. Caught and corrected 5 documentation errors before they could cause damage (Lua pcall exists, send_in_progress resets properly, parser field 9 already implemented, endstats line numbers off by +78, greatshot skill_rating already handled).
+
+- **Production VM SRE Audit** — `docs/VM_AUDIT_REPORT_2026-02-20.md` — full audit of production VM (192.168.64.159) using 5 parallel agents. Key discoveries: PostgreSQL v17 (docs said v14), 67 tables (docs said 41), Redis running but undocumented, VM built Feb 19. Overall grade: B.
+
+### Changed — 2026-02-20
+
+- **VM Configuration Tuning** — Applied 6 production changes:
+  - Added `PRODUCTION_CHANNEL_ID` to .env
+  - Increased web service memory limits (512M→768M MemoryMax, 384M→640M MemoryHigh)
+  - Increased `etlegacy_user` connection limit (20→30, shared by bot+web)
+  - Increased `website_readonly` connection limit (10→20)
+  - Added logrotate configuration (daily, 14 rotations, compressed, 10M max)
+  - Verified all 5 services boot-enabled
+
 ### Fixed — 2026-02-16
 
 - **R2 Lua Webhook Rejection** — `bot/ultimate_bot.py:3637` rejected all R2 webhook data because `round_metadata.get("round_number", 0) == 0` treated `round_number=0` as invalid. In ET:Legacy stopwatch mode, `g_currentRound=0` means R2, so `round_number=0` is a valid value. Changed guard to `round_metadata.get("round_number", -1) < 0`. DB evidence: `lua_round_teams` had 13 rows total, 11 R1, 0 R2.

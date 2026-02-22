@@ -263,6 +263,11 @@ class UltimateETLegacyBot(commands.Bot):
         )
         logger.info("✅ Round publisher service initialized")
 
+        # 🔗 Round Correlation Service (tracks R1+R2 data completeness)
+        from bot.services.round_correlation_service import RoundCorrelationService
+        self.correlation_service = RoundCorrelationService(self.db_adapter, dry_run=True)
+        logger.info("✅ Round correlation service initialized (dry-run mode)")
+
         # 📁 File Repository (data access layer for processed files)
         self.file_repository = FileRepository(self.db_adapter, self.config)
         logger.info("✅ File repository initialized")
@@ -2059,6 +2064,18 @@ class UltimateETLegacyBot(commands.Bot):
                 session_date=date_part,
                 gaming_session_id=gaming_session_id
             )
+
+            # 🔗 CORRELATION: notify correlation service of round import
+            if hasattr(self, 'correlation_service') and self.correlation_service:
+                try:
+                    await self.correlation_service.on_round_imported(
+                        match_id=match_id,
+                        round_number=stats_data["round_num"],
+                        round_id=round_id,
+                        map_name=stats_data["map_name"],
+                    )
+                except Exception as corr_err:
+                    logger.warning(f"[CORRELATION] hook error (non-fatal): {corr_err}")
 
             return round_id
 
@@ -4033,6 +4050,25 @@ class UltimateETLegacyBot(commands.Bot):
         if spawn_stats_meta:
             await self._store_lua_spawn_stats(round_metadata, spawn_stats_meta)
 
+        # 🔗 CORRELATION: notify of gametime arrival
+        if hasattr(self, 'correlation_service') and self.correlation_service:
+            try:
+                round_end = round_metadata.get('round_end_unix', 0)
+                if round_end:
+                    from datetime import datetime as _dt
+                    # NOTE: fromtimestamp() uses local time, matching Lua os.date()
+                    # which generates stats filenames in the game server's local TZ.
+                    # Both machines are CET — do NOT change to utcfromtimestamp().
+                    ts = _dt.fromtimestamp(round_end)
+                    gt_match_id = ts.strftime('%Y-%m-%d-%H%M%S')
+                    await self.correlation_service.on_gametime_processed(
+                        match_id=gt_match_id,
+                        round_number=round_metadata.get('round_number', 0),
+                        map_name=round_metadata.get('map_name', 'unknown'),
+                    )
+            except Exception as corr_err:
+                webhook_logger.warning(f"[CORRELATION] gametime hook error (non-fatal): {corr_err}")
+
         self._queue_pending_metadata(round_metadata, source="gametime")
 
         # Attempt to fetch the matching stats file using the Lua timing data
@@ -4344,6 +4380,25 @@ class UltimateETLegacyBot(commands.Bot):
                 f"💾 Stored Lua round data: {match_id} R{round_number} "
                 f"(Axis: {axis_count}, Allies: {allies_count})"
             )
+
+            # 🔗 CORRELATION: notify of lua teams arrival
+            if hasattr(self, 'correlation_service') and self.correlation_service:
+                try:
+                    # Fetch the lua_round_teams id for this upsert
+                    lua_row = await self.db_adapter.fetch_one(
+                        "SELECT id FROM lua_round_teams WHERE match_id = $1 AND round_number = $2",
+                        (match_id, round_number),
+                    )
+                    lua_teams_id = lua_row[0] if lua_row else None
+                    if lua_teams_id:
+                        await self.correlation_service.on_lua_teams_stored(
+                            match_id=match_id,
+                            round_number=round_number,
+                            lua_teams_id=lua_teams_id,
+                            map_name=map_name,
+                        )
+                except Exception as corr_err:
+                    webhook_logger.warning(f"[CORRELATION] lua_teams hook error (non-fatal): {corr_err}")
 
         except Exception as e:
             # Non-fatal: log warning but don't fail the webhook processing
@@ -5251,6 +5306,21 @@ class UltimateETLegacyBot(commands.Bot):
             round_id=round_id,
             detail=f"awards={len(awards)} vs_rows={len(vs_stats)}",
         )
+
+        # 🔗 CORRELATION: notify of endstats arrival
+        if hasattr(self, 'correlation_service') and self.correlation_service:
+            try:
+                mid_row = await self.db_adapter.fetch_one(
+                    "SELECT match_id FROM rounds WHERE id = $1", (round_id,)
+                )
+                if mid_row and mid_row[0]:
+                    await self.correlation_service.on_endstats_processed(
+                        match_id=mid_row[0],
+                        round_number=round_number,
+                        map_name=map_name,
+                    )
+            except Exception as corr_err:
+                log.warning(f"[CORRELATION] endstats hook error (non-fatal): {corr_err}")
 
         published = True
         if should_publish:

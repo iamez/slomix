@@ -27,6 +27,7 @@ import asyncpg
 import hashlib
 import logging
 import os
+import re
 import time
 import sys
 from pathlib import Path
@@ -2108,8 +2109,29 @@ class PostgreSQLDatabaseManager:
         defender = parsed_data.get('defender_team', 0)
         round_outcome = parsed_data.get('round_outcome', '')
         
-        # Generate match_id from filename (ORIGINAL BEHAVIOR - includes timestamp)
-        match_id = filename.replace('.txt', '')
+        # Generate match_id as date-time only (shared by R1+R2 of the same match)
+        # For R2: use R1's timestamp (parser attaches r1_filename to R2 results)
+        r1_fn = parsed_data.get('r1_filename')
+        if r1_fn and round_number == 2:
+            # R2 with matched R1 - extract R1's date-time for shared match_id
+            r1_base = r1_fn.replace('.txt', '')
+            r1_match = re.match(r'^(\d{4}-\d{2}-\d{2})-(\d{6})-.+$', r1_base)
+            if r1_match:
+                match_id = f"{r1_match.group(1)}-{r1_match.group(2)}"
+            else:
+                match_id = f"{file_date}-{round_time}"  # fallback
+            logger.info(f"🔗 R2 match_id from R1 timestamp: {match_id}")
+        elif is_match_summary and parsed_data.get('r1_filename'):
+            # Match summary (round_num=0) also uses R1's timestamp
+            r1_base = parsed_data['r1_filename'].replace('.txt', '')
+            r1_match = re.match(r'^(\d{4}-\d{2}-\d{2})-(\d{6})-.+$', r1_base)
+            if r1_match:
+                match_id = f"{r1_match.group(1)}-{r1_match.group(2)}"
+            else:
+                match_id = f"{file_date}-{round_time}"
+        else:
+            # R1 or orphan R2 - use own timestamp
+            match_id = f"{file_date}-{round_time}"
         
         # Calculate gaming_session_id
         gaming_session_id = await self._get_or_create_gaming_session_id(conn, file_date, round_time)
@@ -2152,6 +2174,18 @@ class PostgreSQLDatabaseManager:
 
             if is_match_summary:
                 logger.debug(f"✓ Created match summary (round_number=0) with ID {round_id}")
+
+            # 🔗 CORRELATION: notify correlation service of round import
+            if hasattr(self, '_correlation_service') and self._correlation_service:
+                try:
+                    await self._correlation_service.on_round_imported(
+                        match_id=match_id,
+                        round_number=round_number,
+                        round_id=round_id,
+                        map_name=map_name,
+                    )
+                except Exception as corr_err:
+                    logger.warning(f"[CORRELATION] hook error (non-fatal): {corr_err}")
 
             return round_id
         except Exception as e:

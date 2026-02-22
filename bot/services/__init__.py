@@ -63,6 +63,9 @@ from bot.services.round_publisher_service import RoundPublisherService
 # Debug services
 from bot.services.timing_debug_service import TimingDebugService
 
+# Correlation services
+from bot.services.round_correlation_service import RoundCorrelationService
+
 __all__ = [
     # Session services
     'SessionDataService',
@@ -84,4 +87,6 @@ __all__ = [
     'RoundPublisherService',
     # Debug services
     'TimingDebugService',
+    # Correlation services
+    'RoundCorrelationService',
 ]
