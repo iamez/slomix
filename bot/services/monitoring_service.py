@@ -334,7 +334,7 @@ class MonitoringService:
         """Record game server status via UDP query"""
         try:
             # Run blocking UDP query in thread pool to avoid blocking event loop
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             status = await loop.run_in_executor(
                 None, query_game_server, self.server_host, self.server_port
             )

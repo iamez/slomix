@@ -1,7 +1,12 @@
+> **⚠️ DEPRECATED (February 2026):** This document is from November 2025 and is dangerously outdated.
+> It references SQLite, 7 cogs, 50+ commands, and other numbers that are no longer accurate.
+> **Use `docs/AI_COMPREHENSIVE_SYSTEM_GUIDE.md` and `docs/CLAUDE.md` instead** for current system documentation.
+> This file is kept for historical reference only.
+
 # 🎮 ET:Legacy Discord Bot - Complete System Rundown
 
-**Date:** November 2, 2025  
-**Status:** Production-Ready, Modular Architecture
+**Date:** November 2, 2025
+**Status:** ~~Production-Ready, Modular Architecture~~ **OUTDATED — see deprecation notice above**
 
 > Update (February 18, 2026): Availability and multi-channel notification details are maintained in:
 > - `docs/AVAILABILITY_SYSTEM.md`

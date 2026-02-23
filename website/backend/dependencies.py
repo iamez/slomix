@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from typing import AsyncGenerator
@@ -17,6 +18,8 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")
 if project_root not in sys.path:
     sys.path.append(project_root)
 
+
+logger = logging.getLogger(__name__)
 
 # Global singleton connection pool
 _db_pool: DatabaseAdapter = None
@@ -41,7 +44,7 @@ async def init_db_pool():
         raise ValueError(f"Unsupported database type: {db_type}")
 
     await _db_pool.connect()
-    print(f"✅ Database pool initialized ({db_type})")
+    logger.info("Database pool initialized (%s)", db_type)
     return _db_pool
 
 
@@ -51,7 +54,7 @@ async def close_db_pool():
     if _db_pool:
         await _db_pool.close()
         _db_pool = None
-        print("✅ Database pool closed")
+        logger.info("Database pool closed")
 
 
 async def get_db() -> AsyncGenerator[DatabaseAdapter, None]:

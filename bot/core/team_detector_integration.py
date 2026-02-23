@@ -1,6 +1,10 @@
 """
 Team Detector Integration Layer
 
+DEPRECATED: SQLite-only module — NOT used in production (PostgreSQL mode).
+All methods accept a synchronous sqlite3.Connection and use SQLite syntax.
+For async/PostgreSQL usage, use TeamManager via the bot's database adapter.
+
 Provides a unified interface for team detection that:
 1. Uses the advanced detector by default
 2. Falls back to simple detection if needed

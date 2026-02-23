@@ -83,59 +83,6 @@ logger.info(f"📦 Discord.py: {discord.__version__}")
 # ======================================================================
 
 
-async def ensure_player_name_alias(db) -> None:
-    """Create a TEMP VIEW aliasing an existing name column to `player_name`.
-
-    This standalone helper mirrors the Cog method and can be used by
-    non-Cog code paths that open their own DB connections (where `self`
-    isn't available).
-    """
-    try:
-        async with db.execute(
-            "PRAGMA table_info('player_comprehensive_stats')"
-        ) as cur:
-            cols = await cur.fetchall()
-
-        col_names = [c[1] for c in cols]
-        if "player_name" in col_names:
-            return
-
-        # Common alternate name columns we've seen in older DBs
-        candidates = [
-            "player_name",
-            "clean_name",
-            "clean_name_final",
-            "clean_name_normalized",
-            "name",
-            "player",
-            "display_name",
-        ]
-        # Pick the first candidate present in the table
-        alt = next((c for c in candidates if c in col_names), None)
-        if not alt:
-            logger.warning(
-                "player_comprehensive_stats missing 'player_name' and no alternative found"
-            )
-            return
-
-        tmp_tbl_sql = (
-            f"CREATE TEMP TABLE tmp_player_comprehensive_stats AS "
-            f"SELECT *, {alt} AS player_name FROM main.player_comprehensive_stats"
-        )
-        view_sql = "CREATE TEMP VIEW player_comprehensive_stats AS SELECT * FROM tmp_player_comprehensive_stats"
-
-        await db.execute(tmp_tbl_sql)
-        await db.execute(view_sql)
-        await db.commit()
-        logger.info(
-            f"Created TEMP VIEW player_comprehensive_stats aliasing {alt} -> player_name via tmp table"
-        )
-    except Exception:
-        logger.exception(
-            "Failed to create TEMP VIEW alias for player_name; queries may still fail"
-        )
-
-
 def _split_chunks(s: str, max_len: int = 900):
     """Split a long string into line-preserving chunks under max_len.
 
@@ -2484,28 +2431,6 @@ class UltimateETLegacyBot(commands.Bot):
                         row_vals.append(player.get("name", "Unknown"))
 
                     row_vals += [weapon_name, w_kills, w_deaths, w_headshots, w_hits, w_shots, w_acc]
-
-                    # Temporary diagnostic logging: capture the first few weapon INSERTs
-                    # to verify column/value alignment (will be removed after debugging).
-                    try:
-                        logged = getattr(self, "_weapon_diag_logged", 0)
-                        if logged < 5:
-                            logger.debug(
-                                "DIAG WEAPON INSERT: round_id=%s player=%s",
-                                round_id,
-                                player.get("name"),
-                            )
-                            logger.debug("  insert_cols: %s", insert_cols)
-                            logger.debug("  row_vals: %r", tuple(row_vals))
-                            logger.debug("  insert_sql: %s", insert_sql)
-                            # increment global counter on the bot cog instance
-                            try:
-                                self._weapon_diag_logged = logged + 1
-                            except Exception:
-                                # Best-effort; don't raise from diagnostics
-                                pass
-                    except Exception:
-                        logger.exception("Failed to log weapon insert diagnostic")
 
                     await self.db_adapter.execute(insert_sql, tuple(row_vals))
         except Exception as e:

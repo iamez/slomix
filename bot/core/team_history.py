@@ -2,13 +2,12 @@
 """
 Team History Helper Functions
 
+DEPRECATED: SQLite-only module — NOT used in production (PostgreSQL mode).
+All methods gracefully return empty/None when the SQLite DB file is missing.
+For async/PostgreSQL usage, use TeamManager via the bot's database adapter.
+
 Utility functions for querying and displaying team history data.
 These can be imported and used by bot commands or analysis scripts.
-
-NOTE: This module uses synchronous sqlite3 connections and is ONLY usable
-in SQLite mode. All methods return empty/None when the db_path does not
-exist (i.e. when running against PostgreSQL). The async bot cogs should
-use the database adapter instead.
 """
 
 import json
@@ -68,7 +67,7 @@ class TeamHistoryManager:
         # Get player names
         guids = lineup['player_guids']
         placeholders = ','.join('?' * len(guids))
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT guid, alias
             FROM player_aliases
             WHERE guid IN ({placeholders})
