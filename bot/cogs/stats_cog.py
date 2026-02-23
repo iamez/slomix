@@ -364,12 +364,13 @@ class StatsCog(commands.Cog, name="Stats"):
 
                 kills, deaths, games, damage, headshots, time_sec = stats
 
-                # Get weapon stats for accuracy
+                # Get weapon stats for accuracy and headshot hits
                 weapon_stats = await self.bot.db_adapter.fetch_one(
                     """
                     SELECT
                         SUM(w.hits) as total_hits,
-                        SUM(w.shots) as total_shots
+                        SUM(w.shots) as total_shots,
+                        SUM(w.headshots) as total_headshot_hits
                     FROM weapon_comprehensive_stats w
                     JOIN rounds r ON w.round_id = r.id
                     WHERE w.player_guid = ?
@@ -379,13 +380,13 @@ class StatsCog(commands.Cog, name="Stats"):
                     (player_guid,),
                 )
 
-                hits, shots = weapon_stats if weapon_stats else (0, 0)
+                hits, shots, headshot_hits = weapon_stats if weapon_stats else (0, 0, 0)
 
                 # Calculate metrics using centralized calculator
                 kd = StatsCalculator.calculate_kd(kills, deaths)
                 accuracy = StatsCalculator.calculate_accuracy(hits, shots)
                 dpm = StatsCalculator.calculate_dpm(damage, time_sec)
-                hs_pct = StatsCalculator.calculate_headshot_percentage(headshots, kills)
+                hs_pct = StatsCalculator.calculate_headshot_accuracy(headshot_hits, hits)
 
                 return {
                     "name": display_name,
