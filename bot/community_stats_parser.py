@@ -295,7 +295,7 @@ class C0RNP0RN3StatsParser:
                 dpm = obj_stats.get('dpm', 0)
                 time_dead_mins = obj_stats.get('time_dead_minutes', 0)
                 denied_mins = obj_stats.get('denied_playtime', 0) / 60.0 if obj_stats.get('denied_playtime') else 0
-                headshots = obj_stats.get('headshot_kills', 0)
+                headshot_kills = obj_stats.get('headshot_kills', 0)
 
                 # Multikills
                 double_kills = obj_stats.get('multikill_2x', 0)
@@ -308,8 +308,9 @@ class C0RNP0RN3StatsParser:
                 weapon_stats = player.get('weapon_stats', {})
                 total_hits = sum(w['hits'] for w in weapon_stats.values())
                 total_shots = sum(w['shots'] for w in weapon_stats.values())
+                headshot_hits = sum(w.get('headshots', 0) for w in weapon_stats.values())
                 acc = (total_hits / total_shots * 100) if total_shots > 0 else 0
-                hs_rate = (headshots / total_hits * 100) if total_hits > 0 else 0
+                hs_rate = (headshot_hits / total_hits * 100) if total_hits > 0 else 0
 
                 # Format damage (show in K if over 1000)
                 dmg_given_display = f"{damage_given/1000:.1f}K" if damage_given >= 1000 else f"{damage_given}"
@@ -323,7 +324,7 @@ class C0RNP0RN3StatsParser:
                 mvp_badge = " (MVP)" if name == mvp_name else ""
                 player_text = f"{medal} {team_indicator} **{name}**{mvp_badge}\n"
                 player_text += f"⏱️ `{actual_time}` • 💪 `{dpm:.0f} DPM` • 📊 `{dmg_given_display}⬆/{dmg_recv_display}⬇` • 🎯 `{acc:.1f}% ACC ({total_hits}/{total_shots})`\n"
-                player_text += f"⚔️ `{kills}K/{deaths}D/{gibs}G ({kd_ratio:.2f} KD)` • 💉 `{revives_given}↑/{times_revived}↓` • 🎯 `{useful_kills} UK` • 📈 `{headshots} HS ({hs_rate:.1f}%)`\n"
+                player_text += f"⚔️ `{kills}K/{deaths}D/{gibs}G ({kd_ratio:.2f} KD)` • 💉 `{revives_given}↑/{times_revived}↓` • 🎯 `{useful_kills} UK` • 📈 `{headshot_kills} HS ({hs_rate:.1f}%)`\n"
 
                 # Line 4: Multikills (conditional) + death stats
                 multikills_text = ""

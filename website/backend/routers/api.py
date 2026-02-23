@@ -315,6 +315,83 @@ async def resolve_display_name(
     return fallback
 
 
+async def batch_resolve_display_names(
+    db: DatabaseAdapter,
+    guid_fallback_pairs: List[Tuple[str, str]],
+) -> Dict[str, str]:
+    """
+    Batch-resolve display names for multiple GUIDs in minimal queries.
+    Returns a dict mapping guid -> display_name.
+    """
+    if not guid_fallback_pairs:
+        return {}
+
+    guids = [g for g, _ in guid_fallback_pairs]
+    fallback_map = {g: f for g, f in guid_fallback_pairs}
+    result: Dict[str, str] = {}
+
+    # 1) Batch from player_links
+    try:
+        placeholders = ", ".join(f"${i+1}" for i in range(len(guids)))
+        rows = await db.fetch_all(
+            f"SELECT player_guid, COALESCE(display_name, player_name) FROM player_links WHERE player_guid IN ({placeholders})",
+            tuple(guids),
+        )
+        for row in rows:
+            if row[1]:
+                result[row[0]] = row[1]
+    except (OSError, RuntimeError):
+        # display_name column may not exist; try without it
+        try:
+            rows = await db.fetch_all(
+                f"SELECT player_guid, player_name FROM player_links WHERE player_guid IN ({placeholders})",
+                tuple(guids),
+            )
+            for row in rows:
+                if row[1]:
+                    result[row[0]] = row[1]
+        except (OSError, RuntimeError):
+            pass
+
+    remaining = [g for g in guids if g not in result]
+    if not remaining:
+        return result
+
+    # 2) Batch from player_aliases
+    try:
+        placeholders = ", ".join(f"${i+1}" for i in range(len(remaining)))
+        rows = await db.fetch_all(
+            f"SELECT DISTINCT ON (guid) guid, alias FROM player_aliases WHERE guid IN ({placeholders}) ORDER BY guid, last_seen DESC",
+            tuple(remaining),
+        )
+        for row in rows:
+            if row[1]:
+                result[row[0]] = row[1]
+    except (OSError, RuntimeError):
+        pass
+
+    remaining = [g for g in guids if g not in result]
+    if not remaining:
+        return result
+
+    # 3) Batch from player_comprehensive_stats
+    placeholders = ", ".join(f"${i+1}" for i in range(len(remaining)))
+    rows = await db.fetch_all(
+        f"SELECT DISTINCT ON (player_guid) player_guid, player_name FROM player_comprehensive_stats WHERE player_guid IN ({placeholders}) ORDER BY player_guid, round_date DESC",
+        tuple(remaining),
+    )
+    for row in rows:
+        if row[1]:
+            result[row[0]] = row[1]
+
+    # Fill any still-missing with fallbacks
+    for g in guids:
+        if g not in result:
+            result[g] = fallback_map.get(g, "Unknown")
+
+    return result
+
+
 async def resolve_alias_guid_map(
     db: DatabaseAdapter,
     names: List[str],
@@ -565,11 +642,14 @@ async def get_diagnostics(db: DatabaseAdapter = Depends(get_db)):
         results["status"] = "warning"
 
     # Monitoring history quick info (non-fatal)
+    _MONITORING_TABLES = {"server_status_history", "voice_status_history"}
     monitoring = {}
     for table, key in (
         ("server_status_history", "server"),
         ("voice_status_history", "voice"),
     ):
+        if table not in _MONITORING_TABLES:
+            continue
         try:
             count = await db.fetch_val(f"SELECT COUNT(*) FROM {table}")
             last = await db.fetch_val(f"SELECT MAX(recorded_at) FROM {table}")
@@ -1081,10 +1161,13 @@ async def get_monitoring_status(db: DatabaseAdapter = Depends(get_db)):
         },
     }
 
+    _MONITORING_STATUS_TABLES = {"server_status_history", "voice_status_history"}
     for table, key in (
         ("server_status_history", "server"),
         ("voice_status_history", "voice"),
     ):
+        if table not in _MONITORING_STATUS_TABLES:
+            continue
         try:
             count = await db.fetch_val(f"SELECT COUNT(*) FROM {table}")
             last = await db.fetch_val(f"SELECT MAX(recorded_at) FROM {table}")
@@ -1485,14 +1568,14 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
         try:
             return await db.fetch_val(query, params)
         except Exception as e:
-            print(f"[overview] query failed: {e}")
+            logger.warning("[overview] query failed: %s", e)
             return default
 
     async def safe_one(query: str, params: Optional[tuple] = None):
         try:
             return await db.fetch_one(query, params)
         except Exception as e:
-            print(f"[overview] query failed: {e}")
+            logger.warning("[overview] query failed: %s", e)
             return None
 
     # Use only legal rounds (completed or pre-status rows) and only R1/R2
@@ -1565,7 +1648,7 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
                 (start_date_str,),
             )
         except Exception as e:
-            print(f"[overview] round_status filter failed, retrying fallback: {e}")
+            logger.warning("round_status filter failed, retrying fallback: %s", e)
             rounds_count = await safe_val(
                 f"SELECT COUNT(*) FROM rounds {round_filter_fallback}"
             )
@@ -3027,10 +3110,10 @@ async def search_player(query: str, db: DatabaseAdapter = Depends(get_db)):
         LIMIT 10
     """
     rows = await db.fetch_all(sql, (f"%{safe_query}%",))
-    names = []
-    for guid, player_name in rows:
-        names.append(await resolve_display_name(db, guid, player_name or "Unknown"))
-    return names
+    name_map = await batch_resolve_display_names(
+        db, [(guid, player_name or "Unknown") for guid, player_name in rows]
+    )
+    return [name_map.get(guid, player_name or "Unknown") for guid, player_name in rows]
 
 
 @router.post("/player/link")
@@ -3671,14 +3754,16 @@ async def get_leaderboard(
         logger.error("Leaderboard query error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Database error")
 
+    name_map = await batch_resolve_display_names(
+        db, [(row[0], row[1] or "Unknown") for row in rows]
+    )
     leaderboard = []
     for i, row in enumerate(rows):
-        display_name = await resolve_display_name(db, row[0], row[1] or "Unknown")
         leaderboard.append(
             {
                 "rank": i + 1,
                 "guid": row[0],
-                "name": display_name,
+                "name": name_map.get(row[0], row[1] or "Unknown"),
                 "value": float(row[2]) if row[2] is not None else 0,
                 "rounds": row[3],  # Changed from sessions to rounds
                 "kills": row[4],
@@ -3743,14 +3828,16 @@ async def get_quick_leaders(
         except Exception as e:
             errors.append(f"xp_query_failed: {e}")
             xp_rows = []
+    xp_name_map = await batch_resolve_display_names(
+        db, [(row[0], row[1] or "Unknown") for row in xp_rows]
+    )
     xp_leaders = []
     for i, row in enumerate(xp_rows):
-        display_name = await resolve_display_name(db, row[0], row[1] or "Unknown")
         xp_leaders.append(
             {
                 "rank": i + 1,
                 "guid": row[0],
-                "name": display_name,
+                "name": xp_name_map.get(row[0], row[1] or "Unknown"),
                 "value": row[2] or 0,
                 "rounds": row[3] or 0,
                 "label": "XP",
@@ -4087,14 +4174,15 @@ async def get_weapon_stats(
         weapon_name = row[0] or "Unknown"
         total_kills = row[1] or 0
         total_headshots = row[2] or 0
+        total_hits = row[4] or 0
         avg_accuracy = row[5] or 0
 
         if total_kills <= 0:
             continue
 
-        # Weapon-level headshot kill rate: headshot_kills / total_kills * 100
-        # In ET:Legacy, headshot count can exceed killing shots; cap display at 100%.
-        hs_rate = min(100, round((total_headshots / total_kills * 100), 1))
+        # Weapon-level headshot accuracy: headshots / hits * 100
+        # headshots in weapon_comprehensive_stats are headshot HITS, not kills.
+        hs_rate = min(100, round((total_headshots / total_hits * 100), 1)) if total_hits > 0 else 0.0
         weapons.append(
             {
                 "name": _clean_weapon_name(weapon_name),
@@ -4290,8 +4378,9 @@ async def get_weapon_stats_by_player(
         shots = int(row[5] or 0)
         hits = int(row[6] or 0)
         avg_accuracy = float(row[7] or 0)
-        # Player-level headshot kill rate: headshot_kills / kills * 100
-        hs_rate = round((headshots / kills) * 100, 1) if kills > 0 else 0.0
+        # Player-level headshot accuracy: headshots / hits * 100
+        # headshots in weapon_comprehensive_stats are headshot HITS, not kills.
+        hs_rate = round((headshots / hits) * 100, 1) if hits > 0 else 0.0
 
         players[guid]["total_kills"] += kills
         players[guid]["weapons"].append(

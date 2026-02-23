@@ -80,6 +80,8 @@ class PlayerMetrics:
     # Support stats
     revives_given: int = 0
     headshot_kills: int = 0
+    headshot_hits: int = 0  # Sum of weapon headshot hits (different from headshot_kills)
+    total_hits: int = 0     # Sum of weapon hits across all weapons
     
     # Objective stats
     objectives_completed: int = 0
@@ -134,8 +136,11 @@ class PlayerMetrics:
         # Damage Ratio (given/received)
         self.damage_ratio = self.damage_given / max(1, self.damage_received)
         
-        # Headshot percentage
-        if self.kills > 0:
+        # Headshot percentage (% of hits that landed on the head)
+        if self.total_hits > 0:
+            self.headshot_percentage = (self.headshot_hits / self.total_hits) * 100
+        elif self.kills > 0:
+            # Fallback: use headshot_kills / kills when hit data unavailable
             self.headshot_percentage = (self.headshot_kills / self.kills) * 100
         else:
             self.headshot_percentage = 0.0
@@ -397,14 +402,19 @@ class FragPotentialCalculator:
                 SUM(p.objectives_destroyed) as obj_destroyed,
                 SUM(p.objectives_stolen) as obj_stolen,
                 SUM(p.objectives_returned) as obj_returned,
-                COUNT(DISTINCT p.round_id) as rounds_played
+                COUNT(DISTINCT p.round_id) as rounds_played,
+                COALESCE((SELECT SUM(w.headshots) FROM weapon_comprehensive_stats w
+                          WHERE w.player_guid = p.player_guid AND w.round_id IN ({placeholders})), 0) as weapon_headshot_hits,
+                COALESCE((SELECT SUM(w.hits) FROM weapon_comprehensive_stats w
+                          WHERE w.player_guid = p.player_guid AND w.round_id IN ({placeholders})), 0) as weapon_total_hits
             FROM player_comprehensive_stats p
             WHERE p.round_id IN ({placeholders})
             GROUP BY p.player_guid, p.player_name
             ORDER BY SUM(p.damage_given) DESC
         """
 
-        rows = await db_adapter.fetch_all(query, tuple(session_ids))
+        # Query uses session_ids 4 times (main WHERE + 3 subquery IN clauses)
+        rows = await db_adapter.fetch_all(query, tuple(session_ids) * 4)
         
         if not rows:
             return []
@@ -446,6 +456,8 @@ class FragPotentialCalculator:
                 objectives_destroyed=row[11] or 0,
                 objectives_stolen=row[12] or 0,
                 objectives_returned=row[13] or 0,
+                headshot_hits=row[15] or 0,
+                total_hits=row[16] or 0,
             )
             
             rounds_played = row[14] or 1

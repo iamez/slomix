@@ -155,33 +155,67 @@ class StatsCalculator:
             return default
 
     @staticmethod
-    def calculate_headshot_percentage(headshots: Optional[int], kills: Optional[int],
-                                     default: float = 0.0) -> float:
+    def calculate_headshot_accuracy(headshot_hits: Optional[int], total_hits: Optional[int],
+                                    default: float = 0.0) -> float:
         """
-        Calculate headshot percentage.
+        Calculate headshot accuracy (what % of hits landed on the head).
 
-        Formula: (headshots / kills) * 100
+        Formula: (headshot_hits / total_hits) * 100
 
         Args:
-            headshots: Number of headshot kills
-            kills: Total kills
+            headshot_hits: Number of shots that hit the head (sum of weapon headshot hits)
+            total_hits: Total shots that hit any body part
             default: Value to return on error
 
         Returns:
-            Headshot percentage (0-100)
+            Headshot accuracy as percentage (0-100)
 
         Examples:
-            >>> StatsCalculator.calculate_headshot_percentage(5, 20)
-            25.0  # 25% of kills were headshots
-            >>> StatsCalculator.calculate_headshot_percentage(0, 10)
+            >>> StatsCalculator.calculate_headshot_accuracy(50, 200)
+            25.0  # 25% of hits were headshots
+            >>> StatsCalculator.calculate_headshot_accuracy(0, 100)
             0.0
         """
         try:
-            if headshots is None or kills is None or kills == 0:
+            if headshot_hits is None or total_hits is None or total_hits == 0:
                 return default
-            return (headshots / kills) * 100
+            return (headshot_hits / total_hits) * 100
         except (TypeError, ZeroDivisionError):
             return default
+
+    @staticmethod
+    def calculate_headshot_kill_rate(headshot_kills: Optional[int], total_kills: Optional[int],
+                                    default: float = 0.0) -> float:
+        """
+        Calculate headshot kill rate (what % of kills were headshot kills).
+
+        Formula: (headshot_kills / total_kills) * 100
+
+        This is the old metric preserved as a separate named stat.
+
+        Args:
+            headshot_kills: Number of kills where the final blow was a headshot
+            total_kills: Total number of kills
+            default: Value to return on error
+
+        Returns:
+            Headshot kill rate as percentage (0-100)
+
+        Examples:
+            >>> StatsCalculator.calculate_headshot_kill_rate(5, 20)
+            25.0  # 25% of kills were headshots
+            >>> StatsCalculator.calculate_headshot_kill_rate(0, 10)
+            0.0
+        """
+        try:
+            if headshot_kills is None or total_kills is None or total_kills == 0:
+                return default
+            return (headshot_kills / total_kills) * 100
+        except (TypeError, ZeroDivisionError):
+            return default
+
+    # Backward-compatible alias (deprecated, use calculate_headshot_accuracy instead)
+    calculate_headshot_percentage = calculate_headshot_accuracy
 
     @staticmethod
     def safe_divide(numerator: Optional[Union[int, float]],
