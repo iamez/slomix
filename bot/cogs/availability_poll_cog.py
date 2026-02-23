@@ -2070,7 +2070,7 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
             await ctx.author.send(instructions)
             await ctx.send(f"✅ Sent your {normalized} link token via DM.")
         except discord.Forbidden:
-            await ctx.send(f"⚠️ Couldn't DM you. Here is the token (delete after use): `{token}`")
+            await ctx.send("⚠️ Couldn't DM you. Please enable DMs from server members and try again.")
 
     @commands.command(name="avail_unsubscribe")
     @commands.cooldown(1, 10, commands.BucketType.user)

@@ -150,7 +150,7 @@ class SSHHandler:
         """
         try:
             # Run in executor to avoid blocking event loop, with 30s timeout
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             files = await asyncio.wait_for(
                 loop.run_in_executor(
                     None,
@@ -251,7 +251,7 @@ class SSHHandler:
             os.makedirs(local_dir, exist_ok=True)
 
             # Run in executor
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             local_path = await loop.run_in_executor(
                 None,
                 SSHHandler._download_file_sync,

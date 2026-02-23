@@ -196,10 +196,12 @@ class ServerControl(commands.Cog):
         
         logger.info(f"AUDIT: {log_entry}")
         
-        # Write to local audit log
+        # Write to local audit log (non-blocking)
         try:
-            with open(self.audit_log_path, 'a', encoding='utf-8') as f:
-                f.write(log_entry + '\n')
+            def _write_audit():
+                with open(self.audit_log_path, 'a', encoding='utf-8') as f:
+                    f.write(log_entry + '\n')
+            await asyncio.to_thread(_write_audit)
         except Exception as e:
             logger.error(f"Failed to write audit log: {e}")
     

@@ -413,7 +413,7 @@ class SSHMonitor:
 
     async def _list_remote_files(self) -> list:
         """List files in remote SSH directory (async wrapper)"""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._list_remote_files_sync)
     
     async def _process_new_file(self, filename: str):
@@ -545,7 +545,7 @@ class SSHMonitor:
 
     async def _download_file(self, filename: str) -> Optional[str]:
         """Download file from remote server (async wrapper)"""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         local_path, download_duration = await loop.run_in_executor(
             None, self._download_file_sync, filename
         )

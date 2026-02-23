@@ -115,29 +115,19 @@ class LinkCog(commands.Cog, name="Link"):
             )
             return
 
-        if self.bot.config.database_type == 'sqlite':
-            await self.bot.db_adapter.execute(
-                """
-                INSERT OR REPLACE INTO player_links
-                (discord_id, discord_username, player_guid, player_name, linked_at)
-                VALUES (?, ?, ?, ?, datetime('now'))
-                """,
-                (discord_id, str(ctx.author), selected["guid"], selected["name"]),
-            )
-        else:  # PostgreSQL
-            await self.bot.db_adapter.execute(
-                """
-                INSERT INTO player_links
-                (discord_id, discord_username, player_guid, player_name, linked_at)
-                VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-                ON CONFLICT (discord_id) DO UPDATE SET
-                    discord_username = EXCLUDED.discord_username,
-                    player_guid = EXCLUDED.player_guid,
-                    player_name = EXCLUDED.player_name,
-                    linked_at = EXCLUDED.linked_at
-                """,
-                (discord_id, str(ctx.author), selected["guid"], selected["name"]),
-            )
+        await self.bot.db_adapter.execute(
+            """
+            INSERT INTO player_links
+            (discord_id, discord_username, player_guid, player_name, linked_at)
+            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+            ON CONFLICT (discord_id) DO UPDATE SET
+                discord_username = EXCLUDED.discord_username,
+                player_guid = EXCLUDED.player_guid,
+                player_name = EXCLUDED.player_name,
+                linked_at = EXCLUDED.linked_at
+            """,
+            (discord_id, str(ctx.author), selected["guid"], selected["name"]),
+        )
 
         success_embed = discord.Embed(
             title="✅ Account Linked Successfully!",
@@ -975,30 +965,20 @@ class LinkCog(commands.Cog, name="Link"):
                 )
 
                 if str(reaction.emoji) == "✅":
-                    # Confirmed - link it (database-specific syntax)
-                    if self.bot.config.database_type == 'sqlite':
-                        await self.bot.db_adapter.execute(
-                            """
-                            INSERT OR REPLACE INTO player_links
-                            (discord_id, discord_username, player_guid, player_name, linked_at)
-                            VALUES (?, ?, ?, ?, datetime('now'))
-                            """,
-                            (discord_id, str(ctx.author), guid, primary_name),
-                        )
-                    else:  # PostgreSQL
-                        await self.bot.db_adapter.execute(
-                            """
-                            INSERT INTO player_links
-                            (discord_id, discord_username, player_guid, player_name, linked_at)
-                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-                            ON CONFLICT (discord_id) DO UPDATE SET
-                                discord_username = EXCLUDED.discord_username,
-                                player_guid = EXCLUDED.player_guid,
-                                player_name = EXCLUDED.player_name,
-                                linked_at = EXCLUDED.linked_at
-                            """,
-                            (discord_id, str(ctx.author), guid, primary_name),
-                        )
+                    # Confirmed - link it
+                    await self.bot.db_adapter.execute(
+                        """
+                        INSERT INTO player_links
+                        (discord_id, discord_username, player_guid, player_name, linked_at)
+                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                        ON CONFLICT (discord_id) DO UPDATE SET
+                            discord_username = EXCLUDED.discord_username,
+                            player_guid = EXCLUDED.player_guid,
+                            player_name = EXCLUDED.player_name,
+                            linked_at = EXCLUDED.linked_at
+                        """,
+                        (discord_id, str(ctx.author), guid, primary_name),
+                    )
 
                     await message.clear_reactions()
                     await ctx.send(
@@ -1331,30 +1311,20 @@ class LinkCog(commands.Cog, name="Link"):
                 )
 
                 if str(reaction.emoji) == "✅":
-                    # Confirmed - link it (database-specific syntax)
-                    if self.bot.config.database_type == 'sqlite':
-                        await self.bot.db_adapter.execute(
-                            """
-                            INSERT OR REPLACE INTO player_links
-                            (discord_id, discord_username, player_guid, player_name, linked_at)
-                            VALUES (?, ?, ?, ?, datetime('now'))
-                            """,
-                            (target_discord_id, str(target_user), guid, primary_name),
-                        )
-                    else:  # PostgreSQL
-                        await self.bot.db_adapter.execute(
-                            """
-                            INSERT INTO player_links
-                            (discord_id, discord_username, player_guid, player_name, linked_at)
-                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-                            ON CONFLICT (discord_id) DO UPDATE SET
-                                discord_username = EXCLUDED.discord_username,
-                                player_guid = EXCLUDED.player_guid,
-                                player_name = EXCLUDED.player_name,
-                                linked_at = EXCLUDED.linked_at
-                            """,
-                            (target_discord_id, str(target_user), guid, primary_name),
-                        )
+                    # Confirmed - link it
+                    await self.bot.db_adapter.execute(
+                        """
+                        INSERT INTO player_links
+                        (discord_id, discord_username, player_guid, player_name, linked_at)
+                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                        ON CONFLICT (discord_id) DO UPDATE SET
+                            discord_username = EXCLUDED.discord_username,
+                            player_guid = EXCLUDED.player_guid,
+                            player_name = EXCLUDED.player_name,
+                            linked_at = EXCLUDED.linked_at
+                        """,
+                        (target_discord_id, str(target_user), guid, primary_name),
+                    )
 
                     await message.clear_reactions()
 

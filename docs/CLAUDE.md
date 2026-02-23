@@ -9,8 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Slomix - ET:Legacy Discord Bot
 
-**Version**: 1.0.6 | **Language**: Python 3.11+ | **Discord.py**: 2.0+
-**Database**: PostgreSQL 14 (primary) | **Status**: Production-Ready
+**Version**: 1.0.8 | **Language**: Python 3.11+ | **Discord.py**: 2.0+
+**Database**: PostgreSQL 17 (production) / 14 (dev) | **Status**: Production-Ready
 
 ---
 
@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Database**: `etlegacy` on `localhost:5432` (user: `etlegacy_user`, password in `.env`)
 - Use `postgresql_database_manager.py` for ALL DB operations (NOT `database_manager.py`)
 - Use `?` for query parameters (NOT `{ph}` placeholders)
-- Schema: `tools/schema_postgresql.sql` (41 tables, 53+ columns in player_comprehensive_stats)
+- Schema: `tools/schema_postgresql.sql` (68 tables, 56 columns in player_comprehensive_stats)
 - NEVER use SQLite syntax (`INSERT OR REPLACE`, `AUTOINCREMENT`, etc.)
 - `bot/core/database_adapter.py` may expose SQLite fallback paths for local/dev tooling, but production remains PostgreSQL-only.
 - See `docs/POSTGRESQL_MIGRATION_INDEX.md` for migration details
@@ -50,14 +50,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> Users
-                         (60s poll)    (53+ fields) (41 tables)  (80+ commands)
+                         (60s poll)    (56 fields)  (68 tables)  (80+ commands)
 ```
 
 ### Key Patterns
 
 - **SSH Monitoring**: Only `endstats_monitor` task loop handles SSH (SSHMonitor disabled - race condition fix)
 - **R2 Differential**: Round 2 files contain CUMULATIVE stats; parser subtracts R1 values automatically
-- **Lua Webhook** (`vps_scripts/stats_discord_webhook.lua` v1.6.0): Real-time round notification, fixes surrender timing bug. Data stored in `lua_round_teams` table.
+- **Lua Webhook** (`vps_scripts/stats_discord_webhook.lua` v1.6.2): Real-time round notification, fixes surrender timing bug. Data stored in `lua_round_teams` table.
 - **Cog Pattern**: 21 Cogs in `bot/cogs/`, 18 core modules in `bot/core/`, services in `bot/services/`
 
 ### Timing Configuration
@@ -174,15 +174,15 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 ---
 
-## System Status (Version 1.0.6)
+## System Status (Version 1.0.8)
 
 - Parser: 100% functional, R2 differential validated
-- Database: PostgreSQL (41 tables), no corruption
+- Database: PostgreSQL (68 tables), no corruption
 - Bot: 80+ commands across 21 Cogs, all functional
 - Website: Upload library, availability polls, greatshot, system overview
-- Automation: SSH monitoring, voice detection, Lua webhook (v1.6.0)
+- Automation: SSH monitoring, voice detection, Lua webhook (v1.6.2)
 - Production Ready: Fully tested and validated
 
 ---
 
-**Version**: 1.0.6 | **Last Updated**: 2026-02-15 | **Schema Version**: 2.0
+**Version**: 1.0.8 | **Last Updated**: 2026-02-23 | **Schema Version**: 2.0
