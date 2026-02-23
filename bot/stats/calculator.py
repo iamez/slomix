@@ -218,6 +218,99 @@ class StatsCalculator:
     calculate_headshot_percentage = calculate_headshot_accuracy
 
     @staticmethod
+    def calculate_adr(damage_given: Optional[int], rounds_played: Optional[int],
+                      default: float = 0.0) -> float:
+        """
+        Calculate Average Damage per Round (ADR).
+
+        Formula: damage_given / rounds_played
+
+        Args:
+            damage_given: Total damage dealt
+            rounds_played: Number of rounds played
+            default: Value to return on error or invalid input
+
+        Returns:
+            ADR as float, or default if calculation fails
+
+        Examples:
+            >>> StatsCalculator.calculate_adr(3000, 4)
+            750.0
+            >>> StatsCalculator.calculate_adr(0, 0)
+            0.0
+            >>> StatsCalculator.calculate_adr(None, 2)
+            0.0
+        """
+        try:
+            if damage_given is None or rounds_played is None or rounds_played <= 0:
+                return default
+            return damage_given / rounds_played
+        except (TypeError, ZeroDivisionError):
+            return default
+
+    @staticmethod
+    def calculate_kpr(kills: Optional[int], rounds_played: Optional[int],
+                      default: float = 0.0) -> float:
+        """
+        Calculate Kills Per Round (KPR).
+
+        Formula: kills / rounds_played
+
+        Args:
+            kills: Number of kills
+            rounds_played: Number of rounds played
+            default: Value to return on error or invalid input
+
+        Returns:
+            KPR as float rounded to 2 decimals, or default if calculation fails
+
+        Examples:
+            >>> StatsCalculator.calculate_kpr(20, 4)
+            5.0
+            >>> StatsCalculator.calculate_kpr(7, 3)
+            2.33
+            >>> StatsCalculator.calculate_kpr(None, 2)
+            0.0
+        """
+        try:
+            if kills is None or rounds_played is None or rounds_played <= 0:
+                return default
+            return round(kills / rounds_played, 2)
+        except (TypeError, ZeroDivisionError):
+            return default
+
+    @staticmethod
+    def calculate_dpr(deaths: Optional[int], rounds_played: Optional[int],
+                      default: float = 0.0) -> float:
+        """
+        Calculate Deaths Per Round (DPR). Lower is better.
+
+        Formula: deaths / rounds_played
+
+        Args:
+            deaths: Number of deaths
+            rounds_played: Number of rounds played
+            default: Value to return on error or invalid input
+
+        Returns:
+            DPR as float rounded to 2 decimals, or default if calculation fails
+
+        Examples:
+            >>> StatsCalculator.calculate_dpr(12, 4)
+            3.0
+            >>> StatsCalculator.calculate_dpr(5, 3)
+            1.67
+            >>> StatsCalculator.calculate_dpr(None, 2)
+            0.0
+        """
+        try:
+            if deaths is None or rounds_played is None or rounds_played <= 0:
+                return default
+            return round(deaths / rounds_played, 2)
+        except (TypeError, ZeroDivisionError):
+            return default
+
+    @staticmethod
     def safe_divide(numerator: Optional[Union[int, float]],
                    denominator: Optional[Union[int, float]],
                    default: float = 0.0) -> float:

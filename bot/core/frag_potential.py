@@ -89,11 +89,17 @@ class PlayerMetrics:
     objectives_stolen: int = 0
     objectives_returned: int = 0
     
+    # Round count (set externally after construction)
+    rounds_played: int = 0
+
     # Computed metrics
     frag_potential: float = 0.0
     kd_ratio: float = 0.0
     damage_ratio: float = 0.0
     headshot_percentage: float = 0.0
+    adr: float = 0.0   # Average Damage per Round
+    kpr: float = 0.0   # Kills Per Round
+    dpr: float = 0.0   # Deaths Per Round
     playstyle: Playstyle = Playstyle.BALANCED
     playstyle_confidence: float = 0.0
     

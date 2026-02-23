@@ -215,11 +215,7 @@ class LinkCog(commands.Cog, name="Link"):
                 elif filter_lower in ["unlinked", "nolink"]:
                     filter_clause = " HAVING pl.discord_id IS NULL"
                 elif filter_lower in ["active", "recent"]:
-                    # Use database-compatible date arithmetic
-                    if self.bot.config.database_type == 'sqlite':
-                        filter_clause = " HAVING MAX(p.round_date) >= date('now', '-30 days')"
-                    else:
-                        filter_clause = " HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'"
+                    filter_clause = " HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'"
                 # If filter_type doesn't match whitelist, filter_clause stays empty (no filter applied)
 
             # Safe string concatenation: filter_clause is built from whitelisted constants only
@@ -703,24 +699,14 @@ class LinkCog(commands.Cog, name="Link"):
 
             # Optimize: Fetch all aliases in a single query (avoid N+1 problem)
             all_guids = [player[0] for player in top_players]
-            if self.bot.config.database_type == 'sqlite':
-                # Safe: placeholders are generated strings (?, ?, ?), not user input
-                placeholders = ', '.join(['?'] * len(all_guids))
-                alias_query = f"""
-                    SELECT guid, alias, last_seen, times_seen
-                    FROM player_aliases
-                    WHERE guid IN ({placeholders})
-                    ORDER BY guid, last_seen DESC, times_seen DESC
-                """
-            else:  # PostgreSQL
-                # Safe: placeholders are generated strings ($1, $2, $3), not user input
-                placeholders = ', '.join([f'${i+1}' for i in range(len(all_guids))])
-                alias_query = f"""
-                    SELECT guid, alias, last_seen, times_seen
-                    FROM player_aliases
-                    WHERE guid IN ({placeholders})
-                    ORDER BY guid, last_seen DESC, times_seen DESC
-                """
+            # Safe: placeholders are generated strings ($1, $2, $3), not user input
+            placeholders = ', '.join([f'${i+1}' for i in range(len(all_guids))])
+            alias_query = f"""
+                SELECT guid, alias, last_seen, times_seen
+                FROM player_aliases
+                WHERE guid IN ({placeholders})
+                ORDER BY guid, last_seen DESC, times_seen DESC
+            """
 
             all_aliases = await self.bot.db_adapter.fetch_all(alias_query, all_guids)
 
@@ -746,28 +732,16 @@ class LinkCog(commands.Cog, name="Link"):
                         alias_str += " _(only name)_"
                 else:
                     # Fallback to most recent name
-                    if self.bot.config.database_type == 'sqlite':
-                        name_row = await self.bot.db_adapter.fetch_one(
-                            """
-                            SELECT player_name
-                            FROM player_comprehensive_stats
-                            WHERE player_guid = ?
-                            ORDER BY round_date DESC
-                            LIMIT 1
-                        """,
-                            (guid,),
-                        )
-                    else:  # PostgreSQL
-                        name_row = await self.bot.db_adapter.fetch_one(
-                            """
-                            SELECT player_name
-                            FROM player_comprehensive_stats
-                            WHERE player_guid = $1
-                            ORDER BY round_date DESC
-                            LIMIT 1
-                        """,
-                            (guid,),
-                        )
+                    name_row = await self.bot.db_adapter.fetch_one(
+                        """
+                        SELECT player_name
+                        FROM player_comprehensive_stats
+                        WHERE player_guid = ?
+                        ORDER BY round_date DESC
+                        LIMIT 1
+                    """,
+                        (guid,),
+                    )
                     primary_name = name_row[0] if name_row else "Unknown"
                     alias_str = primary_name
 
@@ -1390,7 +1364,6 @@ class LinkCog(commands.Cog, name="Link"):
             discord_id = int(ctx.author.id)  # BIGINT in PostgreSQL
 
             # Check if linked
-            placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
             existing = await self.bot.db_adapter.fetch_one(
                 """
                 SELECT player_name, player_guid FROM player_links
