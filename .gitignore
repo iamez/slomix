@@ -230,6 +230,7 @@ plan-*.md
 # ROOT DEV MARKDOWN FILES (keep only named essentials)
 # ============================================
 *_IMPLEMENTATION*.md
+!docs/SKILL_RATING_IMPLEMENTATION_PLAN.md
 *_VERIFICATION*.md
 *_REFERENCE*.md
 *_OVERVIEW*.md
