@@ -128,6 +128,19 @@ psql -d etlegacy -Atc "SELECT COUNT(*) FROM proximity_reaction_metric;"
 curl -s "http://localhost:8000/api/proximity/reactions?range_days=30&limit=5"
 ```
 
+## Objective Coordinate Extraction
+
+Use BSP entity data from PK3 files to auto-discover objective coordinates:
+
+```bash
+python3 proximity/parser/extract_objective_coords.py \
+  --etmain-dir /home/samba/share/etmain \
+  --output proximity/objective_coords_from_etmain.json
+```
+
+The output JSON includes map -> objective entries with `x/y/z`, inferred type,
+and source PK3/BSP for traceability.
+
 ## Documentation
 
 - `proximity/docs/README.md`

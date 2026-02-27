@@ -32,12 +32,18 @@
     ],
     "braundorf_b4": [
       {
-        "name": "todo_objective",
-        "note": "TODO: add coordinates",
+        "name": "command_post",
+        "type": "command_post",
+        "x": 4776,
+        "y": -256,
+        "z": 403
+      },
+      {
+        "name": "the_side_gate",
         "type": "objective",
-        "x": null,
-        "y": null,
-        "z": null
+        "x": 4352,
+        "y": 896,
+        "z": 152
       }
     ],
     "bremen_b2": [
@@ -91,12 +97,11 @@
     ],
     "erdenberg_t2": [
       {
-        "name": "todo_objective",
-        "note": "TODO: add coordinates",
-        "type": "objective",
-        "x": null,
-        "y": null,
-        "z": null
+        "name": "neutral_command_post",
+        "type": "command_post",
+        "x": 5568,
+        "y": -2264,
+        "z": -382
       }
     ],
     "et_beach": [
@@ -131,12 +136,18 @@
     ],
     "etl_adlernest": [
       {
-        "name": "documents",
-        "note": "TODO: add coordinates",
+        "name": "transmitter",
         "type": "objective",
-        "x": null,
-        "y": null,
-        "z": null
+        "x": -298,
+        "y": -3288,
+        "z": 24
+      },
+      {
+        "name": "documents",
+        "type": "objective",
+        "x": -676,
+        "y": 672,
+        "z": 108
       }
     ],
     "etl_frostbite": [
@@ -151,32 +162,50 @@
     ],
     "etl_ice": [
       {
-        "name": "todo_objective",
-        "note": "TODO: add coordinates",
+        "name": "transmitter",
         "type": "objective",
-        "x": null,
-        "y": null,
-        "z": null
+        "x": 328,
+        "y": -2792,
+        "z": 280
+      },
+      {
+        "name": "documents",
+        "type": "objective",
+        "x": -6016,
+        "y": 2176,
+        "z": 1088
       }
     ],
     "etl_sp_delivery": [
       {
-        "name": "deliveries",
-        "note": "TODO: add coordinates",
+        "name": "axis_gold",
         "type": "objective",
-        "x": null,
-        "y": null,
-        "z": null
+        "x": -1160,
+        "y": 1332,
+        "z": 168
+      },
+      {
+        "name": "getaway_trucks",
+        "type": "escort",
+        "x": 1456,
+        "y": 4280,
+        "z": -56
       }
     ],
     "etl_supply": [
       {
-        "name": "todo_objective",
-        "note": "TODO: add coordinates",
+        "name": "crane_controls",
         "type": "objective",
-        "x": null,
-        "y": null,
-        "z": null
+        "x": 656,
+        "y": -1360,
+        "z": 372
+      },
+      {
+        "name": "truck_escape",
+        "type": "escort",
+        "x": 2720,
+        "y": 1376,
+        "z": 192
       }
     ],
     "frostbite": [
@@ -301,18 +330,46 @@
     ],
     "supply": [
       {
+        "name": "forward_bunker_gate",
+        "type": "objective",
+        "x": 56,
+        "y": 2368,
+        "z": -48
+      },
+      {
+        "name": "truck",
+        "type": "escort",
+        "x": -2368,
+        "y": 688,
+        "z": 0
+      },
+      {
+        "name": "depot_fence",
+        "type": "objective",
+        "x": 144,
+        "y": -1792,
+        "z": 52
+      },
+      {
+        "name": "command_post",
+        "type": "command_post",
+        "x": 2432,
+        "y": 904,
+        "z": 288
+      },
+      {
+        "name": "forward_spawn_door",
+        "type": "objective",
+        "x": -68,
+        "y": 2368,
+        "z": 304
+      },
+      {
         "name": "crane_controls",
-        "type": "misc",
+        "type": "objective",
         "x": 656,
         "y": -1360,
         "z": 372
-      },
-      {
-        "name": "truck_escape",
-        "type": "escort",
-        "x": 2720,
-        "y": 1376,
-        "z": 192
       }
     ],
     "supplydepot2": [
@@ -337,18 +394,53 @@
     ],
     "sw_goldrush_te": [
       {
-        "name": "tank_breakout",
+        "name": "tank_barrier",
         "type": "escort",
-        "x": 1860,
-        "y": -80,
-        "z": -96
+        "x": 688,
+        "y": 184,
+        "z": -11
       },
       {
-        "name": "truck_escape",
+        "name": "jagdpanther",
+        "type": "objective",
+        "x": -272,
+        "y": 2200,
+        "z": 416
+      },
+      {
+        "name": "command_post",
+        "type": "command_post",
+        "x": 1336,
+        "y": 264,
+        "z": 284
+      },
+      {
+        "name": "bank_doors",
+        "type": "objective",
+        "x": 1600,
+        "y": -1948,
+        "z": -214
+      },
+      {
+        "name": "gold_bars",
+        "type": "objective",
+        "x": 2480,
+        "y": -2248,
+        "z": -296
+      },
+      {
+        "name": "truck",
         "type": "escort",
-        "x": -3310,
-        "y": -1060,
-        "z": -31
+        "x": 2315,
+        "y": 1047,
+        "z": -352
+      },
+      {
+        "name": "truck_barrier",
+        "type": "escort",
+        "x": 1920,
+        "y": 40,
+        "z": -368
       }
     ],
     "sw_oasis_b3": [
@@ -373,12 +465,25 @@
     ],
     "te_escape2": [
       {
-        "name": "todo_objective",
-        "note": "TODO: add coordinates",
+        "name": "secret_exit",
         "type": "objective",
-        "x": null,
-        "y": null,
-        "z": null
+        "x": -6165,
+        "y": 1606,
+        "z": -20
+      },
+      {
+        "name": "command_post",
+        "type": "command_post",
+        "x": -3340,
+        "y": 1372,
+        "z": 252
+      },
+      {
+        "name": "holy_grail",
+        "type": "objective",
+        "x": -5828,
+        "y": -228,
+        "z": -24
       }
     ],
     "the_station": [
