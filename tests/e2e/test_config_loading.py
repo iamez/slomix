@@ -60,3 +60,40 @@ class TestConfigLoadingE2E:
 
         assert isinstance(config.webhook_trigger_whitelist, list)
         assert len(config.webhook_trigger_whitelist) == 0
+
+    def test_webhook_trigger_mode_defaults_to_stats_ready_only(self, monkeypatch):
+        monkeypatch.setenv("DISCORD_BOT_TOKEN", "test_token")
+        monkeypatch.setenv("AUTOMATION_ENABLED", "false")
+        monkeypatch.setenv("SSH_ENABLED", "false")
+        monkeypatch.delenv("WEBHOOK_TRIGGER_MODE", raising=False)
+
+        from bot.config import BotConfig
+        config = BotConfig()
+
+        assert config.webhook_trigger_mode == "stats_ready_only"
+
+    def test_invalid_webhook_trigger_mode_falls_back_to_stats_ready_only(self, monkeypatch):
+        monkeypatch.setenv("DISCORD_BOT_TOKEN", "test_token")
+        monkeypatch.setenv("AUTOMATION_ENABLED", "false")
+        monkeypatch.setenv("SSH_ENABLED", "false")
+        monkeypatch.setenv("WEBHOOK_TRIGGER_MODE", "legacy+unknown")
+
+        from bot.config import BotConfig
+        config = BotConfig()
+
+        assert config.webhook_trigger_mode == "stats_ready_only"
+
+    def test_validate_flags_websocket_conflict_for_strict_webhook_mode(self, monkeypatch):
+        monkeypatch.setenv("DISCORD_BOT_TOKEN", "test_token")
+        monkeypatch.setenv("AUTOMATION_ENABLED", "false")
+        monkeypatch.setenv("SSH_ENABLED", "false")
+        monkeypatch.setenv("WEBHOOK_TRIGGER_CHANNEL_ID", "123")
+        monkeypatch.setenv("WEBHOOK_TRIGGER_WHITELIST", "111222333444555666")
+        monkeypatch.setenv("WEBHOOK_TRIGGER_MODE", "stats_ready_only")
+        monkeypatch.setenv("WS_ENABLED", "true")
+
+        from bot.config import BotConfig
+        config = BotConfig()
+        errors = config.validate()
+
+        assert any("WS_ENABLED must be false" in err for err in errors)
