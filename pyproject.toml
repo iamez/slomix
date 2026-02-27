@@ -3,7 +3,7 @@ name = "etlegacy-stats-bot"
 version = "1.0.8"
 description = "ET:Legacy Discord Stats Bot - Production-grade gaming analytics"
 readme = "README.md"
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.11,<3.14"
 
 [tool.pycodestyle]
 max-line-length = 120
