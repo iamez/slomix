@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "updated_at_utc": "2026-02-26T00:00:00Z",
+    "source": "rounds map frequency snapshot (Postgres)",
+    "notes": [
+      "Static guard maps are the W10 top-played batch with completed coordinates.",
+      "Runtime allowlist tracks known top-map gaps until coordinates are curated."
+    ]
+  },
+  "static_guard_maps": [
+    "te_escape2",
+    "etl_adlernest",
+    "supply",
+    "etl_sp_delivery",
+    "sw_goldrush_te",
+    "erdenberg_t2",
+    "braundorf_b4",
+    "etl_ice"
+  ],
+  "runtime": {
+    "top_n": 10,
+    "allow_todo_maps": [
+      "etl_frostbite",
+      "et_brewdog"
+    ]
+  }
+}
