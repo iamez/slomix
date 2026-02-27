@@ -77,7 +77,7 @@ website/logs/
 # ============================================
 # IDE & OS
 # ============================================
-.vscode/settings.json
+.vscode/
 *.code-workspace
 .idea/
 .claude/
@@ -209,6 +209,10 @@ run_claude_auto.sh
 # ============================================
 # PERSONAL / SCRATCH FILES AT ROOT
 # ============================================
+*.docx
+config.json
+bot_config.json
+fiveeyes_config.json
 chatgptresearch.md
 zac0rna.md
 Complete
@@ -310,6 +314,20 @@ WEBSITE_STAT_BUGS_FOUND.md
 !/vps_scripts/__init__.py
 
 # ============================================
+# DEV SCRATCH SCRIPTS (in scripts/)
+# ============================================
+scripts/audit_round_pairs.py
+scripts/audit_time_vs_lua.py
+scripts/bot_scrim_mode.py
+scripts/debug_import.py
+scripts/generate_omnibot_botnames.py
+scripts/generate_retro.py
+scripts/generate_retro_text.py
+scripts/omnibot_toggle.py
+scripts/rcon_command.py
+scripts/run_retro_test.py
+
+# ============================================
 # ROOT DIAGNOSTIC/DEV SCRIPTS
 # ============================================
 check_*.py
@@ -335,9 +353,7 @@ trigger_timing_debug.py
 !website/migrations/*.sql
 !proximity/schema/migrations/
 !proximity/schema/migrations/*.sql
-!tools/migrations/
-!tools/migrations/*.py
-!tools/migrations/*.sql
+# tools/migrations/ — dev-only
 
 # ============================================
 # TOOLS DIRECTORY — ESSENTIALS ONLY
@@ -349,13 +365,10 @@ tools/*
 !tools/schema_postgresql.sql
 !tools/pipeline_health_report.py
 !tools/verify_pipeline.py
-!tools/migrations/
-!tools/migrations/*.py
-!tools/migrations/*.sql
-!tools/schema_sqlite.sql
-!tools/vm_steps/
-!tools/vm_steps/*.sh
-!tools/harden_*.sh
+# tools/migrations/ — dev-only
+# tools/schema_sqlite.sql — dev-only, not needed in repo
+# tools/vm_steps/ — VM setup scripts, dev-only
+# tools/harden_*.sh — hardening scripts, dev-only
 
 # ============================================
 # DOCS ARCHIVE (historical, not needed)
@@ -365,6 +378,26 @@ docs/archive/
 # ============================================
 # DOCS — INTERNAL DEV ARTIFACTS (gitignore)
 # ============================================
+docs/BRAINSTORM_SESSION_*.md
+docs/CONTEXT_*.md
+docs/CONTEXT_SNAPSHOT_*.md
+docs/DOCS_IDEA_*.md
+docs/DOCS_IDEA_*.txt
+docs/DATA_INGEST_QUEUE_DESIGN.md
+docs/FAIL2BAN_SETUP_*.md
+docs/IMPLEMENTATION_RESEARCH_*.md
+docs/READONLY_AUDIT_*.md
+docs/READONLY_AUDIT_*.txt
+docs/SYSTEM_AUDIT_*.md
+docs/VM_AUDIT_REPORT_*.md
+docs/VM_FIREWALL_RULES_*.md
+docs/W15_RESEARCH_ADOPTION_TICKETS_*.md
+docs/agentchattr/
+docs/reference/TIMING_POLICY_PROTOTYPE_*.md
+proximity/docs/PROXIMITY_MAP_ASSET_AUDIT_*.md
+proximity/docs/PROXIMITY_MOD_MAPPING_RCA_*.md
+proximity/docs/PROXIMITY_RECONCILIATION_BACKLOG_*.md
+proximity/docs/PROXIMITY_RESUME_CONTEXT_*.md
 docs/SESSION_*.md
 docs/SESSION_INDEX.md
 docs/SESSION_REPORT_*.md
@@ -484,6 +517,12 @@ docs/scripts/
 # ============================================
 # BOT — DEAD CODE & DEV ARTIFACTS
 # ============================================
+bot/.oldbackup.CLAUDE.md
+bot/automation/.oldbackup.CLAUDE.md
+bot/cogs/.oldbackup.CLAUDE.md
+bot/core/.oldbackup.CLAUDE.md
+bot/services/.oldbackup.CLAUDE.md
+bot/schema.json
 bot/*.db
 bot/*.db.*
 bot/*.bak
@@ -527,6 +566,8 @@ bot/README_AUTOMATION.md
 # ============================================
 # WEBSITE DEV ARTIFACTS
 # ============================================
+website/backend/.oldbackup.CLAUDE.md
+tests/.oldbackup.CLAUDE.md
 website/backend/debug_*.py
 website/fix_*.sql
 website/grant_*.sql
@@ -587,7 +628,7 @@ proximity/map_rotation.txt
 !docker-compose.yml
 !pyproject.toml
 !pytest.ini
-!bot_config.json
+# bot_config.json — local runtime config, not tracked
 
 # ============================================
 # COPILOT/AI INSTRUCTIONS (keep these)
