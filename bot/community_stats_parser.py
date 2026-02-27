@@ -980,6 +980,14 @@ class C0RNP0RN3StatsParser:
                 if round_time_seconds == 0:
                     round_time_seconds = 300  # Default 5 minutes if unknown
 
+            # GUARD: In R2 files, actual_time can be cumulative server uptime instead of round duration.
+            # Cap to time_limit as a reliable upper bound (no round can exceed its time limit by definition).
+            # Only applies when TAB[22] per-player time data is absent (fallback case).
+            # See: https://github.com/etlegacy/etlegacy/issues/XXX (ET:Legacy R2 actual_time quirk)
+            time_limit_seconds = self.parse_time_to_seconds(time_limit)
+            if time_limit_seconds > 0 and round_time_seconds > time_limit_seconds:
+                round_time_seconds = time_limit_seconds
+
             # Calculate DPM for all players using SECONDS
             # NOTE: In stopwatch mode, all players play the full round duration (teams locked)
             for player in players:

@@ -5,6 +5,7 @@ Simplified to PostgreSQL-only (SQLite support removed)
 import asyncio
 import contextvars
 import logging
+import time
 from typing import Any, Optional, List, Tuple
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
@@ -201,8 +202,10 @@ class PostgreSQLAdapter(DatabaseAdapter):
 
         # Nested transaction: use savepoint on the same connection.
         if active_conn is not None:
+            logger.debug("Transaction BEGIN (savepoint/nested)")
             async with active_conn.transaction():
                 yield active_conn
+            logger.debug("Transaction COMMIT (savepoint/nested)")
             return
 
         # Thread-safe pool initialization with double-check locking
@@ -213,9 +216,17 @@ class PostgreSQLAdapter(DatabaseAdapter):
 
         conn = await self.pool.acquire()
         token = self._active_tx_conn.set(conn)
+        tx_start = time.monotonic()
+        logger.debug("Transaction BEGIN")
         try:
             async with conn.transaction():
                 yield conn
+            duration_ms = (time.monotonic() - tx_start) * 1000
+            logger.debug("Transaction COMMIT (%.0fms)", duration_ms)
+        except Exception as e:
+            duration_ms = (time.monotonic() - tx_start) * 1000
+            logger.error("Transaction ROLLBACK (%.0fms): %s", duration_ms, e)
+            raise
         finally:
             self._active_tx_conn.reset(token)
             await self.pool.release(conn)
@@ -236,35 +247,82 @@ class PostgreSQLAdapter(DatabaseAdapter):
         query = self._translate_placeholders(query)
         params = self._normalize_params(params)
 
-        async with self.connection() as conn:
-            await conn.execute(query, *(params or ()))
+        start = time.monotonic()
+        try:
+            async with self.connection() as conn:
+                result = await conn.execute(query, *(params or ()))
+            duration_ms = (time.monotonic() - start) * 1000
+            if duration_ms > 1000:
+                logger.warning("SLOW QUERY (%.0fms): %.200s", duration_ms, query)
+            else:
+                logger.debug("execute (%.0fms): %.100s", duration_ms, query)
+            return result
+        except asyncpg.UniqueViolationError as e:
+            logger.warning("Unique violation on execute: %s — %.100s", e.constraint_name, query)
+            raise
+        except asyncpg.ForeignKeyViolationError as e:
+            logger.error("FK violation on execute: %s — %.100s", e.constraint_name, query)
+            raise
+        except Exception:
+            logger.error("Query failed (%.100s)", query, exc_info=True)
+            raise
 
     async def fetch_one(self, query: str, params: Optional[Tuple] = None) -> Optional[Any]:
         """Fetch single row from PostgreSQL."""
-        # Translate ? placeholders to $1, $2, etc.
         query = self._translate_placeholders(query)
         params = self._normalize_params(params)
 
-        async with self.connection() as conn:
-            return await conn.fetchrow(query, *(params or ()))
+        start = time.monotonic()
+        try:
+            async with self.connection() as conn:
+                result = await conn.fetchrow(query, *(params or ()))
+            duration_ms = (time.monotonic() - start) * 1000
+            if duration_ms > 1000:
+                logger.warning("SLOW QUERY (%.0fms): %.200s", duration_ms, query)
+            else:
+                logger.debug("fetch_one (%.0fms): %.100s", duration_ms, query)
+            return result
+        except Exception:
+            logger.error("fetch_one failed (%.100s)", query, exc_info=True)
+            raise
 
     async def fetch_all(self, query: str, params: Optional[Tuple] = None) -> List[Any]:
         """Fetch all rows from PostgreSQL."""
-        # Translate ? placeholders to $1, $2, etc.
         query = self._translate_placeholders(query)
         params = self._normalize_params(params)
 
-        async with self.connection() as conn:
-            return await conn.fetch(query, *(params or ()))
+        start = time.monotonic()
+        try:
+            async with self.connection() as conn:
+                result = await conn.fetch(query, *(params or ()))
+            duration_ms = (time.monotonic() - start) * 1000
+            if duration_ms > 1000:
+                logger.warning("SLOW QUERY (%.0fms, %d rows): %.200s", duration_ms, len(result), query)
+            else:
+                logger.debug("fetch_all (%.0fms, %d rows): %.100s", duration_ms, len(result), query)
+            return result
+        except Exception:
+            logger.error("fetch_all failed (%.100s)", query, exc_info=True)
+            raise
 
     async def fetch_val(self, query: str, params: Optional[Tuple] = None) -> Any:
         """Fetch single value from PostgreSQL."""
-        # Translate ? placeholders to $1, $2, etc.
         query = self._translate_placeholders(query)
         params = self._normalize_params(params)
 
-        async with self.connection() as conn:
-            return await conn.fetchval(query, *(params or ()))
+        start = time.monotonic()
+        try:
+            async with self.connection() as conn:
+                result = await conn.fetchval(query, *(params or ()))
+            duration_ms = (time.monotonic() - start) * 1000
+            if duration_ms > 1000:
+                logger.warning("SLOW QUERY (%.0fms): %.200s", duration_ms, query)
+            else:
+                logger.debug("fetch_val (%.0fms): %.100s", duration_ms, query)
+            return result
+        except Exception:
+            logger.error("fetch_val failed (%.100s)", query, exc_info=True)
+            raise
 
     def _normalize_params(self, params: Optional[Tuple]) -> Optional[Tuple]:
         """

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 import os
 import time
 from collections import deque
 from typing import Callable
+
+logger = logging.getLogger('website.middleware.rate_limit')
 
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -62,6 +65,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 self._cleanup_inactive_buckets(now)
             if len(self._requests) >= self.max_tracked_keys:
                 API_RATE_LIMIT_REJECTIONS.inc()
+                logger.warning("Rate limiter capacity reached (max_keys=%d, client=%s)",
+                               self.max_tracked_keys, client_ip)
                 return JSONResponse(
                     status_code=429,
                     content={
@@ -79,6 +84,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if len(timeline) >= limit:
             retry_after = max(1, int(timeline[0] + self.window_seconds - now))
             API_RATE_LIMIT_REJECTIONS.inc()
+            logger.warning("Rate limit exceeded: client=%s bucket=%s limit=%d path=%s",
+                           client_ip, bucket, limit, request.url.path)
             return JSONResponse(
                 status_code=429,
                 content={

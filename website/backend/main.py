@@ -163,7 +163,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[
         "Content-Type",
         "Authorization",
@@ -197,6 +197,14 @@ app.add_middleware(HTTPCacheMiddleware, cache_backend=cache_backend)
 
 # Request Logging Middleware (added after session so it can access session data)
 app.add_middleware(RequestLoggingMiddleware)
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 # Include Routers
 app.include_router(api.router, prefix="/api", tags=["API"])

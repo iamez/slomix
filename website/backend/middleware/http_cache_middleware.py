@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 import os
 from typing import Callable
+
+logger = logging.getLogger('website.middleware.cache')
 from urllib.parse import urlencode
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -63,6 +66,7 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
             if response.status_code < 500 and self._should_invalidate_on_write(path):
                 await self.cache_backend.invalidate_all()
                 API_CACHE_INVALIDATIONS.inc()
+                logger.info("Cache invalidated by write to %s", path)
             return response
 
         if request.method != "GET":
@@ -87,6 +91,7 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
 
         if cached is not None:
             API_CACHE_HITS.inc()
+            logger.debug("Cache HIT: %s", cache_key)
             etag = str(cached.get("etag", ""))
             cache_control = self._cache_control_header(ttl)
             headers = {
@@ -108,6 +113,7 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
             )
 
         API_CACHE_MISSES.inc()
+        logger.debug("Cache MISS: %s", cache_key)
         response = await call_next(request)
         if response.status_code != 200:
             return response
