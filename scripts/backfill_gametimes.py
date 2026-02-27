@@ -18,6 +18,10 @@ from bot.core.database_adapter import create_adapter
 from bot.core.round_contract import normalize_end_reason, normalize_side_value
 from bot.core.round_linker import resolve_round_id
 
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
+
 
 def _fields_to_metadata_map(fields) -> dict:
     metadata = {}
@@ -320,6 +324,7 @@ async def _store_lua_round(db_adapter, round_metadata: dict, has_round_id: bool)
 
 
 async def main() -> None:
+    logger.info("Script started: %s", __file__)
     parser = argparse.ArgumentParser()
     parser.add_argument("--path", default=None, help="Local gametimes directory")
     args = parser.parse_args()
