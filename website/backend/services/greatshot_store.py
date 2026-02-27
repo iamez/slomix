@@ -246,7 +246,8 @@ class GreatshotStorageService:
         try:
             row = await db.fetch_one("SELECT current_user")
             return str(row[0]) if row and row[0] else "unknown"
-        except Exception:
+        except Exception as e:
+            logger.debug("Could not determine current role: %s", e)
             return "unknown"
 
     async def _has_schema_ddl_privileges(self, db) -> bool:
@@ -276,7 +277,8 @@ class GreatshotStorageService:
             if not row:
                 return False
             return bool(row[0]) or bool(row[1])
-        except Exception:
+        except Exception as e:
+            logger.debug("Could not check DDL privileges: %s", e)
             return False
 
     async def _is_schema_ready(self, db) -> bool:
@@ -303,7 +305,8 @@ class GreatshotStorageService:
             if not row:
                 return False
             return all(bool(v) for v in row)
-        except Exception:
+        except Exception as e:
+            logger.debug("Schema readiness check failed: %s", e)
             return False
 
     async def _ensure_schema_inner(self, db) -> None:
@@ -373,8 +376,8 @@ class GreatshotStorageService:
                 ADD COLUMN IF NOT EXISTS total_kills INTEGER DEFAULT 0
                 """
             )
-        except Exception:
-            pass  # Column may already exist
+        except Exception as e:
+            logger.debug("total_kills column migration skipped: %s", e)
 
         await db.execute(
             """

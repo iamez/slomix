@@ -146,6 +146,7 @@ export async function fetchWithRetry(url, options = {}, maxRetries = 3) {
         }
         await new Promise(r => setTimeout(r, 1000 * (i + 1)));
     }
+    throw new Error(`fetchWithRetry: all ${maxRetries} attempts failed for ${url}`);
 }
 
 /**
