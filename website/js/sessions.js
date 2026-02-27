@@ -401,6 +401,13 @@ export function renderSessionDetails(data) {
     setTimeout(() => {
         if (!hasChartJs()) {
             console.warn('Chart.js is unavailable, skipping session charts.');
+            container.querySelectorAll('canvas').forEach(c => {
+                const ctx = c.getContext('2d');
+                ctx.fillStyle = '#64748b';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Charts unavailable', c.width / 2, c.height / 2);
+            });
             return;
         }
 
