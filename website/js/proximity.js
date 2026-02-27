@@ -8,6 +8,9 @@ import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js';
 const DEFAULT_RANGE_DAYS = 30;
 const DEFAULT_EVENTS_LIMIT = 20;
 const DEFAULT_SCOPE_RANGE_DAYS = 365;
+const MAP_TRANSFORM_CONFIG_URL = '/assets/maps/proximity/map_transforms.json';
+const OBJECTIVE_ZONES_CONFIG_URL = '/assets/maps/proximity/objective_zones.json';
+const PROXIMITY_GRID_SIZE = 512;
 
 const proximityScopeState = {
     sessions: [],
@@ -17,8 +20,122 @@ const proximityScopeState = {
     roundStartUnix: null,
 };
 
+const proximityVizState = {
+    showObjectiveZones: true,
+    heatIntensity: 1.0,
+    teamEmphasis: 'auto',
+};
+
+const proximityRenderCache = {
+    heatmapPayload: null,
+    eventPayload: null,
+};
+
 let proximityViewLoadPromise = null;
 let proximityScopedLoadId = 0;
+let mapTransformConfigPromise = null;
+let mapTransformConfig = null;
+let objectiveZonesConfigPromise = null;
+let objectiveZonesConfig = null;
+const mapImageCache = new Map();
+
+const TEAM_COLORS = {
+    AXIS: 'rgba(239, 68, 68, 0.9)',
+    ALLIES: 'rgba(59, 130, 246, 0.9)',
+};
+
+function normalizeTeamName(team) {
+    const normalized = String(team || '').trim().toUpperCase();
+    if (!normalized) return null;
+    if (normalized === 'AXIS' || normalized === '1' || normalized === 'RED') return 'AXIS';
+    if (normalized === 'ALLIES' || normalized === '2' || normalized === 'BLUE') return 'ALLIES';
+    return normalized;
+}
+
+function getOpposingTeam(team) {
+    const normalized = normalizeTeamName(team);
+    if (normalized === 'AXIS') return 'ALLIES';
+    if (normalized === 'ALLIES') return 'AXIS';
+    return null;
+}
+
+function normalizeMapKey(mapName) {
+    return stripEtColors(mapName || '').trim().toLowerCase();
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function withAlpha(color, alpha) {
+    if (typeof color !== 'string') return color;
+    const value = clamp(Number(alpha), 0, 1);
+    const rgbaMatch = color.match(/^rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)$/i);
+    if (rgbaMatch) {
+        return `rgba(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]}, ${value})`;
+    }
+    const rgbMatch = color.match(/^rgb\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)$/i);
+    if (rgbMatch) {
+        return `rgba(${rgbMatch[1]}, ${rgbMatch[2]}, ${rgbMatch[3]}, ${value})`;
+    }
+    return color;
+}
+
+async function ensureMapTransformConfig() {
+    if (mapTransformConfig) return mapTransformConfig;
+    if (!mapTransformConfigPromise) {
+        mapTransformConfigPromise = fetch(MAP_TRANSFORM_CONFIG_URL)
+            .then((res) => (res.ok ? res.json() : null))
+            .catch(() => null);
+    }
+    mapTransformConfig = await mapTransformConfigPromise;
+    return mapTransformConfig;
+}
+
+async function ensureObjectiveZonesConfig() {
+    if (objectiveZonesConfig) return objectiveZonesConfig;
+    if (!objectiveZonesConfigPromise) {
+        objectiveZonesConfigPromise = fetch(OBJECTIVE_ZONES_CONFIG_URL)
+            .then((res) => (res.ok ? res.json() : null))
+            .catch(() => null);
+    }
+    objectiveZonesConfig = await objectiveZonesConfigPromise;
+    return objectiveZonesConfig;
+}
+
+function getMapTransformEntry(mapName) {
+    if (!mapTransformConfig || !mapTransformConfig.maps) return null;
+    const key = normalizeMapKey(mapName);
+    return mapTransformConfig.maps[key] || mapTransformConfig.maps[mapName] || null;
+}
+
+function getObjectiveZonesForMap(mapName) {
+    if (!objectiveZonesConfig || !objectiveZonesConfig.maps) return [];
+    const key = normalizeMapKey(mapName);
+    const entry = objectiveZonesConfig.maps[key] || objectiveZonesConfig.maps[mapName] || null;
+    if (!entry || !Array.isArray(entry.objectives)) return [];
+    return entry.objectives;
+}
+
+function getTeamColor(team, fallback = 'rgba(56, 189, 248, 0.85)') {
+    const normalized = normalizeTeamName(team);
+    return TEAM_COLORS[normalized] || fallback;
+}
+
+async function preloadMapImage(imagePath) {
+    if (!imagePath) return null;
+    if (mapImageCache.has(imagePath)) {
+        return mapImageCache.get(imagePath);
+    }
+    const promise = new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = imagePath;
+    });
+    mapImageCache.set(imagePath, promise);
+    return promise;
+}
 
 function formatDateLabel(value) {
     if (!value) return '--';
@@ -179,6 +296,11 @@ function renderScopeSelectors() {
 function setText(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
+}
+
+function setHtml(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = value;
 }
 
 function stripEtColors(text) {
@@ -403,11 +525,380 @@ function renderTimeline(buckets) {
     }).join('');
 }
 
-function renderHeatmap(payload) {
+function getWorldBounds(mapTransform) {
+    const boundsMins = Array.isArray(mapTransform?.mapcoordsmins) ? mapTransform.mapcoordsmins : null;
+    const boundsMaxs = Array.isArray(mapTransform?.mapcoordsmaxs) ? mapTransform.mapcoordsmaxs : null;
+    const valid = boundsMins && boundsMaxs
+        && Number.isFinite(boundsMins[0]) && Number.isFinite(boundsMins[1])
+        && Number.isFinite(boundsMaxs[0]) && Number.isFinite(boundsMaxs[1])
+        && Math.abs(boundsMaxs[0] - boundsMins[0]) > 0.0001
+        && Math.abs(boundsMins[1] - boundsMaxs[1]) > 0.0001;
+    if (!valid) return null;
+    return { mins: boundsMins, maxs: boundsMaxs };
+}
+
+function worldToCanvasPoint(x, y, width, height, worldBounds) {
+    if (!worldBounds) return null;
+    const { mins, maxs } = worldBounds;
+    const u = (x - mins[0]) / (maxs[0] - mins[0]);
+    const v = (mins[1] - y) / (mins[1] - maxs[1]);
+    return {
+        x: clamp(u, 0, 1) * width,
+        y: clamp(v, 0, 1) * height,
+    };
+}
+
+function worldRadiusToCanvas(radius, width, height, worldBounds) {
+    if (!worldBounds || !Number.isFinite(radius)) return 0;
+    const { mins, maxs } = worldBounds;
+    const pxPerUnitX = width / Math.max(Math.abs(maxs[0] - mins[0]), 1);
+    const pxPerUnitY = height / Math.max(Math.abs(mins[1] - maxs[1]), 1);
+    return Math.max(2, radius * ((pxPerUnitX + pxPerUnitY) / 2));
+}
+
+function getObjectiveTypeColor(type) {
+    const normalized = String(type || '').toLowerCase();
+    if (normalized === 'escort') return 'rgba(251, 146, 60, 0.5)';
+    if (normalized === 'command_post') return 'rgba(96, 165, 250, 0.5)';
+    return 'rgba(110, 231, 183, 0.42)';
+}
+
+function shouldRenderObjectiveZone(objective) {
+    const type = String(objective?.type || '').toLowerCase();
+    const name = String(objective?.name || '').toLowerCase();
+    const luaName = String(objective?.lua_name || '').toLowerCase();
+    const target = String(objective?.target || '').toLowerCase();
+    const haystack = `${name} ${luaName} ${target}`;
+
+    if (type === 'command_post' || type === 'escort') return true;
+    if (haystack.includes('barrier')) return true;
+
+    const hasMgToken = /\bmg\b/.test(haystack) || luaName.includes('_mg') || target.includes('mg42') || target.includes('weaponclip');
+    if (hasMgToken) return false;
+    if (haystack.includes('cabinet') || haystack.includes('healammo') || haystack.includes('health_and_ammo')) return false;
+    if (haystack.includes('controls') || haystack.includes('control') || haystack.includes('utility')) return false;
+
+    return true;
+}
+
+function getObjectiveStateColor(state) {
+    if (state === 'contested') return 'rgba(248, 113, 113, 0.34)';
+    if (state === 'core') return 'rgba(34, 197, 94, 0.30)';
+    if (state === 'approach') return 'rgba(250, 204, 21, 0.26)';
+    return 'rgba(148, 163, 184, 0.2)';
+}
+
+function classifyObjectiveZoneState(metrics) {
+    if ((metrics.contestedCount || 0) > 0) return 'contested';
+    if ((metrics.targetCoreHits || 0) + (metrics.attackerCoreHits || 0) > 0) return 'core';
+    if ((metrics.targetApproachHits || 0) + (metrics.attackerApproachHits || 0) > 0) return 'approach';
+    return 'outside';
+}
+
+function isInsideObjectiveRadius(sample, objective, radius) {
+    if (!sample || !objective) return false;
+    const sx = Number(sample.x);
+    const sy = Number(sample.y);
+    const ox = Number(objective.x);
+    const oy = Number(objective.y);
+    if (![sx, sy, ox, oy, radius].every(Number.isFinite)) return false;
+    const dx = sx - ox;
+    const dy = sy - oy;
+    return Math.sqrt(dx * dx + dy * dy) <= radius;
+}
+
+function computeObjectiveZoneStates(targetPath, attackerPath, objectiveZones = []) {
+    const target = (Array.isArray(targetPath) ? targetPath : []).filter((p) => Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y)));
+    const attacker = (Array.isArray(attackerPath) ? attackerPath : []).filter((p) => Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y)));
+    if (!objectiveZones.length) return [];
+
+    const states = [];
+    for (const objective of objectiveZones) {
+        const baseRadius = Number(objective?.radius || 500);
+        if (!Number.isFinite(baseRadius) || baseRadius <= 0) continue;
+        const coreRadius = baseRadius * 0.55;
+        const approachRadius = baseRadius * 1.2;
+        const inZoneRadius = baseRadius;
+
+        const metrics = {
+            targetCoreHits: 0,
+            targetApproachHits: 0,
+            attackerCoreHits: 0,
+            attackerApproachHits: 0,
+            contestedCount: 0,
+        };
+
+        const targetInZone = [];
+        const attackerInZone = [];
+
+        for (const sample of target) {
+            if (isInsideObjectiveRadius(sample, objective, approachRadius)) metrics.targetApproachHits += 1;
+            if (isInsideObjectiveRadius(sample, objective, coreRadius)) metrics.targetCoreHits += 1;
+            if (isInsideObjectiveRadius(sample, objective, inZoneRadius)) {
+                const sampleTime = Number(sample.time);
+                if (Number.isFinite(sampleTime)) targetInZone.push(sampleTime);
+            }
+        }
+        for (const sample of attacker) {
+            if (isInsideObjectiveRadius(sample, objective, approachRadius)) metrics.attackerApproachHits += 1;
+            if (isInsideObjectiveRadius(sample, objective, coreRadius)) metrics.attackerCoreHits += 1;
+            if (isInsideObjectiveRadius(sample, objective, inZoneRadius)) {
+                const sampleTime = Number(sample.time);
+                if (Number.isFinite(sampleTime)) attackerInZone.push(sampleTime);
+            }
+        }
+
+        if (targetInZone.length && attackerInZone.length) {
+            for (const targetTime of targetInZone) {
+                if (attackerInZone.some((attackerTime) => Math.abs(attackerTime - targetTime) <= 1200)) {
+                    metrics.contestedCount += 1;
+                    break;
+                }
+            }
+        }
+
+        const state = classifyObjectiveZoneState(metrics);
+        states.push({
+            id: objective.id || objective.lua_name || objective.name || `objective-${states.length}`,
+            name: objective.name || objective.lua_name || 'Objective',
+            state,
+            ...metrics,
+        });
+    }
+    return states;
+}
+
+function renderObjectiveStateSummary(states = [], targetTeam = null, attackerTeam = null) {
+    const container = document.getElementById('proximity-objective-state-summary');
+    if (!container) return;
+    if (!Array.isArray(states) || states.length === 0) {
+        container.innerHTML = '<div class="text-[10px] text-slate-500">Objective state: no zones available on this map.</div>';
+        return;
+    }
+
+    const severityOrder = { contested: 0, core: 1, approach: 2, outside: 3 };
+    const sorted = states.slice().sort((a, b) => {
+        const sa = severityOrder[a.state] ?? 4;
+        const sb = severityOrder[b.state] ?? 4;
+        if (sa !== sb) return sa - sb;
+        const ah = (a.targetCoreHits || 0) + (a.attackerCoreHits || 0) + (a.targetApproachHits || 0) + (a.attackerApproachHits || 0);
+        const bh = (b.targetCoreHits || 0) + (b.attackerCoreHits || 0) + (b.targetApproachHits || 0) + (b.attackerApproachHits || 0);
+        return bh - ah;
+    });
+
+    container.innerHTML = sorted.slice(0, 8).map((row) => {
+        const badgeColor = row.state === 'contested'
+            ? 'bg-rose-500/20 text-rose-300 border-rose-400/30'
+            : row.state === 'core'
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
+                : row.state === 'approach'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-400/30'
+                    : 'bg-slate-500/20 text-slate-300 border-slate-400/30';
+        const targetLabel = normalizeTeamName(targetTeam) || 'Target';
+        const attackerLabel = normalizeTeamName(attackerTeam) || 'Attacker';
+        return `
+            <div class="inline-flex items-center gap-2 mr-2 mb-2 px-2 py-1 rounded border border-white/10 bg-white/5">
+                <span class="font-semibold text-slate-200">${escapeHtml(stripEtColors(row.name))}</span>
+                <span class="px-1.5 py-0.5 rounded border ${badgeColor} uppercase tracking-wide">${escapeHtml(row.state)}</span>
+                <span class="text-slate-400">${escapeHtml(targetLabel)} core:${formatNumber(row.targetCoreHits || 0)}</span>
+                <span class="text-slate-500">${escapeHtml(attackerLabel)} core:${formatNumber(row.attackerCoreHits || 0)}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function getObjectiveTimelineStateClass(state) {
+    if (state === 'contested') return 'bg-rose-400/90';
+    if (state === 'core') return 'bg-emerald-400/80';
+    if (state === 'approach') return 'bg-amber-300/80';
+    return 'bg-slate-700/50';
+}
+
+function formatTimelineSeconds(ms) {
+    const value = Number(ms);
+    if (!Number.isFinite(value)) return '--';
+    return `${(value / 1000).toFixed(1)}s`;
+}
+
+function computeObjectiveTimelineRows(targetPath, attackerPath, objectiveZones = [], objectiveStates = [], binCount = 24) {
+    const target = (Array.isArray(targetPath) ? targetPath : []).filter((p) => (
+        Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y)) && Number.isFinite(Number(p?.time))
+    ));
+    const attacker = (Array.isArray(attackerPath) ? attackerPath : []).filter((p) => (
+        Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y)) && Number.isFinite(Number(p?.time))
+    ));
+    const allTimes = target.map((s) => Number(s.time)).concat(attacker.map((s) => Number(s.time)));
+    if (!objectiveZones.length || !allTimes.length) return null;
+
+    const stateRank = { contested: 0, core: 1, approach: 2, outside: 3 };
+    const objectiveById = objectiveZones.reduce((acc, objective) => {
+        const id = objective.id || objective.lua_name || objective.name || '';
+        if (id) acc[id] = objective;
+        return acc;
+    }, {});
+
+    const prioritized = (Array.isArray(objectiveStates) ? objectiveStates : [])
+        .slice()
+        .sort((a, b) => {
+            const ar = stateRank[a.state] ?? 4;
+            const br = stateRank[b.state] ?? 4;
+            if (ar !== br) return ar - br;
+            const ah = (a.targetCoreHits || 0) + (a.attackerCoreHits || 0) + (a.targetApproachHits || 0) + (a.attackerApproachHits || 0);
+            const bh = (b.targetCoreHits || 0) + (b.attackerCoreHits || 0) + (b.targetApproachHits || 0) + (b.attackerApproachHits || 0);
+            return bh - ah;
+        })
+        .filter((row) => objectiveById[row.id]);
+
+    const selected = prioritized.slice(0, 4);
+    if (!selected.length) return null;
+
+    const minTime = Math.min(...allTimes);
+    const maxTime = Math.max(...allTimes);
+    const span = Math.max(maxTime - minTime, 1);
+    const safeBins = Math.max(8, Math.min(40, Number(binCount) || 24));
+    const binSize = span / safeBins;
+
+    const rows = selected.map((row) => {
+        const objective = objectiveById[row.id];
+        const baseRadius = Number(objective?.radius || 500);
+        const coreRadius = baseRadius * 0.55;
+        const approachRadius = baseRadius * 1.2;
+        const inZoneRadius = baseRadius;
+        const bins = [];
+
+        for (let idx = 0; idx < safeBins; idx += 1) {
+            const start = minTime + idx * binSize;
+            const end = idx === safeBins - 1 ? (maxTime + 1) : (start + binSize);
+            let targetInApproach = false;
+            let attackerInApproach = false;
+            let targetInCore = false;
+            let attackerInCore = false;
+            let targetInZone = false;
+            let attackerInZone = false;
+
+            for (const sample of target) {
+                const t = Number(sample.time);
+                if (t < start || t >= end) continue;
+                if (isInsideObjectiveRadius(sample, objective, approachRadius)) targetInApproach = true;
+                if (isInsideObjectiveRadius(sample, objective, coreRadius)) targetInCore = true;
+                if (isInsideObjectiveRadius(sample, objective, inZoneRadius)) targetInZone = true;
+            }
+            for (const sample of attacker) {
+                const t = Number(sample.time);
+                if (t < start || t >= end) continue;
+                if (isInsideObjectiveRadius(sample, objective, approachRadius)) attackerInApproach = true;
+                if (isInsideObjectiveRadius(sample, objective, coreRadius)) attackerInCore = true;
+                if (isInsideObjectiveRadius(sample, objective, inZoneRadius)) attackerInZone = true;
+            }
+
+            let state = 'outside';
+            if (targetInZone && attackerInZone) state = 'contested';
+            else if (targetInCore || attackerInCore) state = 'core';
+            else if (targetInApproach || attackerInApproach) state = 'approach';
+
+            bins.push({
+                state,
+                start,
+                end,
+            });
+        }
+
+        return {
+            id: row.id,
+            name: row.name,
+            bins,
+        };
+    });
+
+    return {
+        minTime,
+        maxTime,
+        rows,
+        binCount: safeBins,
+    };
+}
+
+function renderObjectiveTimelineStrip(timeline, targetTeam = null, attackerTeam = null) {
+    const container = document.getElementById('proximity-objective-timeline');
+    if (!container) return;
+    if (!timeline || !Array.isArray(timeline.rows) || timeline.rows.length === 0) {
+        container.innerHTML = '<div class="text-[10px] text-slate-500">Objective timeline: no timestamped path data.</div>';
+        return;
+    }
+
+    const targetLabel = normalizeTeamName(targetTeam) || 'Target';
+    const attackerLabel = normalizeTeamName(attackerTeam) || 'Attacker';
+    const durationMs = Math.max(Number(timeline.maxTime) - Number(timeline.minTime), 0);
+
+    const rowsHtml = timeline.rows.map((row) => {
+        const segments = row.bins.map((segment) => (
+            `<span class="h-2.5 rounded-sm ${getObjectiveTimelineStateClass(segment.state)} flex-1" title="${escapeHtml(segment.state)} • ${formatTimelineSeconds(segment.start - timeline.minTime)}-${formatTimelineSeconds(segment.end - timeline.minTime)}"></span>`
+        )).join('');
+        return `
+            <div class="grid grid-cols-[120px_1fr] gap-2 items-center mt-1">
+                <div class="text-slate-300 truncate" title="${escapeHtml(stripEtColors(row.name || 'Objective'))}">${escapeHtml(stripEtColors(row.name || 'Objective'))}</div>
+                <div class="flex gap-0.5">${segments}</div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="text-[10px] text-slate-500 mb-1">Objective timeline (${formatTimelineSeconds(durationMs)}) • ${escapeHtml(targetLabel)} vs ${escapeHtml(attackerLabel)}</div>
+        <div class="flex items-center gap-3 mb-1 text-[10px] text-slate-500">
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-slate-700/50"></span>outside</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-300/80"></span>approach</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-400/80"></span>core</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-rose-400/90"></span>contested</span>
+        </div>
+        ${rowsHtml}
+    `;
+}
+
+function drawObjectiveZones(ctx, width, height, worldBounds, objectiveZones = [], stateByObjective = null) {
+    if (!worldBounds || !Array.isArray(objectiveZones) || objectiveZones.length === 0) return;
+    for (const objective of objectiveZones) {
+        if (!Number.isFinite(objective?.x) || !Number.isFinite(objective?.y)) continue;
+        const point = worldToCanvasPoint(objective.x, objective.y, width, height, worldBounds);
+        if (!point) continue;
+        const radius = worldRadiusToCanvas(Number(objective.radius || 500), width, height, worldBounds);
+        const objectiveId = objective.id || objective.lua_name || objective.name || '';
+        const state = stateByObjective && objectiveId ? stateByObjective[objectiveId] : null;
+        ctx.save();
+        ctx.fillStyle = state ? getObjectiveStateColor(state) : getObjectiveTypeColor(objective.type);
+        ctx.strokeStyle = state ? withAlpha(getObjectiveStateColor(state), 0.6) : 'rgba(226, 232, 240, 0.45)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // center marker
+        ctx.fillStyle = 'rgba(226, 232, 240, 0.9)';
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+function updateEventLegend(targetTeam, attackerTeam) {
+    const targetDot = document.getElementById('proximity-legend-target-dot');
+    const targetText = document.getElementById('proximity-legend-target-text');
+    const attackerDot = document.getElementById('proximity-legend-attacker-dot');
+    const attackerText = document.getElementById('proximity-legend-attacker-text');
+    if (targetDot) targetDot.style.backgroundColor = getTeamColor(targetTeam, 'rgba(56, 189, 248, 0.9)');
+    if (attackerDot) attackerDot.style.backgroundColor = getTeamColor(attackerTeam, 'rgba(249, 115, 22, 0.9)');
+    if (targetText) targetText.textContent = targetTeam ? `Target path (${targetTeam})` : 'Target path';
+    if (attackerText) attackerText.textContent = attackerTeam ? `Attacker path (${attackerTeam}, dashed)` : 'Attacker path (dashed)';
+}
+
+async function renderHeatmap(payload) {
     const canvas = document.getElementById('proximity-heatmap');
     const empty = document.getElementById('proximity-heatmap-empty');
     const caption = document.getElementById('proximity-heatmap-caption');
     if (!canvas) return;
+
+    proximityRenderCache.heatmapPayload = payload || { hotzones: [] };
 
     const hotzones = payload?.hotzones || [];
     const scope = getScopeDescription();
@@ -430,15 +921,60 @@ function renderHeatmap(payload) {
     ctx.scale(dpr, dpr);
 
     ctx.clearRect(0, 0, width, height);
+    await ensureMapTransformConfig();
+    const transform = getMapTransformEntry(mapName);
+    const worldBounds = getWorldBounds(transform);
+    const mapImage = await preloadMapImage(transform?.image || null);
+    if (mapImage) {
+        ctx.save();
+        ctx.globalAlpha = 0.26;
+        ctx.drawImage(mapImage, 0, 0, width, height);
+        ctx.restore();
+    }
 
-    const xs = hotzones.map(h => h.grid_x);
-    const ys = hotzones.map(h => h.grid_y);
+    const maxKills = Math.max(...hotzones.map((h) => Number(h.kills || 0)), 1);
+    const heatScale = clamp(Number(proximityVizState.heatIntensity || 1), 0.6, 1.8);
+    const alphaScale = clamp(heatScale, 0.6, 1.8);
+
+    if (worldBounds) {
+        await ensureObjectiveZonesConfig();
+        const objectiveZones = getObjectiveZonesForMap(mapName).filter(shouldRenderObjectiveZone);
+        if (proximityVizState.showObjectiveZones) {
+            drawObjectiveZones(ctx, width, height, worldBounds, objectiveZones);
+        }
+
+        const cellRadius = worldRadiusToCanvas(PROXIMITY_GRID_SIZE * 0.65, width, height, worldBounds);
+        for (const zone of hotzones) {
+            const kills = Number(zone.kills || 0);
+            const gx = Number(zone.grid_x);
+            const gy = Number(zone.grid_y);
+            if (!Number.isFinite(gx) || !Number.isFinite(gy)) continue;
+            const worldX = (gx + 0.5) * PROXIMITY_GRID_SIZE;
+            const worldY = (gy + 0.5) * PROXIMITY_GRID_SIZE;
+            const point = worldToCanvasPoint(worldX, worldY, width, height, worldBounds);
+            if (!point) continue;
+
+            const intensity = clamp(kills / maxKills, 0, 1);
+            const radius = Math.max(8, cellRadius * (0.65 + intensity * 0.55) * (0.72 + heatScale * 0.28));
+            const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
+            gradient.addColorStop(0, `rgba(248, 113, 113, ${(0.65 * intensity + 0.15) * alphaScale})`);
+            gradient.addColorStop(0.65, `rgba(244, 63, 94, ${(0.35 * intensity + 0.08) * alphaScale})`);
+            gradient.addColorStop(1, 'rgba(244, 63, 94, 0)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        return;
+    }
+
+    // Fallback to old relative grid rendering when map transform is unavailable.
+    const xs = hotzones.map((h) => h.grid_x);
+    const ys = hotzones.map((h) => h.grid_y);
     const minX = Math.min(...xs);
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
-    const maxKills = Math.max(...hotzones.map(h => h.kills || 0), 1);
-
     const pad = 6;
     const spanX = Math.max(maxX - minX, 1);
     const spanY = Math.max(maxY - minY, 1);
@@ -446,10 +982,10 @@ function renderHeatmap(payload) {
     for (const h of hotzones) {
         const normX = (h.grid_x - minX) / spanX;
         const normY = (h.grid_y - minY) / spanY;
-        const size = 6 + Math.min(18, (h.kills / maxKills) * 18);
+        const size = (6 + Math.min(18, (h.kills / maxKills) * 18)) * (0.72 + heatScale * 0.28);
         const x = pad + normX * (width - pad * 2);
         const y = pad + normY * (height - pad * 2);
-        const alpha = 0.2 + Math.min(0.75, (h.kills / maxKills) * 0.75);
+        const alpha = (0.2 + Math.min(0.75, (h.kills / maxKills) * 0.75)) * alphaScale;
         ctx.fillStyle = `rgba(244, 63, 94, ${alpha})`;
         ctx.beginPath();
         ctx.arc(x, y, size / 2, 0, Math.PI * 2);
@@ -509,7 +1045,16 @@ function renderEventList(events) {
     });
 }
 
-function drawEngagementPath(targetPath, attackerPath = [], strafeEvents = []) {
+function drawEngagementPath(
+    targetPath,
+    attackerPath = [],
+    strafeEvents = [],
+    mapTransform = null,
+    mapImage = null,
+    objectiveZones = [],
+    targetTeam = null,
+    attackerTeam = null
+) {
     const canvas = document.getElementById('proximity-event-canvas');
     const empty = document.getElementById('proximity-event-empty');
     if (!canvas) return;
@@ -520,6 +1065,8 @@ function drawEngagementPath(targetPath, attackerPath = [], strafeEvents = []) {
 
     if (!allRaw || allRaw.length === 0) {
         if (empty) empty.classList.remove('hidden');
+        renderObjectiveStateSummary([]);
+        renderObjectiveTimelineStrip(null);
         return;
     }
     if (empty) empty.classList.add('hidden');
@@ -533,6 +1080,12 @@ function drawEngagementPath(targetPath, attackerPath = [], strafeEvents = []) {
     ctx.scale(dpr, dpr);
 
     ctx.clearRect(0, 0, width, height);
+    if (mapImage) {
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.drawImage(mapImage, 0, 0, width, height);
+        ctx.restore();
+    }
 
     const xs = allRaw.map(p => p.x);
     const ys = allRaw.map(p => p.y);
@@ -544,23 +1097,58 @@ function drawEngagementPath(targetPath, attackerPath = [], strafeEvents = []) {
     const spanY = Math.max(maxY - minY, 1);
     const pad = 12;
 
-    const mapPoints = (path) => path.map(p => {
-        const nx = (p.x - minX) / spanX;
-        const ny = (p.y - minY) / spanY;
+    const worldBounds = getWorldBounds(mapTransform);
+    const hasWorldBounds = !!worldBounds;
+
+    const mapPoints = (path) => path.map((p) => {
+        let canvasX;
+        let canvasY;
+        if (hasWorldBounds) {
+            const point = worldToCanvasPoint(p.x, p.y, width, height, worldBounds);
+            canvasX = point.x;
+            canvasY = point.y;
+        } else {
+            const nx = (p.x - minX) / spanX;
+            const ny = (p.y - minY) / spanY;
+            canvasX = pad + nx * (width - pad * 2);
+            canvasY = pad + ny * (height - pad * 2);
+        }
         return {
-            x: pad + nx * (width - pad * 2),
-            y: pad + ny * (height - pad * 2),
+            x: canvasX,
+            y: canvasY,
             event: p.event,
-            t: p.time
+            t: p.time,
         };
     });
 
     const targetPoints = mapPoints(targetPointsRaw);
     const attackerPoints = mapPoints(attackerPointsRaw);
+    const targetStroke = getTeamColor(targetTeam, 'rgba(56, 189, 248, 0.85)');
+    const attackerStroke = getTeamColor(attackerTeam, 'rgba(249, 115, 22, 0.8)');
+    const objectiveStates = computeObjectiveZoneStates(targetPointsRaw, attackerPointsRaw, objectiveZones);
+    const objectiveTimeline = computeObjectiveTimelineRows(targetPointsRaw, attackerPointsRaw, objectiveZones, objectiveStates, 24);
+    const objectiveStateById = objectiveStates.reduce((acc, row) => {
+        acc[row.id] = row.state;
+        return acc;
+    }, {});
+    renderObjectiveStateSummary(objectiveStates, targetTeam, attackerTeam);
+    renderObjectiveTimelineStrip(objectiveTimeline, targetTeam, attackerTeam);
+
+    let targetAlpha = 1;
+    let attackerAlpha = 1;
+    if (proximityVizState.teamEmphasis === 'target') {
+        attackerAlpha = 0.25;
+    } else if (proximityVizState.teamEmphasis === 'attacker') {
+        targetAlpha = 0.25;
+    }
+
+    if (hasWorldBounds && proximityVizState.showObjectiveZones) {
+        drawObjectiveZones(ctx, width, height, worldBounds, objectiveZones, objectiveStateById);
+    }
 
     if (attackerPoints.length > 1) {
         ctx.save();
-        ctx.strokeStyle = 'rgba(249, 115, 22, 0.8)';
+        ctx.strokeStyle = withAlpha(attackerStroke, attackerAlpha);
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
@@ -572,7 +1160,8 @@ function drawEngagementPath(targetPath, attackerPath = [], strafeEvents = []) {
         ctx.restore();
     }
 
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+    ctx.save();
+    ctx.strokeStyle = withAlpha(targetStroke, targetAlpha);
     ctx.lineWidth = 3;
     ctx.beginPath();
     targetPoints.forEach((pt, idx) => {
@@ -580,11 +1169,12 @@ function drawEngagementPath(targetPath, attackerPath = [], strafeEvents = []) {
         else ctx.lineTo(pt.x, pt.y);
     });
     ctx.stroke();
+    ctx.restore();
 
     const start = targetPoints[0];
     const end = targetPoints[targetPoints.length - 1];
     if (start && end) {
-        ctx.fillStyle = 'rgba(52, 211, 153, 0.95)';
+        ctx.fillStyle = withAlpha(targetStroke, targetAlpha);
         ctx.beginPath();
         ctx.arc(start.x, start.y, 6, 0, Math.PI * 2);
         ctx.fill();
@@ -596,7 +1186,8 @@ function drawEngagementPath(targetPath, attackerPath = [], strafeEvents = []) {
 
     for (const pt of targetPoints) {
         if (pt.event === 'hit' || pt.event === 'death') {
-            ctx.fillStyle = pt.event === 'death' ? 'rgba(248,113,113,0.9)' : 'rgba(250,204,21,0.9)';
+            const markerColor = pt.event === 'death' ? 'rgba(248,113,113,0.9)' : 'rgba(250,204,21,0.9)';
+            ctx.fillStyle = withAlpha(markerColor, targetAlpha);
             ctx.beginPath();
             ctx.arc(pt.x, pt.y, pt.event === 'death' ? 5 : 4, 0, Math.PI * 2);
             ctx.fill();
@@ -621,6 +1212,33 @@ function drawEngagementPath(targetPath, attackerPath = [], strafeEvents = []) {
             }
         }
     }
+}
+
+function redrawEventFromCache() {
+    const payload = proximityRenderCache.eventPayload;
+    if (!payload) {
+        renderObjectiveStateSummary([]);
+        renderObjectiveTimelineStrip(null);
+        updateEventLegend(null, null);
+        return;
+    }
+    drawEngagementPath(
+        payload.targetPath || [],
+        payload.attackerPath || [],
+        payload.strafeEvents || [],
+        payload.transform || null,
+        payload.mapImage || null,
+        payload.objectiveZones || [],
+        payload.targetTeam || null,
+        payload.attackerTeam || null
+    );
+    updateEventLegend(payload.targetTeam || null, payload.attackerTeam || null);
+}
+
+async function redrawHeatmapFromCache() {
+    const payload = proximityRenderCache.heatmapPayload;
+    if (!payload) return;
+    await renderHeatmap(payload);
 }
 
 async function loadEventDetail(id) {
@@ -703,11 +1321,39 @@ async function loadEventDetail(id) {
             details.textContent = `${details.textContent} • ${strafeSummary}`;
         }
 
-        drawEngagementPath(targetPath || [], attackerPath || [], targetStrafe.events || []);
+        const targetTeam = normalizeTeamName(data.target_team);
+        let attackerTeam = normalizeTeamName(killer.team);
+        if (!attackerTeam) {
+            attackerTeam = normalizeTeamName((attackers.find((a) => normalizeTeamName(a?.team)) || {}).team);
+        }
+        if (!attackerTeam) {
+            attackerTeam = getOpposingTeam(targetTeam);
+        }
+
+        await Promise.all([ensureMapTransformConfig(), ensureObjectiveZonesConfig()]);
+        const transform = getMapTransformEntry(data.map_name || map || '');
+        const objectiveZones = getObjectiveZonesForMap(data.map_name || map || '').filter(shouldRenderObjectiveZone);
+        const mapImage = await preloadMapImage(transform?.image || null);
+
+        proximityRenderCache.eventPayload = {
+            targetPath: targetPath || [],
+            attackerPath: attackerPath || [],
+            strafeEvents: targetStrafe.events || [],
+            transform,
+            mapImage,
+            objectiveZones,
+            targetTeam,
+            attackerTeam,
+        };
+        redrawEventFromCache();
     } catch (e) {
         if (meta) meta.textContent = 'Failed to load';
         if (details) details.textContent = 'Unable to load engagement details.';
         if (statsEl) statsEl.innerHTML = '';
+        proximityRenderCache.eventPayload = null;
+        renderObjectiveStateSummary([]);
+        renderObjectiveTimelineStrip(null);
+        updateEventLegend(null, null);
     }
 }
 
@@ -800,6 +1446,9 @@ function renderReactionSignals(payload) {
 }
 
 function resetProximityValues() {
+    proximityRenderCache.eventPayload = null;
+    proximityRenderCache.heatmapPayload = { hotzones: [] };
+
     setText('proximity-total-engagements', '--');
     setText('proximity-avg-distance', '--');
     setText('proximity-crossfire', '--');
@@ -822,9 +1471,10 @@ function resetProximityValues() {
     setText('proximity-scope-caption', defaultScope);
     setText('proximity-timeline-scope', `Scope: ${defaultScope}`);
     setText('proximity-heatmap-scope', `Scope: ${defaultScope}`);
+    updateHeatIntensityLabel();
 
     renderTimeline([]);
-    renderHeatmap({ hotzones: [] });
+    void renderHeatmap({ hotzones: [] }).catch(() => {});
     renderEventList([]);
     renderTradeEvents([]);
     renderDuos([]);
@@ -839,6 +1489,19 @@ function resetProximityValues() {
     renderLeaderList('proximity-dodge-leaders', [], () => '--');
     renderLeaderList('proximity-support-reaction-leaders', [], () => '--');
     renderClassSummary({ classes: [] });
+    // v5 resets
+    setHtml('spawn-timing-teams', '');
+    setHtml('spawn-timing-leaders', '');
+    setHtml('cohesion-summary', '');
+    setHtml('crossfire-angles-summary', '');
+    setHtml('crossfire-angle-buckets', '');
+    setHtml('crossfire-top-duos', '');
+    setHtml('team-pushes-summary', '');
+    setHtml('lua-trades-summary', '');
+    setHtml('lua-trades-leaders', '');
+    setHtml('lua-trades-recent', '');
+    renderObjectiveStateSummary([]);
+    renderObjectiveTimelineStrip(null);
     renderClassReactionSummary([]);
 
     const meta = document.getElementById('proximity-event-meta');
@@ -858,6 +1521,7 @@ function resetProximityValues() {
         }
     }
     if (empty) empty.classList.remove('hidden');
+    updateEventLegend(null, null);
 }
 
 async function loadScopeHierarchy() {
@@ -912,6 +1576,7 @@ async function loadScopedProximityData() {
         }
 
         if (ready) {
+            const scopeParams = buildScopeParams();
             const [
                 timelineRes,
                 heatmapRes,
@@ -921,7 +1586,12 @@ async function loadScopedProximityData() {
                 reactionRes,
                 eventsRes,
                 tradesSummaryRes,
-                tradesEventsRes
+                tradesEventsRes,
+                spawnTimingRes,
+                cohesionRes,
+                crossfireAnglesRes,
+                pushesRes,
+                luaTradesRes
             ] = await Promise.allSettled([
                 fetchJSON(scopedUrl('/proximity/engagements')),
                 fetchJSON(scopedUrl('/proximity/hotzones')),
@@ -931,7 +1601,12 @@ async function loadScopedProximityData() {
                 fetchJSON(scopedUrl('/proximity/reactions', { extra: { limit: 6 } })),
                 fetchJSON(scopedUrl('/proximity/events', { extra: { limit: DEFAULT_EVENTS_LIMIT } })),
                 fetchJSON(scopedUrl('/proximity/trades/summary')),
-                fetchJSON(scopedUrl('/proximity/trades/events', { extra: { limit: 10 } }))
+                fetchJSON(scopedUrl('/proximity/trades/events', { extra: { limit: 10 } })),
+                fetchJSON(`/api/proximity/spawn-timing?${scopeParams}`),
+                fetchJSON(`/api/proximity/cohesion?${scopeParams}`),
+                fetchJSON(`/api/proximity/crossfire-angles?${scopeParams}`),
+                fetchJSON(`/api/proximity/pushes?${scopeParams}`),
+                fetchJSON(`/api/proximity/lua-trades?${scopeParams}`)
             ]);
             if (loadId !== proximityScopedLoadId) return;
 
@@ -939,7 +1614,8 @@ async function loadScopedProximityData() {
                 renderTimeline(timelineRes.value.buckets || []);
             }
             if (heatmapRes.status === 'fulfilled') {
-                renderHeatmap(heatmapRes.value);
+                await renderHeatmap(heatmapRes.value);
+                if (loadId !== proximityScopedLoadId) return;
             }
             if (eventsRes.status === 'fulfilled') {
                 renderEventList(eventsRes.value.events || []);
@@ -989,6 +1665,24 @@ async function loadScopedProximityData() {
             if (tradesEventsRes.status === 'fulfilled') {
                 renderTradeEvents(tradesEventsRes.value.events || []);
             }
+            // v5 teamplay results
+            if (spawnTimingRes.status === 'fulfilled' && spawnTimingRes.value.status === 'ok') {
+                renderSpawnTimingTeams(spawnTimingRes.value.team_averages);
+                renderSpawnTimingLeaders(spawnTimingRes.value.leaders);
+            }
+            if (cohesionRes.status === 'fulfilled' && cohesionRes.value.status === 'ok') {
+                renderCohesionTeam(cohesionRes.value.team_summary);
+                renderCohesionTimeline(cohesionRes.value.timeline);
+            }
+            if (crossfireAnglesRes.status === 'fulfilled') {
+                renderCrossfireAngles(crossfireAnglesRes.value);
+            }
+            if (pushesRes.status === 'fulfilled') {
+                renderTeamPushes(pushesRes.value);
+            }
+            if (luaTradesRes.status === 'fulfilled') {
+                renderLuaTrades(luaTradesRes.value);
+            }
         }
     } catch (e) {
         if (stateEl) {
@@ -997,6 +1691,50 @@ async function loadScopedProximityData() {
                 <span>Prototype mode: proximity API not connected yet.</span>
             `;
         }
+    }
+}
+
+function updateHeatIntensityLabel() {
+    const label = document.getElementById('proximity-heat-intensity-value');
+    if (!label) return;
+    label.textContent = `${Number(proximityVizState.heatIntensity || 1).toFixed(1)}x`;
+}
+
+function bindVisualizationControls() {
+    const objectiveToggle = document.getElementById('proximity-toggle-objective-zones');
+    const heatSlider = document.getElementById('proximity-heat-intensity');
+    const emphasisSelect = document.getElementById('proximity-team-emphasis');
+
+    if (objectiveToggle && !objectiveToggle.dataset.bound) {
+        objectiveToggle.dataset.bound = '1';
+        objectiveToggle.checked = proximityVizState.showObjectiveZones;
+        objectiveToggle.addEventListener('change', async () => {
+            proximityVizState.showObjectiveZones = !!objectiveToggle.checked;
+            await redrawHeatmapFromCache();
+            redrawEventFromCache();
+        });
+    }
+
+    if (heatSlider && !heatSlider.dataset.bound) {
+        heatSlider.dataset.bound = '1';
+        heatSlider.value = String(proximityVizState.heatIntensity);
+        updateHeatIntensityLabel();
+        heatSlider.addEventListener('input', async () => {
+            const value = clamp(Number(heatSlider.value), 0.6, 1.8);
+            proximityVizState.heatIntensity = value;
+            updateHeatIntensityLabel();
+            await redrawHeatmapFromCache();
+        });
+    }
+
+    if (emphasisSelect && !emphasisSelect.dataset.bound) {
+        emphasisSelect.dataset.bound = '1';
+        emphasisSelect.value = proximityVizState.teamEmphasis;
+        emphasisSelect.addEventListener('change', () => {
+            const next = emphasisSelect.value || 'auto';
+            proximityVizState.teamEmphasis = ['auto', 'target', 'attacker'].includes(next) ? next : 'auto';
+            redrawEventFromCache();
+        });
     }
 }
 
@@ -1073,6 +1811,7 @@ export async function loadProximityView() {
     proximityViewLoadPromise = (async () => {
         resetProximityValues();
         bindScopeEvents();
+        bindVisualizationControls();
         await loadScopeHierarchy();
         await loadScopedProximityData();
 
@@ -1085,5 +1824,150 @@ export async function loadProximityView() {
         await proximityViewLoadPromise;
     } finally {
         proximityViewLoadPromise = null;
+    }
+}
+
+/* ===== v5 TEAMPLAY RENDER FUNCTIONS ===== */
+
+/* ---- v5 Spawn Timing ---- */
+function renderSpawnTimingTeams(teams) {
+    const el = document.getElementById('spawn-timing-teams');
+    if (!el) return;
+    if (!teams || !teams.length) { el.innerHTML = '<em class="text-slate-500">No data</em>'; return; }
+    el.innerHTML = teams.map(t =>
+        `<div class="glass-card p-3 rounded-lg border border-white/5 inline-block mr-3"><strong>${t.team}</strong><br>Avg score: ${(t.avg_score * 100).toFixed(1)}% | Kills: ${t.total_kills}</div>`
+    ).join('');
+}
+
+function renderSpawnTimingLeaders(leaders) {
+    const el = document.getElementById('spawn-timing-leaders');
+    if (!el) return;
+    if (!leaders || !leaders.length) { el.innerHTML = '<em class="text-slate-500">No data</em>'; return; }
+    el.innerHTML = '<ol class="list-decimal list-inside text-sm text-slate-300 space-y-1">' + leaders.map(l =>
+        `<li><strong>${escapeHtml(l.name)}</strong> — ${(l.avg_score * 100).toFixed(1)}% (${l.kills} kills, avg denial ${l.avg_denial_ms}ms)</li>`
+    ).join('') + '</ol>';
+}
+
+/* ---- v5 Team Cohesion ---- */
+function renderCohesionTeam(summary) {
+    const el = document.getElementById('cohesion-summary');
+    if (!el) return;
+    if (!summary || !summary.length) { el.innerHTML = '<em class="text-slate-500">No data</em>'; return; }
+    el.innerHTML = summary.map(t => {
+        const cls = t.avg_dispersion < 300 ? 'TIGHT' : t.avg_dispersion < 800 ? 'NORMAL' : t.avg_dispersion < 1500 ? 'LOOSE' : 'SCATTERED';
+        return `<div class="glass-card p-3 rounded-lg border border-white/5 inline-block mr-3">
+            <strong>${t.team} — ${cls}</strong><br>
+            Dispersion: ${t.avg_dispersion} | Spread: ${t.avg_max_spread} | Stragglers: ${t.avg_stragglers} | Alive: ${t.avg_alive}
+        </div>`;
+    }).join('');
+}
+
+function renderCohesionTimeline(timeline) {
+    const canvas = document.getElementById('cohesion-timeline-canvas');
+    if (!canvas || !timeline || !timeline.length) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width = canvas.parentElement.clientWidth || 600;
+    const H = canvas.height = 200;
+    ctx.clearRect(0, 0, W, H);
+
+    const axis = timeline.filter(t => t.team === 'AXIS');
+    const allies = timeline.filter(t => t.team === 'ALLIES');
+    const allDisp = timeline.map(t => t.dispersion);
+    const maxDisp = Math.max(...allDisp, 1);
+    const minTime = Math.min(...timeline.map(t => t.time));
+    const maxTime = Math.max(...timeline.map(t => t.time));
+    const timeRange = maxTime - minTime || 1;
+
+    function drawLine(data, color) {
+        if (!data.length) return;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        data.forEach((p, i) => {
+            const x = ((p.time - minTime) / timeRange) * W;
+            const y = H - (p.dispersion / maxDisp) * H;
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    }
+    drawLine(axis, '#e74c3c');
+    drawLine(allies, '#3498db');
+
+    ctx.font = '12px monospace';
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('AXIS', 10, 15);
+    ctx.fillStyle = '#3498db'; ctx.fillText('ALLIES', 70, 15);
+}
+
+/* ---- v5 Crossfire Angles ---- */
+function renderCrossfireAngles(data) {
+    const el = document.getElementById('crossfire-angles-summary');
+    if (!el) return;
+    if (!data || data.status !== 'ok') { el.innerHTML = '<em class="text-slate-500">No data</em>'; return; }
+    el.innerHTML = `<div class="glass-card p-3 rounded-lg border border-white/5">
+        Opportunities: <strong>${data.total_opportunities}</strong> |
+        Executed: <strong>${data.executed}</strong> (${data.utilization_rate_pct}%) |
+        Avg angle: ${data.avg_angle}&deg;
+    </div>`;
+
+    const bucketsEl = document.getElementById('crossfire-angle-buckets');
+    if (bucketsEl && data.angle_buckets) {
+        const maxCount = Math.max(...data.angle_buckets.map(b => b.count), 1);
+        bucketsEl.innerHTML = data.angle_buckets.map(b => {
+            const pct = (b.count / maxCount * 100).toFixed(0);
+            return `<div style="margin:4px 0" class="text-sm text-slate-300">
+                <span style="display:inline-block;width:150px">${b.bucket}</span>
+                <span style="display:inline-block;width:${pct}%;max-width:200px;background:#e74c3c;height:16px;border-radius:3px"></span>
+                <span> ${b.count} (${b.executed} exec)</span></div>`;
+        }).join('');
+    }
+
+    const duosEl = document.getElementById('crossfire-top-duos');
+    if (duosEl && data.top_duos && data.top_duos.length) {
+        duosEl.innerHTML = '<ol class="list-decimal list-inside text-sm text-slate-300 space-y-1">' + data.top_duos.map(d =>
+            `<li>${d.teammate1_guid.substring(0,8)} + ${d.teammate2_guid.substring(0,8)} = ${d.executions} exec (avg ${d.avg_angle}&deg;)</li>`
+        ).join('') + '</ol>';
+    }
+}
+
+/* ---- v5 Team Pushes ---- */
+function renderTeamPushes(data) {
+    const el = document.getElementById('team-pushes-summary');
+    if (!el) return;
+    if (!data || data.status !== 'ok' || !data.team_summary || !data.team_summary.length) {
+        el.innerHTML = '<em class="text-slate-500">No data</em>'; return;
+    }
+    el.innerHTML = data.team_summary.map(t => {
+        const objPct = t.pushes > 0 ? (t.objective_pushes / t.pushes * 100).toFixed(0) : 0;
+        return `<div class="glass-card p-3 rounded-lg border border-white/5 inline-block mr-3">
+            <strong>${t.team}</strong><br>
+            Pushes: ${t.pushes} | Quality: ${t.avg_quality.toFixed(3)} | Alignment: ${t.avg_alignment.toFixed(3)}<br>
+            Avg speed: ${t.avg_speed} | Participants: ${t.avg_participants.toFixed(1)} | Obj-oriented: ${objPct}%
+        </div>`;
+    }).join('');
+}
+
+/* ---- v5 Lua Trades ---- */
+function renderLuaTrades(data) {
+    const el = document.getElementById('lua-trades-summary');
+    if (!el) return;
+    if (!data || data.status !== 'ok') { el.innerHTML = '<em class="text-slate-500">No data</em>'; return; }
+    el.innerHTML = '';
+
+    const leadersEl = document.getElementById('lua-trades-leaders');
+    if (leadersEl && data.leaders && data.leaders.length) {
+        leadersEl.innerHTML = '<ol class="list-decimal list-inside text-sm text-slate-300 space-y-1">' + data.leaders.map(l =>
+            `<li><strong>${escapeHtml(l.name)}</strong> — ${l.trades} trades (avg ${l.avg_reaction_ms}ms, fastest ${l.fastest_ms}ms)</li>`
+        ).join('') + '</ol>';
+    } else if (leadersEl) {
+        leadersEl.innerHTML = '<em class="text-slate-500">No trade leaders</em>';
+    }
+
+    const recentEl = document.getElementById('lua-trades-recent');
+    if (recentEl && data.recent_trades && data.recent_trades.length) {
+        recentEl.innerHTML = data.recent_trades.map(t =>
+            `<div class="glass-card p-2 rounded-lg border border-white/5 mb-2 text-sm text-slate-300">
+                ${escapeHtml(t.victim)} killed by ${escapeHtml(t.killer)} &rarr; avenged by <strong>${escapeHtml(t.trader)}</strong> (${t.delta_ms}ms) on ${escapeHtml(t.map)}
+            </div>`
+        ).join('');
     }
 }
