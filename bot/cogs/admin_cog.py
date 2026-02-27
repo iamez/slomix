@@ -146,9 +146,22 @@ class AdminCog(commands.Cog, name="Admin"):
             counts = summary.get('counts', {})
             total = summary.get('total', 0)
             dry_run = summary.get('dry_run', True)
+            live_requested = summary.get('live_requested', not dry_run)
+            guardrail_reason = summary.get('guardrail_reason')
+            preflight_checked = summary.get('preflight_checked', False)
+            preflight_ok = summary.get('preflight_ok', False)
+            write_error_count = summary.get('write_error_count', 0)
+            write_error_threshold = summary.get('write_error_threshold', 0)
 
             mode = "DRY-RUN (logging only)" if dry_run else "LIVE"
             msg = f"🔗 **Round Correlation Status** ({mode})\n\n"
+            requested_mode = "LIVE" if live_requested else "DRY-RUN"
+            msg += f"**Requested mode:** {requested_mode}\n"
+            if preflight_checked:
+                msg += f"**Schema preflight:** {'ok' if preflight_ok else 'failed'}\n"
+            if guardrail_reason:
+                msg += f"⚠️ **Guardrail:** `{guardrail_reason}`\n"
+            msg += f"**Write errors:** {write_error_count}/{write_error_threshold}\n\n"
 
             if total == 0:
                 msg += "No correlations tracked yet.\n"
