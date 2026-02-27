@@ -1,0 +1,556 @@
+{
+  "meta": {
+    "etmain_dir": "/home/samba/share/etmain",
+    "pk3_count": 22,
+    "generated_by": "proximity map asset audit script"
+  },
+  "maps": {
+    "adlernest": [
+      {
+        "map": "adlernest",
+        "pk3": "adlernest.pk3",
+        "bsp": "maps/adlernest.bsp",
+        "minimap_file": "levelshots/adlernest_cc.tga",
+        "minimap_size": [
+          256,
+          256
+        ],
+        "levelshots": [
+          "levelshots/adlernest.tga",
+          "levelshots/adlernest_cc.tga"
+        ],
+        "limbo_marker_count": 3,
+        "limbo_marker_samples": [
+          "gfx/limbo/cm_adlernest_drctl.tga",
+          "gfx/limbo/cm_adlernest_trans.tga",
+          "gfx/limbo/cm_frostbitedocs.tga"
+        ],
+        "mapcoordsmins": "-2048 2048",
+        "mapcoordsmaxs": "4096 -4096",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "braundorf_b4": [
+      {
+        "map": "braundorf_b4",
+        "pk3": "braundorf_b4.pk3",
+        "bsp": "maps/braundorf_b4.bsp",
+        "minimap_file": "levelshots/braundorf_b4_cc.tga",
+        "minimap_size": [
+          512,
+          512
+        ],
+        "levelshots": [
+          "levelshots/braundorf_b4.tga",
+          "levelshots/braundorf_b4_cc.tga"
+        ],
+        "limbo_marker_count": 0,
+        "limbo_marker_samples": [],
+        "mapcoordsmins": "-1536 2560",
+        "mapcoordsmaxs": "7424 -6400",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "bremen_b3": [
+      {
+        "map": "bremen_b3",
+        "pk3": "bremen_b3.pk3",
+        "bsp": "maps/bremen_b3.bsp",
+        "minimap_file": "levelshots/bremen_b3_cc.tga",
+        "minimap_size": [
+          256,
+          256
+        ],
+        "levelshots": [
+          "levelshots/bremen_b3.tga",
+          "levelshots/bremen_b3_cc.tga"
+        ],
+        "limbo_marker_count": 1,
+        "limbo_marker_samples": [
+          "gfx/limbo/cm_bremgen.tga"
+        ],
+        "mapcoordsmins": "-3840 3584",
+        "mapcoordsmaxs": "3840 -4096",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "decay_sw": [
+      {
+        "map": "decay_sw",
+        "pk3": "decay_sw.pk3",
+        "bsp": "maps/decay_sw.bsp",
+        "minimap_file": "levelshots/decay_sw_cc.tga",
+        "minimap_size": [
+          256,
+          256
+        ],
+        "levelshots": [
+          "levelshots/decay_sw.tga",
+          "levelshots/decay_sw_cc.tga"
+        ],
+        "limbo_marker_count": 2,
+        "limbo_marker_samples": [
+          "gfx/limbo/cm_frostbitedocs.tga",
+          "gfx/limbo/cm_raidtrans.tga"
+        ],
+        "mapcoordsmins": "-2100 5540",
+        "mapcoordsmaxs": "5540 -2100",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "erdenberg_t2": [
+      {
+        "map": "erdenberg_t2",
+        "pk3": "erdenberg_t2.pk3",
+        "bsp": "maps/erdenberg_t2.bsp",
+        "minimap_file": "levelshots/erdenberg_t2_cc.tga",
+        "minimap_size": [
+          256,
+          256
+        ],
+        "levelshots": [
+          "levelshots/erdenberg_t2.tga",
+          "levelshots/erdenberg_t2_cc.tga"
+        ],
+        "limbo_marker_count": 0,
+        "limbo_marker_samples": [],
+        "mapcoordsmins": "88 3752",
+        "mapcoordsmaxs": "8240 -4400",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "et_brewdog": [
+      {
+        "map": "et_brewdog",
+        "pk3": "et_brewdog_b6.pk3",
+        "bsp": "maps/et_brewdog.bsp",
+        "minimap_file": "levelshots/et_brewdog_cc.tga",
+        "minimap_size": [
+          512,
+          512
+        ],
+        "levelshots": [
+          "levelshots/et_brewdog.jpg",
+          "levelshots/et_brewdog_cc.tga"
+        ],
+        "limbo_marker_count": 4,
+        "limbo_marker_samples": [
+          "gfx/limbo/cm_documents.tga",
+          "gfx/limbo/cm_frostbiteservicedoor.tga",
+          "gfx/limbo/cm_frostbitestoragewall.tga",
+          "gfx/limbo/cm_radio.tga"
+        ],
+        "mapcoordsmins": "-3328 4736",
+        "mapcoordsmaxs": "3840 -2432",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "etl_adlernest": [
+      {
+        "map": "etl_adlernest",
+        "pk3": "etl_adlernest_v4.pk3",
+        "bsp": "maps/etl_adlernest.bsp",
+        "minimap_file": "levelshots/etl_adlernest_cc.tga",
+        "minimap_size": [
+          1024,
+          1024
+        ],
+        "levelshots": [
+          "levelshots/etl_adlernest.tga",
+          "levelshots/etl_adlernest_cc.tga"
+        ],
+        "limbo_marker_count": 3,
+        "limbo_marker_samples": [
+          "gfx/limbo/cm_adlernest_drctl.tga",
+          "gfx/limbo/cm_documents.tga",
+          "gfx/limbo/cm_radio.tga"
+        ],
+        "mapcoordsmins": "-2048 2048",
+        "mapcoordsmaxs": "4096 -4096",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "etl_base": [
+      {
+        "map": "etl_base",
+        "pk3": "etl_base_v3.pk3",
+        "bsp": "maps/etl_base.bsp",
+        "minimap_file": "levelshots/etl_base_cc.tga",
+        "minimap_size": [
+          1024,
+          1024
+        ],
+        "levelshots": [
+          "levelshots/etl_base.tga",
+          "levelshots/etl_base_cc.tga"
+        ],
+        "limbo_marker_count": 5,
+        "limbo_marker_samples": [
+          "gfx/limbo/etl_base/cm_bunker_door.tga",
+          "gfx/limbo/etl_base/cm_documents.tga",
+          "gfx/limbo/etl_base/cm_gate.tga",
+          "gfx/limbo/etl_base/cm_radar.tga",
+          "gfx/limbo/etl_base/cm_radio.tga"
+        ],
+        "mapcoordsmins": "-3328 4736",
+        "mapcoordsmaxs": "3840 -2432",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "etl_beach": [
+      {
+        "map": "etl_beach",
+        "pk3": "etl_beach_v2.pk3",
+        "bsp": "maps/etl_beach.bsp",
+        "minimap_file": "levelshots/etl_beach_cc.tga",
+        "minimap_size": [
+          1024,
+          1024
+        ],
+        "levelshots": [
+          "levelshots/etl_beach.tga",
+          "levelshots/etl_beach_cc.tga"
+        ],
+        "limbo_marker_count": 5,
+        "limbo_marker_samples": [
+          "gfx/limbo/beach_obj1.tga",
+          "gfx/limbo/cm_ammo.tga",
+          "gfx/limbo/cm_radioroom.tga",
+          "gfx/limbo/cm_secretdocs.tga",
+          "gfx/limbo/cm_sidedoor.tga"
+        ],
+        "mapcoordsmins": "-5688 6056",
+        "mapcoordsmaxs": "4492 -4625",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "etl_braundorf": [
+      {
+        "map": "etl_braundorf",
+        "pk3": "etl_braundorf_v2.pk3",
+        "bsp": "maps/etl_braundorf.bsp",
+        "minimap_file": "levelshots/etl_braundorf_cc.tga",
+        "minimap_size": [
+          1024,
+          1024
+        ],
+        "levelshots": [
+          "levelshots/etl_braundorf.tga",
+          "levelshots/etl_braundorf_cc.tga"
+        ],
+        "limbo_marker_count": 0,
+        "limbo_marker_samples": [],
+        "mapcoordsmins": "-1536 2560",
+        "mapcoordsmaxs": "7424 -6400",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "etl_ice": [
+      {
+        "map": "etl_ice",
+        "pk3": "etl_ice_v12.pk3",
+        "bsp": "maps/etl_ice.bsp",
+        "minimap_file": "levelshots/etl_ice_cc.tga",
+        "minimap_size": [
+          1024,
+          1024
+        ],
+        "levelshots": [
+          "levelshots/etl_ice.tga",
+          "levelshots/etl_ice_cc.tga"
+        ],
+        "limbo_marker_count": 3,
+        "limbo_marker_samples": [
+          "gfx/limbo/cm_documents.tga",
+          "gfx/limbo/cm_radio.tga",
+          "gfx/limbo/cm_wall.tga"
+        ],
+        "mapcoordsmins": "-9472 6656",
+        "mapcoordsmaxs": "2816 -5632",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "etl_sp_delivery": [
+      {
+        "map": "etl_sp_delivery",
+        "pk3": "etl_sp_delivery_v5.pk3",
+        "bsp": "maps/etl_sp_delivery.bsp",
+        "minimap_file": "levelshots/etl_sp_delivery_cc.tga",
+        "minimap_size": [
+          1024,
+          1024
+        ],
+        "levelshots": [
+          "levelshots/etl_sp_delivery.tga",
+          "levelshots/etl_sp_delivery_cc.tga"
+        ],
+        "limbo_marker_count": 1,
+        "limbo_marker_samples": [
+          "gfx/limbo/cm_delivery_wall.tga"
+        ],
+        "mapcoordsmins": "-3968 4584",
+        "mapcoordsmaxs": "4992 -4376",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "frostbite": [
+      {
+        "map": "frostbite",
+        "pk3": "Frostbite.pk3",
+        "bsp": "maps/frostbite.bsp",
+        "minimap_file": "levelshots/frostbite_cc.tga",
+        "minimap_size": [
+          512,
+          512
+        ],
+        "levelshots": [
+          "levelshots/frostbite.tga",
+          "levelshots/frostbite_cc.tga"
+        ],
+        "limbo_marker_count": 6,
+        "limbo_marker_samples": [
+          "gfx/limbo/cm_frostbitedocs.tga",
+          "gfx/limbo/cm_frostbitemaindoor.tga",
+          "gfx/limbo/cm_frostbitenull.tga",
+          "gfx/limbo/cm_frostbiteservicedoor.tga",
+          "gfx/limbo/cm_frostbitestoragewall.tga",
+          "gfx/limbo/cm_frostbitetransmitter.tga"
+        ],
+        "mapcoordsmins": "-5888 4352",
+        "mapcoordsmaxs": "1536 -3072",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "missile_b3": [
+      {
+        "map": "missile_b3",
+        "pk3": "missile_b3.pk3",
+        "bsp": "maps/missile_b3.bsp",
+        "minimap_file": "levelshots/missile_b3.tga",
+        "minimap_size": [
+          256,
+          256
+        ],
+        "levelshots": [
+          "levelshots/missile_b3.tga",
+          "levelshots/missile_cc.tga"
+        ],
+        "limbo_marker_count": 3,
+        "limbo_marker_samples": [
+          "gfx/limbo/cm_dcontrols.tga",
+          "gfx/limbo/cm_gcontrols.tga",
+          "gfx/limbo/cm_rocket.tga"
+        ],
+        "mapcoordsmins": "-1280 4864",
+        "mapcoordsmaxs": "10752 -7168",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "missile_b4": [
+      {
+        "map": "missile_b4",
+        "pk3": "missile_b4.pk3",
+        "bsp": "maps/missile_b4.bsp",
+        "minimap_file": "levelshots/missile_b4_cc.tga",
+        "minimap_size": [
+          512,
+          512
+        ],
+        "levelshots": [
+          "levelshots/missile_b4.tga",
+          "levelshots/missile_b4_cc.tga"
+        ],
+        "limbo_marker_count": 3,
+        "limbo_marker_samples": [
+          "gfx/limbo/cm_dcontrols.tga",
+          "gfx/limbo/cm_gcontrols.tga",
+          "gfx/limbo/cm_rocket.tga"
+        ],
+        "mapcoordsmins": "-1280 4864",
+        "mapcoordsmaxs": "10752 -7168",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "supply": [
+      {
+        "map": "supply",
+        "pk3": "supply_sp.pk3",
+        "bsp": "maps/supply.bsp",
+        "minimap_file": "levelshots/supply_cc.tga",
+        "minimap_size": [
+          256,
+          256
+        ],
+        "levelshots": [
+          "levelshots/supply.tga",
+          "levelshots/supply_cc.tga"
+        ],
+        "limbo_marker_count": 0,
+        "limbo_marker_samples": [],
+        "mapcoordsmins": "-3200 3200",
+        "mapcoordsmaxs": "3200 -3200",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "sw_battery": [
+      {
+        "map": "sw_battery",
+        "pk3": "sw_battery.pk3",
+        "bsp": "maps/sw_battery.bsp",
+        "minimap_file": "levelshots/sw_battery_cc.tga",
+        "minimap_size": [
+          512,
+          512
+        ],
+        "levelshots": [
+          "levelshots/sw_battery.tga",
+          "levelshots/sw_battery_cc.tga"
+        ],
+        "limbo_marker_count": 0,
+        "limbo_marker_samples": [],
+        "mapcoordsmins": "-768 1664",
+        "mapcoordsmaxs": "7296 -6400",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "sw_goldrush_te": [
+      {
+        "map": "sw_goldrush_te",
+        "pk3": "sw_goldrush_te.pk3",
+        "bsp": "maps/sw_goldrush_te.bsp",
+        "minimap_file": "levelshots/sw_goldrush_te_cc.tga",
+        "minimap_size": [
+          512,
+          512
+        ],
+        "levelshots": [
+          "levelshots/SW_GR.jpg",
+          "levelshots/sw_goldrush_te.tga",
+          "levelshots/sw_goldrush_te_cc.tga"
+        ],
+        "limbo_marker_count": 0,
+        "limbo_marker_samples": [],
+        "mapcoordsmins": "-4224 4352",
+        "mapcoordsmaxs": "3712 -3584",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "sw_oasis_b3": [
+      {
+        "map": "sw_oasis_b3",
+        "pk3": "sw_oasis_b3.pk3",
+        "bsp": "maps/sw_oasis_b3.bsp",
+        "minimap_file": "levelshots/sw_oasis_b3_cc.tga",
+        "minimap_size": [
+          512,
+          512
+        ],
+        "levelshots": [
+          "levelshots/sw_oasis_b3.tga",
+          "levelshots/sw_oasis_b3_cc.tga"
+        ],
+        "limbo_marker_count": 0,
+        "limbo_marker_samples": [],
+        "mapcoordsmins": "-768 9216",
+        "mapcoordsmaxs": "10496 -2048",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ],
+    "te_escape2": [
+      {
+        "map": "te_escape2",
+        "pk3": "te_escape2_fixed.pk3",
+        "bsp": "maps/te_escape2.bsp",
+        "minimap_file": "levelshots/te_escape2_cc.tga",
+        "minimap_size": [
+          512,
+          512
+        ],
+        "levelshots": [
+          "levelshots/te_escape2.tga",
+          "levelshots/te_escape2_cc.tga"
+        ],
+        "limbo_marker_count": 4,
+        "limbo_marker_samples": [
+          "gfx/limbo/te_escape2/cm_holygrail.tga",
+          "gfx/limbo/te_escape2/cm_maingate.tga",
+          "gfx/limbo/te_escape2/cm_secretexit.tga",
+          "gfx/limbo/te_escape2/cm_tunneldoor.tga"
+        ],
+        "mapcoordsmins": "-7104 4608",
+        "mapcoordsmaxs": "1088 -3584",
+        "automaporigin": null,
+        "automapzoom": null
+      },
+      {
+        "map": "te_escape2",
+        "pk3": "te_escape2_fixed2.pk3",
+        "bsp": "maps/te_escape2.bsp",
+        "minimap_file": "levelshots/te_escape2_cc.tga",
+        "minimap_size": [
+          512,
+          512
+        ],
+        "levelshots": [
+          "levelshots/te_escape2.tga",
+          "levelshots/te_escape2_cc.tga"
+        ],
+        "limbo_marker_count": 4,
+        "limbo_marker_samples": [
+          "gfx/limbo/te_escape2/cm_holygrail.tga",
+          "gfx/limbo/te_escape2/cm_maingate.tga",
+          "gfx/limbo/te_escape2/cm_secretexit.tga",
+          "gfx/limbo/te_escape2/cm_tunneldoor.tga"
+        ],
+        "mapcoordsmins": "-7104 4608",
+        "mapcoordsmaxs": "1088 -3584",
+        "automaporigin": null,
+        "automapzoom": null
+      },
+      {
+        "map": "te_escape2",
+        "pk3": "te_escape2_fixed3.pk3",
+        "bsp": "maps/te_escape2.bsp",
+        "minimap_file": "levelshots/te_escape2_cc.tga",
+        "minimap_size": [
+          512,
+          512
+        ],
+        "levelshots": [
+          "levelshots/te_escape2.tga",
+          "levelshots/te_escape2_cc.tga"
+        ],
+        "limbo_marker_count": 4,
+        "limbo_marker_samples": [
+          "gfx/limbo/te_escape2/cm_holygrail.tga",
+          "gfx/limbo/te_escape2/cm_maingate.tga",
+          "gfx/limbo/te_escape2/cm_secretexit.tga",
+          "gfx/limbo/te_escape2/cm_tunneldoor.tga"
+        ],
+        "mapcoordsmins": "-7104 4608",
+        "mapcoordsmaxs": "1088 -3584",
+        "automaporigin": null,
+        "automapzoom": null
+      }
+    ]
+  }
+}
