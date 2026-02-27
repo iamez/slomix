@@ -573,6 +573,10 @@ CREATE TABLE IF NOT EXISTS combat_engagement (
     round_start_unix INTEGER DEFAULT 0,
     round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
     engagement_id INTEGER NOT NULL,
     start_time_ms INTEGER NOT NULL,
     end_time_ms INTEGER NOT NULL,
@@ -685,6 +689,10 @@ CREATE TABLE IF NOT EXISTS player_track (
     round_start_unix INTEGER DEFAULT 0,
     round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
     player_guid VARCHAR(32) NOT NULL,
     player_name VARCHAR(64) NOT NULL,
     team VARCHAR(10) NOT NULL,
@@ -711,6 +719,10 @@ CREATE TABLE IF NOT EXISTS proximity_trade_event (
     round_start_unix INTEGER DEFAULT 0,
     round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
     victim_guid VARCHAR(32) NOT NULL,
     victim_name VARCHAR(64) NOT NULL,
     victim_team VARCHAR(10) NOT NULL,
@@ -740,6 +752,10 @@ CREATE TABLE IF NOT EXISTS proximity_support_summary (
     round_start_unix INTEGER DEFAULT 0,
     round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
     support_samples INTEGER NOT NULL DEFAULT 0,
     total_samples INTEGER NOT NULL DEFAULT 0,
     support_uptime_pct REAL,
@@ -755,6 +771,10 @@ CREATE TABLE IF NOT EXISTS proximity_objective_focus (
     round_start_unix INTEGER DEFAULT 0,
     round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
     player_guid VARCHAR(32) NOT NULL,
     player_name VARCHAR(64) NOT NULL,
     team VARCHAR(10) NOT NULL,
@@ -763,8 +783,146 @@ CREATE TABLE IF NOT EXISTS proximity_objective_focus (
     time_within_radius_ms INTEGER NOT NULL,
     samples INTEGER NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(session_date, round_number, player_guid)
+    UNIQUE(session_date, round_number, round_start_unix, player_guid)
 );
+
+-- Proximity v5: Spawn timing events
+CREATE TABLE IF NOT EXISTS proximity_spawn_timing (
+    id SERIAL PRIMARY KEY,
+    session_date DATE NOT NULL,
+    round_number INTEGER NOT NULL,
+    round_start_unix INTEGER DEFAULT 0,
+    round_end_unix INTEGER DEFAULT 0,
+    map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
+    killer_guid VARCHAR(32) NOT NULL,
+    killer_name VARCHAR(64) NOT NULL,
+    killer_team VARCHAR(10) NOT NULL,
+    victim_guid VARCHAR(32) NOT NULL,
+    victim_name VARCHAR(64) NOT NULL,
+    victim_team VARCHAR(10) NOT NULL,
+    kill_time INTEGER NOT NULL,
+    enemy_spawn_interval INTEGER NOT NULL,
+    time_to_next_spawn INTEGER NOT NULL,
+    spawn_timing_score REAL NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(session_date, round_number, round_start_unix, killer_guid, victim_guid, kill_time)
+);
+CREATE INDEX IF NOT EXISTS idx_spawn_timing_session ON proximity_spawn_timing(session_date, round_number);
+CREATE INDEX IF NOT EXISTS idx_spawn_timing_killer ON proximity_spawn_timing(killer_guid);
+CREATE INDEX IF NOT EXISTS idx_spawn_timing_score ON proximity_spawn_timing(spawn_timing_score DESC);
+
+-- Proximity v5: Team cohesion snapshots
+CREATE TABLE IF NOT EXISTS proximity_team_cohesion (
+    id SERIAL PRIMARY KEY,
+    session_date DATE NOT NULL,
+    round_number INTEGER NOT NULL,
+    round_start_unix INTEGER DEFAULT 0,
+    round_end_unix INTEGER DEFAULT 0,
+    map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
+    sample_time INTEGER NOT NULL,
+    team VARCHAR(10) NOT NULL,
+    alive_count INTEGER NOT NULL,
+    centroid_x REAL NOT NULL,
+    centroid_y REAL NOT NULL,
+    dispersion REAL NOT NULL,
+    max_spread REAL NOT NULL,
+    straggler_count INTEGER NOT NULL,
+    buddy_pair_guids VARCHAR(128),
+    buddy_distance REAL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(session_date, round_number, round_start_unix, team, sample_time)
+);
+CREATE INDEX IF NOT EXISTS idx_team_cohesion_session ON proximity_team_cohesion(session_date, round_number);
+
+-- Proximity v5: Crossfire opportunities
+CREATE TABLE IF NOT EXISTS proximity_crossfire_opportunity (
+    id SERIAL PRIMARY KEY,
+    session_date DATE NOT NULL,
+    round_number INTEGER NOT NULL,
+    round_start_unix INTEGER DEFAULT 0,
+    round_end_unix INTEGER DEFAULT 0,
+    map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
+    event_time INTEGER NOT NULL,
+    target_guid VARCHAR(32) NOT NULL,
+    target_name VARCHAR(64) NOT NULL,
+    target_team VARCHAR(10) NOT NULL,
+    teammate1_guid VARCHAR(32) NOT NULL,
+    teammate2_guid VARCHAR(32) NOT NULL,
+    angular_separation REAL NOT NULL,
+    was_executed BOOLEAN NOT NULL DEFAULT FALSE,
+    damage_within_window INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(session_date, round_number, round_start_unix, target_guid, event_time, teammate1_guid, teammate2_guid)
+);
+CREATE INDEX IF NOT EXISTS idx_crossfire_opp_session ON proximity_crossfire_opportunity(session_date, round_number);
+CREATE INDEX IF NOT EXISTS idx_crossfire_opp_executed ON proximity_crossfire_opportunity(was_executed);
+
+-- Proximity v5: Team push events
+CREATE TABLE IF NOT EXISTS proximity_team_push (
+    id SERIAL PRIMARY KEY,
+    session_date DATE NOT NULL,
+    round_number INTEGER NOT NULL,
+    round_start_unix INTEGER DEFAULT 0,
+    round_end_unix INTEGER DEFAULT 0,
+    map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
+    start_time INTEGER NOT NULL,
+    end_time INTEGER NOT NULL,
+    team VARCHAR(10) NOT NULL,
+    avg_speed REAL NOT NULL,
+    direction_x REAL NOT NULL,
+    direction_y REAL NOT NULL,
+    alignment_score REAL NOT NULL,
+    push_quality REAL NOT NULL,
+    participant_count INTEGER NOT NULL,
+    toward_objective VARCHAR(64),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(session_date, round_number, round_start_unix, team, start_time)
+);
+CREATE INDEX IF NOT EXISTS idx_team_push_session ON proximity_team_push(session_date, round_number);
+CREATE INDEX IF NOT EXISTS idx_team_push_quality ON proximity_team_push(push_quality DESC);
+
+-- Proximity v5: Lua-detected trade kills
+CREATE TABLE IF NOT EXISTS proximity_lua_trade_kill (
+    id SERIAL PRIMARY KEY,
+    session_date DATE NOT NULL,
+    round_number INTEGER NOT NULL,
+    round_start_unix INTEGER DEFAULT 0,
+    round_end_unix INTEGER DEFAULT 0,
+    map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
+    original_kill_time INTEGER NOT NULL,
+    traded_kill_time INTEGER NOT NULL,
+    delta_ms INTEGER NOT NULL,
+    original_victim_guid VARCHAR(32) NOT NULL,
+    original_victim_name VARCHAR(64) NOT NULL,
+    original_killer_guid VARCHAR(32) NOT NULL,
+    original_killer_name VARCHAR(64) NOT NULL,
+    trader_guid VARCHAR(32) NOT NULL,
+    trader_name VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(session_date, round_number, round_start_unix, original_victim_guid, original_kill_time, trader_guid)
+);
+CREATE INDEX IF NOT EXISTS idx_lua_trade_session ON proximity_lua_trade_kill(session_date, round_number);
+CREATE INDEX IF NOT EXISTS idx_lua_trade_trader ON proximity_lua_trade_kill(trader_guid);
 
 
 -- ============================================================================
