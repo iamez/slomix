@@ -1595,6 +1595,34 @@ class UltimateETLegacyBot(commands.Bot):
                 f"pauses={metadata.get('pause_count')}"
             )
 
+            # FIX: When Lua webhook provides actual_duration_seconds, use it to correct
+            # player stats that were computed with an inflated header-fallback time_played_seconds.
+            # This handles the ET:Legacy R2 actual_time quirk where stats files report cumulative
+            # server uptime instead of round duration.
+            # See: DPM Bug Investigation (Feb 27, 2026) - root cause: header fallback in parser
+            lua_duration = metadata.get('actual_duration_seconds')
+            if lua_duration and lua_duration > 0:
+                try:
+                    fix_query = """
+                        UPDATE player_comprehensive_stats
+                        SET
+                            time_played_seconds = $1,
+                            time_played_minutes = $1 / 60.0,
+                            dpm = CASE WHEN $1 > 0 THEN (damage_given * 60.0) / $1 ELSE 0 END
+                        WHERE round_id = $2
+                          AND time_played_seconds > $1 * 1.5
+                    """
+                    await self.db_adapter.execute(fix_query, (lua_duration, round_id))
+                    logger.debug(
+                        f"✅ Fixed player stats for round {round_id} using Lua duration: "
+                        f"clamped inflated time_played_seconds to {lua_duration}s"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to fix player stats for round {round_id}: {e} "
+                        "(non-fatal, round still imported correctly)"
+                    )
+
             # Link Lua rows to this round_id when possible
             await self._link_lua_round_teams(round_id, metadata)
 
@@ -1667,13 +1695,73 @@ class UltimateETLegacyBot(commands.Bot):
                     best_diff = diff
                     best_id = lua_id
 
-            if best_id is None:
-                return
+            if best_id is not None:
+                await self.db_adapter.execute(
+                    "UPDATE lua_round_teams SET round_id = ? WHERE id = ?",
+                    (round_id, best_id),
+                )
+                logger.debug(
+                    "Lua round link (NULL pass): lua_id=%s → round_id=%s (diff=%ss)",
+                    best_id, round_id, best_diff,
+                )
 
-            await self.db_adapter.execute(
-                "UPDATE lua_round_teams SET round_id = ? WHERE id = ?",
-                (round_id, best_id),
+            # --- Second pass: fix stale linkages ---
+            # When the same map is played multiple times in a session, the initial
+            # insert may link a Lua record to a wrong round (race condition: the
+            # correct round hadn't been imported yet). Now that THIS round exists,
+            # check if any Lua records currently linked to OTHER rounds are actually
+            # a closer temporal match for THIS round.
+            stale_query = """
+                SELECT lrt.id, lrt.round_end_unix, lrt.round_start_unix, lrt.round_id
+                FROM lua_round_teams lrt
+                WHERE lrt.map_name = ?
+                  AND lrt.round_number = ?
+                  AND lrt.round_id IS NOT NULL
+                  AND lrt.round_id != ?
+                  AND (
+                        (lrt.round_end_unix IS NOT NULL AND ABS(lrt.round_end_unix - ?) <= ?)
+                     OR (lrt.round_start_unix IS NOT NULL AND ABS(lrt.round_start_unix - ?) <= ?)
+                  )
+                ORDER BY captured_at DESC
+                LIMIT 10
+            """
+            stale_rows = await self.db_adapter.fetch_all(
+                stale_query,
+                (map_name, round_number, round_id, target_unix, window_seconds, target_unix, window_seconds),
             )
+            for row in stale_rows:
+                lua_id, lua_end_unix, lua_start_unix, current_rid = row
+                lua_ts = int(lua_end_unix or lua_start_unix or 0)
+                if not lua_ts:
+                    continue
+
+                # Get the currently-linked round's timestamp for comparison
+                current_round = await self.db_adapter.fetch_one(
+                    "SELECT round_date, round_time FROM rounds WHERE id = ?",
+                    (current_rid,),
+                )
+                if not current_round:
+                    continue
+                from bot.core.round_linker import _parse_round_datetime
+                current_round_dt = _parse_round_datetime(current_round[0], current_round[1])
+                if not current_round_dt:
+                    continue
+                current_round_unix = int(current_round_dt.timestamp())
+
+                dist_to_this = abs(lua_ts - target_unix)
+                dist_to_current = abs(lua_ts - current_round_unix)
+
+                if dist_to_this < dist_to_current:
+                    await self.db_adapter.execute(
+                        "UPDATE lua_round_teams SET round_id = ? WHERE id = ?",
+                        (round_id, lua_id),
+                    )
+                    logger.info(
+                        "🔗 Lua round re-link (stale fix): lua_id=%s moved %s → %s "
+                        "(dist: %ss→%ss, map=%s R%s)",
+                        lua_id, current_rid, round_id,
+                        dist_to_current, dist_to_this, map_name, round_number,
+                    )
         except Exception as e:
             logger.debug(f"Lua round link failed: {e}")
 
