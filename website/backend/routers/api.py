@@ -419,7 +419,8 @@ async def resolve_alias_guid_map(
             (lowered,),
         )
         return {row[0].lower(): row[1] for row in rows if row and row[0]}
-    except Exception:
+    except Exception as e:
+        logger.warning("resolve_alias_guid_map failed: %s", e)
         return {}
 
 
@@ -460,7 +461,8 @@ async def resolve_name_guid_map(
                 if key in lowered and key not in mapping:
                     mapping[key] = guid
         return mapping
-    except Exception:
+    except Exception as e:
+        logger.warning("resolve_name_guid_map failed: %s", e)
         return {}
 
 
@@ -3260,15 +3262,11 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
             SUM(CASE WHEN p.team = r.winner_team THEN 1 ELSE 0 END) as total_wins,
             MAX(p.round_date) as last_seen
         FROM player_comprehensive_stats p
-        LEFT JOIN rounds r ON p.round_date = r.round_date AND p.map_name = r.map_name AND p.round_number = r.round_number
+        LEFT JOIN rounds r ON r.id = p.round_id
         WHERE p.player_guid = $1
     """
     if not use_guid:
         query = query.replace("p.player_guid = $1", "p.player_name ILIKE $1")
-
-    # Note: Joining on round_date + map_name because I'm not 100% sure round_id is in the stats table
-    # based on my truncated schema check, but date+map is a decent proxy for now.
-    # Ideally we use round_id.
 
     try:
         row = await db.fetch_one(query, (identifier,))
@@ -6358,7 +6356,8 @@ async def _load_scoped_guid_name_map(
             for row in rows
             if row and row[0] and row[1]
         }
-    except Exception:
+    except Exception as e:
+        logger.warning("_load_scoped_guid_name_map failed: %s", e)
         return {}
 
 
