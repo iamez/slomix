@@ -5,7 +5,7 @@
 Discord.py Cogs for the ET:Legacy Statistics Bot.
 Each cog handles a specific domain of commands.
 
-## Available Cogs (20 total)
+## Available Cogs (18 total)
 
 ### Core User Cogs
 
@@ -13,6 +13,7 @@ Each cog handles a specific domain of commands.
 |------|---------|
 | `achievements_cog.py` | Achievement help and badge legend |
 | `analytics_cog.py` | Consistency, map stats, playstyle, awards |
+| `availability_poll_cog.py` | Daily availability polling commands |
 | `last_session_cog.py` | Latest session embeds and endstats audits |
 | `leaderboard_cog.py` | Leaderboards and player stats entrypoint |
 | `link_cog.py` | Discord-to-player linking and alias tools |
@@ -27,20 +28,12 @@ Each cog handles a specific domain of commands.
 
 | File | Purpose |
 |------|---------|
-| `admin_cog.py` | Cache/reload/diagnostic admin commands |
+| `admin_cog.py` | Cache/reload/diagnostic/correlation_status admin commands |
 | `admin_predictions_cog.py` | Admin prediction management |
-| `automation_commands.py` | Automation status, health, metrics, DB maintenance |
 | `permission_management_cog.py` | Permission whitelist management |
-| `server_control.py` | ET server control and RCON actions |
 | `session_management_cog.py` | Manual session start/end |
 | `sync_cog.py` | Manual sync/backfill commands |
 | `team_management_cog.py` | Team assignment helpers |
-
-### Optional/Extended
-
-| File | Purpose |
-|------|---------|
-| `synergy_analytics.py` | Experimental synergy and team-balancing analytics |
 
 ## Cog Template
 

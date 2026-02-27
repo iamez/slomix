@@ -14,7 +14,7 @@ bot/
 ├── community_stats_parser.py # Stats file parser (1,036 lines)
 ├── config.py                # Configuration management
 ├── logging_config.py        # Logging setup
-├── cogs/                    # Discord command modules (20 cogs currently in repo)
+├── cogs/                    # Discord command modules (18 cogs currently in repo)
 ├── core/                    # Business logic layer
 ├── services/                # Service layer
 ├── automation/              # SSH monitoring & file tracking
@@ -43,7 +43,7 @@ bot/
 - **CRITICAL**: Handles Round 2 differential calculation
   - R2 files contain CUMULATIVE stats
   - Parser finds matching R1 and calculates: `R2_only = R2_cumulative - R1`
-- 30-minute window for R1-R2 matching (line 384)
+- 45-minute window for R1-R2 matching (`ROUND_MATCH_WINDOW_MINUTES` in config.py)
 - Handles midnight crossovers
 
 ### config.py
