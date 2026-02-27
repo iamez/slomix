@@ -10,6 +10,61 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed — 2026-02-28
+
+- **Lua round_id Linkage Race Condition** — Fixed a race condition where `_link_lua_round_teams()` would permanently link Lua webhook data to the wrong round when the same map was played multiple times in a session:
+  - Root cause: Lua webhook arrives before stats file import completes; linker picks nearest *existing* round of same map+round_number, which is wrong when replayed maps exist
+  - Added second pass to `_link_lua_round_teams()` that detects and corrects stale linkages when a closer-matching round is imported later
+  - Created `scripts/relink_lua_round_teams.py` backfill script (dry-run by default)
+  - Backfilled both samba (1 fix) and slomix (4 fixes) databases for session 9973..9995
+  - Investigation report: `docs/LUA_TIMING_DRIFT_INVESTIGATION_2026-02-27.md`
+- **Website round JOIN fragility** — Replaced composite key fallback `(round_date, map_name, round_number)` with direct `round_id` JOIN in player stats endpoint (`api.py:3263`)
+- **Website silent error handlers** — Added logging to 3 bare `except: return {}` handlers in `api.py` (resolve_alias_guid_map, resolve_name_guid_map, _load_scoped_guid_name_map)
+- **Chart.js crash prevention** — Added `hasChartJs()` guards to `retro-viz.js` (4 chart functions) and `player-profile.js` (2 chart functions) that would throw `ReferenceError` if Chart.js was missing
+- **Chart.js user feedback** — Added visible "Charts unavailable" fallback text in `sessions.js` canvas slots instead of silent empty canvases
+
+### Changed — 2026-02-26
+
+- **Round Correlation Live Rollout Guardrails** — Correlation service is now config-driven with safe live rollout behavior:
+  - New config flags: `CORRELATION_ENABLED`, `CORRELATION_DRY_RUN`, `CORRELATION_REQUIRE_SCHEMA_CHECK`, `CORRELATION_WRITE_ERROR_THRESHOLD`
+  - Default requested mode moved to live (`CORRELATION_DRY_RUN=false`) with automatic fallback to dry-run if guardrails fail
+  - Schema preflight verifies `round_correlations` columns before enabling writes
+  - Circuit breaker auto-disables live writes after repeated DB write errors
+  - `!correlation_status` now shows requested/effective mode, preflight state, write error counter, and guardrail reason
+- **Round/Match Linkage Anomaly Checks** — Added thresholded diagnostics for linkage drift across `lua_round_teams`, `rounds`, and `round_correlations`:
+  - New service: `bot/services/round_linkage_anomaly_service.py`
+  - New API endpoint: `GET /diagnostics/round-linkage`
+  - New read-only script: `scripts/check_round_linkage_anomalies.py` (optional `--fail-on-breach` for gates/alerts)
+  - New focused tests for service and endpoint payload contract
+- **Proximity Objective Coordinates (Top-Played Batch)** — Filled objective coordinates for high-impact maps first and regenerated downstream outputs from the shared template source:
+  - Updated template coverage for `te_escape2`, `etl_adlernest`, `supply`, `etl_sp_delivery`, `sw_goldrush_te`, `erdenberg_t2`, `braundorf_b4`, `etl_ice`
+  - Regenerated Lua objective table (`proximity/lua/proximity_tracker.lua`) from `proximity/objective_coords_template.json`
+  - Regenerated web objective zones (`website/assets/maps/proximity/objective_zones.json`)
+- **WS11 Objective Coordinate Gate** — Added explicit static + runtime guardrails to block top-map coverage regressions:
+  - New gate script: `scripts/proximity_objective_coords_gate.py`
+  - New runtime DB wrapper: `scripts/check_ws11_objective_coords_gate.sh`
+  - New gate config: `proximity/objective_coords_gate_config.json` (static guard list + runtime allowlist)
+  - New focused tests: `tests/unit/test_proximity_objective_coords_gate.py`
+- **W12 Single Trigger Path Enforcement** — Enforced canonical webhook trigger flow to avoid duplicate producer paths:
+  - New config: `WEBHOOK_TRIGGER_MODE` (`stats_ready_only` default; legacy modes explicit)
+  - Webhook handler now gates legacy filename triggers when strict mode is active
+  - Startup webhook security validation now blocks `WS_ENABLED=true` in strict mode
+  - New ops gate script: `scripts/check_ws12_single_trigger_path.sh` (local policy + optional remote deprecated-service/process checks)
+  - Added config loading/validation tests for trigger mode behavior
+
+### Added — 2026-02-24
+
+- **Proximity v5 Teamplay Pipeline** — Full-stack implementation of 5 new teamplay analytics systems from `proximity_tracker_v5.lua`:
+  - **Spawn Timing**: Per-kill spawn wave efficiency scoring (table: `proximity_spawn_timing`, command: `!pse`, API: `/proximity/spawn-timing`)
+  - **Team Cohesion**: Periodic team shape snapshots with centroid, dispersion, buddy pairs (table: `proximity_team_cohesion`, command: `!pco`, API: `/proximity/cohesion`)
+  - **Crossfire Opportunities**: LOS-verified crossfire angle detection with execution tracking (table: `proximity_crossfire_opportunity`, command: `!pxa`, API: `/proximity/crossfire-angles`)
+  - **Team Pushes**: Coordinated team movement detection with objective orientation (table: `proximity_team_push`, command: `!ppu`, API: `/proximity/pushes`)
+  - **Lua Trade Kills**: Server-side trade kill detection with reaction timing (table: `proximity_lua_trade_kill`, command: `!ptl`, API: `/proximity/lua-trades`)
+  - Parser: 5 new dataclasses, parse methods, and import methods in `ProximityParserV4` (backward compatible with v4 files)
+  - Migration: `migrations/013_add_proximity_v5_teamplay.sql` (5 tables with indexes)
+  - Website: 5 new HTML panels, 7 JS render functions including Canvas cohesion timeline
+  - Lua review: 8 bug fixes applied to `proximity_tracker_v5.lua` (team-damage filter, crossfire dedup, LOS mask, cache fix, teamkill filter, round_start_unix fallback, engagement timeout, cohesion guard)
+
 ### Added — 2026-02-22
 
 - **Round Correlation System** — Event-driven service that tracks data completeness for each match (R1+R2). Correlates stats files, Lua webhook data, gametime files, and endstats into a single `round_correlations` row per match with 8 boolean flags and completeness percentage.
