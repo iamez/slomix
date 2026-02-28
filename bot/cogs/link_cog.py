@@ -179,7 +179,7 @@ class LinkCog(commands.Cog, name="Link"):
         try:
             # Ensure player_name alias compatibility
             await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
-            
+
             # Base query to get all players with their link status
             base_query = """
                 SELECT
@@ -382,7 +382,7 @@ class LinkCog(commands.Cog, name="Link"):
         try:
             # Escape LIKE pattern to prevent injection
             safe_pattern = escape_like_pattern_for_query(search_term)
-            
+
             # Search in player_aliases (uses 'guid' and 'alias' columns)
             alias_guids = await self.bot.db_adapter.fetch_all(
                 """
@@ -501,29 +501,29 @@ class LinkCog(commands.Cog, name="Link"):
 
                 link_status = f"🔗 Linked to `{link_row[0]}`" if link_row else "❌ Not linked"
 
-                # Calculate days ago for last_seen
+                # Calculate days ago for last_seen (currently informational only)
                 try:
                     last_date = datetime.fromisoformat(
                         last_seen.replace("Z", "+00:00") if "Z" in last_seen else last_seen
                     )
                     days_ago = (datetime.now() - last_date).days
                     if days_ago == 0:
-                        last_str = "Today"
+                        _last_str = "Today"
                     elif days_ago == 1:
-                        last_str = "Yesterday"
+                        _last_str = "Yesterday"
                     elif days_ago < 7:
-                        last_str = f"{days_ago} days ago"
+                        _last_str = f"{days_ago} days ago"
                     elif days_ago < 30:
                         weeks = days_ago // 7
-                        last_str = f"{weeks} week{'s' if weeks > 1 else ''} ago"
+                        _last_str = f"{weeks} week{'s' if weeks > 1 else ''} ago"
                     elif days_ago < 365:
                         months = days_ago // 30
-                        last_str = f"{months} month{'s' if months > 1 else ''} ago"
+                        _last_str = f"{months} month{'s' if months > 1 else ''} ago"
                     else:
                         years = days_ago // 365
-                        last_str = f"{years} year{'s' if years > 1 else ''} ago"
+                        _last_str = f"{years} year{'s' if years > 1 else ''} ago"
                 except (ValueError, TypeError, AttributeError):
-                    last_str = last_seen
+                    _last_str = last_seen  # noqa: F841
 
                 # Add field to embed with formatted name and badges
                 embed.add_field(
@@ -880,10 +880,10 @@ class LinkCog(commands.Cog, name="Link"):
                 # Fallback
                 name_row = await self.bot.db_adapter.fetch_one(
                     """
-                    SELECT player_name 
-                    FROM player_comprehensive_stats 
-                    WHERE player_guid = ? 
-                    ORDER BY round_date DESC 
+                    SELECT player_name
+                    FROM player_comprehensive_stats
+                    WHERE player_guid = ?
+                    ORDER BY round_date DESC
                     LIMIT 1
                 """,
                     (guid,),
@@ -1215,10 +1215,10 @@ class LinkCog(commands.Cog, name="Link"):
                 # Fallback
                 name_row = await self.bot.db_adapter.fetch_one(
                     """
-                    SELECT player_name 
-                    FROM player_comprehensive_stats 
-                    WHERE player_guid = ? 
-                    ORDER BY round_date DESC 
+                    SELECT player_name
+                    FROM player_comprehensive_stats
+                    WHERE player_guid = ?
+                    ORDER BY round_date DESC
                     LIMIT 1
                 """,
                     (guid,),

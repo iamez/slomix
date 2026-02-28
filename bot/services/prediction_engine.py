@@ -510,7 +510,7 @@ class PredictionEngine:
         team_1_guids_json, team_2_guids_json, winning_team = row
         try:
             team_1_guids = set(json.loads(team_1_guids_json or "[]"))
-            team_2_guids = set(json.loads(team_2_guids_json or "[]"))
+            _ = set(json.loads(team_2_guids_json or "[]"))  # validate JSON
         except Exception:
             cache[session_date] = None
             return None

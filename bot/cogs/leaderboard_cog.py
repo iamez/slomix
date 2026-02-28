@@ -74,7 +74,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 await self._enable_sql_diag()
             except Exception:  # nosec B110
                 pass  # Diagnostics are optional
-            
+
             # === SCENARIO 1: @MENTION - Look up linked Discord user ===
             if ctx.message.mentions:
                 mentioned_user = ctx.message.mentions[0]
@@ -221,7 +221,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
             else:
                 # Cache MISS - Query database
                 logger.info(f"💾 Cache MISS: {primary_name} - querying DB")
-                
+
                 # Get overall stats (EXCLUDE R0 match summaries to prevent 33% inflation)
                 overall = await self.bot.db_adapter.fetch_one(
                         """
@@ -285,7 +285,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 """,
                     (player_guid,),
                 )
-                
+
                 # 💾 STORE IN CACHE
                 self.stats_cache.set(
                     cache_key,
@@ -427,7 +427,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
         - !lb accuracy     → First page (accuracy)
 
         Available stat types:
-        - kills, kd, dpm, accuracy/acc, headshots/hs, games, 
+        - kills, kd, dpm, accuracy/acc, headshots/hs, games,
         - revives, gibs, objectives/obj, efficiency/eff, teamwork,
         - multikills, grenades/nades
 
@@ -439,21 +439,21 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
             # Get total player count to calculate total pages
             count_query = """
-                SELECT COUNT(DISTINCT player_guid) 
+                SELECT COUNT(DISTINCT player_guid)
                 FROM player_comprehensive_stats
             """
             total_count = await self.bot.db_adapter.fetch_one(count_query)
             if not total_count:
                 await ctx.send("❌ No player data found")
                 return
-            
+
             total_players = total_count[0]
             total_pages = max(1, (total_players + 9) // 10)  # 10 per page
 
             # Create page fetcher - reuses existing leaderboard logic
             async def get_page(page_num: int) -> Optional[discord.Embed]:
                 """Fetch a single leaderboard page
-                
+
                 Note: page_num is 0-indexed from LazyPaginationView
                 """
                 players_per_page = 10
@@ -587,7 +587,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 elif stat == "games":
                     query = """
-                            SELECT 
+                            SELECT
                                 MAX(p.player_name) as primary_name,
                                 COUNT(DISTINCT p.round_id) as games,
                                 SUM(p.kills) as total_kills,
@@ -604,7 +604,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 elif stat == "revives":
                     query = """
-                            SELECT 
+                            SELECT
                                 MAX(p.player_name) as primary_name,
                                 SUM(p.revives_given) as total_revives,
                                 SUM(p.kills) as total_kills,
@@ -622,7 +622,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 elif stat == "gibs":
                     query = """
-                            SELECT 
+                            SELECT
                                 MAX(p.player_name) as primary_name,
                                 SUM(p.gibs) as total_gibs,
                                 SUM(p.kills) as total_kills,
@@ -640,7 +640,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 elif stat == "objectives":
                     query = """
-                            SELECT 
+                            SELECT
                                 MAX(p.player_name) as primary_name,
                                 SUM(p.objectives_completed + p.objectives_destroyed + p.objectives_stolen + p.objectives_returned) as total_obj,
                                 SUM(p.objectives_completed) as completed,
@@ -658,7 +658,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 elif stat == "efficiency":
                     query = """
-                            SELECT 
+                            SELECT
                                 MAX(p.player_name) as primary_name,
                                 AVG(p.efficiency) as avg_eff,
                                 SUM(p.kills) as total_kills,
@@ -697,7 +697,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
                 elif stat == "multikills":
                     query = """
-                            SELECT 
+                            SELECT
                                 MAX(p.player_name) as primary_name,
                                 SUM(p.double_kills + p.triple_kills + p.quad_kills + p.multi_kills + p.mega_kills) as total_multi,
                                 SUM(p.mega_kills) as megas,

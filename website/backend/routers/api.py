@@ -1474,7 +1474,7 @@ async def get_current_voice_activity(db: DatabaseAdapter = Depends(get_db)):
     try:
         # First try to get from voice_members table (active members)
         query = """
-            SELECT 
+            SELECT
                 discord_id,
                 member_name,
                 channel_id,
@@ -3796,7 +3796,6 @@ async def get_quick_leaders(
     - Top DPM per session in last 7 days
     """
     start_date = (datetime.now() - timedelta(days=7)).date()
-    start_date_str = start_date.strftime("%Y-%m-%d")
 
     xp_query = """
         SELECT
@@ -5135,7 +5134,7 @@ async def get_records(
         extra_filter = f" AND {config['filter']}" if "filter" in config else ""
 
         query = f"""
-            SELECT 
+            SELECT
                 player_name,
                 {col} as value,
                 map_name,
@@ -6091,15 +6090,15 @@ async def get_player_round_details(
     # Get round info
     round_query = "SELECT map_name, round_number, round_date FROM rounds WHERE id = $1"
     round_row = await db.fetch_one(round_query, (round_id,))
-    
+
     if not round_row:
         raise HTTPException(status_code=404, detail="Round not found")
-    
+
     map_name, round_number, round_date = round_row
-    
+
     # Get comprehensive player stats
     stats_query = """
-        SELECT 
+        SELECT
             player_name, kills, deaths, damage_given, damage_received,
             time_played_seconds, headshots, gibs, revives_given, times_revived,
             accuracy, shots, hits, team_kills, self_kills,
@@ -6108,29 +6107,29 @@ async def get_player_round_details(
             double_kills, triple_kills, quad_kills, multi_kills, mega_kills,
             time_dead_minutes, xp, kill_assists
         FROM player_comprehensive_stats
-        WHERE round_date = $1 
-          AND map_name = $2 
+        WHERE round_date = $1
+          AND map_name = $2
           AND round_number = $3
           AND player_guid = $4
         LIMIT 1
     """
     stats = await db.fetch_one(stats_query, (round_date, map_name, round_number, player_guid))
-    
+
     if not stats:
         raise HTTPException(status_code=404, detail="Player stats not found")
-    
+
     # Get weapon stats
     weapon_query = """
         SELECT weapon_name, kills, deaths, headshots, hits, shots, accuracy
         FROM weapon_comprehensive_stats
-        WHERE round_date = $1 
-          AND map_name = $2 
+        WHERE round_date = $1
+          AND map_name = $2
           AND round_number = $3
           AND player_guid = $4
         ORDER BY kills DESC
     """
     weapons = await db.fetch_all(weapon_query, (round_date, map_name, round_number, player_guid))
-    
+
     # Format response
     return {
         "player_name": stats[0],

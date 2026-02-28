@@ -180,11 +180,11 @@ class SessionEmbedBuilder:
         # Build player summary - split into multiple fields to avoid 1024 char limit
         medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "1️⃣0️⃣", "1️⃣1️⃣", "1️⃣2️⃣"]
         players_per_field = 3  # 3 players per field to stay under 1024 chars
-        
+
         for field_idx in range(0, len(all_players), players_per_field):
             field_text = ""
             field_players = all_players[field_idx:field_idx + players_per_field]
-            
+
             for i, player in enumerate(field_players):
                 global_idx = field_idx + i
                 name, player_guid, kills, deaths, dpm, hits, shots = player[0:7]
@@ -327,7 +327,7 @@ class SessionEmbedBuilder:
                         f"⏱{time_display} 💀{time_dead_display}({dead_pct:.0f}%) "
                         f"⏳{time_denied_display}({denied_pct:.0f}%){multikills_display}\n\n"
                     )
-            
+
             # Add field with appropriate name, chunk if needed
             if field_idx == 0:
                 field_name = "🏆 All Players"

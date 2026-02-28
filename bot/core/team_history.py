@@ -55,15 +55,15 @@ class TeamHistoryManager:
         cursor.execute("""
             SELECT * FROM team_lineups WHERE id = ?
         """, (lineup_id,))
-        
+
         row = cursor.fetchone()
         if not row:
             conn.close()
             return None
-        
+
         lineup = dict(row)
         lineup['player_guids'] = json.loads(lineup['player_guids'])
-        
+
         # Get player names
         guids = lineup['player_guids']
         placeholders = ','.join('?' * len(guids))
@@ -73,39 +73,39 @@ class TeamHistoryManager:
             WHERE guid IN ({placeholders})
             AND last_seen = (SELECT MAX(last_seen) FROM player_aliases pa2 WHERE pa2.guid = player_aliases.guid)
         """, guids)
-        
+
         names = {row['guid']: row['alias'] for row in cursor.fetchall()}
         lineup['player_names'] = [names.get(g, g) for g in guids]
-        
+
         # Calculate win rate
         total = lineup['total_wins'] + lineup['total_losses'] + lineup['total_ties']
         lineup['win_rate'] = (lineup['total_wins'] / total * 100) if total > 0 else 0
-        
+
         conn.close()
         return lineup
-    
+
     def get_lineup_sessions(self, lineup_id: int) -> List[Dict]:
         """Get all sessions played by a lineup"""
         conn = self._get_connection()
         if conn is None:
             return []
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             SELECT sr.*,
-                   CASE 
+                   CASE
                        WHEN sr.team_1_lineup_id = ? THEN sr.team_1_name
                        ELSE sr.team_2_name
                    END as this_team,
-                   CASE 
+                   CASE
                        WHEN sr.team_1_lineup_id = ? THEN sr.team_2_name
                        ELSE sr.team_1_name
                    END as opponent_team,
-                   CASE 
+                   CASE
                        WHEN sr.team_1_lineup_id = ? THEN sr.team_1_score
                        ELSE sr.team_2_score
                    END as this_score,
-                   CASE 
+                   CASE
                        WHEN sr.team_1_lineup_id = ? THEN sr.team_2_score
                        ELSE sr.team_1_score
                    END as opponent_score
@@ -113,11 +113,11 @@ class TeamHistoryManager:
             WHERE sr.team_1_lineup_id = ? OR sr.team_2_lineup_id = ?
             ORDER BY sr.session_date DESC
         """, (lineup_id, lineup_id, lineup_id, lineup_id, lineup_id, lineup_id))
-        
+
         sessions = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return sessions
-    
+
     def find_similar_lineups(self, player_guids: List[str], min_overlap: int = 3) -> List[Dict]:
         """
         Find lineups with significant player overlap.
@@ -133,25 +133,25 @@ class TeamHistoryManager:
         if conn is None:
             return []
         cursor = conn.cursor()
-        
+
         cursor.execute("SELECT * FROM team_lineups")
-        
+
         similar = []
         player_set = set(player_guids)
-        
+
         for row in cursor.fetchall():
             lineup_guids = set(json.loads(row['player_guids']))
             overlap = len(player_set & lineup_guids)
-            
+
             if overlap >= min_overlap:
                 lineup = dict(row)
                 lineup['overlap_count'] = overlap
                 lineup['overlap_percent'] = overlap / max(len(player_set), len(lineup_guids)) * 100
                 similar.append(lineup)
-        
+
         conn.close()
         return sorted(similar, key=lambda x: x['overlap_count'], reverse=True)
-    
+
     def get_head_to_head(self, lineup1_id: int, lineup2_id: int) -> Dict:
         """
         Get head-to-head record between two lineups.
@@ -163,20 +163,20 @@ class TeamHistoryManager:
         if conn is None:
             return {'total_matches': 0, 'lineup1_wins': 0, 'lineup2_wins': 0, 'ties': 0, 'matches': []}
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             SELECT * FROM session_results
             WHERE (team_1_lineup_id = ? AND team_2_lineup_id = ?)
                OR (team_1_lineup_id = ? AND team_2_lineup_id = ?)
             ORDER BY session_date DESC
         """, (lineup1_id, lineup2_id, lineup2_id, lineup1_id))
-        
+
         matches = [dict(row) for row in cursor.fetchall()]
-        
+
         lineup1_wins = 0
         lineup2_wins = 0
         ties = 0
-        
+
         for match in matches:
             if match['winner'] == 'TIE':
                 ties += 1
@@ -185,9 +185,9 @@ class TeamHistoryManager:
                 lineup1_wins += 1
             else:
                 lineup2_wins += 1
-        
+
         conn.close()
-        
+
         return {
             'total_matches': len(matches),
             'lineup1_wins': lineup1_wins,
@@ -195,22 +195,22 @@ class TeamHistoryManager:
             'ties': ties,
             'matches': matches
         }
-    
+
     def get_recent_lineups(self, days: int = 30, min_sessions: int = 1) -> List[Dict]:
         """Get lineups active in recent period"""
         conn = self._get_connection()
         if conn is None:
             return []
         cursor = conn.cursor()
-        
+
         cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-        
+
         # Check if team_lineups table exists
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='team_lineups'")
         if not cursor.fetchone():
             # Fallback: Use session_teams instead
             cursor.execute("""
-                SELECT 
+                SELECT
                     team_name,
                     player_names,
                     player_guids,
@@ -225,30 +225,30 @@ class TeamHistoryManager:
             results = cursor.fetchall()
             conn.close()
             return results
-        
+
         cursor.execute("""
             SELECT * FROM team_lineups
             WHERE last_seen >= ?
             AND total_sessions >= ?
             ORDER BY last_seen DESC, total_sessions DESC
         """, (cutoff_date, min_sessions))
-        
+
         lineups = []
         for row in cursor.fetchall():
             lineup = dict(row)
             lineup['player_guids'] = json.loads(lineup['player_guids'])
             lineups.append(lineup)
-        
+
         conn.close()
         return lineups
-    
+
     def get_best_lineups(self, min_sessions: int = 3, limit: int = 10) -> List[Dict]:
         """Get top performing lineups by win rate"""
         conn = self._get_connection()
         if conn is None:
             return []
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             SELECT *,
                    CAST(total_wins AS FLOAT) / (total_wins + total_losses + total_ties) * 100 as win_rate
@@ -257,13 +257,13 @@ class TeamHistoryManager:
             ORDER BY win_rate DESC, total_wins DESC
             LIMIT ?
         """, (min_sessions, limit))
-        
+
         lineups = []
         for row in cursor.fetchall():
             lineup = dict(row)
             lineup['player_guids'] = json.loads(lineup['player_guids'])
             lineups.append(lineup)
-        
+
         conn.close()
         return lineups
 

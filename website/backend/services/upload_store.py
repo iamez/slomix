@@ -16,10 +16,6 @@ from fastapi import HTTPException, UploadFile
 
 from website.backend.logging_config import get_app_logger
 from website.backend.services.upload_validators import (
-    CATEGORY_CONFIG,
-    SIZE_LIMITS,
-    detect_category,
-    get_content_type,
     get_size_limit,
     sanitize_filename,
     validate_extension,

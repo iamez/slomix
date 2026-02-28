@@ -278,7 +278,7 @@ class PlayerBadgeService:
             # Format the query with placeholders before sending to adapter
             formatted_query = query.format(placeholders=placeholders)
             logger.debug(f"Badge batch query placeholders: {placeholders[:50]}...")
-            
+
             results = await self.db_adapter.fetch_all(
                 formatted_query, tuple(player_guids)
             )
