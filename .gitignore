@@ -38,8 +38,6 @@ htmlcov/
 # NODE / REACT
 # ============================================
 node_modules/
-package.json
-package-lock.json
 gemini-website/dist/
 gemini-website/.next/
 build/
