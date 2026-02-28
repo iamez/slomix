@@ -26,11 +26,11 @@ class TeamDetectorIntegration:
     """
     Unified team detection interface with automatic fallback
     """
-    
+
     def __init__(self, db_path: str = "bot/etlegacy_production.db"):
         self.db_path = db_path
         self.advanced_detector = AdvancedTeamDetector(db_path)
-        
+
     def detect_and_validate(
         self,
         db: sqlite3.Connection,
@@ -39,15 +39,15 @@ class TeamDetectorIntegration:
     ) -> Tuple[Dict, bool]:
         """
         Detect teams with automatic validation
-        
+
         Args:
             db: Database connection
             session_date: Session date (YYYY-MM-DD)
             require_high_confidence: If True, reject low-confidence detections
-            
+
         Returns:
             (teams_dict, is_reliable)
-            
+
         The teams_dict format:
         {
             'Team A': {'guids': [...], 'names': [...], 'confidence': 0.85},
@@ -65,52 +65,52 @@ class TeamDetectorIntegration:
             result = self.advanced_detector.detect_session_teams(
                 db, session_date, use_historical=True
             )
-            
+
             if not result or 'Team A' not in result or 'Team B' not in result:
                 logger.warning(f"Advanced detection failed for {session_date}")
                 return {}, False
-            
+
             metadata = result.get('metadata', {})
             quality = metadata.get('detection_quality', 'unknown')
             confidence = metadata.get('avg_confidence', 0.0)
-            
+
             # Validate results
             team_a_size = len(result['Team A']['guids'])
             team_b_size = len(result['Team B']['guids'])
-            
+
             # Check for reasonable team sizes
             if team_a_size == 0 or team_b_size == 0:
                 logger.error("One team has no players!")
                 return {}, False
-            
+
             # Warn about imbalanced teams
             size_ratio = max(team_a_size, team_b_size) / min(team_a_size, team_b_size)
             if size_ratio > 2.0:
                 logger.warning(f"Teams are imbalanced: {team_a_size} vs {team_b_size}")
                 metadata['warning'] = 'imbalanced_teams'
-            
+
             # Check confidence requirements
             if require_high_confidence and quality != 'high':
                 logger.warning(f"Detection quality '{quality}' below required threshold")
                 return result, False
-            
+
             # Log detection results
             logger.info("✅ Team detection successful:")
             logger.info(f"   Quality: {quality}, Confidence: {confidence:.1%}")
             logger.info(f"   Team A: {team_a_size} players")
             logger.info(f"   Team B: {team_b_size} players")
-            
+
             if metadata.get('uncertain_players'):
                 logger.info(f"   ⚠️  Uncertain: {metadata['uncertain_players']}")
-            
+
             is_reliable = (quality in ['high', 'medium'] and confidence > 0.5)
-            
+
             return result, is_reliable
-            
+
         except Exception as e:
             logger.exception(f"Error in team detection: {e}")
             return {}, False
-    
+
     def store_detected_teams(
         self,
         db: sqlite3.Connection,
@@ -119,31 +119,31 @@ class TeamDetectorIntegration:
     ) -> bool:
         """
         Store detected teams in session_teams table
-        
+
         Args:
             db: Database connection
             session_date: Session date
             teams_result: Result from detect_and_validate()
-            
+
         Returns:
             True if successful
         """
         if not teams_result or 'Team A' not in teams_result:
             return False
-        
+
         cursor = db.cursor()
-        
+
         try:
             # Delete existing entries
             cursor.execute(
                 "DELETE FROM session_teams WHERE session_start_date LIKE ? AND map_name = 'ALL'",
                 (f"{session_date}%",)
             )
-            
+
             # Store Team A
             cursor.execute(
                 """
-                INSERT INTO session_teams 
+                INSERT INTO session_teams
                 (session_start_date, map_name, team_name, player_guids, player_names)
                 VALUES (?, 'ALL', 'Team A', ?, ?)
                 """,
@@ -153,11 +153,11 @@ class TeamDetectorIntegration:
                     json.dumps(teams_result['Team A']['names'])
                 )
             )
-            
+
             # Store Team B
             cursor.execute(
                 """
-                INSERT INTO session_teams 
+                INSERT INTO session_teams
                 (session_start_date, map_name, team_name, player_guids, player_names)
                 VALUES (?, 'ALL', 'Team B', ?, ?)
                 """,
@@ -167,23 +167,23 @@ class TeamDetectorIntegration:
                     json.dumps(teams_result['Team B']['names'])
                 )
             )
-            
+
             # Store metadata if needed (could add to separate table)
             metadata = teams_result.get('metadata', {})
-            
+
             db.commit()
-            
+
             logger.info(f"✅ Stored team data for {session_date}")
             logger.info(f"   Confidence: {metadata.get('avg_confidence', 0):.1%}")
             logger.info(f"   Quality: {metadata.get('detection_quality', 'unknown')}")
-            
+
             return True
-            
+
         except Exception as e:
             logger.exception(f"Error storing teams: {e}")
             db.rollback()
             return False
-    
+
     def get_or_detect_teams(
         self,
         db: sqlite3.Connection,
@@ -193,13 +193,13 @@ class TeamDetectorIntegration:
     ) -> Dict:
         """
         Get teams from DB or detect if not found
-        
+
         Args:
             db: Database connection
             session_date: Session date
             auto_detect: Auto-detect if not found
             force_redetect: Force re-detection even if stored
-            
+
         Returns:
             Teams dictionary
         """
@@ -216,9 +216,9 @@ class TeamDetectorIntegration:
                 """,
                 (f"{session_date}%",)
             )
-            
+
             rows = cursor.fetchall()
-            
+
             if rows:
                 teams = {}
                 for team_name, guids_json, names_json in rows:
@@ -229,24 +229,24 @@ class TeamDetectorIntegration:
                     }
                 logger.info(f"✅ Found stored teams for {session_date}")
                 return teams
-        
+
         # Auto-detect if requested
         if auto_detect or force_redetect:
             logger.info(f"{'Re-detecting' if force_redetect else 'Detecting'} teams for {session_date}...")
             result, is_reliable = self.detect_and_validate(db, session_date)
-            
+
             if result and is_reliable:
                 # Store the results
                 self.store_detected_teams(db, session_date, result)
-                
+
                 # Return in expected format
                 return {
                     'Team A': result['Team A'],
                     'Team B': result['Team B']
                 }
-        
+
         return {}
-    
+
     def validate_stored_teams(
         self,
         db: sqlite3.Connection,
@@ -254,12 +254,12 @@ class TeamDetectorIntegration:
     ) -> Tuple[bool, str]:
         """
         Validate that stored teams make sense
-        
+
         Returns:
             (is_valid, reason)
         """
         cursor = db.cursor()
-        
+
         cursor.execute(
             """
             SELECT team_name, player_guids
@@ -268,28 +268,28 @@ class TeamDetectorIntegration:
             """,
             (f"{session_date}%",)
         )
-        
+
         rows = cursor.fetchall()
-        
+
         if not rows:
             return False, "No teams stored"
-        
+
         if len(rows) != 2:
             return False, f"Expected 2 teams, found {len(rows)}"
-        
+
         # Check team sizes
         team_sizes = []
         for team_name, guids_json in rows:
             guids = json.loads(guids_json)
             team_sizes.append(len(guids))
-        
+
         if min(team_sizes) == 0:
             return False, "One team has no players"
-        
+
         size_ratio = max(team_sizes) / min(team_sizes)
         if size_ratio > 3.0:
             return False, f"Teams very imbalanced: {team_sizes[0]} vs {team_sizes[1]}"
-        
+
         return True, "Valid"
 
 

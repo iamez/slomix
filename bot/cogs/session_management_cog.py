@@ -33,9 +33,9 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
     @commands.command(name="session_start")
     async def session_start(self, ctx, *, map_name: str = "Unknown"):
         """🎬 Start a new gaming session
-        
+
         Usage: !session_start [map_name]
-        
+
         This manually starts a gaming session and creates a database entry.
         Normally sessions are auto-detected via voice channel monitoring.
         """
@@ -94,9 +94,9 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
     @commands.command(name="session_end")
     async def session_end(self, ctx):
         """🏁 Stop SSH monitoring
-        
+
         Usage: !session_end
-        
+
         This stops automatic stats monitoring and SSH file checking.
         Does not delete the current session, just disables monitoring.
         """

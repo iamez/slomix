@@ -3,11 +3,10 @@ Upload file validators - extension allowlists, content verification, size limits
 OWASP-compliant file upload security.
 """
 
-import hashlib
 import re
 import unicodedata
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 # Category definitions
 CATEGORY_CONFIG = "config"

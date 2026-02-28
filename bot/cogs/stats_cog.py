@@ -12,7 +12,6 @@ Commands use the bot's StatsCache for performance and SeasonManager for
 season filtering. All commands support @mentions and linked accounts.
 """
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import Optional
@@ -118,7 +117,7 @@ class StatsCog(commands.Cog, name="Stats"):
                 await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
                 pass  # Alias is optional
-            
+
             # Handle @mention
             if ctx.message.mentions:
                 mentioned_user = ctx.message.mentions[0]
@@ -847,11 +846,11 @@ class StatsCog(commands.Cog, name="Stats"):
     @commands.command(name="help_command", aliases=["commands", "cmds", "bothelp"])
     async def help_command(self, ctx, category: str = None):
         """📚 Show all available commands with examples
-        
+
         Usage: !help [category]
         Categories: stats, sessions, teams, predictions, synergy, server, admin, automation
         """
-        
+
         # Define all command categories
         categories = {
             "stats": self._help_stats,
@@ -864,13 +863,13 @@ class StatsCog(commands.Cog, name="Stats"):
             "automation": self._help_automation,
             "players": self._help_players,
         }
-        
+
         # If category specified, show that category only
         if category and category.lower() in categories:
             embed = categories[category.lower()]()
             await ctx.send(embed=embed)
             return
-        
+
         # Main overview embed
         embed1 = discord.Embed(
             title="🚀 Ultimate ET:Legacy Bot - Command Reference",

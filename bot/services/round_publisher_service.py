@@ -845,7 +845,6 @@ class RoundPublisherService:
                 return False
 
             awards = endstats_data.get('awards', [])
-            vs_stats = endstats_data.get('vs_stats', [])
 
             # Import categorization helper
             from bot.endstats_parser import EndStatsParser
