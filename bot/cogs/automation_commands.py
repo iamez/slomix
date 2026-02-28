@@ -26,11 +26,11 @@ logger = logging.getLogger("AutomationCommands")
 
 class AutomationCommands(commands.Cog):
     """Commands for automation management"""
-    
+
     def __init__(self, bot):
         self.bot = bot
         logger.info("✅ Automation Commands Cog loaded")
-    
+
     @is_admin()
     @commands.command(name="health")
     async def health_command(self, ctx):
@@ -39,14 +39,14 @@ class AutomationCommands(commands.Cog):
             if not hasattr(self.bot, 'health_monitor'):
                 await ctx.send("⚠️ Health monitoring not initialized")
                 return
-            
+
             embed = await self.bot.health_monitor.get_health_report()
             await ctx.send(embed=embed)
-            
+
         except Exception as e:
             logger.error(f"❌ Health command error: {e}")
             await ctx.send(f"❌ Error getting health status: {sanitize_error_message(e)}")
-    
+
     @is_admin()
     @commands.command(name="ssh_stats")
     async def ssh_stats_command(self, ctx):
@@ -88,7 +88,6 @@ class AutomationCommands(commands.Cog):
             )
 
             # Errors
-            error_icon = "⚠️" if stats['errors_count'] > 5 else "✅"
             error_color = "⚠️" if stats['errors_count'] > 5 else "🟢"
             embed.add_field(
                 name=f"{error_color} Error Count",
@@ -135,7 +134,7 @@ class AutomationCommands(commands.Cog):
 
             embed.set_footer(text=f"Requested by {ctx.author.name}")
             await ctx.send(embed=embed)
-            
+
         except Exception as e:
             logger.error(f"❌ SSH stats command error: {e}")
             await ctx.send(f"❌ Error getting SSH stats: {sanitize_error_message(e)}")
@@ -148,15 +147,15 @@ class AutomationCommands(commands.Cog):
             if not hasattr(self.bot, 'ssh_monitor'):
                 await ctx.send("⚠️ SSH monitor not initialized")
                 return
-            
+
             if self.bot.ssh_monitor.is_monitoring:
                 await ctx.send("ℹ️ Monitoring is already active")
                 return
-            
+
             await ctx.send("🔄 Starting SSH monitoring...")
             await self.bot.ssh_monitor.start_monitoring()
             await ctx.send("✅ SSH monitoring started!")
-            
+
         except Exception as e:
             logger.error(f"❌ Start monitoring error: {e}")
             await ctx.send(f"❌ Error starting monitoring: {sanitize_error_message(e)}")
@@ -169,15 +168,15 @@ class AutomationCommands(commands.Cog):
             if not hasattr(self.bot, 'ssh_monitor'):
                 await ctx.send("⚠️ SSH monitor not initialized")
                 return
-            
+
             if not self.bot.ssh_monitor.is_monitoring:
                 await ctx.send("ℹ️ Monitoring is not active")
                 return
-            
+
             await ctx.send("🛑 Stopping SSH monitoring...")
             await self.bot.ssh_monitor.stop_monitoring()
             await ctx.send("✅ SSH monitoring stopped!")
-            
+
         except Exception as e:
             logger.error(f"❌ Stop monitoring error: {e}")
             await ctx.send(f"❌ Error stopping monitoring: {sanitize_error_message(e)}")
@@ -190,19 +189,19 @@ class AutomationCommands(commands.Cog):
             if not hasattr(self.bot, 'metrics'):
                 await ctx.send("⚠️ Metrics logger not initialized")
                 return
-            
+
             if hours < 1 or hours > 720:  # Max 30 days
                 await ctx.send("⚠️ Hours must be between 1 and 720 (30 days)")
                 return
-            
+
             await ctx.send(f"📊 Generating metrics report for last {hours} hours...")
-            
+
             report = await self.bot.metrics.generate_report(hours=hours)
-            
+
             if not report:
                 await ctx.send("❌ Failed to generate report")
                 return
-            
+
             # Create summary embed with color based on error rate
             summary = report.get('summary', {})
             error_rate = summary.get('error_rate', 0)
@@ -282,18 +281,18 @@ class AutomationCommands(commands.Cog):
 
             embed.set_footer(text=f"Report period: {hours}h • Requested by {ctx.author.name}")
             await ctx.send(embed=embed)
-            
+
             # Offer to export full report
             await ctx.send("💾 Exporting full report to JSON...")
             filepath = await self.bot.metrics.export_to_json()
-            
+
             if filepath:
                 await ctx.send(f"✅ Full report exported to: `{filepath}`")
-            
+
         except Exception as e:
             logger.error(f"❌ Metrics report error: {e}", exc_info=True)
             await ctx.send(f"❌ Error generating report: {sanitize_error_message(e)}")
-    
+
     @is_admin()
     @commands.command(name="metrics_summary")
     async def metrics_summary_command(self, ctx):
@@ -358,7 +357,7 @@ class AutomationCommands(commands.Cog):
 
             embed.set_footer(text=f"Requested by {ctx.author.name}")
             await ctx.send(embed=embed)
-            
+
         except Exception as e:
             logger.error(f"❌ Metrics summary error: {e}")
             await ctx.send(f"❌ Error getting summary: {sanitize_error_message(e)}")
@@ -371,11 +370,11 @@ class AutomationCommands(commands.Cog):
             if not hasattr(self.bot, 'db_maintenance'):
                 await ctx.send("⚠️ Database maintenance not initialized")
                 return
-            
+
             await ctx.send("💾 Creating database backup...")
-            
+
             success = await self.bot.db_maintenance.backup_database()
-            
+
             if success:
                 stats = self.bot.db_maintenance.get_stats()
                 await ctx.send(
@@ -385,7 +384,7 @@ class AutomationCommands(commands.Cog):
                 )
             else:
                 await ctx.send("❌ Backup failed - check logs for details")
-                
+
         except Exception as e:
             logger.error(f"❌ Backup command error: {e}")
             await ctx.send(f"❌ Error creating backup: {sanitize_error_message(e)}")
@@ -398,20 +397,20 @@ class AutomationCommands(commands.Cog):
             if not hasattr(self.bot, 'db_maintenance'):
                 await ctx.send("⚠️ Database maintenance not initialized")
                 return
-            
+
             await ctx.send("🧹 Optimizing database...")
-            
+
             success = await self.bot.db_maintenance.vacuum_database()
-            
+
             if success:
                 await ctx.send("✅ Database optimized successfully!")
             else:
                 await ctx.send("❌ Optimization failed - check logs")
-                
+
         except Exception as e:
             logger.error(f"❌ Vacuum command error: {e}")
             await ctx.send(f"❌ Error optimizing database: {sanitize_error_message(e)}")
-    
+
     @is_admin()
     @commands.command(name="automation_status")
     async def automation_status_command(self, ctx):
@@ -510,7 +509,7 @@ class AutomationCommands(commands.Cog):
 
             embed.set_footer(text=f"Requested by {ctx.author.name} • Use !health for detailed bot health")
             await ctx.send(embed=embed)
-            
+
         except Exception as e:
             logger.error(f"❌ Status command error: {e}")
             await ctx.send(f"❌ Error getting status: {sanitize_error_message(e)}")

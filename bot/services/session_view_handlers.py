@@ -558,13 +558,6 @@ class SessionViewHandlers:
             return self._player_stats_columns
 
         try:
-            cols = await self.db_adapter.fetch_all("PRAGMA table_info(player_comprehensive_stats)")
-            self._player_stats_columns = {c[1] for c in cols}
-            return self._player_stats_columns
-        except Exception:
-            pass
-
-        try:
             cols = await self.db_adapter.fetch_all(
                 """
                 SELECT column_name
@@ -660,11 +653,11 @@ class SessionViewHandlers:
             txt_lines.append(f"Kill Assists: `{stats.get('kill_assists',0)}`")
             txt_lines.append(f"Revives Given: `{stats.get('revives_given',0)}` • Times Revived: `{stats.get('times_revived',0)}`")
             txt_lines.append(f"Dyns P/D: `{stats.get('dyn_planted',0)}/{stats.get('dyn_defused',0)}` • S/R: `{stats.get('obj_stolen',0)}/{stats.get('obj_returned',0)}`")
-        
+
             if stats.get("gibs", 0) > 0:
                 txt_lines.append(f"Gibs: `{stats.get('gibs',0)}`")
             txt_lines.append(f"Best Spree: `{stats.get('best_spree',0)}` • Worst Spree: `{stats.get('worst_spree',0)}`")
-        
+
             if stats.get("denied_time", 0) > 0:
                 dt = int(stats.get("denied_time", 0))
                 dm = dt // 60
@@ -723,7 +716,7 @@ class SessionViewHandlers:
         for i, row in enumerate(combat_rows, 1):
             name, kills, deaths, dmg_g, dmg_r, gibs, hsk, self_kills, full_selfkills, dpm = row
             kd = StatsCalculator.calculate_kd(kills, deaths)
-        
+
             player_text = (
                 f"{medals[i-1] if i <= 3 else f'{i}.'} **{name}**\n"
                 f"💀 `{kills}K/{deaths}D ({kd:.2f})` • `{dpm:.0f} DPM`\n"
@@ -909,7 +902,7 @@ class SessionViewHandlers:
         )
 
         medals = ["🥇", "🥈", "🥉"]
-    
+
         # Build player list in batches to avoid Discord field limits
         field_text = ""
         for i, player in enumerate(top_players, 1):
@@ -921,20 +914,20 @@ class SessionViewHandlers:
 
             # Medal for top 3, number for rest
             prefix = medals[i-1] if i <= 3 else f"{i}."
-        
+
             player_line = (
                 f"{prefix} **{name}**\n"
                 f"`{kills}K/{deaths}D ({kd:.2f})` • `{dpm:.0f} DPM` • `{damage:,} DMG`\n"
                 f"`{hsk} HSK` • `{gibs} Gibs` • ⏱️ `{time_display}`\n"
             )
-        
+
             # Check if adding this player would exceed field limit (1024)
             if len(field_text) + len(player_line) > 1000:
                 embed.add_field(name="\u200b", value=field_text, inline=False)
                 field_text = player_line
             else:
                 field_text += player_line
-    
+
         # Add remaining players
         if field_text:
             embed.add_field(name="\u200b", value=field_text, inline=False)
@@ -970,7 +963,6 @@ class SessionViewHandlers:
 
         # For each match, get aggregated stats (both rounds combined)
         for map_name, map_session_ids in map_matches:
-            map_ids_str = ','.join('?' * len(map_session_ids))
 
             # Determine display name (add counter for duplicates)
             if map_counts[map_name] > 1:
@@ -979,7 +971,7 @@ class SessionViewHandlers:
                 display_map_name = f"{map_name} (#{occurrence_num})"
             else:
                 display_map_name = map_name
-        
+
             # Query with time_played and denied_playtime
             query = """
                 WITH target_rounds AS (
@@ -1008,12 +1000,12 @@ class SessionViewHandlers:
                 GROUP BY p.player_guid
                 ORDER BY kills DESC
             """
-        
+
             players = await self.db_adapter.fetch_all(query, tuple(map_session_ids))
-        
+
             if not players:
                 continue
-        
+
             # Build embed matching live format
             embed = discord.Embed(
                 title=f"🗺️ {display_map_name.upper()} - Map Complete!",
@@ -1047,26 +1039,26 @@ class SessionViewHandlers:
                 # Medium games: max 5 per chunk
                 chunk_size = 5
             else:
-                # Large games: max 6 per chunk  
+                # Large games: max 6 per chunk
                 chunk_size = 6
 
             for i in range(0, len(players), chunk_size):
                 chunk = players[i:i + chunk_size]
-                
+
                 # Use "All Players" for single chunk, otherwise show range
                 if total_players <= chunk_size:
                     field_name = '📊 All Players'
                 else:
                     field_name = f'📊 Players {i+1}-{i+len(chunk)}'
-                
+
                 player_lines = []
                 for idx, player in enumerate(chunk):
                     rank = i + idx + 1
                     rank_display = get_rank_display(rank)
-                    
-                    (name, kills, deaths, dmg, gibs, hs, acc, revives, 
+
+                    (name, kills, deaths, dmg, gibs, hs, acc, revives,
                      got_revived, time_dead, team_dmg, time_played, time_denied, dpm) = player
-                    
+
                     # Handle nulls
                     kills = kills or 0
                     deaths = deaths or 0
@@ -1081,14 +1073,14 @@ class SessionViewHandlers:
                     time_played = time_played or 0
                     time_denied = time_denied or 0
                     dpm = dpm or 0
-                    
+
                     name = (name or 'Unknown')[:16]
                     kd_str = f'{kills}/{deaths}'
-                    
+
                     # Format time_played as MM:SS
                     tp_min = int(time_played)
                     tp_sec = int((time_played - tp_min) * 60)
-                    
+
                     # Format time_denied as MM:SS (it's in seconds)
                     td_min = int(time_denied // 60)
                     td_sec = int(time_denied % 60)
@@ -1141,7 +1133,7 @@ class SessionViewHandlers:
                 ),
                 inline=False
             )
-        
+
             embed.set_footer(text=f"Session: {latest_date} • Use !last_session maps full for round-by-round")
             await ctx.send(embed=embed)
             await asyncio.sleep(3)
@@ -1189,7 +1181,7 @@ class SessionViewHandlers:
                 display_map_name = f"{map_name} (#{occurrence_num})"
             else:
                 display_map_name = map_name
-        
+
             # ===== ROUND 1 =====
             if rounds['round1']:
                 await self._send_round_stats(ctx, display_map_name, "Round 1", rounds['round1'], latest_date)
@@ -1209,8 +1201,7 @@ class SessionViewHandlers:
         """
         Send round stats embed - matches live round_publisher_service format exactly
         """
-        round_ids_str = ','.join('?' * len(round_session_ids))
-    
+
         # Using CTE to avoid duplicate placeholder references
         query = """
             WITH target_rounds AS (
@@ -1239,12 +1230,12 @@ class SessionViewHandlers:
             GROUP BY p.player_guid
             ORDER BY kills DESC
         """
-    
+
         players = await self.db_adapter.fetch_all(query, tuple(round_session_ids))
-    
+
         if not players:
             return
-    
+
         # Determine color based on round
         if "Round 1" in round_label:
             color = discord.Color.blue()
@@ -1252,7 +1243,7 @@ class SessionViewHandlers:
             color = discord.Color.red()
         else:
             color = discord.Color.gold()  # Map summary
-    
+
         # Build title matching live format
         if "Summary" in round_label:
             title = f"🗺️ {map_name.upper()} - Map Complete!"
@@ -1260,7 +1251,7 @@ class SessionViewHandlers:
         else:
             title = f"🎮 {round_label} Complete - {map_name}"
             description = f"**Players:** {len(players)}"
-    
+
         embed = discord.Embed(
             title=title,
             description=description,
@@ -1293,20 +1284,20 @@ class SessionViewHandlers:
 
         for i in range(0, len(players), chunk_size):
             chunk = players[i:i + chunk_size]
-            
+
             if total_players <= chunk_size:
                 field_name = '📊 All Players'
             else:
                 field_name = f'📊 Players {i+1}-{i+len(chunk)}'
-            
+
             player_lines = []
             for idx, player in enumerate(chunk):
                 rank = i + idx + 1
                 rank_display = get_rank_display(rank)
-                
+
                 (name, kills, deaths, dmg, gibs, hs, acc, revives,
                  got_revived, time_dead, team_dmg, time_played, time_denied, dpm) = player
-                
+
                 # Handle nulls
                 kills = kills or 0
                 deaths = deaths or 0
@@ -1321,14 +1312,14 @@ class SessionViewHandlers:
                 time_played = time_played or 0
                 time_denied = time_denied or 0
                 dpm = dpm or 0
-                
+
                 name = (name or 'Unknown')[:16]
                 kd_str = f'{kills}/{deaths}'
-                
+
                 # Format time_played as MM:SS
                 tp_min = int(time_played)
                 tp_sec = int((time_played - tp_min) * 60)
-                
+
                 # Format time_denied as MM:SS (it's in seconds)
                 td_min = int(time_denied // 60)
                 td_sec = int(time_denied % 60)
@@ -1346,16 +1337,16 @@ class SessionViewHandlers:
                     f"DMG:`{int(dmg):,}` DPM:`{int(dpm)}` "
                     f"ACC:`{acc:.1f}%` HS:`{hs}`"
                 )
-                
+
                 # Line 2: Support + Time stats
                 line2 = (
                     f"     ↳ Rev:`{int(revives)}/{int(got_revived)}` Gibs:`{gibs}` "
                     f"TmDmg:`{int(team_dmg)}` "
                     f"⏱️`{tp_min}:{tp_sec:02d}` 💀`{time_dead:.1f}m`({dead_pct:.0f}%) ⏳`{td_min}:{td_sec:02d}`({denied_pct:.0f}%)"
                 )
-                
+
                 player_lines.append(f"{line1}\n{line2}")
-            
+
             embed.add_field(
                 name=field_name,
                 value='\n'.join(player_lines) if player_lines else 'No stats',
@@ -1381,7 +1372,7 @@ class SessionViewHandlers:
             ),
             inline=False
         )
-    
+
         embed.set_footer(text=f"Session: {latest_date}")
         await ctx.send(embed=embed)
 

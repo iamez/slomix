@@ -287,7 +287,7 @@ class FileTracker:
                         file_hash = COALESCE(EXCLUDED.file_hash, processed_files.file_hash),
                         success = EXCLUDED.success,
                         error_message = EXCLUDED.error_message,
-                        processed_at = EXCLUDED.processed_at
+                        processed_at = processed_files.processed_at
                 """
                 await self.db_adapter.execute(
                     query,

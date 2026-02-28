@@ -203,31 +203,28 @@ class GreatshotStorageService:
         role_name = await self._current_role(db)
         has_ddl_privileges = await self._has_schema_ddl_privileges(db)
 
-        # In production, website role is often intentionally non-owner/read-only.
-        # If schema is already present, skip DDL and avoid noisy startup warnings.
-        if schema_ready and not has_ddl_privileges:
-            logger.info(
-                "Greatshot schema already ready; skipping DDL for limited-privilege role '%s'.",
-                role_name,
-            )
+        # Skip DDL entirely when the current role lacks privileges.
+        # This prevents noisy InsufficientPrivilegeError logs at startup
+        # when running as a limited-privilege role (e.g. website_app).
+        if not has_ddl_privileges:
+            if schema_ready:
+                logger.info(
+                    "Greatshot schema already ready; skipping DDL for limited-privilege role '%s'.",
+                    role_name,
+                )
+            else:
+                logger.warning(
+                    "Greatshot schema is not fully ready but role '%s' lacks DDL privileges. "
+                    "Run migrations with an owner/admin role.",
+                    role_name,
+                )
             return
 
         try:
             await self._ensure_schema_inner(db)
         except Exception as e:
             if self._is_insufficient_privilege_error(e):
-                if schema_ready:
-                    logger.info(
-                        "Greatshot schema DDL skipped for role '%s' due to limited privileges: %s",
-                        role_name,
-                        e,
-                    )
-                    return
-                logger.warning("⚠️ Greatshot schema DDL failed due to insufficient privileges: %s", e)
-                logger.warning(
-                    "   Schema is not fully ready and this role cannot manage DDL. "
-                    "Run migrations with an owner/admin role."
-                )
+                logger.warning("Greatshot schema DDL failed for role '%s': %s", role_name, e)
                 return
             raise
 
@@ -252,31 +249,54 @@ class GreatshotStorageService:
 
     async def _has_schema_ddl_privileges(self, db) -> bool:
         """
-        Return True when current role likely can manage Greatshot DDL.
+        Return True when current role can manage Greatshot DDL.
+
+        ALTER TABLE and CREATE INDEX require table ownership, not just
+        schema CREATE privilege. So we check:
+        - If tables exist: current role must own them
+        - If tables don't exist: schema CREATE is sufficient
         """
         try:
             row = await db.fetch_one(
                 """
                 SELECT
                     has_schema_privilege(current_user, 'public', 'CREATE') AS can_create,
-                    EXISTS (
-                        SELECT 1
-                        FROM pg_class c
-                        JOIN pg_namespace n ON n.oid = c.relnamespace
-                        WHERE n.nspname = 'public'
-                          AND c.relname IN (
-                              'greatshot_demos',
-                              'greatshot_analysis',
-                              'greatshot_highlights',
-                              'greatshot_renders'
-                          )
-                          AND pg_get_userbyid(c.relowner) = current_user
-                    ) AS owns_any
+                    (SELECT COUNT(*)
+                     FROM pg_class c
+                     JOIN pg_namespace n ON n.oid = c.relnamespace
+                     WHERE n.nspname = 'public'
+                       AND c.relname IN (
+                           'greatshot_demos',
+                           'greatshot_analysis',
+                           'greatshot_highlights',
+                           'greatshot_renders'
+                       )
+                    ) AS tables_exist_count,
+                    (SELECT COUNT(*)
+                     FROM pg_class c
+                     JOIN pg_namespace n ON n.oid = c.relnamespace
+                     WHERE n.nspname = 'public'
+                       AND c.relname IN (
+                           'greatshot_demos',
+                           'greatshot_analysis',
+                           'greatshot_highlights',
+                           'greatshot_renders'
+                       )
+                       AND pg_get_userbyid(c.relowner) = current_user
+                    ) AS tables_owned_count
                 """
             )
             if not row:
                 return False
-            return bool(row[0]) or bool(row[1])
+            can_create = bool(row[0])
+            tables_exist = int(row[1] or 0)
+            tables_owned = int(row[2] or 0)
+
+            if tables_exist == 0:
+                # No tables yet — CREATE privilege is enough
+                return can_create
+            # Tables exist — must own them to ALTER/INDEX
+            return tables_owned > 0
         except Exception as e:
             logger.debug("Could not check DDL privileges: %s", e)
             return False

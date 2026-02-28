@@ -24,7 +24,7 @@ from discord.ext import commands, tasks
 import logging
 from datetime import datetime, date as dt_date, time as dt_time, timedelta, timezone
 from zoneinfo import ZoneInfo
-from typing import Optional, Dict, Set
+from typing import Optional, Set
 
 from bot.services.availability_notifier_service import (
     UnifiedAvailabilityNotifier,
@@ -539,8 +539,8 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
                 try:
                     user = await self.bot.fetch_user(user_id)
                     await user.send(
-                        f"⏰ **Game time reminder!** Don't forget about tonight's gaming session. "
-                        f"See you soon! 🎮"
+                        "⏰ **Game time reminder!** Don't forget about tonight's gaming session. "
+                        "See you soon! 🎮"
                     )
                     reminder_count += 1
                     await asyncio.sleep(0.25)  # Rate limit protection

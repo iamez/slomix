@@ -252,7 +252,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
             async with self.connection() as conn:
                 result = await conn.execute(query, *(params or ()))
             duration_ms = (time.monotonic() - start) * 1000
-            if duration_ms > 1000:
+            if duration_ms > 3000:
                 logger.warning("SLOW QUERY (%.0fms): %.200s", duration_ms, query)
             else:
                 logger.debug("execute (%.0fms): %.100s", duration_ms, query)
@@ -262,6 +262,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
             raise
         except asyncpg.ForeignKeyViolationError as e:
             logger.error("FK violation on execute: %s — %.100s", e.constraint_name, query)
+            raise
+        except asyncpg.InsufficientPrivilegeError:
+            logger.warning("Insufficient privileges: %.100s", query)
             raise
         except Exception:
             logger.error("Query failed (%.100s)", query, exc_info=True)
@@ -277,11 +280,14 @@ class PostgreSQLAdapter(DatabaseAdapter):
             async with self.connection() as conn:
                 result = await conn.fetchrow(query, *(params or ()))
             duration_ms = (time.monotonic() - start) * 1000
-            if duration_ms > 1000:
+            if duration_ms > 3000:
                 logger.warning("SLOW QUERY (%.0fms): %.200s", duration_ms, query)
             else:
                 logger.debug("fetch_one (%.0fms): %.100s", duration_ms, query)
             return result
+        except asyncpg.InsufficientPrivilegeError:
+            logger.warning("Insufficient privileges: %.100s", query)
+            raise
         except Exception:
             logger.error("fetch_one failed (%.100s)", query, exc_info=True)
             raise
@@ -296,11 +302,14 @@ class PostgreSQLAdapter(DatabaseAdapter):
             async with self.connection() as conn:
                 result = await conn.fetch(query, *(params or ()))
             duration_ms = (time.monotonic() - start) * 1000
-            if duration_ms > 1000:
+            if duration_ms > 3000:
                 logger.warning("SLOW QUERY (%.0fms, %d rows): %.200s", duration_ms, len(result), query)
             else:
                 logger.debug("fetch_all (%.0fms, %d rows): %.100s", duration_ms, len(result), query)
             return result
+        except asyncpg.InsufficientPrivilegeError:
+            logger.warning("Insufficient privileges: %.100s", query)
+            raise
         except Exception:
             logger.error("fetch_all failed (%.100s)", query, exc_info=True)
             raise
@@ -315,11 +324,14 @@ class PostgreSQLAdapter(DatabaseAdapter):
             async with self.connection() as conn:
                 result = await conn.fetchval(query, *(params or ()))
             duration_ms = (time.monotonic() - start) * 1000
-            if duration_ms > 1000:
+            if duration_ms > 3000:
                 logger.warning("SLOW QUERY (%.0fms): %.200s", duration_ms, query)
             else:
                 logger.debug("fetch_val (%.0fms): %.100s", duration_ms, query)
             return result
+        except asyncpg.InsufficientPrivilegeError:
+            logger.warning("Insufficient privileges: %.100s", query)
+            raise
         except Exception:
             logger.error("fetch_val failed (%.100s)", query, exc_info=True)
             raise
