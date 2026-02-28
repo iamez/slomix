@@ -297,7 +297,7 @@ class RoundCorrelationService:
             await self.db.execute(
                 """
                 INSERT INTO round_correlations (correlation_id, match_id, map_name)
-                VALUES ($1, $2, $3)
+                VALUES (?, ?, ?)
                 ON CONFLICT (correlation_id) DO NOTHING
                 """,
                 (correlation_id, match_id, map_name),
@@ -306,17 +306,15 @@ class RoundCorrelationService:
             # Apply updates
             set_clauses = []
             params = []
-            idx = 1
             for col, val in updates.items():
-                set_clauses.append(f"{col} = ${idx}")
+                set_clauses.append(f"{col} = ?")
                 params.append(val)
-                idx += 1
             params.append(correlation_id)
 
             if set_clauses:
                 sql = (
                     f"UPDATE round_correlations SET {', '.join(set_clauses)} "
-                    f"WHERE correlation_id = ${idx}"
+                    f"WHERE correlation_id = ?"
                 )
                 await self.db.execute(sql, tuple(params))
 
@@ -337,7 +335,7 @@ class RoundCorrelationService:
                    has_r1_gametime, has_r2_gametime,
                    has_r1_endstats, has_r2_endstats
             FROM round_correlations
-            WHERE correlation_id = $1
+            WHERE correlation_id = ?
             """,
             (correlation_id,),
         )
@@ -384,8 +382,8 @@ class RoundCorrelationService:
             await self.db.execute(
                 """
                 UPDATE round_correlations
-                SET status = $1, completeness_pct = $2, completed_at = $3
-                WHERE correlation_id = $4
+                SET status = ?, completeness_pct = ?, completed_at = ?
+                WHERE correlation_id = ?
                 """,
                 (status, pct, completed_at, correlation_id),
             )
@@ -393,8 +391,8 @@ class RoundCorrelationService:
             await self.db.execute(
                 """
                 UPDATE round_correlations
-                SET status = $1, completeness_pct = $2
-                WHERE correlation_id = $3
+                SET status = ?, completeness_pct = ?
+                WHERE correlation_id = ?
                 """,
                 (status, pct, correlation_id),
             )
@@ -410,8 +408,8 @@ class RoundCorrelationService:
             await self.db.execute(
                 """
                 UPDATE round_correlations
-                SET summary_round_id = $1
-                WHERE match_id = $2
+                SET summary_round_id = ?
+                WHERE match_id = ?
                 """,
                 (round_id, match_id),
             )

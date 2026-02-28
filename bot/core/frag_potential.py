@@ -7,12 +7,12 @@ This module provides advanced player performance metrics:
 1. FragPotential (FP) - Damage output while alive
    Formula: (damage_given / time_alive_seconds) * 60
    Where: time_alive = time_played - time_dead
-   
+
    Interpretation:
    - Higher FP = More impactful while alive (dealing damage efficiently)
    - Measures "damage per minute while actually playing"
    - Unlike standard DPM, doesn't penalize dying as much
-   
+
 2. Playstyle Classification - Categorizes players based on their stats:
    - 🔥 Fragger    - High damage dealer, good K/D, efficient killer
    - 💀 Slayer     - Kill-focused, high kill count, aggressive
@@ -42,15 +42,15 @@ class Playstyle(Enum):
     RUSHER = ("🏃", "Rusher", "#F39C12")         # Orange
     OBJECTIVE = ("🎖️", "Objective", "#1ABC9C")   # Teal
     BALANCED = ("⚔️", "Balanced", "#95A5A6")     # Gray
-    
+
     @property
     def emoji(self) -> str:
         return self.value[0]
-    
+
     @property
     def name_display(self) -> str:
         return self.value[1]
-    
+
     @property
     def color(self) -> str:
         return self.value[2]
@@ -61,34 +61,34 @@ class PlayerMetrics:
     """Comprehensive player metrics for analysis"""
     player_name: str
     player_guid: str
-    
+
     # Core stats
     kills: int
     deaths: int
     damage_given: int
     damage_received: int
-    
+
     # Time stats (in seconds)
     time_played_seconds: int
     time_dead_ratio: float  # Percentage (0-100)
     time_dead_seconds: float = 0.0
     time_dead_minutes: float = 0.0
-    
+
     # Calculated time
     time_alive_seconds: float = 0.0
-    
+
     # Support stats
     revives_given: int = 0
     headshot_kills: int = 0
     headshot_hits: int = 0  # Sum of weapon headshot hits (different from headshot_kills)
     total_hits: int = 0     # Sum of weapon hits across all weapons
-    
+
     # Objective stats
     objectives_completed: int = 0
     objectives_destroyed: int = 0
     objectives_stolen: int = 0
     objectives_returned: int = 0
-    
+
     # Round count (set externally after construction)
     rounds_played: int = 0
 
@@ -102,11 +102,11 @@ class PlayerMetrics:
     dpr: float = 0.0   # Deaths Per Round
     playstyle: Playstyle = Playstyle.BALANCED
     playstyle_confidence: float = 0.0
-    
+
     def __post_init__(self):
         """Calculate derived metrics after initialization"""
         self.calculate_metrics()
-    
+
     def calculate_metrics(self):
         """Calculate all derived metrics"""
         # Time alive calculation (prefer raw minutes/seconds over ratio)
@@ -129,19 +129,19 @@ class PlayerMetrics:
             self.time_dead_ratio = (time_dead_seconds / self.time_played_seconds) * 100.0
 
         self.time_alive_seconds = max(1, self.time_played_seconds - time_dead_seconds)
-        
+
         # FragPotential: DPM while alive
         if self.time_alive_seconds > 0:
             self.frag_potential = (self.damage_given / self.time_alive_seconds) * 60
         else:
             self.frag_potential = 0.0
-        
+
         # K/D Ratio
         self.kd_ratio = self.kills / max(1, self.deaths)
-        
+
         # Damage Ratio (given/received)
         self.damage_ratio = self.damage_given / max(1, self.damage_received)
-        
+
         # Headshot percentage (% of hits that landed on the head)
         if self.total_hits > 0:
             self.headshot_percentage = (self.headshot_hits / self.total_hits) * 100
@@ -156,37 +156,37 @@ class FragPotentialCalculator:
     """
     Calculates FragPotential and determines player playstyles
     """
-    
+
     # Thresholds for playstyle detection (can be tuned)
     THRESHOLDS = {
         # FragPotential thresholds
         'fp_high': 900,        # High damage output while alive
         'fp_medium': 600,      # Medium damage output
-        
+
         # K/D thresholds
         'kd_high': 1.5,        # Very good K/D
         'kd_good': 1.2,        # Good K/D
         'kd_low': 0.8,         # Below average K/D
-        
+
         # Deaths ratio (compared to session average)
         'deaths_high_mult': 1.3,  # 30% more deaths than average
-        
+
         # Support thresholds
         'revives_high': 10,    # High revive count for session
         'revives_per_round': 2, # Revives per round threshold
-        
+
         # Headshot percentage
         'hs_high': 25,         # High headshot percentage
         'hs_sniper': 35,       # Sniper-level headshot percentage
-        
+
         # Damage ratio
         'dmg_ratio_tank': 0.7,  # Takes more than gives (tank behavior)
         'dmg_ratio_high': 1.5,  # Gives much more than takes
-        
+
         # Objective count
         'obj_high': 3,         # High objective interactions
     }
-    
+
     @classmethod
     def calculate_frag_potential(
         cls,
@@ -198,18 +198,18 @@ class FragPotentialCalculator:
     ) -> float:
         """
         Calculate FragPotential for a player
-        
+
         Args:
             damage_given: Total damage dealt
             time_played_seconds: Total time in round/session
             time_dead_ratio: Percentage of time spent dead (0-100)
-            
+
         Returns:
             FragPotential value (damage per minute while alive)
         """
         if time_played_seconds <= 0:
             return 0.0
-        
+
         # Prefer raw dead time when available (minutes/seconds)
         td_seconds = None
         if time_dead_seconds is not None and time_dead_seconds > 0:
@@ -234,12 +234,12 @@ class FragPotentialCalculator:
         # Calculate time alive
         time_dead_seconds = td_seconds
         time_alive_seconds = max(1, time_played_seconds - time_dead_seconds)
-        
+
         # FragPotential = DPM while alive
         frag_potential = (damage_given / time_alive_seconds) * 60
-        
+
         return round(frag_potential, 1)
-    
+
     @classmethod
     def determine_playstyle(
         cls,
@@ -250,30 +250,30 @@ class FragPotentialCalculator:
     ) -> Tuple[Playstyle, float]:
         """
         Determine a player's playstyle based on their metrics
-        
+
         Args:
             metrics: PlayerMetrics object with all stats
             session_avg_deaths: Average deaths in session (for comparison)
             session_avg_revives: Average revives in session
             rounds_played: Number of rounds played
-            
+
         Returns:
             Tuple of (Playstyle, confidence_score 0.0-1.0)
         """
         scores = {style: 0.0 for style in Playstyle}
-        
+
         fp = metrics.frag_potential
         kd = metrics.kd_ratio
         dmg_ratio = metrics.damage_ratio
         hs_pct = metrics.headshot_percentage
         revives = metrics.revives_given
         total_objectives = (
-            metrics.objectives_completed + 
-            metrics.objectives_destroyed + 
-            metrics.objectives_stolen + 
+            metrics.objectives_completed +
+            metrics.objectives_destroyed +
+            metrics.objectives_stolen +
             metrics.objectives_returned
         )
-        
+
         # ═══════════════════════════════════════════════════════
         # FRAGGER: High damage dealer, efficient killer
         # ═══════════════════════════════════════════════════════
@@ -283,7 +283,7 @@ class FragPotentialCalculator:
             scores[Playstyle.FRAGGER] += 0.3
         if dmg_ratio >= cls.THRESHOLDS['dmg_ratio_high']:
             scores[Playstyle.FRAGGER] += 0.2
-        
+
         # ═══════════════════════════════════════════════════════
         # SLAYER: Kill-focused, high kill count
         # ═══════════════════════════════════════════════════════
@@ -293,7 +293,7 @@ class FragPotentialCalculator:
             scores[Playstyle.SLAYER] += 0.3
         if fp >= cls.THRESHOLDS['fp_medium']:
             scores[Playstyle.SLAYER] += 0.2
-        
+
         # ═══════════════════════════════════════════════════════
         # TANK: Absorbs damage, high survival
         # ═══════════════════════════════════════════════════════
@@ -305,7 +305,7 @@ class FragPotentialCalculator:
             scores[Playstyle.TANK] += 0.2
         if kd < cls.THRESHOLDS['kd_good'] and metrics.damage_received > 3000:
             scores[Playstyle.TANK] += 0.2
-        
+
         # ═══════════════════════════════════════════════════════
         # MEDIC: Support-focused, high revives
         # ═══════════════════════════════════════════════════════
@@ -316,7 +316,7 @@ class FragPotentialCalculator:
             scores[Playstyle.MEDIC] += 0.3
         if session_avg_revives and revives > session_avg_revives * 1.5:
             scores[Playstyle.MEDIC] += 0.2
-        
+
         # ═══════════════════════════════════════════════════════
         # SNIPER: Precision player, high headshots
         # ═══════════════════════════════════════════════════════
@@ -326,7 +326,7 @@ class FragPotentialCalculator:
             scores[Playstyle.SNIPER] += 0.3
         if metrics.deaths < 10 and hs_pct >= cls.THRESHOLDS['hs_high']:
             scores[Playstyle.SNIPER] += 0.2
-        
+
         # ═══════════════════════════════════════════════════════
         # RUSHER: Aggressive, high deaths, high activity
         # ═══════════════════════════════════════════════════════
@@ -339,7 +339,7 @@ class FragPotentialCalculator:
             scores[Playstyle.RUSHER] += 0.2
         if metrics.time_dead_ratio > 35:  # High death time
             scores[Playstyle.RUSHER] += 0.2
-        
+
         # ═══════════════════════════════════════════════════════
         # OBJECTIVE: Objective-focused player
         # ═══════════════════════════════════════════════════════
@@ -349,27 +349,27 @@ class FragPotentialCalculator:
             scores[Playstyle.OBJECTIVE] += 0.3
         if metrics.objectives_destroyed >= 2:
             scores[Playstyle.OBJECTIVE] += 0.2
-        
+
         # ═══════════════════════════════════════════════════════
         # BALANCED: Default if no strong signals
         # ═══════════════════════════════════════════════════════
         # Always give balanced a base score
         scores[Playstyle.BALANCED] = 0.3
-        
+
         # Find the dominant playstyle
         max_score = max(scores.values())
         dominant_style = max(scores, key=scores.get)
-        
+
         # Calculate confidence (normalized)
         total_score = sum(scores.values())
         confidence = max_score / total_score if total_score > 0 else 0.0
-        
+
         # If confidence is too low, default to balanced
         if confidence < 0.25 or max_score < 0.4:
             return Playstyle.BALANCED, 0.5
-        
+
         return dominant_style, min(1.0, confidence)
-    
+
     @classmethod
     async def analyze_session_players(
         cls,
@@ -419,20 +419,20 @@ class FragPotentialCalculator:
             ORDER BY SUM(p.damage_given) DESC
         """
 
-        # Query uses session_ids 4 times (main WHERE + 3 subquery IN clauses)
-        rows = await db_adapter.fetch_all(query, tuple(session_ids) * 4)
-        
+        # Query uses session_ids 3 times (2 subquery IN clauses + main WHERE)
+        rows = await db_adapter.fetch_all(query, tuple(session_ids) * 3)
+
         if not rows:
             return []
-        
+
         # Calculate session averages for comparison
         total_deaths = sum(row[3] or 0 for row in rows)
         total_revives = sum(row[8] or 0 for row in rows)
         player_count = len(rows)
-        
+
         avg_deaths = total_deaths / player_count if player_count > 0 else 0
         avg_revives = total_revives / player_count if player_count > 0 else 0
-        
+
         # Build PlayerMetrics for each player
         players = []
         for row in rows:
@@ -465,9 +465,9 @@ class FragPotentialCalculator:
                 headshot_hits=row[15] or 0,
                 total_hits=row[16] or 0,
             )
-            
+
             rounds_played = row[14] or 1
-            
+
             # Determine playstyle
             playstyle, confidence = cls.determine_playstyle(
                 metrics,
@@ -477,12 +477,12 @@ class FragPotentialCalculator:
             )
             metrics.playstyle = playstyle
             metrics.playstyle_confidence = confidence
-            
+
             players.append(metrics)
-        
+
         # Sort by FragPotential (highest first)
         players.sort(key=lambda p: p.frag_potential, reverse=True)
-        
+
         return players
 
 
