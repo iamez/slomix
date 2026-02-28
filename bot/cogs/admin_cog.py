@@ -21,7 +21,6 @@ NOTE: Other commands moved to specialized cogs:
 import logging
 from typing import Optional
 
-import discord
 # import aiosqlite  # Removed - using database adapter
 from discord.ext import commands
 
@@ -71,11 +70,11 @@ class AdminCog(commands.Cog, name="Admin"):
         try:
             await ctx.send("🔄 Reloading bot... This will take a few seconds.")
             logger.info(f"🔄 Bot reload initiated by {ctx.author}")
-            
+
             # Reload all cogs
             reloaded_cogs = []
             failed_cogs = []
-            
+
             for cog_name in list(self.bot.extensions.keys()):
                 try:
                     await self.bot.reload_extension(cog_name)
@@ -84,18 +83,18 @@ class AdminCog(commands.Cog, name="Admin"):
                 except Exception as e:
                     failed_cogs.append(f"{cog_name.split('.')[-1]}: {str(e)[:50]}")
                     logger.error(f"❌ Failed to reload {cog_name}: {e}")
-            
+
             # Report results
             result_msg = "✅ **Bot Reloaded!**\n\n"
             if reloaded_cogs:
                 result_msg += f"**Reloaded ({len(reloaded_cogs)}):** {', '.join(reloaded_cogs)}\n"
             if failed_cogs:
                 result_msg += f"\n⚠️ **Failed ({len(failed_cogs)}):**\n" + "\n".join(f"• {cog}" for cog in failed_cogs)
-            
+
             result_msg += "\n\n💡 Bot is now running updated code!"
             await ctx.send(result_msg)
             logger.info("✅ Bot reload complete")
-            
+
         except Exception as e:
             logger.error(f"Error in reload_bot: {e}", exc_info=True)
             await ctx.send(f"❌ Error reloading bot: {sanitize_error_message(e)}")

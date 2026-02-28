@@ -14,7 +14,7 @@ import discord
 from datetime import datetime, timedelta
 import logging
 import re
-from typing import List, Optional, Tuple, Any, Dict
+from typing import List, Optional, Any, Dict
 
 from bot.core.round_contract import normalize_end_reason
 
@@ -650,7 +650,7 @@ class TimingDebugService:
 
             for i, chunk_lines in enumerate(chunks):
                 table_content = header_block + "\n".join(chunk_lines) + "\n```"
-                field_name = "Round Comparison" if i == 0 else f"Round Comparison (cont.)"
+                field_name = "Round Comparison" if i == 0 else "Round Comparison (cont.)"
                 embed.add_field(name=field_name, value=table_content, inline=False)
 
             # Summary section

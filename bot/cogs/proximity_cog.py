@@ -324,10 +324,8 @@ class ProximityCog(commands.Cog, name="Proximity"):
         # parts[4:-1] could be mapname pieces, last part is "N_engagements.txt"
         try:
             # Find round number from the part containing "_engagements"
-            round_part = None
             for p in parts:
                 if '_engagements' in p or '_proximity' in p:
-                    round_part = p.split('_')[0]
                     break
 
             map_parts = parts[4:]
@@ -727,9 +725,12 @@ class ProximityCog(commands.Cog, name="Proximity"):
                 return
 
             def classify(disp):
-                if disp < 300: return "TIGHT"
-                if disp < 800: return "NORMAL"
-                if disp < 1500: return "LOOSE"
+                if disp < 300:
+                    return "TIGHT"
+                if disp < 800:
+                    return "NORMAL"
+                if disp < 1500:
+                    return "LOOSE"
                 return "SCATTERED"
 
             embed = discord.Embed(

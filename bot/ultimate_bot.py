@@ -27,7 +27,6 @@ from bot.core.round_contract import (
     normalize_side_value,
     score_confidence_state,
     derive_stopwatch_contract,
-    derive_end_reason_display,
 )
 
 # Import database adapter and config for PostgreSQL migration
@@ -146,7 +145,6 @@ class UltimateETLegacyBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
         # 📊 Database Configuration - Load config and create adapter
-        import os
 
         # Load configuration (from env vars or bot_config.json)
         self.config = load_config()
@@ -1843,7 +1841,6 @@ class UltimateETLegacyBot(commands.Bot):
                     self._player_stats_columns = set()
 
             # Extract date from filename: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
-            timestamp = "-".join(filename.split("-")[:4])  # Full timestamp YYYY-MM-DD-HHMMSS
             date_part = "-".join(filename.split("-")[:3])  # Date YYYY-MM-DD
             time_part = filename.split("-")[3] if len(filename.split("-")) > 3 else "000000"  # HHMMSS
 
@@ -2921,12 +2918,25 @@ class UltimateETLegacyBot(commands.Bot):
         """
         🔄 Cache Refresh Task - Runs every 30 seconds
 
-        Keeps in-memory cache in sync with database
-        Uses FileRepository for data access (Repository Pattern)
+        Keeps in-memory cache in sync with database.
+        Uses incremental delta queries after the initial full load
+        to avoid fetching all 4000+ rows every cycle.
         """
         try:
-            # Refresh processed files cache via repository
-            self.processed_files = await self.file_repository.get_processed_filenames()
+            from datetime import datetime
+
+            if not hasattr(self, '_cache_last_refresh'):
+                # First run: full load
+                self.processed_files = await self.file_repository.get_processed_filenames()
+                self._cache_last_refresh = datetime.utcnow()
+            else:
+                # Subsequent runs: incremental delta only
+                new_files = await self.file_repository.get_newly_processed_filenames(
+                    self._cache_last_refresh
+                )
+                if new_files:
+                    self.processed_files.update(new_files)
+                self._cache_last_refresh = datetime.utcnow()
 
         except Exception as e:
             logger.debug(f"Cache refresh error: {e}")
@@ -3099,12 +3109,13 @@ class UltimateETLegacyBot(commands.Bot):
                         server_cog.rcon_port,
                         server_cog.rcon_password
                     )
-                    # Set socket timeout to prevent blocking on shutdown
-                    if hasattr(rcon, 'socket') and rcon.socket:
-                        rcon.socket.settimeout(5.0)
                     try:
-                        status_response = rcon.send_command('status')
-                        rcon.close()
+                        # Run RCON in executor to avoid blocking event loop
+                        loop = asyncio.get_running_loop()
+                        status_response = await loop.run_in_executor(
+                            None, rcon.send_command, 'status'
+                        )
+                        await loop.run_in_executor(None, rcon.close)
                         rcon = None
 
                         if status_response and 'Error' not in status_response:
@@ -5893,8 +5904,6 @@ class UltimateETLegacyBot(commands.Bot):
         self.error_count += 1
 
         # Log the error with full context
-        duration = time.time() - getattr(ctx, 'command_start_time', time.time())
-
         log_command_execution(
             ctx,
             f"!{ctx.command.name}" if ctx.command else "unknown",
