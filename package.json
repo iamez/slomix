@@ -1,0 +1,14 @@
+{
+  "name": "slomix-web-frontend",
+  "private": true,
+  "version": "1.0.8",
+  "description": "Tooling metadata for Slomix website frontend",
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "lint:js": "bash scripts/lint-js.sh",
+    "test:js": "bash scripts/lint-js.sh"
+  }
+}
