@@ -2794,22 +2794,38 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
 
 @router.get("/stats/session-leaderboard")
 async def get_session_leaderboard(
-    limit: int = 5, db: DatabaseAdapter = Depends(get_db)
+    limit: int = 5,
+    session_id: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
 ):
-    """Get the leaderboard for the last session"""
+    """Get the leaderboard for a specific session (or latest if not specified)"""
     data_service = SessionDataService(db, None)
     stats_service = SessionStatsAggregator(db)
 
-    latest_date = await data_service.get_latest_session_date()
-    if not latest_date:
-        return []
-
-    sessions, session_ids, session_ids_str, _ = await data_service.fetch_session_data(
-        latest_date
-    )
-
-    if not session_ids:
-        return []
+    if session_id is not None:
+        # Fetch rounds for the specified gaming_session_id
+        rounds = await db.fetch_all(
+            """
+            SELECT id FROM rounds
+            WHERE gaming_session_id = $1
+              AND round_number IN (1, 2)
+              AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)
+            """,
+            (session_id,),
+        )
+        if not rounds:
+            return []
+        session_ids = [r[0] for r in rounds]
+        session_ids_str = ", ".join("?" * len(session_ids))
+    else:
+        latest_date = await data_service.get_latest_session_date()
+        if not latest_date:
+            return []
+        sessions, session_ids, session_ids_str, _ = await data_service.fetch_session_data(
+            latest_date
+        )
+        if not session_ids:
+            return []
 
     leaderboard = await stats_service.get_dpm_leaderboard(
         session_ids, session_ids_str, limit
@@ -9050,4 +9066,393 @@ async def get_round_viz(
         "player_count": len(players),
         "players": players,
         "highlights": highlights,
+    }
+
+
+# ========================================
+# GEMINI SESSIONS API (P0 Redesign)
+# ========================================
+
+
+@router.get("/stats/sessions")
+async def get_stats_sessions(
+    limit: int = Query(default=20, le=100, ge=1),
+    offset: int = Query(default=0, ge=0),
+    search: str = "",
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Get list of gaming sessions for the Gemini frontend.
+    Supports search by map name or player name.
+    Returns richer data than /sessions endpoint: timing, scores, duration.
+    """
+    search_filter = ""
+    search_params: list = []
+    param_idx = 1  # PostgreSQL $1, $2, ...
+
+    if search.strip():
+        safe_search = escape_like_pattern(search.strip())
+        search_filter = f"""
+            AND (
+                sr.gaming_session_id IN (
+                    SELECT r2.gaming_session_id FROM rounds r2
+                    WHERE r2.gaming_session_id IS NOT NULL
+                      AND LOWER(r2.map_name) LIKE LOWER(${param_idx})
+                )
+                OR sr.gaming_session_id IN (
+                    SELECT r3.gaming_session_id FROM rounds r3
+                    INNER JOIN player_comprehensive_stats p2 ON p2.round_id = r3.id
+                    WHERE r3.gaming_session_id IS NOT NULL
+                      AND LOWER(p2.player_name) LIKE LOWER(${param_idx})
+                )
+            )
+        """
+        search_params.append(f"%{safe_search}%")
+        param_idx += 1
+
+    limit_param = f"${param_idx}"
+    offset_param = f"${param_idx + 1}"
+
+    query = f"""
+        WITH session_rounds AS (
+            SELECT
+                r.gaming_session_id,
+                MIN(r.round_date) as first_date,
+                MAX(r.round_date) as last_date,
+                MIN(r.round_time) as first_time,
+                MAX(r.round_time) as last_time,
+                COUNT(r.id) as round_count,
+                STRING_AGG(DISTINCT r.map_name, ', ' ORDER BY r.map_name) as maps_played,
+                COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 1 THEN 1 END) as allies_wins,
+                COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 2 THEN 1 END) as axis_wins
+            FROM rounds r
+            WHERE r.gaming_session_id IS NOT NULL
+              AND r.round_number IN (1, 2)
+              AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+            GROUP BY r.gaming_session_id
+        ),
+        session_players AS (
+            SELECT
+                r.gaming_session_id,
+                COUNT(DISTINCT p.player_guid) as player_count,
+                COALESCE(SUM(p.kills), 0) as total_kills,
+                COALESCE(SUM(p.deaths), 0) as total_deaths
+            FROM rounds r
+            INNER JOIN player_comprehensive_stats p ON p.round_id = r.id
+            WHERE r.gaming_session_id IS NOT NULL
+              AND r.round_number IN (1, 2)
+              AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+            GROUP BY r.gaming_session_id
+        ),
+        session_duration AS (
+            SELECT
+                r.gaming_session_id,
+                COALESCE(SUM(lrt.actual_duration_seconds), 0) as total_duration_seconds
+            FROM rounds r
+            LEFT JOIN lua_round_teams lrt ON lrt.round_id = r.id
+            WHERE r.gaming_session_id IS NOT NULL
+              AND r.round_number IN (1, 2)
+              AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+            GROUP BY r.gaming_session_id
+        )
+        SELECT
+            sr.gaming_session_id,
+            sr.first_date,
+            sr.last_date,
+            sr.first_time,
+            sr.last_time,
+            sr.round_count,
+            sr.maps_played,
+            sr.allies_wins,
+            sr.axis_wins,
+            COALESCE(sp.player_count, 0) as player_count,
+            COALESCE(sp.total_kills, 0) as total_kills,
+            COALESCE(sp.total_deaths, 0) as total_deaths,
+            COALESCE(sd.total_duration_seconds, 0) as duration_seconds
+        FROM session_rounds sr
+        LEFT JOIN session_players sp ON sr.gaming_session_id = sp.gaming_session_id
+        LEFT JOIN session_duration sd ON sr.gaming_session_id = sd.gaming_session_id
+        WHERE 1=1
+        {search_filter}
+        ORDER BY sr.gaming_session_id DESC
+        LIMIT {limit_param} OFFSET {offset_param}
+    """
+
+    params = tuple(search_params + [limit, offset])
+
+    try:
+        rows = await db.fetch_all(query, params)
+    except Exception as e:
+        logger.error(f"Error fetching stats sessions: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+    sessions = []
+    for row in rows:
+        session_id = row[0]
+        first_date = row[1]
+        last_date = row[2]
+        first_time = str(row[3]) if row[3] else ""
+        last_time = str(row[4]) if row[4] else ""
+        round_count = row[5]
+        maps_str = row[6]
+        allies_wins = row[7]
+        axis_wins = row[8]
+        player_count = row[9]
+        total_kills = row[10]
+        total_deaths = row[11]
+        duration_seconds = row[12]
+
+        # Format date
+        if isinstance(first_date, str):
+            dt = datetime.strptime(first_date[:10], "%Y-%m-%d")
+        else:
+            dt = datetime.combine(first_date, datetime.min.time())
+
+        # Format start/end times
+        start_time_str = ""
+        end_time_str = ""
+        if first_time and len(first_time) >= 6:
+            ft = first_time.replace(":", "")[:6]
+            start_time_str = f"{ft[:2]}:{ft[2:4]}"
+        if last_time and len(last_time) >= 6:
+            lt = last_time.replace(":", "")[:6]
+            end_time_str = f"{lt[:2]}:{lt[2:4]}"
+
+        # Time ago
+        now = datetime.now()
+        diff = now - dt
+        days = diff.days
+        if days == 0:
+            time_ago = "Today"
+        elif days == 1:
+            time_ago = "Yesterday"
+        elif days < 7:
+            time_ago = f"{days} days ago"
+        elif days < 30:
+            weeks = days // 7
+            time_ago = f"{weeks} week{'s' if weeks > 1 else ''} ago"
+        else:
+            time_ago = dt.strftime("%b %d, %Y")
+
+        maps_played = [m.strip() for m in maps_str.split(",")] if maps_str else []
+
+        sessions.append({
+            "session_id": session_id,
+            "date": str(first_date),
+            "formatted_date": dt.strftime("%A, %B %d, %Y"),
+            "time_ago": time_ago,
+            "start_time": start_time_str,
+            "end_time": end_time_str,
+            "round_count": round_count,
+            "player_count": player_count,
+            "maps_played": maps_played,
+            "total_kills": total_kills,
+            "total_deaths": total_deaths,
+            "allies_wins": allies_wins,
+            "axis_wins": axis_wins,
+            "duration_seconds": duration_seconds,
+        })
+
+    return sessions
+
+
+@router.get("/stats/session/{gaming_session_id}/detail")
+async def get_stats_session_detail(
+    gaming_session_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Get full session detail by gaming_session_id.
+    Returns matches (grouped R1+R2), per-player stats, round metadata.
+    """
+    # 1. Get all rounds for this session (R1 and R2 only, exclude R0 summaries)
+    rounds_query = """
+        SELECT r.id, r.map_name, r.round_number, r.winner_team,
+               r.round_date, r.round_time, r.actual_time
+        FROM rounds r
+        WHERE r.gaming_session_id = $1
+          AND r.round_number IN (1, 2)
+          AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+        ORDER BY r.round_date, CAST(REPLACE(r.round_time, ':', '') AS INTEGER)
+    """
+    round_rows = await db.fetch_all(rounds_query, (gaming_session_id,))
+
+    if not round_rows:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    round_ids = [r[0] for r in round_rows]
+    placeholders = ", ".join(f"${i+1}" for i in range(len(round_ids)))
+
+    # 2. Get lua_round_teams data for scores and duration
+    lua_query = f"""
+        SELECT round_id, round_number, allies_score, axis_score,
+               actual_duration_seconds, winner_team, map_name
+        FROM lua_round_teams
+        WHERE round_id IN ({placeholders})
+    """
+    lua_rows = await db.fetch_all(lua_query, tuple(round_ids))
+    lua_by_round = {}
+    for lr in lua_rows:
+        lua_by_round[lr[0]] = {
+            "round_number": lr[1],
+            "allies_score": lr[2],
+            "axis_score": lr[3],
+            "duration_seconds": lr[4],
+            "winner_team": lr[5],
+        }
+
+    # 3. Build matches (group rounds by map in order of play)
+    matches = []
+    current_map = None
+    current_rounds = []
+
+    for rr in round_rows:
+        round_id = rr[0]
+        map_name = _normalize_map_name(rr[1])
+        round_number = rr[2]
+        winner_team = rr[3]
+        round_date = str(rr[4]) if rr[4] else None
+        round_time = str(rr[5]) if rr[5] else None
+
+        lua = lua_by_round.get(round_id, {})
+        duration = lua.get("duration_seconds", rr[6])
+
+        round_obj = {
+            "round_id": round_id,
+            "round_number": round_number,
+            "map_name": map_name,
+            "winner_team": winner_team,
+            "allies_score": lua.get("allies_score"),
+            "axis_score": lua.get("axis_score"),
+            "duration_seconds": duration,
+            "round_date": round_date,
+            "round_time": round_time,
+        }
+
+        # Group consecutive rounds on same map into a match
+        if current_map == map_name:
+            current_rounds.append(round_obj)
+        else:
+            if current_rounds:
+                matches.append({
+                    "map_name": current_map,
+                    "rounds": current_rounds,
+                })
+            current_map = map_name
+            current_rounds = [round_obj]
+
+    if current_rounds:
+        matches.append({
+            "map_name": current_map,
+            "rounds": current_rounds,
+        })
+
+    # 4. Get per-player stats aggregated across session
+    player_query = f"""
+        SELECT
+            p.player_guid,
+            MAX(p.player_name) as player_name,
+            SUM(p.kills) as kills,
+            SUM(p.deaths) as deaths,
+            SUM(p.damage_given) as damage_given,
+            SUM(p.damage_received) as damage_received,
+            CASE
+                WHEN SUM(p.time_played_seconds) > 0
+                THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                ELSE 0
+            END as dpm,
+            CASE
+                WHEN SUM(p.deaths) > 0
+                THEN ROUND(SUM(p.kills)::numeric / SUM(p.deaths), 2)
+                ELSE SUM(p.kills)::numeric
+            END as kd,
+            SUM(p.headshot_kills) as headshot_kills,
+            SUM(p.kills) as total_kills_for_hs,
+            SUM(p.gibs) as gibs,
+            SUM(p.self_kills) as self_kills,
+            SUM(p.revives_given) as revives_given,
+            SUM(p.times_revived) as times_revived,
+            SUM(p.time_played_seconds) as time_played_seconds,
+            COALESCE(SUM(w.hits), 0) as total_hits,
+            COALESCE(SUM(w.shots), 0) as total_shots
+        FROM player_comprehensive_stats p
+        LEFT JOIN (
+            SELECT round_id, player_guid,
+                SUM(hits) as hits, SUM(shots) as shots
+            FROM weapon_comprehensive_stats
+            WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE',
+                                      'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
+            GROUP BY round_id, player_guid
+        ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
+        WHERE p.round_id IN ({placeholders})
+        GROUP BY p.player_guid
+        ORDER BY dpm DESC
+    """
+    player_rows = await db.fetch_all(player_query, tuple(round_ids))
+
+    players = []
+    for pr in player_rows:
+        kills = pr[2] or 0
+        deaths = pr[3] or 0
+        damage_given = pr[4] or 0
+        damage_received = pr[5] or 0
+        dpm = round(float(pr[6]), 1) if pr[6] else 0
+        kd = float(pr[7]) if pr[7] else 0
+        headshot_kills = pr[8] or 0
+        total_kills_for_hs = pr[9] or 0
+        gibs = pr[10] or 0
+        self_kills = pr[11] or 0
+        revives_given = pr[12] or 0
+        times_revived = pr[13] or 0
+        time_played_seconds = pr[14] or 0
+        total_hits = pr[15] or 0
+        total_shots = pr[16] or 0
+
+        hs_pct = round((headshot_kills / total_kills_for_hs * 100), 1) if total_kills_for_hs > 0 else 0
+        accuracy = round((total_hits / total_shots * 100), 1) if total_shots > 0 else 0
+        efficiency = round((kills / (kills + deaths) * 100), 1) if (kills + deaths) > 0 else 0
+
+        players.append({
+            "player_guid": pr[0],
+            "player_name": pr[1],
+            "kills": kills,
+            "deaths": deaths,
+            "damage_given": damage_given,
+            "damage_received": damage_received,
+            "dpm": dpm,
+            "kd": kd,
+            "efficiency": efficiency,
+            "headshot_pct": hs_pct,
+            "gibs": gibs,
+            "self_kills": self_kills,
+            "revives_given": revives_given,
+            "times_revived": times_revived,
+            "accuracy": accuracy,
+            "time_played_seconds": time_played_seconds,
+        })
+
+    # 5. Scoring — reuse StopwatchScoringService for team-aware map scoring
+    first_date = round_rows[0][4] if round_rows else None
+    scoring_payload = {"available": False}
+    try:
+        config = load_config()
+        db_path = config.sqlite_db_path if config.database_type == "sqlite" else None
+        service = SessionDataService(db, db_path)
+        scoring_service = StopwatchScoringService(db)
+        session_date = str(first_date) if first_date else None
+        if session_date:
+            scoring_payload, _, _ = await build_session_scoring(
+                session_date, round_ids, service, scoring_service
+            )
+    except Exception as e:
+        logger.warning(f"Scoring unavailable for session {gaming_session_id}: {e}")
+
+    return {
+        "session_id": gaming_session_id,
+        "date": str(first_date) if first_date else None,
+        "player_count": len(players),
+        "round_count": len(round_ids),
+        "matches": matches,
+        "players": players,
+        "scoring": scoring_payload,
     }
