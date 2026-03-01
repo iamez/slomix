@@ -715,6 +715,13 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
 
     async def _ensure_multichannel_tables(self):
         await self.notifier.ensure_tables()
+        # Fast path: if last table exists, all availability tables are present
+        row = await self.bot.db_adapter.fetch_one(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1 LIMIT 1",
+            ("subscription_preferences",),
+        )
+        if row:
+            return
         await self.bot.db_adapter.execute(
             """
             CREATE TABLE IF NOT EXISTS availability_entries (
