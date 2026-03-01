@@ -1,0 +1,923 @@
+"""
+Round Publisher Service - Manages Discord auto-posting of round statistics
+
+This service handles:
+- Automatic posting of round statistics to Discord after file processing
+- Comprehensive player stats from database (all fields)
+- Map completion detection and aggregate summaries
+- Rich Discord embeds with detailed statistics
+
+Extracted from ultimate_bot.py as part of Week 9-10 refactoring.
+"""
+
+import discord
+from datetime import datetime
+import logging
+
+from bot.core.correlation_context import set_correlation_id, get_correlation_id
+
+logger = logging.getLogger('RoundPublisherService')
+
+
+class RoundPublisherService:
+    """
+    Manages Discord posting of round and map statistics.
+
+    Posting Flow:
+    1. Round completes → File processed → publish_round_stats() called
+    2. Fetch comprehensive stats from database (18+ fields per player)
+    3. Build rich Discord embed with ALL players ranked by kills
+    4. Post to production channel
+    5. Check if map complete → Post aggregate map summary if last round
+    6. Post timing debug comparison if enabled
+    """
+
+    @staticmethod
+    def _derive_side_marker(axis_rows: int, allies_rows: int):
+        """
+        Return display marker plus ambiguity flag for aggregated player rows.
+        """
+        axis_count = int(axis_rows or 0)
+        allies_count = int(allies_rows or 0)
+
+        if axis_count > 0 and allies_count > 0:
+            return "[MIXED]", True
+        if axis_count > 0:
+            return "[AXIS]", False
+        if allies_count > 0:
+            return "[ALLIES]", False
+        return "[UNK]", True
+
+    @staticmethod
+    def _chunk_embed_lines(lines, separator="\n\n", max_chars=1024):
+        """
+        Chunk preformatted lines into Discord-safe field values.
+        """
+        if not lines:
+            return []
+
+        chunks = []
+        current = []
+
+        for line in lines:
+            safe_line = line
+            if len(safe_line) > max_chars:
+                safe_line = safe_line[: max_chars - 3] + "..."
+
+            if not current:
+                current = [safe_line]
+                continue
+
+            candidate = separator.join(current + [safe_line])
+            if len(candidate) <= max_chars:
+                current.append(safe_line)
+            else:
+                chunks.append(separator.join(current))
+                current = [safe_line]
+
+        if current:
+            chunks.append(separator.join(current))
+
+        return chunks
+
+    @staticmethod
+    def _parse_time_to_seconds(value):
+        """Parse MM:SS / HH:MM:SS / numeric values into seconds."""
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text or text.lower() == "unknown":
+            return None
+        try:
+            parts = text.split(":")
+            if len(parts) == 2:
+                return int(parts[0]) * 60 + int(parts[1])
+            if len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            if "." in text:
+                return int(float(text) * 60)
+            return int(float(text))
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _format_seconds(seconds: int) -> str:
+        """Format integer seconds as MM:SS."""
+        total = max(0, int(seconds or 0))
+        return f"{total // 60}:{total % 60:02d}"
+
+    @staticmethod
+    def _format_delta_seconds(delta_seconds: int) -> str:
+        """Format signed delta in MM:SS."""
+        total = abs(int(delta_seconds or 0))
+        if total == 0:
+            return "0:00"
+        sign = "+" if delta_seconds > 0 else "-"
+        return f"{sign}{total // 60}:{total % 60:02d}"
+
+    async def _fetch_lua_elapsed_seconds(self, round_id: int):
+        """
+        Fetch elapsed timing from lua_round_teams.
+
+        Returns:
+            tuple[int|None, str]
+            - elapsed seconds or None
+            - source label (round_id_link | match_round_fallback | "")
+        """
+        try:
+            direct_query = """
+                SELECT actual_duration_seconds
+                FROM lua_round_teams
+                WHERE round_id = ?
+                  AND actual_duration_seconds IS NOT NULL
+                ORDER BY id DESC
+                LIMIT 1
+            """
+            direct_row = await self.db_adapter.fetch_one(direct_query, (round_id,))
+            if direct_row and direct_row[0] is not None:
+                try:
+                    direct_seconds = int(direct_row[0])
+                except (TypeError, ValueError):
+                    direct_seconds = None
+                if direct_seconds and direct_seconds > 0:
+                    return direct_seconds, "round_id_link"
+        except Exception as e:
+            logger.debug("Lua elapsed lookup by round_id failed for round %s: %s", round_id, e)
+
+        try:
+            fallback_query = """
+                SELECT l.actual_duration_seconds
+                FROM lua_round_teams l
+                JOIN rounds r ON r.id = ?
+                WHERE l.match_id = r.match_id
+                  AND l.round_number = r.round_number
+                  AND LOWER(COALESCE(l.map_name, '')) = LOWER(COALESCE(r.map_name, ''))
+                  AND l.actual_duration_seconds IS NOT NULL
+                ORDER BY l.id DESC
+                LIMIT 1
+            """
+            fallback_row = await self.db_adapter.fetch_one(fallback_query, (round_id,))
+            if fallback_row and fallback_row[0] is not None:
+                try:
+                    fallback_seconds = int(fallback_row[0])
+                except (TypeError, ValueError):
+                    fallback_seconds = None
+                if fallback_seconds and fallback_seconds > 0:
+                    return fallback_seconds, "match_round_fallback"
+        except Exception as e:
+            logger.debug("Lua elapsed fallback lookup failed for round %s: %s", round_id, e)
+
+        return None, ""
+
+    def __init__(self, bot, config, db_adapter, timing_debug_service=None, timing_comparison_service=None):
+        """
+        Initialize round publisher service.
+
+        Args:
+            bot: Discord bot instance (for channel access)
+            config: BotConfig instance (for production_channel_id)
+            db_adapter: DatabaseAdapter instance (for database queries)
+            timing_debug_service: Optional TimingDebugService for timing comparisons
+            timing_comparison_service: Optional TimingComparisonService for per-player timing analysis
+        """
+        self.bot = bot
+        self.config = config
+        self.db_adapter = db_adapter
+        self.timing_debug_service = timing_debug_service
+        self.timing_comparison_service = timing_comparison_service
+
+        logger.info("✅ RoundPublisherService initialized")
+
+    async def publish_round_stats(self, filename: str, result: dict):
+        """
+        Auto-post round statistics to Discord after processing.
+
+        Called automatically after successful file processing.
+        Shows ALL players with detailed stats from database.
+
+        Args:
+            filename: Stats file name (for footer)
+            result: Processing result dict containing:
+                - round_id: Database round ID
+                - stats_data: Parser output (used for fallback values only)
+        """
+        import uuid
+        set_correlation_id(uuid.uuid4().hex[:8])
+        try:
+            logger.debug(f"📤 Preparing Discord post for {filename} [cid={get_correlation_id()}]")
+
+            # Get the production channel
+            if not self.config.production_channel_id:
+                logger.warning("⚠️ PRODUCTION_CHANNEL_ID not configured, skipping Discord post")
+                return
+
+            logger.debug(f"📡 Looking for production channel ID: {self.config.production_channel_id}")
+            channel = self.bot.get_channel(self.config.production_channel_id)
+            if not channel:
+                logger.error(f"❌ Production channel {self.config.production_channel_id} not found")
+                logger.error(f"   Available channels: {[c.id for c in self.bot.get_all_channels()][:10]}")
+                return
+
+            logger.debug(f"✅ Found channel: {channel.name}")
+
+            # Get round_id from result
+            round_id = result.get('round_id')
+            stats_data = result.get('stats_data', {})
+
+            if not round_id:
+                logger.warning(f"⚠️ No round_id for {filename}, skipping post")
+                return
+
+            # Get basic round info from parser (for round outcome/winner)
+            round_num = stats_data.get('round_num', stats_data.get('round', 1))
+            map_name = stats_data.get('map_name', stats_data.get('map', 'Unknown'))
+            winner_team = stats_data.get('winner_team', 'Unknown')
+            round_outcome = stats_data.get('round_outcome', '')
+
+            # 🔥 FETCH ALL PLAYER DATA FROM DATABASE (not from parser!)
+            # This gives us access to ALL 54 fields, not just the limited parser output
+            logger.debug(f"📊 Fetching full player data from database for session {round_id}, round {round_num}...")
+
+            # Get round info (time limit, actual time)
+            round_query = """
+                SELECT time_limit, actual_time, winner_team, round_outcome
+                FROM rounds
+                WHERE id = ?
+            """
+            round_info = await self.db_adapter.fetch_one(round_query, (round_id,))
+
+            time_limit = round_info[0] if round_info else 'Unknown'
+            actual_time = round_info[1] if round_info else 'Unknown'
+            db_winner_team = round_info[2] if round_info else winner_team
+            db_round_outcome = round_info[3] if round_info else round_outcome
+            dual_timing_enabled = bool(getattr(self.config, "show_timing_dual", False))
+
+            # If Lua override metadata is available, prefer corrected playtime for display
+            override_metadata = result.get('override_metadata') or {}
+            lua_duration = (
+                override_metadata.get('actual_duration_seconds')
+                or override_metadata.get('lua_playtime_seconds')
+                or 0
+            )
+            elapsed_seconds = None
+            elapsed_source = ""
+            try:
+                if lua_duration:
+                    elapsed_seconds = int(lua_duration)
+                    if elapsed_seconds <= 0:
+                        elapsed_seconds = None
+            except (TypeError, ValueError):
+                elapsed_seconds = None
+            if elapsed_seconds:
+                elapsed_source = "override_metadata"
+
+            if elapsed_seconds is None:
+                elapsed_seconds, elapsed_source = await self._fetch_lua_elapsed_seconds(round_id)
+
+            corrected_time = None
+            if elapsed_seconds and elapsed_seconds > 0:
+                mins = elapsed_seconds // 60
+                secs = elapsed_seconds % 60
+                corrected_time = f"{mins}:{secs:02d}"
+                if not dual_timing_enabled:
+                    actual_time = corrected_time
+
+            # Sanity cap: orphan R2 files may have cumulative server time
+            # (e.g., 79:20 for a 12:00 map). Cap to time_limit for display.
+            if not corrected_time and actual_time and time_limit:
+                if actual_time != 'Unknown' and time_limit != 'Unknown':
+                    try:
+                        actual_sec = self._parse_time_to_seconds(actual_time) or 0
+                        limit_sec = self._parse_time_to_seconds(time_limit) or 0
+                        if limit_sec > 0 and actual_sec > limit_sec:
+                            raw_time = actual_time
+                            actual_time = time_limit
+                            logger.warning(
+                                f"[TIMING] Capped display actual_time to {time_limit} "
+                                f"(raw was {raw_time}, exceeded time_limit)"
+                            )
+                    except (ValueError, TypeError, IndexError):
+                        pass
+
+            # Get player stats (expanded to include multikills and time denied)
+            players_query = """
+                SELECT
+                    player_name, team, kills, deaths, damage_given, damage_received,
+                    team_damage_given, team_damage_received, gibs, headshots,
+                    accuracy, revives_given, times_revived, time_dead_minutes,
+                    efficiency, kd_ratio, time_played_minutes, dpm,
+                    double_kills, triple_kills, quad_kills, multi_kills, mega_kills,
+                    denied_playtime
+                FROM player_comprehensive_stats
+                WHERE round_id = ? AND round_number = ?
+                ORDER BY kills DESC
+            """
+            rows = await self.db_adapter.fetch_all(players_query, (round_id, round_num))
+
+            # Convert to dict format
+            players = []
+            for row in rows:
+                    players.append({
+                        'name': row[0],
+                        'team': row[1],
+                        'kills': row[2],
+                        'deaths': row[3],
+                        'damage_given': row[4],
+                        'damage_received': row[5],
+                        'team_damage_given': row[6],
+                        'team_damage_received': row[7],
+                        'gibs': row[8],
+                        'headshots': row[9],
+                        'accuracy': row[10],
+                        'revives': row[11],
+                        'times_revived': row[12],
+                        'time_dead': row[13],
+                        'efficiency': row[14],
+                        'kd_ratio': row[15],
+                        'time_played': row[16],
+                        'dpm': row[17],
+                        'double_kills': row[18] or 0,
+                        'triple_kills': row[19] or 0,
+                        'quad_kills': row[20] or 0,
+                        'multi_kills': row[21] or 0,
+                        'mega_kills': row[22] or 0,
+                        'time_denied': row[23] or 0
+                    })
+
+            logger.info(f"📊 Fetched {len(players)} players with FULL stats from database")
+
+            logger.info(f"📋 Creating embed: Round {round_num}, Map {map_name}, {len(players)} players")
+
+            # Determine round type
+            round_type = "Round 1" if round_num == 1 else "Round 2"
+
+            # Build title - simple and clean
+            title = f"🎮 {round_type} Complete - {map_name}"
+
+            description_parts = []
+
+            # Add timing information.
+            if dual_timing_enabled:
+                stopwatch_seconds = self._parse_time_to_seconds(actual_time)
+                stopwatch_display = actual_time if actual_time and actual_time != 'Unknown' else "N/A"
+                elapsed_display = self._format_seconds(elapsed_seconds) if elapsed_seconds else "N/A"
+
+                if stopwatch_seconds is not None and elapsed_seconds is not None:
+                    delta_display = self._format_delta_seconds(elapsed_seconds - stopwatch_seconds)
+                    timing_line = (
+                        f"⏱️ **Timing:** SW `{stopwatch_display}` | EL `{elapsed_display}` | Δ `{delta_display}`"
+                    )
+                elif stopwatch_seconds is not None:
+                    timing_line = (
+                        f"⏱️ **Timing:** SW `{stopwatch_display}` | EL `N/A` (fallback: no-lua-link)"
+                    )
+                elif elapsed_seconds is not None:
+                    timing_line = (
+                        f"⏱️ **Timing:** SW `N/A` | EL `{elapsed_display}` (fallback: no-stopwatch)"
+                    )
+                else:
+                    timing_line = "⏱️ **Timing:** SW `N/A` | EL `N/A` (fallback: no-timing-sources)"
+
+                if time_limit and time_limit != 'Unknown':
+                    timing_line += f" | Limit `{time_limit}`"
+                if elapsed_source:
+                    timing_line += f" • src:{elapsed_source}"
+
+                description_parts.append(timing_line)
+            else:
+                # Legacy single-source display path.
+                if time_limit and actual_time and time_limit != 'Unknown' and actual_time != 'Unknown':
+                    time_note = " (Lua)" if corrected_time else ""
+                    description_parts.append(f"⏱️ **Time:** {actual_time} / {time_limit}{time_note}")
+                elif actual_time and actual_time != 'Unknown':
+                    time_note = " (Lua)" if corrected_time else ""
+                    description_parts.append(f"⏱️ **Duration:** {actual_time}{time_note}")
+
+            # Add round outcome - use DB values if available
+            outcome_to_show = db_round_outcome if db_round_outcome else round_outcome
+            winner_to_show = db_winner_team if db_winner_team and str(db_winner_team) != 'Unknown' else winner_team
+
+            # Build outcome line
+            outcome_line = ""
+            if winner_to_show and str(winner_to_show) != 'Unknown':
+                outcome_line = f"🏆 **Winner:** {winner_to_show}"
+            if outcome_to_show:
+                if outcome_line:
+                    outcome_line += f" ({outcome_to_show})"
+                else:
+                    outcome_line = f"🏆 **Outcome:** {outcome_to_show}"
+
+            if outcome_line:
+                description_parts.append(outcome_line)
+
+            score_confidence = stats_data.get("score_confidence")
+            if score_confidence:
+                description_parts.append(f"🧭 **Score Confidence:** {score_confidence}")
+
+            stopwatch_state = stats_data.get("round_stopwatch_state")
+            if stopwatch_state:
+                description_parts.append(f"⏱️ **Stopwatch State:** {stopwatch_state}")
+
+            # Determine embed color based on round type
+            embed_color = discord.Color.blue() if round_num == 1 else discord.Color.red()
+
+            # Create main embed
+            embed = discord.Embed(
+                title=title,
+                description="\n".join(description_parts),
+                color=embed_color,
+                timestamp=datetime.now()
+            )
+
+            # Rank emoji/number helper
+            def get_rank_display(rank):
+                """Get rank emoji for top 3, number emojis for 4+"""
+                if rank == 1:
+                    return "🥇"
+                elif rank == 2:
+                    return "🥈"
+                elif rank == 3:
+                    return "🥉"
+                else:
+                    # Use number emojis for ranks 4+ (e.g., 4 → 4️⃣, 10 → 1️⃣0️⃣)
+                    rank_str = str(rank)
+                    emoji_digits = {'0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+                                   '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'}
+                    return ''.join(emoji_digits[d] for d in rank_str)
+
+            # Split each team into chunks for Discord field limits (1024 chars per field)
+            def normalize_team_value(raw_team):
+                try:
+                    parsed = int(raw_team)
+                except (TypeError, ValueError):
+                    return 0
+                return parsed if parsed in (1, 2) else 0
+
+            team_sections = [
+                ("⚔️ Axis", 1),
+                ("🛡️ Allies", 2),
+                ("❓ Unknown Side", 0),
+            ]
+
+            for section_name, section_team in team_sections:
+                team_players = [
+                    p for p in players
+                    if normalize_team_value(p.get('team')) == section_team
+                ]
+                if not team_players:
+                    continue
+
+                team_sorted = sorted(team_players, key=lambda p: p.get('kills', 0), reverse=True)
+                player_blocks = []
+                for rank, player in enumerate(team_sorted, 1):
+                    rank_display = get_rank_display(rank)
+
+                    name = player.get('name', 'Unknown')[:16]
+                    kills = player.get('kills', 0)
+                    deaths = player.get('deaths', 0)
+                    gibs = player.get('gibs', 0)
+                    kd_ratio = player.get('kd_ratio', 0) or 0
+                    dpm = player.get('dpm', 0) or 0
+                    dmg = player.get('damage_given', 0) or 0
+                    dmg_recv = player.get('damage_received', 0) or 0
+                    acc = player.get('accuracy', 0) or 0
+                    hs = player.get('headshots', 0) or 0
+                    revives = player.get('revives', 0) or 0
+                    got_revived = player.get('times_revived', 0) or 0
+                    team_dmg = player.get('team_damage_given', 0) or 0
+                    time_dead = player.get('time_dead', 0) or 0
+                    time_denied = player.get('time_denied', 0) or 0
+                    time_played = player.get('time_played', 0) or 0
+
+                    # Multikills
+                    double_kills = player.get('double_kills', 0) or 0
+                    triple_kills = player.get('triple_kills', 0) or 0
+                    quad_kills = player.get('quad_kills', 0) or 0
+                    multi_kills = player.get('multi_kills', 0) or 0
+                    mega_kills = player.get('mega_kills', 0) or 0
+
+                    # Format damage (K if over 1000)
+                    if dmg >= 1000:
+                        dmg_str = f"{dmg/1000:.1f}K"
+                    else:
+                        dmg_str = f"{int(dmg)}"
+
+                    if dmg_recv >= 1000:
+                        dmg_recv_str = f"{dmg_recv/1000:.1f}K"
+                    else:
+                        dmg_recv_str = f"{int(dmg_recv)}"
+
+                    # Format times as M:SS
+                    dead_min = int(time_dead)
+                    dead_sec = int((time_dead % 1) * 60)
+                    time_dead_str = f"{dead_min}:{dead_sec:02d}"
+
+                    denied_min = int(time_denied // 60)
+                    denied_sec = int(time_denied % 60)
+                    time_denied_str = f"{denied_min}:{denied_sec:02d}"
+
+                    played_min = int(time_played)
+                    played_sec = int((time_played % 1) * 60)
+                    time_played_str = f"{played_min}:{played_sec:02d}"
+
+                    # Calculate time percentages for debugging/analysis
+                    # time_dead and time_played are in minutes, time_denied is in seconds
+                    if time_played > 0:
+                        dead_pct = (time_dead / time_played) * 100
+                        denied_pct = ((time_denied / 60) / time_played) * 100
+                    else:
+                        dead_pct = denied_pct = 0
+
+                    # ═══════════════════════════════════════════════════════════════════
+                    # TIME DEBUG: Validate time values at posting time
+                    # ═══════════════════════════════════════════════════════════════════
+                    time_alive = time_played - time_dead
+                    if time_dead > time_played and time_played > 0:
+                        logger.warning(
+                            f"[TIME POST] ⚠️ {name}: time_dead ({time_dead:.2f}) > "
+                            f"time_played ({time_played:.2f})!"
+                        )
+                    logger.debug(
+                        f"[TIME POST] {name}: played={time_played:.1f}m, "
+                        f"dead={time_dead:.1f}m ({dead_pct:.0f}%), alive={time_alive:.1f}m"
+                    )
+
+                    # Build multikills string (only if any)
+                    multikills_parts = []
+                    if double_kills > 0:
+                        multikills_parts.append(f"{double_kills}x2")
+                    if triple_kills > 0:
+                        multikills_parts.append(f"{triple_kills}x3")
+                    if quad_kills > 0:
+                        multikills_parts.append(f"{quad_kills}x4")
+                    if multi_kills > 0:
+                        multikills_parts.append(f"{multi_kills}x5")
+                    if mega_kills > 0:
+                        multikills_parts.append(f"{mega_kills}x6")
+                    multikills_str = " ".join(multikills_parts)
+
+                    # Line 1: Rank + Name
+                    line1 = f"{rank_display} **{name}**"
+
+                    # Line 2: All combat stats (compact format like session_embed)
+                    # K/D/G (ratio) • DPM • DMG↑/↓ • ACC • HS • Rev±
+                    # Gibs TmDmg • ⏱Played 💀Dead ⏳Denied • Multikills
+                    line2 = (
+                        f"{kills}K/{deaths}D/{gibs}G ({kd_ratio:.2f}) "
+                        f"DPM:{int(dpm)} {dmg_str}⬆/{dmg_recv_str}⬇ "
+                        f"ACC:{acc:.1f}% HS:{hs} Rev:{revives}↑/{got_revived}↓"
+                    )
+                    line3 = (
+                        f"TmDmg:{int(team_dmg)} "
+                        f"⏱{time_played_str} 💀{time_dead_str}({dead_pct:.0f}%) ⏳{time_denied_str}({denied_pct:.0f}%)"
+                    )
+                    if multikills_str:
+                        line3 += f" 🔥{multikills_str}"
+
+                    # Combine: Name on line 1, stats on line 2+3 with indent
+                    player_blocks.append(f"{line1}\n↳ {line2}\n↳ {line3}")
+
+                field_values = self._chunk_embed_lines(player_blocks, separator="\n\n", max_chars=1024)
+                for idx, field_value in enumerate(field_values):
+                    field_name = section_name if idx == 0 else f"{section_name} (cont.)"
+                    embed.add_field(
+                        name=field_name,
+                        value=field_value if field_value else 'No stats',
+                        inline=False
+                    )
+
+            # Calculate round totals (comprehensive)
+            total_kills = sum(p.get('kills', 0) for p in players)
+            total_deaths = sum(p.get('deaths', 0) for p in players)
+            total_dmg = sum(p.get('damage_given', 0) for p in players)
+            total_hs = sum(p.get('headshots', 0) for p in players)
+            total_team_dmg = sum(p.get('team_damage_given', 0) for p in players)
+            avg_acc = sum(p.get('accuracy', 0) for p in players) / len(players) if players else 0
+            avg_dpm = sum(p.get('dpm', 0) for p in players) / len(players) if players else 0
+            avg_time_dead = sum(p.get('time_dead', 0) for p in players) / len(players) if players else 0
+
+            embed.add_field(
+                name="📊 Round Summary",
+                value=(
+                    f"**Totals:** Kills:`{total_kills}` Deaths:`{total_deaths}` HS:`{total_hs}` "
+                    f"Damage:`{int(total_dmg):,}` TeamDmg:`{int(total_team_dmg):,}`\n"
+                    f"**Averages:** Accuracy:`{avg_acc:.1f}%` DPM:`{int(avg_dpm)}` DeadTime:`{avg_time_dead:.1f}m`"
+                ),
+                inline=False
+            )
+
+            embed.set_footer(text=f"Round ID: {round_id} | {filename}")
+
+            # Post to channel
+            logger.info(f"📤 Sending detailed stats embed to #{channel.name}...")
+            await channel.send(embed=embed)
+            logger.info(f"✅ Successfully posted stats for {len(players)} players to Discord!")
+
+            # 🗺️ Check if this was the last round for the map → post map summary
+            await self._check_and_post_map_completion(round_id, map_name, round_num, channel)
+
+            # ⏱️ Post timing debug comparison (stats file vs Lua webhook)
+            if self.timing_debug_service and self.timing_debug_service.enabled:
+                await self.timing_debug_service.post_round_timing_comparison(
+                    round_id=round_id
+                )
+
+            # 👥 Post per-player timing comparison (dev channel)
+            if (self.timing_comparison_service and
+                self.config.timing_comparison_enabled and
+                self.config.dev_timing_channel_id):
+                await self.timing_comparison_service.post_timing_comparison(
+                    round_id=round_id,
+                    dev_channel_id=self.config.dev_timing_channel_id
+                )
+
+            logger.info("=" * 60)
+
+        except Exception as e:
+            logger.error(f"❌ Error posting round stats to Discord: {e}", exc_info=True)
+
+    async def _check_and_post_map_completion(self, round_id: int, map_name: str, current_round: int, channel):
+        """
+        Check if we just finished the last round of a map.
+        If so, post aggregate map statistics.
+
+        Args:
+            round_id: Database round/session ID
+            map_name: Map name
+            current_round: Current round number (1 or 2)
+            channel: Discord channel to post to
+        """
+        try:
+            # Check map progress in the same gaming session scope.
+            query = """
+                SELECT MAX(round_number) as max_round, COUNT(DISTINCT round_number) as round_count
+                FROM rounds
+                WHERE gaming_session_id = (
+                    SELECT gaming_session_id FROM rounds WHERE id = ?
+                )
+                  AND map_name = ?
+                  AND round_number IN (1, 2)
+            """
+            row = await self.db_adapter.fetch_one(query, (round_id, map_name))
+
+            if not row:
+                return
+
+            max_round, round_count = row
+
+            logger.debug(f"🗺️ Map check: {map_name} - current round {current_round}, max in DB: {max_round}, total rounds: {round_count}")
+
+            # If current round matches max round in DB, this is the last round for the map
+            if current_round == max_round and round_count >= 2:
+                logger.info(f"🏁 Map complete! {map_name} finished after {round_count} rounds. Posting map summary...")
+                await self._post_map_summary(round_id, map_name, channel)
+            else:
+                logger.debug(f"⏳ Map {map_name} not complete yet (round {current_round}/{max_round})")
+
+        except Exception as e:
+            logger.error(f"❌ Error checking map completion: {e}", exc_info=True)
+
+    async def _post_map_summary(self, round_id: int, map_name: str, channel):
+        """
+        Post aggregate statistics for all rounds of a completed map.
+
+        Args:
+            round_id: Database round/session ID
+            map_name: Map name
+            channel: Discord channel to post to
+        """
+        try:
+            logger.info(f"📊 Generating map summary for {map_name}...")
+
+            session_query = "SELECT gaming_session_id FROM rounds WHERE id = ?"
+            session_row = await self.db_adapter.fetch_one(session_query, (round_id,))
+            if not session_row:
+                logger.warning(f"⚠️ Could not resolve gaming_session_id for round_id={round_id}")
+                return
+            gaming_session_id = session_row[0]
+
+            # Get map-level aggregate stats using all R1/R2 rounds in this map/session.
+            map_query = """
+                SELECT
+                    COUNT(DISTINCT round_number) as total_rounds,
+                    COUNT(DISTINCT player_guid) as unique_players,
+                    SUM(kills) as total_kills,
+                    SUM(deaths) as total_deaths,
+                    SUM(damage_given) as total_damage,
+                    SUM(headshot_kills) as total_headshots,
+                    AVG(accuracy) as avg_accuracy
+                FROM player_comprehensive_stats
+                WHERE round_id IN (
+                    SELECT id
+                    FROM rounds
+                    WHERE gaming_session_id = ?
+                      AND map_name = ?
+                      AND round_number IN (1, 2)
+                )
+            """
+            map_stats = await self.db_adapter.fetch_one(map_query, (gaming_session_id, map_name))
+
+            if not map_stats:
+                logger.warning(f"⚠️ No map stats found for {map_name}")
+                return
+
+            total_rounds, unique_players, total_kills, total_deaths, total_damage, total_headshots, avg_accuracy = map_stats
+
+            # Get top 5 players across all rounds on this map/session.
+            top_players_query = """
+                SELECT
+                    COALESCE(MAX(player_name), player_guid) as player_name,
+                    SUM(kills) as total_kills,
+                    SUM(deaths) as total_deaths,
+                    SUM(damage_given) as total_damage,
+                    AVG(accuracy) as avg_accuracy,
+                    SUM(CASE WHEN team = 1 THEN 1 ELSE 0 END) as axis_rows,
+                    SUM(CASE WHEN team = 2 THEN 1 ELSE 0 END) as allies_rows
+                FROM player_comprehensive_stats
+                WHERE round_id IN (
+                    SELECT id
+                    FROM rounds
+                    WHERE gaming_session_id = ?
+                      AND map_name = ?
+                      AND round_number IN (1, 2)
+                )
+                GROUP BY player_guid
+                ORDER BY total_kills DESC
+                LIMIT 5
+            """
+            top_players = await self.db_adapter.fetch_all(top_players_query, (gaming_session_id, map_name))
+
+            # Create embed
+            embed = discord.Embed(
+                title=f"🗺️ {map_name.upper()} - Map Complete!",
+                description=f"Aggregate stats from **{total_rounds} rounds**",
+                color=discord.Color.gold(),
+                timestamp=datetime.now()
+            )
+
+            # Map overview
+            kd_ratio = total_kills / total_deaths if total_deaths > 0 else total_kills
+            embed.add_field(
+                    name="📊 Map Overview",
+                    value=(
+                        f"**Rounds Played:** {total_rounds}\n"
+                        f"**Unique Players:** {unique_players}\n"
+                        f"**Total Kills:** {total_kills:,}\n"
+                        f"**Total Deaths:** {total_deaths:,}\n"
+                        f"**K/D Ratio:** {kd_ratio:.2f}\n"
+                        f"**Total Damage:** {int(total_damage):,}\n"
+                        f"**Total Headshots:** {total_headshots}\n"
+                        f"**Avg Accuracy:** {avg_accuracy:.1f}%"
+                    ),
+                    inline=False
+            )
+
+            # Top performers
+            if top_players:
+                top_lines = []
+                ambiguous_side_count = 0
+                for i, (name, kills, deaths, damage, acc, axis_rows, allies_rows) in enumerate(top_players, 1):
+                    kd = kills / deaths if deaths > 0 else kills
+                    side_marker, is_ambiguous_side = self._derive_side_marker(axis_rows, allies_rows)
+                    if is_ambiguous_side:
+                        ambiguous_side_count += 1
+                    top_lines.append(
+                        f"{i}. {side_marker} **{name}** - {kills}/{deaths} K/D ({kd:.2f}) | {int(damage):,} DMG | {acc:.1f}% ACC"
+                    )
+
+                embed.add_field(
+                    name="🏆 Top Performers (All Rounds)",
+                    value="\n".join(top_lines),
+                    inline=False
+                )
+
+                side_note = "[AXIS]=Axis | [ALLIES]=Allies | [MIXED]/[UNK]=ambiguous side data"
+                if ambiguous_side_count:
+                    side_note += f" ({ambiguous_side_count} ambiguous player(s))"
+                embed.add_field(
+                    name="🧭 Side Markers",
+                    value=side_note,
+                    inline=False,
+                )
+
+            embed.set_footer(text=f"Session: {gaming_session_id} | Anchor Round ID: {round_id}")
+
+            # Post to channel
+            logger.info(f"📤 Posting map summary to #{channel.name}...")
+            await channel.send(embed=embed)
+            logger.info(f"✅ Map summary posted for {map_name}!")
+
+        except Exception as e:
+            logger.error(f"❌ Error posting map summary: {e}", exc_info=True)
+
+    async def publish_endstats(
+        self,
+        filename: str,
+        endstats_data: dict,
+        round_id: int,
+        map_name: str,
+        round_number: int
+    ) -> bool:
+        """
+        Post endstats (awards and VS stats) embed to Discord.
+
+        Called after processing endstats file. Posts a follow-up embed
+        with categorized awards and top VS performers.
+
+        Args:
+            filename: Endstats filename (for footer)
+            endstats_data: Parsed endstats dict with 'awards' and 'vs_stats'
+            round_id: Database round ID
+            map_name: Map name
+            round_number: Round number (1 or 2)
+        """
+        try:
+            logger.info(f"🏆 Publishing endstats for {filename}")
+
+            # Get production channel
+            if not self.config.production_channel_id:
+                logger.warning("⚠️ PRODUCTION_CHANNEL_ID not configured")
+                return False
+
+            channel = self.bot.get_channel(self.config.production_channel_id)
+            if not channel:
+                logger.error("❌ Production channel not found")
+                return False
+
+            awards = endstats_data.get('awards', [])
+
+            # Import categorization helper
+            from bot.endstats_parser import EndStatsParser
+
+            parser = EndStatsParser()
+            categorized = parser.categorize_awards(awards)
+
+            # Create embed
+            # Round 1 endstats are per-round, but Round 2+ are cumulative (map-wide)
+            if round_number == 1:
+                title = f"🏆 Round {round_number} Awards - {map_name}"
+            else:
+                title = f"🏆 Map Awards (Cumulative) - {map_name}"
+
+            embed = discord.Embed(
+                title=title,
+                color=discord.Color.gold(),
+                timestamp=datetime.now()
+            )
+
+            # Category display info
+            category_info = {
+                'combat': ('⚔️ Combat', ''),
+                'deaths': ('💀 Deaths & Mayhem', ''),
+                'skills': ('🎯 Skills', ''),
+                'weapons': ('🔫 Weapons', ''),
+                'teamwork': ('🤝 Teamwork', ''),
+                'objectives': ('🎯 Objectives', ''),
+                'timing': ('⏱️ Timing', ''),
+                'other': ('📋 Other', ''),
+            }
+
+            # Add categorized awards as fields
+            for category, cat_awards in categorized.items():
+                if not cat_awards:
+                    continue
+
+                cat_name, _ = category_info.get(category, (category.title(), ''))
+
+                # Build award lines
+                award_lines = []
+                for award in cat_awards[:6]:  # Limit per category for embed size
+                    name = award['name']
+                    player = award['player']
+                    value = award['value']
+
+                    # Shorten long award names
+                    if len(name) > 30:
+                        name = name[:27] + "..."
+
+                    award_lines.append(f"**{name}:** {player} ({value})")
+
+                if award_lines:
+                    embed.add_field(
+                        name=cat_name,
+                        value="\n".join(award_lines),
+                        inline=True
+                    )
+
+            # VS stats removed - the file format doesn't include source player,
+            # so aggregated data is meaningless without knowing who vs who
+
+            # Footer
+            if round_number == 1:
+                embed.set_footer(text=f"Round {round_number} | {filename}")
+            else:
+                embed.set_footer(text=f"Map Total (R1+R2) | {filename}")
+
+            # Post embed
+            await channel.send(embed=embed)
+            logger.info(f"✅ Endstats embed posted for {filename}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Error publishing endstats: {e}", exc_info=True)
+            return False
