@@ -1,0 +1,370 @@
+{
+  "meta": {
+    "manifest": "proximity/map_assets_manifest_from_etmain.json",
+    "etmain_dir": "/home/samba/share/etmain",
+    "map_count": 20,
+    "failures": []
+  },
+  "maps": {
+    "adlernest": {
+      "map_name": "adlernest",
+      "image": "/assets/maps/proximity/adlernest.png",
+      "size": [
+        256,
+        256
+      ],
+      "mapcoordsmins": [
+        -2048.0,
+        2048.0
+      ],
+      "mapcoordsmaxs": [
+        4096.0,
+        -4096.0
+      ],
+      "source_pk3": "adlernest.pk3",
+      "source_image": "levelshots/adlernest_cc.tga"
+    },
+    "braundorf_b4": {
+      "map_name": "braundorf_b4",
+      "image": "/assets/maps/proximity/braundorf_b4.png",
+      "size": [
+        512,
+        512
+      ],
+      "mapcoordsmins": [
+        -1536.0,
+        2560.0
+      ],
+      "mapcoordsmaxs": [
+        7424.0,
+        -6400.0
+      ],
+      "source_pk3": "braundorf_b4.pk3",
+      "source_image": "levelshots/braundorf_b4_cc.tga"
+    },
+    "bremen_b3": {
+      "map_name": "bremen_b3",
+      "image": "/assets/maps/proximity/bremen_b3.png",
+      "size": [
+        256,
+        256
+      ],
+      "mapcoordsmins": [
+        -3840.0,
+        3584.0
+      ],
+      "mapcoordsmaxs": [
+        3840.0,
+        -4096.0
+      ],
+      "source_pk3": "bremen_b3.pk3",
+      "source_image": "levelshots/bremen_b3_cc.tga"
+    },
+    "decay_sw": {
+      "map_name": "decay_sw",
+      "image": "/assets/maps/proximity/decay_sw.png",
+      "size": [
+        256,
+        256
+      ],
+      "mapcoordsmins": [
+        -2100.0,
+        5540.0
+      ],
+      "mapcoordsmaxs": [
+        5540.0,
+        -2100.0
+      ],
+      "source_pk3": "decay_sw.pk3",
+      "source_image": "levelshots/decay_sw_cc.tga"
+    },
+    "erdenberg_t2": {
+      "map_name": "erdenberg_t2",
+      "image": "/assets/maps/proximity/erdenberg_t2.png",
+      "size": [
+        256,
+        256
+      ],
+      "mapcoordsmins": [
+        88.0,
+        3752.0
+      ],
+      "mapcoordsmaxs": [
+        8240.0,
+        -4400.0
+      ],
+      "source_pk3": "erdenberg_t2.pk3",
+      "source_image": "levelshots/erdenberg_t2_cc.tga"
+    },
+    "et_brewdog": {
+      "map_name": "et_brewdog",
+      "image": "/assets/maps/proximity/et_brewdog.png",
+      "size": [
+        512,
+        512
+      ],
+      "mapcoordsmins": [
+        -3328.0,
+        4736.0
+      ],
+      "mapcoordsmaxs": [
+        3840.0,
+        -2432.0
+      ],
+      "source_pk3": "et_brewdog_b6.pk3",
+      "source_image": "levelshots/et_brewdog_cc.tga"
+    },
+    "etl_adlernest": {
+      "map_name": "etl_adlernest",
+      "image": "/assets/maps/proximity/etl_adlernest.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "mapcoordsmins": [
+        -2048.0,
+        2048.0
+      ],
+      "mapcoordsmaxs": [
+        4096.0,
+        -4096.0
+      ],
+      "source_pk3": "etl_adlernest_v4.pk3",
+      "source_image": "levelshots/etl_adlernest_cc.tga"
+    },
+    "etl_base": {
+      "map_name": "etl_base",
+      "image": "/assets/maps/proximity/etl_base.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "mapcoordsmins": [
+        -3328.0,
+        4736.0
+      ],
+      "mapcoordsmaxs": [
+        3840.0,
+        -2432.0
+      ],
+      "source_pk3": "etl_base_v3.pk3",
+      "source_image": "levelshots/etl_base_cc.tga"
+    },
+    "etl_beach": {
+      "map_name": "etl_beach",
+      "image": "/assets/maps/proximity/etl_beach.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "mapcoordsmins": [
+        -5688.0,
+        6056.0
+      ],
+      "mapcoordsmaxs": [
+        4492.0,
+        -4625.0
+      ],
+      "source_pk3": "etl_beach_v2.pk3",
+      "source_image": "levelshots/etl_beach_cc.tga"
+    },
+    "etl_braundorf": {
+      "map_name": "etl_braundorf",
+      "image": "/assets/maps/proximity/etl_braundorf.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "mapcoordsmins": [
+        -1536.0,
+        2560.0
+      ],
+      "mapcoordsmaxs": [
+        7424.0,
+        -6400.0
+      ],
+      "source_pk3": "etl_braundorf_v2.pk3",
+      "source_image": "levelshots/etl_braundorf_cc.tga"
+    },
+    "etl_ice": {
+      "map_name": "etl_ice",
+      "image": "/assets/maps/proximity/etl_ice.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "mapcoordsmins": [
+        -9472.0,
+        6656.0
+      ],
+      "mapcoordsmaxs": [
+        2816.0,
+        -5632.0
+      ],
+      "source_pk3": "etl_ice_v12.pk3",
+      "source_image": "levelshots/etl_ice_cc.tga"
+    },
+    "etl_sp_delivery": {
+      "map_name": "etl_sp_delivery",
+      "image": "/assets/maps/proximity/etl_sp_delivery.png",
+      "size": [
+        1024,
+        1024
+      ],
+      "mapcoordsmins": [
+        -3968.0,
+        4584.0
+      ],
+      "mapcoordsmaxs": [
+        4992.0,
+        -4376.0
+      ],
+      "source_pk3": "etl_sp_delivery_v5.pk3",
+      "source_image": "levelshots/etl_sp_delivery_cc.tga"
+    },
+    "frostbite": {
+      "map_name": "frostbite",
+      "image": "/assets/maps/proximity/frostbite.png",
+      "size": [
+        512,
+        512
+      ],
+      "mapcoordsmins": [
+        -5888.0,
+        4352.0
+      ],
+      "mapcoordsmaxs": [
+        1536.0,
+        -3072.0
+      ],
+      "source_pk3": "Frostbite.pk3",
+      "source_image": "levelshots/frostbite_cc.tga"
+    },
+    "missile_b3": {
+      "map_name": "missile_b3",
+      "image": "/assets/maps/proximity/missile_b3.png",
+      "size": [
+        256,
+        256
+      ],
+      "mapcoordsmins": [
+        -1280.0,
+        4864.0
+      ],
+      "mapcoordsmaxs": [
+        10752.0,
+        -7168.0
+      ],
+      "source_pk3": "missile_b3.pk3",
+      "source_image": "levelshots/missile_b3.tga"
+    },
+    "missile_b4": {
+      "map_name": "missile_b4",
+      "image": "/assets/maps/proximity/missile_b4.png",
+      "size": [
+        512,
+        512
+      ],
+      "mapcoordsmins": [
+        -1280.0,
+        4864.0
+      ],
+      "mapcoordsmaxs": [
+        10752.0,
+        -7168.0
+      ],
+      "source_pk3": "missile_b4.pk3",
+      "source_image": "levelshots/missile_b4_cc.tga"
+    },
+    "supply": {
+      "map_name": "supply",
+      "image": "/assets/maps/proximity/supply.png",
+      "size": [
+        256,
+        256
+      ],
+      "mapcoordsmins": [
+        -3200.0,
+        3200.0
+      ],
+      "mapcoordsmaxs": [
+        3200.0,
+        -3200.0
+      ],
+      "source_pk3": "supply_sp.pk3",
+      "source_image": "levelshots/supply_cc.tga"
+    },
+    "sw_battery": {
+      "map_name": "sw_battery",
+      "image": "/assets/maps/proximity/sw_battery.png",
+      "size": [
+        512,
+        512
+      ],
+      "mapcoordsmins": [
+        -768.0,
+        1664.0
+      ],
+      "mapcoordsmaxs": [
+        7296.0,
+        -6400.0
+      ],
+      "source_pk3": "sw_battery.pk3",
+      "source_image": "levelshots/sw_battery_cc.tga"
+    },
+    "sw_goldrush_te": {
+      "map_name": "sw_goldrush_te",
+      "image": "/assets/maps/proximity/sw_goldrush_te.png",
+      "size": [
+        512,
+        512
+      ],
+      "mapcoordsmins": [
+        -4224.0,
+        4352.0
+      ],
+      "mapcoordsmaxs": [
+        3712.0,
+        -3584.0
+      ],
+      "source_pk3": "sw_goldrush_te.pk3",
+      "source_image": "levelshots/sw_goldrush_te_cc.tga"
+    },
+    "sw_oasis_b3": {
+      "map_name": "sw_oasis_b3",
+      "image": "/assets/maps/proximity/sw_oasis_b3.png",
+      "size": [
+        512,
+        512
+      ],
+      "mapcoordsmins": [
+        -768.0,
+        9216.0
+      ],
+      "mapcoordsmaxs": [
+        10496.0,
+        -2048.0
+      ],
+      "source_pk3": "sw_oasis_b3.pk3",
+      "source_image": "levelshots/sw_oasis_b3_cc.tga"
+    },
+    "te_escape2": {
+      "map_name": "te_escape2",
+      "image": "/assets/maps/proximity/te_escape2.png",
+      "size": [
+        512,
+        512
+      ],
+      "mapcoordsmins": [
+        -7104.0,
+        4608.0
+      ],
+      "mapcoordsmaxs": [
+        1088.0,
+        -3584.0
+      ],
+      "source_pk3": "te_escape2_fixed.pk3",
+      "source_image": "levelshots/te_escape2_cc.tga"
+    }
+  }
+}

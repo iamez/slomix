@@ -1,0 +1,381 @@
+"""
+Player Substitution and Addition Detection
+
+Analyzes round-by-round team rosters to detect:
+1. Players who joined mid-session
+2. Players who left mid-session
+3. Player substitutions (player A replaced by player B)
+4. Team composition changes
+
+This helps improve team detection accuracy by understanding
+roster changes throughout the session.
+"""
+
+import logging
+from typing import Dict, List, Tuple, Set, Optional
+from dataclasses import dataclass
+from collections import defaultdict
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PlayerActivity:
+    """Track when a player was active during session"""
+    player_guid: str
+    player_name: str
+    first_round: int
+    last_round: int
+    rounds_played: Set[int]
+    game_teams: Dict[int, int]  # round -> game_team (1 or 2)
+
+    @property
+    def is_full_session(self) -> bool:
+        """Did player play entire session (from round 1)?"""
+        return self.first_round == 1
+
+    @property
+    def is_late_joiner(self) -> bool:
+        """Did player join after round 1?"""
+        return self.first_round > 1
+
+    @property
+    def is_early_leaver(self) -> bool:
+        """Did player leave before last round?"""
+        # We don't know total rounds yet, will check later
+        return False
+
+
+@dataclass
+class RosterChange:
+    """Represents a roster change between rounds"""
+    round_number: int
+    change_type: str  # 'addition', 'substitution', 'departure'
+    game_team: int  # 1 or 2
+    player_in: Optional[str] = None  # Player who joined
+    player_out: Optional[str] = None  # Player who left
+    guid_in: Optional[str] = None
+    guid_out: Optional[str] = None
+
+    def __str__(self):
+        if self.change_type == 'addition':
+            return f"Round {self.round_number}: {self.player_in} joined Team {self.game_team}"
+        elif self.change_type == 'departure':
+            return f"Round {self.round_number}: {self.player_out} left Team {self.game_team}"
+        elif self.change_type == 'substitution':
+            return f"Round {self.round_number}: {self.player_out} → {self.player_in} (Team {self.game_team})"
+        return f"Round {self.round_number}: Unknown change"
+
+
+class SubstitutionDetector:
+    """
+    Detects player substitutions and roster changes
+    """
+
+    def __init__(self, db_adapter):
+        """
+        Initialize SubstitutionDetector with async database adapter.
+
+        Args:
+            db_adapter: DatabaseAdapter instance (supports both SQLite and PostgreSQL)
+        """
+        self.db = db_adapter
+        self.substitution_window = 1  # Detect subs within N rounds
+
+    async def analyze_session_roster_changes(
+        self,
+        session_date: str
+    ) -> Dict:
+        """
+        Analyze roster changes throughout a session
+
+        Returns:
+            {
+                'player_activity': {guid: PlayerActivity},
+                'roster_changes': [RosterChange],
+                'full_session_players': [guids],
+                'late_joiners': [guids],
+                'early_leavers': [guids],
+                'substitutions': [(guid_out, guid_in, round)],
+                'round_rosters': {round: {'team1': [guids], 'team2': [guids]}}
+            }
+        """
+        logger.info(f"🔍 Analyzing roster changes for {session_date}")
+
+        # Get all player activity
+        player_activity = await self._get_player_activity(session_date)
+
+        if not player_activity:
+            logger.warning("No player activity found")
+            return {}
+
+        # Get round-by-round rosters
+        round_rosters = await self._get_round_rosters(session_date)
+
+        # Detect changes
+        roster_changes = self._detect_roster_changes(round_rosters, player_activity)
+
+        # Categorize players
+        total_rounds = max(round_rosters.keys()) if round_rosters else 0
+
+        full_session = []
+        late_joiners = []
+        early_leavers = []
+
+        for guid, activity in player_activity.items():
+            if activity.first_round == 1 and activity.last_round == total_rounds:
+                full_session.append(guid)
+
+            if activity.first_round > 1:
+                late_joiners.append(guid)
+
+            if activity.last_round < total_rounds:
+                early_leavers.append(guid)
+
+        # Detect substitutions (player leaves, another joins same round/next)
+        substitutions = self._detect_substitutions(roster_changes)
+
+        result = {
+            'player_activity': player_activity,
+            'roster_changes': roster_changes,
+            'full_session_players': full_session,
+            'late_joiners': late_joiners,
+            'early_leavers': early_leavers,
+            'substitutions': substitutions,
+            'round_rosters': round_rosters,
+            'total_rounds': total_rounds,
+            'summary': self._generate_summary(
+                player_activity, roster_changes,
+                full_session, late_joiners, early_leavers, substitutions
+            )
+        }
+
+        logger.info(f"✅ Analysis complete: {len(full_session)} full-session, "
+                   f"{len(late_joiners)} late joiners, "
+                   f"{len(early_leavers)} early leavers, "
+                   f"{len(substitutions)} substitutions")
+
+        return result
+
+    async def _get_player_activity(
+        self,
+        session_date: str
+    ) -> Dict[str, PlayerActivity]:
+        """Get detailed player activity for session"""
+        query = """
+            SELECT
+                player_guid,
+                player_name,
+                round_number,
+                team
+            FROM player_comprehensive_stats
+            WHERE round_date LIKE $1
+            ORDER BY round_number, player_guid
+        """
+
+        rows = await self.db.fetch_all(query, (f"{session_date}%",))
+
+        # Build activity records
+        activity = {}
+
+        for guid, name, round_num, game_team in rows:
+            if guid not in activity:
+                activity[guid] = PlayerActivity(
+                    player_guid=guid,
+                    player_name=name,
+                    first_round=round_num,
+                    last_round=round_num,
+                    rounds_played=set(),
+                    game_teams={}
+                )
+
+            activity[guid].last_round = max(activity[guid].last_round, round_num)
+            activity[guid].rounds_played.add(round_num)
+            activity[guid].game_teams[round_num] = game_team
+
+        return activity
+
+    async def _get_round_rosters(
+        self,
+        session_date: str
+    ) -> Dict[int, Dict]:
+        """Get rosters for each round"""
+        query = """
+            SELECT DISTINCT
+                round_number,
+                team,
+                player_guid,
+                player_name
+            FROM player_comprehensive_stats
+            WHERE round_date LIKE $1
+            ORDER BY round_number, team, player_guid
+        """
+
+        rows = await self.db.fetch_all(query, (f"{session_date}%",))
+
+        rosters = defaultdict(lambda: {'team1': set(), 'team2': set()})
+
+        for round_num, game_team, guid, name in rows:
+            team_key = 'team1' if game_team == 1 else 'team2'
+            # Use set to avoid duplicates, store tuples
+            rosters[round_num][team_key].add((guid, name))
+
+        # Convert sets to lists of dicts
+        result = {}
+        for round_num, teams in rosters.items():
+            result[round_num] = {
+                'team1': [{'guid': g, 'name': n} for g, n in sorted(teams['team1'])],
+                'team2': [{'guid': g, 'name': n} for g, n in sorted(teams['team2'])]
+            }
+
+        return result
+
+    def _detect_roster_changes(
+        self,
+        round_rosters: Dict[int, Dict],
+        player_activity: Dict[str, PlayerActivity]
+    ) -> List[RosterChange]:
+        """Detect changes between rounds"""
+        changes = []
+
+        rounds = sorted(round_rosters.keys())
+
+        for i in range(len(rounds) - 1):
+            current_round = rounds[i]
+            next_round = rounds[i + 1]
+
+            # Check each game team
+            for game_team_num, team_key in [(1, 'team1'), (2, 'team2')]:
+                current_guids = {p['guid'] for p in round_rosters[current_round][team_key]}
+                next_guids = {p['guid'] for p in round_rosters[next_round][team_key]}
+
+                # Players who left
+                departed = current_guids - next_guids
+                for guid in departed:
+                    name = player_activity[guid].player_name
+                    changes.append(RosterChange(
+                        round_number=next_round,
+                        change_type='departure',
+                        game_team=game_team_num,
+                        player_out=name,
+                        guid_out=guid
+                    ))
+
+                # Players who joined
+                joined = next_guids - current_guids
+                for guid in joined:
+                    name = player_activity[guid].player_name
+                    changes.append(RosterChange(
+                        round_number=next_round,
+                        change_type='addition',
+                        game_team=game_team_num,
+                        player_in=name,
+                        guid_in=guid
+                    ))
+
+        return changes
+
+    def _detect_substitutions(
+        self,
+        roster_changes: List[RosterChange]
+    ) -> List[Tuple[str, str, int]]:
+        """
+        Detect likely substitutions (player leaves, another joins same round/next)
+
+        Returns: [(guid_out, guid_in, round_number)]
+        """
+        substitutions = []
+
+        # Group changes by round and team
+        by_round_team = defaultdict(lambda: {'departures': [], 'additions': []})
+
+        for change in roster_changes:
+            key = (change.round_number, change.game_team)
+            if change.change_type == 'departure':
+                by_round_team[key]['departures'].append(change)
+            elif change.change_type == 'addition':
+                by_round_team[key]['additions'].append(change)
+
+        # Find matching departures and additions
+        for (round_num, team), changes in by_round_team.items():
+            deps = changes['departures']
+            adds = changes['additions']
+
+            # If same number left and joined, likely substitutions
+            if len(deps) > 0 and len(adds) > 0:
+                for dep, add in zip(deps, adds):
+                    substitutions.append((
+                        dep.guid_out,
+                        add.guid_in,
+                        round_num
+                    ))
+
+        return substitutions
+
+    def _generate_summary(
+        self,
+        player_activity: Dict,
+        roster_changes: List[RosterChange],
+        full_session: List[str],
+        late_joiners: List[str],
+        early_leavers: List[str],
+        substitutions: List
+    ) -> str:
+        """Generate human-readable summary"""
+        lines = []
+
+        lines.append(f"Total Players: {len(player_activity)}")
+        lines.append(f"Full Session: {len(full_session)}")
+
+        if late_joiners:
+            lines.append(f"Late Joiners: {len(late_joiners)}")
+            for guid in late_joiners[:3]:
+                activity = player_activity[guid]
+                lines.append(f"  - {activity.player_name} (joined round {activity.first_round})")
+            if len(late_joiners) > 3:
+                lines.append(f"  ...and {len(late_joiners) - 3} more")
+
+        if early_leavers:
+            lines.append(f"Early Leavers: {len(early_leavers)}")
+            for guid in early_leavers[:3]:
+                activity = player_activity[guid]
+                lines.append(f"  - {activity.player_name} (left after round {activity.last_round})")
+            if len(early_leavers) > 3:
+                lines.append(f"  ...and {len(early_leavers) - 3} more")
+
+        if substitutions:
+            lines.append(f"Substitutions: {len(substitutions)}")
+
+        return "\n".join(lines)
+
+    def adjust_team_detection_for_substitutions(
+        self,
+        team_assignments: Dict[str, str],
+        substitution_analysis: Dict
+    ) -> Dict[str, str]:
+        """
+        Adjust team assignments based on substitution analysis
+
+        Strategy: If player B replaced player A, assign player B
+        to the same team as player A.
+
+        Args:
+            team_assignments: {guid: 'A' or 'B'}
+            substitution_analysis: Result from analyze_session_roster_changes
+
+        Returns:
+            Adjusted team assignments
+        """
+        if not substitution_analysis or 'substitutions' not in substitution_analysis:
+            return team_assignments
+
+        adjusted = team_assignments.copy()
+        substitutions = substitution_analysis['substitutions']
+
+        for guid_out, guid_in, round_num in substitutions:
+            # If we know the outgoing player's team, assign incoming to same team
+            if guid_out in adjusted and guid_in in adjusted:
+                logger.info(f"Substitution detected: Assigning {guid_in} to same team as {guid_out}")
+                adjusted[guid_in] = adjusted[guid_out]
+
+        return adjusted
