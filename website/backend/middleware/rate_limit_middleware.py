@@ -29,14 +29,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window_seconds = max(1, getenv_int("RATE_LIMIT_WINDOW_SECONDS", 60))
         self.standard_limit = max(1, getenv_int("RATE_LIMIT_REQUESTS_PER_WINDOW", 180))
         self.heavy_limit = max(1, getenv_int("RATE_LIMIT_HEAVY_REQUESTS_PER_WINDOW", 45))
+        self.proximity_limit = max(1, getenv_int("RATE_LIMIT_PROXIMITY_REQUESTS_PER_WINDOW", 200))
         self._trusted_proxy_networks, self._trusted_proxy_hosts = self._load_trusted_proxies(
             os.getenv("RATE_LIMIT_TRUSTED_PROXIES", self._DEFAULT_TRUSTED_PROXIES)
         )
+        self.proximity_prefixes = ("/api/proximity",)
         self.heavy_prefixes = (
             "/api/stats/leaderboard",
             "/api/stats/matches",
             "/api/sessions",
-            "/api/proximity",
         )
         self.cleanup_interval_seconds = max(
             10, getenv_int("RATE_LIMIT_CLEANUP_INTERVAL_SECONDS", 60)
@@ -55,9 +56,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             self._next_cleanup_at = now + self.cleanup_interval_seconds
 
         client_ip = self._get_client_ip(request)
-        bucket = "heavy" if request.url.path.startswith(self.heavy_prefixes) else "standard"
+        path = request.url.path
+        if path.startswith(self.proximity_prefixes):
+            bucket = "proximity"
+        elif path.startswith(self.heavy_prefixes):
+            bucket = "heavy"
+        else:
+            bucket = "standard"
         key = f"{client_ip}:{bucket}"
-        limit = self.heavy_limit if bucket == "heavy" else self.standard_limit
+        limits = {"standard": self.standard_limit, "heavy": self.heavy_limit, "proximity": self.proximity_limit}
+        limit = limits[bucket]
 
         timeline = self._requests.get(key)
         if timeline is None:

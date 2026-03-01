@@ -32,6 +32,9 @@ QUIET_PATHS = {
     "/health",
     "/favicon.ico",
     "/static",
+    "/js/",
+    "/css/",
+    "/assets/",
 }
 
 # Expected auth failures for background/polling reads should stay informational.

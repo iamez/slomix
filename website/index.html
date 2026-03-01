@@ -1746,6 +1746,22 @@
                     <p class="text-slate-400">Browse all gaming sessions with detailed match breakdowns</p>
                 </div>
 
+                <!-- Search Bar -->
+                <div class="relative max-w-xl mx-auto mb-8">
+                    <div class="relative">
+                        <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 pointer-events-none"></i>
+                        <input id="sessions-search-input" type="text"
+                            placeholder="Search by map or player name..."
+                            class="w-full pl-12 pr-10 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 text-sm font-medium focus:outline-none focus:border-brand-purple/50 focus:ring-1 focus:ring-brand-purple/30 transition" />
+                        <button id="sessions-search-clear"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 text-slate-400 hover:text-white flex items-center justify-center transition hidden"
+                            aria-label="Clear search">
+                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="sessions-search-count" class="text-center text-sm text-slate-400 mb-4 hidden"></div>
+
                 <!-- Sessions List -->
                 <div id="sessions-list" class="space-y-4">
                     <!-- Loading state -->
