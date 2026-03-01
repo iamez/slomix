@@ -9190,7 +9190,6 @@ async def get_stats_sessions(
     for row in rows:
         session_id = row[0]
         first_date = row[1]
-        last_date = row[2]
         first_time = str(row[3]) if row[3] else ""
         last_time = str(row[4]) if row[4] else ""
         round_count = row[5]
