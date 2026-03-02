@@ -324,10 +324,8 @@ class ProximityCog(commands.Cog, name="Proximity"):
         # parts[4:-1] could be mapname pieces, last part is "N_engagements.txt"
         try:
             # Find round number from the part containing "_engagements"
-            round_part = None
             for p in parts:
                 if '_engagements' in p or '_proximity' in p:
-                    round_part = p.split('_')[0]
                     break
 
             map_parts = parts[4:]
@@ -509,6 +507,30 @@ class ProximityCog(commands.Cog, name="Proximity"):
                     inline=False
                 )
 
+        # v5 teamplay table counts
+        try:
+            v5_tables = {
+                'proximity_spawn_timing': 'Spawn Timing',
+                'proximity_team_cohesion': 'Team Cohesion',
+                'proximity_crossfire_opportunity': 'Crossfire Opps',
+                'proximity_team_push': 'Team Pushes',
+                'proximity_lua_trade_kill': 'Lua Trade Kills',
+            }
+            v5_parts = []
+            for table, label in v5_tables.items():
+                count_row = await self.bot.db_adapter.fetch_one(
+                    f"SELECT COUNT(*) FROM {table}"
+                )
+                count = int(count_row[0]) if count_row else 0
+                v5_parts.append(f"{label}: {count:,}")
+            embed.add_field(
+                name="v5 Teamplay Data",
+                value="\n".join(v5_parts),
+                inline=False
+            )
+        except Exception:
+            pass  # Tables may not exist yet
+
         embed.set_footer(text="Proximity tracker runs independently of main stats")
 
         await ctx.send(embed=embed)
@@ -610,6 +632,333 @@ class ProximityCog(commands.Cog, name="Proximity"):
             await ctx.send(f"✅ Successfully imported {filename}")
         else:
             await ctx.send(f"❌ Failed to import {filename}")
+
+    # =========================================================================
+    # V5 TEAMPLAY COMMANDS
+    # =========================================================================
+
+    @commands.command(name='proximity_spawn_efficiency', aliases=['pse'])
+    async def proximity_spawn_efficiency(self, ctx, session_date: str = None):
+        """Top 10 players by spawn timing efficiency (v5)"""
+        if not self.commands_enabled and not self.enabled:
+            await ctx.send("Proximity commands are disabled.")
+            return
+
+        try:
+            date_filter = ""
+            params = []
+            if session_date:
+                date_filter = "WHERE session_date = $1"
+                params = [session_date]
+            else:
+                date_filter = "WHERE session_date >= CURRENT_DATE - INTERVAL '30 days'"
+
+            rows = await self.bot.db_adapter.fetch_all(f"""
+                SELECT killer_guid, MAX(killer_name) AS name,
+                       ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
+                       COUNT(*) AS kills,
+                       ROUND(AVG(time_to_next_spawn)::numeric, 0) AS avg_denial_ms
+                FROM proximity_spawn_timing
+                {date_filter}
+                GROUP BY killer_guid
+                HAVING COUNT(*) >= 5
+                ORDER BY avg_score DESC
+                LIMIT 10
+            """, tuple(params))
+
+            if not rows:
+                await ctx.send("No spawn timing data found.")
+                return
+
+            embed = discord.Embed(
+                title="Spawn Timing Efficiency - Top 10",
+                description="Higher score = kills timed to maximize enemy respawn wait",
+                color=discord.Color.orange()
+            )
+            for i, row in enumerate(rows, 1):
+                name = row[1] or row[0][:8]
+                score = float(row[2] or 0)
+                kills = int(row[3] or 0)
+                denial_ms = int(row[4] or 0)
+                embed.add_field(
+                    name=f"{i}. {name}",
+                    value=f"Score: **{score:.1%}** | Kills: {kills} | Avg denial: {denial_ms}ms",
+                    inline=False
+                )
+
+            await ctx.send(embed=embed)
+        except Exception as e:
+            logger.error(f"spawn_efficiency error: {e}", exc_info=True)
+            await ctx.send(f"Error: {e}")
+
+    @commands.command(name='proximity_cohesion', aliases=['pco'])
+    async def proximity_cohesion(self, ctx, session_date: str = None):
+        """Team cohesion summary - Axis vs Allies formation tightness (v5)"""
+        if not self.commands_enabled and not self.enabled:
+            await ctx.send("Proximity commands are disabled.")
+            return
+
+        try:
+            date_filter = ""
+            params = []
+            if session_date:
+                date_filter = "WHERE session_date = $1"
+                params = [session_date]
+            else:
+                date_filter = "WHERE session_date >= CURRENT_DATE - INTERVAL '30 days'"
+
+            rows = await self.bot.db_adapter.fetch_all(f"""
+                SELECT team,
+                       ROUND(AVG(dispersion)::numeric, 1) AS avg_dispersion,
+                       ROUND(AVG(max_spread)::numeric, 1) AS avg_max_spread,
+                       ROUND(AVG(straggler_count)::numeric, 1) AS avg_stragglers,
+                       ROUND(AVG(alive_count)::numeric, 1) AS avg_alive,
+                       COUNT(*) AS samples
+                FROM proximity_team_cohesion
+                {date_filter}
+                GROUP BY team
+                ORDER BY team
+            """, tuple(params))
+
+            if not rows:
+                await ctx.send("No team cohesion data found.")
+                return
+
+            def classify(disp):
+                if disp < 300:
+                    return "TIGHT"
+                if disp < 800:
+                    return "NORMAL"
+                if disp < 1500:
+                    return "LOOSE"
+                return "SCATTERED"
+
+            embed = discord.Embed(
+                title="Team Cohesion Summary",
+                description="Formation tightness analysis",
+                color=discord.Color.blue()
+            )
+
+            for row in rows:
+                team = row[0]
+                disp = float(row[1] or 0)
+                spread = float(row[2] or 0)
+                stragglers = float(row[3] or 0)
+                alive = float(row[4] or 0)
+                samples = int(row[5] or 0)
+                classification = classify(disp)
+
+                embed.add_field(
+                    name=f"{team} - {classification}",
+                    value=(
+                        f"Avg dispersion: **{disp:.0f}** units\n"
+                        f"Max spread: {spread:.0f} | Stragglers: {stragglers:.1f}\n"
+                        f"Avg alive: {alive:.1f} | Samples: {samples}"
+                    ),
+                    inline=True
+                )
+
+            await ctx.send(embed=embed)
+        except Exception as e:
+            logger.error(f"cohesion error: {e}", exc_info=True)
+            await ctx.send(f"Error: {e}")
+
+    @commands.command(name='proximity_crossfire_angles', aliases=['pxa'])
+    async def proximity_crossfire_angles(self, ctx, session_date: str = None):
+        """Crossfire opportunity analysis with utilization rate (v5)"""
+        if not self.commands_enabled and not self.enabled:
+            await ctx.send("Proximity commands are disabled.")
+            return
+
+        try:
+            date_filter = ""
+            params = []
+            if session_date:
+                date_filter = "WHERE session_date = $1"
+                params = [session_date]
+            else:
+                date_filter = "WHERE session_date >= CURRENT_DATE - INTERVAL '30 days'"
+
+            summary = await self.bot.db_adapter.fetch_one(f"""
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN was_executed THEN 1 ELSE 0 END) AS executed,
+                       ROUND(AVG(angular_separation)::numeric, 1) AS avg_angle
+                FROM proximity_crossfire_opportunity
+                {date_filter}
+            """, tuple(params))
+
+            total = int(summary[0] or 0) if summary else 0
+            if total == 0:
+                await ctx.send("No crossfire opportunity data found.")
+                return
+
+            executed = int(summary[1] or 0)
+            avg_angle = float(summary[2] or 0)
+            util_rate = (executed / total * 100) if total > 0 else 0
+
+            duos = await self.bot.db_adapter.fetch_all(f"""
+                SELECT teammate1_guid, teammate2_guid,
+                       COUNT(*) AS executions
+                FROM proximity_crossfire_opportunity
+                {date_filter} AND was_executed = TRUE
+                GROUP BY teammate1_guid, teammate2_guid
+                ORDER BY executions DESC
+                LIMIT 5
+            """, tuple(params))
+
+            embed = discord.Embed(
+                title="Crossfire Opportunity Analysis",
+                color=discord.Color.red()
+            )
+            embed.add_field(
+                name="Summary",
+                value=(
+                    f"Total opportunities: **{total}**\n"
+                    f"Executed: **{executed}** ({util_rate:.1f}%)\n"
+                    f"Avg angle: {avg_angle:.1f} deg"
+                ),
+                inline=False
+            )
+
+            if duos:
+                duo_text = ""
+                for i, row in enumerate(duos, 1):
+                    duo_text += f"{i}. `{row[0][:8]}` + `{row[1][:8]}` = {row[2]} executions\n"
+                embed.add_field(name="Top Crossfire Duos", value=duo_text, inline=False)
+
+            await ctx.send(embed=embed)
+        except Exception as e:
+            logger.error(f"crossfire_angles error: {e}", exc_info=True)
+            await ctx.send(f"Error: {e}")
+
+    @commands.command(name='proximity_trades_lua', aliases=['ptl'])
+    async def proximity_trades_lua(self, ctx, session_date: str = None):
+        """Lua-detected trade kill leaderboard (v5)"""
+        if not self.commands_enabled and not self.enabled:
+            await ctx.send("Proximity commands are disabled.")
+            return
+
+        try:
+            date_filter = ""
+            params = []
+            if session_date:
+                date_filter = "WHERE session_date = $1"
+                params = [session_date]
+            else:
+                date_filter = "WHERE session_date >= CURRENT_DATE - INTERVAL '30 days'"
+
+            leaders = await self.bot.db_adapter.fetch_all(f"""
+                SELECT trader_guid, MAX(trader_name) AS name,
+                       COUNT(*) AS trades,
+                       ROUND(AVG(delta_ms)::numeric, 0) AS avg_reaction,
+                       MIN(delta_ms) AS fastest
+                FROM proximity_lua_trade_kill
+                {date_filter}
+                GROUP BY trader_guid
+                ORDER BY trades DESC
+                LIMIT 10
+            """, tuple(params))
+
+            recent = await self.bot.db_adapter.fetch_all(f"""
+                SELECT original_victim_name, original_killer_name, trader_name, delta_ms
+                FROM proximity_lua_trade_kill
+                {date_filter}
+                ORDER BY session_date DESC, traded_kill_time DESC
+                LIMIT 5
+            """, tuple(params))
+
+            embed = discord.Embed(
+                title="Trade Kill Leaderboard (Lua-detected)",
+                description="Teammate avenges your death within time window",
+                color=discord.Color.gold()
+            )
+
+            if leaders:
+                for i, row in enumerate(leaders, 1):
+                    name = row[1] or row[0][:8]
+                    trades = int(row[2] or 0)
+                    avg_ms = int(row[3] or 0)
+                    fastest = int(row[4] or 0)
+                    embed.add_field(
+                        name=f"{i}. {name}",
+                        value=f"Trades: **{trades}** | Avg: {avg_ms}ms | Fastest: {fastest}ms",
+                        inline=False
+                    )
+            else:
+                embed.add_field(name="No data", value="No trade kills recorded", inline=False)
+
+            if recent:
+                chain_text = ""
+                for row in recent:
+                    chain_text += f"{row[0]} killed by {row[1]} -> avenged by **{row[2]}** ({row[3]}ms)\n"
+                embed.add_field(name="Recent Trades", value=chain_text, inline=False)
+
+            await ctx.send(embed=embed)
+        except Exception as e:
+            logger.error(f"trades_lua error: {e}", exc_info=True)
+            await ctx.send(f"Error: {e}")
+
+    @commands.command(name='proximity_pushes', aliases=['ppu'])
+    async def proximity_pushes(self, ctx, session_date: str = None):
+        """Team push quality comparison - Axis vs Allies (v5)"""
+        if not self.commands_enabled and not self.enabled:
+            await ctx.send("Proximity commands are disabled.")
+            return
+
+        try:
+            date_filter = ""
+            params = []
+            if session_date:
+                date_filter = "WHERE session_date = $1"
+                params = [session_date]
+            else:
+                date_filter = "WHERE session_date >= CURRENT_DATE - INTERVAL '30 days'"
+
+            rows = await self.bot.db_adapter.fetch_all(f"""
+                SELECT team,
+                       COUNT(*) AS pushes,
+                       ROUND(AVG(push_quality)::numeric, 3) AS avg_quality,
+                       ROUND(AVG(participant_count)::numeric, 1) AS avg_participants,
+                       SUM(CASE WHEN toward_objective NOT IN ('NO', 'N/A') THEN 1 ELSE 0 END) AS obj_pushes
+                FROM proximity_team_push
+                {date_filter}
+                GROUP BY team
+                ORDER BY team
+            """, tuple(params))
+
+            if not rows:
+                await ctx.send("No team push data found.")
+                return
+
+            embed = discord.Embed(
+                title="Team Push Comparison",
+                description="Coordinated team movement analysis",
+                color=discord.Color.purple()
+            )
+
+            for row in rows:
+                team = row[0]
+                pushes = int(row[1] or 0)
+                quality = float(row[2] or 0)
+                participants = float(row[3] or 0)
+                obj = int(row[4] or 0)
+                obj_pct = (obj / pushes * 100) if pushes > 0 else 0
+
+                embed.add_field(
+                    name=f"{team}",
+                    value=(
+                        f"Pushes: **{pushes}**\n"
+                        f"Avg quality: {quality:.3f}\n"
+                        f"Avg participants: {participants:.1f}\n"
+                        f"Objective-oriented: {obj_pct:.0f}%"
+                    ),
+                    inline=True
+                )
+
+            await ctx.send(embed=embed)
+        except Exception as e:
+            logger.error(f"pushes error: {e}", exc_info=True)
+            await ctx.send(f"Error: {e}")
 
 
 async def setup(bot):

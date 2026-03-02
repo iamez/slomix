@@ -5,7 +5,6 @@ Similar to game_server_query.py, this tracks Discord voice channel activity
 directly through the Discord API for historical analytics.
 """
 
-import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 from datetime import datetime

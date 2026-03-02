@@ -49,9 +49,9 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
     @commands.command(name="set_teams")
     async def set_teams(self, ctx, team1_name: str, team2_name: str):
         """👥 Manually set persistent team names for the latest session date
-        
+
         Usage: !set_teams "Team A" "Team B"
-        
+
         This creates team entries for the most recent session date.
         After setting teams, use !assign_player to add players to each team.
         """
@@ -104,9 +104,9 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
     @commands.command(name="assign_player")
     async def assign_player(self, ctx, player_name: str, team_name: str):
         """👤 Assign a player to a persistent team for the latest session date
-        
+
         Usage: !assign_player "PlayerName" "Team A"
-        
+
         Assigns a player to a specific team. The player name is fuzzy-matched
         against known player aliases. Use !set_teams first to create the teams.
         """
@@ -170,7 +170,7 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
             guids = set(json.loads(row[0] or "[]"))
             names = set(json.loads(row[1] or "[]"))
             updated = False
-            
+
             if player_guid not in guids:
                 guids.add(player_guid)
                 updated = True

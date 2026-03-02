@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 
@@ -163,7 +164,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[
         "Content-Type",
         "Authorization",
@@ -197,6 +198,36 @@ app.add_middleware(HTTPCacheMiddleware, cache_backend=cache_backend)
 
 # Request Logging Middleware (added after session so it can access session data)
 app.add_middleware(RequestLoggingMiddleware)
+
+# GZip compression — added last so it wraps all other middleware (outermost layer)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# File extensions that get Cache-Control headers
+_CACHE_1D_EXTS = (".js", ".css", ".woff2", ".woff", ".ttf")
+_CACHE_7D_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp")
+
+
+@app.middleware("http")
+async def add_static_cache_headers(request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.endswith(_CACHE_1D_EXTS):
+        response.headers["Cache-Control"] = "public, max-age=86400"
+    elif path.endswith(_CACHE_7D_EXTS):
+        response.headers["Cache-Control"] = "public, max-age=604800"
+    return response
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if os.getenv("ENABLE_HSTS", "false").lower() == "true":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 # Include Routers
 app.include_router(api.router, prefix="/api", tags=["API"])

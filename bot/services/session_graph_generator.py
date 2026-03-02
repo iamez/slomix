@@ -61,13 +61,6 @@ class SessionGraphGenerator:
             return self._player_stats_columns
 
         try:
-            cols = await self.db_adapter.fetch_all("PRAGMA table_info(player_comprehensive_stats)")
-            self._player_stats_columns = {c[1] for c in cols}
-            return self._player_stats_columns
-        except Exception:
-            pass
-
-        try:
             cols = await self.db_adapter.fetch_all(
                 """
                 SELECT column_name
@@ -411,7 +404,7 @@ class SessionGraphGenerator:
                     fontsize=8, fontweight='bold'
                 )
 
-    def _add_grouped_bar_labels(self, ax, bars1, bars2, values1, values2, 
+    def _add_grouped_bar_labels(self, ax, bars1, bars2, values1, values2,
                                  fmt="{:.0f}"):
         """Add labels for grouped bars"""
         for bar, value in zip(bars1, values1):
@@ -437,19 +430,19 @@ class SessionGraphGenerator:
                Optional[io.BytesIO]]:
         """
         Generate FIVE beautiful graph images:
-        
+
         Image 1: COMBAT STATS (OFFENSE) - 2x2
             - Kills vs Deaths (grouped bars)
             - Damage Given vs Received (grouped bars)
             - K/D Ratio
             - DPM
-            
+
         Image 2: COMBAT STATS (DEFENSE/SUPPORT) - 2x2
             - Revives Given vs Times Revived (grouped bars)
             - Time Played vs Time Dead (grouped bars)
             - Gibs
             - Headshots
-            
+
         Image 3: ADVANCED METRICS - 3x2
             - FragPotential
             - Damage Efficiency
@@ -457,15 +450,15 @@ class SessionGraphGenerator:
             - Survival Rate
             - Useful Kills (UK)
             - Self Kills vs Full Selfkills
-            
+
         Image 4: PLAYSTYLE ANALYSIS
             - Player Playstyles (horizontal bars - full width)
             - Playstyle Legend
-            
+
         Image 5: DPM TIMELINE
             - DPM evolution line graph
             - Session Form Analysis
-        
+
         Returns: Tuple of 5 buffers
         """
         try:
@@ -583,11 +576,11 @@ class SessionGraphGenerator:
                 denied_playtime_new_sec.append(denied_new)
 
             time_dead_new_minutes = [v / 60.0 for v in time_dead_new_sec]
-            denied_playtime_pct_old = [
-                (dp / max(1, tp)) * 100 for dp, tp in zip(denied_playtime_old_sec, time_played_sec)
+            denied_per_min_old = [
+                (dp / max(1, tp)) * 60 for dp, tp in zip(denied_playtime_old_sec, time_played_sec)
             ]
-            denied_playtime_pct_new = [
-                (dp / max(1, tp)) * 100 for dp, tp in zip(denied_playtime_new_sec, time_played_sec)
+            denied_per_min_new = [
+                (dp / max(1, tp)) * 60 for dp, tp in zip(denied_playtime_new_sec, time_played_sec)
             ]
 
             # Baseline metrics keep legacy timing to preserve existing behavior when flag is off
@@ -892,7 +885,7 @@ class SessionGraphGenerator:
                 timing_bar_width = 0.35
                 bars1 = axes3[1, 0].bar(
                     x - timing_bar_width/2,
-                    denied_playtime_pct_old,
+                    denied_per_min_old,
                     timing_bar_width,
                     color=self.COLORS['orange'],
                     label='Old',
@@ -901,16 +894,16 @@ class SessionGraphGenerator:
                 )
                 bars2 = axes3[1, 0].bar(
                     x + timing_bar_width/2,
-                    denied_playtime_pct_new,
+                    denied_per_min_new,
                     timing_bar_width,
                     color=self.COLORS['teal'],
                     label='New',
                     edgecolor='white',
                     linewidth=0.5,
                 )
-                self._style_axis(axes3[1, 0], "TIME DENIED % (OLD vs NEW)")
-                max_denied = max(max(denied_playtime_pct_old), max(denied_playtime_pct_new), 1)
-                axes3[1, 0].set_ylim(0, max(50, max_denied * 1.2))
+                self._style_axis(axes3[1, 0], "DENIED/MIN (OLD vs NEW)")
+                max_denied = max(max(denied_per_min_old), max(denied_per_min_new), 1)
+                axes3[1, 0].set_ylim(0, max(10, max_denied * 1.2))
                 axes3[1, 0].set_xticks(x)
                 axes3[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
                 axes3[1, 0].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
@@ -919,26 +912,26 @@ class SessionGraphGenerator:
                     axes3[1, 0],
                     bars1,
                     bars2,
-                    denied_playtime_pct_old,
-                    denied_playtime_pct_new,
-                    fmt="{:.1f}%",
+                    denied_per_min_old,
+                    denied_per_min_new,
+                    fmt="{:.1f}",
                 )
             else:
-                # Denied Playtime (as percentage)
+                # Denied Playtime (per-minute rate)
                 denied_colors = [
-                    self.COLORS['red'] if d >= 30
-                    else self.COLORS['orange'] if d >= 15
+                    self.COLORS['red'] if d >= 5
+                    else self.COLORS['orange'] if d >= 2
                     else self.COLORS['green']
-                    for d in denied_playtime_pct_old
+                    for d in denied_per_min_old
                 ]
-                bars = axes3[1, 0].bar(x, denied_playtime_pct_old, color=denied_colors,
+                bars = axes3[1, 0].bar(x, denied_per_min_old, color=denied_colors,
                                         edgecolor='white', linewidth=0.5)
-                self._style_axis(axes3[1, 0], "TIME DENIED (%)")
-                axes3[1, 0].set_ylim(0, max(50, max(denied_playtime_pct_old) * 1.2))
+                self._style_axis(axes3[1, 0], "DENIED/MIN")
+                axes3[1, 0].set_ylim(0, max(10, max(denied_per_min_old) * 1.2))
                 axes3[1, 0].set_xticks(x)
                 axes3[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
-                self._add_bar_labels(axes3[1, 0], bars, denied_playtime_pct_old,
-                                     fmt="{:.1f}%")
+                self._add_bar_labels(axes3[1, 0], bars, denied_per_min_old,
+                                     fmt="{:.1f}")
 
             if self.show_timing_dual:
                 timing_bar_width = 0.35

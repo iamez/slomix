@@ -177,6 +177,9 @@ All fields from our webhook use the `Lua_` or `lua_` prefix:
 
 ## Which Source to Use?
 
+For current prototype/testing policy (dual display + reliability evaluation), see:
+- `docs/reference/TIMING_POLICY_PROTOTYPE_W04_2026-02-26.md`
+
 | Use Case | Recommended Source |
 |----------|-------------------|
 | Accurate round duration | `lua_round_teams.actual_duration_seconds` |

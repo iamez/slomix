@@ -115,29 +115,19 @@ class LinkCog(commands.Cog, name="Link"):
             )
             return
 
-        if self.bot.config.database_type == 'sqlite':
-            await self.bot.db_adapter.execute(
-                """
-                INSERT OR REPLACE INTO player_links
-                (discord_id, discord_username, player_guid, player_name, linked_at)
-                VALUES (?, ?, ?, ?, datetime('now'))
-                """,
-                (discord_id, str(ctx.author), selected["guid"], selected["name"]),
-            )
-        else:  # PostgreSQL
-            await self.bot.db_adapter.execute(
-                """
-                INSERT INTO player_links
-                (discord_id, discord_username, player_guid, player_name, linked_at)
-                VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-                ON CONFLICT (discord_id) DO UPDATE SET
-                    discord_username = EXCLUDED.discord_username,
-                    player_guid = EXCLUDED.player_guid,
-                    player_name = EXCLUDED.player_name,
-                    linked_at = EXCLUDED.linked_at
-                """,
-                (discord_id, str(ctx.author), selected["guid"], selected["name"]),
-            )
+        await self.bot.db_adapter.execute(
+            """
+            INSERT INTO player_links
+            (discord_id, discord_username, player_guid, player_name, linked_at)
+            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+            ON CONFLICT (discord_id) DO UPDATE SET
+                discord_username = EXCLUDED.discord_username,
+                player_guid = EXCLUDED.player_guid,
+                player_name = EXCLUDED.player_name,
+                linked_at = EXCLUDED.linked_at
+            """,
+            (discord_id, str(ctx.author), selected["guid"], selected["name"]),
+        )
 
         success_embed = discord.Embed(
             title="✅ Account Linked Successfully!",
@@ -189,7 +179,7 @@ class LinkCog(commands.Cog, name="Link"):
         try:
             # Ensure player_name alias compatibility
             await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
-            
+
             # Base query to get all players with their link status
             base_query = """
                 SELECT
@@ -225,11 +215,7 @@ class LinkCog(commands.Cog, name="Link"):
                 elif filter_lower in ["unlinked", "nolink"]:
                     filter_clause = " HAVING pl.discord_id IS NULL"
                 elif filter_lower in ["active", "recent"]:
-                    # Use database-compatible date arithmetic
-                    if self.bot.config.database_type == 'sqlite':
-                        filter_clause = " HAVING MAX(p.round_date) >= date('now', '-30 days')"
-                    else:
-                        filter_clause = " HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'"
+                    filter_clause = " HAVING MAX(p.round_date) >= CURRENT_DATE - INTERVAL '30 days'"
                 # If filter_type doesn't match whitelist, filter_clause stays empty (no filter applied)
 
             # Safe string concatenation: filter_clause is built from whitelisted constants only
@@ -396,7 +382,7 @@ class LinkCog(commands.Cog, name="Link"):
         try:
             # Escape LIKE pattern to prevent injection
             safe_pattern = escape_like_pattern_for_query(search_term)
-            
+
             # Search in player_aliases (uses 'guid' and 'alias' columns)
             alias_guids = await self.bot.db_adapter.fetch_all(
                 """
@@ -514,30 +500,6 @@ class LinkCog(commands.Cog, name="Link"):
                     last_seen = "Never"
 
                 link_status = f"🔗 Linked to `{link_row[0]}`" if link_row else "❌ Not linked"
-
-                # Calculate days ago for last_seen
-                try:
-                    last_date = datetime.fromisoformat(
-                        last_seen.replace("Z", "+00:00") if "Z" in last_seen else last_seen
-                    )
-                    days_ago = (datetime.now() - last_date).days
-                    if days_ago == 0:
-                        last_str = "Today"
-                    elif days_ago == 1:
-                        last_str = "Yesterday"
-                    elif days_ago < 7:
-                        last_str = f"{days_ago} days ago"
-                    elif days_ago < 30:
-                        weeks = days_ago // 7
-                        last_str = f"{weeks} week{'s' if weeks > 1 else ''} ago"
-                    elif days_ago < 365:
-                        months = days_ago // 30
-                        last_str = f"{months} month{'s' if months > 1 else ''} ago"
-                    else:
-                        years = days_ago // 365
-                        last_str = f"{years} year{'s' if years > 1 else ''} ago"
-                except (ValueError, TypeError, AttributeError):
-                    last_str = last_seen
 
                 # Add field to embed with formatted name and badges
                 embed.add_field(
@@ -713,24 +675,14 @@ class LinkCog(commands.Cog, name="Link"):
 
             # Optimize: Fetch all aliases in a single query (avoid N+1 problem)
             all_guids = [player[0] for player in top_players]
-            if self.bot.config.database_type == 'sqlite':
-                # Safe: placeholders are generated strings (?, ?, ?), not user input
-                placeholders = ', '.join(['?'] * len(all_guids))
-                alias_query = f"""
-                    SELECT guid, alias, last_seen, times_seen
-                    FROM player_aliases
-                    WHERE guid IN ({placeholders})
-                    ORDER BY guid, last_seen DESC, times_seen DESC
-                """
-            else:  # PostgreSQL
-                # Safe: placeholders are generated strings ($1, $2, $3), not user input
-                placeholders = ', '.join([f'${i+1}' for i in range(len(all_guids))])
-                alias_query = f"""
-                    SELECT guid, alias, last_seen, times_seen
-                    FROM player_aliases
-                    WHERE guid IN ({placeholders})
-                    ORDER BY guid, last_seen DESC, times_seen DESC
-                """
+            # Safe: placeholders are generated strings ($1, $2, $3), not user input
+            placeholders = ', '.join([f'${i+1}' for i in range(len(all_guids))])
+            alias_query = f"""
+                SELECT guid, alias, last_seen, times_seen
+                FROM player_aliases
+                WHERE guid IN ({placeholders})
+                ORDER BY guid, last_seen DESC, times_seen DESC
+            """
 
             all_aliases = await self.bot.db_adapter.fetch_all(alias_query, all_guids)
 
@@ -756,28 +708,16 @@ class LinkCog(commands.Cog, name="Link"):
                         alias_str += " _(only name)_"
                 else:
                     # Fallback to most recent name
-                    if self.bot.config.database_type == 'sqlite':
-                        name_row = await self.bot.db_adapter.fetch_one(
-                            """
-                            SELECT player_name
-                            FROM player_comprehensive_stats
-                            WHERE player_guid = ?
-                            ORDER BY round_date DESC
-                            LIMIT 1
-                        """,
-                            (guid,),
-                        )
-                    else:  # PostgreSQL
-                        name_row = await self.bot.db_adapter.fetch_one(
-                            """
-                            SELECT player_name
-                            FROM player_comprehensive_stats
-                            WHERE player_guid = $1
-                            ORDER BY round_date DESC
-                            LIMIT 1
-                        """,
-                            (guid,),
-                        )
+                    name_row = await self.bot.db_adapter.fetch_one(
+                        """
+                        SELECT player_name
+                        FROM player_comprehensive_stats
+                        WHERE player_guid = ?
+                        ORDER BY round_date DESC
+                        LIMIT 1
+                    """,
+                        (guid,),
+                    )
                     primary_name = name_row[0] if name_row else "Unknown"
                     alias_str = primary_name
 
@@ -916,10 +856,10 @@ class LinkCog(commands.Cog, name="Link"):
                 # Fallback
                 name_row = await self.bot.db_adapter.fetch_one(
                     """
-                    SELECT player_name 
-                    FROM player_comprehensive_stats 
-                    WHERE player_guid = ? 
-                    ORDER BY round_date DESC 
+                    SELECT player_name
+                    FROM player_comprehensive_stats
+                    WHERE player_guid = ?
+                    ORDER BY round_date DESC
                     LIMIT 1
                 """,
                     (guid,),
@@ -975,30 +915,20 @@ class LinkCog(commands.Cog, name="Link"):
                 )
 
                 if str(reaction.emoji) == "✅":
-                    # Confirmed - link it (database-specific syntax)
-                    if self.bot.config.database_type == 'sqlite':
-                        await self.bot.db_adapter.execute(
-                            """
-                            INSERT OR REPLACE INTO player_links
-                            (discord_id, discord_username, player_guid, player_name, linked_at)
-                            VALUES (?, ?, ?, ?, datetime('now'))
-                            """,
-                            (discord_id, str(ctx.author), guid, primary_name),
-                        )
-                    else:  # PostgreSQL
-                        await self.bot.db_adapter.execute(
-                            """
-                            INSERT INTO player_links
-                            (discord_id, discord_username, player_guid, player_name, linked_at)
-                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-                            ON CONFLICT (discord_id) DO UPDATE SET
-                                discord_username = EXCLUDED.discord_username,
-                                player_guid = EXCLUDED.player_guid,
-                                player_name = EXCLUDED.player_name,
-                                linked_at = EXCLUDED.linked_at
-                            """,
-                            (discord_id, str(ctx.author), guid, primary_name),
-                        )
+                    # Confirmed - link it
+                    await self.bot.db_adapter.execute(
+                        """
+                        INSERT INTO player_links
+                        (discord_id, discord_username, player_guid, player_name, linked_at)
+                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                        ON CONFLICT (discord_id) DO UPDATE SET
+                            discord_username = EXCLUDED.discord_username,
+                            player_guid = EXCLUDED.player_guid,
+                            player_name = EXCLUDED.player_name,
+                            linked_at = EXCLUDED.linked_at
+                        """,
+                        (discord_id, str(ctx.author), guid, primary_name),
+                    )
 
                     await message.clear_reactions()
                     await ctx.send(
@@ -1261,10 +1191,10 @@ class LinkCog(commands.Cog, name="Link"):
                 # Fallback
                 name_row = await self.bot.db_adapter.fetch_one(
                     """
-                    SELECT player_name 
-                    FROM player_comprehensive_stats 
-                    WHERE player_guid = ? 
-                    ORDER BY round_date DESC 
+                    SELECT player_name
+                    FROM player_comprehensive_stats
+                    WHERE player_guid = ?
+                    ORDER BY round_date DESC
                     LIMIT 1
                 """,
                     (guid,),
@@ -1331,30 +1261,20 @@ class LinkCog(commands.Cog, name="Link"):
                 )
 
                 if str(reaction.emoji) == "✅":
-                    # Confirmed - link it (database-specific syntax)
-                    if self.bot.config.database_type == 'sqlite':
-                        await self.bot.db_adapter.execute(
-                            """
-                            INSERT OR REPLACE INTO player_links
-                            (discord_id, discord_username, player_guid, player_name, linked_at)
-                            VALUES (?, ?, ?, ?, datetime('now'))
-                            """,
-                            (target_discord_id, str(target_user), guid, primary_name),
-                        )
-                    else:  # PostgreSQL
-                        await self.bot.db_adapter.execute(
-                            """
-                            INSERT INTO player_links
-                            (discord_id, discord_username, player_guid, player_name, linked_at)
-                            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-                            ON CONFLICT (discord_id) DO UPDATE SET
-                                discord_username = EXCLUDED.discord_username,
-                                player_guid = EXCLUDED.player_guid,
-                                player_name = EXCLUDED.player_name,
-                                linked_at = EXCLUDED.linked_at
-                            """,
-                            (target_discord_id, str(target_user), guid, primary_name),
-                        )
+                    # Confirmed - link it
+                    await self.bot.db_adapter.execute(
+                        """
+                        INSERT INTO player_links
+                        (discord_id, discord_username, player_guid, player_name, linked_at)
+                        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                        ON CONFLICT (discord_id) DO UPDATE SET
+                            discord_username = EXCLUDED.discord_username,
+                            player_guid = EXCLUDED.player_guid,
+                            player_name = EXCLUDED.player_name,
+                            linked_at = EXCLUDED.linked_at
+                        """,
+                        (target_discord_id, str(target_user), guid, primary_name),
+                    )
 
                     await message.clear_reactions()
 
@@ -1420,7 +1340,6 @@ class LinkCog(commands.Cog, name="Link"):
             discord_id = int(ctx.author.id)  # BIGINT in PostgreSQL
 
             # Check if linked
-            placeholder = '$1' if self.bot.config.database_type == 'postgresql' else '?'
             existing = await self.bot.db_adapter.fetch_one(
                 """
                 SELECT player_name, player_guid FROM player_links

@@ -4,6 +4,8 @@ import json
 import os
 import secrets
 import time
+
+_SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "false").lower() == "true"
 from collections import defaultdict, deque
 from typing import Any
 from urllib.parse import urlencode, urlsplit
@@ -334,6 +336,7 @@ async def login(request: Request):
             "code_challenge_method": "S256",
         }
     )
+    logger.info("OAuth login initiated")
     return RedirectResponse(f"https://discord.com/api/oauth2/authorize?{auth_query}")
 
 
@@ -362,6 +365,8 @@ async def callback(
     state_not_expired = (int(time.time()) - state_issued_at) <= OAUTH_STATE_TTL_SECONDS
 
     if not state_is_valid or not state_not_expired or not code_verifier:
+        logger.warning("OAuth callback rejected: valid=%s expired=%s verifier=%s",
+                        state_is_valid, not state_not_expired, bool(code_verifier))
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
     async with httpx.AsyncClient(timeout=20.0) as client:
@@ -379,6 +384,7 @@ async def callback(
         )
 
         if token_resp.status_code != 200:
+            logger.warning("Discord token exchange failed (status=%d)", token_resp.status_code)
             raise HTTPException(status_code=400, detail="Failed to get token from Discord")
 
         token_data = token_resp.json()
@@ -397,6 +403,7 @@ async def callback(
         user_data = user_resp.json()
 
     discord_id, username, display_name, avatar = _discord_identity(user_data)
+    logger.info("OAuth callback success: discord_id=%s username=%s", discord_id, username)
 
     website_user_id = discord_id
     linked_player_guid = None
@@ -435,7 +442,9 @@ async def logout(request: Request):
     request.session.clear()
     frontend_origin = get_frontend_origin(get_discord_config())
     response = JSONResponse({"ok": True, "redirect_url": f"{frontend_origin}/"})
-    response.delete_cookie("session")
+    response.delete_cookie(
+        "session", path="/", httponly=True, samesite="lax", secure=_SESSION_HTTPS_ONLY
+    )
     return response
 
 
@@ -798,5 +807,7 @@ async def unlink_discord_account(request: Request, db: DatabaseAdapter = Depends
             "redirect_url": f"{frontend_origin}/",
         }
     )
-    response.delete_cookie("session")
+    response.delete_cookie(
+        "session", path="/", httponly=True, samesite="lax", secure=_SESSION_HTTPS_ONLY
+    )
     return response

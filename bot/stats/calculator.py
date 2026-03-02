@@ -155,31 +155,158 @@ class StatsCalculator:
             return default
 
     @staticmethod
-    def calculate_headshot_percentage(headshots: Optional[int], kills: Optional[int],
-                                     default: float = 0.0) -> float:
+    def calculate_headshot_accuracy(headshot_hits: Optional[int], total_hits: Optional[int],
+                                    default: float = 0.0) -> float:
         """
-        Calculate headshot percentage.
+        Calculate headshot accuracy (what % of hits landed on the head).
 
-        Formula: (headshots / kills) * 100
+        Formula: (headshot_hits / total_hits) * 100
 
         Args:
-            headshots: Number of headshot kills
-            kills: Total kills
+            headshot_hits: Number of shots that hit the head (sum of weapon headshot hits)
+            total_hits: Total shots that hit any body part
             default: Value to return on error
 
         Returns:
-            Headshot percentage (0-100)
+            Headshot accuracy as percentage (0-100)
 
         Examples:
-            >>> StatsCalculator.calculate_headshot_percentage(5, 20)
-            25.0  # 25% of kills were headshots
-            >>> StatsCalculator.calculate_headshot_percentage(0, 10)
+            >>> StatsCalculator.calculate_headshot_accuracy(50, 200)
+            25.0  # 25% of hits were headshots
+            >>> StatsCalculator.calculate_headshot_accuracy(0, 100)
             0.0
         """
         try:
-            if headshots is None or kills is None or kills == 0:
+            if headshot_hits is None or total_hits is None or total_hits == 0:
                 return default
-            return (headshots / kills) * 100
+            return (headshot_hits / total_hits) * 100
+        except (TypeError, ZeroDivisionError):
+            return default
+
+    @staticmethod
+    def calculate_headshot_kill_rate(headshot_kills: Optional[int], total_kills: Optional[int],
+                                    default: float = 0.0) -> float:
+        """
+        Calculate headshot kill rate (what % of kills were headshot kills).
+
+        Formula: (headshot_kills / total_kills) * 100
+
+        This is the old metric preserved as a separate named stat.
+
+        Args:
+            headshot_kills: Number of kills where the final blow was a headshot
+            total_kills: Total number of kills
+            default: Value to return on error
+
+        Returns:
+            Headshot kill rate as percentage (0-100)
+
+        Examples:
+            >>> StatsCalculator.calculate_headshot_kill_rate(5, 20)
+            25.0  # 25% of kills were headshots
+            >>> StatsCalculator.calculate_headshot_kill_rate(0, 10)
+            0.0
+        """
+        try:
+            if headshot_kills is None or total_kills is None or total_kills == 0:
+                return default
+            return (headshot_kills / total_kills) * 100
+        except (TypeError, ZeroDivisionError):
+            return default
+
+    # Backward-compatible alias (deprecated, use calculate_headshot_accuracy instead)
+    calculate_headshot_percentage = calculate_headshot_accuracy
+
+    @staticmethod
+    def calculate_adr(damage_given: Optional[int], rounds_played: Optional[int],
+                      default: float = 0.0) -> float:
+        """
+        Calculate Average Damage per Round (ADR).
+
+        Formula: damage_given / rounds_played
+
+        Args:
+            damage_given: Total damage dealt
+            rounds_played: Number of rounds played
+            default: Value to return on error or invalid input
+
+        Returns:
+            ADR as float, or default if calculation fails
+
+        Examples:
+            >>> StatsCalculator.calculate_adr(3000, 4)
+            750.0
+            >>> StatsCalculator.calculate_adr(0, 0)
+            0.0
+            >>> StatsCalculator.calculate_adr(None, 2)
+            0.0
+        """
+        try:
+            if damage_given is None or rounds_played is None or rounds_played <= 0:
+                return default
+            return damage_given / rounds_played
+        except (TypeError, ZeroDivisionError):
+            return default
+
+    @staticmethod
+    def calculate_kpr(kills: Optional[int], rounds_played: Optional[int],
+                      default: float = 0.0) -> float:
+        """
+        Calculate Kills Per Round (KPR).
+
+        Formula: kills / rounds_played
+
+        Args:
+            kills: Number of kills
+            rounds_played: Number of rounds played
+            default: Value to return on error or invalid input
+
+        Returns:
+            KPR as float rounded to 2 decimals, or default if calculation fails
+
+        Examples:
+            >>> StatsCalculator.calculate_kpr(20, 4)
+            5.0
+            >>> StatsCalculator.calculate_kpr(7, 3)
+            2.33
+            >>> StatsCalculator.calculate_kpr(None, 2)
+            0.0
+        """
+        try:
+            if kills is None or rounds_played is None or rounds_played <= 0:
+                return default
+            return round(kills / rounds_played, 2)
+        except (TypeError, ZeroDivisionError):
+            return default
+
+    @staticmethod
+    def calculate_dpr(deaths: Optional[int], rounds_played: Optional[int],
+                      default: float = 0.0) -> float:
+        """
+        Calculate Deaths Per Round (DPR). Lower is better.
+
+        Formula: deaths / rounds_played
+
+        Args:
+            deaths: Number of deaths
+            rounds_played: Number of rounds played
+            default: Value to return on error or invalid input
+
+        Returns:
+            DPR as float rounded to 2 decimals, or default if calculation fails
+
+        Examples:
+            >>> StatsCalculator.calculate_dpr(12, 4)
+            3.0
+            >>> StatsCalculator.calculate_dpr(5, 3)
+            1.67
+            >>> StatsCalculator.calculate_dpr(None, 2)
+            0.0
+        """
+        try:
+            if deaths is None or rounds_played is None or rounds_played <= 0:
+                return default
+            return round(deaths / rounds_played, 2)
         except (TypeError, ZeroDivisionError):
             return default
 

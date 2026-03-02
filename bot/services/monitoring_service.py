@@ -85,7 +85,7 @@ class MonitoringService:
     async def _ensure_history_tables(self):
         """Create history tables if they don't exist yet."""
         await self._ensure_table(
-            "server_status_history table",
+            "server_status_history",
             """
             CREATE TABLE IF NOT EXISTS server_status_history (
                 id SERIAL PRIMARY KEY,
@@ -101,7 +101,7 @@ class MonitoringService:
             """,
         )
         await self._ensure_table(
-            "voice_status_history table",
+            "voice_status_history",
             """
             CREATE TABLE IF NOT EXISTS voice_status_history (
                 id SERIAL PRIMARY KEY,
@@ -129,18 +129,20 @@ class MonitoringService:
             index_expr="recorded_at",
         )
 
-    async def _ensure_table(self, step_name: str, query: str) -> None:
+    async def _ensure_table(self, table_name: str, query: str) -> None:
+        if await self._table_exists(table_name):
+            return
         try:
             await self.db.execute(query)
         except Exception as e:
             if self._is_insufficient_privilege_error(e):
                 logger.warning(
                     "Skipping monitoring DDL for %s due to insufficient DB privileges: %s",
-                    step_name,
+                    table_name,
                     e,
                 )
                 return
-            logger.error(f"Failed to ensure {step_name}: {e}", exc_info=True)
+            logger.error(f"Failed to ensure {table_name}: {e}", exc_info=True)
 
     _MONITORING_TABLES = frozenset({"server_status_history", "voice_status_history", "voice_members", "live_status"})
 
@@ -334,7 +336,7 @@ class MonitoringService:
         """Record game server status via UDP query"""
         try:
             # Run blocking UDP query in thread pool to avoid blocking event loop
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             status = await loop.run_in_executor(
                 None, query_game_server, self.server_host, self.server_port
             )

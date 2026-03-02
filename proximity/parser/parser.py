@@ -25,6 +25,7 @@ import json
 import logging
 import re
 from bisect import bisect_left
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -55,7 +56,7 @@ class Engagement:
     target_guid: str
     target_name: str
     target_team: str
-    outcome: str  # 'killed', 'escaped', 'round_end'
+    outcome: str  # 'killed', 'escaped', 'round_end', 'teamkill', 'selfkill', 'fallen', 'world'
     total_damage: int
     killer_guid: Optional[str]
     killer_name: Optional[str]
@@ -165,6 +166,74 @@ class ReactionMetric:
     duration_ms: int
 
 
+@dataclass
+class SpawnTimingEvent:
+    killer_guid: str
+    killer_name: str
+    killer_team: str
+    victim_guid: str
+    victim_name: str
+    victim_team: str
+    kill_time: int
+    enemy_spawn_interval: int
+    time_to_next_spawn: int
+    spawn_timing_score: float
+
+
+@dataclass
+class TeamCohesionSnapshot:
+    sample_time: int
+    team: str
+    alive_count: int
+    centroid_x: float
+    centroid_y: float
+    dispersion: float
+    max_spread: float
+    straggler_count: int
+    buddy_pair_guids: Optional[str]
+    buddy_distance: Optional[float]
+
+
+@dataclass
+class CrossfireOpportunity:
+    event_time: int
+    target_guid: str
+    target_name: str
+    target_team: str
+    teammate1_guid: str
+    teammate2_guid: str
+    angular_separation: float
+    was_executed: bool
+    damage_within_window: int
+
+
+@dataclass
+class TeamPush:
+    start_time: int
+    end_time: int
+    team: str
+    avg_speed: float
+    direction_x: float
+    direction_y: float
+    alignment_score: float
+    push_quality: float
+    participant_count: int
+    toward_objective: str
+
+
+@dataclass
+class LuaTradeKill:
+    original_kill_time: int
+    traded_kill_time: int
+    delta_ms: int
+    original_victim_guid: str
+    original_victim_name: str
+    original_killer_guid: str
+    original_killer_name: str
+    trader_guid: str
+    trader_name: str
+
+
 class ProximityParserV4:
     """Parser for proximity_tracker v4 output files with full player tracking"""
 
@@ -182,8 +251,20 @@ class ProximityParserV4:
         self.movement_heatmap: List[Dict] = []
         self.trade_events: List[Dict] = []
         self.support_summary: Optional[Dict] = None
+        # v5 teamplay data
+        self.spawn_timing_events: List[SpawnTimingEvent] = []
+        self.team_cohesion_snapshots: List[TeamCohesionSnapshot] = []
+        self.crossfire_opportunities: List[CrossfireOpportunity] = []
+        self.team_pushes: List[TeamPush] = []
+        self.lua_trade_kills: List[LuaTradeKill] = []
         self.metadata = self._metadata_defaults()
         self._schema_cache: Dict[tuple, bool] = {}
+        self._round_link_context: Dict[str, Optional[object]] = {
+            "round_id": None,
+            "round_link_source": "unresolved",
+            "round_link_reason": "not_resolved",
+            "round_linked_at": None,
+        }
 
     @staticmethod
     def _metadata_defaults() -> Dict:
@@ -197,6 +278,9 @@ class ProximityParserV4:
             'position_sample_interval': 1000,  # v4: track sample rate
             'round_start_unix': 0,
             'round_end_unix': 0,
+            'axis_spawn_interval': 0,
+            'allies_spawn_interval': 0,
+            'tracker_version': 4,
         }
 
     @staticmethod
@@ -293,6 +377,11 @@ class ProximityParserV4:
         self.objective_focus = []
         self.trade_events = []
         self.support_summary = None
+        self.spawn_timing_events = []
+        self.team_cohesion_snapshots = []
+        self.crossfire_opportunities = []
+        self.team_pushes = []
+        self.lua_trade_kills = []
 
         section = 'header'
 
@@ -357,6 +446,37 @@ class ProximityParserV4:
                     if line.startswith('# REACTION_METRICS'):
                         section = 'reaction_metrics'
                         continue
+                    if line.startswith('# SPAWN_TIMING'):
+                        section = 'spawn_timing'
+                        continue
+                    if line.startswith('# TEAM_COHESION'):
+                        section = 'team_cohesion'
+                        continue
+                    if line.startswith('# CROSSFIRE_OPPORTUNITIES'):
+                        section = 'crossfire_opportunities'
+                        continue
+                    if line.startswith('# TEAM_PUSHES'):
+                        section = 'team_pushes'
+                        continue
+                    if line.startswith('# TRADE_KILLS'):
+                        section = 'trade_kills'
+                        continue
+
+                    if line.startswith('# axis_spawn_interval='):
+                        try:
+                            self.metadata['axis_spawn_interval'] = int(line.split('=')[1])
+                        except ValueError:
+                            pass
+                        continue
+                    if line.startswith('# allies_spawn_interval='):
+                        try:
+                            self.metadata['allies_spawn_interval'] = int(line.split('=')[1])
+                        except ValueError:
+                            pass
+                        continue
+                    if line.startswith('# PROXIMITY_TRACKER_V5'):
+                        self.metadata['tracker_version'] = 5
+                        continue
 
                     # Skip other comments
                     if line.startswith('#'):
@@ -375,6 +495,16 @@ class ProximityParserV4:
                         self._parse_objective_focus_line(line)
                     elif section == 'reaction_metrics':
                         self._parse_reaction_metric_line(line)
+                    elif section == 'spawn_timing':
+                        self._parse_spawn_timing_line(line)
+                    elif section == 'team_cohesion':
+                        self._parse_team_cohesion_line(line)
+                    elif section == 'crossfire_opportunities':
+                        self._parse_crossfire_opportunity_line(line)
+                    elif section == 'team_pushes':
+                        self._parse_team_push_line(line)
+                    elif section == 'trade_kills':
+                        self._parse_trade_kill_line(line)
 
             self._normalize_round_metadata(filepath)
             self.logger.info(
@@ -410,6 +540,134 @@ class ProximityParserV4:
         except Exception:
             self._schema_cache[key] = False
         return self._schema_cache[key]
+
+    async def _resolve_round_link_context(self, session_date) -> None:
+        """
+        Resolve a canonical rounds.id once per imported proximity file.
+
+        Keeps per-source timestamps (R1/R2 are physically distinct rounds) while
+        linking all rows to a stable round_id for cross-source joins.
+        """
+        context: Dict[str, Optional[object]] = {
+            "round_id": None,
+            "round_link_source": "unresolved",
+            "round_link_reason": "not_resolved",
+            "round_linked_at": datetime.utcnow(),
+        }
+        self._round_link_context = context
+
+        if not self.db_adapter:
+            context["round_link_reason"] = "db_unavailable"
+            return
+
+        map_name = str(self.metadata.get("map_name") or "").strip()
+        try:
+            round_number = int(self.metadata.get("round_num") or 0)
+        except (TypeError, ValueError):
+            round_number = 0
+
+        if not map_name or round_number <= 0:
+            context["round_link_reason"] = "invalid_metadata"
+            return
+
+        round_end_unix = int(self.metadata.get("round_end_unix") or 0)
+        round_start_unix = int(self.metadata.get("round_start_unix") or 0)
+        target_dt = None
+        if round_end_unix > 0:
+            target_dt = datetime.fromtimestamp(round_end_unix)
+        elif round_start_unix > 0:
+            target_dt = datetime.fromtimestamp(round_start_unix)
+
+        try:
+            from bot.core.round_linker import resolve_round_id_with_reason
+        except Exception:
+            context["round_link_reason"] = "round_linker_import_failed"
+            return
+
+        round_date = (
+            session_date.isoformat()
+            if hasattr(session_date, "isoformat")
+            else str(session_date)
+        )
+
+        try:
+            window_minutes = int(os.getenv("PROXIMITY_ROUND_LINK_WINDOW_MINUTES", "45"))
+        except ValueError:
+            window_minutes = 45
+        window_minutes = max(1, min(window_minutes, 180))
+
+        try:
+            round_id, diag = await resolve_round_id_with_reason(
+                self.db_adapter,
+                map_name,
+                round_number,
+                target_dt=target_dt,
+                round_date=round_date,
+                round_time=None,
+                window_minutes=window_minutes,
+            )
+        except Exception as exc:
+            context["round_link_reason"] = f"round_linker_error:{type(exc).__name__}"
+            return
+
+        reason_code = (diag or {}).get("reason_code")
+        context["round_id"] = round_id
+        context["round_link_source"] = "round_linker" if round_id else "unresolved"
+        context["round_link_reason"] = None if round_id else (reason_code or "unresolved")
+
+        if round_id:
+            self.logger.info(
+                "[ROUND LINK] map=%s round=%s round_id=%s reason=%s candidates=%s diff_s=%s",
+                map_name,
+                round_number,
+                round_id,
+                reason_code,
+                (diag or {}).get("candidate_count"),
+                (diag or {}).get("best_diff_seconds"),
+            )
+        else:
+            self.logger.warning(
+                "[ROUND LINK] unresolved map=%s round=%s reason=%s candidates=%s parsed=%s diff_s=%s",
+                map_name,
+                round_number,
+                reason_code,
+                (diag or {}).get("candidate_count"),
+                (diag or {}).get("parsed_candidate_count"),
+                (diag or {}).get("best_diff_seconds"),
+            )
+
+    async def _append_round_link_columns(self, table: str, columns: List[str], values: List[object]) -> None:
+        context = self._round_link_context or {}
+        if await self._table_has_column(table, "round_id"):
+            columns.append("round_id")
+            values.append(context.get("round_id"))
+        if await self._table_has_column(table, "round_link_source"):
+            columns.append("round_link_source")
+            values.append(context.get("round_link_source"))
+        if await self._table_has_column(table, "round_link_reason"):
+            columns.append("round_link_reason")
+            values.append(context.get("round_link_reason"))
+        if await self._table_has_column(table, "round_linked_at"):
+            columns.append("round_linked_at")
+            values.append(context.get("round_linked_at"))
+
+    async def _round_link_update_clauses(self, table: str) -> List[str]:
+        clauses: List[str] = []
+        if await self._table_has_column(table, "round_id"):
+            clauses.append(f"round_id = COALESCE(EXCLUDED.round_id, {table}.round_id)")
+        if await self._table_has_column(table, "round_link_source"):
+            clauses.append(
+                f"round_link_source = COALESCE(EXCLUDED.round_link_source, {table}.round_link_source)"
+            )
+        if await self._table_has_column(table, "round_link_reason"):
+            clauses.append(
+                f"round_link_reason = COALESCE(EXCLUDED.round_link_reason, {table}.round_link_reason)"
+            )
+        if await self._table_has_column(table, "round_linked_at"):
+            clauses.append(
+                f"round_linked_at = COALESCE(EXCLUDED.round_linked_at, {table}.round_linked_at)"
+            )
+        return clauses
     
     def _parse_engagement_line(self, line: str):
         """Parse engagement data line (semicolon-delimited)"""
@@ -678,6 +936,8 @@ class ProximityParserV4:
             from datetime import datetime
             session_date = datetime.strptime(session_date, '%Y-%m-%d').date()
 
+        await self._resolve_round_link_context(session_date)
+
         async def _run_import_steps():
             # Import engagements
             await self._import_engagements(session_date)
@@ -713,6 +973,18 @@ class ProximityParserV4:
                 self.support_summary = self._compute_support_uptime()
                 if self.support_summary:
                     await self._import_support_summary(session_date)
+
+            # v5 teamplay imports
+            if self.spawn_timing_events:
+                await self._import_spawn_timing(session_date)
+            if self.team_cohesion_snapshots:
+                await self._import_team_cohesion(session_date)
+            if self.crossfire_opportunities:
+                await self._import_crossfire_opportunities(session_date)
+            if self.team_pushes:
+                await self._import_team_pushes(session_date)
+            if self.lua_trade_kills:
+                await self._import_lua_trade_kills(session_date)
 
         try:
             tx_context = getattr(self.db_adapter, "transaction", None)
@@ -791,6 +1063,7 @@ class ProximityParserV4:
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("combat_engagement", columns, values)
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
                 INSERT INTO combat_engagement ({", ".join(columns)})
@@ -860,6 +1133,7 @@ class ProximityParserV4:
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("player_track", columns, values)
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
                 INSERT INTO player_track ({", ".join(columns)})
@@ -1115,6 +1389,104 @@ class ProximityParserV4:
                 cell['traversal'], cell['combat'], cell['escape']
             ))
 
+    def _parse_spawn_timing_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 10:
+                return
+            self.spawn_timing_events.append(SpawnTimingEvent(
+                killer_guid=parts[0],
+                killer_name=parts[1],
+                killer_team=parts[2],
+                victim_guid=parts[3],
+                victim_name=parts[4],
+                victim_team=parts[5],
+                kill_time=int(parts[6]),
+                enemy_spawn_interval=int(parts[7]),
+                time_to_next_spawn=int(parts[8]),
+                spawn_timing_score=float(parts[9]),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip spawn_timing line: {e}")
+
+    def _parse_team_cohesion_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 10:
+                return
+            self.team_cohesion_snapshots.append(TeamCohesionSnapshot(
+                sample_time=int(parts[0]),
+                team=parts[1],
+                alive_count=int(parts[2]),
+                centroid_x=float(parts[3]),
+                centroid_y=float(parts[4]),
+                dispersion=float(parts[5]),
+                max_spread=float(parts[6]),
+                straggler_count=int(parts[7]),
+                buddy_pair_guids=parts[8] if parts[8] else None,
+                buddy_distance=float(parts[9]) if parts[9] else None,
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip team_cohesion line: {e}")
+
+    def _parse_crossfire_opportunity_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 9:
+                return
+            self.crossfire_opportunities.append(CrossfireOpportunity(
+                event_time=int(parts[0]),
+                target_guid=parts[1],
+                target_name=parts[2],
+                target_team=parts[3],
+                teammate1_guid=parts[4],
+                teammate2_guid=parts[5],
+                angular_separation=float(parts[6]),
+                was_executed=parts[7] == '1',
+                damage_within_window=int(parts[8]),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip crossfire_opportunity line: {e}")
+
+    def _parse_team_push_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 10:
+                return
+            self.team_pushes.append(TeamPush(
+                start_time=int(parts[0]),
+                end_time=int(parts[1]),
+                team=parts[2],
+                avg_speed=float(parts[3]),
+                direction_x=float(parts[4]),
+                direction_y=float(parts[5]),
+                alignment_score=float(parts[6]),
+                push_quality=float(parts[7]),
+                participant_count=int(parts[8]),
+                toward_objective=parts[9],
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip team_push line: {e}")
+
+    def _parse_trade_kill_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 9:
+                return
+            self.lua_trade_kills.append(LuaTradeKill(
+                original_kill_time=int(parts[0]),
+                traded_kill_time=int(parts[1]),
+                delta_ms=int(parts[2]),
+                original_victim_guid=parts[3],
+                original_victim_name=parts[4],
+                original_killer_guid=parts[5],
+                original_killer_name=parts[6],
+                trader_guid=parts[7],
+                trader_name=parts[8],
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip trade_kill line: {e}")
+
     async def _import_objective_focus(self, session_date: str):
         """Import objective focus metrics if table exists"""
         supports_round_end = await self._table_has_column('proximity_objective_focus', 'round_end_unix')
@@ -1141,7 +1513,12 @@ class ProximityParserV4:
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_objective_focus", columns, values)
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            round_link_updates = await self._round_link_update_clauses("proximity_objective_focus")
+            extra_updates = ""
+            if round_link_updates:
+                extra_updates = ",\n                    " + ",\n                    ".join(round_link_updates)
             query = f"""
                 INSERT INTO proximity_objective_focus ({", ".join(columns)})
                 VALUES ({placeholders})
@@ -1151,7 +1528,181 @@ class ProximityParserV4:
                     objective = EXCLUDED.objective,
                     avg_distance = EXCLUDED.avg_distance,
                     time_within_radius_ms = EXCLUDED.time_within_radius_ms,
-                    samples = EXCLUDED.samples
+                    samples = EXCLUDED.samples{extra_updates}
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_spawn_timing(self, session_date):
+        """Import v5 spawn timing events"""
+        if not await self._table_has_column('proximity_spawn_timing', 'killer_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_spawn_timing', 'round_end_unix')
+        for evt in self.spawn_timing_events:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "killer_guid", "killer_name", "killer_team",
+                "victim_guid", "victim_name", "victim_team",
+                "kill_time", "enemy_spawn_interval",
+                "time_to_next_spawn", "spawn_timing_score",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                evt.killer_guid, evt.killer_name, evt.killer_team,
+                evt.victim_guid, evt.victim_name, evt.victim_team,
+                evt.kill_time, evt.enemy_spawn_interval,
+                evt.time_to_next_spawn, evt.spawn_timing_score,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_spawn_timing", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_spawn_timing ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_team_cohesion(self, session_date):
+        """Import v5 team cohesion snapshots"""
+        if not await self._table_has_column('proximity_team_cohesion', 'team'):
+            return
+        supports_round_end = await self._table_has_column('proximity_team_cohesion', 'round_end_unix')
+        for snap in self.team_cohesion_snapshots:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "sample_time", "team", "alive_count",
+                "centroid_x", "centroid_y", "dispersion", "max_spread",
+                "straggler_count", "buddy_pair_guids", "buddy_distance",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                snap.sample_time, snap.team, snap.alive_count,
+                snap.centroid_x, snap.centroid_y, snap.dispersion, snap.max_spread,
+                snap.straggler_count, snap.buddy_pair_guids, snap.buddy_distance,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_team_cohesion", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_team_cohesion ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_crossfire_opportunities(self, session_date):
+        """Import v5 crossfire opportunity events"""
+        if not await self._table_has_column('proximity_crossfire_opportunity', 'target_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_crossfire_opportunity', 'round_end_unix')
+        for opp in self.crossfire_opportunities:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "event_time", "target_guid", "target_name", "target_team",
+                "teammate1_guid", "teammate2_guid",
+                "angular_separation", "was_executed", "damage_within_window",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                opp.event_time, opp.target_guid, opp.target_name, opp.target_team,
+                opp.teammate1_guid, opp.teammate2_guid,
+                opp.angular_separation, opp.was_executed, opp.damage_within_window,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_crossfire_opportunity", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_crossfire_opportunity ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_team_pushes(self, session_date):
+        """Import v5 team push events"""
+        if not await self._table_has_column('proximity_team_push', 'team'):
+            return
+        supports_round_end = await self._table_has_column('proximity_team_push', 'round_end_unix')
+        for push in self.team_pushes:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "start_time", "end_time", "team", "avg_speed",
+                "direction_x", "direction_y", "alignment_score",
+                "push_quality", "participant_count", "toward_objective",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                push.start_time, push.end_time, push.team, push.avg_speed,
+                push.direction_x, push.direction_y, push.alignment_score,
+                push.push_quality, push.participant_count, push.toward_objective,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_team_push", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_team_push ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_lua_trade_kills(self, session_date):
+        """Import v5 Lua-side trade kill events"""
+        if not await self._table_has_column('proximity_lua_trade_kill', 'trader_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_lua_trade_kill', 'round_end_unix')
+        for tk in self.lua_trade_kills:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "original_kill_time", "traded_kill_time", "delta_ms",
+                "original_victim_guid", "original_victim_name",
+                "original_killer_guid", "original_killer_name",
+                "trader_guid", "trader_name",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                tk.original_kill_time, tk.traded_kill_time, tk.delta_ms,
+                tk.original_victim_guid, tk.original_victim_name,
+                tk.original_killer_guid, tk.original_killer_name,
+                tk.trader_guid, tk.trader_name,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_lua_trade_kill", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_lua_trade_kill ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT DO NOTHING
             """
             await self.db_adapter.execute(query, tuple(values))
 
@@ -1494,6 +2045,7 @@ class ProximityParserV4:
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_trade_event", columns, values)
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
                 INSERT INTO proximity_trade_event ({", ".join(columns)})
@@ -1543,8 +2095,13 @@ class ProximityParserV4:
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_reaction_metric", columns, values)
 
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            round_link_updates = await self._round_link_update_clauses("proximity_reaction_metric")
+            extra_updates = ""
+            if round_link_updates:
+                extra_updates = ",\n                    " + ",\n                    ".join(round_link_updates)
             query = f"""
                 INSERT INTO proximity_reaction_metric ({", ".join(columns)})
                 VALUES ({placeholders})
@@ -1560,7 +2117,7 @@ class ProximityParserV4:
                     support_reaction_ms = EXCLUDED.support_reaction_ms,
                     start_time_ms = EXCLUDED.start_time_ms,
                     end_time_ms = EXCLUDED.end_time_ms,
-                    duration_ms = EXCLUDED.duration_ms
+                    duration_ms = EXCLUDED.duration_ms{extra_updates}
             """
             await self.db_adapter.execute(query, tuple(values))
 
@@ -1589,8 +2146,13 @@ class ProximityParserV4:
         if supports_round_end:
             columns.insert(3, "round_end_unix")
             values.insert(3, self.metadata.get('round_end_unix', 0))
+        await self._append_round_link_columns("proximity_support_summary", columns, values)
 
         placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+        round_link_updates = await self._round_link_update_clauses("proximity_support_summary")
+        extra_updates = ""
+        if round_link_updates:
+            extra_updates = ",\n                " + ",\n                ".join(round_link_updates)
         query = f"""
             INSERT INTO proximity_support_summary ({", ".join(columns)})
             VALUES ({placeholders})
@@ -1599,7 +2161,7 @@ class ProximityParserV4:
                 support_samples = EXCLUDED.support_samples,
                 total_samples = EXCLUDED.total_samples,
                 support_uptime_pct = EXCLUDED.support_uptime_pct,
-                computed_at = CURRENT_TIMESTAMP
+                computed_at = CURRENT_TIMESTAMP{extra_updates}
         """
         await self.db_adapter.execute(query, tuple(values))
     
@@ -1632,6 +2194,13 @@ class ProximityParserV4:
             'total_distance': total_distance,
             'avg_life_ms': avg_life,
             'reaction_metrics': len(self.reaction_metrics),
+            # v5 teamplay
+            'tracker_version': self.metadata.get('tracker_version', 4),
+            'spawn_timing_events': len(self.spawn_timing_events),
+            'team_cohesion_snapshots': len(self.team_cohesion_snapshots),
+            'crossfire_opportunities': len(self.crossfire_opportunities),
+            'team_pushes': len(self.team_pushes),
+            'lua_trade_kills': len(self.lua_trade_kills),
         }
 
 

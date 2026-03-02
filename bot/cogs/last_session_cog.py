@@ -365,7 +365,7 @@ class LastSessionCog(commands.Cog):
 
             # Phase 3: Aggregate all data (now with correct team mappings)
             all_players = await self.stats_aggregator.aggregate_all_player_stats(session_ids, session_ids_str)
-            team_stats = await self.stats_aggregator.aggregate_team_stats(session_ids, session_ids_str, hardcoded_teams, name_to_team)
+            await self.stats_aggregator.aggregate_team_stats(session_ids, session_ids_str, hardcoded_teams, name_to_team)
 
             # Phase 3.5: Aggregate endstats (awards and VS stats)
             endstats_data = {'has_data': False}

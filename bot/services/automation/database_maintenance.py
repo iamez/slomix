@@ -39,11 +39,11 @@ class DatabaseMaintenance:
         self.admin_channel_id = admin_channel_id
 
         # Backup settings
-        self.backup_dir = "bot/backups"
+        self.backup_dir = "logs/backups"
         self.backup_retention = 7  # Keep last 7 backups
 
         # Log settings
-        self.log_dir = "bot/logs"
+        self.log_dir = "logs"
         self.log_retention_days = 30
 
         # State

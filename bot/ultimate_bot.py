@@ -27,7 +27,6 @@ from bot.core.round_contract import (
     normalize_side_value,
     score_confidence_state,
     derive_stopwatch_contract,
-    derive_end_reason_display,
 )
 
 # Import database adapter and config for PostgreSQL migration
@@ -38,6 +37,7 @@ from bot.services.voice_session_service import VoiceSessionService
 from bot.services.round_publisher_service import RoundPublisherService
 from bot.services.timing_debug_service import TimingDebugService
 from bot.services.timing_comparison_service import TimingComparisonService
+from bot.services.webhook_round_metadata_service import WebhookRoundMetadataService
 from bot.core.team_manager import TeamManager
 from bot.repositories import FileRepository
 
@@ -81,59 +81,6 @@ logger.info(f"🐍 Python: {sys.version}")
 logger.info(f"📦 Discord.py: {discord.__version__}")
 
 # ======================================================================
-
-
-async def ensure_player_name_alias(db) -> None:
-    """Create a TEMP VIEW aliasing an existing name column to `player_name`.
-
-    This standalone helper mirrors the Cog method and can be used by
-    non-Cog code paths that open their own DB connections (where `self`
-    isn't available).
-    """
-    try:
-        async with db.execute(
-            "PRAGMA table_info('player_comprehensive_stats')"
-        ) as cur:
-            cols = await cur.fetchall()
-
-        col_names = [c[1] for c in cols]
-        if "player_name" in col_names:
-            return
-
-        # Common alternate name columns we've seen in older DBs
-        candidates = [
-            "player_name",
-            "clean_name",
-            "clean_name_final",
-            "clean_name_normalized",
-            "name",
-            "player",
-            "display_name",
-        ]
-        # Pick the first candidate present in the table
-        alt = next((c for c in candidates if c in col_names), None)
-        if not alt:
-            logger.warning(
-                "player_comprehensive_stats missing 'player_name' and no alternative found"
-            )
-            return
-
-        tmp_tbl_sql = (
-            f"CREATE TEMP TABLE tmp_player_comprehensive_stats AS "
-            f"SELECT *, {alt} AS player_name FROM main.player_comprehensive_stats"
-        )
-        view_sql = "CREATE TEMP VIEW player_comprehensive_stats AS SELECT * FROM tmp_player_comprehensive_stats"
-
-        await db.execute(tmp_tbl_sql)
-        await db.execute(view_sql)
-        await db.commit()
-        logger.info(
-            f"Created TEMP VIEW player_comprehensive_stats aliasing {alt} -> player_name via tmp table"
-        )
-    except Exception:
-        logger.exception(
-            "Failed to create TEMP VIEW alias for player_name; queries may still fail"
-        )
 
 
 def _split_chunks(s: str, max_len: int = 900):
@@ -198,7 +145,6 @@ class UltimateETLegacyBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
         # 📊 Database Configuration - Load config and create adapter
-        import os
 
         # Load configuration (from env vars or bot_config.json)
         self.config = load_config()
@@ -254,6 +200,8 @@ class UltimateETLegacyBot(commands.Bot):
         # 👥 Timing Comparison Service (per-player timing analysis for dev channel)
         self.timing_comparison_service = TimingComparisonService(self.db_adapter, self)
         logger.info("✅ Timing comparison service initialized")
+        self.webhook_round_metadata_service = WebhookRoundMetadataService()
+        logger.info("✅ Webhook round metadata service initialized")
 
         # 📊 Round Publisher Service (manages Discord auto-posting of stats)
         self.round_publisher = RoundPublisherService(
@@ -262,6 +210,26 @@ class UltimateETLegacyBot(commands.Bot):
             timing_comparison_service=self.timing_comparison_service
         )
         logger.info("✅ Round publisher service initialized")
+
+        # 🔗 Round Correlation Service (tracks R1+R2 data completeness)
+        self.correlation_service = None
+        if self.config.correlation_enabled:
+            from bot.services.round_correlation_service import RoundCorrelationService
+            self.correlation_service = RoundCorrelationService(
+                self.db_adapter,
+                dry_run=self.config.correlation_dry_run,
+                require_schema_check=self.config.correlation_require_schema_check,
+                write_error_threshold=self.config.correlation_write_error_threshold,
+            )
+            requested_mode = "dry-run" if self.config.correlation_dry_run else "live"
+            logger.info(
+                "✅ Round correlation service initialized "
+                f"(requested={requested_mode}, "
+                f"schema_check={self.config.correlation_require_schema_check}, "
+                f"error_threshold={self.config.correlation_write_error_threshold})"
+            )
+        else:
+            logger.warning("⚠️ Round correlation service disabled (CORRELATION_ENABLED=false)")
 
         # 📁 File Repository (data access layer for processed files)
         self.file_repository = FileRepository(self.db_adapter, self.config)
@@ -628,6 +596,19 @@ class UltimateETLegacyBot(commands.Bot):
         # ✅ CRITICAL: Validate schema FIRST
         await self.validate_database_schema()
 
+        # 🔗 Correlation guardrail initialization (schema preflight/live fallback)
+        if self.correlation_service:
+            await self.correlation_service.initialize()
+            effective_mode = "DRY-RUN" if self.correlation_service.dry_run else "LIVE"
+            guardrail_reason = getattr(self.correlation_service, "guardrail_reason", None)
+            if guardrail_reason:
+                logger.warning(
+                    f"⚠️ Correlation service effective mode={effective_mode}, "
+                    f"guardrail_reason={guardrail_reason}"
+                )
+            else:
+                logger.info(f"✅ Correlation service effective mode={effective_mode}")
+
 
         # � Load Admin Cog (database operations, maintenance commands)
         try:
@@ -744,7 +725,7 @@ class UltimateETLegacyBot(commands.Bot):
 
         # �🎯 FIVEEYES: Load synergy analytics cog (SAFE - disabled by default)
         try:
-            await self.load_extension("cogs.synergy_analytics")
+            await self.load_extension("bot.cogs.synergy_analytics")
             logger.info(
                 "✅ FIVEEYES synergy analytics cog loaded (disabled by default)"
             )
@@ -756,7 +737,7 @@ class UltimateETLegacyBot(commands.Bot):
 
         # 🎯 PROXIMITY TRACKER: Load combat engagement analytics (SAFE - disabled by default)
         try:
-            await self.load_extension("cogs.proximity_cog")
+            await self.load_extension("bot.cogs.proximity_cog")
             status = "ENABLED" if self.config.proximity_enabled else "disabled"
             logger.info(f"✅ Proximity Tracker cog loaded ({status})")
         except Exception as e:
@@ -765,7 +746,7 @@ class UltimateETLegacyBot(commands.Bot):
 
         # 🎮 SERVER CONTROL: Load server control cog (optional)
         try:
-            await self.load_extension("cogs.server_control")
+            await self.load_extension("bot.cogs.server_control")
             logger.info("✅ Server Control cog loaded")
         except Exception as e:
             logger.warning(f"⚠️  Could not load Server Control cog: {e}")
@@ -773,14 +754,14 @@ class UltimateETLegacyBot(commands.Bot):
 
         # 🔮 COMPETITIVE ANALYTICS: Load prediction cogs (Phase 5)
         try:
-            await self.load_extension("cogs.predictions_cog")
+            await self.load_extension("bot.cogs.predictions_cog")
             logger.info("✅ Predictions cog loaded (!predictions, !prediction_stats, !my_predictions)")
         except Exception as e:
             logger.warning(f"⚠️  Could not load Predictions cog: {e}")
             logger.warning("Bot will continue without prediction commands")
 
         try:
-            await self.load_extension("cogs.admin_predictions_cog")
+            await self.load_extension("bot.cogs.admin_predictions_cog")
             logger.info("✅ Admin Predictions cog loaded (!admin_predictions, !update_prediction_outcome)")
         except Exception as e:
             logger.warning(f"⚠️  Could not load Admin Predictions cog: {e}")
@@ -809,7 +790,7 @@ class UltimateETLegacyBot(commands.Bot):
 
             if db_type in ("postgresql", "postgres"):
                 sqlite_path = getattr(self.config, "sqlite_db_path", "") or ""
-                default_metrics_path = os.path.join("bot", "logs", "metrics", "metrics.db")
+                default_metrics_path = os.path.join("logs", "metrics", "metrics.db")
                 sqlite_abs = os.path.abspath(sqlite_path) if sqlite_path else ""
                 metrics_abs = os.path.abspath(metrics_db_path) if metrics_db_path else ""
                 metrics_basename = os.path.basename(metrics_abs) if metrics_abs else ""
@@ -837,7 +818,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.info("✅ Automation services initialized (SSH, Health, Metrics, DB Maintenance)")
 
             # Load automation commands cog
-            await self.load_extension("cogs.automation_commands")
+            await self.load_extension("bot.cogs.automation_commands")
             logger.info("✅ Automation Commands cog loaded")
 
             # NOTE: SSHMonitor service is DISABLED - endstats_monitor task handles everything
@@ -904,7 +885,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.debug("📡 WebSocket push disabled (using SSH polling)")
 
         # 🎯 Proximity Tracker Cog (optional, isolated)
-        # NOTE: It is already loaded above via load_extension("cogs.proximity_cog").
+        # NOTE: It is already loaded above via load_extension("bot.cogs.proximity_cog").
         # Keep this as a no-op guard so startup does not create duplicate cog instances.
         try:
             if self.get_cog("Proximity") is not None:
@@ -1117,6 +1098,10 @@ class UltimateETLegacyBot(commands.Bot):
 
                 # Create database manager instance and share the bot's existing pool
                 db_manager = PostgreSQLDatabaseManager()
+                # Reuse the same correlation service so stats imports participate
+                # in the same round completeness lifecycle as webhook/gametime data.
+                if hasattr(self, 'correlation_service') and self.correlation_service:
+                    db_manager._correlation_service = self.correlation_service
                 # Reuse the bot's existing asyncpg pool instead of creating a new one
                 if hasattr(self, 'db_adapter') and hasattr(self.db_adapter, 'pool') and self.db_adapter.pool:
                     db_manager.pool = self.db_adapter.pool
@@ -1327,6 +1312,43 @@ class UltimateETLegacyBot(commands.Bot):
         except Exception as e:
             logger.debug(f"Round ID resolve failed: {e}")
             return None
+
+    async def _resolve_round_correlation_context(
+        self,
+        round_id: int | None,
+        fallback_match_id: str,
+        fallback_map_name: str,
+        fallback_round_number: int,
+    ) -> tuple[str, str, int]:
+        """
+        Resolve canonical correlation identity from rounds when round_id is known.
+
+        This keeps R1/R2 timestamp reality intact in source payloads while ensuring
+        correlation keys align with canonical rounds.match_id.
+        """
+        canonical_match_id = fallback_match_id
+        canonical_map_name = fallback_map_name
+        canonical_round_number = fallback_round_number
+
+        if not round_id:
+            return canonical_match_id, canonical_map_name, canonical_round_number
+
+        try:
+            row = await self.db_adapter.fetch_one(
+                "SELECT match_id, map_name, round_number FROM rounds WHERE id = $1",
+                (round_id,),
+            )
+            if row:
+                if row[0]:
+                    canonical_match_id = row[0]
+                if row[1]:
+                    canonical_map_name = row[1]
+                if row[2] is not None:
+                    canonical_round_number = int(row[2])
+        except Exception as e:
+            logger.debug(f"Round correlation context resolve failed for round_id={round_id}: {e}")
+
+        return canonical_match_id, canonical_map_name, canonical_round_number
 
     async def _post_live_achievements(self, stats_data: dict) -> None:
         """
@@ -1571,6 +1593,34 @@ class UltimateETLegacyBot(commands.Bot):
                 f"pauses={metadata.get('pause_count')}"
             )
 
+            # FIX: When Lua webhook provides actual_duration_seconds, use it to correct
+            # player stats that were computed with an inflated header-fallback time_played_seconds.
+            # This handles the ET:Legacy R2 actual_time quirk where stats files report cumulative
+            # server uptime instead of round duration.
+            # See: DPM Bug Investigation (Feb 27, 2026) - root cause: header fallback in parser
+            lua_duration = metadata.get('actual_duration_seconds')
+            if lua_duration and lua_duration > 0:
+                try:
+                    fix_query = """
+                        UPDATE player_comprehensive_stats
+                        SET
+                            time_played_seconds = $1,
+                            time_played_minutes = $1 / 60.0,
+                            dpm = CASE WHEN $1 > 0 THEN (damage_given * 60.0) / $1 ELSE 0 END
+                        WHERE round_id = $2
+                          AND time_played_seconds > $1 * 1.5
+                    """
+                    await self.db_adapter.execute(fix_query, (lua_duration, round_id))
+                    logger.debug(
+                        f"✅ Fixed player stats for round {round_id} using Lua duration: "
+                        f"clamped inflated time_played_seconds to {lua_duration}s"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to fix player stats for round {round_id}: {e} "
+                        "(non-fatal, round still imported correctly)"
+                    )
+
             # Link Lua rows to this round_id when possible
             await self._link_lua_round_teams(round_id, metadata)
 
@@ -1643,13 +1693,73 @@ class UltimateETLegacyBot(commands.Bot):
                     best_diff = diff
                     best_id = lua_id
 
-            if best_id is None:
-                return
+            if best_id is not None:
+                await self.db_adapter.execute(
+                    "UPDATE lua_round_teams SET round_id = ? WHERE id = ?",
+                    (round_id, best_id),
+                )
+                logger.debug(
+                    "Lua round link (NULL pass): lua_id=%s → round_id=%s (diff=%ss)",
+                    best_id, round_id, best_diff,
+                )
 
-            await self.db_adapter.execute(
-                "UPDATE lua_round_teams SET round_id = ? WHERE id = ?",
-                (round_id, best_id),
+            # --- Second pass: fix stale linkages ---
+            # When the same map is played multiple times in a session, the initial
+            # insert may link a Lua record to a wrong round (race condition: the
+            # correct round hadn't been imported yet). Now that THIS round exists,
+            # check if any Lua records currently linked to OTHER rounds are actually
+            # a closer temporal match for THIS round.
+            stale_query = """
+                SELECT lrt.id, lrt.round_end_unix, lrt.round_start_unix, lrt.round_id
+                FROM lua_round_teams lrt
+                WHERE lrt.map_name = ?
+                  AND lrt.round_number = ?
+                  AND lrt.round_id IS NOT NULL
+                  AND lrt.round_id != ?
+                  AND (
+                        (lrt.round_end_unix IS NOT NULL AND ABS(lrt.round_end_unix - ?) <= ?)
+                     OR (lrt.round_start_unix IS NOT NULL AND ABS(lrt.round_start_unix - ?) <= ?)
+                  )
+                ORDER BY captured_at DESC
+                LIMIT 10
+            """
+            stale_rows = await self.db_adapter.fetch_all(
+                stale_query,
+                (map_name, round_number, round_id, target_unix, window_seconds, target_unix, window_seconds),
             )
+            for row in stale_rows:
+                lua_id, lua_end_unix, lua_start_unix, current_rid = row
+                lua_ts = int(lua_end_unix or lua_start_unix or 0)
+                if not lua_ts:
+                    continue
+
+                # Get the currently-linked round's timestamp for comparison
+                current_round = await self.db_adapter.fetch_one(
+                    "SELECT round_date, round_time FROM rounds WHERE id = ?",
+                    (current_rid,),
+                )
+                if not current_round:
+                    continue
+                from bot.core.round_linker import _parse_round_datetime
+                current_round_dt = _parse_round_datetime(current_round[0], current_round[1])
+                if not current_round_dt:
+                    continue
+                current_round_unix = int(current_round_dt.timestamp())
+
+                dist_to_this = abs(lua_ts - target_unix)
+                dist_to_current = abs(lua_ts - current_round_unix)
+
+                if dist_to_this < dist_to_current:
+                    await self.db_adapter.execute(
+                        "UPDATE lua_round_teams SET round_id = ? WHERE id = ?",
+                        (round_id, lua_id),
+                    )
+                    logger.info(
+                        "🔗 Lua round re-link (stale fix): lua_id=%s moved %s → %s "
+                        "(dist: %ss→%ss, map=%s R%s)",
+                        lua_id, current_rid, round_id,
+                        dist_to_current, dist_to_this, map_name, round_number,
+                    )
         except Exception as e:
             logger.debug(f"Lua round link failed: {e}")
 
@@ -1731,7 +1841,6 @@ class UltimateETLegacyBot(commands.Bot):
                     self._player_stats_columns = set()
 
             # Extract date from filename: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
-            timestamp = "-".join(filename.split("-")[:4])  # Full timestamp YYYY-MM-DD-HHMMSS
             date_part = "-".join(filename.split("-")[:3])  # Date YYYY-MM-DD
             time_part = filename.split("-")[3] if len(filename.split("-")) > 3 else "000000"  # HHMMSS
 
@@ -2059,6 +2168,26 @@ class UltimateETLegacyBot(commands.Bot):
                 session_date=date_part,
                 gaming_session_id=gaming_session_id
             )
+
+            # 🔗 CORRELATION: notify correlation service of round import
+            if hasattr(self, 'correlation_service') and self.correlation_service:
+                try:
+                    corr_match_id, corr_map_name, corr_round_num = (
+                        await self._resolve_round_correlation_context(
+                            round_id,
+                            fallback_match_id=match_id,
+                            fallback_map_name=stats_data.get("map_name", "unknown"),
+                            fallback_round_number=int(stats_data.get("round_num", 0) or 0),
+                        )
+                    )
+                    await self.correlation_service.on_round_imported(
+                        match_id=corr_match_id,
+                        round_number=corr_round_num,
+                        round_id=round_id,
+                        map_name=corr_map_name,
+                    )
+                except Exception as corr_err:
+                    logger.warning(f"[CORRELATION] hook error (non-fatal): {corr_err}")
 
             return round_id
 
@@ -2468,28 +2597,6 @@ class UltimateETLegacyBot(commands.Bot):
 
                     row_vals += [weapon_name, w_kills, w_deaths, w_headshots, w_hits, w_shots, w_acc]
 
-                    # Temporary diagnostic logging: capture the first few weapon INSERTs
-                    # to verify column/value alignment (will be removed after debugging).
-                    try:
-                        logged = getattr(self, "_weapon_diag_logged", 0)
-                        if logged < 5:
-                            logger.debug(
-                                "DIAG WEAPON INSERT: round_id=%s player=%s",
-                                round_id,
-                                player.get("name"),
-                            )
-                            logger.debug("  insert_cols: %s", insert_cols)
-                            logger.debug("  row_vals: %r", tuple(row_vals))
-                            logger.debug("  insert_sql: %s", insert_sql)
-                            # increment global counter on the bot cog instance
-                            try:
-                                self._weapon_diag_logged = logged + 1
-                            except Exception:
-                                # Best-effort; don't raise from diagnostics
-                                pass
-                    except Exception:
-                        logger.exception("Failed to log weapon insert diagnostic")
-
                     await self.db_adapter.execute(insert_sql, tuple(row_vals))
         except Exception as e:
             # Weapon insert failures should be visible — escalate to error and include traceback
@@ -2811,12 +2918,25 @@ class UltimateETLegacyBot(commands.Bot):
         """
         🔄 Cache Refresh Task - Runs every 30 seconds
 
-        Keeps in-memory cache in sync with database
-        Uses FileRepository for data access (Repository Pattern)
+        Keeps in-memory cache in sync with database.
+        Uses incremental delta queries after the initial full load
+        to avoid fetching all 4000+ rows every cycle.
         """
         try:
-            # Refresh processed files cache via repository
-            self.processed_files = await self.file_repository.get_processed_filenames()
+            from datetime import datetime
+
+            if not hasattr(self, '_cache_last_refresh'):
+                # First run: full load
+                self.processed_files = await self.file_repository.get_processed_filenames()
+                self._cache_last_refresh = datetime.utcnow()
+            else:
+                # Subsequent runs: incremental delta only
+                new_files = await self.file_repository.get_newly_processed_filenames(
+                    self._cache_last_refresh
+                )
+                if new_files:
+                    self.processed_files.update(new_files)
+                self._cache_last_refresh = datetime.utcnow()
 
         except Exception as e:
             logger.debug(f"Cache refresh error: {e}")
@@ -2989,12 +3109,13 @@ class UltimateETLegacyBot(commands.Bot):
                         server_cog.rcon_port,
                         server_cog.rcon_password
                     )
-                    # Set socket timeout to prevent blocking on shutdown
-                    if hasattr(rcon, 'socket') and rcon.socket:
-                        rcon.socket.settimeout(5.0)
                     try:
-                        status_response = rcon.send_command('status')
-                        rcon.close()
+                        # Run RCON in executor to avoid blocking event loop
+                        loop = asyncio.get_running_loop()
+                        status_response = await loop.run_in_executor(
+                            None, rcon.send_command, 'status'
+                        )
+                        await loop.run_in_executor(None, rcon.close)
                         rcon = None
 
                         if status_response and 'Error' not in status_response:
@@ -3335,6 +3456,18 @@ class UltimateETLegacyBot(commands.Bot):
             label="STATS_READY webhook",
         )
 
+    def _webhook_trigger_mode(self) -> str:
+        mode = str(getattr(self.config, "webhook_trigger_mode", "stats_ready_only") or "").strip().lower()
+        if mode in {"stats_ready_only", "dual", "filename_only"}:
+            return mode
+        return "stats_ready_only"
+
+    def _webhook_mode_allows_stats_ready(self) -> bool:
+        return self._webhook_trigger_mode() in {"stats_ready_only", "dual"}
+
+    def _webhook_mode_allows_filename_triggers(self) -> bool:
+        return self._webhook_trigger_mode() in {"dual", "filename_only"}
+
     def _validate_stats_filename(self, filename: str) -> bool:
         """
         Strict validation for stats filenames.
@@ -3502,9 +3635,16 @@ class UltimateETLegacyBot(commands.Bot):
             _debug_webhook("ignored: duplicate webhook message id")
             return True
 
+        webhook_mode = self._webhook_trigger_mode()
+        allow_stats_ready = self._webhook_mode_allows_stats_ready()
+        allow_filename_triggers = self._webhook_mode_allows_filename_triggers()
+
         # ===== Handle STATS_READY webhook with embedded metadata =====
         # Lua script sends "STATS_READY" with embeds containing timing/winner data
         if message.content and message.content.strip() == "STATS_READY":
+            if not allow_stats_ready:
+                _debug_webhook(f"ignored: STATS_READY disabled by mode={webhook_mode}")
+                return False
             if message.embeds:
                 if not self._check_stats_ready_rate_limit(message.webhook_id):
                     _debug_webhook("ignored: STATS_READY rate limited")
@@ -3517,6 +3657,10 @@ class UltimateETLegacyBot(commands.Bot):
                 webhook_logger.warning("STATS_READY webhook received but no embeds found")
                 _debug_webhook("ignored: STATS_READY missing embeds")
                 return False
+
+        if not allow_filename_triggers:
+            _debug_webhook(f"ignored: filename trigger disabled by mode={webhook_mode}")
+            return False
 
         # HIGH: Rate limit check (applies to filename/endstats triggers only).
         # STATS_READY carries authoritative round metadata and should not be
@@ -3665,184 +3809,25 @@ class UltimateETLegacyBot(commands.Bot):
             await self.track_error("webhook_processing", str(e), max_consecutive=3)
 
     def _fields_to_metadata_map(self, fields) -> dict:
-        metadata = {}
-        for field in fields or []:
-            name = getattr(field, "name", None)
-            value = getattr(field, "value", None)
-            if name is None and isinstance(field, dict):
-                name = field.get("name")
-                value = field.get("value")
-            if not name:
-                continue
-            metadata[str(name).lower()] = "" if value is None else str(value)
-        return metadata
+        return self.webhook_round_metadata_service.fields_to_metadata_map(fields)
 
     def _parse_spawn_stats_from_metadata(self, metadata: dict) -> list:
-        """
-        Parse spawn stats JSON from Lua metadata fields.
-        Accepts multiple key variants for compatibility.
-        """
-        import json as _json
-        raw = (
-            metadata.get("lua_spawnstats_json")
-            or metadata.get("lua_spawn_stats_json")
-            or metadata.get("spawn_stats")
-        )
-        if not raw:
-            return []
-        try:
-            text = str(raw).replace('\\"', '"')
-            return _json.loads(text) if text else []
-        except _json.JSONDecodeError:
-            return []
+        return self.webhook_round_metadata_service.parse_spawn_stats_from_metadata(metadata)
 
     def _parse_lua_version_from_footer(self, footer_text: str | None) -> str | None:
-        if not footer_text:
-            return None
-        match = re.search(r"v(\d+\.\d+\.\d+)", footer_text)
-        return match.group(1) if match else None
+        return self.webhook_round_metadata_service.parse_lua_version_from_footer(footer_text)
 
     def _build_round_metadata_from_map(
         self,
         metadata: dict,
         footer_text: str | None = None,
     ) -> dict:
-        import json as _json
-
-        winner_raw = metadata.get("winner", 0)
-        defender_raw = metadata.get("defender", 0)
-        winner_team = normalize_side_value(winner_raw, allow_unknown=True)
-        defender_team = normalize_side_value(defender_raw, allow_unknown=True)
-        side_reasons = []
-        if winner_team == 0:
-            side_reasons.append("winner_missing_or_invalid")
-        if defender_team == 0:
-            side_reasons.append("defender_missing_or_invalid")
-
-        end_reason_raw = metadata.get("lua_endreason", metadata.get("end reason", "unknown"))
-        normalized_end_reason = normalize_end_reason(end_reason_raw)
-        raw_round_number = metadata.get("round")
-        normalized_round_number = self._normalize_lua_round_for_metadata_paths(raw_round_number)
-
-        round_metadata = {
-            "map_name": metadata.get("map", "unknown"),
-            "round_number": normalized_round_number,
-            "lua_round_number_raw": raw_round_number,
-            "winner_team": winner_team,
-            "defender_team": defender_team,
-            # v1.2.0: renamed fields with Lua_ prefix, normalized to strict enum
-            "end_reason": normalized_end_reason,
-            "end_reason_raw": end_reason_raw,
-            "round_start_unix": int(metadata.get("lua_roundstart", metadata.get("start unix", 0)) or 0),
-            "round_end_unix": int(metadata.get("lua_roundend", metadata.get("end unix", 0)) or 0),
-            "side_parse_diagnostics": {
-                "winner_team_raw": winner_raw,
-                "defender_team_raw": defender_raw,
-                "reasons": side_reasons,
-            },
-        }
-
-        duration_str = metadata.get("lua_playtime", metadata.get("duration", "0 sec"))
-        try:
-            round_metadata["lua_playtime_seconds"] = int(str(duration_str).split()[0])
-            round_metadata["actual_duration_seconds"] = round_metadata["lua_playtime_seconds"]
-        except (ValueError, IndexError):
-            round_metadata["lua_playtime_seconds"] = 0
-            round_metadata["actual_duration_seconds"] = 0
-
-        time_limit_str = metadata.get("lua_timelimit", metadata.get("time limit", "0 min"))
-        try:
-            round_metadata["lua_timelimit_minutes"] = int(str(time_limit_str).split()[0])
-            round_metadata["time_limit_minutes"] = round_metadata["lua_timelimit_minutes"]
-        except (ValueError, IndexError):
-            round_metadata["lua_timelimit_minutes"] = 0
-            round_metadata["time_limit_minutes"] = 0
-
-        pauses_str = metadata.get("lua_pauses", metadata.get("pauses", "0 (0 sec)"))
-        try:
-            parts = str(pauses_str).split("(")
-            round_metadata["lua_pause_count"] = int(parts[0].strip())
-            round_metadata["pause_count"] = round_metadata["lua_pause_count"]
-            if len(parts) > 1:
-                round_metadata["lua_pause_seconds"] = int(parts[1].rstrip(" sec)"))
-            else:
-                round_metadata["lua_pause_seconds"] = 0
-            round_metadata["total_pause_seconds"] = round_metadata["lua_pause_seconds"]
-        except (ValueError, IndexError):
-            round_metadata["lua_pause_count"] = 0
-            round_metadata["lua_pause_seconds"] = 0
-            round_metadata["pause_count"] = 0
-            round_metadata["total_pause_seconds"] = 0
-
-        warmup_str = metadata.get("lua_warmup", "0 sec")
-        try:
-            round_metadata["lua_warmup_seconds"] = int(str(warmup_str).split()[0])
-        except (ValueError, IndexError):
-            round_metadata["lua_warmup_seconds"] = 0
-
-        round_metadata["lua_warmup_start_unix"] = int(metadata.get("lua_warmupstart", 0) or 0)
-        round_metadata["lua_warmup_end_unix"] = int(
-            metadata.get("lua_warmupend", metadata.get("lua_roundstart", 0)) or 0
+        return self.webhook_round_metadata_service.build_round_metadata_from_map(
+            metadata,
+            footer_text=footer_text,
+            normalize_round_number=self._normalize_lua_round_for_metadata_paths,
+            warn=webhook_logger.warning,
         )
-
-        pause_events_raw = metadata.get("lua_pauses_json", "[]")
-        try:
-            pause_events_json = str(pause_events_raw).replace('\\"', '"')
-            round_metadata["lua_pause_events"] = (
-                _json.loads(pause_events_json) if pause_events_json != "[]" else []
-            )
-        except _json.JSONDecodeError:
-            round_metadata["lua_pause_events"] = []
-
-        round_metadata["surrender_team"] = int(metadata.get("lua_surrenderteam", 0) or 0)
-        round_metadata["surrender_caller_guid"] = metadata.get("lua_surrendercaller", "")
-        round_metadata["surrender_caller_name"] = metadata.get("lua_surrendercallername", "")
-
-        round_metadata["axis_score"] = int(metadata.get("lua_axisscore", 0) or 0)
-        round_metadata["allies_score"] = int(metadata.get("lua_alliesscore", 0) or 0)
-
-        axis_json_raw = metadata.get("axis_json", "[]")
-        allies_json_raw = metadata.get("allies_json", "[]")
-
-        try:
-            axis_json = str(axis_json_raw).replace('\\"', '"')
-            allies_json = str(allies_json_raw).replace('\\"', '"')
-            round_metadata["axis_players"] = (
-                _json.loads(axis_json) if axis_json != "[]" else []
-            )
-            round_metadata["allies_players"] = (
-                _json.loads(allies_json) if allies_json != "[]" else []
-            )
-        except _json.JSONDecodeError as e:
-            webhook_logger.warning(f"Failed to parse team JSON: {e}")
-            round_metadata["axis_players"] = []
-            round_metadata["allies_players"] = []
-
-        lua_version = self._parse_lua_version_from_footer(footer_text)
-        if lua_version:
-            round_metadata["lua_version"] = lua_version
-
-        stopwatch_contract = derive_stopwatch_contract(
-            round_metadata.get("round_number", 0),
-            int(round_metadata.get("time_limit_minutes", 0) or 0) * 60,
-            round_metadata.get("actual_duration_seconds", 0),
-            round_metadata.get("end_reason"),
-        )
-        round_metadata["round_stopwatch_state"] = stopwatch_contract["round_stopwatch_state"]
-        round_metadata["time_to_beat_seconds"] = stopwatch_contract["time_to_beat_seconds"]
-        round_metadata["next_timelimit_minutes"] = stopwatch_contract["next_timelimit_minutes"]
-        round_metadata["end_reason_display"] = derive_end_reason_display(
-            round_metadata.get("end_reason"),
-            round_stopwatch_state=round_metadata.get("round_stopwatch_state"),
-        )
-        round_metadata["score_confidence"] = score_confidence_state(
-            round_metadata.get("defender_team"),
-            round_metadata.get("winner_team"),
-            reasons=side_reasons,
-            fallback_used=False,
-        )
-
-        return round_metadata
 
     async def _process_stats_ready_webhook(self, message):
         """
@@ -4029,9 +4014,44 @@ class UltimateETLegacyBot(commands.Bot):
         if allies_names:
             webhook_logger.info(f"   Allies: {allies_names}")
 
-        await self._store_lua_round_teams(round_metadata)
+        stored_round_id = await self._store_lua_round_teams(round_metadata)
         if spawn_stats_meta:
             await self._store_lua_spawn_stats(round_metadata, spawn_stats_meta)
+
+        # 🔗 CORRELATION: notify of gametime arrival
+        if hasattr(self, 'correlation_service') and self.correlation_service:
+            try:
+                round_end = int(round_metadata.get('round_end_unix', 0) or 0)
+                fallback_match_id = "unknown"
+                if round_end:
+                    from datetime import datetime as _dt
+                    # NOTE: fromtimestamp() uses local time, matching Lua os.date()
+                    # which generates stats filenames in the game server's local TZ.
+                    # Both machines are CET — do NOT change to utcfromtimestamp().
+                    ts = _dt.fromtimestamp(round_end)
+                    fallback_match_id = ts.strftime('%Y-%m-%d-%H%M%S')
+
+                try:
+                    round_number = int(round_metadata.get('round_number', 0) or 0)
+                except (TypeError, ValueError):
+                    round_number = 0
+                map_name = round_metadata.get('map_name', 'unknown')
+                corr_match_id, corr_map_name, corr_round_number = (
+                    await self._resolve_round_correlation_context(
+                        stored_round_id,
+                        fallback_match_id=fallback_match_id,
+                        fallback_map_name=map_name,
+                        fallback_round_number=round_number,
+                    )
+                )
+                if corr_match_id != "unknown":
+                    await self.correlation_service.on_gametime_processed(
+                        match_id=corr_match_id,
+                        round_number=corr_round_number,
+                        map_name=corr_map_name,
+                    )
+            except Exception as corr_err:
+                webhook_logger.warning(f"[CORRELATION] gametime hook error (non-fatal): {corr_err}")
 
         self._queue_pending_metadata(round_metadata, source="gametime")
 
@@ -4151,7 +4171,7 @@ class UltimateETLegacyBot(commands.Bot):
 
             if round_end == 0:
                 webhook_logger.warning("Cannot store Lua teams: missing round_end_unix")
-                return
+                return None
 
             # Create match_id in same format as rounds table
             # Format: YYYY-MM-DD-HHMMSS (timestamp only, NO map name)
@@ -4161,6 +4181,16 @@ class UltimateETLegacyBot(commands.Bot):
 
             # Try to resolve round_id for direct linking (may be None if stats not imported yet)
             round_id = await self._resolve_round_id_for_metadata(None, round_metadata)
+            try:
+                fallback_round_number = int(round_number or 0)
+            except (TypeError, ValueError):
+                fallback_round_number = 0
+            corr_match_id, corr_map_name, corr_round_number = await self._resolve_round_correlation_context(
+                round_id,
+                fallback_match_id=match_id,
+                fallback_map_name=map_name,
+                fallback_round_number=fallback_round_number,
+            )
 
             # Serialize team data as JSON
             axis_players = round_metadata.get('axis_players', [])
@@ -4345,10 +4375,31 @@ class UltimateETLegacyBot(commands.Bot):
                 f"(Axis: {axis_count}, Allies: {allies_count})"
             )
 
+            # 🔗 CORRELATION: notify of lua teams arrival
+            if hasattr(self, 'correlation_service') and self.correlation_service:
+                try:
+                    # Fetch the lua_round_teams id for this upsert
+                    lua_row = await self.db_adapter.fetch_one(
+                        "SELECT id FROM lua_round_teams WHERE match_id = $1 AND round_number = $2",
+                        (match_id, round_number),
+                    )
+                    lua_teams_id = lua_row[0] if lua_row else None
+                    if lua_teams_id:
+                        await self.correlation_service.on_lua_teams_stored(
+                            match_id=corr_match_id,
+                            round_number=corr_round_number,
+                            lua_teams_id=lua_teams_id,
+                            map_name=corr_map_name,
+                        )
+                except Exception as corr_err:
+                    webhook_logger.warning(f"[CORRELATION] lua_teams hook error (non-fatal): {corr_err}")
+            return round_id
+
         except Exception as e:
             # Non-fatal: log warning but don't fail the webhook processing
             # This could fail if table doesn't exist (migration not run)
             webhook_logger.warning(f"⚠️ Could not store Lua team data: {e}")
+            return None
 
     async def _store_lua_spawn_stats(self, round_metadata: dict, spawn_stats: list) -> None:
         """
@@ -5252,6 +5303,21 @@ class UltimateETLegacyBot(commands.Bot):
             detail=f"awards={len(awards)} vs_rows={len(vs_stats)}",
         )
 
+        # 🔗 CORRELATION: notify of endstats arrival
+        if hasattr(self, 'correlation_service') and self.correlation_service:
+            try:
+                mid_row = await self.db_adapter.fetch_one(
+                    "SELECT match_id FROM rounds WHERE id = $1", (round_id,)
+                )
+                if mid_row and mid_row[0]:
+                    await self.correlation_service.on_endstats_processed(
+                        match_id=mid_row[0],
+                        round_number=round_number,
+                        map_name=map_name,
+                    )
+            except Exception as corr_err:
+                log.warning(f"[CORRELATION] endstats hook error (non-fatal): {corr_err}")
+
         published = True
         if should_publish:
             published = await self.round_publisher.publish_endstats(
@@ -5726,6 +5792,19 @@ class UltimateETLegacyBot(commands.Bot):
         else:
             logger.info(f"✅ Webhook whitelist: {len(self.config.webhook_trigger_whitelist)} IDs")
 
+        webhook_mode = self._webhook_trigger_mode()
+        logger.info(f"✅ Webhook trigger mode: {webhook_mode}")
+        if webhook_mode == "stats_ready_only" and self.config.ws_enabled:
+            errors.append(
+                "WS_ENABLED must be false when WEBHOOK_TRIGGER_MODE=stats_ready_only.\n"
+                "  This prevents duplicate trigger paths (deprecated websocket + webhook)."
+            )
+        elif webhook_mode != "stats_ready_only":
+            logger.warning(
+                "⚠️ WEBHOOK_TRIGGER_MODE is not strict stats_ready_only. "
+                "Legacy filename trigger path remains enabled."
+            )
+
         # Validate SSH config
         if not all([self.config.ssh_host, self.config.ssh_user,
                     self.config.ssh_key_path, self.config.ssh_remote_path]):
@@ -5825,8 +5904,6 @@ class UltimateETLegacyBot(commands.Bot):
         self.error_count += 1
 
         # Log the error with full context
-        duration = time.time() - getattr(ctx, 'command_start_time', time.time())
-
         log_command_execution(
             ctx,
             f"!{ctx.command.name}" if ctx.command else "unknown",

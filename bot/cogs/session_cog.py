@@ -17,9 +17,7 @@ This cog uses service-oriented architecture for session analytics:
 - PlayerDisplayNameService: Custom display names
 """
 
-import asyncio
 import logging
-import os
 from datetime import datetime, timedelta
 
 import discord

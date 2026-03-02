@@ -42,11 +42,14 @@ Services are stateless and receive the bot instance for database/config access.
 | `StopwatchScoringService` | `stopwatch_scoring_service.py` | Stopwatch mode scoring |
 | `VoiceSessionService` | `voice_session_service.py` | Voice channel tracking |
 
-### Publishing
+### Publishing & Diagnostics
 
 | Service | File | Purpose |
 |---------|------|---------|
 | `RoundPublisherService` | `round_publisher_service.py` | Auto-post round stats |
+| `RoundCorrelationService` | `round_correlation_service.py` | **NEW (Feb 2026)** Track R1+R2 data completeness |
+| `RoundLinkageAnomalyService` | `round_linkage_anomaly_service.py` | **NEW (Feb 2026)** Detect linkage drift |
+| `WebhookRoundMetadataService` | `webhook_round_metadata_service.py` | **NEW (Feb 2026)** Enrich webhook metadata |
 
 ## Key Patterns
 

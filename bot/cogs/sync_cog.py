@@ -12,7 +12,6 @@ Commands:
 This cog requires SSH to be enabled in the bot configuration.
 """
 
-import asyncio
 import logging
 import os
 import re
