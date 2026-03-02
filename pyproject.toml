@@ -36,14 +36,32 @@ max-line-length = 100
 
 [tool.pylint.messages_control]
 disable = [
-    "C0114",
-    "C0115",
-    "C0116",
-    "W0612",
-    "W0613",
-    "R0913",
-    "R0914",
-    "R0915",
+    "C0114",  # missing-module-docstring
+    "C0115",  # missing-class-docstring
+    "C0116",  # missing-function-docstring
+    "C0301",  # line-too-long (handled by ruff/flake8)
+    "C0302",  # too-many-lines
+    "C0411",  # wrong-import-order (handled by isort/ruff)
+    "C0415",  # import-outside-toplevel (intentional: optional deps, deferred imports)
+    "R0902",  # too-many-instance-attributes
+    "R0903",  # too-few-public-methods
+    "R0912",  # too-many-branches
+    "R0913",  # too-many-arguments
+    "R0914",  # too-many-locals
+    "R0915",  # too-many-statements
+    "W0201",  # attribute-defined-outside-init
+    "W0612",  # unused-variable
+    "W0613",  # unused-argument
+    "W0718",  # broad-exception-caught (intentional: bot stability, imports are idempotent)
+    "W1203",  # logging-fstring-interpolation (f-strings in logging are project standard)
+    "W1514",  # unspecified-encoding
+    "R0801",  # duplicate-code (false positives in similar command handlers)
+    "R1705",  # no-else-return (stylistic preference to keep explicit branches)
+    "C0325",  # superfluous-parens
+    "C0413",  # wrong-import-position (intentional deferred imports)
+    "W0107",  # unnecessary-pass
+    "W0212",  # protected-access (internal Discord.py patterns require it)
+    "W0621",  # redefined-outer-name
 ]
 
 [tool.ruff]

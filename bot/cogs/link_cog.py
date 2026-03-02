@@ -501,30 +501,6 @@ class LinkCog(commands.Cog, name="Link"):
 
                 link_status = f"🔗 Linked to `{link_row[0]}`" if link_row else "❌ Not linked"
 
-                # Calculate days ago for last_seen (currently informational only)
-                try:
-                    last_date = datetime.fromisoformat(
-                        last_seen.replace("Z", "+00:00") if "Z" in last_seen else last_seen
-                    )
-                    days_ago = (datetime.now() - last_date).days
-                    if days_ago == 0:
-                        _last_str = "Today"
-                    elif days_ago == 1:
-                        _last_str = "Yesterday"
-                    elif days_ago < 7:
-                        _last_str = f"{days_ago} days ago"
-                    elif days_ago < 30:
-                        weeks = days_ago // 7
-                        _last_str = f"{weeks} week{'s' if weeks > 1 else ''} ago"
-                    elif days_ago < 365:
-                        months = days_ago // 30
-                        _last_str = f"{months} month{'s' if months > 1 else ''} ago"
-                    else:
-                        years = days_ago // 365
-                        _last_str = f"{years} year{'s' if years > 1 else ''} ago"
-                except (ValueError, TypeError, AttributeError):
-                    _last_str = last_seen  # noqa: F841
-
                 # Add field to embed with formatted name and badges
                 embed.add_field(
                     name=f"{formatted_name}",

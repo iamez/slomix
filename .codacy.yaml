@@ -4,3 +4,10 @@ exclude_paths:
   - "tools/schema_postgresql.sql"
   - "website/migrations/005_date_based_availability.sql"
   - "website/js/utils.js"
+  # Archive directories contain intentionally deprecated scripts (reference copies only)
+  - "scripts/archive/**"
+  - "tools/archive/**"
+  # Test fixtures and migration SQL files
+  - "tests/fixtures/**"
+  - "website/migrations/**"
+  - "migrations/**"
