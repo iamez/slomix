@@ -430,7 +430,7 @@ class TeamCog(commands.Cog):
                     # Prefer team-aware points when available
                     team1_pts = map_result.get('team_a_points', map_result.get('team1_points', 0))
                     team2_pts = map_result.get('team_b_points', map_result.get('team2_points', 0))
-                    
+
                     # Determine map winner emoji
                     if team1_pts > team2_pts:
                         map_emoji = "🟢"

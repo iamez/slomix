@@ -13,7 +13,7 @@ This service handles:
 
 Usage:
     from bot.services.automation.ssh_monitor import SSHMonitor
-    
+
     monitor = SSHMonitor(bot)
     await monitor.check_and_process_new_files()
 """
@@ -24,7 +24,7 @@ import os
 import shlex
 from datetime import datetime, timedelta
 from pathlib import PurePosixPath
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Dict, Any, Tuple
 import discord
 
 # Import services for comprehensive stats display
@@ -37,23 +37,23 @@ logger = logging.getLogger("UltimateBot.SSHMonitor")
 class SSHMonitor:
     """
     SSH File Monitor Service
-    
+
     Handles SSH connections, file detection, downloading, and coordination
     with the bot for processing and Discord posting.
-    
+
     This is a SERVICE class - it doesn't contain business logic for parsing
     or database operations. It delegates those to the bot.
     """
-    
+
     def __init__(self, bot):
         """
         Initialize SSH monitor service.
-        
+
         Args:
             bot: Discord bot instance (UltimateETLegacyBot)
         """
         self.bot = bot
-        
+
         # SSH configuration from bot config object
         self.ssh_enabled = bot.config.ssh_enabled
         self.ssh_config = {
@@ -63,7 +63,7 @@ class SSHMonitor:
             "key_path": bot.config.ssh_key_path,
             "remote_path": bot.config.ssh_remote_path
         }
-        
+
         # Discord configuration - use production channel for all match posts
         self.production_channel_id = bot.production_channel_id if hasattr(bot, 'production_channel_id') else 0
         self.admin_channel_id = bot.admin_channel_id if hasattr(bot, 'admin_channel_id') else 0
@@ -100,7 +100,7 @@ class SSHMonitor:
         logger.info("🔄 SSH Monitor service initialized")
         if self.voice_conditional:
             logger.info(f"🎙️ Voice-conditional mode: SSH checks only when players in voice (grace period: {self.grace_period_minutes}min)")
-    
+
     async def start_monitoring(self):
         """Start the SSH monitoring task"""
         logger.info(f"🔍 start_monitoring() called - ssh_enabled={self.ssh_enabled}")
@@ -123,12 +123,12 @@ class SSHMonitor:
         # Start monitoring loop
         logger.info("🔁 Starting monitoring loop...")
         asyncio.create_task(self._monitoring_loop())
-    
+
     async def stop_monitoring(self):
         """Stop the SSH monitoring task"""
         self.is_monitoring = False
         logger.info("🛑 SSH monitoring stopped")
-    
+
     def _validate_config(self) -> bool:
         """Validate SSH configuration"""
         required = [
@@ -151,7 +151,7 @@ class SSHMonitor:
             return False
 
         return True
-    
+
     async def _load_processed_files(self):
         """Load list of previously processed files from database"""
         try:
@@ -163,7 +163,7 @@ class SSHMonitor:
             logger.info(f"📋 Loaded {len(self.processed_files)} previously processed files")
         except Exception as e:
             logger.error(f"❌ Failed to load processed files: {e}")
-    
+
     def _get_voice_player_count(self) -> int:
         """
         Get current number of players in gaming voice channels.
@@ -271,19 +271,19 @@ class SSHMonitor:
 
                 # Wait before next check
                 await asyncio.sleep(self.check_interval)
-                
+
             except Exception as e:
                 self.errors_count += 1
                 self.last_error = str(e)
                 logger.error(f"❌ Monitoring loop error: {e}", exc_info=True)
-                
+
                 # Exponential backoff on errors
                 wait_time = min(300, 30 * (2 ** min(self.errors_count, 5)))
                 logger.info(f"⏳ Waiting {wait_time}s before retry...")
                 await asyncio.sleep(wait_time)
-        
+
         logger.info("🛑 Monitoring loop stopped")
-    
+
     def _parse_file_timestamp(self, filename: str) -> Optional[datetime]:
         """
         Parse timestamp from filename.
@@ -370,7 +370,7 @@ class SSHMonitor:
         except Exception as e:
             logger.error(f"❌ Error checking for new files: {e}", exc_info=True)
             raise
-    
+
     def _list_remote_files_sync(self) -> list:
         """List files in remote SSH directory (synchronous - use in executor)"""
         import paramiko
@@ -413,13 +413,13 @@ class SSHMonitor:
 
     async def _list_remote_files(self) -> list:
         """List files in remote SSH directory (async wrapper)"""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._list_remote_files_sync)
-    
+
     async def _process_new_file(self, filename: str):
         """
         Process a newly detected stats file.
-        
+
         Steps:
         1. Download file
         2. Parse stats
@@ -430,47 +430,47 @@ class SSHMonitor:
         try:
             logger.info(f"📥 Processing new file: {filename}")
             start_time = datetime.now()
-            
+
             # Download file
             local_path = await self._download_file(filename)
-            
+
             if not local_path:
                 logger.error(f"❌ Failed to download: {filename}")
                 return
-            
+
             # Wait a moment for file to fully write
             await asyncio.sleep(2)
-            
+
             # Parse and import to database
             success = await self._import_file_to_db(local_path, filename)
-            
+
             if not success:
                 logger.error(f"❌ Failed to import: {filename}")
                 return
-            
+
             # NOTE: Discord posting is handled by endstats_monitor + RoundPublisherService
             # in ultimate_bot.py. SSHMonitor only handles file download and DB import.
             # The duplicate posting code below was removed to prevent:
             # 1. Double-posting (both systems were posting)
             # 2. Embed field overflow errors (SSHMonitor didn't handle 1024 char limit)
-            
+
             # Mark as processed
             self.processed_files.add(filename)
             self.files_processed_count += 1
-            
+
             # Track processing time
             process_duration = (datetime.now() - start_time).total_seconds()
             logger.info(f"✅ Processed {filename} in {process_duration:.2f}s")
-            
+
             # Reset error count on success
             if self.errors_count > 0:
                 self.errors_count = max(0, self.errors_count - 1)
-            
+
         except Exception as e:
             self.errors_count += 1
             self.last_error = str(e)
             logger.error(f"❌ Error processing {filename}: {e}", exc_info=True)
-    
+
     def _download_file_sync(self, filename: str) -> Tuple[Optional[str], float]:
         """Download file from remote server (synchronous - use in executor)"""
         import paramiko
@@ -545,7 +545,7 @@ class SSHMonitor:
 
     async def _download_file(self, filename: str) -> Optional[str]:
         """Download file from remote server (async wrapper)"""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         local_path, download_duration = await loop.run_in_executor(
             None, self._download_file_sync, filename
         )
@@ -561,7 +561,7 @@ class SSHMonitor:
             logger.info(f"✅ Downloaded {filename} in {download_duration:.2f}s")
 
         return local_path
-    
+
     async def _import_file_to_db(self, local_path: str, filename: str) -> bool:
         """Import stats file to database"""
         try:
@@ -573,11 +573,11 @@ class SSHMonitor:
             else:
                 logger.error("❌ Bot missing process_gamestats_file method")
                 return False
-                
+
         except Exception as e:
             logger.error(f"❌ Import error for {filename}: {e}")
             return False
-    
+
     async def _post_round_stats(self, filename: str):
         """Post round statistics to Discord channel"""
         try:
@@ -593,24 +593,24 @@ class SSHMonitor:
                         f"Stats for `{filename}` could not be posted."
                     )
                 return
-            
+
             # Get the round data from database (most recent round)
             round_data = await self._get_latest_round_data()
-            
+
             if not round_data:
                 logger.warning(f"⚠️ No round data found for {filename}")
                 return
-            
+
             # Create embed
             embed = await self._create_round_embed(round_data, filename)
-            
+
             # Post to channel
             await channel.send(embed=embed)
             logger.info(f"📊 Posted stats for {filename} to channel")
-            
+
         except Exception as e:
             logger.error(f"❌ Error posting stats: {e}", exc_info=True)
-    
+
     async def _get_latest_round_data(self) -> Optional[Dict[str, Any]]:
         """Get data for the most recently imported round"""
         try:
@@ -697,7 +697,7 @@ class SSHMonitor:
         except Exception as e:
             logger.error(f"❌ Error getting round data: {e}", exc_info=True)
             return None
-    
+
     async def _create_round_embed(self, data: Dict[str, Any], filename: str) -> discord.Embed:
         """Create Discord embed for round stats with comprehensive 3-line format"""
         embed = discord.Embed(
@@ -832,11 +832,11 @@ class SSHMonitor:
         embed.set_footer(text=f"File: {filename}")
 
         return embed
-    
+
     async def _post_match_summary(self, filename: str):
         """
         Post match summary (cumulative R1+R2 stats) to Discord
-        
+
         This queries round_number=0 which contains the cumulative stats
         from the Round 2 file (R1+R2 combined).
         """
@@ -846,32 +846,32 @@ class SSHMonitor:
             if not channel:
                 logger.error(f"❌ Production channel {self.production_channel_id} not found")
                 return
-            
+
             # Extract map name from filename
             parts = filename.split('-')
             if len(parts) < 5:
                 logger.error(f"❌ Invalid filename format: {filename}")
                 return
-            
+
             map_name = '-'.join(parts[4:-2])  # Everything between timestamp and "round-N.txt"
-            
+
             # Get match summary data (round_number = 0)
             match_data = await self._get_match_summary_data(map_name)
-            
+
             if not match_data:
                 logger.warning(f"⚠️ No match summary found for {map_name}")
                 return
-            
+
             # Create embed
             embed = await self._create_match_summary_embed(match_data, filename, map_name)
-            
+
             # Post to channel
             await channel.send(embed=embed)
             logger.info(f"🏁 Posted match summary for {map_name}")
-            
+
         except Exception as e:
             logger.error(f"❌ Error posting match summary: {e}", exc_info=True)
-    
+
     async def _get_match_summary_data(self, map_name: str) -> Optional[Dict[str, Any]]:
         """Get match summary data (round_number=0) from database"""
         try:
@@ -893,7 +893,7 @@ class SSHMonitor:
                 return None
 
             round_id, time_limit, actual_time, winner_team, round_outcome = row
-            
+
             # Get ALL player stats with comprehensive data from match summary
             player_stats = await self.bot.db_adapter.fetch_all("""
                 SELECT
@@ -923,10 +923,10 @@ class SSHMonitor:
                 WHERE round_id = ?
                 ORDER BY kills DESC
             """, (round_id,))
-            
+
             # Calculate totals
             total_query = await self.bot.db_adapter.fetch_one("""
-                SELECT 
+                SELECT
                     SUM(kills) as total_kills,
                     SUM(deaths) as total_deaths,
                     SUM(damage_given) as total_damage,
@@ -934,9 +934,9 @@ class SSHMonitor:
                 FROM player_comprehensive_stats
                 WHERE round_id = ?
             """, (round_id,))
-            
+
             total_kills, total_deaths, total_damage, player_count = total_query
-            
+
             return {
                 'time_limit': time_limit,
                 'actual_time': actual_time,
@@ -948,11 +948,11 @@ class SSHMonitor:
                 'player_count': player_count or 0,
                 'top_players': player_stats
             }
-            
+
         except Exception as e:
             logger.error(f"❌ Error getting match summary: {e}")
             return None
-    
+
     async def _create_match_summary_embed(self, data: Dict[str, Any], filename: str, map_name: str) -> discord.Embed:
         """Create Discord embed for match summary with comprehensive 3-line format"""
         embed = discord.Embed(
@@ -1105,12 +1105,12 @@ class SSHMonitor:
         embed.set_footer(text=f"Match summary from {filename}")
 
         return embed
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get monitoring statistics"""
         avg_check_time = sum(self.check_times) / len(self.check_times) if self.check_times else 0
         avg_download_time = sum(self.download_times) / len(self.download_times) if self.download_times else 0
-        
+
         return {
             'is_monitoring': self.is_monitoring,
             'files_processed': self.files_processed_count,

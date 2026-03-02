@@ -9,8 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Slomix - ET:Legacy Discord Bot
 
-**Version**: 1.0.6 | **Language**: Python 3.11+ | **Discord.py**: 2.0+
-**Database**: PostgreSQL 14 (primary) | **Status**: Production-Ready
+**Version**: 1.0.8 | **Language**: Python 3.11+ | **Discord.py**: 2.6.4 (pinned)
+**Database**: PostgreSQL 17 (production) / 14 (dev) | **Status**: Production-Ready
 
 ---
 
@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Database**: `etlegacy` on `localhost:5432` (user: `etlegacy_user`, password in `.env`)
 - Use `postgresql_database_manager.py` for ALL DB operations (NOT `database_manager.py`)
 - Use `?` for query parameters (NOT `{ph}` placeholders)
-- Schema: `tools/schema_postgresql.sql` (41 tables, 53+ columns in player_comprehensive_stats)
+- Schema: `tools/schema_postgresql.sql` (68 tables, 56 columns in player_comprehensive_stats)
 - NEVER use SQLite syntax (`INSERT OR REPLACE`, `AUTOINCREMENT`, etc.)
 - `bot/core/database_adapter.py` may expose SQLite fallback paths for local/dev tooling, but production remains PostgreSQL-only.
 - See `docs/POSTGRESQL_MIGRATION_INDEX.md` for migration details
@@ -50,15 +50,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> Users
-                         (60s poll)    (53+ fields) (41 tables)  (80+ commands)
+                         (60s poll)    (56 fields)  (68 tables)  (80+ commands)
 ```
 
 ### Key Patterns
 
 - **SSH Monitoring**: Only `endstats_monitor` task loop handles SSH (SSHMonitor disabled - race condition fix)
 - **R2 Differential**: Round 2 files contain CUMULATIVE stats; parser subtracts R1 values automatically
-- **Lua Webhook** (`vps_scripts/stats_discord_webhook.lua` v1.6.0): Real-time round notification, fixes surrender timing bug. Data stored in `lua_round_teams` table.
-- **Cog Pattern**: 21 Cogs in `bot/cogs/`, 18 core modules in `bot/core/`, services in `bot/services/`
+- **Lua Webhook** (`vps_scripts/stats_discord_webhook.lua` v1.6.2): Real-time round notification, fixes surrender timing bug. Data stored in `lua_round_teams` table.
+- **Cog Pattern**: 18 Cogs in `bot/cogs/`, 18 core modules in `bot/core/`, services in `bot/services/`
 
 ### Timing Configuration
 
@@ -74,15 +74,15 @@ ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> U
 
 ### Core Files
 
-- `bot/ultimate_bot.py` - Main bot entry point, loads 21 Cogs, on_ready handler
+- `bot/ultimate_bot.py` - Main bot entry point, loads 18 Cogs, on_ready handler
 - `bot/community_stats_parser.py` - R1/R2 differential parser
 - `postgresql_database_manager.py` - **ONLY tool for DB operations**
 - `bot/core/database_adapter.py` - Async PostgreSQL/SQLite abstraction
 - `bot/core/stats_cache.py` - 5-minute TTL query cache
 
-### 21 Cogs (Command Modules)
+### 18 Cogs (Command Modules)
 
-All in `bot/cogs/`: achievements, admin, admin_predictions, analytics, availability_poll, automation_commands, last_session, leaderboard, link, matchup, permission_management, predictions, proximity, server_control, session, session_management, stats, sync, synergy_analytics, team, team_management.
+All in `bot/cogs/`: achievements, admin, admin_predictions, analytics, availability_poll, last_session, leaderboard, link, matchup, permission_management, predictions, proximity, session, session_management, stats, sync, team, team_management.
 
 ### 18 Core Modules
 
@@ -97,7 +97,7 @@ All in `bot/core/`: achievement_system, advanced_team_detector, checks, database
 ```bash
 pip install -r requirements.txt
 python -m bot.ultimate_bot
-# Or: sudo systemctl start etlegacy-bot
+# Production: screen -r slomix (bot already running in screen session)
 ```
 
 ### Database Operations
@@ -138,6 +138,48 @@ AUTOMATION_ENABLED=true
 
 ---
 
+## Infrastructure Services
+
+- **PostgreSQL**: Primary database (17 in production, 14 in dev)
+- **Redis**: v7.2.1 (caching, session data) — running on localhost:6379
+- **Website**: FastAPI backend on port 8000
+
+---
+
+## NEW FEATURES (February 2026)
+
+### Round Correlation System (Feb 22-26)
+- **Table**: `round_correlations` (23 columns, 8 completeness boolean flags)
+- **Service**: `bot/services/round_correlation_service.py`
+- **Command**: `!correlation_status` (admin only)
+- **Purpose**: Tracks data completeness for each match (R1+R2 together)
+- **Config**: `CORRELATION_ENABLED`, `CORRELATION_DRY_RUN`, `CORRELATION_WRITE_ERROR_THRESHOLD`
+- **Status**: Live mode with guardrails enabled (schema preflight, circuit breaker)
+
+### Proximity v5 Teamplay Analytics (Feb 24)
+- **New Tables**: `proximity_spawn_timing`, `proximity_team_cohesion`, `proximity_crossfire_opportunity`, `proximity_team_push`, `proximity_lua_trade_kill`
+- **New Commands**: `!pse`, `!pco`, `!pxa`, `!ppu`, `!ptl`
+- **Parser**: ProximityParserV4 extended (backward compatible with v4 files)
+- **Website**: 5 new HTML panels with canvas cohesion timeline
+- **Migration**: `migrations/013_add_proximity_v5_teamplay.sql`
+
+### Round Linkage Anomaly Detection (Feb 26)
+- **Service**: `bot/services/round_linkage_anomaly_service.py`
+- **API**: `GET /diagnostics/round-linkage` (thresholded anomaly report)
+- **Purpose**: Detects and reports linkage drift across lua_round_teams, rounds, round_correlations
+
+### Website Redesign (Feb 23)
+- **Framework**: React 19 + TypeScript 5.9 + Tailwind CSS v4 + Framer Motion
+- **New Pages**: Sessions, Records, Awards, Activity Calendar (90-day heatmap), Maps
+- **Total Pages**: 10 (5 new)
+- **Features**: Player autocomplete search, achievement grid, discord badge display
+
+### Objective Coordinate Gates (Feb 26)
+- **WS11**: `scripts/proximity_objective_coords_gate.py` — prevents coordinate regressions
+- **WS12**: `WEBHOOK_TRIGGER_MODE=stats_ready_only` — enforces single trigger path
+
+---
+
 ## Common Pitfalls
 
 - Don't use date-based queries for sessions (use `gaming_session_id`)
@@ -174,15 +216,15 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 ---
 
-## System Status (Version 1.0.6)
+## System Status (Version 1.0.8)
 
 - Parser: 100% functional, R2 differential validated
-- Database: PostgreSQL (41 tables), no corruption
-- Bot: 80+ commands across 21 Cogs, all functional
+- Database: PostgreSQL (68 tables), no corruption
+- Bot: 80+ commands across 18 Cogs, all functional
 - Website: Upload library, availability polls, greatshot, system overview
-- Automation: SSH monitoring, voice detection, Lua webhook (v1.6.0)
+- Automation: SSH monitoring, voice detection, Lua webhook (v1.6.2)
 - Production Ready: Fully tested and validated
 
 ---
 
-**Version**: 1.0.6 | **Last Updated**: 2026-02-15 | **Schema Version**: 2.0
+**Version**: 1.0.8 | **Last Updated**: 2026-02-27 | **Schema Version**: 2.0

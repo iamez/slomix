@@ -219,7 +219,7 @@ class BotConfig:
         self.stats_directory: str = self._get_config('STATS_DIRECTORY', 'local_stats')
         self.local_stats_path: str = self._get_config('LOCAL_STATS_PATH', './local_stats')
         self.backup_directory: str = self._get_config('BACKUP_DIRECTORY', 'processed_stats')
-        self.metrics_db_path: str = self._get_config('METRICS_DB_PATH', 'bot/logs/metrics/metrics.db')
+        self.metrics_db_path: str = self._get_config('METRICS_DB_PATH', 'logs/metrics/metrics.db')
 
         # ==================== RCON (REMOTE CONSOLE) ====================
         self.rcon_enabled: bool = self._get_config('RCON_ENABLED', 'false').lower() == 'true'
@@ -252,6 +252,16 @@ class BotConfig:
         # VPS sends webhook to Discord, bot listens and processes
         self.webhook_trigger_channel_id: int = int(self._get_config('WEBHOOK_TRIGGER_CHANNEL_ID', '0'))
         self.webhook_trigger_username: str = self._get_config('WEBHOOK_TRIGGER_USERNAME', 'ET:Legacy Stats')
+        self.webhook_trigger_mode: str = self._get_config(
+            'WEBHOOK_TRIGGER_MODE',
+            'stats_ready_only',
+        ).strip().lower()
+        if self.webhook_trigger_mode not in {'stats_ready_only', 'dual', 'filename_only'}:
+            logger.warning(
+                f"⚠️ Invalid WEBHOOK_TRIGGER_MODE='{self.webhook_trigger_mode}', "
+                "falling back to 'stats_ready_only'"
+            )
+            self.webhook_trigger_mode = 'stats_ready_only'
 
         # Webhook ID whitelist (REQUIRED for security)
         webhook_whitelist_raw = self._get_config('WEBHOOK_TRIGGER_WHITELIST', '')
@@ -435,6 +445,17 @@ class BotConfig:
         # Show legacy (old) and shadow-corrected (new) timing side-by-side in last_session views/graphs
         self.show_timing_dual: bool = self._get_config('SHOW_TIMING_DUAL', 'false').lower() == 'true'
 
+        # ==================== ROUND CORRELATION ====================
+        # Correlation service mode and guardrails
+        self.correlation_enabled: bool = self._get_config('CORRELATION_ENABLED', 'true').lower() == 'true'
+        self.correlation_dry_run: bool = self._get_config('CORRELATION_DRY_RUN', 'false').lower() == 'true'
+        self.correlation_require_schema_check: bool = (
+            self._get_config('CORRELATION_REQUIRE_SCHEMA_CHECK', 'true').lower() == 'true'
+        )
+        self.correlation_write_error_threshold: int = int(
+            self._get_config('CORRELATION_WRITE_ERROR_THRESHOLD', '5')
+        )
+
         # ==================== TIMING DEBUG ====================
         # Compare stats file timing vs Lua webhook timing for validation
         self.timing_debug_enabled: bool = self._get_config('TIMING_DEBUG_ENABLED', 'true').lower() == 'true'
@@ -586,6 +607,14 @@ class BotConfig:
             if not self.server_host:
                 errors.append("SERVER_HOST is required when MONITORING_ENABLED=true")
 
+        # Single-trigger enforcement for webhook path
+        if self.webhook_trigger_channel_id and self.webhook_trigger_mode == "stats_ready_only":
+            if self.ws_enabled:
+                errors.append(
+                    "WS_ENABLED must be false when WEBHOOK_TRIGGER_MODE=stats_ready_only "
+                    "(prevents duplicate trigger paths)"
+                )
+
         # RCON configuration (if enabled)
         if self.rcon_enabled:
             if not self.rcon_host:
@@ -613,6 +642,8 @@ class BotConfig:
         logger.info(f"  Automation: {'ENABLED' if self.automation_enabled else 'DISABLED'}")
         logger.info(f"  SSH Monitoring: {'ENABLED' if self.ssh_enabled else 'DISABLED'}")
         logger.info(f"  Activity Monitoring: {'ENABLED' if self.monitoring_enabled else 'DISABLED'}")
+        if self.webhook_trigger_channel_id:
+            logger.info(f"  Webhook Trigger Mode: {self.webhook_trigger_mode}")
         if self.monitoring_enabled:
             logger.info(
                 f"  Monitor Server: {self.server_host}:{self.server_port} "

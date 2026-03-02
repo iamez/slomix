@@ -12,7 +12,6 @@ Advanced player analytics beyond basic stats:
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
-from collections import defaultdict
 import statistics
 
 logger = logging.getLogger(__name__)
@@ -719,8 +718,6 @@ class PlayerAnalyticsService:
 
     def format_consistency(self, stats: ConsistencyStats) -> str:
         """Format consistency stats for Discord."""
-        emoji = {"Consistent": "🟢", "Average": "🟡", "Streaky": "🔴"}
-
         return (
             f"**{stats.player_name}** - Consistency Analysis\n"
             f"• Score: {stats.consistency_score:.0f}/100 ({stats.consistency_tier})\n"

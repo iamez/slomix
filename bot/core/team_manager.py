@@ -16,7 +16,6 @@ import json
 import logging
 import os
 from typing import Dict, List, Tuple, Optional, Set, Any
-from datetime import datetime
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
@@ -551,7 +550,7 @@ class TeamManager:
             rounds[round_id][team_key].add(guid)
 
         logger.info(f"Team values found in data: {team_values}, {len(rounds)} unique rounds")
-        
+
         # Seed from earliest Round 1 (prefer actual Round 1 by timestamp)
         # This gives us the initial team composition before any stopwatch swaps
         def _normalize_time(t):
@@ -593,7 +592,7 @@ class TeamManager:
         elif len(persistent_team2) == 0 and len(persistent_team1) > 0:
             logger.warning(f"⚠️ Team detection issue: All {len(persistent_team1)} players in team1, none in team2")
             logger.warning(f"Team values in data: {team_values} - check if 'team' column is populated correctly")
-        
+
         # Handle late joiners using co-membership voting
         all_players = set(player_names.keys())
         unassigned = all_players - persistent_team1 - persistent_team2
@@ -627,7 +626,7 @@ class TeamManager:
                     persistent_team2.add(guid)
                     logger.debug(f"Assigned {player_names[guid]} to Team2 "
                                f"(votes: {team1_votes} vs {team2_votes})")
-        
+
         # Calculate detection confidence based on consistency and data validation
         # High confidence: Teams consistent across multiple maps, defender_team aligns
         # Medium confidence: Teams detected but some variations, or single map session
@@ -678,7 +677,7 @@ class TeamManager:
                    f"(confidence: {confidence})")
 
         return teams
-    
+
     async def store_session_teams(
         self,
         session_date: str,
@@ -765,7 +764,7 @@ class TeamManager:
                 # Continue anyway - teams are stored with default names
 
         return True
-    
+
     async def get_session_teams(
         self,
         session_date: str,
@@ -859,7 +858,7 @@ class TeamManager:
             return teams
 
         return {}
-    
+
     async def detect_lineup_changes(
         self,
         session_date: str,
@@ -911,7 +910,7 @@ class TeamManager:
             previous_session_date = row[0]
 
         previous_teams = await self.get_session_teams(previous_session_date, auto_detect=False)
-        
+
         if not previous_teams:
             return {
                 'current': current_teams,
@@ -919,20 +918,20 @@ class TeamManager:
                 'changes': {},
                 'summary': f"No team data for previous session {previous_session_date}"
             }
-        
+
         # Calculate changes
         changes = {}
         total_added = 0
         total_removed = 0
-        
+
         for team_name in current_teams:
             current_guids = set(current_teams[team_name]['guids'])
             previous_guids = set(previous_teams.get(team_name, {}).get('guids', []))
-            
+
             added_guids = current_guids - previous_guids
             removed_guids = previous_guids - current_guids
             unchanged_guids = current_guids & previous_guids
-            
+
             # Get names for readability
             guid_to_name = {
                 g: n for g, n in zip(
@@ -946,16 +945,16 @@ class TeamManager:
                     previous_teams.get(team_name, {}).get('names', [])
                 )
             }
-            
+
             changes[team_name] = {
                 'added': [guid_to_name.get(g, g) for g in added_guids],
                 'removed': [prev_guid_to_name.get(g, g) for g in removed_guids],
                 'unchanged': [guid_to_name.get(g, g) for g in unchanged_guids]
             }
-            
+
             total_added += len(added_guids)
             total_removed += len(removed_guids)
-        
+
         summary_parts = []
         if total_added > 0:
             summary_parts.append(f"{total_added} player(s) added")
@@ -963,7 +962,7 @@ class TeamManager:
             summary_parts.append(f"{total_removed} player(s) removed")
         if not summary_parts:
             summary_parts.append("No changes")
-        
+
         return {
             'current': current_teams,
             'previous': previous_teams,
@@ -971,7 +970,7 @@ class TeamManager:
             'summary': ", ".join(summary_parts),
             'previous_date': previous_session_date
         }
-    
+
     async def set_custom_team_names(
         self,
         session_date: str,
@@ -1018,7 +1017,7 @@ class TeamManager:
         logger.info(f"✅ Set custom team names for {session_date}: "
                    f"{team_a_name} vs {team_b_name}")
         return True
-    
+
     async def get_map_performance(
         self,
         session_date: str,

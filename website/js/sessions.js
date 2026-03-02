@@ -10,21 +10,43 @@ let sessionsData = [];
 let sessionsOffset = 0;
 const SESSIONS_LIMIT = 15;
 let expandedSessions = new Set();
+let sessionsSearchQuery = '';
+let sessionsSearchTimer = null;
 
 const MAP_IMAGE_MAP = {
-    "supply": "assets/maps/supply.svg",
-    "etl_adlernest": "assets/maps/etl_adlernest.svg",
-    "etl_sp_delivery": "assets/maps/etl_sp_delivery.svg",
-    "etl_delivery": "assets/maps/etl_sp_delivery.svg",
-    "etl_battery": "assets/maps/etl_battery.svg",
-    "etl_oasis": "assets/maps/etl_oasis.svg",
-    "etl_frostbite": "assets/maps/etl_frostbite.svg",
-    "etl_goldrush": "assets/maps/etl_goldrush.svg",
-    "etl_brewdog": "assets/maps/etl_brewdog.svg",
-    "etl_erdenberg": "assets/maps/etl_erdenberg.svg",
-    "etl_bradendorf": "assets/maps/etl_bradendorf.svg",
-    "etl_escape2": "assets/maps/etl_escape2.svg",
-    "etl_adlernest_a3": "assets/maps/etl_adlernest.svg"
+    "supply": "assets/maps/proximity/supply.png",
+    "etl_supply": "assets/maps/proximity/supply.png",
+    "adlernest": "assets/maps/proximity/adlernest.png",
+    "etl_adlernest": "assets/maps/proximity/etl_adlernest.png",
+    "etl_adlernest_a3": "assets/maps/proximity/etl_adlernest.png",
+    "etl_sp_delivery": "assets/maps/proximity/etl_sp_delivery.png",
+    "sp_delivery_te": "assets/maps/proximity/etl_sp_delivery.png",
+    "etl_delivery": "assets/maps/proximity/etl_sp_delivery.png",
+    "etl_battery": "assets/maps/proximity/sw_battery.png",
+    "sw_battery": "assets/maps/proximity/sw_battery.png",
+    "etl_oasis": "assets/maps/proximity/sw_oasis_b3.png",
+    "sw_oasis_b3": "assets/maps/proximity/sw_oasis_b3.png",
+    "etl_frostbite": "assets/maps/proximity/frostbite.png",
+    "frostbite": "assets/maps/proximity/frostbite.png",
+    "etl_goldrush": "assets/maps/proximity/sw_goldrush_te.png",
+    "sw_goldrush_te": "assets/maps/proximity/sw_goldrush_te.png",
+    "etl_brewdog": "assets/maps/proximity/et_brewdog.png",
+    "et_brewdog": "assets/maps/proximity/et_brewdog.png",
+    "etl_erdenberg": "assets/maps/proximity/erdenberg_t2.png",
+    "erdenberg_t2": "assets/maps/proximity/erdenberg_t2.png",
+    "etl_bradendorf": "assets/maps/proximity/etl_braundorf.png",
+    "etl_braundorf": "assets/maps/proximity/etl_braundorf.png",
+    "braundorf_b4": "assets/maps/proximity/braundorf_b4.png",
+    "etl_escape2": "assets/maps/proximity/te_escape2.png",
+    "te_escape2": "assets/maps/proximity/te_escape2.png",
+    "etl_beach": "assets/maps/proximity/etl_beach.png",
+    "et_beach": "assets/maps/proximity/etl_beach.png",
+    "etl_base": "assets/maps/proximity/etl_base.png",
+    "etl_ice": "assets/maps/proximity/etl_ice.png",
+    "bremen_b3": "assets/maps/proximity/bremen_b3.png",
+    "decay_sw": "assets/maps/proximity/decay_sw.png",
+    "missile_b3": "assets/maps/proximity/missile_b3.png",
+    "missile_b4": "assets/maps/proximity/missile_b4.png",
 };
 const AXIS_ICON = "assets/icons/axis.svg";
 const ALLIES_ICON = "assets/icons/allies.svg";
@@ -97,7 +119,7 @@ function mapImageFor(mapName) {
 function mapTile(mapName) {
     const safeMapName = escapeHtml(mapLabel(mapName));
     const mapImg = mapImageFor(mapName);
-    const isFallbackMap = mapImg.includes('map_generic.svg');
+    const isFallbackMap = mapImg.includes('map_generic');
 
     if (isFallbackMap) {
         return `
@@ -401,6 +423,13 @@ export function renderSessionDetails(data) {
     setTimeout(() => {
         if (!hasChartJs()) {
             console.warn('Chart.js is unavailable, skipping session charts.');
+            container.querySelectorAll('canvas').forEach(c => {
+                const ctx = c.getContext('2d');
+                ctx.fillStyle = '#64748b';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Charts unavailable', c.width / 2, c.height / 2);
+            });
             return;
         }
 
@@ -674,7 +703,7 @@ export function renderSessionDetails(data) {
             const statusClass = counted ? 'text-slate-400' : 'text-amber-300';
             const rowOpacity = counted ? '' : 'opacity-70';
             const mapImg = mapImageFor(m.map || '');
-            const isFallbackMap = mapImg.includes('map_generic.svg');
+            const isFallbackMap = mapImg.includes('map_generic');
             const winnerSide = Number(m.winner_side || 0);
             const winnerIcon = winnerSide === 1 ? AXIS_ICON : winnerSide === 2 ? ALLIES_ICON : null;
             const winnerLabel = winnerSide === 1 ? 'Axis' : winnerSide === 2 ? 'Allies' : 'Side ?';
@@ -1150,7 +1179,42 @@ export async function loadSessionsView() {
     sessionsData = [];
     sessionsOffset = 0;
     expandedSessions.clear();
+    sessionsSearchQuery = '';
     await loadSessions(true);
+    initSessionsSearch();
+}
+
+function initSessionsSearch() {
+    const input = document.getElementById('sessions-search-input');
+    const clearBtn = document.getElementById('sessions-search-clear');
+    if (!input) return;
+
+    // Reset input value
+    input.value = '';
+    if (clearBtn) clearBtn.classList.add('hidden');
+
+    input.addEventListener('input', () => {
+        const val = input.value.trim();
+        if (clearBtn) clearBtn.classList.toggle('hidden', val.length === 0);
+
+        if (sessionsSearchTimer) clearTimeout(sessionsSearchTimer);
+        sessionsSearchTimer = setTimeout(() => {
+            sessionsSearchQuery = val;
+            sessionsOffset = 0;
+            loadSessions(true);
+        }, 300);
+    });
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            input.value = '';
+            clearBtn.classList.add('hidden');
+            sessionsSearchQuery = '';
+            sessionsOffset = 0;
+            if (sessionsSearchTimer) clearTimeout(sessionsSearchTimer);
+            loadSessions(true);
+        });
+    }
 }
 
 /**
@@ -1175,7 +1239,11 @@ export async function loadSessions(reset = false) {
     }
 
     try {
-        const data = await fetchJSON(`${API_BASE}/sessions?limit=${SESSIONS_LIMIT}&offset=${sessionsOffset}`);
+        let url = `${API_BASE}/stats/sessions?limit=${SESSIONS_LIMIT}&offset=${sessionsOffset}`;
+        if (sessionsSearchQuery) {
+            url += `&search=${encodeURIComponent(sessionsSearchQuery)}`;
+        }
+        const data = await fetchJSON(url);
         console.log('📊 Sessions data received:', data.length, 'sessions');
 
         if (reset) {
@@ -1199,6 +1267,17 @@ export async function loadSessions(reset = false) {
             loadMoreBtn.classList.toggle('hidden', data.length < SESSIONS_LIMIT);
         }
 
+        // Update search result count
+        const countEl = document.getElementById('sessions-search-count');
+        if (countEl) {
+            if (sessionsSearchQuery) {
+                countEl.textContent = `${data.length} session${data.length !== 1 ? 's' : ''} found for "${sessionsSearchQuery}"`;
+                countEl.classList.remove('hidden');
+            } else {
+                countEl.classList.add('hidden');
+            }
+        }
+
         sessionsOffset += data.length;
 
     } catch (e) {
@@ -1217,6 +1296,15 @@ export function loadMoreSessions() {
 /**
  * Render a single session card
  */
+function formatSessionDuration(seconds) {
+    const total = Number(seconds || 0);
+    if (!total || total <= 0) return '';
+    const hrs = Math.floor(total / 3600);
+    const mins = Math.floor((total % 3600) / 60);
+    if (hrs > 0) return `${hrs}h ${mins}m`;
+    return `${mins}m`;
+}
+
 function renderSessionCard(session) {
     const rawDate = String(session.date ?? '');
     const dateKey = sessionDomKey(rawDate);
@@ -1225,13 +1313,22 @@ function renderSessionCard(session) {
     const safeTimeAgo = escapeHtml(session.time_ago);
     const safeFormattedDate = escapeHtml(session.formatted_date);
     const isExpanded = expandedSessions.has(rawDate);
-    const missingRounds = session.rounds % 2 !== 0;
+    const roundCount = session.round_count ?? session.rounds ?? 0;
+    const playerCount = session.player_count ?? session.players ?? 0;
+    const mapCount = session.maps_played ? session.maps_played.length : (session.maps ?? 0);
+    const missingRounds = roundCount % 2 !== 0;
     const sessionId = session.session_id;
+    const totalKills = session.total_kills || 0;
+    const durationStr = formatSessionDuration(session.duration_seconds);
+    const startTime = session.start_time || '';
+    const endTime = session.end_time || '';
+    const timeRange = (startTime && endTime) ? `${startTime} — ${endTime}` : '';
 
     // Map tiles
-    const mapTiles = session.maps_played.slice(0, 5).map(map => mapTile(map)).join('');
-    const moreMapsBadge = session.maps_played.length > 5
-        ? `<span class="text-slate-500 text-xs">+${session.maps_played.length - 5} more</span>`
+    const mapsPlayed = session.maps_played || [];
+    const mapTiles = mapsPlayed.slice(0, 5).map(map => mapTile(map)).join('');
+    const moreMapsBadge = mapsPlayed.length > 5
+        ? `<span class="text-slate-500 text-xs">+${mapsPlayed.length - 5} more</span>`
         : '';
 
     return `
@@ -1248,6 +1345,8 @@ function renderSessionCard(session) {
                             <div class="text-lg font-black text-white">${safeFormattedDate}</div>
                             <div class="text-sm text-slate-400 flex items-center gap-2">
                                 <span>${safeTimeAgo}</span>
+                                ${timeRange ? `<span class="text-slate-500">·</span><span>${escapeHtml(timeRange)}</span>` : ''}
+                                ${durationStr ? `<span class="text-slate-500">·</span><span class="text-slate-500">${escapeHtml(durationStr)}</span>` : ''}
                                 ${sessionId ? `<span class="px-2 py-0.5 rounded-full bg-slate-800 text-[10px] uppercase tracking-wide text-slate-400">Session ${sessionId}</span>` : ''}
                                 ${missingRounds ? `<span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] uppercase tracking-wide">Missing Round</span>` : ''}
                             </div>
@@ -1257,20 +1356,26 @@ function renderSessionCard(session) {
                     <!-- Center: Stats -->
                     <div class="flex items-center gap-6">
                         <div class="text-center">
-                            <div class="text-2xl font-black text-brand-cyan">${session.players}</div>
+                            <div class="text-2xl font-black text-brand-cyan">${playerCount}</div>
                             <div class="text-xs text-slate-500 uppercase">Players</div>
                         </div>
                         <div class="text-center">
-                            <div class="text-2xl font-black text-brand-purple">${session.maps}</div>
+                            <div class="text-2xl font-black text-brand-purple">${mapCount}</div>
                             <div class="text-xs text-slate-500 uppercase">Maps</div>
                         </div>
                         <div class="text-center">
-                            <div class="text-2xl font-black text-brand-amber">${session.rounds}</div>
+                            <div class="text-2xl font-black text-brand-amber">${roundCount}</div>
                             <div class="text-xs text-slate-500 uppercase">Rounds</div>
                         </div>
+                        ${totalKills > 0 ? `
+                        <div class="text-center">
+                            <div class="text-2xl font-black text-brand-emerald">${totalKills.toLocaleString()}</div>
+                            <div class="text-xs text-slate-500 uppercase">Kills</div>
+                        </div>
+                        ` : ''}
                         <div class="text-center">
                             <div class="text-2xl font-black ${session.allies_wins > session.axis_wins ? 'text-brand-blue' : session.axis_wins > session.allies_wins ? 'text-brand-rose' : 'text-slate-400'}">${session.allies_wins} - ${session.axis_wins}</div>
-                            <div class="text-xs text-slate-500 uppercase">Score${session.draws > 0 ? ` (${session.draws} draws)` : ''}</div>
+                            <div class="text-xs text-slate-500 uppercase">Score</div>
                         </div>
                     </div>
 
@@ -1345,6 +1450,98 @@ let currentGraphTab = 'offense';
 /**
  * Load expanded session details
  */
+function winnerTeamLabel(winnerTeam) {
+    if (winnerTeam === 1) return 'Allies';
+    if (winnerTeam === 2) return 'Axis';
+    return 'Draw';
+}
+
+function roundBadge(roundNumber) {
+    if (roundNumber === 1) {
+        return `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-amber-500/20 text-amber-300">R1</span>`;
+    }
+    return `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-violet-500/20 text-violet-300">R2</span>`;
+}
+
+function renderPlayerStatsTable(players) {
+    if (!players || players.length === 0) return '';
+
+    const rows = players.map((p, idx) => {
+        const name = escapeHtml(p.player_name || 'Unknown');
+        const jsName = escapeJsString(p.player_name || '');
+        const kills = p.kills || 0;
+        const deaths = p.deaths || 0;
+        const kd = Number(p.kd || 0).toFixed(2);
+        const dmgG = p.damage_given || 0;
+        const dmgR = p.damage_received || 0;
+        const dpm = Number(p.dpm || 0).toFixed(1);
+        const eff = Number(p.efficiency || 0).toFixed(1);
+        const hsPct = Number(p.headshot_pct || 0).toFixed(1);
+        const acc = Number(p.accuracy || 0).toFixed(1);
+        const gibs = p.gibs || 0;
+        const sk = p.self_kills || 0;
+        const rev = p.revives_given || 0;
+        const revd = p.times_revived || 0;
+        const mvpClass = idx === 0 ? 'bg-cyan-500/5' : '';
+
+        return `
+            <tr class="border-b border-white/5 hover:bg-white/5 transition ${mvpClass} cursor-pointer"
+                onclick="loadPlayerProfile('${jsName}')">
+                <td class="px-3 py-2 text-sm font-semibold text-white whitespace-nowrap">
+                    ${idx === 0 ? '<span class="text-brand-gold mr-1">★</span>' : ''}${name}
+                </td>
+                <td class="px-2 py-2 text-sm font-mono text-emerald-400 text-right">${kills}</td>
+                <td class="px-2 py-2 text-sm font-mono text-rose-400 text-right">${deaths}</td>
+                <td class="px-2 py-2 text-sm font-mono text-slate-300 text-right">${kd}</td>
+                <td class="px-2 py-2 text-sm font-mono text-emerald-400 text-right">${dmgG.toLocaleString()}</td>
+                <td class="px-2 py-2 text-sm font-mono text-rose-400 text-right">${dmgR.toLocaleString()}</td>
+                <td class="px-2 py-2 text-sm font-mono text-amber-300 font-bold text-right">${dpm}</td>
+                <td class="px-2 py-2 text-sm font-mono text-slate-300 text-right">${eff}%</td>
+                <td class="px-2 py-2 text-sm font-mono text-slate-400 text-right">${hsPct}%</td>
+                <td class="px-2 py-2 text-sm font-mono text-slate-400 text-right">${acc}%</td>
+                <td class="px-2 py-2 text-sm font-mono text-slate-400 text-right">${gibs}</td>
+                <td class="px-2 py-2 text-sm font-mono text-slate-400 text-right">${sk}</td>
+                <td class="px-2 py-2 text-sm font-mono text-slate-400 text-right">${rev}</td>
+                <td class="px-2 py-2 text-sm font-mono text-slate-400 text-right">${revd}</td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <div class="mt-6">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <i data-lucide="table" class="w-5 h-5 text-brand-cyan"></i>
+                Player Stats
+            </h3>
+            <div class="overflow-x-auto rounded-xl border border-white/5">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="bg-white/5 border-b border-white/10">
+                            <th class="px-3 py-2 text-xs text-slate-400 uppercase font-bold">Player</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">K</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">D</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">K/D</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">DMG G</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">DMG R</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">DPM</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">EFF</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">HS%</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">ACC</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">Gibs</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">SK</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">REV</th>
+                            <th class="px-2 py-2 text-xs text-slate-400 uppercase font-bold text-right">Rev'd</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
 async function loadSessionDetailsExpanded(date) {
     const dateKey = sessionDomKey(date);
     const safeDateJs = escapeJsString(date);
@@ -1352,36 +1549,117 @@ async function loadSessionDetailsExpanded(date) {
     if (!detailsEl) return;
 
     try {
-        const data = await fetchJSON(`${API_BASE}/sessions/${date}`);
+        // Find session_id from sessionsData
+        const sessionEntry = sessionsData.find(s => String(s.date) === date);
+        const sessionId = sessionEntry?.session_id;
 
-        // Build leaderboard HTML
-        const leaderboardHtml = data.leaderboard.map((player, idx) => {
-            const safeName = escapeHtml(player.name);
-            const jsName = escapeJsString(player.name);
-            const rankColors = ['text-brand-gold', 'text-slate-300', 'text-amber-600'];
-            const rankColor = rankColors[idx] || 'text-slate-400';
-            return `
-                <div class="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition cursor-pointer"
-                     onclick="loadPlayerProfile('${jsName}')">
-                    <div class="flex items-center gap-3">
-                        <span class="w-6 text-center font-black ${rankColor}">#${player.rank}</span>
-                        <span class="font-bold text-white">${safeName}</span>
+        // Try new detail API first, fall back to old
+        let data = null;
+        let detailData = null;
+        if (sessionId) {
+            try {
+                detailData = await fetchJSON(`${API_BASE}/stats/session/${sessionId}/detail`);
+            } catch (detailErr) {
+                console.warn('Detail API failed, falling back to old endpoint:', detailErr);
+            }
+        }
+
+        if (!detailData) {
+            // Fall back to old endpoint
+            data = await fetchJSON(`${API_BASE}/sessions/${date}`);
+        }
+
+        // Build leaderboard HTML (from old data or detail players as leaderboard)
+        let leaderboardHtml = '';
+        if (data?.leaderboard) {
+            leaderboardHtml = data.leaderboard.map((player, idx) => {
+                const safeName = escapeHtml(player.name);
+                const jsName = escapeJsString(player.name);
+                const rankColors = ['text-brand-gold', 'text-slate-300', 'text-amber-600'];
+                const rankColor = rankColors[idx] || 'text-slate-400';
+                return `
+                    <div class="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition cursor-pointer"
+                         onclick="loadPlayerProfile('${jsName}')">
+                        <div class="flex items-center gap-3">
+                            <span class="w-6 text-center font-black ${rankColor}">#${player.rank}</span>
+                            <span class="font-bold text-white">${safeName}</span>
+                        </div>
+                        <div class="flex items-center gap-4 text-sm">
+                            <span class="text-brand-cyan font-mono">${player.dpm} DPM</span>
+                            <span class="text-slate-400">${player.kills}/${player.deaths}</span>
+                            <span class="text-slate-500">${player.kd} K/D</span>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-4 text-sm">
-                        <span class="text-brand-cyan font-mono">${player.dpm} DPM</span>
-                        <span class="text-slate-400">${player.kills}/${player.deaths}</span>
-                        <span class="text-slate-500">${player.kd} K/D</span>
+                `;
+            }).join('');
+        } else if (detailData?.players) {
+            leaderboardHtml = detailData.players.slice(0, 10).map((player, idx) => {
+                const safeName = escapeHtml(player.player_name);
+                const jsName = escapeJsString(player.player_name);
+                const rankColors = ['text-brand-gold', 'text-slate-300', 'text-amber-600'];
+                const rankColor = rankColors[idx] || 'text-slate-400';
+                return `
+                    <div class="flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition cursor-pointer"
+                         onclick="loadPlayerProfile('${jsName}')">
+                        <div class="flex items-center gap-3">
+                            <span class="w-6 text-center font-black ${rankColor}">#${idx + 1}</span>
+                            <span class="font-bold text-white">${safeName}</span>
+                        </div>
+                        <div class="flex items-center gap-4 text-sm">
+                            <span class="text-brand-cyan font-mono">${player.dpm} DPM</span>
+                            <span class="text-slate-400">${player.kills}/${player.deaths}</span>
+                            <span class="text-slate-500">${Number(player.kd).toFixed(2)} K/D</span>
+                        </div>
                     </div>
+                `;
+            }).join('');
+        }
+
+        // Scoring data — team-aware map scoring from StopwatchScoringService
+        const scoring = detailData?.scoring || data?.scoring || {};
+        const hasScoring = scoring.available === true;
+        const teamAName = hasScoring ? (scoring.team_a_name || 'Team A') : 'Team A';
+        const teamBName = hasScoring ? (scoring.team_b_name || 'Team B') : 'Team B';
+        const scoringMaps = hasScoring && Array.isArray(scoring.maps) ? scoring.maps : [];
+
+        // Build series scoreboard header (esports-style: Team A [5] - [3] Team B)
+        let seriesHeaderHtml = '';
+        if (hasScoring) {
+            const teamAScore = scoring.team_a_score || 0;
+            const teamBScore = scoring.team_b_score || 0;
+            const aWinning = teamAScore > teamBScore;
+            const bWinning = teamBScore > teamAScore;
+            seriesHeaderHtml = `
+                <div class="glass-panel rounded-xl p-4 mb-6">
+                    <div class="flex items-center justify-center gap-6">
+                        <div class="text-right flex-1">
+                            <span class="text-sm font-bold ${aWinning ? 'text-white' : 'text-slate-400'}">${escapeHtml(teamAName)}</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-3xl font-black ${aWinning ? 'text-brand-emerald' : 'text-slate-400'}">${teamAScore}</span>
+                            <span class="text-lg text-slate-600 font-bold">:</span>
+                            <span class="text-3xl font-black ${bWinning ? 'text-brand-emerald' : 'text-slate-400'}">${teamBScore}</span>
+                        </div>
+                        <div class="text-left flex-1">
+                            <span class="text-sm font-bold ${bWinning ? 'text-white' : 'text-slate-400'}">${escapeHtml(teamBName)}</span>
+                        </div>
+                    </div>
+                    <div class="text-center mt-1 text-[10px] text-slate-500 uppercase tracking-wide">${scoringMaps.length} maps played</div>
                 </div>
             `;
-        }).join('');
+        }
 
-        // Build matches HTML
-        const matchesHtml = data.matches.map(mapMatch => {
+        // Build matches HTML — use detailData matches with scoring overlay
+        const matchSource = detailData?.matches || data?.matches || [];
+        let scoringMapIdx = 0; // Track position in scoring maps for running score
+        let runningA = 0;
+        let runningB = 0;
+
+        const matchesHtml = matchSource.map(mapMatch => {
             const displayMapName = mapLabel(mapMatch.map_name || 'Unknown');
             const safeMapName = escapeHtml(displayMapName);
             const mapImg = mapImageFor(mapMatch.map_name || '');
-            const isFallbackMap = mapImg.includes('map_generic.svg');
+            const isFallbackMap = mapImg.includes('map_generic');
             const mapThumb = isFallbackMap
                 ? `
                     <div class="w-16 h-12 rounded-md bg-slate-900/70 border border-white/10 flex items-center justify-center text-[9px] font-bold text-white px-1 text-center leading-tight">
@@ -1396,21 +1674,59 @@ async function loadSessionDetailsExpanded(date) {
                         </div>
                     </div>
                   `;
+
+            // Match this map to scoring data (maps may repeat, e.g., te_escape2 x3)
+            // Count how many map plays this map represents (R1+R2 = 1 play, but 6 rounds = 3 plays)
+            const numPlays = Math.max(1, Math.floor(mapMatch.rounds.length / 2));
+            let mapScoreHtml = '';
+
+            if (hasScoring) {
+                // Collect scoring entries for this map's plays
+                for (let p = 0; p < numPlays && scoringMapIdx < scoringMaps.length; p++) {
+                    const sm = scoringMaps[scoringMapIdx];
+                    runningA += (sm.team_a_points || 0);
+                    runningB += (sm.team_b_points || 0);
+                    scoringMapIdx++;
+                }
+                // Show running score after this map
+                const aLeading = runningA > runningB;
+                const bLeading = runningB > runningA;
+                mapScoreHtml = `<span class="ml-2 px-2 py-0.5 rounded text-[11px] font-bold font-mono ${aLeading ? 'bg-emerald-500/15 text-emerald-300' : bLeading ? 'bg-rose-500/15 text-rose-300' : 'bg-slate-700/50 text-slate-400'}">${runningA}:${runningB}</span>`;
+            }
+
             const roundsHtml = mapMatch.rounds.map(round => {
-                const roundId = coerceRoundId(round.id);
+                // Support both old (round.id, round.winner) and new (round.round_id, round.winner_team) shapes
+                const roundId = coerceRoundId(round.round_id || round.id);
                 if (!roundId) return '';
-                const safeWinner = escapeHtml(round.winner);
-                const winnerColor = round.winner === 'Allies' ? 'text-brand-blue' :
-                                   round.winner === 'Axis' ? 'text-brand-rose' : 'text-slate-400';
+
+                const roundNum = round.round_number || 1;
+                const badge = roundBadge(roundNum);
+
+                // Winner label
+                let winnerLabel = '';
+                let winnerColor = 'text-slate-400';
+                if (round.winner_team !== undefined) {
+                    winnerLabel = winnerTeamLabel(round.winner_team);
+                    winnerColor = round.winner_team === 1 ? 'text-brand-blue' : round.winner_team === 2 ? 'text-brand-rose' : 'text-slate-400';
+                } else if (round.winner) {
+                    winnerLabel = round.winner;
+                    winnerColor = round.winner === 'Allies' ? 'text-brand-blue' : round.winner === 'Axis' ? 'text-brand-rose' : 'text-slate-400';
+                }
+
+                // Duration
+                const durationText = round.duration_seconds
+                    ? formatDuration(round.duration_seconds)
+                    : escapeHtml(round.duration || 'N/A');
+
                 return `
                     <div class="flex items-center justify-between p-2 rounded bg-black/30 cursor-pointer hover:bg-black/50 transition"
                          onclick="loadMatchDetails(${roundId})">
                         <div class="flex items-center gap-3">
-                            <span class="text-xs text-slate-500">R${round.round_number}</span>
-                            <span class="text-sm ${winnerColor} font-bold">${safeWinner} Win</span>
+                            ${badge}
+                            <span class="text-sm ${winnerColor} font-bold">${escapeHtml(winnerLabel)} Win</span>
                         </div>
                         <div class="flex items-center gap-2 text-xs text-slate-500">
-                            <span>${escapeHtml(round.duration || 'N/A')}</span>
+                            <span>${durationText}</span>
                             <i data-lucide="chevron-right" class="w-4 h-4"></i>
                         </div>
                     </div>
@@ -1421,10 +1737,11 @@ async function loadSessionDetailsExpanded(date) {
                 <div class="glass-card rounded-lg p-4">
                     <div class="flex items-center gap-3 mb-3">
                         ${mapThumb}
-                        <div>
+                        <div class="flex-1">
                             <div class="flex items-center gap-2">
                                 <i data-lucide="map" class="w-4 h-4 text-brand-cyan"></i>
                                 <span class="font-bold text-white">${safeMapName}</span>
+                                ${mapScoreHtml}
                             </div>
                             <span class="text-xs text-slate-500">${mapMatch.rounds.length} rounds</span>
                         </div>
@@ -1435,6 +1752,9 @@ async function loadSessionDetailsExpanded(date) {
                 </div>
             `;
         }).join('');
+
+        // Player stats table (only from new detail API)
+        const playerStatsHtml = detailData?.players ? renderPlayerStatsTable(detailData.players) : '';
 
         detailsEl.innerHTML = `
             <div class="border-t border-white/5 p-6 bg-black/20">
@@ -1452,23 +1772,23 @@ async function loadSessionDetailsExpanded(date) {
                 <div id="session-graphs-${dateKey}" class="hidden mb-6">
                     <!-- Graph Tabs -->
                     <div class="flex flex-wrap gap-2 mb-4">
-                        <button onclick="switchGraphTab('${safeDateJs}', 'offense')" 
+                        <button onclick="switchGraphTab('${safeDateJs}', 'offense')"
                             class="graph-tab px-4 py-2 rounded-lg text-sm font-bold transition" data-tab="offense">
                             Combat (Offense)
                         </button>
-                        <button onclick="switchGraphTab('${safeDateJs}', 'defense')" 
+                        <button onclick="switchGraphTab('${safeDateJs}', 'defense')"
                             class="graph-tab px-4 py-2 rounded-lg text-sm font-bold transition" data-tab="defense">
                             Combat (Defense)
                         </button>
-                        <button onclick="switchGraphTab('${safeDateJs}', 'advanced')" 
+                        <button onclick="switchGraphTab('${safeDateJs}', 'advanced')"
                             class="graph-tab px-4 py-2 rounded-lg text-sm font-bold transition" data-tab="advanced">
                             Advanced Metrics
                         </button>
-                        <button onclick="switchGraphTab('${safeDateJs}', 'playstyle')" 
+                        <button onclick="switchGraphTab('${safeDateJs}', 'playstyle')"
                             class="graph-tab px-4 py-2 rounded-lg text-sm font-bold transition" data-tab="playstyle">
                             Playstyle
                         </button>
-                        <button onclick="switchGraphTab('${safeDateJs}', 'timeline')" 
+                        <button onclick="switchGraphTab('${safeDateJs}', 'timeline')"
                             class="graph-tab px-4 py-2 rounded-lg text-sm font-bold transition" data-tab="timeline">
                             DPM Timeline
                         </button>
@@ -1480,7 +1800,7 @@ async function loadSessionDetailsExpanded(date) {
                             <i data-lucide="sword" class="w-5 h-5 text-brand-rose"></i>
                             <h3 class="text-lg font-bold text-white">Combat Stats (Offense)</h3>
                         </div>
-                        
+
                         <!-- Player Legend -->
                         <div id="graph-legend-${dateKey}" class="flex flex-wrap justify-center gap-4 mb-4">
                             <!-- Populated dynamically -->
@@ -1492,6 +1812,8 @@ async function loadSessionDetailsExpanded(date) {
                         </div>
                     </div>
                 </div>
+
+                ${seriesHeaderHtml}
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <!-- Leaderboard -->
@@ -1516,11 +1838,13 @@ async function loadSessionDetailsExpanded(date) {
                         </div>
                     </div>
                 </div>
+
+                ${playerStatsHtml}
             </div>
         `;
 
         if (typeof lucide !== 'undefined') lucide.createIcons();
-        
+
         // Initialize graph tab styling
         updateGraphTabStyles(date, 'offense');
 

@@ -18,7 +18,7 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any
 
 logger = logging.getLogger(__name__)
 
@@ -661,11 +661,9 @@ class MatchupAnalyticsService:
             # Calculate averages (safe division)
             count = len(together_stats)
             avg_dpm_together = sum(s.get('dpm', 0) for s in together_stats) / count if count > 0 else 0
-            avg_kd_together = sum(s.get('kd', 0) for s in together_stats) / count if count > 0 else 0
 
             # Calculate synergy (delta from baseline)
             baseline_dpm = baseline.get('avg_dpm', 0)
-            baseline_kd = baseline.get('avg_kd', 0)
             dpm_delta = avg_dpm_together - baseline_dpm
 
             # Safe synergy percent calculation

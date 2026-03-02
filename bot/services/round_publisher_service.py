@@ -14,6 +14,8 @@ import discord
 from datetime import datetime
 import logging
 
+from bot.core.correlation_context import set_correlation_id, get_correlation_id
+
 logger = logging.getLogger('RoundPublisherService')
 
 
@@ -78,6 +80,95 @@ class RoundPublisherService:
 
         return chunks
 
+    @staticmethod
+    def _parse_time_to_seconds(value):
+        """Parse MM:SS / HH:MM:SS / numeric values into seconds."""
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text or text.lower() == "unknown":
+            return None
+        try:
+            parts = text.split(":")
+            if len(parts) == 2:
+                return int(parts[0]) * 60 + int(parts[1])
+            if len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            if "." in text:
+                return int(float(text) * 60)
+            return int(float(text))
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _format_seconds(seconds: int) -> str:
+        """Format integer seconds as MM:SS."""
+        total = max(0, int(seconds or 0))
+        return f"{total // 60}:{total % 60:02d}"
+
+    @staticmethod
+    def _format_delta_seconds(delta_seconds: int) -> str:
+        """Format signed delta in MM:SS."""
+        total = abs(int(delta_seconds or 0))
+        if total == 0:
+            return "0:00"
+        sign = "+" if delta_seconds > 0 else "-"
+        return f"{sign}{total // 60}:{total % 60:02d}"
+
+    async def _fetch_lua_elapsed_seconds(self, round_id: int):
+        """
+        Fetch elapsed timing from lua_round_teams.
+
+        Returns:
+            tuple[int|None, str]
+            - elapsed seconds or None
+            - source label (round_id_link | match_round_fallback | "")
+        """
+        try:
+            direct_query = """
+                SELECT actual_duration_seconds
+                FROM lua_round_teams
+                WHERE round_id = ?
+                  AND actual_duration_seconds IS NOT NULL
+                ORDER BY id DESC
+                LIMIT 1
+            """
+            direct_row = await self.db_adapter.fetch_one(direct_query, (round_id,))
+            if direct_row and direct_row[0] is not None:
+                try:
+                    direct_seconds = int(direct_row[0])
+                except (TypeError, ValueError):
+                    direct_seconds = None
+                if direct_seconds and direct_seconds > 0:
+                    return direct_seconds, "round_id_link"
+        except Exception as e:
+            logger.debug("Lua elapsed lookup by round_id failed for round %s: %s", round_id, e)
+
+        try:
+            fallback_query = """
+                SELECT l.actual_duration_seconds
+                FROM lua_round_teams l
+                JOIN rounds r ON r.id = ?
+                WHERE l.match_id = r.match_id
+                  AND l.round_number = r.round_number
+                  AND LOWER(COALESCE(l.map_name, '')) = LOWER(COALESCE(r.map_name, ''))
+                  AND l.actual_duration_seconds IS NOT NULL
+                ORDER BY l.id DESC
+                LIMIT 1
+            """
+            fallback_row = await self.db_adapter.fetch_one(fallback_query, (round_id,))
+            if fallback_row and fallback_row[0] is not None:
+                try:
+                    fallback_seconds = int(fallback_row[0])
+                except (TypeError, ValueError):
+                    fallback_seconds = None
+                if fallback_seconds and fallback_seconds > 0:
+                    return fallback_seconds, "match_round_fallback"
+        except Exception as e:
+            logger.debug("Lua elapsed fallback lookup failed for round %s: %s", round_id, e)
+
+        return None, ""
+
     def __init__(self, bot, config, db_adapter, timing_debug_service=None, timing_comparison_service=None):
         """
         Initialize round publisher service.
@@ -110,8 +201,10 @@ class RoundPublisherService:
                 - round_id: Database round ID
                 - stats_data: Parser output (used for fallback values only)
         """
+        import uuid
+        set_correlation_id(uuid.uuid4().hex[:8])
         try:
-            logger.debug(f"📤 Preparing Discord post for {filename}")
+            logger.debug(f"📤 Preparing Discord post for {filename} [cid={get_correlation_id()}]")
 
             # Get the production channel
             if not self.config.production_channel_id:
@@ -157,6 +250,7 @@ class RoundPublisherService:
             actual_time = round_info[1] if round_info else 'Unknown'
             db_winner_team = round_info[2] if round_info else winner_team
             db_round_outcome = round_info[3] if round_info else round_outcome
+            dual_timing_enabled = bool(getattr(self.config, "show_timing_dual", False))
 
             # If Lua override metadata is available, prefer corrected playtime for display
             override_metadata = result.get('override_metadata') or {}
@@ -165,23 +259,36 @@ class RoundPublisherService:
                 or override_metadata.get('lua_playtime_seconds')
                 or 0
             )
+            elapsed_seconds = None
+            elapsed_source = ""
+            try:
+                if lua_duration:
+                    elapsed_seconds = int(lua_duration)
+                    if elapsed_seconds <= 0:
+                        elapsed_seconds = None
+            except (TypeError, ValueError):
+                elapsed_seconds = None
+            if elapsed_seconds:
+                elapsed_source = "override_metadata"
+
+            if elapsed_seconds is None:
+                elapsed_seconds, elapsed_source = await self._fetch_lua_elapsed_seconds(round_id)
+
             corrected_time = None
-            if lua_duration and int(lua_duration) > 0:
-                mins = int(lua_duration) // 60
-                secs = int(lua_duration) % 60
+            if elapsed_seconds and elapsed_seconds > 0:
+                mins = elapsed_seconds // 60
+                secs = elapsed_seconds % 60
                 corrected_time = f"{mins}:{secs:02d}"
-                actual_time = corrected_time
+                if not dual_timing_enabled:
+                    actual_time = corrected_time
 
             # Sanity cap: orphan R2 files may have cumulative server time
             # (e.g., 79:20 for a 12:00 map). Cap to time_limit for display.
             if not corrected_time and actual_time and time_limit:
                 if actual_time != 'Unknown' and time_limit != 'Unknown':
                     try:
-                        def _time_to_seconds(t):
-                            parts = t.split(':')
-                            return int(parts[0]) * 60 + int(parts[1]) if len(parts) == 2 else 0
-                        actual_sec = _time_to_seconds(actual_time)
-                        limit_sec = _time_to_seconds(time_limit)
+                        actual_sec = self._parse_time_to_seconds(actual_time) or 0
+                        limit_sec = self._parse_time_to_seconds(time_limit) or 0
                         if limit_sec > 0 and actual_sec > limit_sec:
                             raw_time = actual_time
                             actual_time = time_limit
@@ -249,13 +356,42 @@ class RoundPublisherService:
 
             description_parts = []
 
-            # Add time information (limit vs actual)
-            if time_limit and actual_time and time_limit != 'Unknown' and actual_time != 'Unknown':
-                time_note = " (Lua)" if corrected_time else ""
-                description_parts.append(f"⏱️ **Time:** {actual_time} / {time_limit}{time_note}")
-            elif actual_time and actual_time != 'Unknown':
-                time_note = " (Lua)" if corrected_time else ""
-                description_parts.append(f"⏱️ **Duration:** {actual_time}{time_note}")
+            # Add timing information.
+            if dual_timing_enabled:
+                stopwatch_seconds = self._parse_time_to_seconds(actual_time)
+                stopwatch_display = actual_time if actual_time and actual_time != 'Unknown' else "N/A"
+                elapsed_display = self._format_seconds(elapsed_seconds) if elapsed_seconds else "N/A"
+
+                if stopwatch_seconds is not None and elapsed_seconds is not None:
+                    delta_display = self._format_delta_seconds(elapsed_seconds - stopwatch_seconds)
+                    timing_line = (
+                        f"⏱️ **Timing:** SW `{stopwatch_display}` | EL `{elapsed_display}` | Δ `{delta_display}`"
+                    )
+                elif stopwatch_seconds is not None:
+                    timing_line = (
+                        f"⏱️ **Timing:** SW `{stopwatch_display}` | EL `N/A` (fallback: no-lua-link)"
+                    )
+                elif elapsed_seconds is not None:
+                    timing_line = (
+                        f"⏱️ **Timing:** SW `N/A` | EL `{elapsed_display}` (fallback: no-stopwatch)"
+                    )
+                else:
+                    timing_line = "⏱️ **Timing:** SW `N/A` | EL `N/A` (fallback: no-timing-sources)"
+
+                if time_limit and time_limit != 'Unknown':
+                    timing_line += f" | Limit `{time_limit}`"
+                if elapsed_source:
+                    timing_line += f" • src:{elapsed_source}"
+
+                description_parts.append(timing_line)
+            else:
+                # Legacy single-source display path.
+                if time_limit and actual_time and time_limit != 'Unknown' and actual_time != 'Unknown':
+                    time_note = " (Lua)" if corrected_time else ""
+                    description_parts.append(f"⏱️ **Time:** {actual_time} / {time_limit}{time_note}")
+                elif actual_time and actual_time != 'Unknown':
+                    time_note = " (Lua)" if corrected_time else ""
+                    description_parts.append(f"⏱️ **Duration:** {actual_time}{time_note}")
 
             # Add round outcome - use DB values if available
             outcome_to_show = db_round_outcome if db_round_outcome else round_outcome
@@ -709,7 +845,6 @@ class RoundPublisherService:
                 return False
 
             awards = endstats_data.get('awards', [])
-            vs_stats = endstats_data.get('vs_stats', [])
 
             # Import categorization helper
             from bot.endstats_parser import EndStatsParser

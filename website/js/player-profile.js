@@ -9,6 +9,10 @@ import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js';
 let sessionChartInstance = null;
 let roundChartInstance = null;
 
+function _hasChartJs() {
+    return typeof Chart !== 'undefined';
+}
+
 // Navigation function (set by app.js to avoid circular imports)
 let navigateToFn = null;
 let loadMatchDetailsFn = null;
@@ -154,6 +158,7 @@ export async function loadSessionChart(playerIdentifier) {
             return;
         }
 
+        if (!_hasChartJs()) return;
         if (sessionChartInstance) sessionChartInstance.destroy();
 
         const ctx = canvas.getContext('2d');
@@ -243,6 +248,7 @@ export async function loadRoundChart(playerIdentifier) {
             return;
         }
 
+        if (!_hasChartJs()) return;
         if (roundChartInstance) roundChartInstance.destroy();
 
         const ctx = canvas.getContext('2d');

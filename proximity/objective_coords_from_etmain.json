@@ -1,0 +1,881 @@
+{
+  "meta": {
+    "etmain_dir": "/home/samba/share/etmain",
+    "filtered_by_template": true
+  },
+  "maps": {
+    "adlernest": [
+      {
+        "name": "Allied CP",
+        "lua_name": "allied_cp",
+        "target": "allied_radio_built",
+        "type": "command_post",
+        "x": -412,
+        "y": -2064,
+        "z": 128,
+        "source_pk3": "adlernest.pk3",
+        "source_bsp": "maps/adlernest.bsp"
+      },
+      {
+        "name": "Transmitter",
+        "lua_name": "transmitter",
+        "target": "trans_cmm",
+        "type": "objective",
+        "x": -298,
+        "y": -3288,
+        "z": 12,
+        "source_pk3": "adlernest.pk3",
+        "source_bsp": "maps/adlernest.bsp"
+      },
+      {
+        "name": "Documents",
+        "lua_name": "documents",
+        "target": "documents_CMM",
+        "type": "objective",
+        "x": -676,
+        "y": 672,
+        "z": 108,
+        "source_pk3": "adlernest.pk3",
+        "source_bsp": "maps/adlernest.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "healanammo_cmm",
+        "type": "objective",
+        "x": 1830,
+        "y": 992,
+        "z": 12,
+        "source_pk3": "adlernest.pk3",
+        "source_bsp": "maps/adlernest.bsp"
+      }
+    ],
+    "braundorf_b4": [
+      {
+        "name": "Command Post",
+        "lua_name": "command_post",
+        "target": "cp_open",
+        "type": "command_post",
+        "x": 4776,
+        "y": -256,
+        "z": 403,
+        "source_pk3": "braundorf_b4.pk3",
+        "source_bsp": "maps/braundorf_b4.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "south_hacabinet_cm_marker",
+        "type": "objective",
+        "x": 1094,
+        "y": -4170,
+        "z": 417,
+        "source_pk3": "braundorf_b4.pk3",
+        "source_bsp": "maps/braundorf_b4.bsp"
+      },
+      {
+        "name": "the side gate",
+        "lua_name": "the_side_gate",
+        "target": "cm_marker_sidegate",
+        "type": "objective",
+        "x": 4352,
+        "y": 896,
+        "z": 152,
+        "source_pk3": "braundorf_b4.pk3",
+        "source_bsp": "maps/braundorf_b4.bsp"
+      }
+    ],
+    "bremen_b3": [
+      {
+        "name": "Neutral Command Post",
+        "lua_name": "neutral_command_post",
+        "target": "cp_open",
+        "type": "command_post",
+        "x": 2320,
+        "y": 2432,
+        "z": 366,
+        "source_pk3": "bremen_b3.pk3",
+        "source_bsp": "maps/bremen_b3.bsp"
+      },
+      {
+        "name": "Side Door",
+        "lua_name": "side_door",
+        "target": "sidedoor",
+        "type": "objective",
+        "x": -1476,
+        "y": 1954,
+        "z": 296,
+        "source_pk3": "bremen_b3.pk3",
+        "source_bsp": "maps/bremen_b3.bsp"
+      },
+      {
+        "name": "Keycard",
+        "lua_name": "keycard",
+        "target": "keycard_CMM",
+        "type": "objective",
+        "x": 1260,
+        "y": 88,
+        "z": 240,
+        "source_pk3": "bremen_b3.pk3",
+        "source_bsp": "maps/bremen_b3.bsp"
+      },
+      {
+        "name": "Truck",
+        "lua_name": "truck",
+        "target": "truck_construct",
+        "type": "escort",
+        "x": 1716,
+        "y": -924,
+        "z": 130,
+        "source_pk3": "bremen_b3.pk3",
+        "source_bsp": "maps/bremen_b3.bsp"
+      },
+      {
+        "name": "Truck Barrier #1",
+        "lua_name": "truck_barrier_1",
+        "target": "defense3",
+        "type": "escort",
+        "x": 1744,
+        "y": 376,
+        "z": 160,
+        "source_pk3": "bremen_b3.pk3",
+        "source_bsp": "maps/bremen_b3.bsp"
+      },
+      {
+        "name": "Truck Barrier #2",
+        "lua_name": "truck_barrier_2",
+        "target": "defense4",
+        "type": "escort",
+        "x": -1428,
+        "y": 320,
+        "z": 113,
+        "source_pk3": "bremen_b3.pk3",
+        "source_bsp": "maps/bremen_b3.bsp"
+      },
+      {
+        "name": "Wooden Barrier",
+        "lua_name": "wooden_barrier",
+        "target": "woodenbarrier",
+        "type": "objective",
+        "x": 1560,
+        "y": 8,
+        "z": 112,
+        "source_pk3": "bremen_b3.pk3",
+        "source_bsp": "maps/bremen_b3.bsp"
+      },
+      {
+        "name": "Generator",
+        "lua_name": "generator",
+        "target": "generator_cmm1",
+        "type": "objective",
+        "x": 674,
+        "y": 2624,
+        "z": 140,
+        "source_pk3": "bremen_b3.pk3",
+        "source_bsp": "maps/bremen_b3.bsp"
+      }
+    ],
+    "erdenberg_t2": [
+      {
+        "name": "Neutral Command Post",
+        "lua_name": "neutral_command_post",
+        "target": "cp_open",
+        "type": "command_post",
+        "x": 5568,
+        "y": -2264,
+        "z": -382,
+        "source_pk3": "erdenberg_t2.pk3",
+        "source_bsp": "maps/erdenberg_t2.bsp"
+      }
+    ],
+    "etl_adlernest": [
+      {
+        "name": "Transmitter",
+        "lua_name": "transmitter",
+        "target": "transmitter_cmm",
+        "type": "objective",
+        "x": -298,
+        "y": -3288,
+        "z": 24,
+        "source_pk3": "etl_adlernest_v4.pk3",
+        "source_bsp": "maps/etl_adlernest.bsp"
+      },
+      {
+        "name": "Documents",
+        "lua_name": "documents",
+        "target": "documents_CMM",
+        "type": "objective",
+        "x": -676,
+        "y": 672,
+        "z": 108,
+        "source_pk3": "etl_adlernest_v4.pk3",
+        "source_bsp": "maps/etl_adlernest.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "outer_cabinet_marker",
+        "type": "objective",
+        "x": 1830,
+        "y": 992,
+        "z": 12,
+        "source_pk3": "etl_adlernest_v4.pk3",
+        "source_bsp": "maps/etl_adlernest.bsp"
+      }
+    ],
+    "etl_ice": [
+      {
+        "name": "Transmitter",
+        "lua_name": "transmitter",
+        "target": "transmitter_marker",
+        "type": "objective",
+        "x": 328,
+        "y": -2792,
+        "z": 280,
+        "source_pk3": "etl_ice_v12.pk3",
+        "source_bsp": "maps/etl_ice.bsp"
+      },
+      {
+        "name": "Documents",
+        "lua_name": "documents",
+        "target": "documents_marker",
+        "type": "objective",
+        "x": -6016,
+        "y": 2176,
+        "z": 1088,
+        "source_pk3": "etl_ice_v12.pk3",
+        "source_bsp": "maps/etl_ice.bsp"
+      }
+    ],
+    "etl_sp_delivery": [
+      {
+        "name": "Axis Gold",
+        "lua_name": "axis_gold",
+        "target": "axis_gold_cm_marker",
+        "type": "objective",
+        "x": -1160,
+        "y": 1332,
+        "z": 168,
+        "source_pk3": "etl_sp_delivery_v5.pk3",
+        "source_bsp": "maps/etl_sp_delivery.bsp"
+      },
+      {
+        "name": "Getaway Trucks",
+        "lua_name": "getaway_trucks",
+        "target": "getaway_trucks_cm_marker",
+        "type": "escort",
+        "x": 1456,
+        "y": 4280,
+        "z": -56,
+        "source_pk3": "etl_sp_delivery_v5.pk3",
+        "source_bsp": "maps/etl_sp_delivery.bsp"
+      }
+    ],
+    "frostbite": [
+      {
+        "name": "Main Door",
+        "lua_name": "main_door",
+        "target": "t182",
+        "type": "objective",
+        "x": -32,
+        "y": 208,
+        "z": 352,
+        "source_pk3": "Frostbite.pk3",
+        "source_bsp": "maps/frostbite.bsp"
+      },
+      {
+        "name": "Storage Wall",
+        "lua_name": "storage_wall",
+        "target": "t217",
+        "type": "objective",
+        "x": -32,
+        "y": 208,
+        "z": 352,
+        "source_pk3": "Frostbite.pk3",
+        "source_bsp": "maps/frostbite.bsp"
+      },
+      {
+        "name": "Transmitter",
+        "lua_name": "transmitter",
+        "target": "transmitter_cmd_marker",
+        "type": "objective",
+        "x": -4544,
+        "y": 2240,
+        "z": -96,
+        "source_pk3": "Frostbite.pk3",
+        "source_bsp": "maps/frostbite.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "south_hacabinet_cm_marker",
+        "type": "objective",
+        "x": -150,
+        "y": -662,
+        "z": 296,
+        "source_pk3": "Frostbite.pk3",
+        "source_bsp": "maps/frostbite.bsp"
+      },
+      {
+        "name": "Platform MG",
+        "lua_name": "platform_mg",
+        "target": "platformmg42_target",
+        "type": "objective",
+        "x": -1512,
+        "y": 1868,
+        "z": 45,
+        "source_pk3": "Frostbite.pk3",
+        "source_bsp": "maps/frostbite.bsp"
+      },
+      {
+        "name": "Axis Command Post",
+        "lua_name": "axis_command_post",
+        "target": "axis_compost_built",
+        "type": "command_post",
+        "x": -5056,
+        "y": 1896,
+        "z": -108,
+        "source_pk3": "Frostbite.pk3",
+        "source_bsp": "maps/frostbite.bsp"
+      },
+      {
+        "name": "Documents",
+        "lua_name": "documents",
+        "target": "docs_cm_marker",
+        "type": "objective",
+        "x": 816,
+        "y": 160,
+        "z": 432,
+        "source_pk3": "Frostbite.pk3",
+        "source_bsp": "maps/frostbite.bsp"
+      },
+      {
+        "name": "the Gramophone",
+        "lua_name": "the_gramophone",
+        "target": "record",
+        "type": "objective",
+        "x": -299,
+        "y": 1264,
+        "z": 343,
+        "source_pk3": "Frostbite.pk3",
+        "source_bsp": "maps/frostbite.bsp"
+      },
+      {
+        "name": "Allied Command Post",
+        "lua_name": "allied_command_post",
+        "target": "t2019",
+        "type": "command_post",
+        "x": -1836,
+        "y": 404,
+        "z": 444,
+        "source_pk3": "Frostbite.pk3",
+        "source_bsp": "maps/frostbite.bsp"
+      }
+    ],
+    "supply": [
+      {
+        "name": "Forward Bunker Gate",
+        "lua_name": "forward_bunker_gate",
+        "target": "forwardgate",
+        "type": "objective",
+        "x": 56,
+        "y": 2368,
+        "z": -48,
+        "source_pk3": "supply_sp.pk3",
+        "source_bsp": "maps/supply.bsp"
+      },
+      {
+        "name": "Truck",
+        "lua_name": "truck",
+        "target": "fakeobj1",
+        "type": "escort",
+        "x": -2368,
+        "y": 688,
+        "z": 0,
+        "source_pk3": "supply_sp.pk3",
+        "source_bsp": "maps/supply.bsp"
+      },
+      {
+        "name": "Depot Fence",
+        "lua_name": "depot_fence",
+        "target": "fence",
+        "type": "objective",
+        "x": 144,
+        "y": -1792,
+        "z": 52,
+        "source_pk3": "supply_sp.pk3",
+        "source_bsp": "maps/supply.bsp"
+      },
+      {
+        "name": "Command Post",
+        "lua_name": "command_post",
+        "target": "cp_constructor",
+        "type": "command_post",
+        "x": 2432,
+        "y": 904,
+        "z": 288,
+        "source_pk3": "supply_sp.pk3",
+        "source_bsp": "maps/supply.bsp"
+      },
+      {
+        "name": "Forward spawn door",
+        "lua_name": "forward_spawn_door",
+        "target": "forwardgate2",
+        "type": "objective",
+        "x": -68,
+        "y": 2368,
+        "z": 304,
+        "source_pk3": "supply_sp.pk3",
+        "source_bsp": "maps/supply.bsp"
+      },
+      {
+        "name": "Crane Controls",
+        "lua_name": "crane_controls",
+        "target": "cranecontrol",
+        "type": "objective",
+        "x": 656,
+        "y": -1360,
+        "z": 372,
+        "source_pk3": "supply_sp.pk3",
+        "source_bsp": "maps/supply.bsp"
+      }
+    ],
+    "sw_battery": [
+      {
+        "name": "Axis South-East MG",
+        "lua_name": "axis_south_east_mg",
+        "target": "mg42_clip_2",
+        "type": "objective",
+        "x": 4248,
+        "y": -4864,
+        "z": 1056,
+        "source_pk3": "sw_battery.pk3",
+        "source_bsp": "maps/sw_battery.bsp"
+      },
+      {
+        "name": "Axis North-West MG",
+        "lua_name": "axis_north_west_mg",
+        "target": "mg42_clip_3",
+        "type": "objective",
+        "x": 1992,
+        "y": -4018,
+        "z": 1180,
+        "source_pk3": "sw_battery.pk3",
+        "source_bsp": "maps/sw_battery.bsp"
+      },
+      {
+        "name": "Gun Controls",
+        "lua_name": "gun_controls",
+        "target": "guncontrols",
+        "type": "objective",
+        "x": 3200,
+        "y": -2924,
+        "z": 1016,
+        "source_pk3": "sw_battery.pk3",
+        "source_bsp": "maps/sw_battery.bsp"
+      },
+      {
+        "name": "Allied West MG",
+        "lua_name": "allied_west_mg",
+        "target": "browning_clip_1",
+        "type": "objective",
+        "x": 992,
+        "y": -992,
+        "z": 152,
+        "source_pk3": "sw_battery.pk3",
+        "source_bsp": "maps/sw_battery.bsp"
+      },
+      {
+        "name": "Allied East MG",
+        "lua_name": "allied_east_mg",
+        "target": "browning_clip_2",
+        "type": "objective",
+        "x": 4012,
+        "y": -1100,
+        "z": 264,
+        "source_pk3": "sw_battery.pk3",
+        "source_bsp": "maps/sw_battery.bsp"
+      },
+      {
+        "name": "Command Post",
+        "lua_name": "command_post",
+        "target": "neutral_compost_built",
+        "type": "command_post",
+        "x": 6172,
+        "y": -3652,
+        "z": 1192,
+        "source_pk3": "sw_battery.pk3",
+        "source_bsp": "maps/sw_battery.bsp"
+      },
+      {
+        "name": "Generator",
+        "lua_name": "generator",
+        "target": "doorcontrols",
+        "type": "objective",
+        "x": 3986,
+        "y": -5122,
+        "z": 1036,
+        "source_pk3": "sw_battery.pk3",
+        "source_bsp": "maps/sw_battery.bsp"
+      },
+      {
+        "name": "Command Post",
+        "lua_name": "command_post",
+        "target": "neutral_compost_built_lms",
+        "type": "command_post",
+        "x": 3146,
+        "y": -3096,
+        "z": 1008,
+        "source_pk3": "sw_battery.pk3",
+        "source_bsp": "maps/sw_battery.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "eastbunker_hacabinet_cm_marker",
+        "type": "objective",
+        "x": 6102,
+        "y": -3294,
+        "z": 1154,
+        "source_pk3": "sw_battery.pk3",
+        "source_bsp": "maps/sw_battery.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "mainbunker_hacabinet_cm_marker_lms",
+        "type": "objective",
+        "x": 3104,
+        "y": -4674,
+        "z": 970,
+        "source_pk3": "sw_battery.pk3",
+        "source_bsp": "maps/sw_battery.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "mainbunker_hacabinet_cm_marker",
+        "type": "objective",
+        "x": 3506,
+        "y": -4926,
+        "z": 1226,
+        "source_pk3": "sw_battery.pk3",
+        "source_bsp": "maps/sw_battery.bsp"
+      },
+      {
+        "name": "Backdoor Barrier",
+        "lua_name": "backdoor_barrier",
+        "target": "glotz",
+        "type": "objective",
+        "x": 4600,
+        "y": -4640,
+        "z": 1132,
+        "source_pk3": "sw_battery.pk3",
+        "source_bsp": "maps/sw_battery.bsp"
+      }
+    ],
+    "sw_goldrush_te": [
+      {
+        "name": "Tank Barrier",
+        "lua_name": "tank_barrier",
+        "target": "defense1",
+        "type": "escort",
+        "x": 688,
+        "y": 184,
+        "z": -11,
+        "source_pk3": "sw_goldrush_te.pk3",
+        "source_bsp": "maps/sw_goldrush_te.bsp"
+      },
+      {
+        "name": "Jagdpanther",
+        "lua_name": "jagdpanther",
+        "target": "tank_construct",
+        "type": "objective",
+        "x": -272,
+        "y": 2200,
+        "z": 416,
+        "source_pk3": "sw_goldrush_te.pk3",
+        "source_bsp": "maps/sw_goldrush_te.bsp"
+      },
+      {
+        "name": "Command Post",
+        "lua_name": "command_post",
+        "target": "neutral_compost_built",
+        "type": "command_post",
+        "x": 1336,
+        "y": 264,
+        "z": 284,
+        "source_pk3": "sw_goldrush_te.pk3",
+        "source_bsp": "maps/sw_goldrush_te.bsp"
+      },
+      {
+        "name": "Command Post",
+        "lua_name": "command_post",
+        "target": "neutral_compost_built_lms",
+        "type": "command_post",
+        "x": 856,
+        "y": -512,
+        "z": 68,
+        "source_pk3": "sw_goldrush_te.pk3",
+        "source_bsp": "maps/sw_goldrush_te.bsp"
+      },
+      {
+        "name": "Bank Doors",
+        "lua_name": "bank_doors",
+        "target": "bankdoors_cm_marker",
+        "type": "objective",
+        "x": 1600,
+        "y": -1948,
+        "z": -214,
+        "source_pk3": "sw_goldrush_te.pk3",
+        "source_bsp": "maps/sw_goldrush_te.bsp"
+      },
+      {
+        "name": "Gold Bars",
+        "lua_name": "gold_bars",
+        "target": "goldbars_cm_marker",
+        "type": "objective",
+        "x": 2480,
+        "y": -2248,
+        "z": -296,
+        "source_pk3": "sw_goldrush_te.pk3",
+        "source_bsp": "maps/sw_goldrush_te.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "north_hacabinet_cm_marker",
+        "type": "objective",
+        "x": -1884,
+        "y": 1984,
+        "z": 244,
+        "source_pk3": "sw_goldrush_te.pk3",
+        "source_bsp": "maps/sw_goldrush_te.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "south_hacabinet_cm_marker",
+        "type": "objective",
+        "x": -238,
+        "y": -1874,
+        "z": -136,
+        "source_pk3": "sw_goldrush_te.pk3",
+        "source_bsp": "maps/sw_goldrush_te.bsp"
+      },
+      {
+        "name": "Truck",
+        "lua_name": "truck",
+        "target": "truck_construct",
+        "type": "escort",
+        "x": 2315,
+        "y": 1047,
+        "z": -352,
+        "source_pk3": "sw_goldrush_te.pk3",
+        "source_bsp": "maps/sw_goldrush_te.bsp"
+      },
+      {
+        "name": "Truck Barrier",
+        "lua_name": "truck_barrier",
+        "target": "defense3",
+        "type": "escort",
+        "x": 1920,
+        "y": 40,
+        "z": -368,
+        "source_pk3": "sw_goldrush_te.pk3",
+        "source_bsp": "maps/sw_goldrush_te.bsp"
+      }
+    ],
+    "sw_oasis_b3": [
+      {
+        "name": "Axis Command Post",
+        "lua_name": "axis_command_post",
+        "target": "axis_radio_built",
+        "type": "command_post",
+        "x": 8577,
+        "y": 5696,
+        "z": -120,
+        "source_pk3": "sw_oasis_b3.pk3",
+        "source_bsp": "maps/sw_oasis_b3.bsp"
+      },
+      {
+        "name": "Old City Wall",
+        "lua_name": "old_city_wall",
+        "target": "dynawall",
+        "type": "objective",
+        "x": 4896,
+        "y": 7586,
+        "z": -420,
+        "source_pk3": "sw_oasis_b3.pk3",
+        "source_bsp": "maps/sw_oasis_b3.bsp"
+      },
+      {
+        "name": "Allied Command Post",
+        "lua_name": "allied_command_post",
+        "target": "t2",
+        "type": "command_post",
+        "x": 2393,
+        "y": 4678,
+        "z": -232,
+        "source_pk3": "sw_oasis_b3.pk3",
+        "source_bsp": "maps/sw_oasis_b3.bsp"
+      },
+      {
+        "name": "Axis Command Post",
+        "lua_name": "axis_command_post",
+        "target": "axis_radio_built_lms",
+        "type": "command_post",
+        "x": 6500,
+        "y": 6605,
+        "z": -236,
+        "source_pk3": "sw_oasis_b3.pk3",
+        "source_bsp": "maps/sw_oasis_b3.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "hacabinet_marker",
+        "type": "objective",
+        "x": 4182,
+        "y": 7470,
+        "z": -456,
+        "source_pk3": "sw_oasis_b3.pk3",
+        "source_bsp": "maps/sw_oasis_b3.bsp"
+      }
+    ],
+    "te_escape2": [
+      {
+        "name": "Secret Exit",
+        "lua_name": "secret_exit",
+        "target": "t1074",
+        "type": "objective",
+        "x": -6165,
+        "y": 1606,
+        "z": -20,
+        "source_pk3": "te_escape2_fixed.pk3",
+        "source_bsp": "maps/te_escape2.bsp"
+      },
+      {
+        "name": "Command Post",
+        "lua_name": "command_post",
+        "target": "allied_compost_built",
+        "type": "command_post",
+        "x": -3340,
+        "y": 1372,
+        "z": 252,
+        "source_pk3": "te_escape2_fixed.pk3",
+        "source_bsp": "maps/te_escape2.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "south_hacabinet_cm_marker",
+        "type": "objective",
+        "x": -2362,
+        "y": 990,
+        "z": 17,
+        "source_pk3": "te_escape2_fixed.pk3",
+        "source_bsp": "maps/te_escape2.bsp"
+      },
+      {
+        "name": "Holy Grail",
+        "lua_name": "holy_grail",
+        "target": "calicetarget",
+        "type": "objective",
+        "x": -5828,
+        "y": -228,
+        "z": -24,
+        "source_pk3": "te_escape2_fixed.pk3",
+        "source_bsp": "maps/te_escape2.bsp"
+      },
+      {
+        "name": "Secret Exit",
+        "lua_name": "secret_exit",
+        "target": "t1074",
+        "type": "objective",
+        "x": -6165,
+        "y": 1606,
+        "z": -20,
+        "source_pk3": "te_escape2_fixed2.pk3",
+        "source_bsp": "maps/te_escape2.bsp"
+      },
+      {
+        "name": "Command Post",
+        "lua_name": "command_post",
+        "target": "allied_compost_built",
+        "type": "command_post",
+        "x": -3340,
+        "y": 1372,
+        "z": 252,
+        "source_pk3": "te_escape2_fixed2.pk3",
+        "source_bsp": "maps/te_escape2.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "south_hacabinet_cm_marker",
+        "type": "objective",
+        "x": -2362,
+        "y": 990,
+        "z": 17,
+        "source_pk3": "te_escape2_fixed2.pk3",
+        "source_bsp": "maps/te_escape2.bsp"
+      },
+      {
+        "name": "Holy Grail",
+        "lua_name": "holy_grail",
+        "target": "calicetarget",
+        "type": "objective",
+        "x": -5828,
+        "y": -228,
+        "z": -24,
+        "source_pk3": "te_escape2_fixed2.pk3",
+        "source_bsp": "maps/te_escape2.bsp"
+      },
+      {
+        "name": "Secret Exit",
+        "lua_name": "secret_exit",
+        "target": "t1074",
+        "type": "objective",
+        "x": -6165,
+        "y": 1606,
+        "z": -20,
+        "source_pk3": "te_escape2_fixed3.pk3",
+        "source_bsp": "maps/te_escape2.bsp"
+      },
+      {
+        "name": "Command Post",
+        "lua_name": "command_post",
+        "target": "allied_compost_built",
+        "type": "command_post",
+        "x": -3340,
+        "y": 1372,
+        "z": 252,
+        "source_pk3": "te_escape2_fixed3.pk3",
+        "source_bsp": "maps/te_escape2.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "south_hacabinet_cm_marker",
+        "type": "objective",
+        "x": -2362,
+        "y": 990,
+        "z": 17,
+        "source_pk3": "te_escape2_fixed3.pk3",
+        "source_bsp": "maps/te_escape2.bsp"
+      },
+      {
+        "name": "Holy Grail",
+        "lua_name": "holy_grail",
+        "target": "calicetarget",
+        "type": "objective",
+        "x": -5828,
+        "y": -228,
+        "z": -24,
+        "source_pk3": "te_escape2_fixed3.pk3",
+        "source_bsp": "maps/te_escape2.bsp"
+      }
+    ]
+  }
+}

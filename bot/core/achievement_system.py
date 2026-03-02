@@ -137,8 +137,8 @@ class AchievementSystem:
             return True
 
     async def check_player_achievements(
-        self, 
-        player_guid: str, 
+        self,
+        player_guid: str,
         channel: Optional[discord.TextChannel] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -296,8 +296,8 @@ class AchievementSystem:
             return []
 
     async def _send_achievement_notification(
-        self, 
-        achievement: Dict[str, Any], 
+        self,
+        achievement: Dict[str, Any],
         channel: discord.TextChannel
     ) -> None:
         """

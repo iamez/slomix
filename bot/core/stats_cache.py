@@ -13,7 +13,7 @@ Original location: Line 121-190 of ultimate_bot.py
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger("UltimateBot.StatsCache")
@@ -60,7 +60,7 @@ class StatsCache:
             Cached value if valid, None if expired or not found
         """
         if key in self.cache:
-            age = (datetime.now() - self.timestamps[key]).total_seconds()
+            age = (datetime.now(timezone.utc) - self.timestamps[key]).total_seconds()
             if age < self.ttl:
                 logger.debug(f"✅ Cache HIT: {key} (age: {age:.1f}s)")
                 return self.cache[key]
@@ -79,7 +79,7 @@ class StatsCache:
             value: Value to cache
         """
         self.cache[key] = value
-        self.timestamps[key] = datetime.now()
+        self.timestamps[key] = datetime.now(timezone.utc)
         logger.debug(f"💾 Cache SET: {key} (total keys: {len(self.cache)})")
 
     def clear(self) -> None:
@@ -100,7 +100,7 @@ class StatsCache:
         expired = sum(
             1
             for k in self.cache
-            if (datetime.now() - self.timestamps[k]).total_seconds() >= self.ttl
+            if (datetime.now(timezone.utc) - self.timestamps[k]).total_seconds() >= self.ttl
         )
         return {
             "total_keys": total,

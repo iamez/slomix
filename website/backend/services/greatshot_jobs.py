@@ -191,7 +191,7 @@ class GreatshotJobService:
                     logger.warning("Analysis job skipped: demo %s not found or already being processed", demo_id)
                     return True
 
-                stored_path, extension = row["stored_path"], row["extension"]
+                stored_path, _ = row["stored_path"], row["extension"]
                 demo_path = Path(stored_path)
 
                 await conn.execute(

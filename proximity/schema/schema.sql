@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS combat_engagement (
     round_start_unix INTEGER DEFAULT 0,
     round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
     engagement_id INTEGER NOT NULL,  -- unique within round
     
     -- Timing
@@ -184,6 +188,10 @@ CREATE TABLE IF NOT EXISTS player_track (
     round_start_unix INTEGER DEFAULT 0,
     round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
 
     -- Player info
     player_guid VARCHAR(32) NOT NULL,
@@ -393,6 +401,10 @@ CREATE TABLE IF NOT EXISTS proximity_objective_focus (
     round_start_unix INTEGER DEFAULT 0,
     round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
 
     player_guid VARCHAR(32) NOT NULL,
     player_name VARCHAR(64) NOT NULL,
@@ -418,6 +430,10 @@ CREATE TABLE IF NOT EXISTS proximity_trade_event (
     round_start_unix INTEGER DEFAULT 0,
     round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
 
     victim_guid VARCHAR(32) NOT NULL,
     victim_name VARCHAR(64) NOT NULL,
@@ -465,6 +481,10 @@ CREATE TABLE IF NOT EXISTS proximity_support_summary (
     round_start_unix INTEGER DEFAULT 0,
     round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
 
     support_samples INTEGER NOT NULL DEFAULT 0,
     total_samples INTEGER NOT NULL DEFAULT 0,
@@ -489,6 +509,10 @@ CREATE TABLE IF NOT EXISTS proximity_reaction_metric (
     round_start_unix INTEGER DEFAULT 0,
     round_end_unix INTEGER DEFAULT 0,
     map_name VARCHAR(64) NOT NULL,
+    round_id INTEGER REFERENCES rounds(id) ON DELETE SET NULL,
+    round_link_source VARCHAR(32),
+    round_link_reason VARCHAR(64),
+    round_linked_at TIMESTAMP,
 
     engagement_id INTEGER NOT NULL,
     target_guid VARCHAR(32) NOT NULL,

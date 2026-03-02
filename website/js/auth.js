@@ -7,6 +7,7 @@ import { AUTH_BASE, fetchJSON, escapeHtml } from './utils.js';
 
 let loadPlayerProfileFn = null;
 let profileSearchTimer = null;
+let _searchAbortController = null;
 
 function updateAdminButton(_user) {
     const adminButton = document.getElementById('link-admin');
@@ -536,7 +537,13 @@ export async function searchHeroPlayer(query) {
     if (!heroSearchResults) return;
 
     try {
-        const results = await fetchJSON(`${AUTH_BASE}/players/search?q=${encodeURIComponent(query)}`);
+        if (_searchAbortController) _searchAbortController.abort();
+        _searchAbortController = new AbortController();
+        const results = await fetchJSON(
+            `${AUTH_BASE}/players/search?q=${encodeURIComponent(query)}`,
+            { signal: _searchAbortController.signal }
+        );
+        _searchAbortController = null;
 
         if (results.length === 0) {
             heroSearchResults.innerHTML = '<div class="p-4 text-slate-500 text-sm text-center">No players found</div>';
@@ -569,6 +576,7 @@ export async function searchHeroPlayer(query) {
         }
         heroSearchResults.classList.remove('hidden');
     } catch (e) {
+        if (e.name === 'AbortError') return;
         console.error(e);
     }
 }

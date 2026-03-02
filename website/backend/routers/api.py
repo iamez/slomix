@@ -20,6 +20,7 @@ from website.backend.services.website_session_data_service import (
 from website.backend.services.game_server_query import query_game_server
 from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.stopwatch_scoring_service import StopwatchScoringService
+from bot.services.round_linkage_anomaly_service import assess_round_linkage_anomalies
 from website.backend.logging_config import get_app_logger
 from website.backend.env_utils import getenv_int
 
@@ -315,6 +316,83 @@ async def resolve_display_name(
     return fallback
 
 
+async def batch_resolve_display_names(
+    db: DatabaseAdapter,
+    guid_fallback_pairs: List[Tuple[str, str]],
+) -> Dict[str, str]:
+    """
+    Batch-resolve display names for multiple GUIDs in minimal queries.
+    Returns a dict mapping guid -> display_name.
+    """
+    if not guid_fallback_pairs:
+        return {}
+
+    guids = [g for g, _ in guid_fallback_pairs]
+    fallback_map = {g: f for g, f in guid_fallback_pairs}
+    result: Dict[str, str] = {}
+
+    # 1) Batch from player_links
+    try:
+        placeholders = ", ".join(f"${i+1}" for i in range(len(guids)))
+        rows = await db.fetch_all(
+            f"SELECT player_guid, COALESCE(display_name, player_name) FROM player_links WHERE player_guid IN ({placeholders})",
+            tuple(guids),
+        )
+        for row in rows:
+            if row[1]:
+                result[row[0]] = row[1]
+    except (OSError, RuntimeError):
+        # display_name column may not exist; try without it
+        try:
+            rows = await db.fetch_all(
+                f"SELECT player_guid, player_name FROM player_links WHERE player_guid IN ({placeholders})",
+                tuple(guids),
+            )
+            for row in rows:
+                if row[1]:
+                    result[row[0]] = row[1]
+        except (OSError, RuntimeError):
+            pass
+
+    remaining = [g for g in guids if g not in result]
+    if not remaining:
+        return result
+
+    # 2) Batch from player_aliases
+    try:
+        placeholders = ", ".join(f"${i+1}" for i in range(len(remaining)))
+        rows = await db.fetch_all(
+            f"SELECT DISTINCT ON (guid) guid, alias FROM player_aliases WHERE guid IN ({placeholders}) ORDER BY guid, last_seen DESC",
+            tuple(remaining),
+        )
+        for row in rows:
+            if row[1]:
+                result[row[0]] = row[1]
+    except (OSError, RuntimeError):
+        pass
+
+    remaining = [g for g in guids if g not in result]
+    if not remaining:
+        return result
+
+    # 3) Batch from player_comprehensive_stats
+    placeholders = ", ".join(f"${i+1}" for i in range(len(remaining)))
+    rows = await db.fetch_all(
+        f"SELECT DISTINCT ON (player_guid) player_guid, player_name FROM player_comprehensive_stats WHERE player_guid IN ({placeholders}) ORDER BY player_guid, round_date DESC",
+        tuple(remaining),
+    )
+    for row in rows:
+        if row[1]:
+            result[row[0]] = row[1]
+
+    # Fill any still-missing with fallbacks
+    for g in guids:
+        if g not in result:
+            result[g] = fallback_map.get(g, "Unknown")
+
+    return result
+
+
 async def resolve_alias_guid_map(
     db: DatabaseAdapter,
     names: List[str],
@@ -341,7 +419,8 @@ async def resolve_alias_guid_map(
             (lowered,),
         )
         return {row[0].lower(): row[1] for row in rows if row and row[0]}
-    except Exception:
+    except Exception as e:
+        logger.warning("resolve_alias_guid_map failed: %s", e)
         return {}
 
 
@@ -382,7 +461,8 @@ async def resolve_name_guid_map(
                 if key in lowered and key not in mapping:
                     mapping[key] = guid
         return mapping
-    except Exception:
+    except Exception as e:
+        logger.warning("resolve_name_guid_map failed: %s", e)
         return {}
 
 
@@ -565,11 +645,14 @@ async def get_diagnostics(db: DatabaseAdapter = Depends(get_db)):
         results["status"] = "warning"
 
     # Monitoring history quick info (non-fatal)
+    _MONITORING_TABLES = {"server_status_history", "voice_status_history"}
     monitoring = {}
     for table, key in (
         ("server_status_history", "server"),
         ("voice_status_history", "voice"),
     ):
+        if table not in _MONITORING_TABLES:
+            continue
         try:
             count = await db.fetch_val(f"SELECT COUNT(*) FROM {table}")
             last = await db.fetch_val(f"SELECT MAX(recorded_at) FROM {table}")
@@ -824,6 +907,19 @@ async def get_lua_webhook_diagnostics(db: DatabaseAdapter = Depends(get_db)):
     if payload["errors"]:
         payload["status"] = "warning"
     return payload
+
+
+@router.get("/diagnostics/round-linkage")
+async def get_round_linkage_diagnostics(
+    sample_limit: int = Query(default=20, ge=1, le=200),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Read-only anomaly checks for round/match linkage consistency.
+    Returns thresholded breach list plus sample mismatch rows.
+    """
+    return await assess_round_linkage_anomalies(db, sample_limit=sample_limit)
+
 
 @router.get("/diagnostics/time-audit")
 async def get_time_audit(
@@ -1081,10 +1177,13 @@ async def get_monitoring_status(db: DatabaseAdapter = Depends(get_db)):
         },
     }
 
+    _MONITORING_STATUS_TABLES = {"server_status_history", "voice_status_history"}
     for table, key in (
         ("server_status_history", "server"),
         ("voice_status_history", "voice"),
     ):
+        if table not in _MONITORING_STATUS_TABLES:
+            continue
         try:
             count = await db.fetch_val(f"SELECT COUNT(*) FROM {table}")
             last = await db.fetch_val(f"SELECT MAX(recorded_at) FROM {table}")
@@ -1375,7 +1474,7 @@ async def get_current_voice_activity(db: DatabaseAdapter = Depends(get_db)):
     try:
         # First try to get from voice_members table (active members)
         query = """
-            SELECT 
+            SELECT
                 discord_id,
                 member_name,
                 channel_id,
@@ -1485,14 +1584,14 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
         try:
             return await db.fetch_val(query, params)
         except Exception as e:
-            print(f"[overview] query failed: {e}")
+            logger.warning("[overview] query failed: %s", e)
             return default
 
     async def safe_one(query: str, params: Optional[tuple] = None):
         try:
             return await db.fetch_one(query, params)
         except Exception as e:
-            print(f"[overview] query failed: {e}")
+            logger.warning("[overview] query failed: %s", e)
             return None
 
     # Use only legal rounds (completed or pre-status rows) and only R1/R2
@@ -1565,7 +1664,7 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
                 (start_date_str,),
             )
         except Exception as e:
-            print(f"[overview] round_status filter failed, retrying fallback: {e}")
+            logger.warning("round_status filter failed, retrying fallback: %s", e)
             rounds_count = await safe_val(
                 f"SELECT COUNT(*) FROM rounds {round_filter_fallback}"
             )
@@ -2695,22 +2794,38 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
 
 @router.get("/stats/session-leaderboard")
 async def get_session_leaderboard(
-    limit: int = 5, db: DatabaseAdapter = Depends(get_db)
+    limit: int = 5,
+    session_id: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
 ):
-    """Get the leaderboard for the last session"""
+    """Get the leaderboard for a specific session (or latest if not specified)"""
     data_service = SessionDataService(db, None)
     stats_service = SessionStatsAggregator(db)
 
-    latest_date = await data_service.get_latest_session_date()
-    if not latest_date:
-        return []
-
-    sessions, session_ids, session_ids_str, _ = await data_service.fetch_session_data(
-        latest_date
-    )
-
-    if not session_ids:
-        return []
+    if session_id is not None:
+        # Fetch rounds for the specified gaming_session_id
+        rounds = await db.fetch_all(
+            """
+            SELECT id FROM rounds
+            WHERE gaming_session_id = $1
+              AND round_number IN (1, 2)
+              AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)
+            """,
+            (session_id,),
+        )
+        if not rounds:
+            return []
+        session_ids = [r[0] for r in rounds]
+        session_ids_str = ", ".join("?" * len(session_ids))
+    else:
+        latest_date = await data_service.get_latest_session_date()
+        if not latest_date:
+            return []
+        sessions, session_ids, session_ids_str, _ = await data_service.fetch_session_data(
+            latest_date
+        )
+        if not session_ids:
+            return []
 
     leaderboard = await stats_service.get_dpm_leaderboard(
         session_ids, session_ids_str, limit
@@ -3027,10 +3142,10 @@ async def search_player(query: str, db: DatabaseAdapter = Depends(get_db)):
         LIMIT 10
     """
     rows = await db.fetch_all(sql, (f"%{safe_query}%",))
-    names = []
-    for guid, player_name in rows:
-        names.append(await resolve_display_name(db, guid, player_name or "Unknown"))
-    return names
+    name_map = await batch_resolve_display_names(
+        db, [(guid, player_name or "Unknown") for guid, player_name in rows]
+    )
+    return [name_map.get(guid, player_name or "Unknown") for guid, player_name in rows]
 
 
 @router.post("/player/link")
@@ -3163,15 +3278,11 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
             SUM(CASE WHEN p.team = r.winner_team THEN 1 ELSE 0 END) as total_wins,
             MAX(p.round_date) as last_seen
         FROM player_comprehensive_stats p
-        LEFT JOIN rounds r ON p.round_date = r.round_date AND p.map_name = r.map_name AND p.round_number = r.round_number
+        LEFT JOIN rounds r ON r.id = p.round_id
         WHERE p.player_guid = $1
     """
     if not use_guid:
         query = query.replace("p.player_guid = $1", "p.player_name ILIKE $1")
-
-    # Note: Joining on round_date + map_name because I'm not 100% sure round_id is in the stats table
-    # based on my truncated schema check, but date+map is a decent proxy for now.
-    # Ideally we use round_id.
 
     try:
         row = await db.fetch_one(query, (identifier,))
@@ -3671,14 +3782,16 @@ async def get_leaderboard(
         logger.error("Leaderboard query error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Database error")
 
+    name_map = await batch_resolve_display_names(
+        db, [(row[0], row[1] or "Unknown") for row in rows]
+    )
     leaderboard = []
     for i, row in enumerate(rows):
-        display_name = await resolve_display_name(db, row[0], row[1] or "Unknown")
         leaderboard.append(
             {
                 "rank": i + 1,
                 "guid": row[0],
-                "name": display_name,
+                "name": name_map.get(row[0], row[1] or "Unknown"),
                 "value": float(row[2]) if row[2] is not None else 0,
                 "rounds": row[3],  # Changed from sessions to rounds
                 "kills": row[4],
@@ -3699,7 +3812,6 @@ async def get_quick_leaders(
     - Top DPM per session in last 7 days
     """
     start_date = (datetime.now() - timedelta(days=7)).date()
-    start_date_str = start_date.strftime("%Y-%m-%d")
 
     xp_query = """
         SELECT
@@ -3743,14 +3855,16 @@ async def get_quick_leaders(
         except Exception as e:
             errors.append(f"xp_query_failed: {e}")
             xp_rows = []
+    xp_name_map = await batch_resolve_display_names(
+        db, [(row[0], row[1] or "Unknown") for row in xp_rows]
+    )
     xp_leaders = []
     for i, row in enumerate(xp_rows):
-        display_name = await resolve_display_name(db, row[0], row[1] or "Unknown")
         xp_leaders.append(
             {
                 "rank": i + 1,
                 "guid": row[0],
-                "name": display_name,
+                "name": xp_name_map.get(row[0], row[1] or "Unknown"),
                 "value": row[2] or 0,
                 "rounds": row[3] or 0,
                 "label": "XP",
@@ -4087,14 +4201,15 @@ async def get_weapon_stats(
         weapon_name = row[0] or "Unknown"
         total_kills = row[1] or 0
         total_headshots = row[2] or 0
+        total_hits = row[4] or 0
         avg_accuracy = row[5] or 0
 
         if total_kills <= 0:
             continue
 
-        # Weapon-level headshot kill rate: headshot_kills / total_kills * 100
-        # In ET:Legacy, headshot count can exceed killing shots; cap display at 100%.
-        hs_rate = min(100, round((total_headshots / total_kills * 100), 1))
+        # Weapon-level headshot accuracy: headshots / hits * 100
+        # headshots in weapon_comprehensive_stats are headshot HITS, not kills.
+        hs_rate = min(100, round((total_headshots / total_hits * 100), 1)) if total_hits > 0 else 0.0
         weapons.append(
             {
                 "name": _clean_weapon_name(weapon_name),
@@ -4290,8 +4405,9 @@ async def get_weapon_stats_by_player(
         shots = int(row[5] or 0)
         hits = int(row[6] or 0)
         avg_accuracy = float(row[7] or 0)
-        # Player-level headshot kill rate: headshot_kills / kills * 100
-        hs_rate = round((headshots / kills) * 100, 1) if kills > 0 else 0.0
+        # Player-level headshot accuracy: headshots / hits * 100
+        # headshots in weapon_comprehensive_stats are headshot HITS, not kills.
+        hs_rate = round((headshots / hits) * 100, 1) if hits > 0 else 0.0
 
         players[guid]["total_kills"] += kills
         players[guid]["weapons"].append(
@@ -5034,7 +5150,7 @@ async def get_records(
         extra_filter = f" AND {config['filter']}" if "filter" in config else ""
 
         query = f"""
-            SELECT 
+            SELECT
                 player_name,
                 {col} as value,
                 map_name,
@@ -5990,15 +6106,15 @@ async def get_player_round_details(
     # Get round info
     round_query = "SELECT map_name, round_number, round_date FROM rounds WHERE id = $1"
     round_row = await db.fetch_one(round_query, (round_id,))
-    
+
     if not round_row:
         raise HTTPException(status_code=404, detail="Round not found")
-    
+
     map_name, round_number, round_date = round_row
-    
+
     # Get comprehensive player stats
     stats_query = """
-        SELECT 
+        SELECT
             player_name, kills, deaths, damage_given, damage_received,
             time_played_seconds, headshots, gibs, revives_given, times_revived,
             accuracy, shots, hits, team_kills, self_kills,
@@ -6007,29 +6123,29 @@ async def get_player_round_details(
             double_kills, triple_kills, quad_kills, multi_kills, mega_kills,
             time_dead_minutes, xp, kill_assists
         FROM player_comprehensive_stats
-        WHERE round_date = $1 
-          AND map_name = $2 
+        WHERE round_date = $1
+          AND map_name = $2
           AND round_number = $3
           AND player_guid = $4
         LIMIT 1
     """
     stats = await db.fetch_one(stats_query, (round_date, map_name, round_number, player_guid))
-    
+
     if not stats:
         raise HTTPException(status_code=404, detail="Player stats not found")
-    
+
     # Get weapon stats
     weapon_query = """
         SELECT weapon_name, kills, deaths, headshots, hits, shots, accuracy
         FROM weapon_comprehensive_stats
-        WHERE round_date = $1 
-          AND map_name = $2 
+        WHERE round_date = $1
+          AND map_name = $2
           AND round_number = $3
           AND player_guid = $4
         ORDER BY kills DESC
     """
     weapons = await db.fetch_all(weapon_query, (round_date, map_name, round_number, player_guid))
-    
+
     # Format response
     return {
         "player_name": stats[0],
@@ -6176,6 +6292,25 @@ def _build_proximity_where_clause(
     return "WHERE " + " AND ".join(clauses), params, scope
 
 
+async def _table_column_exists(db: DatabaseAdapter, table_name: str, column_name: str) -> bool:
+    try:
+        return bool(
+            await db.fetch_val(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_name = $1
+                      AND column_name = $2
+                )
+                """,
+                (table_name, column_name),
+            )
+        )
+    except Exception:
+        return False
+
+
 def _iter_attackers(attackers_raw: Any) -> List[Dict[str, Any]]:
     parsed = _parse_json_field(attackers_raw)
     if isinstance(parsed, list):
@@ -6236,7 +6371,8 @@ async def _load_scoped_guid_name_map(
             for row in rows
             if row and row[0] and row[1]
         }
-    except Exception:
+    except Exception as e:
+        logger.warning("_load_scoped_guid_name_map failed: %s", e)
         return {}
 
 
@@ -6846,6 +6982,19 @@ async def get_proximity_summary(
         guid_name_map = await _load_scoped_guid_name_map(db, where_sql, query_params)
         top_duos = _compute_scoped_duos(duo_rows, 10, guid_name_map=guid_name_map)
 
+        # v5 teamplay counts
+        v5_counts = {}
+        for tbl in ['proximity_spawn_timing', 'proximity_team_cohesion',
+                     'proximity_crossfire_opportunity', 'proximity_team_push',
+                     'proximity_lua_trade_kill']:
+            try:
+                cnt = await db.fetch_val(
+                    f"SELECT COUNT(*) FROM {tbl} {where_sql}", query_params
+                )
+                v5_counts[tbl] = int(cnt or 0)
+            except Exception:
+                v5_counts[tbl] = 0
+
         payload.update(
             {
                 "status": "ok" if (total_engagements or 0) > 0 else "prototype",
@@ -6879,6 +7028,7 @@ async def get_proximity_summary(
                 else None,
                 "sample_rounds": int(sample_rounds or 0),
                 "top_duos": top_duos,
+                "v5_counts": v5_counts,
             }
         )
     except Exception as e:
@@ -7657,24 +7807,53 @@ async def get_proximity_trade_events(
     limit_placeholder = len(scoped_params)
 
     try:
+        has_round_id_column = await _table_column_exists(
+            db, "proximity_trade_event", "round_id"
+        )
+        if has_round_id_column:
+            query = """
+                SELECT e.session_date, e.round_number, e.map_name, e.victim_name, e.killer_name,
+                       e.opportunity_count, e.attempt_count, e.success_count, e.missed_count,
+                       COALESCE(r_exact.id, r_fallback.id) AS round_id,
+                       COALESCE(r_exact.round_date, r_fallback.round_date) AS round_date,
+                       COALESCE(r_exact.round_time, r_fallback.round_time) AS round_time
+                FROM proximity_trade_event e
+                LEFT JOIN rounds r_exact
+                  ON r_exact.id = e.round_id
+                LEFT JOIN LATERAL (
+                    SELECT id, round_date, round_time
+                    FROM rounds r
+                    WHERE r_exact.id IS NULL
+                      AND r.map_name = e.map_name
+                      AND r.round_number = e.round_number
+                      AND e.round_start_unix > 0
+                      AND r.round_start_unix > 0
+                      AND ABS(r.round_start_unix - e.round_start_unix) <= 120
+                    ORDER BY ABS(r.round_start_unix - e.round_start_unix)
+                    LIMIT 1
+                ) r_fallback ON true
+            """
+        else:
+            query = """
+                SELECT e.session_date, e.round_number, e.map_name, e.victim_name, e.killer_name,
+                       e.opportunity_count, e.attempt_count, e.success_count, e.missed_count,
+                       r.id AS round_id, r.round_date, r.round_time
+                FROM proximity_trade_event e
+                LEFT JOIN LATERAL (
+                    SELECT id, round_date, round_time
+                    FROM rounds r
+                    WHERE r.map_name = e.map_name
+                      AND r.round_number = e.round_number
+                      AND e.round_start_unix > 0
+                      AND r.round_start_unix > 0
+                      AND ABS(r.round_start_unix - e.round_start_unix) <= 120
+                    ORDER BY ABS(r.round_start_unix - e.round_start_unix)
+                    LIMIT 1
+                ) r ON true
+            """
+
         rows = await db.fetch_all(
-            """
-            SELECT e.session_date, e.round_number, e.map_name, e.victim_name, e.killer_name,
-                   e.opportunity_count, e.attempt_count, e.success_count, e.missed_count,
-                   r.id AS round_id, r.round_date, r.round_time
-            FROM proximity_trade_event e
-            LEFT JOIN LATERAL (
-                SELECT id, round_date, round_time
-                FROM rounds r
-                WHERE r.map_name = e.map_name
-                  AND r.round_number = e.round_number
-                  AND e.round_start_unix > 0
-                  AND r.round_start_unix > 0
-                  AND ABS(r.round_start_unix - e.round_start_unix) <= 120
-                ORDER BY ABS(r.round_start_unix - e.round_start_unix)
-                LIMIT 1
-            ) r ON true
-            """
+            query
             + f" {where_sql} "
             + "ORDER BY e.session_date DESC, e.round_number DESC, e.death_time_ms DESC "
             + f"LIMIT ${limit_placeholder}",
@@ -7729,6 +7908,384 @@ async def get_proximity_trade_events(
     return payload
 
 
+@router.get("/proximity/spawn-timing")
+async def get_proximity_spawn_timing(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Spawn timing efficiency leaderboard and team averages."""
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+    )
+    query_params = tuple(params)
+    try:
+        leaders = await db.fetch_all(
+            f"""
+            SELECT killer_guid, MAX(killer_name) AS name,
+                   ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
+                   COUNT(*) AS kills,
+                   ROUND(AVG(time_to_next_spawn)::numeric, 0) AS avg_denial_ms
+            FROM proximity_spawn_timing {where_sql}
+            GROUP BY killer_guid
+            HAVING COUNT(*) >= 3
+            ORDER BY avg_score DESC
+            LIMIT 20
+            """,
+            query_params,
+        )
+        team_avgs = await db.fetch_all(
+            f"""
+            SELECT killer_team AS team,
+                   ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
+                   COUNT(*) AS total_kills
+            FROM proximity_spawn_timing {where_sql}
+            GROUP BY killer_team
+            ORDER BY killer_team
+            """,
+            query_params,
+        )
+        total_row = await db.fetch_one(
+            f"SELECT COUNT(*) FROM proximity_spawn_timing {where_sql}",
+            query_params,
+        )
+        return {
+            "status": "ok",
+            "scope": scope,
+            "total_events": int(total_row[0]) if total_row else 0,
+            "leaders": [
+                {
+                    "guid": r[0], "name": r[1],
+                    "avg_score": float(r[2] or 0), "kills": int(r[3] or 0),
+                    "avg_denial_ms": int(r[4] or 0),
+                }
+                for r in (leaders or [])
+            ],
+            "team_averages": [
+                {"team": r[0], "avg_score": float(r[1] or 0), "total_kills": int(r[2] or 0)}
+                for r in (team_avgs or [])
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@router.get("/proximity/cohesion")
+async def get_proximity_cohesion(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Team cohesion: dispersion summary, timeline, and buddy pairs."""
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+    )
+    query_params = tuple(params)
+    try:
+        team_summary = await db.fetch_all(
+            f"""
+            SELECT team,
+                   ROUND(AVG(dispersion)::numeric, 1) AS avg_dispersion,
+                   ROUND(AVG(max_spread)::numeric, 1) AS avg_max_spread,
+                   ROUND(AVG(straggler_count)::numeric, 2) AS avg_stragglers,
+                   ROUND(AVG(alive_count)::numeric, 1) AS avg_alive,
+                   COUNT(*) AS samples
+            FROM proximity_team_cohesion {where_sql}
+            GROUP BY team ORDER BY team
+            """,
+            query_params,
+        )
+        # Sampled timeline (limit to avoid huge payloads)
+        timeline = await db.fetch_all(
+            f"""
+            SELECT sample_time, team, dispersion
+            FROM proximity_team_cohesion {where_sql}
+            ORDER BY sample_time
+            LIMIT 2000
+            """,
+            query_params,
+        )
+        buddy_pairs = await db.fetch_all(
+            f"""
+            SELECT buddy_pair_guids, COUNT(*) AS times_paired,
+                   ROUND(AVG(buddy_distance)::numeric, 1) AS avg_distance
+            FROM proximity_team_cohesion {where_sql}
+            AND buddy_pair_guids IS NOT NULL AND buddy_pair_guids != ''
+            GROUP BY buddy_pair_guids
+            ORDER BY times_paired DESC
+            LIMIT 10
+            """,
+            query_params,
+        )
+        return {
+            "status": "ok",
+            "scope": scope,
+            "team_summary": [
+                {
+                    "team": r[0],
+                    "avg_dispersion": float(r[1] or 0),
+                    "avg_max_spread": float(r[2] or 0),
+                    "avg_stragglers": float(r[3] or 0),
+                    "avg_alive": float(r[4] or 0),
+                    "samples": int(r[5] or 0),
+                }
+                for r in (team_summary or [])
+            ],
+            "timeline": [
+                {"time": int(r[0] or 0), "team": r[1], "dispersion": float(r[2] or 0)}
+                for r in (timeline or [])
+            ],
+            "buddy_pairs": [
+                {"guids": r[0], "times_paired": int(r[1] or 0), "avg_distance": float(r[2] or 0)}
+                for r in (buddy_pairs or [])
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@router.get("/proximity/crossfire-angles")
+async def get_proximity_crossfire_angles(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Crossfire opportunity analysis: utilization rate, angle buckets, top duos."""
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+    )
+    query_params = tuple(params)
+    try:
+        summary = await db.fetch_one(
+            f"""
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN was_executed THEN 1 ELSE 0 END) AS executed,
+                   ROUND(AVG(angular_separation)::numeric, 1) AS avg_angle,
+                   ROUND(AVG(damage_within_window)::numeric, 0) AS avg_damage
+            FROM proximity_crossfire_opportunity {where_sql}
+            """,
+            query_params,
+        )
+        total = int(summary[0] or 0) if summary else 0
+        executed = int(summary[1] or 0) if summary else 0
+        avg_angle = float(summary[2] or 0) if summary else 0
+        avg_damage = int(summary[3] or 0) if summary else 0
+        util_rate = round(executed / total * 100, 1) if total > 0 else 0
+
+        angle_buckets = await db.fetch_all(
+            f"""
+            SELECT
+                CASE
+                    WHEN angular_separation < 60 THEN 'narrow (< 60)'
+                    WHEN angular_separation < 90 THEN 'medium (60-90)'
+                    WHEN angular_separation < 120 THEN 'wide (90-120)'
+                    ELSE 'flanking (120+)'
+                END AS bucket,
+                COUNT(*) AS count,
+                SUM(CASE WHEN was_executed THEN 1 ELSE 0 END) AS executed
+            FROM proximity_crossfire_opportunity {where_sql}
+            GROUP BY 1
+            ORDER BY MIN(angular_separation)
+            """,
+            query_params,
+        )
+        top_duos = await db.fetch_all(
+            f"""
+            SELECT teammate1_guid, teammate2_guid,
+                   COUNT(*) AS executions,
+                   ROUND(AVG(angular_separation)::numeric, 1) AS avg_angle
+            FROM proximity_crossfire_opportunity {where_sql}
+            AND was_executed = TRUE
+            GROUP BY teammate1_guid, teammate2_guid
+            ORDER BY executions DESC
+            LIMIT 10
+            """,
+            query_params,
+        )
+        return {
+            "status": "ok",
+            "scope": scope,
+            "total_opportunities": total,
+            "executed": executed,
+            "utilization_rate_pct": util_rate,
+            "avg_angle": avg_angle,
+            "avg_damage": avg_damage,
+            "angle_buckets": [
+                {"bucket": r[0], "count": int(r[1] or 0), "executed": int(r[2] or 0)}
+                for r in (angle_buckets or [])
+            ],
+            "top_duos": [
+                {
+                    "teammate1_guid": r[0], "teammate2_guid": r[1],
+                    "executions": int(r[2] or 0), "avg_angle": float(r[3] or 0),
+                }
+                for r in (top_duos or [])
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@router.get("/proximity/pushes")
+async def get_proximity_pushes(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Team push analysis: per-team summary and quality distribution."""
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+    )
+    query_params = tuple(params)
+    try:
+        team_summary = await db.fetch_all(
+            f"""
+            SELECT team,
+                   COUNT(*) AS pushes,
+                   ROUND(AVG(push_quality)::numeric, 3) AS avg_quality,
+                   ROUND(AVG(alignment_score)::numeric, 3) AS avg_alignment,
+                   ROUND(AVG(avg_speed)::numeric, 1) AS avg_speed,
+                   ROUND(AVG(participant_count)::numeric, 1) AS avg_participants,
+                   SUM(CASE WHEN toward_objective NOT IN ('NO', 'N/A') THEN 1 ELSE 0 END) AS obj_pushes
+            FROM proximity_team_push {where_sql}
+            GROUP BY team ORDER BY team
+            """,
+            query_params,
+        )
+        quality_dist = await db.fetch_all(
+            f"""
+            SELECT
+                CASE
+                    WHEN push_quality < 0.2 THEN 'low (< 0.2)'
+                    WHEN push_quality < 0.5 THEN 'medium (0.2-0.5)'
+                    WHEN push_quality < 0.8 THEN 'high (0.5-0.8)'
+                    ELSE 'excellent (0.8+)'
+                END AS tier,
+                team, COUNT(*) AS count
+            FROM proximity_team_push {where_sql}
+            GROUP BY 1, team
+            ORDER BY MIN(push_quality), team
+            """,
+            query_params,
+        )
+        return {
+            "status": "ok",
+            "scope": scope,
+            "team_summary": [
+                {
+                    "team": r[0], "pushes": int(r[1] or 0),
+                    "avg_quality": float(r[2] or 0),
+                    "avg_alignment": float(r[3] or 0),
+                    "avg_speed": float(r[4] or 0),
+                    "avg_participants": float(r[5] or 0),
+                    "objective_pushes": int(r[6] or 0),
+                }
+                for r in (team_summary or [])
+            ],
+            "quality_distribution": [
+                {"tier": r[0], "team": r[1], "count": int(r[2] or 0)}
+                for r in (quality_dist or [])
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@router.get("/proximity/lua-trades")
+async def get_proximity_lua_trades(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Lua-detected trade kill analysis."""
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+    )
+    query_params = tuple(params)
+    try:
+        leaders = await db.fetch_all(
+            f"""
+            SELECT trader_guid, MAX(trader_name) AS name,
+                   COUNT(*) AS trades,
+                   ROUND(AVG(delta_ms)::numeric, 0) AS avg_reaction,
+                   MIN(delta_ms) AS fastest
+            FROM proximity_lua_trade_kill {where_sql}
+            GROUP BY trader_guid
+            ORDER BY trades DESC
+            LIMIT 20
+            """,
+            query_params,
+        )
+        recent = await db.fetch_all(
+            f"""
+            SELECT original_victim_name, original_killer_name, trader_name,
+                   delta_ms, map_name, session_date
+            FROM proximity_lua_trade_kill {where_sql}
+            ORDER BY session_date DESC, traded_kill_time DESC
+            LIMIT 10
+            """,
+            query_params,
+        )
+        speed_dist = await db.fetch_all(
+            f"""
+            SELECT
+                CASE
+                    WHEN delta_ms < 500 THEN 'instant (< 500ms)'
+                    WHEN delta_ms < 1000 THEN 'fast (500-1000ms)'
+                    WHEN delta_ms < 2000 THEN 'normal (1-2s)'
+                    ELSE 'slow (2s+)'
+                END AS tier,
+                COUNT(*) AS count
+            FROM proximity_lua_trade_kill {where_sql}
+            GROUP BY 1
+            ORDER BY MIN(delta_ms)
+            """,
+            query_params,
+        )
+        return {
+            "status": "ok",
+            "scope": scope,
+            "leaders": [
+                {
+                    "guid": r[0], "name": r[1],
+                    "trades": int(r[2] or 0),
+                    "avg_reaction_ms": int(r[3] or 0),
+                    "fastest_ms": int(r[4] or 0),
+                }
+                for r in (leaders or [])
+            ],
+            "recent_trades": [
+                {
+                    "victim": r[0], "killer": r[1], "trader": r[2],
+                    "delta_ms": int(r[3] or 0), "map": r[4],
+                    "date": str(r[5]) if r[5] else None,
+                }
+                for r in (recent or [])
+            ],
+            "speed_distribution": [
+                {"tier": r[0], "count": int(r[1] or 0)}
+                for r in (speed_dist or [])
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
 @router.get("/proximity/events")
 async def get_proximity_events(
     range_days: int = 30,
@@ -7756,25 +8313,55 @@ async def get_proximity_events(
     scoped_params.append(safe_limit)
     limit_placeholder = len(scoped_params)
     try:
+        has_round_id_column = await _table_column_exists(
+            db, "combat_engagement", "round_id"
+        )
+        if has_round_id_column:
+            query = """
+                SELECT e.id,
+                       e.session_date, e.round_number, e.map_name, e.target_name, e.outcome,
+                       e.duration_ms, e.distance_traveled, e.num_attackers, e.is_crossfire,
+                       COALESCE(r_exact.id, r_fallback.id) AS round_id,
+                       COALESCE(r_exact.round_date, r_fallback.round_date) AS round_date,
+                       COALESCE(r_exact.round_time, r_fallback.round_time) AS round_time
+                FROM combat_engagement e
+                LEFT JOIN rounds r_exact
+                  ON r_exact.id = e.round_id
+                LEFT JOIN LATERAL (
+                    SELECT id, round_date, round_time
+                    FROM rounds r
+                    WHERE r_exact.id IS NULL
+                      AND r.map_name = e.map_name
+                      AND r.round_number = e.round_number
+                      AND e.round_start_unix > 0
+                      AND r.round_start_unix > 0
+                      AND ABS(r.round_start_unix - e.round_start_unix) <= 120
+                    ORDER BY ABS(r.round_start_unix - e.round_start_unix)
+                    LIMIT 1
+                ) r_fallback ON true
+            """
+        else:
+            query = """
+                SELECT e.id,
+                       e.session_date, e.round_number, e.map_name, e.target_name, e.outcome,
+                       e.duration_ms, e.distance_traveled, e.num_attackers, e.is_crossfire,
+                       r.id AS round_id, r.round_date, r.round_time
+                FROM combat_engagement e
+                LEFT JOIN LATERAL (
+                    SELECT id, round_date, round_time
+                    FROM rounds r
+                    WHERE r.map_name = e.map_name
+                      AND r.round_number = e.round_number
+                      AND e.round_start_unix > 0
+                      AND r.round_start_unix > 0
+                      AND ABS(r.round_start_unix - e.round_start_unix) <= 120
+                    ORDER BY ABS(r.round_start_unix - e.round_start_unix)
+                    LIMIT 1
+                ) r ON true
+            """
+
         rows = await db.fetch_all(
-            """
-            SELECT e.id,
-                   e.session_date, e.round_number, e.map_name, e.target_name, e.outcome,
-                   e.duration_ms, e.distance_traveled, e.num_attackers, e.is_crossfire,
-                   r.id AS round_id, r.round_date, r.round_time
-            FROM combat_engagement e
-            LEFT JOIN LATERAL (
-                SELECT id, round_date, round_time
-                FROM rounds r
-                WHERE r.map_name = e.map_name
-                  AND r.round_number = e.round_number
-                  AND e.round_start_unix > 0
-                  AND r.round_start_unix > 0
-                  AND ABS(r.round_start_unix - e.round_start_unix) <= 120
-                ORDER BY ABS(r.round_start_unix - e.round_start_unix)
-                LIMIT 1
-            ) r ON true
-            """
+            query
             + f" {where_sql} "
             + "ORDER BY e.session_date DESC, e.round_number DESC, e.start_time_ms DESC "
             + f"LIMIT ${limit_placeholder}",
@@ -7826,31 +8413,59 @@ async def get_proximity_event(event_id: int, db: DatabaseAdapter = Depends(get_d
     """
     Fetch a single engagement with position path + attacker details.
     """
-    row = await db.fetch_one(
+    has_round_id_column = await _table_column_exists(db, "combat_engagement", "round_id")
+    if has_round_id_column:
+        query = """
+            SELECT e.id,
+                   e.session_date, e.round_number, e.round_start_unix, e.round_end_unix,
+                   e.map_name, e.target_guid, e.target_name, e.target_team, e.outcome, e.total_damage_taken,
+                   e.start_time_ms, e.end_time_ms,
+                   e.duration_ms, e.num_attackers, e.is_crossfire,
+                   e.position_path, e.attackers, e.start_x, e.start_y, e.end_x, e.end_y, e.distance_traveled,
+                   COALESCE(r_exact.id, r_fallback.id) AS round_id,
+                   COALESCE(r_exact.round_date, r_fallback.round_date) AS round_date,
+                   COALESCE(r_exact.round_time, r_fallback.round_time) AS round_time
+            FROM combat_engagement e
+            LEFT JOIN rounds r_exact
+              ON r_exact.id = e.round_id
+            LEFT JOIN LATERAL (
+                SELECT id, round_date, round_time
+                FROM rounds r
+                WHERE r_exact.id IS NULL
+                  AND r.map_name = e.map_name
+                  AND r.round_number = e.round_number
+                  AND e.round_start_unix > 0
+                  AND r.round_start_unix > 0
+                  AND ABS(r.round_start_unix - e.round_start_unix) <= 120
+                ORDER BY ABS(r.round_start_unix - e.round_start_unix)
+                LIMIT 1
+            ) r_fallback ON true
+            WHERE e.id = $1
         """
-        SELECT e.id,
-               e.session_date, e.round_number, e.round_start_unix, e.round_end_unix,
-               e.map_name, e.target_guid, e.target_name, e.outcome, e.total_damage_taken,
-               e.start_time_ms, e.end_time_ms,
-               e.duration_ms, e.num_attackers, e.is_crossfire,
-               e.position_path, e.attackers, e.start_x, e.start_y, e.end_x, e.end_y, e.distance_traveled,
-               r.id AS round_id, r.round_date, r.round_time
-        FROM combat_engagement e
-        LEFT JOIN LATERAL (
-            SELECT id, round_date, round_time
-            FROM rounds r
-            WHERE r.map_name = e.map_name
-              AND r.round_number = e.round_number
-              AND e.round_start_unix > 0
-              AND r.round_start_unix > 0
-              AND ABS(r.round_start_unix - e.round_start_unix) <= 120
-            ORDER BY ABS(r.round_start_unix - e.round_start_unix)
-            LIMIT 1
-        ) r ON true
-        WHERE e.id = $1
-        """,
-        (event_id,),
-    )
+    else:
+        query = """
+            SELECT e.id,
+                   e.session_date, e.round_number, e.round_start_unix, e.round_end_unix,
+                   e.map_name, e.target_guid, e.target_name, e.target_team, e.outcome, e.total_damage_taken,
+                   e.start_time_ms, e.end_time_ms,
+                   e.duration_ms, e.num_attackers, e.is_crossfire,
+                   e.position_path, e.attackers, e.start_x, e.start_y, e.end_x, e.end_y, e.distance_traveled,
+                   r.id AS round_id, r.round_date, r.round_time
+            FROM combat_engagement e
+            LEFT JOIN LATERAL (
+                SELECT id, round_date, round_time
+                FROM rounds r
+                WHERE r.map_name = e.map_name
+                  AND r.round_number = e.round_number
+                  AND e.round_start_unix > 0
+                  AND r.round_start_unix > 0
+                  AND ABS(r.round_start_unix - e.round_start_unix) <= 120
+                ORDER BY ABS(r.round_start_unix - e.round_start_unix)
+                LIMIT 1
+            ) r ON true
+            WHERE e.id = $1
+        """
+    row = await db.fetch_one(query, (event_id,))
     if not row:
         raise HTTPException(status_code=404, detail="Event not found")
 
@@ -7863,23 +8478,24 @@ async def get_proximity_event(event_id: int, db: DatabaseAdapter = Depends(get_d
         "map_name": row[5],
         "target_guid": row[6],
         "target_name": row[7],
-        "outcome": row[8],
-        "total_damage": row[9],
-        "start_time_ms": row[10],
-        "end_time_ms": row[11],
-        "duration_ms": row[12],
-        "num_attackers": row[13],
-        "is_crossfire": bool(row[14]),
-        "position_path": row[15] or [],
-        "attackers": row[16] or [],
-        "start_x": row[17],
-        "start_y": row[18],
-        "end_x": row[19],
-        "end_y": row[20],
-        "distance_traveled": row[21],
-        "round_id": row[22],
-        "round_date": row[23],
-        "round_time": row[24],
+        "target_team": row[8],
+        "outcome": row[9],
+        "total_damage": row[10],
+        "start_time_ms": row[11],
+        "end_time_ms": row[12],
+        "duration_ms": row[13],
+        "num_attackers": row[14],
+        "is_crossfire": bool(row[15]),
+        "position_path": row[16] or [],
+        "attackers": row[17] or [],
+        "start_x": row[18],
+        "start_y": row[19],
+        "end_x": row[20],
+        "end_y": row[21],
+        "distance_traveled": row[22],
+        "round_id": row[23],
+        "round_date": row[24],
+        "round_time": row[25],
     }
 
     # Strafe / dodge metrics (target + primary attacker)
@@ -8450,4 +9066,392 @@ async def get_round_viz(
         "player_count": len(players),
         "players": players,
         "highlights": highlights,
+    }
+
+
+# ========================================
+# GEMINI SESSIONS API (P0 Redesign)
+# ========================================
+
+
+@router.get("/stats/sessions")
+async def get_stats_sessions(
+    limit: int = Query(default=20, le=100, ge=1),
+    offset: int = Query(default=0, ge=0),
+    search: str = "",
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Get list of gaming sessions for the Gemini frontend.
+    Supports search by map name or player name.
+    Returns richer data than /sessions endpoint: timing, scores, duration.
+    """
+    search_filter = ""
+    search_params: list = []
+    param_idx = 1  # PostgreSQL $1, $2, ...
+
+    if search.strip():
+        safe_search = escape_like_pattern(search.strip())
+        search_filter = f"""
+            AND (
+                sr.gaming_session_id IN (
+                    SELECT r2.gaming_session_id FROM rounds r2
+                    WHERE r2.gaming_session_id IS NOT NULL
+                      AND LOWER(r2.map_name) LIKE LOWER(${param_idx})
+                )
+                OR sr.gaming_session_id IN (
+                    SELECT r3.gaming_session_id FROM rounds r3
+                    INNER JOIN player_comprehensive_stats p2 ON p2.round_id = r3.id
+                    WHERE r3.gaming_session_id IS NOT NULL
+                      AND LOWER(p2.player_name) LIKE LOWER(${param_idx})
+                )
+            )
+        """
+        search_params.append(f"%{safe_search}%")
+        param_idx += 1
+
+    limit_param = f"${param_idx}"
+    offset_param = f"${param_idx + 1}"
+
+    query = f"""
+        WITH session_rounds AS (
+            SELECT
+                r.gaming_session_id,
+                MIN(r.round_date) as first_date,
+                MAX(r.round_date) as last_date,
+                MIN(r.round_time) as first_time,
+                MAX(r.round_time) as last_time,
+                COUNT(r.id) as round_count,
+                STRING_AGG(DISTINCT r.map_name, ', ' ORDER BY r.map_name) as maps_played,
+                COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 1 THEN 1 END) as allies_wins,
+                COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 2 THEN 1 END) as axis_wins
+            FROM rounds r
+            WHERE r.gaming_session_id IS NOT NULL
+              AND r.round_number IN (1, 2)
+              AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+            GROUP BY r.gaming_session_id
+        ),
+        session_players AS (
+            SELECT
+                r.gaming_session_id,
+                COUNT(DISTINCT p.player_guid) as player_count,
+                COALESCE(SUM(p.kills), 0) as total_kills,
+                COALESCE(SUM(p.deaths), 0) as total_deaths
+            FROM rounds r
+            INNER JOIN player_comprehensive_stats p ON p.round_id = r.id
+            WHERE r.gaming_session_id IS NOT NULL
+              AND r.round_number IN (1, 2)
+              AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+            GROUP BY r.gaming_session_id
+        ),
+        session_duration AS (
+            SELECT
+                r.gaming_session_id,
+                COALESCE(SUM(lrt.actual_duration_seconds), 0) as total_duration_seconds
+            FROM rounds r
+            LEFT JOIN lua_round_teams lrt ON lrt.round_id = r.id
+            WHERE r.gaming_session_id IS NOT NULL
+              AND r.round_number IN (1, 2)
+              AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+            GROUP BY r.gaming_session_id
+        )
+        SELECT
+            sr.gaming_session_id,
+            sr.first_date,
+            sr.last_date,
+            sr.first_time,
+            sr.last_time,
+            sr.round_count,
+            sr.maps_played,
+            sr.allies_wins,
+            sr.axis_wins,
+            COALESCE(sp.player_count, 0) as player_count,
+            COALESCE(sp.total_kills, 0) as total_kills,
+            COALESCE(sp.total_deaths, 0) as total_deaths,
+            COALESCE(sd.total_duration_seconds, 0) as duration_seconds
+        FROM session_rounds sr
+        LEFT JOIN session_players sp ON sr.gaming_session_id = sp.gaming_session_id
+        LEFT JOIN session_duration sd ON sr.gaming_session_id = sd.gaming_session_id
+        WHERE 1=1
+        {search_filter}
+        ORDER BY sr.gaming_session_id DESC
+        LIMIT {limit_param} OFFSET {offset_param}
+    """
+
+    params = tuple(search_params + [limit, offset])
+
+    try:
+        rows = await db.fetch_all(query, params)
+    except Exception as e:
+        logger.error(f"Error fetching stats sessions: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+    sessions = []
+    for row in rows:
+        session_id = row[0]
+        first_date = row[1]
+        first_time = str(row[3]) if row[3] else ""
+        last_time = str(row[4]) if row[4] else ""
+        round_count = row[5]
+        maps_str = row[6]
+        allies_wins = row[7]
+        axis_wins = row[8]
+        player_count = row[9]
+        total_kills = row[10]
+        total_deaths = row[11]
+        duration_seconds = row[12]
+
+        # Format date
+        if isinstance(first_date, str):
+            dt = datetime.strptime(first_date[:10], "%Y-%m-%d")
+        else:
+            dt = datetime.combine(first_date, datetime.min.time())
+
+        # Format start/end times
+        start_time_str = ""
+        end_time_str = ""
+        if first_time and len(first_time) >= 6:
+            ft = first_time.replace(":", "")[:6]
+            start_time_str = f"{ft[:2]}:{ft[2:4]}"
+        if last_time and len(last_time) >= 6:
+            lt = last_time.replace(":", "")[:6]
+            end_time_str = f"{lt[:2]}:{lt[2:4]}"
+
+        # Time ago
+        now = datetime.now()
+        diff = now - dt
+        days = diff.days
+        if days == 0:
+            time_ago = "Today"
+        elif days == 1:
+            time_ago = "Yesterday"
+        elif days < 7:
+            time_ago = f"{days} days ago"
+        elif days < 30:
+            weeks = days // 7
+            time_ago = f"{weeks} week{'s' if weeks > 1 else ''} ago"
+        else:
+            time_ago = dt.strftime("%b %d, %Y")
+
+        maps_played = [m.strip() for m in maps_str.split(",")] if maps_str else []
+
+        sessions.append({
+            "session_id": session_id,
+            "date": str(first_date),
+            "formatted_date": dt.strftime("%A, %B %d, %Y"),
+            "time_ago": time_ago,
+            "start_time": start_time_str,
+            "end_time": end_time_str,
+            "round_count": round_count,
+            "player_count": player_count,
+            "maps_played": maps_played,
+            "total_kills": total_kills,
+            "total_deaths": total_deaths,
+            "allies_wins": allies_wins,
+            "axis_wins": axis_wins,
+            "duration_seconds": duration_seconds,
+        })
+
+    return sessions
+
+
+@router.get("/stats/session/{gaming_session_id}/detail")
+async def get_stats_session_detail(
+    gaming_session_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Get full session detail by gaming_session_id.
+    Returns matches (grouped R1+R2), per-player stats, round metadata.
+    """
+    # 1. Get all rounds for this session (R1 and R2 only, exclude R0 summaries)
+    rounds_query = """
+        SELECT r.id, r.map_name, r.round_number, r.winner_team,
+               r.round_date, r.round_time, r.actual_time
+        FROM rounds r
+        WHERE r.gaming_session_id = $1
+          AND r.round_number IN (1, 2)
+          AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+        ORDER BY r.round_date, CAST(REPLACE(r.round_time, ':', '') AS INTEGER)
+    """
+    round_rows = await db.fetch_all(rounds_query, (gaming_session_id,))
+
+    if not round_rows:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    round_ids = [r[0] for r in round_rows]
+    placeholders = ", ".join(f"${i+1}" for i in range(len(round_ids)))
+
+    # 2. Get lua_round_teams data for scores and duration
+    lua_query = f"""
+        SELECT round_id, round_number, allies_score, axis_score,
+               actual_duration_seconds, winner_team, map_name
+        FROM lua_round_teams
+        WHERE round_id IN ({placeholders})
+    """
+    lua_rows = await db.fetch_all(lua_query, tuple(round_ids))
+    lua_by_round = {}
+    for lr in lua_rows:
+        lua_by_round[lr[0]] = {
+            "round_number": lr[1],
+            "allies_score": lr[2],
+            "axis_score": lr[3],
+            "duration_seconds": lr[4],
+            "winner_team": lr[5],
+        }
+
+    # 3. Build matches (group rounds by map in order of play)
+    matches = []
+    current_map = None
+    current_rounds = []
+
+    for rr in round_rows:
+        round_id = rr[0]
+        map_name = _normalize_map_name(rr[1])
+        round_number = rr[2]
+        winner_team = rr[3]
+        round_date = str(rr[4]) if rr[4] else None
+        round_time = str(rr[5]) if rr[5] else None
+
+        lua = lua_by_round.get(round_id, {})
+        duration = lua.get("duration_seconds", rr[6])
+
+        round_obj = {
+            "round_id": round_id,
+            "round_number": round_number,
+            "map_name": map_name,
+            "winner_team": winner_team,
+            "allies_score": lua.get("allies_score"),
+            "axis_score": lua.get("axis_score"),
+            "duration_seconds": duration,
+            "round_date": round_date,
+            "round_time": round_time,
+        }
+
+        # Group consecutive rounds on same map into a match
+        if current_map == map_name:
+            current_rounds.append(round_obj)
+        else:
+            if current_rounds:
+                matches.append({
+                    "map_name": current_map,
+                    "rounds": current_rounds,
+                })
+            current_map = map_name
+            current_rounds = [round_obj]
+
+    if current_rounds:
+        matches.append({
+            "map_name": current_map,
+            "rounds": current_rounds,
+        })
+
+    # 4. Get per-player stats aggregated across session
+    player_query = f"""
+        SELECT
+            p.player_guid,
+            MAX(p.player_name) as player_name,
+            SUM(p.kills) as kills,
+            SUM(p.deaths) as deaths,
+            SUM(p.damage_given) as damage_given,
+            SUM(p.damage_received) as damage_received,
+            CASE
+                WHEN SUM(p.time_played_seconds) > 0
+                THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                ELSE 0
+            END as dpm,
+            CASE
+                WHEN SUM(p.deaths) > 0
+                THEN ROUND(SUM(p.kills)::numeric / SUM(p.deaths), 2)
+                ELSE SUM(p.kills)::numeric
+            END as kd,
+            SUM(p.headshot_kills) as headshot_kills,
+            SUM(p.kills) as total_kills_for_hs,
+            SUM(p.gibs) as gibs,
+            SUM(p.self_kills) as self_kills,
+            SUM(p.revives_given) as revives_given,
+            SUM(p.times_revived) as times_revived,
+            SUM(p.time_played_seconds) as time_played_seconds,
+            COALESCE(SUM(w.hits), 0) as total_hits,
+            COALESCE(SUM(w.shots), 0) as total_shots
+        FROM player_comprehensive_stats p
+        LEFT JOIN (
+            SELECT round_id, player_guid,
+                SUM(hits) as hits, SUM(shots) as shots
+            FROM weapon_comprehensive_stats
+            WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE',
+                                      'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
+            GROUP BY round_id, player_guid
+        ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
+        WHERE p.round_id IN ({placeholders})
+        GROUP BY p.player_guid
+        ORDER BY dpm DESC
+    """
+    player_rows = await db.fetch_all(player_query, tuple(round_ids))
+
+    players = []
+    for pr in player_rows:
+        kills = pr[2] or 0
+        deaths = pr[3] or 0
+        damage_given = pr[4] or 0
+        damage_received = pr[5] or 0
+        dpm = round(float(pr[6]), 1) if pr[6] else 0
+        kd = float(pr[7]) if pr[7] else 0
+        headshot_kills = pr[8] or 0
+        total_kills_for_hs = pr[9] or 0
+        gibs = pr[10] or 0
+        self_kills = pr[11] or 0
+        revives_given = pr[12] or 0
+        times_revived = pr[13] or 0
+        time_played_seconds = pr[14] or 0
+        total_hits = pr[15] or 0
+        total_shots = pr[16] or 0
+
+        hs_pct = round((headshot_kills / total_kills_for_hs * 100), 1) if total_kills_for_hs > 0 else 0
+        accuracy = round((total_hits / total_shots * 100), 1) if total_shots > 0 else 0
+        efficiency = round((kills / (kills + deaths) * 100), 1) if (kills + deaths) > 0 else 0
+
+        players.append({
+            "player_guid": pr[0],
+            "player_name": pr[1],
+            "kills": kills,
+            "deaths": deaths,
+            "damage_given": damage_given,
+            "damage_received": damage_received,
+            "dpm": dpm,
+            "kd": kd,
+            "efficiency": efficiency,
+            "headshot_pct": hs_pct,
+            "gibs": gibs,
+            "self_kills": self_kills,
+            "revives_given": revives_given,
+            "times_revived": times_revived,
+            "accuracy": accuracy,
+            "time_played_seconds": time_played_seconds,
+        })
+
+    # 5. Scoring — reuse StopwatchScoringService for team-aware map scoring
+    first_date = round_rows[0][4] if round_rows else None
+    scoring_payload = {"available": False}
+    try:
+        config = load_config()
+        db_path = config.sqlite_db_path if config.database_type == "sqlite" else None
+        service = SessionDataService(db, db_path)
+        scoring_service = StopwatchScoringService(db)
+        session_date = str(first_date) if first_date else None
+        if session_date:
+            scoring_payload, _, _ = await build_session_scoring(
+                session_date, round_ids, service, scoring_service
+            )
+    except Exception as e:
+        logger.warning(f"Scoring unavailable for session {gaming_session_id}: {e}")
+
+    return {
+        "session_id": gaming_session_id,
+        "date": str(first_date) if first_date else None,
+        "player_count": len(players),
+        "round_count": len(round_ids),
+        "matches": matches,
+        "players": players,
+        "scoring": scoring_payload,
     }

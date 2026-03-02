@@ -32,15 +32,6 @@ class SessionStatsAggregator:
             return self._player_stats_columns
 
         try:
-            # SQLite
-            cols = await self.db_adapter.fetch_all("PRAGMA table_info(player_comprehensive_stats)")
-            self._player_stats_columns = {c[1] for c in cols}
-            return self._player_stats_columns
-        except Exception:
-            pass
-
-        try:
-            # PostgreSQL
             cols = await self.db_adapter.fetch_all(
                 """
                 SELECT column_name

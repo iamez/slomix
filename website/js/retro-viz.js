@@ -10,6 +10,19 @@ import { PageHeader, LoadingSkeleton, EmptyState } from './components.js';
 // Chart instances for cleanup
 let _charts = [];
 
+function _hasChartJs() {
+    return typeof Chart !== 'undefined';
+}
+
+function _showChartUnavailable(canvas) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#64748b';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Chart library unavailable', canvas.width / 2, canvas.height / 2);
+}
+
 function _sanitizeHtmlTree(root) {
     const blockedTags = new Set(['SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'STYLE', 'LINK']);
     const blockedUrlSchemes = ['javascript:', 'data:', 'vbscript:'];
@@ -327,6 +340,7 @@ function renderCombatRadar(data, canvasOverride) {
         borderWidth: 2,
     }));
 
+    if (!_hasChartJs()) { _showChartUnavailable(canvas); return; }
     const chart = new Chart(canvas.getContext('2d'), {
         type: 'radar',
         data: { labels, datasets },
@@ -365,6 +379,7 @@ function renderTopFraggers(data, canvasOverride) {
     const kills = sorted.map(p => p.kills);
     const maxKills = Math.max(...kills, 1);
 
+    if (!_hasChartJs()) { _showChartUnavailable(canvas); return; }
     const chart = new Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: {
@@ -457,6 +472,7 @@ function renderSupportPerformance(data, canvasOverride) {
     const sorted = data.players.slice().sort((a, b) => a.revives_given - b.revives_given);
     const labels = sorted.map(p => p.name);
 
+    if (!_hasChartJs()) { _showChartUnavailable(canvas); return; }
     const chart = new Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: {
@@ -514,6 +530,7 @@ function renderTimeDistribution(data, canvasOverride) {
     const timeAlive = sorted.map(p => Math.max(0, Math.round((p.time_played_seconds || 0) / 60) - Math.round((p.time_dead_seconds || 0) / 60)));
     const timeDead = sorted.map(p => Math.round((p.time_dead_seconds || 0) / 60));
 
+    if (!_hasChartJs()) { _showChartUnavailable(canvas); return; }
     const chart = new Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: {

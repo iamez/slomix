@@ -1,21 +1,19 @@
 # ============================================
-# ET:LEGACY DISCORD BOT - GITIGNORE
+# ET:LEGACY DISCORD BOT - GITIGNORE v2.0
 # ============================================
-# This file controls what gets pushed to GitHub
+# Philosophy: Track source code, config templates, docs, CI.
+# Never track: secrets, backups, logs, generated outputs, dev scratch files.
 # Files already tracked need: git rm --cached <file>
 # ============================================
 
 # ============================================
-# ENVIRONMENT & SECRETS
+# ENVIRONMENT & SECRETS (NEVER COMMIT)
 # ============================================
 .env
 .prodenv
 .envcopy
 *.pem
 *.key
-bot_config.json
-config.json
-fiveeyes_config.json
 
 # ============================================
 # PYTHON
@@ -29,7 +27,20 @@ __pycache__/
 venv/
 ENV/
 env/
+*.egg-info/
 .pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ============================================
+# NODE / REACT
+# ============================================
+node_modules/
+gemini-website/dist/
+gemini-website/.next/
+build/
 
 # ============================================
 # DATABASE FILES (NEVER COMMIT)
@@ -39,31 +50,33 @@ env/
 *.db-wal
 *.sqlite
 *.sqlite3
+*.db.backup*
+*.db.bak*
 *.bak
 *.backup
 *BACKUP*
-*.sql
-!schema.sql
-!bot/schema.sql
-!migrations/*.sql
-!website/*.sql
-!proximity/**/*.sql
-
-# Root database backups
-etlegacy_production.db.*
-etlegacy_backup.sql
+# SQL backups (runtime dumps — not schema files)
+etlegacy_backup*.sql
+postgresql_backup_*.sql
+*_backup_*.sql
+*_before_*.sql
 
 # ============================================
 # LOGS
 # ============================================
 *.log
+nohup.out
 logs/
+!logs/.gitkeep
 bot/logs/
+website/logs/
+!website/logs/.gitkeep
 
 # ============================================
 # IDE & OS
 # ============================================
 .vscode/
+*.code-workspace
 .idea/
 .claude/
 *.swp
@@ -82,16 +95,48 @@ desktop.ini
 *.7z
 
 # ============================================
-# IMAGES (dev screenshots, not needed)
+# IMAGES
+# Root-level screenshots and debug images are never needed.
+# Website assets (SVG) are kept; they live in website/assets/.
+# Rule: ignore *.jpg/*.png at root and in dev scratch locations.
 # ============================================
-*.png
 *.jpg
 *.jpeg
+*.png
 *.gif
 *.bmp
+# Re-allow website SVG assets (not affected by above — different extension)
+# website/assets/ uses .svg only, so no exceptions needed here.
+# Re-allow specific test fixtures that use images (add per-path exceptions below if needed)
 
 # ============================================
-# ROOT-LEVEL DEV/TEST FILES
+# DEMO / GAME FILES
+# ============================================
+*.dm_84
+*.tv_84
+
+# ============================================
+# BROKEN PIP INSTALL ARTIFACTS
+# ============================================
+=*
+
+# ============================================
+# BACKUP / TEMP FILES
+# ============================================
+*.orig
+*_before_fix_*.html
+*_before_fix_*.js
+*.BACKUP_[0-9]*
+/temp/
+/tmp/
+/asdf/
+/publish_temp/
+/publish_clean/
+
+# ============================================
+# ROOT-LEVEL DEV/TEST SCRIPTS (NEVER COMMIT)
+# Legitimate test scripts live in tests/
+# Legitimate debug scripts live in scripts/
 # ============================================
 # Analysis & validation outputs
 analysis_*.txt
@@ -103,7 +148,7 @@ analysis_*.txt
 overnight_*.txt
 nov2_*.txt
 
-# Development HTML reports
+# Development HTML reports (not docs)
 *.html
 !docs/*.html
 !website/*.html
@@ -135,49 +180,83 @@ check.vps.*.txt
 rebuild_inputs.txt
 backup_table_schemas.txt
 debug_fp.py
-"field mappings.txt"
 team_check_output.txt
 test_out.txt
 validation_*.txt
 stats_validation_*.json
 req2.txt
-package.json
-package-lock.json
 
-# Migrations (DB-specific, not needed in repo)
-migrations/
-!website/migrations/
-website/migrations/*
-!website/migrations/005_date_based_availability.sql
-!website/migrations/006_discord_linking_and_promotions.sql
-!website/migrations/006_discord_linking_and_promotions_down.sql
-!website/migrations/007_planning_room_mvp.sql
-!website/migrations/007_planning_room_mvp_down.sql
-!website/migrations/008_website_app_availability_grants.sql
-!website/migrations/008_website_app_availability_grants_down.sql
-!proximity/schema/migrations/
-proximity/schema/migrations/*
-!proximity/schema/migrations/*.sql
-
-# Deprecated install docs
+# Deprecated install docs at root
 INSTALL_*.md
 
 # ============================================
 # ROOT-LEVEL SCRIPTS (use install.sh only)
 # ============================================
-# Windows scripts (dev only)
 *.bat
 *.ps1
-
-# Redundant Linux scripts (consolidated into install.sh)
 setup_linux_bot.sh
 setup_linux_env.sh
-setup_local_db.ps1
-setup_postgres_simple.ps1
 vps_install.sh
 vps_setup.sh
 drop_tables.sh
 check_before_commit.sh
+
+# Personal automation scripts
+run_claude_auto.sh
+
+# ============================================
+# PERSONAL / SCRATCH FILES AT ROOT
+# ============================================
+*.docx
+config.json
+bot_config.json
+fiveeyes_config.json
+chatgptresearch.md
+zac0rna.md
+Complete
+plan-*.md
+*.prompt.md
+
+# ============================================
+# ROOT LUA FILES (game server experiments)
+# Production Lua is in vps_scripts/ and proximity/lua/
+# ============================================
+/*.lua
+
+# ============================================
+# ROOT SQL FILES (schema superseded by tools/)
+# ============================================
+/schema.sql
+
+# ============================================
+# ROOT DEV MARKDOWN FILES (keep only named essentials)
+# ============================================
+*_IMPLEMENTATION*.md
+!docs/SKILL_RATING_IMPLEMENTATION_PLAN.md
+*_VERIFICATION*.md
+*_REFERENCE*.md
+*_OVERVIEW*.md
+*_SUMMARY*.md
+*_DEPLOYMENT*.md
+*_README*.md
+!README.md
+!proximity/**/*.md
+
+# ============================================
+# VS CODE WORKSPACE FILES
+# ============================================
+*.code-workspace
+
+# ============================================
+# OTHER ROOT DEV ARTIFACTS
+# ============================================
+corrupt_records_before_fix.txt
+postgres_setup.md
+.markdownlint.json
+.markdownlintignore
+DATA_ACCURACY_REPORT.md
+TESTING_REQUIRED.md
+WEBSITE_STAT_BUGS_FOUND.md
 
 # ============================================
 # DEV DIRECTORIES (NEVER COMMIT)
@@ -193,22 +272,28 @@ check_before_commit.sh
 /dev_tools/
 /fiveeyes/
 /local_stats/
+/local_gametimes/
+/local_proximity/
+/data/
+/monitoring/
 /node_modules/
 /prompt_instructions/
-/scripts/*
 /server/
 /temp/
-# /tests/ - Removed: Tests need to be tracked for CI
 /test_files/
 /test_suite/
 /tmp/
-/tools/*
 /publish_temp/
 /publish_clean/
 /github/
 /performance_updates/
+/bin/
+/opusreview/
+/deployed_lua/
 
-# CI-required script/tool modules used by tests
+# ============================================
+# KEEP ESSENTIAL ROOT SCRIPTS
+# ============================================
 !/scripts/
 !/tools/
 !/scripts/__init__.py
@@ -217,33 +302,32 @@ check_before_commit.sh
 !/tools/simple_bulk_import.py
 !/tools/verify_pipeline.py
 
-# Prototype projects
-# /website/      # ENABLED - Added in v1.1.0
-# /proximity/    # ENABLED - Added in v1.1.0
-/opusreview/
+# ============================================
+# VPS SCRIPTS (keep only production webhook)
+# ============================================
 /vps_scripts/
 !/vps_scripts/
 !/vps_scripts/stats_discord_webhook.lua
+!/vps_scripts/stats_webhook_notify.py
+!/vps_scripts/__init__.py
 
-# Demo files (binary recordings, never commit)
-*.dm_84
-*.tv_84
+# ============================================
+# DEV SCRATCH SCRIPTS (in scripts/)
+# ============================================
+scripts/audit_round_pairs.py
+scripts/audit_time_vs_lua.py
+scripts/bot_scrim_mode.py
+scripts/debug_import.py
+scripts/generate_omnibot_botnames.py
+scripts/generate_retro.py
+scripts/generate_retro_text.py
+scripts/omnibot_toggle.py
+scripts/rcon_command.py
+scripts/run_retro_test.py
 
-# Compiled binaries
-/bin/
-
-# Local data directories
-/local_proximity/
-/local_gametimes/
-/data/
-
-# Root junk files
-nohup.out
-=*
-coverage.xml
-.coverage
-
-# Root diagnostic/dev scripts (removed from repo)
+# ============================================
+# ROOT DIAGNOSTIC/DEV SCRIPTS
+# ============================================
 check_*.py
 compare_*.py
 investigate_*.py
@@ -252,58 +336,25 @@ pentest_*.py
 test_*.py
 !tests/test_*.py
 !tests/**/test_*.py
-
-# Root Lua files (game server files, not bot code)
-/*.lua
-!proximity/lua/*.lua
-
-# Root dev markdown files (keep only README.md)
-*_IMPLEMENTATION*.md
-*_VERIFICATION*.md
-*_REFERENCE*.md
-*_OVERVIEW*.md
-*_SUMMARY*.md
-*_DEPLOYMENT*.md
-*_README*.md
-!README.md
-!proximity/**/*.md
-
-# Planning/prompt files
-plan-*.md
-*.prompt.md
-
-# VS Code workspace files
-*.code-workspace
-
-# Other root dev artifacts
-corrupt_records_before_fix.txt
-postgres_setup.md
+trigger_timing_debug.py
 
 # ============================================
-# BOT DIRECTORY EXCLUSIONS
+# MIGRATIONS — KEEP ALL SQL MIGRATIONS
 # ============================================
-bot/*.db
-bot/*.db.*
-bot/*.bak
-bot/*.backup
-bot/etlegacy_production*
-bot/BACKUP_*
-bot/*.cleaned.py
-bot/ultimate_bot.py.backup*
-bot/ultimate_bot.py.bak
-bot/local_stats/
-bot/tools/
-bot/backups/
-bot/diagnostics/
-bot/config.json
-bot/fiveeyes_config.json
-bot/schema.json
-bot/schema.sql
-!bot/schema.sql
-bot/README_AUTOMATION.md
+# NOTE: Current gitignore incorrectly ignores migrations/ directory.
+# All *.sql migration files should be tracked.
+# The negation rules below ensure they are included.
+!migrations/
+!migrations/*.sql
+!migrations/__init__.py
+!website/migrations/
+!website/migrations/*.sql
+!proximity/schema/migrations/
+!proximity/schema/migrations/*.sql
+# tools/migrations/ — dev-only
 
 # ============================================
-# TOOLS DIRECTORY - ONLY ESSENTIALS
+# TOOLS DIRECTORY — ESSENTIALS ONLY
 # ============================================
 tools/*
 !tools/__init__.py
@@ -311,6 +362,11 @@ tools/*
 !tools/stopwatch_scoring.py
 !tools/schema_postgresql.sql
 !tools/pipeline_health_report.py
+!tools/verify_pipeline.py
+# tools/migrations/ — dev-only
+# tools/schema_sqlite.sql — dev-only, not needed in repo
+# tools/vm_steps/ — VM setup scripts, dev-only
+# tools/harden_*.sh — hardening scripts, dev-only
 
 # ============================================
 # DOCS ARCHIVE (historical, not needed)
@@ -318,28 +374,37 @@ tools/*
 docs/archive/
 
 # ============================================
-# DOCS - INTERNAL DEV ARTIFACTS
+# DOCS — INTERNAL DEV ARTIFACTS (gitignore)
 # ============================================
-# Session reports (internal dev logs)
+docs/BRAINSTORM_SESSION_*.md
+docs/CONTEXT_*.md
+docs/CONTEXT_SNAPSHOT_*.md
+docs/DOCS_IDEA_*.md
+docs/DOCS_IDEA_*.txt
+docs/DATA_INGEST_QUEUE_DESIGN.md
+docs/FAIL2BAN_SETUP_*.md
+docs/IMPLEMENTATION_RESEARCH_*.md
+docs/READONLY_AUDIT_*.md
+docs/READONLY_AUDIT_*.txt
+docs/SYSTEM_AUDIT_*.md
+docs/VM_AUDIT_REPORT_*.md
+docs/VM_FIREWALL_RULES_*.md
+docs/W15_RESEARCH_ADOPTION_TICKETS_*.md
+docs/agentchattr/
+docs/reference/TIMING_POLICY_PROTOTYPE_*.md
+proximity/docs/PROXIMITY_MAP_ASSET_AUDIT_*.md
+proximity/docs/PROXIMITY_MOD_MAPPING_RCA_*.md
+proximity/docs/PROXIMITY_RECONCILIATION_BACKLOG_*.md
+proximity/docs/PROXIMITY_RESUME_CONTEXT_*.md
 docs/SESSION_*.md
 docs/SESSION_INDEX.md
 docs/SESSION_REPORT_*.md
-
-# Evidence files (internal verification)
 docs/evidence/
-
-# Codex reports (AI audit artifacts)
 docs/codexreport-*.md
-
-# Internal plans, TODOs, handoffs, checklists
 docs/TODO_*.md
 docs/TODO-*.md
 docs/HANDOFF_*.md
 docs/CRASH_PROOF_*.md
-# Recovered planning docs — DO NOT re-ignore (see ROAD_AHEAD runbook rule #5)
-# docs/TWO_WEEK_*.md
-# docs/ROAD_AHEAD_*.md
-# docs/WEBHOOK_TRIAGE_*.md
 docs/MISSION_*.md
 docs/LIVE_MONITORING_*.md
 docs/WEEK_HANDOFF_*.md
@@ -349,8 +414,6 @@ docs/IMPLEMENTATION_COMPLETE_*.md
 docs/REFACTORING_PROGRESS.md
 docs/INTEGRATION_CONFLICTS_*.md
 docs/LAN_PUBLIC_ACCESS_*.md
-
-# Internal reports, audits, and analysis
 docs/reports/deep-research-report*.md
 docs/reports/deep-research-report*.docx
 docs/reports/deep-research-report*.pdf
@@ -422,6 +485,27 @@ docs/omnibot_*.md
 docs/INTEGRATION_*.md
 docs/et_stopwatch_proximity_analytics_spec.md
 docs/reference/TESTING_CHECKLIST_*.md
+docs/reference/live_sync_backups/
+
+# AI agent prompt/handoff docs (internal operations logs)
+docs/AI_AGENT_EXEC_PROMPT_SYSTEM_LOG_AUDIT_*.md
+docs/AI_AGENT_PROMPT_LAUNCH_CARD_*.md
+docs/AI_AGENT_SYSTEM_AUDIT_*.md
+docs/AI_AGENT_SYSTEM_AUDIT_RUN_LOG.md
+docs/AI_HANDOFF_*.md
+docs/PIPELINE_DEEP_DIVE_HANDOFF_*.md
+docs/TIMING_SHADOW_HANDOFF_*.md
+docs/SYSTEM_LOG_AUDIT_*.md
+docs/R2_ENDSTATS_*.md
+docs/LUA_R2_MISSING_ROOT_CAUSE_*.md
+docs/WS1_R2_MISSING_INVESTIGATION_*.md
+docs/SUPER_PROMPT_*.md
+
+# Historical proximity docs that are redundant/superseded
+docs/PROXIMITY_CLOSEOUT_*.md
+docs/PROXIMITY_ETL_LUA_CAPABILITIES_*.md
+docs/PROXIMITY_IMPROVEMENT_DIRECTION_*.md
+docs/PROXIMITY_WEB_BENCHMARK_IDEAS_*.md
 
 # Historical fix scripts and one-off directories
 docs/2026-01-30-r2-parser-fix/
@@ -429,8 +513,29 @@ docs/scripts_2026-01-30_r2_fix/
 docs/scripts/
 
 # ============================================
-# BOT - DEAD CODE & DEV ARTIFACTS
+# BOT — DEAD CODE & DEV ARTIFACTS
 # ============================================
+bot/.oldbackup.CLAUDE.md
+bot/automation/.oldbackup.CLAUDE.md
+bot/cogs/.oldbackup.CLAUDE.md
+bot/core/.oldbackup.CLAUDE.md
+bot/services/.oldbackup.CLAUDE.md
+bot/schema.json
+bot/*.db
+bot/*.db.*
+bot/*.bak
+bot/*.backup
+bot/etlegacy_production*
+bot/BACKUP_*
+bot/*.cleaned.py
+bot/ultimate_bot.py.backup*
+bot/ultimate_bot.py.bak
+bot/local_stats/
+bot/tools/
+bot/backups/
+bot/diagnostics/
+bot/config.json
+bot/fiveeyes_config.json
 bot/BOT_CRITICAL_FIXES.py
 bot/automation_architecture.py
 bot/automation_enhancements.py
@@ -445,12 +550,35 @@ bot/last_session_redesigned_impl.py
 bot/proximity_parser.py
 bot/proximity_parser_v2.py
 bot/proximity_parser_v3.py
+bot/proximity_schema.sql
+bot/proximity_schema_v2.sql
+bot/proximity_schema_v3.sql
 bot/remove_duplicates.py
 bot/retro_text_stats.py
 bot/retro_viz.py
 bot/setup_automation.py
 bot/image_generator.py
 bot/website_design_prototype.pdf
+bot/README_AUTOMATION.md
+
+# ============================================
+# WEBSITE DEV ARTIFACTS
+# ============================================
+website/backend/.oldbackup.CLAUDE.md
+tests/.oldbackup.CLAUDE.md
+website/backend/debug_*.py
+website/fix_*.sql
+website/grant_*.sql
+website/index_before_fix_*.html
+website/index_BEFORE_RESTORE_*.html
+website/index_temp_builder.html
+website/js/app.js.BACKUP*
+website/js/records.js.BACKUP*
+website/SESSION_NOTES_*.md
+website/REVIEW_NOTES.md
+website/websitemissing*.png
+website/website.code-workspace
+website/venv/
 
 # ============================================
 # TEST DEV SCRIPTS (keep real tests)
@@ -461,13 +589,6 @@ tests/diag_*.py
 tests/tmp_*.py
 
 # ============================================
-# WEBSITE DEV ARTIFACTS
-# ============================================
-website/backend/debug_*.py
-website/fix_*.sql
-website/grant_*.sql
-
-# ============================================
 # SUB-PROJECT DEV FILES
 # ============================================
 proximity/.github/
@@ -475,34 +596,45 @@ website/.github/
 proximity/map_rotation.txt
 
 # ============================================
-# ROOT DEV ARTIFACTS
-# ============================================
-.markdownlint.json
-.markdownlintignore
-postgres_setup.md
-DATA_ACCURACY_REPORT.md
-TESTING_REQUIRED.md
-WEBSITE_STAT_BUGS_FOUND.md
-
-# ============================================
-# KEEP ESSENTIAL FILES
+# KEEP ESSENTIAL FILES (explicit allowlist)
 # ============================================
 !README.md
+!CLAUDE.md
+!CONTRIBUTING.md
+!CODE_OF_CONDUCT.md
+!SECURITY.md
+!LICENSE
+!CHANGELOG.md
 !requirements.txt
+!requirements-dev.txt
 !.env.example
 !.gitignore
+!.gitattributes
+!.dockerignore
+!.codacy.yaml
+!.secrets.baseline
+!.nvmrc
+!.pre-commit-config.yaml
+!.release-please-config.json
+!.release-please-manifest.json
 !postgresql_database_manager.py
 !install.sh
 !start_bot.sh
 !update_bot.sh
-
-# ============================================
-# GEMINI WEBSITE (local dev, not part of this project)
-# ============================================
-gemini-website/
+!freshinstall.sh
+!Makefile
+!docker-compose.yml
+!pyproject.toml
+!pytest.ini
+# bot_config.json — local runtime config, not tracked
 
 # ============================================
 # COPILOT/AI INSTRUCTIONS (keep these)
 # ============================================
 !.github/copilot-instructions.md
 !.github/instructions/
+
+# ============================================
+# GEMINI WEBSITE (local dev, not part of this project)
+# ============================================
+gemini-website/

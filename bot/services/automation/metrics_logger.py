@@ -37,7 +37,7 @@ class MetricsLogger:
     - Bot uptime and availability
     """
 
-    def __init__(self, db_path: str, log_dir: str = "bot/logs/metrics"):
+    def __init__(self, db_path: str, log_dir: str = "logs/metrics"):
         """
         Initialize metrics logger.
 

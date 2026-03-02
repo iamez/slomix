@@ -21,7 +21,6 @@ NOTE: Other commands moved to specialized cogs:
 import logging
 from typing import Optional
 
-import discord
 # import aiosqlite  # Removed - using database adapter
 from discord.ext import commands
 
@@ -71,11 +70,11 @@ class AdminCog(commands.Cog, name="Admin"):
         try:
             await ctx.send("🔄 Reloading bot... This will take a few seconds.")
             logger.info(f"🔄 Bot reload initiated by {ctx.author}")
-            
+
             # Reload all cogs
             reloaded_cogs = []
             failed_cogs = []
-            
+
             for cog_name in list(self.bot.extensions.keys()):
                 try:
                     await self.bot.reload_extension(cog_name)
@@ -84,18 +83,18 @@ class AdminCog(commands.Cog, name="Admin"):
                 except Exception as e:
                     failed_cogs.append(f"{cog_name.split('.')[-1]}: {str(e)[:50]}")
                     logger.error(f"❌ Failed to reload {cog_name}: {e}")
-            
+
             # Report results
             result_msg = "✅ **Bot Reloaded!**\n\n"
             if reloaded_cogs:
                 result_msg += f"**Reloaded ({len(reloaded_cogs)}):** {', '.join(reloaded_cogs)}\n"
             if failed_cogs:
                 result_msg += f"\n⚠️ **Failed ({len(failed_cogs)}):**\n" + "\n".join(f"• {cog}" for cog in failed_cogs)
-            
+
             result_msg += "\n\n💡 Bot is now running updated code!"
             await ctx.send(result_msg)
             logger.info("✅ Bot reload complete")
-            
+
         except Exception as e:
             logger.error(f"Error in reload_bot: {e}", exc_info=True)
             await ctx.send(f"❌ Error reloading bot: {sanitize_error_message(e)}")
@@ -130,6 +129,61 @@ class AdminCog(commands.Cog, name="Admin"):
         except Exception as e:
             logger.error(f"Error in weapon_diag: {e}", exc_info=True)
             await ctx.send(f"❌ weapon_diag failed: {sanitize_error_message(e)}")
+
+
+    @is_admin()
+    @commands.command(name="correlation_status")
+    async def correlation_status(self, ctx):
+        """🔗 Show round correlation status (Admin only)."""
+        try:
+            svc = getattr(self.bot, 'correlation_service', None)
+            if not svc:
+                await ctx.send("❌ Correlation service not initialized.")
+                return
+
+            summary = await svc.get_status_summary()
+            counts = summary.get('counts', {})
+            total = summary.get('total', 0)
+            dry_run = summary.get('dry_run', True)
+            live_requested = summary.get('live_requested', not dry_run)
+            guardrail_reason = summary.get('guardrail_reason')
+            preflight_checked = summary.get('preflight_checked', False)
+            preflight_ok = summary.get('preflight_ok', False)
+            write_error_count = summary.get('write_error_count', 0)
+            write_error_threshold = summary.get('write_error_threshold', 0)
+
+            mode = "DRY-RUN (logging only)" if dry_run else "LIVE"
+            msg = f"🔗 **Round Correlation Status** ({mode})\n\n"
+            requested_mode = "LIVE" if live_requested else "DRY-RUN"
+            msg += f"**Requested mode:** {requested_mode}\n"
+            if preflight_checked:
+                msg += f"**Schema preflight:** {'ok' if preflight_ok else 'failed'}\n"
+            if guardrail_reason:
+                msg += f"⚠️ **Guardrail:** `{guardrail_reason}`\n"
+            msg += f"**Write errors:** {write_error_count}/{write_error_threshold}\n\n"
+
+            if total == 0:
+                msg += "No correlations tracked yet.\n"
+            else:
+                msg += f"**Total:** {total}\n"
+                for status, cnt in sorted(counts.items()):
+                    emoji = {'complete': '✅', 'partial': '🔶', 'pending': '⏳'}.get(status, '❓')
+                    msg += f"{emoji} **{status}:** {cnt}\n"
+
+            recent = summary.get('recent', [])
+            if recent:
+                msg += "\n**Recent (last 10):**\n```\n"
+                for row in recent:
+                    cid = row[0] if row[0] else '?'
+                    status = row[3] if row[3] else '?'
+                    pct = row[4] if row[4] else 0
+                    msg += f"{cid}: {status} ({pct}%)\n"
+                msg += "```"
+
+            await ctx.send(msg)
+        except Exception as e:
+            logger.error(f"Error in correlation_status: {e}", exc_info=True)
+            await ctx.send(f"❌ correlation_status failed: {sanitize_error_message(e)}")
 
 
 async def setup(bot):
