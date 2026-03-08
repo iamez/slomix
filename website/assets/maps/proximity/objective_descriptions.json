@@ -1,0 +1,489 @@
+{
+  "meta": {
+    "source_pk3": "etmain/pak0.pk3",
+    "generated_at_utc": "2026-03-03T19:11:44.549411+00:00",
+    "map_count": 6,
+    "objective_count": 82,
+    "notes": "Descriptions parsed from maps/*.objdata; images extracted from levelshots/* and levelshots/*_cc"
+  },
+  "maps": {
+    "battery": {
+      "map_name": "battery",
+      "longname": "Seawall Battery",
+      "game_types": "wolfmp wolfsw wolflms",
+      "assets": {
+        "levelshot": "assets/maps/levelshots/battery.png",
+        "minimap": "assets/maps/proximity/battery.png"
+      },
+      "descriptions": {
+        "map": {
+          "axis": "Our mighty Siegfried 38cm shore battery is terrorizing Allied shipping. Protect Siegfried from Allied sabotage.",
+          "allied": "Remove the threat to Allied shipping by silencing the Siegfried 15 inch battery: fight your way into the battery and dynamite the Gun Controls.",
+          "neutral": "The mighty Axis shore battery 'Siegfried' is harassing Allied shipping in the Mediterranean. The Axis must protect Siegfried from Allied attempts at sabotage."
+        },
+        "axis_objectives": [
+          {
+            "index": 1,
+            "text": "Primary Objective:**Defend the Battery Gun until the Allied convoy comes into range."
+          },
+          {
+            "index": 2,
+            "text": "Secondary Objective:**Prevent the Allies from constructing an Assault Ramp up the West side of the Beach."
+          },
+          {
+            "index": 3,
+            "text": "Secondary Objective:**Defend the West Bunker from the Allies."
+          },
+          {
+            "index": 4,
+            "text": "Secondary Objective:**Defend the Generator which holds the magnetic Bunker Doors shut."
+          },
+          {
+            "index": 5,
+            "text": "Secondary Objective:**Prevent the Allies from establishing a Command Post in the East Bunker."
+          },
+          {
+            "index": 6,
+            "text": "Secondary Objective:**Set up a Command Post in the East Bunker."
+          }
+        ],
+        "allied_objectives": [
+          {
+            "index": 1,
+            "text": "Primary Objective:**Destroy the Battery Gun to allow the Allied convoy to pass unharmed."
+          },
+          {
+            "index": 2,
+            "text": "Secondary Objective:**Construct an Assault Ramp up the West side of the Beach."
+          },
+          {
+            "index": 3,
+            "text": "Secondary Objective:**Capture the West Bunker from the Axis."
+          },
+          {
+            "index": 4,
+            "text": "Secondary Objective:**Destroy the Generator which keeps the magnetic Bunker Doors shut."
+          },
+          {
+            "index": 5,
+            "text": "Secondary Objective:**Establish a Command Post in the East Bunker."
+          },
+          {
+            "index": 6,
+            "text": "Secondary Objective:**Prevent the Axis from fortifying their position with a Command Post in the East Bunker."
+          }
+        ]
+      },
+      "source": {
+        "pk3": "etmain/pak0.pk3",
+        "objdata": "maps/battery.objdata",
+        "arena": "scripts/battery.arena"
+      }
+    },
+    "fueldump": {
+      "map_name": "fueldump",
+      "longname": "Fuel Dump",
+      "game_types": "wolfmp wolfsw wolflms",
+      "assets": {
+        "levelshot": "assets/maps/levelshots/fueldump.png",
+        "minimap": "assets/maps/proximity/fueldump.png"
+      },
+      "descriptions": {
+        "map": {
+          "axis": "Protect your fuel depot from attack: demolish any Allied assault bridges and immobilize their armoured vehicles with Panzerfausts or grenades.",
+          "allied": "Escort a Churchill AVRE demolition tank to destroy an armored Axis fuel depot. Construct and reinforce a bridge, protect and repair the Churchill and smash your way through to victory.",
+          "neutral": "The Allies are attacking an Axis fuel depot and must escort their Churchill AVRE Demolition Tank as it blasts through the defences. The Axis can disable and delay the Tank with Panzerfausts, grenades, mines or explosives."
+        },
+        "axis_objectives": [
+          {
+            "index": 1,
+            "text": "Primary Objective:**Prevent the Allies from constructing and reinforcing a Bridge over the frozen river."
+          },
+          {
+            "index": 2,
+            "text": "Primary Objective:**Prevent the Allied Tank from destroying the Tunnel Doors."
+          },
+          {
+            "index": 3,
+            "text": "Primary Objective:**Disable the Allied Tank before it can blow open the Depot Gates."
+          },
+          {
+            "index": 4,
+            "text": "Primary Objective:**Defend the Depot Fuel Dump."
+          },
+          {
+            "index": 5,
+            "text": "Secondary Objective:**Defend the damaged Side Wall."
+          },
+          {
+            "index": 6,
+            "text": "Secondary Objective:**Build your Command Post for improved charge times."
+          },
+          {
+            "index": 7,
+            "text": "Secondary Objective:**Stop the Allies from constructing a Command Post."
+          }
+        ],
+        "allied_objectives": [
+          {
+            "index": 1,
+            "text": "Primary Objective:**Construct and reinforce a Bridge over the frozen river."
+          },
+          {
+            "index": 2,
+            "text": "Primary Objective:**Escort the Tank over the Bridge to destroy the Tunnel Doors."
+          },
+          {
+            "index": 3,
+            "text": "Primary Objective:**Cover the Tank as it destroys the Axis Depot Gates."
+          },
+          {
+            "index": 4,
+            "text": "Primary Objective:**Dynamite the Axis Fuel Dump."
+          },
+          {
+            "index": 5,
+            "text": "Secondary Objective:**Escort the Tank to destroy the Side Wall to the rear of the Depot."
+          },
+          {
+            "index": 6,
+            "text": "Secondary Objective:**Stop the Axis from constructing a Command Post."
+          },
+          {
+            "index": 7,
+            "text": "Secondary Objective:**Build a Command Post for faster charge times."
+          }
+        ]
+      },
+      "source": {
+        "pk3": "etmain/pak0.pk3",
+        "objdata": "maps/fueldump.objdata",
+        "arena": "scripts/fueldump.arena"
+      }
+    },
+    "goldrush": {
+      "map_name": "goldrush",
+      "longname": "Gold Rush",
+      "game_types": "wolfmp wolfsw wolflms",
+      "assets": {
+        "levelshot": "assets/maps/levelshots/goldrush.png",
+        "minimap": "assets/maps/proximity/goldrush.png"
+      },
+      "descriptions": {
+        "map": {
+          "axis": "Gold bars worth millions of Reichsmarks lie in the Tobruk Central Bank. Guard the bank closely and ensure that the Allies cannot steal any getaway vehicles.",
+          "allied": "Millions of dollars worth of Axis gold lie in a bank in Tobruk: liberate it. Enter under cover of darkness, steal a Jagdpanther, blow open the bank and make your escape.",
+          "neutral": "The Axis are guarding a hoard of gold in the Tobruk Central Bank. The Allies must steal an Axis Jagdpanther to blow the bank open, steal the gold bars and drive them to safety in a Truck."
+        },
+        "axis_objectives": [
+          {
+            "index": 1,
+            "text": "Primary Objective:**Stop the Allies from stealing the Tank from the Axis Tank Depot."
+          },
+          {
+            "index": 2,
+            "text": "Primary Objective:**Disable or obstruct the Allied-held Tank to prevent it reaching the Bank Courtyard."
+          },
+          {
+            "index": 3,
+            "text": "Primary Objective:**Prevent the Allies from using the Tank to blow open the Bank Doors."
+          },
+          {
+            "index": 4,
+            "text": "Primary Objective:**Stop the Allies from stealing the Gold from the Bank Vault."
+          },
+          {
+            "index": 5,
+            "text": "Primary Objective:**Stop the Allies from escaping with the Gold via a Truck in the Courtyard."
+          },
+          {
+            "index": 6,
+            "text": "Secondary Objective:**Prevent the Allies from establishing a Command Post inside the Tank Depot."
+          },
+          {
+            "index": 7,
+            "text": "Secondary Objective:**Set up a Command Post inside the Tank Depot."
+          }
+        ],
+        "allied_objectives": [
+          {
+            "index": 1,
+            "text": "Primary Objective:**Steal a Tank from the Axis Tank Depot."
+          },
+          {
+            "index": 2,
+            "text": "Primary Objective:**Protect the Tank and escort it to the Bank Courtyard, clearing any obstructions along the route."
+          },
+          {
+            "index": 3,
+            "text": "Primary Objective:**Escort the Tank into position to blow the Bank Doors open."
+          },
+          {
+            "index": 4,
+            "text": "Primary Objective:**Steal two crates of Gold from the Bank Vault."
+          },
+          {
+            "index": 5,
+            "text": "Primary Objective:**Escape with the crates of Gold using the Truck in the Courtyard."
+          },
+          {
+            "index": 6,
+            "text": "Secondary Objective:**Establish a Command Post inside the Tank Depot"
+          },
+          {
+            "index": 7,
+            "text": "Secondary Objective:**Prevent the Axis from fortifying their position with a Command Post inside the Tank Depot."
+          }
+        ]
+      },
+      "source": {
+        "pk3": "etmain/pak0.pk3",
+        "objdata": "maps/goldrush.objdata",
+        "arena": "scripts/goldrush.arena"
+      }
+    },
+    "oasis": {
+      "map_name": "oasis",
+      "longname": "Siwa Oasis",
+      "game_types": "wolfmp wolfsw wolflms",
+      "assets": {
+        "levelshot": "assets/maps/levelshots/oasis.png",
+        "minimap": "assets/maps/proximity/oasis.png"
+      },
+      "descriptions": {
+        "map": {
+          "axis": "Protect the 75mm anti-tank guns in the Oasis garrison at all costs. Beware of attacks through the Old City or the flooded cave system to your rear.",
+          "allied": "Destroy the Axis 75mm anti-tank guns in the Oasis garrison. Infiltrate the position: Either over the rooftops of the Old City or repair pumps, drain the flooded caves and attack through them.",
+          "neutral": "The Allies must infiltrate the Axis Oasis garrison to destroy two anti-tank guns: either through the Old City or a flooded cave system. The Axis must protect their anti-tank guns and repel the Allied raiders."
+        },
+        "axis_objectives": [
+          {
+            "index": 1,
+            "text": "Primary Objective:**Protect the North Pak 75mm Gun in the Axis Garrison."
+          },
+          {
+            "index": 2,
+            "text": "Primary Objective:**Protect the South Pak 75mm Gun in the Axis Garrison."
+          },
+          {
+            "index": 3,
+            "text": "Primary Objective:**Defend the Old City Wall from being breached."
+          },
+          {
+            "index": 4,
+            "text": "Secondary Objective:**Defend the Old City."
+          },
+          {
+            "index": 5,
+            "text": "Secondary Objective:**Keep the Caves between the Oasis and the Old City flooded by preventing the repair of the Oasis Water Pump."
+          },
+          {
+            "index": 6,
+            "text": "Secondary Objective:**Keep the Caves between the Old City and the Axis Garrison flooded by preventing the repair of the Old City Water Pump."
+          },
+          {
+            "index": 7,
+            "text": "Secondary Objective:**Prevent the Allies from establishing a Command Post at the Oasis."
+          },
+          {
+            "index": 8,
+            "text": "Secondary Objective:**Set up a Command Post inside the Upper Garrison."
+          }
+        ],
+        "allied_objectives": [
+          {
+            "index": 1,
+            "text": "Primary Objective:**Destroy the North Pak 75mm Gun in the Axis Garrison."
+          },
+          {
+            "index": 2,
+            "text": "Primary Objective:**Destroy the South Pak 75mm Gun in the Axis Garrison."
+          },
+          {
+            "index": 3,
+            "text": "Primary Objective:**Breach the Old City Wall."
+          },
+          {
+            "index": 4,
+            "text": "Secondary Objective:**Capture the Old City."
+          },
+          {
+            "index": 5,
+            "text": "Secondary Objective:**Repair the Oasis Water Pump and drain the water out of the Caves leading to the Old City."
+          },
+          {
+            "index": 6,
+            "text": "Secondary Objective:**Repair the Old City Water Pump and drain the water out of the Caves leading to the Axis Garrison."
+          },
+          {
+            "index": 7,
+            "text": "Secondary Objective:**Establish a forward Command Post at the Oasis."
+          },
+          {
+            "index": 8,
+            "text": "Secondary Objective:**Prevent the Axis from fortifying their position with a Command Post in the Upper Garrison."
+          }
+        ]
+      },
+      "source": {
+        "pk3": "etmain/pak0.pk3",
+        "objdata": "maps/oasis.objdata",
+        "arena": "scripts/oasis.arena"
+      }
+    },
+    "radar": {
+      "map_name": "radar",
+      "longname": "Würzburg Radar",
+      "game_types": "wolfmp wolfsw wolflms",
+      "assets": {
+        "levelshot": "assets/maps/levelshots/radar.png",
+        "minimap": "assets/maps/proximity/radar.png"
+      },
+      "descriptions": {
+        "map": {
+          "axis": "We are currently perfecting the new Würzburg 62A radar at your installation. Protect the prototypes from any Allied attempts at sabotage or theft.",
+          "allied": "We need to examine the new Würzburg radar: blast your way into the installation, steal the components and escape by truck.",
+          "neutral": "The Allies are attempting to steal components of the new Axis Würzburg 62A radar for technical analysis. The Axis must guard their two prototype radars and prevent the Allies from escaping with any stolen parts."
+        },
+        "axis_objectives": [
+          {
+            "index": 1,
+            "text": "Primary Objective:**Defend the Radar Installation's Main and Side Doors."
+          },
+          {
+            "index": 2,
+            "text": "Primary Objective:**Prevent both Radar Circuit Boards from being stolen."
+          },
+          {
+            "index": 3,
+            "text": "Secondary Objective:**Defend the Forward Bunker from the Allies."
+          },
+          {
+            "index": 4,
+            "text": "Secondary Objective:**Build a Command Post in the Side Bunker."
+          },
+          {
+            "index": 5,
+            "text": "Secondary Objective:**Stop the Allies from constructing a Command Post in the Side Bunker."
+          }
+        ],
+        "allied_objectives": [
+          {
+            "index": 1,
+            "text": "Primary Objective:**Dynamite the Radar Installation Doors."
+          },
+          {
+            "index": 2,
+            "text": "Primary Objective:**Steal both of the Würzburg Radar Circuit Boards."
+          },
+          {
+            "index": 3,
+            "text": "Secondary Objective:**Capture the Forward Bunker from the Axis."
+          },
+          {
+            "index": 4,
+            "text": "Secondary Objective:**Stop the Axis from constructing a Command Post in the Side Bunker."
+          },
+          {
+            "index": 5,
+            "text": "Secondary Objective:**Build a Command Post in the Side Bunker."
+          }
+        ]
+      },
+      "source": {
+        "pk3": "etmain/pak0.pk3",
+        "objdata": "maps/radar.objdata",
+        "arena": "scripts/radar.arena"
+      }
+    },
+    "railgun": {
+      "map_name": "railgun",
+      "longname": "Rail Gun",
+      "game_types": "wolfmp wolfsw wolflms",
+      "assets": {
+        "levelshot": "assets/maps/levelshots/railgun.png",
+        "minimap": "assets/maps/proximity/railgun.png"
+      },
+      "descriptions": {
+        "map": {
+          "axis": "Our 80cm L/40.6 Dora railway gun will force the Allies into retreat. Get the Ammo to the gun, protect the firing controls, fire the gun and win!",
+          "allied": "Prevent the firing of this enormous railway gun, codenamed Dora, either by preventing the movement of ammunition or destroying the gun's firing controls. The Axis must not fire Dora!",
+          "neutral": "The Allies must prevent the Axis from loading and firing Dora, a colossal railway gun. The Axis must transport and load Dora's ammunition, protect her firing controls and fire her to win."
+        },
+        "axis_objectives": [
+          {
+            "index": 1,
+            "text": "Primary Objective:**Drive the Ammo Tug to the Depot and load the Ammo onto it."
+          },
+          {
+            "index": 2,
+            "text": "Primary Objective:**Transport the Ammo to the North Crane."
+          },
+          {
+            "index": 3,
+            "text": "Primary Objective:**Transfer the Ammo to the Gun Tug."
+          },
+          {
+            "index": 4,
+            "text": "Primary Objective:**Drive the Ammo to the Rail Gun."
+          },
+          {
+            "index": 5,
+            "text": "Primary Objective:**Fire the Rail Gun."
+          },
+          {
+            "index": 6,
+            "text": "Secondary Objective:**Capture the Depot Yard Building."
+          },
+          {
+            "index": 7,
+            "text": "Secondary Objective:**Prevent the Allies from establishing a Command Post inside the Central Bunker."
+          },
+          {
+            "index": 8,
+            "text": "Secondary Objective:**Set up a Command Post inside the Central Bunker."
+          }
+        ],
+        "allied_objectives": [
+          {
+            "index": 1,
+            "text": "Primary Objective:**Prevent the Axis from loading the Ammo onto the Ammo Tug."
+          },
+          {
+            "index": 2,
+            "text": "Primary Objective:**Delay the transport of the Ammo to the North Crane."
+          },
+          {
+            "index": 3,
+            "text": "Primary Objective:**Prevent the Axis from transferring the Ammo to the Gun Tug."
+          },
+          {
+            "index": 4,
+            "text": "Primary Objective:**Delay the transport of the Ammo to the Rail Gun."
+          },
+          {
+            "index": 5,
+            "text": "Primary Objective:**Prevent the Axis from firing the Rail Gun."
+          },
+          {
+            "index": 6,
+            "text": "Secondary Objective:**Capture the Depot yard Building."
+          },
+          {
+            "index": 7,
+            "text": "Secondary Objective:**Establish a Command Post inside the Central Bunker."
+          },
+          {
+            "index": 8,
+            "text": "Secondary Objective:**Prevent the Axis from fortifying their position with a Command Post inside the Central Bunker."
+          }
+        ]
+      },
+      "source": {
+        "pk3": "etmain/pak0.pk3",
+        "objdata": "maps/railgun.objdata",
+        "arena": "scripts/railgun.arena"
+      }
+    }
+  }
+}
