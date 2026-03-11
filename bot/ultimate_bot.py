@@ -2894,6 +2894,10 @@ class UltimateETLegacyBot(commands.Bot):
             # Process Lua gametimes fallback files (JSON) if enabled
             await self._process_remote_gametimes_files()
 
+            # Retroactively apply timing from lua_round_teams to rounds that were
+            # processed before gametime data arrived (backlog replay scenario)
+            await self._reconcile_missing_round_timing()
+
             if new_files_count == 0:
                 logger.debug(f"✅ All {len(remote_files)} files already processed")
             else:
@@ -4149,6 +4153,32 @@ class UltimateETLegacyBot(commands.Bot):
                 self._mark_gametime_processed(filename)
             else:
                 webhook_logger.warning(f"⚠️ Gametime file processing failed: {filename}")
+
+    async def _reconcile_missing_round_timing(self):
+        """Backfill rounds.actual_duration_seconds from lua_round_teams
+        for rounds that were processed before gametime data arrived."""
+        query = """
+            UPDATE rounds r SET
+              actual_duration_seconds = lrt.actual_duration_seconds,
+              round_start_unix = lrt.round_start_unix,
+              round_end_unix = lrt.round_end_unix,
+              end_reason = lrt.end_reason,
+              total_pause_seconds = lrt.total_pause_seconds,
+              pause_count = lrt.pause_count
+            FROM lua_round_teams lrt
+            WHERE lrt.round_id = r.id
+              AND r.actual_duration_seconds IS NULL
+              AND lrt.actual_duration_seconds IS NOT NULL
+        """
+        try:
+            result = await self.db_adapter.execute(query)
+            # asyncpg returns status string like "UPDATE 5"
+            if result and isinstance(result, str):
+                parts = result.split()
+                if len(parts) == 2 and parts[1] != '0':
+                    logger.info(f"[TIMING RECONCILE] Backfilled timing for {parts[1]} rounds")
+        except Exception as e:
+            logger.warning(f"[TIMING RECONCILE] Failed: {e}")
 
     async def _store_lua_round_teams(self, round_metadata: dict):
         """
