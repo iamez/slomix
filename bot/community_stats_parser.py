@@ -569,6 +569,26 @@ class C0RNP0RN3StatsParser:
         match_summary['round_num'] = 0  # Special round number for match summary
         match_summary['is_match_summary'] = True
 
+        # FIX: R2_ONLY_FIELDS (xp, headshot_kills, kill_assists, etc.) reset between
+        # rounds in ET:Legacy Lua, so R2 raw only contains R2's per-round value.
+        # The match summary must add R1 + R2 for these fields to get the true match total.
+        import copy
+        r1_players_by_guid = {p['guid']: p for p in round_1_result.get('players', [])}
+        fixed_players = []
+        for ms_player in match_summary.get('players', []):
+            player_copy = copy.deepcopy(ms_player)
+            r1_player = r1_players_by_guid.get(player_copy.get('guid'))
+            if r1_player:
+                r1_obj = r1_player.get('objective_stats', {})
+                obj = player_copy.get('objective_stats', {})
+                for field in R2_ONLY_FIELDS:
+                    if field in obj:
+                        r1_val = r1_obj.get(field, 0) or 0
+                        r2_val = obj.get(field, 0) or 0
+                        obj[field] = r1_val + r2_val
+            fixed_players.append(player_copy)
+        match_summary['players'] = fixed_players
+
         # Attach match summary to the Round 2 differential result
         round_2_only_result['match_summary'] = match_summary
 
