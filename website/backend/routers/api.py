@@ -3672,7 +3672,7 @@ async def get_leaderboard(
             SELECT
                 {guid_select} as player_guid,
                 {name_select},
-                SUM(headshot_kills) as value,
+                SUM(headshots) as value,
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
@@ -4991,8 +4991,8 @@ async def get_session_graph_stats(
                 "kill_assists": 0,
                 "gibs": 0,
                 "headshots": 0,
-                "accuracy_weighted_sum": 0,
-                "accuracy_bullets_sum": 0,
+                "accuracy_sum": 0,
+                "accuracy_count": 0,
                 "tpp_weighted_sum": 0,
                 "tpp_weight": 0,
                 "team_kills": 0,
@@ -5030,8 +5030,8 @@ async def get_session_graph_stats(
         ps["kill_assists"] += kill_assists
         ps["gibs"] += gibs
         ps["headshots"] += headshots
-        ps["accuracy_weighted_sum"] += accuracy * bullets_fired
-        ps["accuracy_bullets_sum"] += bullets_fired
+        ps["accuracy_sum"] += accuracy
+        ps["accuracy_count"] += 1
         if time_played_percent > 0:
             ps["tpp_weighted_sum"] += time_played_percent * time_played
             ps["tpp_weight"] += time_played
@@ -5086,10 +5086,10 @@ async def get_session_graph_stats(
         time_denied = (time_denied_raw / time_minutes) if time_minutes > 0 else 0
         time_dead_raw_seconds = stats.get("time_dead_minutes", 0) * 60
 
-        # Weighted accuracy (by bullets fired per round)
+        # Simple average accuracy per round
         avg_accuracy = (
-            stats["accuracy_weighted_sum"] / stats["accuracy_bullets_sum"]
-            if stats["accuracy_bullets_sum"] > 0
+            stats["accuracy_sum"] / stats["accuracy_count"]
+            if stats["accuracy_count"] > 0
             else 0
         )
 
@@ -9940,12 +9940,13 @@ async def get_stats_session_detail(
             SUM(p.denied_playtime) as denied_playtime,
             COALESCE(SUM(w.hits), 0) as total_hits,
             COALESCE(SUM(w.shots), 0) as total_shots,
+            COALESCE(SUM(w.headshots), 0) as weapon_headshots,
             SUM(p.time_played_percent * p.time_played_seconds) as tpp_weighted_sum,
             SUM(CASE WHEN p.time_played_percent > 0 THEN p.time_played_seconds ELSE 0 END) as tpp_weight
         FROM player_comprehensive_stats p
         LEFT JOIN (
             SELECT round_id, player_guid,
-                SUM(hits) as hits, SUM(shots) as shots
+                SUM(hits) as hits, SUM(shots) as shots, SUM(headshots) as headshots
             FROM weapon_comprehensive_stats
             WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE',
                                       'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
@@ -9984,10 +9985,11 @@ async def get_stats_session_detail(
         denied_playtime = pr[17] or 0
         total_hits = pr[18] or 0
         total_shots = pr[19] or 0
-        tpp_weighted_sum = float(pr[20]) if pr[20] else 0.0
-        tpp_weight = float(pr[21]) if pr[21] else 0.0
+        weapon_headshots = pr[20] or 0
+        tpp_weighted_sum = float(pr[21]) if pr[21] else 0.0
+        tpp_weight = float(pr[22]) if pr[22] else 0.0
 
-        hs_pct = round((headshot_kills / total_kills_for_hs * 100), 1) if total_kills_for_hs > 0 else 0
+        hs_pct = round((weapon_headshots / total_hits * 100), 1) if total_hits > 0 else 0
         accuracy = round((total_hits / total_shots * 100), 1) if total_shots > 0 else 0
         efficiency = round((kills / (kills + deaths) * 100), 1) if (kills + deaths) > 0 else 0
         time_played_minutes = time_played_seconds / 60.0

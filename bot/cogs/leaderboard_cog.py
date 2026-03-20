@@ -308,7 +308,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
             deaths = deaths or 0
             kd_ratio = StatsCalculator.calculate_kd(kills, deaths)
             accuracy = StatsCalculator.calculate_accuracy(hits, shots)
-            hs_pct = (hs / kills * 100) if kills > 0 else 0.0  # headshot_kills / kills
+            hs_pct = (hs_weapon / hits * 100) if hits > 0 else 0.0  # weapon headshot hits / total hits
 
             # Get formatted player name with badges and custom display name
             formatted_name = await self.player_formatter.format_player(
@@ -566,7 +566,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                     query = """
                             SELECT
                                 MAX(p.player_name) as primary_name,
-                                SUM(p.headshot_kills) as total_hs,
+                                SUM(p.headshots) as total_hs,
                                 SUM(p.kills) as total_kills,
                                 COUNT(DISTINCT p.round_id) as games,
                                 p.player_guid
@@ -575,7 +575,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                             WHERE r.round_number IN (1, 2) AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                             GROUP BY p.player_guid
                             HAVING COUNT(DISTINCT p.round_id) > 50 AND SUM(p.kills) > 500
-                            ORDER BY (CAST(SUM(p.headshot_kills) AS FLOAT) / NULLIF(SUM(p.kills), 0)) DESC
+                            ORDER BY (CAST(SUM(p.headshots) AS FLOAT) / NULLIF(SUM(p.kills), 0)) DESC
                             LIMIT {players_per_page} OFFSET {offset}
                         """
                     title = f"🏆 Top Players by Headshot % (Page {page_num}/{total_pages})"

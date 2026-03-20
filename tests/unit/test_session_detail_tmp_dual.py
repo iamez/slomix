@@ -39,12 +39,12 @@ async def test_session_detail_returns_dual_alive_pct_fields(monkeypatch):
 
     monkeypatch.setattr(api_router, "build_session_scoring", _fake_build_session_scoring)
 
-    # Tuple shape follows get_stats_session_detail SELECT order (22 columns):
+    # Tuple shape follows get_stats_session_detail SELECT order (23 columns):
     # 0:guid, 1:name, 2:kills, 3:deaths, 4:dmg_g, 5:dmg_r, 6:dpm, 7:kd,
     # 8:headshot_kills, 9:total_kills_for_hs, 10:gibs, 11:self_kills,
     # 12:revives_given, 13:times_revived, 14:time_played_seconds, 15:kill_assists,
     # 16:time_dead_minutes, 17:denied_playtime, 18:total_hits, 19:total_shots,
-    # 20:tpp_weighted_sum, 21:tpp_weight
+    # 20:weapon_headshots, 21:tpp_weighted_sum, 22:tpp_weight
     player_rows = [
         (
             "g-alpha", "Alpha",
@@ -54,6 +54,7 @@ async def test_session_detail_returns_dual_alive_pct_fields(monkeypatch):
             2.0,     # time_dead_minutes => computed alive% = 100-(2/10*100) = 80.0
             0,       # denied_playtime
             120, 240,
+            15,       # weapon_headshots
             49200.0,  # tpp_weighted_sum = 82.0 * 600 => engine alive% = 82.0
             600.0,    # tpp_weight
         ),
@@ -65,6 +66,7 @@ async def test_session_detail_returns_dual_alive_pct_fields(monkeypatch):
             2.0,     # computed alive% = 80.0
             0,
             110, 220,
+            12,       # weapon_headshots
             49260.0,  # tpp_weighted_sum = 82.1 * 600 => engine alive% = 82.1
             600.0,
         ),
@@ -76,6 +78,7 @@ async def test_session_detail_returns_dual_alive_pct_fields(monkeypatch):
             1.5,     # computed alive% = 100-(1.5/10*100) = 85.0
             0,
             80, 200,
+            8,        # weapon_headshots
             0.0,     # no engine data available
             0.0,
         ),
