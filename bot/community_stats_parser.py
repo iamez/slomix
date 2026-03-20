@@ -421,7 +421,7 @@ class C0RNP0RN3StatsParser:
 
         Strategy:
         1. Try EXACT match (same timestamp) - for same-session rounds
-        2. Try same-day match (within 30 min before) - for most cases
+        2. Try same-day match (within configurable window before) - for most cases
         3. Try previous-day match (midnight-crossing) - for sessions crossing midnight
         """
         import glob
@@ -490,7 +490,7 @@ class C0RNP0RN3StatsParser:
         if not potential_files:
             return None
 
-        # Find the best Round 1: closest before Round 2, within 30 minutes
+        # Find the best Round 1: closest before Round 2, within round_match_window_minutes
         try:
             r2_datetime = datetime.strptime(f"{date} {time_part}", '%Y-%m-%d %H%M%S')
         except (ValueError, IndexError):
