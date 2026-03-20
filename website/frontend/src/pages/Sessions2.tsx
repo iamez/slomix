@@ -1,138 +1,133 @@
-import { useState, useCallback, useRef } from 'react';
-import { Calendar, Users, Map, Gamepad2, ChevronRight, Search, X } from 'lucide-react';
-import { useSessions } from '../api/hooks';
+import { useMemo, useRef, useState } from 'react';
+import { CalendarDays, ChevronRight, Clock3, Gamepad2, Search, Users, X } from 'lucide-react';
 import type { SessionSummary } from '../api/types';
+import { EmptyState } from '../components/EmptyState';
 import { GlassCard } from '../components/GlassCard';
 import { PageHeader } from '../components/PageHeader';
 import { Skeleton } from '../components/Skeleton';
-import { EmptyState } from '../components/EmptyState';
-import { cn } from '../lib/cn';
+import { useSessions } from '../api/hooks';
+import { mapLevelshot } from '../lib/game-assets';
 import { formatNumber } from '../lib/format';
 import { navigateTo } from '../lib/navigation';
-import { mapLevelshot } from '../lib/game-assets';
 
 const PAGE_SIZE = 15;
 
-function formatDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return '';
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+function mapLabel(name: string): string {
+  return (name || 'Unknown').replace(/^maps[\\/]/, '').replace(/\.(bsp|pk3|arena)$/i, '').replace(/_/g, ' ');
 }
 
 function stripEtColors(text: string): string {
   return text.replace(/\^[0-9A-Za-z]/g, '');
 }
 
-function mapLabel(name: string): string {
-  return name.replace(/^maps[\\/]/, '').replace(/\.(bsp|pk3|arena)$/i, '').replace(/_/g, ' ');
+function formatDuration(seconds: number): string {
+  if (!seconds || seconds <= 0) return '--';
+  const mins = Math.floor(seconds / 60);
+  const hrs = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return hrs > 0 ? `${hrs}h ${remMins}m` : `${mins}m`;
+}
+
+function sessionHash(session: SessionSummary) {
+  return session.session_id
+    ? `#/session-detail/${session.session_id}`
+    : `#/session-detail/date/${encodeURIComponent(session.date)}`;
 }
 
 function SessionCard({ session }: { session: SessionSummary }) {
-  const roundCount = session.round_count ?? session.rounds ?? 0;
-  const playerCount = session.player_count ?? session.players ?? 0;
-  const mapsPlayed = session.maps_played ?? [];
-  const mapCount = mapsPlayed.length || (session.maps ?? 0);
-  const durationStr = formatDuration(session.duration_seconds);
-  const timeRange = (session.start_time && session.end_time)
-    ? `${session.start_time} — ${session.end_time}` : '';
-  const missingRounds = roundCount % 2 !== 0;
-  const playerNames = (session.player_names ?? []).map(stripEtColors).filter(Boolean);
-  const alliesWins = session.allies_wins ?? 0;
-  const axisWins = session.axis_wins ?? 0;
-  const scoreColor = alliesWins > axisWins
-    ? 'text-blue-400' : axisWins > alliesWins ? 'text-rose-400' : 'text-slate-400';
+  const primaryMap = session.maps_played[0];
+  const playerNames = session.player_names.slice(0, 4).map(stripEtColors).filter(Boolean);
+  const scoreLabel = `${session.allies_wins ?? 0} : ${session.axis_wins ?? 0}`;
 
-  function handleClick() {
+  function openDetail() {
     if (session.session_id) {
       navigateTo(`#/session-detail/${session.session_id}`);
-    } else {
-      navigateTo(`#/session-detail/date/${encodeURIComponent(session.date)}`);
+      return;
     }
+    navigateTo(`#/session-detail/date/${encodeURIComponent(session.date)}`);
   }
 
   return (
-    <GlassCard onClick={handleClick} className="group">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <GlassCard onClick={openDetail} className="p-5 md:p-6">
+      <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr_auto] lg:items-center">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shrink-0">
-            <Calendar className="w-6 h-6 text-white" />
+          <div className="h-18 w-18 overflow-hidden rounded-[22px] bg-slate-900/80 md:h-20 md:w-20">
+            {primaryMap ? (
+              <img
+                src={mapLevelshot(primaryMap)}
+                alt={mapLabel(primaryMap)}
+                className="h-full w-full object-cover"
+                onError={(event) => { event.currentTarget.style.display = 'none'; }}
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-cyan-300">
+                <CalendarDays className="h-6 w-6" />
+              </div>
+            )}
           </div>
-          <div>
-            <div className="text-lg font-black text-white">
-              {session.formatted_date || session.date}
-            </div>
-            <div className="text-sm text-slate-400 flex flex-wrap items-center gap-2">
+
+          <div className="min-w-0">
+            <div className="section-kicker mb-1">Session</div>
+            <div className="truncate text-2xl font-black text-white">{session.formatted_date || session.date}</div>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
               {session.time_ago && <span>{session.time_ago}</span>}
-              {timeRange && <><span className="text-slate-600">·</span><span>{timeRange}</span></>}
-              {durationStr && <><span className="text-slate-600">·</span><span className="text-slate-500">{durationStr}</span></>}
-              {session.session_id && (
-                <span className="px-2 py-0.5 rounded-full bg-slate-800 text-[10px] uppercase tracking-wide text-slate-400">
-                  Session {session.session_id}
+              {session.start_time && session.end_time && <span>{session.start_time} to {session.end_time}</span>}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(session.maps_played || []).slice(0, 3).map((mapName) => (
+                <span key={mapName} className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-bold text-slate-300">
+                  {mapLabel(mapName)}
                 </span>
-              )}
-              {missingRounds && (
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] uppercase">
-                  Missing Round
+              ))}
+              {(session.maps_played || []).length > 3 && (
+                <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-bold text-slate-300">
+                  +{session.maps_played.length - 3} more
                 </span>
               )}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
-          <Stat icon={Users} value={playerCount} label="Players" color="text-brand-cyan" />
-          <Stat icon={Map} value={mapCount} label="Maps" color="text-brand-purple" />
-          <Stat icon={Gamepad2} value={roundCount} label="Rounds" color="text-brand-amber" />
-          {session.total_kills > 0 && (
-            <Stat icon={null} value={formatNumber(session.total_kills)} label="Kills" color="text-brand-emerald" />
-          )}
-          <div className="text-center">
-            <div className={cn('text-2xl font-black', scoreColor)}>{alliesWins} - {axisWins}</div>
-            <div className="text-xs text-slate-500 uppercase">Score</div>
-          </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SessionFact icon={Users} label="Players" value={formatNumber(session.player_count || session.players || 0)} accent="text-white" />
+          <SessionFact icon={Gamepad2} label="Rounds" value={formatNumber(session.round_count || session.rounds || 0)} accent="text-cyan-300" />
+          <SessionFact icon={Clock3} label="Duration" value={formatDuration(session.duration_seconds)} accent="text-amber-300" />
+          <SessionFact icon={CalendarDays} label="Score" value={scoreLabel} accent="text-rose-300" />
         </div>
 
-        <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-blue-400 transition" />
-      </div>
-
-      <div className="mt-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {mapsPlayed.slice(0, 5).map((m) => (
-            <span key={m} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300 font-medium">
-              <img src={mapLevelshot(m)} alt="" className="w-4 h-4 rounded-sm object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-              {mapLabel(m)}
-            </span>
-          ))}
-          {mapsPlayed.length > 5 && (
-            <span className="text-slate-500 text-xs">+{mapsPlayed.length - 5} more</span>
-          )}
-        </div>
-        {playerNames.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Users className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-            {playerNames.map((name) => (
-              <span key={name} className="px-2 py-0.5 rounded-full bg-slate-800/80 text-xs text-slate-300 font-medium">
-                {name}
-              </span>
-            ))}
+        <div className="flex items-center justify-between gap-4 lg:flex-col lg:items-end">
+          <div className="text-right">
+            <div className="section-kicker mb-1">Quick read</div>
+            <div className="text-sm font-bold text-white">
+              {playerNames.length > 0 ? playerNames.join(', ') : 'Roster available in detail'}
+            </div>
           </div>
-        )}
+          <div className="inline-flex items-center gap-2 text-sm font-bold text-cyan-300">
+            Open detail
+            <ChevronRight className="h-4 w-4" />
+          </div>
+        </div>
       </div>
     </GlassCard>
   );
 }
 
-function Stat({ icon: Icon, value, label, color }: {
-  icon: typeof Users | null;
-  value: number | string;
+function SessionFact({
+  icon: Icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: typeof Users;
   label: string;
-  color: string;
+  value: string;
+  accent: string;
 }) {
   return (
-    <div className="text-center">
-      <div className={cn('text-2xl font-black', color)}>{value}</div>
-      <div className="text-xs text-slate-500 uppercase">{label}</div>
+    <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
+      <Icon className={`h-4 w-4 ${accent}`} />
+      <div className={`mt-3 text-xl font-black ${accent}`}>{value}</div>
+      <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">{label}</div>
     </div>
   );
 }
@@ -149,75 +144,130 @@ export default function Sessions2() {
     search: debouncedSearch || undefined,
   });
 
-  const handleSearch = useCallback((val: string) => {
-    setSearch(val);
+  const sessions = data ?? [];
+  const hasMore = sessions.length >= PAGE_SIZE;
+
+  const summaryText = useMemo(() => {
+    if (!sessions.length) return 'No sessions loaded yet.';
+    const totalPlayers = sessions.reduce((sum, session) => sum + (session.player_count || 0), 0);
+    const totalRounds = sessions.reduce((sum, session) => sum + (session.round_count || 0), 0);
+    return `${sessions.length} sessions · ${formatNumber(totalPlayers)} player slots · ${formatNumber(totalRounds)} rounds`;
+  }, [sessions]);
+
+  function handleSearch(value: string) {
+    setSearch(value);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      setDebouncedSearch(val);
+      setDebouncedSearch(value);
       setOffset(0);
-    }, 300);
-  }, []);
+    }, 250);
+  }
 
-  const clearSearch = useCallback(() => {
+  function clearSearch() {
     setSearch('');
     setDebouncedSearch('');
     setOffset(0);
     if (timerRef.current) clearTimeout(timerRef.current);
-  }, []);
+  }
 
-  const hasMore = (data?.length ?? 0) >= PAGE_SIZE;
+  if (isLoading) {
+    return (
+      <div className="page-shell">
+        <PageHeader
+          title="Sessions"
+          subtitle="The archive is now browse-first instead of overloaded at first glance."
+          eyebrow="Everyday Browsing"
+        />
+        <Skeleton variant="card" count={4} className="grid-cols-1" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="page-shell">
+        <PageHeader title="Sessions" subtitle="Failed to load session archive." eyebrow="Everyday Browsing" />
+        <div className="text-center text-red-400 py-12">Failed to load sessions.</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="mt-6">
-      <PageHeader title="Sessions" subtitle="Gaming session history" />
+    <div className="page-shell">
+      <PageHeader
+        title="Sessions"
+        subtitle="Archive is now a cleaner browse layer, while Home stays the quickest path into the newest session."
+        eyebrow="Everyday Browsing"
+        badge={summaryText}
+      />
 
-      <div className="relative mb-6 max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => handleSearch(e.target.value)}
-          placeholder="Search sessions by player or map..."
-          className="w-full pl-10 pr-10 py-2.5 bg-slate-800 border border-white/10 text-slate-200 rounded-lg text-sm
-                     focus:outline-none focus:border-blue-500/50 placeholder:text-slate-500"
-        />
-        {search && (
-          <button onClick={clearSearch} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        )}
+      <div className="glass-panel rounded-[26px] p-4 md:p-5">
+        <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" />
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => handleSearch(event.target.value)}
+              placeholder="Search sessions by player or map..."
+              className="w-full rounded-[20px] border border-white/10 bg-slate-900/80 py-3.5 pl-11 pr-11 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/45"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-500 transition hover:bg-white/6 hover:text-white"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => navigateTo(sessions[0] ? sessionHash(sessions[0]) : '#/sessions2')}
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition hover:text-white"
+            >
+              Open Newest Session
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateTo('#/profile')}
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition hover:text-white"
+            >
+              Player Lookup
+            </button>
+          </div>
+        </div>
       </div>
 
-      {debouncedSearch && data && (
-        <div className="text-sm text-slate-400 mb-4">
-          {data.length} session{data.length !== 1 ? 's' : ''} found for "{debouncedSearch}"
+      {debouncedSearch && (
+        <div className="text-sm text-slate-400">
+          Showing {sessions.length} result{sessions.length !== 1 ? 's' : ''} for "{debouncedSearch}".
         </div>
       )}
 
-      {isLoading ? (
-        <div className="space-y-4">
-          <Skeleton variant="card" count={3} className="grid-cols-1" />
-        </div>
-      ) : isError ? (
-        <div className="text-center text-red-400 py-12">Failed to load sessions.</div>
-      ) : !data || data.length === 0 ? (
+      {!sessions.length ? (
         <EmptyState message={debouncedSearch ? `No sessions found for "${debouncedSearch}".` : 'No sessions available yet.'} />
       ) : (
         <div className="space-y-4">
-          {data.map((session, i) => (
-            <SessionCard key={session.session_id ?? `${session.date}-${i}`} session={session} />
+          {sessions.map((session, index) => (
+            <SessionCard key={session.session_id ?? `${session.date}-${index}`} session={session} />
           ))}
+        </div>
+      )}
 
-          {hasMore && (
-            <div className="text-center pt-4">
-              <button
-                onClick={() => setOffset((o) => o + PAGE_SIZE)}
-                className="px-6 py-2.5 rounded-lg bg-blue-500/20 text-blue-400 font-bold text-sm hover:bg-blue-500/30 transition"
-              >
-                Load More
-              </button>
-            </div>
-          )}
+      {hasMore && (
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => setOffset((current) => current + PAGE_SIZE)}
+            className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-3 text-sm font-black text-cyan-200 transition hover:bg-cyan-400/16"
+          >
+            Load More Sessions
+          </button>
         </div>
       )}
     </div>

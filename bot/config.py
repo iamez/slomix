@@ -155,6 +155,9 @@ class BotConfig:
         self.session_end_threshold: int = int(self._get_config('SESSION_END_THRESHOLD', '2'))
         self.session_end_delay: int = int(self._get_config('SESSION_END_DELAY', '300'))  # seconds
         self.session_gap_minutes: int = int(self._get_config('SESSION_GAP_MINUTES', '60'))  # minutes between gaming sessions
+        # Extended gap for competitive matches (BO6-BO13) — used when players
+        # are still in voice channels during halftime breaks.
+        self.competitive_session_gap_minutes: int = int(self._get_config('COMPETITIVE_SESSION_GAP_MINUTES', '180'))
 
         # ==================== ROUND MATCHING & MONITORING ====================
         # R1-R2 matching window: How long after R1 can R2 be matched

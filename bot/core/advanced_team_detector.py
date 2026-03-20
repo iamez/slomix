@@ -110,11 +110,11 @@ class AdvancedTeamDetector:
             logger.info(f"Historical analysis: {len(historical_scores)} players with history")
 
         # Strategy 2: Multi-Round Consensus
-        consensus_scores = await self._analyze_multi_round_consensus(session_date, players_data)
+        consensus_scores = self._analyze_multi_round_consensus(session_date, players_data)
         logger.info("Consensus analysis: Analyzed all rounds")
 
         # Strategy 3: Co-occurrence Matrix
-        cooccurrence_scores = await self._analyze_cooccurrence(session_date, players_data)
+        cooccurrence_scores = self._analyze_cooccurrence(session_date, players_data)
         logger.info("Co-occurrence analysis: Complete")
 
         # Combine all strategies with weighted scoring
@@ -304,8 +304,14 @@ class AdvancedTeamDetector:
         same_side_count = defaultdict(int)
         different_side_count = defaultdict(int)
 
-        # Get round-by-round game teams
-        for round_num in range(1, 10):  # Max 10 rounds per session
+        # Get round-by-round game teams — find actual max round number
+        all_round_nums = set()
+        for data in players_data.values():
+            for r_data in data['rounds']:
+                all_round_nums.add(r_data['round'])
+        max_round = max(all_round_nums) if all_round_nums else 0
+
+        for round_num in range(1, max_round + 1):
             round_players = {}
             for guid, data in players_data.items():
                 for r_data in data['rounds']:

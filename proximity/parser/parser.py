@@ -234,6 +234,63 @@ class LuaTradeKill:
     trader_name: str
 
 
+@dataclass
+class ReviveEvent:
+    time: int
+    medic_guid: str
+    medic_name: str
+    revived_guid: str
+    revived_name: str
+    x: float
+    y: float
+    z: float
+    distance_to_enemy: float
+    nearest_enemy_guid: str
+    under_fire: bool
+
+
+@dataclass
+class WeaponAccuracy:
+    player_guid: str
+    player_name: str
+    team: str
+    weapon_id: int
+    shots_fired: int
+    hits: int
+    kills: int
+    headshots: int
+
+
+@dataclass
+class FocusFireEvent:
+    engagement_id: int
+    target_guid: str
+    target_name: str
+    attacker_count: int
+    attacker_guids: str
+    total_damage: int
+    duration: int
+    focus_score: float
+
+
+@dataclass
+class KillOutcome:
+    kill_time: int
+    victim_guid: str
+    victim_name: str
+    killer_guid: str
+    killer_name: str
+    kill_mod: int
+    outcome: str
+    outcome_time: int
+    delta_ms: int
+    effective_denied_ms: int
+    gibber_guid: str
+    gibber_name: str
+    reviver_guid: str
+    reviver_name: str
+
+
 class ProximityParserV4:
     """Parser for proximity_tracker v4 output files with full player tracking"""
 
@@ -257,6 +314,10 @@ class ProximityParserV4:
         self.crossfire_opportunities: List[CrossfireOpportunity] = []
         self.team_pushes: List[TeamPush] = []
         self.lua_trade_kills: List[LuaTradeKill] = []
+        self.revive_events: List[ReviveEvent] = []
+        self.weapon_accuracy: List[WeaponAccuracy] = []
+        self.focus_fire_events: List[FocusFireEvent] = []
+        self.kill_outcomes: List[KillOutcome] = []
         self.metadata = self._metadata_defaults()
         self._schema_cache: Dict[tuple, bool] = {}
         self._round_link_context: Dict[str, Optional[object]] = {
@@ -382,6 +443,10 @@ class ProximityParserV4:
         self.crossfire_opportunities = []
         self.team_pushes = []
         self.lua_trade_kills = []
+        self.revive_events = []
+        self.weapon_accuracy = []
+        self.focus_fire_events = []
+        self.kill_outcomes = []
 
         section = 'header'
 
@@ -461,6 +526,18 @@ class ProximityParserV4:
                     if line.startswith('# TRADE_KILLS'):
                         section = 'trade_kills'
                         continue
+                    if line.startswith('# REVIVES'):
+                        section = 'revives'
+                        continue
+                    if line.startswith('# WEAPON_ACCURACY'):
+                        section = 'weapon_accuracy'
+                        continue
+                    if line.startswith('# FOCUS_FIRE'):
+                        section = 'focus_fire'
+                        continue
+                    if line.startswith('# KILL_OUTCOME'):
+                        section = 'kill_outcome'
+                        continue
 
                     if line.startswith('# axis_spawn_interval='):
                         try:
@@ -505,6 +582,14 @@ class ProximityParserV4:
                         self._parse_team_push_line(line)
                     elif section == 'trade_kills':
                         self._parse_trade_kill_line(line)
+                    elif section == 'revives':
+                        self._parse_revive_line(line)
+                    elif section == 'weapon_accuracy':
+                        self._parse_weapon_accuracy_line(line)
+                    elif section == 'focus_fire':
+                        self._parse_focus_fire_line(line)
+                    elif section == 'kill_outcome':
+                        self._parse_kill_outcome_line(line)
 
             self._normalize_round_metadata(filepath)
             self.logger.info(
@@ -938,24 +1023,26 @@ class ProximityParserV4:
 
         await self._resolve_round_link_context(session_date)
 
+        # Check if this file was already imported (reimport idempotency)
+        aggregates_already_applied = await self._check_processed_file(os.path.basename(filepath))
+
         async def _run_import_steps():
-            # Import engagements
+            # Import engagements (ON CONFLICT DO NOTHING — safe for reimport)
             await self._import_engagements(session_date)
 
-            # Import player tracks (v4)
+            # Import player tracks (v4) (ON CONFLICT DO NOTHING — safe)
             if self.player_tracks:
                 await self._import_player_tracks(session_date)
 
-            # Update player stats
-            await self._update_player_stats()
+            # Aggregate updates — ONLY on first import to prevent doubling
+            if not aggregates_already_applied:
+                await self._update_player_stats()
+                await self._update_crossfire_pairs()
+                await self._import_heatmaps()
+            else:
+                self.logger.info("Skipping aggregate updates (file already processed)")
 
-            # Update crossfire pairs
-            await self._update_crossfire_pairs()
-
-            # Import heatmaps
-            await self._import_heatmaps()
-
-            # Import objective focus (optional)
+            # Import objective focus (optional, ON CONFLICT DO NOTHING — safe)
             if self.objective_focus:
                 await self._import_objective_focus(session_date)
 
@@ -974,7 +1061,7 @@ class ProximityParserV4:
                 if self.support_summary:
                     await self._import_support_summary(session_date)
 
-            # v5 teamplay imports
+            # v5 teamplay imports (all ON CONFLICT DO NOTHING — safe)
             if self.spawn_timing_events:
                 await self._import_spawn_timing(session_date)
             if self.team_cohesion_snapshots:
@@ -985,6 +1072,17 @@ class ProximityParserV4:
                 await self._import_team_pushes(session_date)
             if self.lua_trade_kills:
                 await self._import_lua_trade_kills(session_date)
+            if self.revive_events:
+                await self._import_revive_events(session_date)
+            if self.weapon_accuracy:
+                await self._import_weapon_accuracy(session_date)
+            if self.focus_fire_events:
+                await self._import_focus_fire_events(session_date)
+            if self.kill_outcomes:
+                await self._import_kill_outcomes(session_date)
+
+            # Mark file as processed
+            await self._mark_file_processed(os.path.basename(filepath))
 
         try:
             tx_context = getattr(self.db_adapter, "transaction", None)
@@ -1002,6 +1100,33 @@ class ProximityParserV4:
             self.logger.error(f"Import error: {e}")
             return False
     
+    async def _check_processed_file(self, filename: str) -> bool:
+        """Check if file was already imported and aggregates applied."""
+        if not await self._table_has_column('proximity_processed_files', 'filename'):
+            return False
+        try:
+            row = await self.db_adapter.fetch_one(
+                "SELECT aggregates_applied FROM proximity_processed_files WHERE filename = $1",
+                (filename,),
+            )
+            return bool(row and row[0])
+        except Exception:
+            return False
+
+    async def _mark_file_processed(self, filename: str) -> None:
+        """Record that this file was imported with aggregates applied."""
+        if not await self._table_has_column('proximity_processed_files', 'filename'):
+            return
+        try:
+            await self.db_adapter.execute(
+                """INSERT INTO proximity_processed_files (filename, aggregates_applied)
+                   VALUES ($1, TRUE)
+                   ON CONFLICT (filename) DO UPDATE SET aggregates_applied = TRUE""",
+                (filename,),
+            )
+        except Exception as e:
+            self.logger.warning(f"Could not mark file processed: {e}")
+
     async def _import_engagements(self, session_date: str):
         """Import engagements to combat_engagement table"""
         supports_round_end = await self._table_has_column('combat_engagement', 'round_end_unix')
@@ -1226,6 +1351,26 @@ class ProximityParserV4:
                     crossfire_kills = player_teamplay_stats.crossfire_kills + EXCLUDED.crossfire_kills,
                     crossfire_damage = player_teamplay_stats.crossfire_damage + EXCLUDED.crossfire_damage,
                     crossfire_final_blows = player_teamplay_stats.crossfire_final_blows + EXCLUDED.crossfire_final_blows,
+                    avg_crossfire_delay_ms = CASE
+                        WHEN COALESCE(player_teamplay_stats.crossfire_participations, 0) + COALESCE(EXCLUDED.crossfire_participations, 0) > 0
+                        THEN (
+                            COALESCE(
+                                player_teamplay_stats.avg_crossfire_delay_ms
+                                * NULLIF(player_teamplay_stats.crossfire_participations, 0),
+                                0
+                            )
+                            + COALESCE(
+                                EXCLUDED.avg_crossfire_delay_ms
+                                * NULLIF(EXCLUDED.crossfire_participations, 0),
+                                0
+                            )
+                        ) / NULLIF(
+                            COALESCE(player_teamplay_stats.crossfire_participations, 0)
+                            + COALESCE(EXCLUDED.crossfire_participations, 0),
+                            0
+                        )
+                        ELSE COALESCE(EXCLUDED.avg_crossfire_delay_ms, player_teamplay_stats.avg_crossfire_delay_ms)
+                    END,
                     solo_kills = player_teamplay_stats.solo_kills + EXCLUDED.solo_kills,
                     solo_engagements = player_teamplay_stats.solo_engagements + EXCLUDED.solo_engagements,
                     times_targeted = player_teamplay_stats.times_targeted + EXCLUDED.times_targeted,
@@ -1234,6 +1379,49 @@ class ProximityParserV4:
                     focus_deaths = player_teamplay_stats.focus_deaths + EXCLUDED.focus_deaths,
                     solo_escapes = player_teamplay_stats.solo_escapes + EXCLUDED.solo_escapes,
                     solo_deaths = player_teamplay_stats.solo_deaths + EXCLUDED.solo_deaths,
+                    avg_escape_distance = CASE
+                        WHEN COALESCE(player_teamplay_stats.times_targeted, 0) + COALESCE(EXCLUDED.times_targeted, 0) > 0
+                        THEN (
+                            COALESCE(
+                                player_teamplay_stats.avg_escape_distance
+                                * NULLIF(player_teamplay_stats.times_targeted, 0),
+                                0
+                            )
+                            + COALESCE(
+                                EXCLUDED.avg_escape_distance
+                                * NULLIF(EXCLUDED.times_targeted, 0),
+                                0
+                            )
+                        ) / NULLIF(
+                            COALESCE(player_teamplay_stats.times_targeted, 0)
+                            + COALESCE(EXCLUDED.times_targeted, 0),
+                            0
+                        )
+                        ELSE COALESCE(EXCLUDED.avg_escape_distance, player_teamplay_stats.avg_escape_distance)
+                    END,
+                    avg_engagement_duration_ms = CASE
+                        WHEN COALESCE(player_teamplay_stats.times_targeted, 0) + COALESCE(EXCLUDED.times_targeted, 0) > 0
+                        THEN (
+                            COALESCE(
+                                player_teamplay_stats.avg_engagement_duration_ms
+                                * NULLIF(player_teamplay_stats.times_targeted, 0),
+                                0
+                            )
+                            + COALESCE(
+                                EXCLUDED.avg_engagement_duration_ms
+                                * NULLIF(EXCLUDED.times_targeted, 0),
+                                0
+                            )
+                        ) / NULLIF(
+                            COALESCE(player_teamplay_stats.times_targeted, 0)
+                            + COALESCE(EXCLUDED.times_targeted, 0),
+                            0
+                        )
+                        ELSE COALESCE(
+                            EXCLUDED.avg_engagement_duration_ms,
+                            player_teamplay_stats.avg_engagement_duration_ms
+                        )
+                    END,
                     total_damage_taken = player_teamplay_stats.total_damage_taken + EXCLUDED.total_damage_taken,
                     last_updated = CURRENT_TIMESTAMP
             """
@@ -1334,6 +1522,26 @@ class ProximityParserV4:
                     crossfire_count = crossfire_pairs.crossfire_count + EXCLUDED.crossfire_count,
                     crossfire_kills = crossfire_pairs.crossfire_kills + EXCLUDED.crossfire_kills,
                     total_combined_damage = crossfire_pairs.total_combined_damage + EXCLUDED.total_combined_damage,
+                    avg_delay_ms = CASE
+                        WHEN COALESCE(crossfire_pairs.crossfire_count, 0) + COALESCE(EXCLUDED.crossfire_count, 0) > 0
+                        THEN (
+                            COALESCE(
+                                crossfire_pairs.avg_delay_ms
+                                * NULLIF(crossfire_pairs.crossfire_count, 0),
+                                0
+                            )
+                            + COALESCE(
+                                EXCLUDED.avg_delay_ms
+                                * NULLIF(EXCLUDED.crossfire_count, 0),
+                                0
+                            )
+                        ) / NULLIF(
+                            COALESCE(crossfire_pairs.crossfire_count, 0)
+                            + COALESCE(EXCLUDED.crossfire_count, 0),
+                            0
+                        )
+                        ELSE COALESCE(EXCLUDED.avg_delay_ms, crossfire_pairs.avg_delay_ms)
+                    END,
                     games_together = crossfire_pairs.games_together + 1,
                     last_played = CURRENT_TIMESTAMP
             """
@@ -1486,6 +1694,127 @@ class ProximityParserV4:
             ))
         except (ValueError, IndexError) as e:
             self.logger.debug(f"Skip trade_kill line: {e}")
+
+    def _parse_revive_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 11:
+                return
+            self.revive_events.append(ReviveEvent(
+                time=int(parts[0]),
+                medic_guid=parts[1],
+                medic_name=parts[2],
+                revived_guid=parts[3],
+                revived_name=parts[4],
+                x=float(parts[5]),
+                y=float(parts[6]),
+                z=float(parts[7]),
+                distance_to_enemy=float(parts[8]),
+                nearest_enemy_guid=parts[9],
+                under_fire=parts[10] == '1',
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip revive line: {e}")
+
+    def _parse_weapon_accuracy_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 8:
+                return
+            self.weapon_accuracy.append(WeaponAccuracy(
+                player_guid=parts[0],
+                player_name=parts[1],
+                team=parts[2],
+                weapon_id=int(parts[3]),
+                shots_fired=int(parts[4]),
+                hits=int(parts[5]),
+                kills=int(parts[6]),
+                headshots=int(parts[7]),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip weapon_accuracy line: {e}")
+
+    def _parse_focus_fire_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 8:
+                return
+            self.focus_fire_events.append(FocusFireEvent(
+                engagement_id=int(parts[0]),
+                target_guid=parts[1],
+                target_name=parts[2],
+                attacker_count=int(parts[3]),
+                attacker_guids=parts[4],
+                total_damage=int(parts[5]),
+                duration=int(parts[6]),
+                focus_score=float(parts[7]),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip focus_fire line: {e}")
+
+    def _parse_kill_outcome_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 14:
+                return
+            self.kill_outcomes.append(KillOutcome(
+                kill_time=int(parts[0]),
+                victim_guid=parts[1],
+                victim_name=parts[2],
+                killer_guid=parts[3],
+                killer_name=parts[4],
+                kill_mod=int(parts[5]),
+                outcome=parts[6],
+                outcome_time=int(parts[7]),
+                delta_ms=int(parts[8]),
+                effective_denied_ms=int(parts[9]),
+                gibber_guid=parts[10],
+                gibber_name=parts[11],
+                reviver_guid=parts[12],
+                reviver_name=parts[13],
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip kill_outcome line: {e}")
+
+    async def _import_kill_outcomes(self, session_date):
+        """Import kill outcome events to proximity_kill_outcome table"""
+        if not await self._table_has_column('proximity_kill_outcome', 'victim_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_kill_outcome', 'round_end_unix')
+        for ko in self.kill_outcomes:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name", "kill_time",
+                "victim_guid", "victim_name",
+                "killer_guid", "killer_name", "kill_mod",
+                "outcome", "outcome_time", "delta_ms", "effective_denied_ms",
+                "gibber_guid", "gibber_name",
+                "reviver_guid", "reviver_name",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                ko.kill_time,
+                ko.victim_guid, ko.victim_name,
+                ko.killer_guid, ko.killer_name, ko.kill_mod,
+                ko.outcome, ko.outcome_time, ko.delta_ms, ko.effective_denied_ms,
+                ko.gibber_guid, ko.gibber_name,
+                ko.reviver_guid, ko.reviver_name,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_kill_outcome", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_kill_outcome ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, kill_time, victim_guid)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
 
     async def _import_objective_focus(self, session_date: str):
         """Import objective focus metrics if table exists"""
@@ -1706,6 +2035,94 @@ class ProximityParserV4:
             """
             await self.db_adapter.execute(query, tuple(values))
 
+    async def _import_revive_events(self, session_date):
+        """Import revive events to proximity_revive table"""
+        if not await self._table_has_column('proximity_revive', 'revived_guid'):
+            return
+        for evt in self.revive_events:
+            columns = [
+                "round_id", "map_name",
+                "medic_guid", "medic_name",
+                "revived_guid", "revived_name",
+                "revive_time", "revive_x", "revive_y", "revive_z",
+                "distance_to_enemy", "under_fire", "nearest_enemy_guid",
+            ]
+            values = [
+                self._round_link_context.get("round_id"),
+                self.metadata['map_name'],
+                evt.medic_guid, evt.medic_name,
+                evt.revived_guid, evt.revived_name,
+                evt.time, evt.x, evt.y, evt.z,
+                evt.distance_to_enemy, evt.under_fire, evt.nearest_enemy_guid,
+            ]
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_revive ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_weapon_accuracy(self, session_date):
+        """Import weapon accuracy data to proximity_weapon_accuracy table"""
+        if not await self._table_has_column('proximity_weapon_accuracy', 'player_guid'):
+            return
+        for wa in self.weapon_accuracy:
+            columns = [
+                "round_id", "map_name",
+                "player_guid", "player_name", "team",
+                "weapon_id", "shots_fired", "hits", "kills", "headshots",
+            ]
+            values = [
+                self._round_link_context.get("round_id"),
+                self.metadata['map_name'],
+                wa.player_guid, wa.player_name, wa.team,
+                wa.weapon_id, wa.shots_fired, wa.hits, wa.kills, wa.headshots,
+            ]
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_weapon_accuracy ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_focus_fire_events(self, session_date):
+        """Import focus fire events to proximity_focus_fire table"""
+        if not await self._table_has_column('proximity_focus_fire', 'target_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_focus_fire', 'round_end_unix')
+        for ff in self.focus_fire_events:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name", "engagement_id",
+                "target_guid", "target_name",
+                "attacker_count", "attacker_guids",
+                "total_damage", "duration", "focus_score",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                ff.engagement_id,
+                ff.target_guid, ff.target_name,
+                ff.attacker_count, ff.attacker_guids,
+                ff.total_damage, ff.duration, ff.focus_score,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_focus_fire", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_focus_fire ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, engagement_id)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
     def _distance2d(self, a: Tuple[float, float, float], b: Tuple[float, float, float]) -> float:
         dx = (a[0] or 0) - (b[0] or 0)
         dy = (a[1] or 0) - (b[1] or 0)
@@ -1886,6 +2303,7 @@ class ProximityParserV4:
             return
 
         trade_window_ms = int(os.getenv("PROXIMITY_TRADE_WINDOW_MS", "3000"))
+        extended_window_ms = 5000  # For diagnostic comparison vs industry 5s standard
         trade_dist = float(os.getenv("PROXIMITY_TRADE_DIST", "800"))
         max_pos_delta = int(os.getenv("PROXIMITY_TRADE_POS_DELTA_MS", "1500"))
         isolation_dist = float(os.getenv("PROXIMITY_ISOLATION_DIST", "1200"))
@@ -1996,6 +2414,31 @@ class ProximityParserV4:
                 "nearest_teammate_dist": round(nearest_teammate_dist, 1) if nearest_teammate_dist is not None else None,
                 "is_isolation_death": is_isolation,
             })
+
+        # Diagnostic: count trades that would be caught with 5s window but missed at 3s.
+        # This helps validate whether our tighter window misses legitimate trades.
+        if trade_window_ms < extended_window_ms:
+            extended_only_successes = 0
+            for eng in self.engagements:
+                if eng.outcome != 'killed' or not eng.killer_guid:
+                    continue
+                death_time = eng.end_time
+                victim_team = eng.target_team
+                killer_engs = engagements_by_target.get(eng.killer_guid, [])
+                for k_eng in killer_engs:
+                    if (k_eng.outcome == 'killed'
+                            and death_time + trade_window_ms < k_eng.end_time <= death_time + extended_window_ms):
+                        for att in k_eng.attackers.values():
+                            if att.team == victim_team and att.got_kill:
+                                extended_only_successes += 1
+                                break
+            if extended_only_successes > 0:
+                current_count = sum(len(e.get("successes", [])) for e in trade_events)
+                self.logger.info(
+                    f"Trade window diagnostic: {current_count} trades at {trade_window_ms}ms, "
+                    f"+{extended_only_successes} additional at {extended_window_ms}ms "
+                    f"({extended_only_successes / max(1, current_count + extended_only_successes) * 100:.0f}%% missed)"
+                )
 
         self.trade_events = trade_events
 
@@ -2201,6 +2644,8 @@ class ProximityParserV4:
             'crossfire_opportunities': len(self.crossfire_opportunities),
             'team_pushes': len(self.team_pushes),
             'lua_trade_kills': len(self.lua_trade_kills),
+            'focus_fire_events': len(self.focus_fire_events),
+            'kill_outcomes': len(self.kill_outcomes),
         }
 
 

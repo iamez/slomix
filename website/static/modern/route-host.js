@@ -1,7 +1,4 @@
-import "react/jsx-runtime";
-import "react-dom/client";
-import { m as i } from "./chunks/route-host-CUL1oI6Z.js";
-import "react";
+import { o as e } from "./chunks/route-host-Ba3v8uFM.js";
 export {
-  i as mountRoute
+  e as mountRoute
 };

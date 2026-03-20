@@ -190,16 +190,16 @@ export default function WeaponsPage() {
 
   if (isLoading) {
     return (
-      <div className="mt-6">
-        <PageHeader title="Weapon Arsenal" subtitle="Detailed weapon statistics" />
+      <div className="page-shell">
+        <PageHeader title="Weapon Arsenal" subtitle="Deeper weapon analysis once the main session/player path is done." eyebrow="More" />
         <Skeleton variant="card" count={6} className="grid-cols-3" />
       </div>
     );
   }
 
   return (
-    <div className="mt-6">
-      <PageHeader title="Weapon Arsenal" subtitle="Detailed weapon statistics">
+    <div className="page-shell">
+      <PageHeader title="Weapon Arsenal" subtitle="Detailed weapon statistics and per-player mastery." eyebrow="More">
         <div className="flex gap-1 bg-slate-800 rounded-lg p-0.5">
           {PERIODS.map((p) => (
             <button

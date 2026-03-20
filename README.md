@@ -3,7 +3,7 @@
 > **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Version](https://img.shields.io/badge/version-1.0.8-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue)](CHANGELOG.md)
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_14-336791)](https://www.postgresql.org/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
@@ -14,69 +14,22 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ---
 
-## 🔥 Recent Updates (February 2026)
+## 🔥 Recent Updates (March 2026)
 
-### **🎬 v1.0.8: Greatshot Highlight Enrichment & Database Cross-Reference (February 8, 2026)** 🆕
+### **📊 v1.1.0: Stats Accuracy Audit, React 19 Frontend & Proximity v5 (March 2026)** 🆕
 
-**Richer fragmovie scout data with ET:Legacy stats database integration!**
+**Full stats accuracy audit — fixed critical data bugs, modernized frontend, expanded proximity analytics.**
 
-- 🎯 **Enriched Highlight Metadata** — Kill sequences (victim, weapon, HS per kill), weapon usage breakdowns, kill timing rhythm (avg/fastest gaps)
-- 👤 **Player Match Stats** — Attacker's overall performance (kills, deaths, KDR, accuracy, damage) attached to each highlight
-- 🔗 **Database Cross-Reference** — Auto-match demos to rounds by map/duration/winner/scores (confidence scoring)
-- 📊 **Stats Validation** — Side-by-side comparison of demo kills vs DB stats for data health
-- 🎨 **Scout-Friendly UI** — Kill sequences, weapon badges, rhythm stats, DB crossref panel in frontend
-- 📝 **Enhanced Reports** — Victims, weapons, timing rhythm in text reports
-- 🔧 **New Service** — `greatshot_crossref.py` with round matching + DB enrichment
-
----
-
-### **🎬 v1.0.7: Greatshot Demo Pipeline & Database Overhaul (February 8, 2026)**
-
-**Demo upload, analysis, highlight detection, and clip extraction — now integrated!**
-
-- 🎬 **Greatshot Pipeline** — Upload `.dm_84` demos via the website, auto-analyze with highlight detection
-- 🔍 **Highlight Detection** — Multi-kills, killing sprees, quick headshot chains, aim moments
-- ✂️ **Clip Extraction** — Cut highlight clips from demos at exact timestamps via UDT_cutter
-- 🎥 **Render Queue** — Pipeline ready for video rendering (configurable render backend)
-- 🛠️ **UDT Parser Built from Source** — ET:Legacy protocol 84 support via [ryzyk-krzysiek's fork](https://github.com/mightycow/uberdemotools/pull/2), 3 compilation fixes applied
-- 🗄️ **4 New Tables** — `greatshot_demos`, `greatshot_analysis`, `greatshot_highlights`, `greatshot_renders`
-- 🔧 **Database Manager Overhaul** — Schema creation now covers all 37 tables (was 7), rebuild wipes 20 tables in FK-safe order (was 7), 4 new column migrations
-
-**Origin:** Based on [mittermichal/greatshot-web](https://github.com/mittermichal/greatshot-web) by **Kimi**. We reverse-engineered his architecture, adapted the scanner/highlight/cutter/renderer pipeline to our codebase, wired it into our PostgreSQL database, integrated it with the website's auth system and background job workers, and built the UDT parser from source with ET:Legacy protocol support. The highlight detection algorithms and pipeline design are his — we made them talk to our database and our website. Big thanks to Kimi! 🙏
-
----
-
-### **📊 v1.0.6: Analytics, Matchups & Website Overhaul (February 1, 2026)**
-
-- 📊 **Player Analytics Commands** — `!consistency`, `!map_stats`, `!playstyle`, `!awards`, `!fatigue`
-- ⚔️ **Matchup Analytics** — `!matchup A vs B`, `!duo_perf`, `!nemesis` — lineup vs lineup stats with confidence scoring
-- 🏆 **Map-Based Stopwatch Scoring** — Session scores now count MAP wins (not round wins), with full map breakdown + timing
-- 👥 **Real-Time Team Tracking** — Teams created on R1, grow dynamically as players join (3v3 → 4v4 → 6v6)
-- 🌐 **Website SPA Overhaul** — Sessions, matches, profiles, leaderboards, admin, badges, proximity, season stats pages
-- 🎮 **Server Control Cog** — RCON, server status, map management, player list
-- 🔫 **Lua Webhook v1.6.0** — Spawn/death tracking, safe gentity access (crash fix)
-- 🔴 **Proximity Tracker v3** — Crossfire detection, trade kill support
-
-### **⏱️ v1.0.5: Lua Webhook Enhancements (January 25, 2026)**
-
-- ⏸️ **Lua Webhook v1.3.0** — Pause event timestamps (`Lua_Pauses_JSON`), warmup end tracking, timing legend in Discord embed
-- 🔥 **Lua Webhook v1.2.0** — Warmup phase tracking (`Lua_Warmup`, `Lua_WarmupStart`)
-
-### **🚀 v1.0.4: Real-Time Lua Webhook (January 22, 2026)**
-
-- ⚡ **Instant Round Notifications** — Lua webhook fires ~3s after round end (vs 60s SSH polling)
-- 🏳️ **Surrender Timing Fix** — Stats files show full map duration on surrender; Lua captures actual played time
-- 👥 **Team Composition Capture** — Axis/Allies player lists at round end
-- ⏸️ **Pause Tracking** — Game pause detection and timing
-- 🗄️ **`lua_round_teams` Table** — Separate storage for Lua-captured data, cross-referenced with stats files
-
-### **🏅 v1.0.3: EndStats & Awards System (January 14, 2026)**
-
-- 🏅 **EndStats Processing** — Parses `-endstats.txt` files for round awards and player VS stats
-- 🎖️ **7 Award Categories** — Combat, Deaths & Mayhem, Skills, Weapons, Teamwork, Objectives, Timing
-- 📊 **VS Stats Tracking** — Player-vs-player kill/death records per round
-- 💬 **Discord Follow-Up Embeds** — Awards posted automatically after round stats
-- 🗄️ **3 New Tables** — `round_awards`, `round_vs_stats`, `processed_endstats_files`
+- 🔍 **Stats Accuracy Audit** — Comprehensive review of every stat formula across API, bot, and parser
+- 🐛 **R0 Double-Counting Fix** — Match summary rows were inflating kills by 94% and DPM by 32% across 7+ API endpoints (profile, leaderboard, compare, records, maps, hall of fame, season leaders)
+- 🐛 **NULLIF KD Bug Fix** — `NULLIF(deaths, 1)` → `NULLIF(deaths, 0)` in all 10 leaderboard KD formulas
+- 🎯 **Accuracy Weighted Average** — Session graph stats now weighted by shots fired (not naive per-round average)
+- 💀 **Alive% Engine Value** — Now uses ET:Legacy `sess.time_played` (TAB[8]) which correctly excludes dead + limbo time. Backfilled 8,799 rows (99.9% coverage)
+- 🔧 **Headshot Leaderboard** — Changed from headshot hit events to headshot kills
+- ⚡ **React 19 + TypeScript 5.9** — Full frontend modernization: Vite 7, Tailwind CSS v4, Framer Motion
+- 🗺️ **Proximity v5.0** — Team pushes, trade kills, spawn timing, team cohesion, crossfire opportunities
+- 🌐 **3 New Proximity Pages** — ProximityPlayer, ProximityReplay, ProximityTeams
+- 🔧 **14 Bug Fixes** — await on sync methods, achievement help text, survival_rate formula, FragPotential hidden from displays
 
 **[📖 Full Changelog](CHANGELOG.md)**
 
@@ -88,11 +41,11 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 - 🤖 **Full Automation** — SSH monitoring, auto-download, auto-import, auto-post (60s cycle)
 - ⚡ **Real-Time Lua Telemetry** — Game server webhook fires ~3s after round end
 - 🧮 **Differential Calculation** — Smart Round 2 stats (subtracts Round 1 for accurate team-swap metrics)
-- 📊 **53+ Statistics** — K/D, DPM, accuracy, efficiency, headshots, damage, playtime, and more
+- 📊 **57 Statistics** — K/D, DPM, accuracy, alive%, efficiency, headshots, damage, playtime, and more
 - 🔮 **AI Match Predictions** — 4-factor algorithm (H2H, form, map performance, substitutions)
 - 🎬 **Demo Highlight Scanner** — Upload demos, detect multi-kills/sprees, cut clips
 - 🏆 **EndStats Awards** — Post-round awards with 7 categories
-- 🌐 **Web Dashboard** — FastAPI + vanilla JS SPA with auth, profiles, leaderboards, admin panel
+- 🌐 **Web Dashboard** — FastAPI + React 19 SPA with auth, profiles, leaderboards, proximity analytics
 
 **[📊 Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation](docs/SAFETY_VALIDATION_SYSTEMS.md)** | **[📖 Changelog](CHANGELOG.md)**
 
@@ -102,17 +55,17 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 | Metric | Value |
 |--------|-------|
-| **Kills Tracked** | 131,648 |
-| **Headshots Recorded** | 149,022 |
-| **Damage Dealt** | 26 million |
-| **Revives Given** | 4,725 |
-| **Rounds Parsed** | 1,657 |
-| **Gaming Sessions** | 87 |
-| **Unique Players** | 32 |
-| **Stats Per Player Per Round** | 53+ fields |
+| **Kills Tracked** | 79,303 |
+| **Headshot Kills** | 15,474 |
+| **Damage Dealt** | 15.7 million |
+| **Revives Given** | 5,655 |
+| **Rounds Parsed** | 1,320 |
+| **Gaming Sessions** | 98 |
+| **Unique Players** | 33 |
+| **Stats Per Player Per Round** | 57 fields |
 | **Discord Commands** | ~99 across 21 cogs |
-| **Database Tables** | 37 |
-| **Data Span** | Jan 2025 — Feb 2026 (13 months) |
+| **Database Tables** | 80 |
+| **Data Span** | Jan 2025 — Mar 2026 (15 months) |
 
 ---
 
@@ -140,7 +93,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 │                          │                                     │
 │                  ┌───────▼───────┐                             │
 │                  │  PostgreSQL   │                             │
-│                  │  37 Tables    │                             │
+│                  │  80 Tables    │                             │
 │                  └───────────────┘                             │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -148,10 +101,10 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 | Project | Status | Description |
 |---------|--------|-------------|
 | **Discord Bot** (this repo) | ✅ Production | ~99 commands, 21 cogs, full automation, AI predictions |
-| **Website** (`/website/`) | ✅ Production | FastAPI + JS SPA: profiles, sessions, leaderboards, admin, greatshot |
+| **Website** (`/website/`) | ✅ Production | FastAPI + React 19/TypeScript SPA: profiles, sessions, leaderboards, proximity, greatshot |
 | **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, surrender timing fix, team capture |
-| **Greatshot** (`/greatshot/`) | 🔶 New | Demo upload, highlight detection, clip extraction, render pipeline |
-| **Proximity** (`/proximity/`) | 🔶 Prototype | Lua combat engagement & heatmap tracking |
+| **Greatshot** (`/greatshot/`) | ✅ Production | Demo upload, highlight detection, clip extraction, render pipeline |
+| **Proximity** (`/proximity/`) | ✅ Production | Lua v5.0 teamplay analytics — engagement, cohesion, crossfire, trade kills |
 
 ---
 
@@ -187,7 +140,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 ┌──────────────────────────────────────────────────┐
 │  Layer 5-6: PostgreSQL (ACID) + Constraints      │
 │  ✓ Transaction safety  ✓ FK/NOT NULL/UNIQUE      │
-│  37 tables  |  53+ columns per player per round  │
+│  80 tables  |  57 columns per player per round    │
 └──────────────────────┬───────────────────────────┘
                        │
               ┌────────┼────────┐
@@ -462,9 +415,13 @@ slomix/
 │
 ├── 🌐 website/                      # Web dashboard
 │   ├── backend/                     # FastAPI routers, services, greatshot workers
-│   │   ├── routers/                 # api, auth, predictions, greatshot
+│   │   ├── routers/                 # api, auth, predictions, greatshot, proximity
 │   │   └── services/                # greatshot_store, greatshot_jobs
-│   ├── js/                          # SPA frontend modules
+│   ├── frontend/                    # React 19 + TypeScript 5.9 + Vite 7
+│   │   ├── src/pages/               # 19 route pages (Sessions, Proximity, Maps, etc.)
+│   │   └── src/components/          # Shared components (GlassCard, DataTable, etc.)
+│   ├── static/modern/               # Built JS/CSS chunks (from npm run build)
+│   ├── js/                          # Legacy JS fallback modules
 │   └── index.html                   # Main SPA entry point
 │
 ├── 🎯 proximity/                    # Combat engagement tracker
@@ -497,12 +454,12 @@ slomix/
 
 ## 🗄️ Database Schema
 
-### **PostgreSQL — 37 Tables**
+### **PostgreSQL — 80 Tables**
 
 ```sql
--- Core Tables (7)
+-- Core Stats (7)
 rounds                          -- Round metadata, gaming_session_id, match_id
-player_comprehensive_stats      -- 53 columns per player per round
+player_comprehensive_stats      -- 57 columns per player per round
 weapon_comprehensive_stats      -- Per-weapon breakdown
 processed_files                 -- File tracking with SHA256 hash
 player_links                    -- Discord ↔ game account links
@@ -513,9 +470,10 @@ session_teams                   -- Persistent team assignments
 lua_round_teams                 -- Real-time data from game server Lua
 lua_spawn_stats                 -- Per-player spawn/death timing
 
--- Round Detail (3)
+-- Round Detail (4)
 round_awards                    -- EndStats awards (7 categories)
 round_vs_stats                  -- Player VS player kill/death records
+round_correlations              -- R1+R2 data completeness tracking (23 cols)
 processed_endstats_files        -- EndStats file tracking
 
 -- Competitive Analytics (3)
@@ -523,31 +481,25 @@ match_predictions               -- AI predictions (35 columns, 6 indexes)
 session_results                 -- Session outcomes with team compositions
 map_performance                 -- Player per-map rolling averages
 
--- Permission & Team Config (3)
-user_permissions                -- 3-tier permission system
-permission_audit_log            -- Permission change audit trail
-team_pool                       -- Team names (sWat, S*F, etc.)
-
--- Matchup (1)
-matchup_history                 -- Lineup vs lineup analytics (JSONB)
-
--- Greatshot (4) 🆕
+-- Greatshot (4)
 greatshot_demos                 -- Uploaded demo files with status tracking
 greatshot_analysis              -- Parsed analysis (metadata, stats, events)
 greatshot_highlights            -- Detected highlights with scores
 greatshot_renders               -- Video render jobs and output paths
 
--- Website (4)
-server_status_history           -- Server status snapshots
-voice_members / voice_status_history -- Voice channel tracking
-live_status                     -- Real-time server state
-
--- Proximity (8)
+-- Proximity (12+)
 combat_engagement               -- Combat encounter tracking
 crossfire_pairs                 -- Crossfire detection
+proximity_spawn_timing          -- Spawn wave timing analysis
+proximity_team_cohesion         -- Team cohesion timeline
+proximity_crossfire_opportunity -- Crossfire setups
+proximity_team_push             -- Coordinated pushes
+proximity_lua_trade_kill        -- Trade kill detection
 player_teamplay_stats           -- Teamplay metrics
-player_track                    -- Movement data
-proximity_* / map_*_heatmap     -- Heatmap data
+player_track                    -- Movement data + heatmaps
+
+-- Website & Infrastructure (20+)
+server_status_history, voice_members, availability_*, uploads_*
 ```
 
 **Gaming Session ID:** Automatically calculated — 60-minute gap between rounds = new session.

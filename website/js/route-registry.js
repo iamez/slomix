@@ -11,6 +11,7 @@ const STATS_VIEWS = new Set([
     'weapons',
     'records',
     'awards',
+    'profile',
     'retro-viz',
     'sessions2',
     'session-detail',
@@ -18,10 +19,13 @@ const STATS_VIEWS = new Set([
 
 const VIEW_TO_NAV = Object.freeze({
     'greatshot-demo': 'greatshot',
+    'proximity-player': 'proximity',
+    'proximity-replay': 'proximity',
+    'proximity-teams': 'proximity',
     'upload-detail': 'uploads',
     sessions: 'sessions-stats',
-    sessions2: 'sessions2',
-    'session-detail': 'sessions2',
+    sessions2: 'sessions-stats',
+    'session-detail': 'sessions-stats',
 });
 
 function safeDecode(value) {
@@ -40,7 +44,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     home: {
         viewId: 'home',
         label: 'Home',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'A',
         buildHash: () => '',
@@ -58,7 +62,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     leaderboards: {
         viewId: 'leaderboards',
         label: 'Leaderboards',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'A',
         buildHash: () => '#/leaderboards',
@@ -67,7 +71,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     maps: {
         viewId: 'maps',
         label: 'Maps',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'A',
         buildHash: () => '#/maps',
@@ -76,7 +80,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     weapons: {
         viewId: 'weapons',
         label: 'Weapons',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'B',
         buildHash: () => '#/weapons',
@@ -85,7 +89,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     profile: {
         viewId: 'profile',
         label: 'Profile',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'A',
         buildHash: () => '#/profile',
@@ -94,7 +98,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     records: {
         viewId: 'records',
         label: 'Records',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'A',
         buildHash: () => '#/records',
@@ -103,7 +107,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     awards: {
         viewId: 'awards',
         label: 'Awards',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'A',
         buildHash: () => '#/awards',
@@ -112,16 +116,55 @@ const ROUTE_DEFINITIONS = Object.freeze({
     proximity: {
         viewId: 'proximity',
         label: 'Proximity',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'B',
         buildHash: () => '#/proximity',
         load: ({ legacy }) => legacy.loadProximityView(),
     },
+    'proximity-player': {
+        viewId: 'proximity-player',
+        label: 'Player Profile',
+        mode: VIEW_MODE.MODERN,
+        surfaceType: 'read-heavy',
+        migrationWave: 'B',
+        buildHash: ({ guid } = {}) => `#/proximity/player/${guid || ''}`,
+        load: () => undefined,
+        parseHash: (hash) => {
+            const m = hash.match(/^#\/proximity\/player\/([^/]+)/);
+            return m ? { guid: safeDecode(m[1]) } : null;
+        },
+    },
+    'proximity-replay': {
+        viewId: 'proximity-replay',
+        label: 'Round Replay',
+        mode: VIEW_MODE.MODERN,
+        surfaceType: 'read-heavy',
+        migrationWave: 'B',
+        buildHash: ({ roundId } = {}) => `#/proximity/round/${roundId || ''}`,
+        load: () => undefined,
+        parseHash: (hash) => {
+            const m = hash.match(/^#\/proximity\/round\/(\d+)$/);
+            return m ? { roundId: m[1] } : null;
+        },
+    },
+    'proximity-teams': {
+        viewId: 'proximity-teams',
+        label: 'Team Comparison',
+        mode: VIEW_MODE.MODERN,
+        surfaceType: 'read-heavy',
+        migrationWave: 'B',
+        buildHash: ({ roundId } = {}) => `#/proximity/round/${roundId || ''}/teams`,
+        load: () => undefined,
+        parseHash: (hash) => {
+            const m = hash.match(/^#\/proximity\/round\/(\d+)\/teams$/);
+            return m ? { roundId: m[1] } : null;
+        },
+    },
     greatshot: {
         viewId: 'greatshot',
         label: 'Greatshot',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'mixed',
         migrationWave: 'C',
         buildHash: ({ section } = {}) => `#/greatshot/${normalizeGreatshotSection(section)}`,
@@ -130,7 +173,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     'greatshot-demo': {
         viewId: 'greatshot-demo',
         label: 'Greatshot Demo',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'write/auth-heavy',
         migrationWave: 'C',
         buildHash: ({ demoId } = {}) => (demoId ? `#/greatshot/demo/${encodeURIComponent(demoId)}` : '#/greatshot/demos'),
@@ -144,7 +187,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     uploads: {
         viewId: 'uploads',
         label: 'Uploads',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'write/auth-heavy',
         migrationWave: 'C',
         buildHash: () => '#/uploads',
@@ -153,7 +196,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     'upload-detail': {
         viewId: 'upload-detail',
         label: 'Upload Detail',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'mixed',
         migrationWave: 'C',
         buildHash: ({ uploadId } = {}) => (uploadId ? `#/uploads/${encodeURIComponent(uploadId)}` : '#/uploads'),
@@ -167,7 +210,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     availability: {
         viewId: 'availability',
         label: 'Availability',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'write/auth-heavy',
         migrationWave: 'C',
         buildHash: () => '#/availability',
@@ -176,7 +219,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     admin: {
         viewId: 'admin',
         label: 'Admin',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'write/auth-heavy',
         migrationWave: 'C',
         buildHash: () => '#/admin',
@@ -185,7 +228,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     'hall-of-fame': {
         viewId: 'hall-of-fame',
         label: 'Hall of Fame',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'B',
         buildHash: () => '#/hall-of-fame',
@@ -194,7 +237,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     'retro-viz': {
         viewId: 'retro-viz',
         label: 'Retro Viz',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'B',
         buildHash: () => '#/retro-viz',
@@ -203,7 +246,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     sessions2: {
         viewId: 'sessions2',
         label: 'Sessions 2.0',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'B',
         buildHash: () => '#/sessions2',
@@ -212,7 +255,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     'session-detail': {
         viewId: 'session-detail',
         label: 'Session Detail',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'B',
         buildHash: ({ sessionId, sessionDate } = {}) => {
@@ -260,6 +303,7 @@ export function parseHashRoute(hashValue = window.location.hash) {
     }
 
     const routePath = cleanHash.split('?')[0];
+    const normalizedHash = `#/${routePath}`;
     const segments = routePath.split('/').filter(Boolean);
 
     if (segments[0] === 'greatshot') {
@@ -294,6 +338,17 @@ export function parseHashRoute(hashValue = window.location.hash) {
             viewId: 'session-detail',
             params: { sessionId: safeDecode(segments[1]) },
         };
+    }
+
+    for (const definition of Object.values(ROUTE_DEFINITIONS)) {
+        if (typeof definition.parseHash !== 'function') continue;
+        const params = definition.parseHash(normalizedHash);
+        if (params) {
+            return {
+                viewId: definition.viewId,
+                params,
+            };
+        }
     }
 
     return { viewId: segments[0] || 'home', params: {} };

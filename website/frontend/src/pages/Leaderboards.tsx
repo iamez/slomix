@@ -125,8 +125,8 @@ export default function Leaderboards() {
 
   if (isLoading) {
     return (
-      <div className="mt-6">
-        <PageHeader title="Leaderboards" subtitle="Top players by stat" />
+      <div className="page-shell">
+        <PageHeader title="Leaderboards" subtitle="Compare top players once you are past the home and sessions flow." eyebrow="Everyday Browsing" />
         <Skeleton variant="table" count={10} />
       </div>
     );
@@ -134,16 +134,16 @@ export default function Leaderboards() {
 
   if (isError) {
     return (
-      <div className="mt-6">
-        <PageHeader title="Leaderboards" subtitle="Top players by stat" />
+      <div className="page-shell">
+        <PageHeader title="Leaderboards" subtitle="Top players by stat" eyebrow="Everyday Browsing" />
         <div className="text-center text-red-400 py-12">Failed to load leaderboard.</div>
       </div>
     );
   }
 
   return (
-    <div className="mt-6">
-      <PageHeader title="Leaderboards" subtitle="Top players by stat">
+    <div className="page-shell">
+      <PageHeader title="Leaderboards" subtitle="Top players by stat with the archive and player flow now doing the heavy lifting up front." eyebrow="Everyday Browsing">
         <div className="flex items-center gap-2">
           <Icon className={cn('w-5 h-5', activeDef?.color)} />
           <span className="text-sm font-bold text-white">{activeDef?.valueLabel}</span>
@@ -185,15 +185,13 @@ export default function Leaderboards() {
         </label>
       </FilterBar>
 
-      <div className="glass-panel rounded-xl p-0 overflow-hidden">
-        <DataTable
-          columns={columns}
-          data={data ?? []}
-          keyFn={(row) => row.guid}
-          onRowClick={(row) => navigateToPlayer(row.name)}
-          defaultSort={{ key: 'value', dir: 'desc' }}
-        />
-      </div>
+      <DataTable
+        columns={columns}
+        data={data ?? []}
+        keyFn={(row) => row.guid}
+        onRowClick={(row) => navigateToPlayer(row.name)}
+        defaultSort={{ key: 'value', dir: 'desc' }}
+      />
     </div>
   );
 }

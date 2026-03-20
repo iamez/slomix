@@ -1,6 +1,6 @@
 /**
  * Sessions 2.0 — Detail Page
- * 5-tab drill-down: Overview, Rounds, Players, Signals, Viz
+ * 4-tab drill-down: Summary, Player Stats, Teamplay, Charts
  * @module session-detail
  */
 import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js';
@@ -12,7 +12,7 @@ import {
     renderSupportPerformance,
     renderTimeDistribution,
     _rvCharts,
-} from './retro-viz.js';
+} from './retro-viz.js?v=20260312-site-recovery3';
 
 // ---- Constants (copied from sessions.js) ----
 const MAP_IMAGE_MAP = {
@@ -258,7 +258,7 @@ let _sessionId = null;
 let _sessionDate = null;
 let _detailData = null;
 let _graphData = null;
-let _activeTab = 'overview';
+let _activeTab = 'summary';
 let _activeRoundId = null;
 let _activeRoundStartUnix = null;
 let _activeRoundSessionDate = null;
@@ -266,6 +266,7 @@ let _signalsLoaded = null;
 let _vizLoaded = null;
 let _overviewMapIndex = null;
 let _overviewRoundId = null;
+let _expandedMapIndex = null;
 let _overviewRenderToken = 0;
 const _overviewRoundStatsCache = new Map();
 const _overviewMapStatsCache = new Map();
@@ -291,7 +292,7 @@ export async function loadSessionDetailView({ sessionId, sessionDate } = {}) {
     _sessionDate = sessionDate || null;
     _detailData = null;
     _graphData = null;
-    _activeTab = 'overview';
+    _activeTab = 'summary';
     _activeRoundId = null;
     _activeRoundStartUnix = null;
     _activeRoundSessionDate = null;
@@ -299,6 +300,7 @@ export async function loadSessionDetailView({ sessionId, sessionDate } = {}) {
     _vizLoaded = null;
     _overviewMapIndex = null;
     _overviewRoundId = null;
+    _expandedMapIndex = null;
     _overviewRenderToken = 0;
     _playersRenderToken = 0;
     _playersScopeLoaded = null;
@@ -342,7 +344,7 @@ export async function loadSessionDetailView({ sessionId, sessionDate } = {}) {
         }
 
         _renderShell(container);
-        _activateTab('overview');
+        _activateTab('summary');
     } catch (e) {
         console.error('Failed to load session detail:', e);
         container.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load session</div>';
@@ -365,51 +367,66 @@ function _renderSessionHeaderMapStrip(scoring = {}) {
         const mapName = escapeHtml(mapLabel(mapNameRaw));
         const image = mapImageFor(mapNameRaw);
         const mapRounds = Array.isArray(mapMatch.rounds) ? mapMatch.rounds : [];
-        const scoreMap = scoringMaps[idx] || {};
-        const alliesScore = scoreMap.team_a_points ?? scoreMap.allies_score;
-        const axisScore = scoreMap.team_b_points ?? scoreMap.axis_score;
-        const hasScore = Number.isFinite(num(alliesScore, Number.NaN)) && Number.isFinite(num(axisScore, Number.NaN));
+        const isExpanded = _expandedMapIndex === idx;
         return `
-            <button onclick="sdSelectOverviewMap(${idx}); sdSwitchTab('overview')"
-                class="group relative min-w-[190px] h-24 rounded-xl overflow-hidden border border-white/10 hover:border-brand-blue/40 transition text-left">
+            <button onclick="sdSelectHeaderMap(${idx})"
+                class="group relative min-w-[160px] h-20 rounded-xl overflow-hidden border ${isExpanded ? 'border-brand-blue/60 ring-1 ring-brand-blue/30' : 'border-white/10 hover:border-brand-blue/40'} transition text-left shrink-0">
                 <div class="absolute inset-0 ${image.includes('map_generic') ? 'bg-slate-900' : ''}"
                     ${image.includes('map_generic') ? '' : `style="background-image:url('${image}');background-size:cover;background-position:center"`}></div>
-                <div class="absolute inset-0 bg-gradient-to-b from-black/20 via-black/30 to-black/85"></div>
-                <div class="relative h-full p-3 flex flex-col justify-between">
-                    <div class="text-[10px] uppercase tracking-wider text-slate-300">${mapRounds.length} rounds</div>
-                    <div>
-                        <div class="text-sm font-black text-white truncate">${mapName}</div>
-                        <div class="text-[11px] text-slate-300 mt-0.5">
-                            ${hasScore ? `A ${num(alliesScore)} - ${num(axisScore)} X` : 'No map score yet'}
-                        </div>
-                    </div>
+                <div class="absolute inset-0 bg-gradient-to-b from-black/20 via-black/40 to-black/80"></div>
+                <div class="relative h-full p-2.5 flex flex-col justify-between">
+                    <div class="text-[10px] uppercase tracking-wider text-slate-300">${mapRounds.length}R</div>
+                    <div class="text-sm font-black text-white truncate">${mapName}</div>
                 </div>
             </button>`;
     }).join('');
 }
 
-function _renderSessionRoundTimeline() {
-    const rounds = _collectSessionRounds();
-    if (!rounds.length) {
-        return '<div class="text-xs text-slate-500">No rounds available</div>';
-    }
-    return rounds.map(round => {
-        const isActive = _activeRoundId === round.roundId;
-        const winnerLabel = round.winnerTeam === 1 ? 'Axis' : round.winnerTeam === 2 ? 'Allies' : 'Draw';
-        const winnerClass = round.winnerTeam === 1
-            ? 'text-brand-rose'
-            : round.winnerTeam === 2
-                ? 'text-brand-blue'
-                : 'text-slate-400';
-        const roundBadge = `R${round.roundNumber}`;
+function _renderMapRoundTimeline() {
+    if (_expandedMapIndex === null) return '';
+    const matches = _getOverviewMatches();
+    const mapMatch = matches[_expandedMapIndex];
+    if (!mapMatch) return '';
+    const mapNameRaw = mapMatch.map_name || mapMatch.map || 'Unknown';
+    const mapName = escapeHtml(mapLabel(mapNameRaw));
+    const rounds = Array.isArray(mapMatch.rounds) ? mapMatch.rounds : [];
+    if (!rounds.length) return `<div class="text-xs text-slate-500">No rounds for ${mapName}</div>`;
+
+    const isFullMap = _expandedMapIndex !== null && !_activeRoundId;
+    const roundBtns = rounds.map(round => {
+        const rid = coerceRoundId(round.round_id || round.id);
+        if (!rid) return '';
+        const roundNum = round.round_number || 1;
+        const isActive = _activeRoundId === rid;
+        const winnerTeam = num(round.winner_team);
+        const winnerLabel = winnerTeam === 1 ? 'Axis' : winnerTeam === 2 ? 'Allies' : 'Draw';
+        const winnerClass = winnerTeam === 1 ? 'text-brand-rose' : winnerTeam === 2 ? 'text-brand-blue' : 'text-slate-400';
+        const durationLabel = round.duration_seconds ? formatDuration(round.duration_seconds) : '';
+        const roundDate = round.round_date || _sessionDate || '';
+        const roundStartUnix = num(round.round_start_unix);
         return `
-            <button id="sd-hero-round-${round.roundId}"
-                onclick="sdSelectRound(${round.roundId}, '${escapeJsString(round.sessionDate || '')}', ${round.roundStartUnix}); sdSwitchTab('players')"
+            <button onclick="sdSelectHeaderRound(${_expandedMapIndex}, ${rid}, ${roundStartUnix}, '${escapeJsString(roundDate)}')"
                 class="px-3 py-2 rounded-lg border text-left transition whitespace-nowrap ${isActive ? 'bg-brand-blue/20 border-brand-blue/50 text-white' : 'bg-black/25 border-white/10 text-slate-300 hover:bg-black/40'}">
-                <div class="text-[11px] font-black">${escapeHtml(roundBadge)} · ${escapeHtml(mapLabel(round.mapName || '').slice(0, 14))}</div>
-                <div class="text-[10px] ${winnerClass}">${escapeHtml(winnerLabel)}</div>
+                <div class="text-[11px] font-black">R${roundNum} <span class="${winnerClass}">${escapeHtml(winnerLabel)}</span></div>
+                ${durationLabel ? `<div class="text-[10px] text-slate-500">${escapeHtml(durationLabel)}</div>` : ''}
             </button>`;
     }).join('');
+
+    const fullMapBtn = `
+        <button onclick="sdClearRoundKeepMap()"
+            class="px-3 py-2 rounded-lg border text-left transition whitespace-nowrap ${isFullMap ? 'bg-brand-emerald/20 border-brand-emerald/50 text-white' : 'bg-black/25 border-white/10 text-slate-300 hover:bg-black/40'}">
+            <div class="text-[11px] font-black">Full Map</div>
+        </button>`;
+
+    return `
+        <div class="flex items-center gap-2 mt-3 p-3 rounded-xl bg-black/20 border border-white/5">
+            <span class="text-xs text-slate-400 font-bold mr-1">${mapName}:</span>
+            ${roundBtns}
+            ${fullMapBtn}
+            <button onclick="sdClearHeaderMapScope()" class="ml-auto text-xs px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition">
+                ✕
+            </button>
+        </div>`;
 }
 
 function _renderShell(container) {
@@ -457,34 +474,27 @@ function _renderShell(container) {
             </div>
 
             <div class="mt-5">
-                <div class="text-[11px] uppercase tracking-wider text-slate-500 font-bold mb-2">Maps</div>
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Maps</div>
+                    <span id="sd-hero-scope-pill" class="text-xs px-2 py-1 rounded bg-brand-blue/20 border border-brand-blue/30 text-brand-blue">
+                        ${escapeHtml(_getScopePillLabel())}
+                    </span>
+                    <button id="sd-hero-clear-btn" onclick="sdClearHeaderMapScope()"
+                        class="ml-auto text-xs px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition ${_expandedMapIndex !== null ? '' : 'hidden'}">
+                        Clear scope
+                    </button>
+                </div>
                 <div id="sd-map-strip" class="flex gap-3 overflow-x-auto pb-2 pr-1">
                     ${_renderSessionHeaderMapStrip(scoring)}
                 </div>
-            </div>
-
-            <div class="mt-4">
-                <div class="flex items-center gap-3 mb-2">
-                    <div class="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Round Timeline</div>
-                    <span class="text-xs px-2 py-1 rounded bg-brand-blue/20 border border-brand-blue/30 text-brand-blue">
-                        Scope: <span id="sd-hero-scope-label">${escapeHtml(_roundScopeLabel())}</span>
-                    </span>
-                    <button id="sd-hero-clear-btn" onclick="sdClearRoundScope()"
-                        class="ml-auto text-xs px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition ${_activeRoundId ? '' : 'hidden'}">
-                        Clear scope
-                    </button>
-                    <div id="sd-hero-hint" class="ml-auto text-xs text-slate-500 ${_activeRoundId ? 'hidden' : ''}">
-                        Select a round to focus Players/Signals/Viz
-                    </div>
-                </div>
-                <div id="sd-round-timeline" class="flex gap-2 overflow-x-auto pb-1 pr-1">
-                    ${_renderSessionRoundTimeline()}
+                <div id="sd-map-round-timeline">
+                    ${_renderMapRoundTimeline()}
                 </div>
             </div>
         </div>
 
         <div class="flex gap-1 mb-6 p-1 bg-slate-900/60 rounded-xl flex-wrap" id="sd-tab-nav">
-            ${['overview', 'rounds', 'players', 'signals', 'viz'].map(tab => `
+            ${['summary', 'players', 'teamplay', 'charts'].map(tab => `
                 <button id="sd-tab-btn-${tab}"
                     onclick="sdSwitchTab('${tab}')"
                     class="sd-tab-btn flex-1 py-2 px-4 rounded-lg text-sm font-bold transition
@@ -493,17 +503,30 @@ function _renderShell(container) {
                 </button>`).join('')}
         </div>
 
-        <div id="sd-tab-overview" class="sd-tab-panel"></div>
-        <div id="sd-tab-rounds"   class="sd-tab-panel hidden"></div>
+        <div id="sd-tab-summary"  class="sd-tab-panel"></div>
         <div id="sd-tab-players"  class="sd-tab-panel hidden"></div>
-        <div id="sd-tab-signals"  class="sd-tab-panel hidden"></div>
-        <div id="sd-tab-viz"      class="sd-tab-panel hidden"></div>
+        <div id="sd-tab-teamplay" class="sd-tab-panel hidden"></div>
+        <div id="sd-tab-charts"   class="sd-tab-panel hidden"></div>
     `;
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function _tabLabel(tab) {
-    return { overview: 'Overview', rounds: 'Rounds', players: 'Players', signals: 'Signals', viz: 'Viz' }[tab] || tab;
+    return { summary: 'Summary', players: 'Player Stats', teamplay: 'Teamplay', charts: 'Charts' }[tab] || tab;
+}
+
+function _getScopePillLabel() {
+    if (_expandedMapIndex !== null) {
+        const matches = _getOverviewMatches();
+        const mapMatch = matches[_expandedMapIndex];
+        const mapName = mapMatch ? mapLabel(mapMatch.map_name || mapMatch.map || 'Unknown') : 'Unknown';
+        if (_activeRoundId) {
+            const meta = _findRoundMeta(_activeRoundId);
+            return `${mapName} / R${meta?.roundNumber || '?'}`;
+        }
+        return `Viewing ${mapName}`;
+    }
+    return 'Full Session';
 }
 
 // ============================================================
@@ -526,11 +549,10 @@ export function sdSwitchTab(tab) {
         activeBtn.classList.remove('text-slate-400');
     }
 
-    if (tab === 'overview') _renderOverviewTab();
-    else if (tab === 'rounds') _renderRoundsTab();
+    if (tab === 'summary') _renderSummaryTab();
     else if (tab === 'players') _renderPlayersTab();
-    else if (tab === 'signals') _loadSignalsTab();
-    else if (tab === 'viz') _loadVizTab();
+    else if (tab === 'teamplay') _loadSignalsTab();
+    else if (tab === 'charts') _loadVizTab();
 }
 
 function _activateTab(tab) { sdSwitchTab(tab); }
@@ -910,8 +932,8 @@ function _renderOverviewMapBreakdown({ matches, scoringMaps, teamAName, teamBNam
         </div>`;
 }
 
-async function _renderOverviewTab(force = false) {
-    const panel = document.getElementById('sd-tab-overview');
+async function _renderSummaryTab(force = false) {
+    const panel = document.getElementById('sd-tab-summary');
     if (!panel) return;
     if (!force && panel.dataset.rendered === '1') return;
     panel.dataset.rendered = '1';
@@ -980,8 +1002,10 @@ async function _renderOverviewTab(force = false) {
                     ${rows || '<div class="text-xs text-slate-500">No player data</div>'}
                 </div>`;
         }).join('');
-        html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-6">${rosterHtml}</div>`;
+        html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">${rosterHtml}</div>`;
     }
+
+    html += _renderRoundsSection();
 
     panel.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -995,7 +1019,7 @@ async function _renderOverviewTab(force = false) {
         scopedError = e;
     }
 
-    if (renderToken !== _overviewRenderToken || _activeTab !== 'overview') return;
+    if (renderToken !== _overviewRenderToken || _activeTab !== 'summary') return;
 
     const statsSection = document.getElementById('sd-overview-player-stats-section');
     if (statsSection) {
@@ -1019,7 +1043,7 @@ export function sdSelectOverviewMap(mapIndex) {
         _overviewMapIndex = parsed;
         _overviewRoundId = null;
     }
-    _renderOverviewTab(true);
+    _renderSummaryTab(true);
 }
 
 export function sdSelectOverviewRound(mapIndex, roundId, roundStartUnix = 0, roundDate = '') {
@@ -1030,7 +1054,7 @@ export function sdSelectOverviewRound(mapIndex, roundId, roundStartUnix = 0, rou
     _overviewMapIndex = parsedMap;
     _overviewRoundId = parsedRound;
     sdSelectRound(parsedRound, roundDate || _sessionDate, parsedStartUnix);
-    _renderOverviewTab(true);
+    _renderSummaryTab(true);
     setTimeout(() => {
         const section = document.getElementById('sd-overview-player-stats-section');
         if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1041,19 +1065,16 @@ export function sdClearOverviewScope() {
     if (_activeRoundId) sdClearRoundScope();
     _overviewMapIndex = null;
     _overviewRoundId = null;
-    _renderOverviewTab(true);
+    _renderSummaryTab(true);
 }
 
 // ============================================================
-// ROUNDS TAB
+// ROUNDS SECTION (embedded in Summary tab)
 // ============================================================
 
-function _renderRoundsTab(force = false) {
-    const panel = document.getElementById('sd-tab-rounds');
-    if (!panel || (!force && panel.dataset.rendered === '1')) return;
-    panel.dataset.rendered = '1';
-
+function _renderRoundsSection() {
     const allRounds = _collectSessionRounds();
+    if (!allRounds.length) return '';
 
     const roundRows = allRounds.map(r => {
         const mn = escapeHtml(mapLabel(r.mapName || 'Unknown'));
@@ -1081,24 +1102,16 @@ function _renderRoundsTab(force = false) {
                 <div class="text-xs text-slate-500 ml-auto">${escapeHtml(dt)}</div>
                 <div class="text-xs text-brand-cyan font-bold whitespace-nowrap">Scope →</div>
             </div>`;
-    }).join('') || '<div class="text-slate-500 text-center py-8">No rounds found</div>';
-    const currentScopeLabel = _roundScopeLabel();
+    }).join('');
 
-    panel.innerHTML = `
-        <div class="glass-panel rounded-xl p-4 mb-6 flex items-center gap-3">
-            <i data-lucide="crosshair" class="w-4 h-4 text-brand-cyan"></i>
-            <span class="text-sm text-slate-300">
-                Click a round to scope <strong class="text-white">Signals</strong> and
-                <strong class="text-white">Viz</strong> to that round.
-                Current scope: <span id="sd-active-round-label" class="text-white font-bold">${escapeHtml(currentScopeLabel)}</span>
-            </span>
-            <button onclick="sdClearRoundScope()"
-                class="ml-auto text-xs px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition">
-                Clear scope
-            </button>
-        </div>
-        <div class="space-y-3">${roundRows}</div>`;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    return `
+        <div class="glass-panel p-5 rounded-xl mt-8">
+            <h3 class="font-bold text-white mb-3 flex items-center gap-2">
+                <i data-lucide="list" class="w-5 h-5 text-brand-cyan"></i> All Rounds
+            </h3>
+            <div class="text-xs text-slate-500 mb-3">Click a round to scope Teamplay and Charts to that round.</div>
+            <div class="space-y-3">${roundRows}</div>
+        </div>`;
 }
 
 // ============================================================
@@ -1106,19 +1119,20 @@ function _renderRoundsTab(force = false) {
 // ============================================================
 
 function _refreshRoundScopeUi() {
-    const label = document.getElementById('sd-active-round-label');
-    if (label) label.textContent = _roundScopeLabel();
-
-    const heroScope = document.getElementById('sd-hero-scope-label');
-    if (heroScope) heroScope.textContent = _roundScopeLabel();
+    const scopePill = document.getElementById('sd-hero-scope-pill');
+    if (scopePill) scopePill.textContent = _getScopePillLabel();
 
     const clearBtn = document.getElementById('sd-hero-clear-btn');
-    const hint = document.getElementById('sd-hero-hint');
-    if (clearBtn) clearBtn.classList.toggle('hidden', !_activeRoundId);
-    if (hint) hint.classList.toggle('hidden', Boolean(_activeRoundId));
+    if (clearBtn) clearBtn.classList.toggle('hidden', _expandedMapIndex === null);
 
-    const timeline = document.getElementById('sd-round-timeline');
-    if (timeline) timeline.innerHTML = _renderSessionRoundTimeline();
+    const timeline = document.getElementById('sd-map-round-timeline');
+    if (timeline) timeline.innerHTML = _renderMapRoundTimeline();
+
+    const mapStrip = document.getElementById('sd-map-strip');
+    if (mapStrip) {
+        const scoring = _detailData?.scoring || {};
+        mapStrip.innerHTML = _renderSessionHeaderMapStrip(scoring);
+    }
 }
 
 export function sdSelectRound(roundId, sessionDate, roundStartUnix) {
@@ -1137,10 +1151,10 @@ export function sdSelectRound(roundId, sessionDate, roundStartUnix) {
     _vizLoaded = null;
     _playersScopeLoaded = null;
 
-    if (_activeTab === 'signals') _loadSignalsTab();
-    else if (_activeTab === 'viz') _loadVizTab();
+    if (_activeTab === 'teamplay') _loadSignalsTab();
+    else if (_activeTab === 'charts') _loadVizTab();
     else if (_activeTab === 'players') _renderPlayersTab(true);
-    else if (_activeTab === 'rounds') _renderRoundsTab(true);
+    else if (_activeTab === 'summary') _renderSummaryTab(true);
 }
 
 export function sdClearRoundScope() {
@@ -1154,10 +1168,10 @@ export function sdClearRoundScope() {
     document.querySelectorAll('.sd-round-row').forEach(el => el.classList.remove('ring-1', 'ring-brand-blue'));
     _refreshRoundScopeUi();
 
-    if (_activeTab === 'signals') _loadSignalsTab();
-    else if (_activeTab === 'viz') _loadVizTab();
+    if (_activeTab === 'teamplay') _loadSignalsTab();
+    else if (_activeTab === 'charts') _loadVizTab();
     else if (_activeTab === 'players') _renderPlayersTab(true);
-    else if (_activeTab === 'rounds') _renderRoundsTab(true);
+    else if (_activeTab === 'summary') _renderSummaryTab(true);
 }
 
 // ============================================================
@@ -1803,8 +1817,11 @@ export async function sdTogglePlayerPanel(playerName, playerGuidOrPanelId, panel
                     ? _fetchWeaponMastery(_activeRoundId, playerGuid)
                     : _fetchSessionWeaponMastery(playerGuid))
                 : Promise.resolve(null),
+            (playerGuid)
+                ? fetchJSON(`${API_BASE}/player/${encodeURIComponent(playerGuid)}/vs-stats?scope=${_activeRoundId ? 'round' : 'session'}${_activeRoundId ? `&round_id=${_activeRoundId}` : (_sessionId ? `&session_id=${_sessionId}` : '')}&limit=5`)
+                : Promise.resolve(null),
         ];
-        const [playerStatsResult, graphResult, weaponResult] = await Promise.allSettled(detailsPromises);
+        const [playerStatsResult, graphResult, weaponResult, vsStatsResult] = await Promise.allSettled(detailsPromises);
 
         const playerStatsRows = playerStatsResult.status === 'fulfilled'
             ? (playerStatsResult.value.players || [])
@@ -1840,6 +1857,7 @@ export async function sdTogglePlayerPanel(playerName, playerGuidOrPanelId, panel
             timeline: Array.isArray(playstyleEntry?.dpm_timeline) ? playstyleEntry.dpm_timeline : [],
             weaponPayload,
             weaponError: weaponResult.status === 'rejected' ? weaponResult.reason : null,
+            vsStats: vsStatsResult.status === 'fulfilled' ? vsStatsResult.value : null,
         };
 
         _renderPlayerPanelContent(panelKey, panelId);
@@ -1847,6 +1865,51 @@ export async function sdTogglePlayerPanel(playerName, playerGuidOrPanelId, panel
         const td2 = panelRow.querySelector('td');
         if (td2) td2.innerHTML = '<div class="text-red-500 text-xs text-center py-4">Failed to load player details</div>';
     }
+}
+
+function _buildVsStatsHtml(vsStats) {
+    if (!vsStats) return '';
+    const preys = Array.isArray(vsStats.easiest_preys) ? vsStats.easiest_preys : [];
+    const enemies = Array.isArray(vsStats.worst_enemies) ? vsStats.worst_enemies : [];
+    if (!preys.length && !enemies.length) return '';
+
+    function renderList(entries) {
+        if (!entries.length) return '<div class="text-slate-600 text-xs py-2">No data</div>';
+        return entries.map((e, i) => {
+            const name = escapeHtml(e.opponent_name || 'Unknown');
+            const profileHash = `#/profile/${encodeURIComponent(e.opponent_name || '')}`;
+            return `
+                <div class="flex items-center justify-between rounded-lg bg-slate-900/50 px-3 py-2 text-xs">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-slate-600 font-mono w-4">${i + 1}</span>
+                        <a href="${profileHash}" class="text-white font-semibold truncate hover:text-brand-cyan transition">${name}</a>
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0 font-mono">
+                        <span class="text-brand-emerald">${num(e.kills)}K</span>
+                        <span class="text-brand-rose">${num(e.deaths)}D</span>
+                        <span class="text-slate-400">${num(e.kd).toFixed(1)}</span>
+                    </div>
+                </div>`;
+        }).join('');
+    }
+
+    return `
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+            <div>
+                <div class="flex items-center gap-2 mb-2">
+                    <i data-lucide="crosshair" class="w-4 h-4 text-brand-emerald"></i>
+                    <span class="text-xs font-bold text-slate-400 uppercase">Easiest Preys</span>
+                </div>
+                <div class="space-y-1">${renderList(preys)}</div>
+            </div>
+            <div>
+                <div class="flex items-center gap-2 mb-2">
+                    <i data-lucide="skull" class="w-4 h-4 text-brand-rose"></i>
+                    <span class="text-xs font-bold text-slate-400 uppercase">Worst Enemies</span>
+                </div>
+                <div class="space-y-1">${renderList(enemies)}</div>
+            </div>
+        </div>`;
 }
 
 function _renderPlayerPanelContent(playerKey, panelId) {
@@ -1996,7 +2059,8 @@ function _renderPlayerPanelContent(playerKey, panelId) {
                         </table>
                     </div>`}
             </div>
-        </div>`;
+        </div>
+        ${_buildVsStatsHtml(data.vsStats)}`;
 
     _destroyPlayerPanelChart(panelId);
     if (timeline.length && typeof Chart !== 'undefined') {
@@ -2043,6 +2107,7 @@ function _renderPlayerPanelContent(playerKey, panelId) {
             _playerPanelCharts.set(panelId, chart);
         }
     }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // ============================================================
@@ -2053,7 +2118,7 @@ async function _loadSignalsTab() {
     const scopeKey = _activeRoundId ? _activeRoundId : 'session';
     if (_signalsLoaded === scopeKey) return;
 
-    const panel = document.getElementById('sd-tab-signals');
+    const panel = document.getElementById('sd-tab-teamplay');
     if (!panel) return;
     const requestToken = ++_signalsRequestToken;
 
@@ -2083,7 +2148,7 @@ async function _loadSignalsTab() {
         fetchJSON(`${withScope(`${API_BASE}/proximity/movers`)}${scopeParams ? '&' : '?'}limit=5`),
     ]);
     if (requestToken !== _signalsRequestToken) return;
-    if (_activeTab !== 'signals') return;
+    if (_activeTab !== 'teamplay') return;
     if (((_activeRoundId ? _activeRoundId : 'session')) !== scopeKey) return;
 
     const get = (settled, fb) => settled.status === 'fulfilled' ? settled.value : fb;
@@ -2259,7 +2324,7 @@ async function _loadSignalsTab() {
     `;
 
     if (requestToken !== _signalsRequestToken) return;
-    if (_activeTab !== 'signals') return;
+    if (_activeTab !== 'teamplay') return;
     if (((_activeRoundId ? _activeRoundId : 'session')) !== scopeKey) return;
     _signalsLoaded = scopeKey;
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -2290,7 +2355,7 @@ async function _renderSessionGraphs(panel, requestToken) {
             _getTradePlayerStatsForCurrentScope().catch(() => null),
         ]);
         const data = graphPayload;
-        if (requestToken !== _vizRequestToken || _activeTab !== 'viz' || _activeRoundId) return;
+        if (requestToken !== _vizRequestToken || _activeTab !== 'charts' || _activeRoundId) return;
         if (!data || !data.players || data.players.length === 0) {
             panel.innerHTML = '<div class="text-center text-slate-500 py-12">No graph data for this session.</div>';
             return;
@@ -2316,7 +2381,7 @@ async function _renderSessionGraphs(panel, requestToken) {
                     <strong class="text-white">Full Session Overview</strong>
                     — ${players.length} players · ${roundLabels.length} rounds
                 </span>
-                <button onclick="sdClearRoundScope(); sdSwitchTab('rounds')"
+                <button onclick="sdClearRoundScope(); sdSwitchTab('summary')"
                     class="ml-auto text-xs text-slate-400 hover:text-white transition">
                     Select a round →
                 </button>
@@ -2533,7 +2598,7 @@ async function _renderSessionGraphs(panel, requestToken) {
         const RADAR_KEYS = ['aggression','precision','survivability','support','lethality','brutality'];
         const RADAR_LABELS = ['Aggression','Precision','Survivability','Support','Lethality','Brutality'];
 
-        if (requestToken !== _vizRequestToken || _activeTab !== 'viz' || _activeRoundId) return;
+        if (requestToken !== _vizRequestToken || _activeTab !== 'charts' || _activeRoundId) return;
         players.forEach((p, i) => {
             const color = COLORS[i % COLORS.length];
             const adv = p.advanced_metrics || {};
@@ -2628,11 +2693,11 @@ async function _renderSessionGraphs(panel, requestToken) {
             });
         }
 
-        if (requestToken !== _vizRequestToken || _activeTab !== 'viz' || _activeRoundId) return;
+        if (requestToken !== _vizRequestToken || _activeTab !== 'charts' || _activeRoundId) return;
         _vizLoaded = 'session';
         if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (e) {
-        if (requestToken !== _vizRequestToken || _activeTab !== 'viz' || _activeRoundId) return;
+        if (requestToken !== _vizRequestToken || _activeTab !== 'charts' || _activeRoundId) return;
         console.error('Session graphs error:', e);
         panel.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load session graphs.</div>';
     }
@@ -2643,7 +2708,7 @@ async function _renderSessionGraphs(panel, requestToken) {
 // ============================================================
 
 async function _loadVizTab() {
-    const panel = document.getElementById('sd-tab-viz');
+    const panel = document.getElementById('sd-tab-charts');
     if (!panel) return;
     const requestedRoundId = coerceRoundId(_activeRoundId);
 
@@ -2675,7 +2740,7 @@ async function _loadVizTab() {
 
     try {
         const vizData = await fetchJSON(`${API_BASE}/rounds/${requestedRoundId}/viz`);
-        if (requestToken !== _vizRequestToken || _activeTab !== 'viz' || _activeRoundId !== requestedRoundId) return;
+        if (requestToken !== _vizRequestToken || _activeTab !== 'charts' || _activeRoundId !== requestedRoundId) return;
         if (!vizData || !vizData.players || vizData.players.length === 0) {
             panel.innerHTML = '<div class="text-center text-slate-500 py-12">No chart data for this round</div>';
             return;
@@ -2689,7 +2754,7 @@ async function _loadVizTab() {
                     Round <strong class="text-white">${requestedRoundId}</strong> —
                     ${escapeHtml(vizData.map_name || 'Unknown')} ${escapeHtml(vizData.round_label || '')}
                 </span>
-                <button onclick="sdSwitchTab('rounds')" class="ml-auto text-xs text-slate-400 hover:text-white transition">
+                <button onclick="sdSwitchTab('summary')" class="ml-auto text-xs text-slate-400 hover:text-white transition">
                     Change round
                 </button>
             </div>
@@ -2727,11 +2792,11 @@ async function _loadVizTab() {
         renderSupportPerformance(vizData);
         renderTimeDistribution(vizData);
 
-        if (requestToken !== _vizRequestToken || _activeTab !== 'viz' || _activeRoundId !== requestedRoundId) return;
+        if (requestToken !== _vizRequestToken || _activeTab !== 'charts' || _activeRoundId !== requestedRoundId) return;
         _vizLoaded = requestedRoundId;
         if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (e) {
-        if (requestToken !== _vizRequestToken || _activeTab !== 'viz' || _activeRoundId !== requestedRoundId) return;
+        if (requestToken !== _vizRequestToken || _activeTab !== 'charts' || _activeRoundId !== requestedRoundId) return;
         console.error('Viz tab error:', e);
         panel.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load round charts</div>';
     }
@@ -2749,6 +2814,58 @@ function _destroyAllCharts() {
     while (_rvCharts.length) { try { _rvCharts.pop().destroy(); } catch (e) { /* ignore */ } }
 }
 
+// ---- Header map/round selection handlers ----
+
+export function sdSelectHeaderMap(mapIndex) {
+    const parsed = Number.parseInt(String(mapIndex), 10);
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    if (_expandedMapIndex === parsed) {
+        _expandedMapIndex = null;
+    } else {
+        _expandedMapIndex = parsed;
+    }
+    _activeRoundId = null;
+    _activeRoundStartUnix = null;
+    _activeRoundSessionDate = null;
+    _overviewMapIndex = _expandedMapIndex;
+    _overviewRoundId = null;
+    _refreshRoundScopeUi();
+    if (_activeTab === 'summary') _renderSummaryTab(true);
+}
+
+export function sdSelectHeaderRound(mapIndex, roundId, roundStartUnix = 0, roundDate = '') {
+    const parsedMap = Number.parseInt(String(mapIndex), 10);
+    const parsedRound = coerceRoundId(roundId);
+    if (!Number.isFinite(parsedMap) || parsedMap < 0 || !parsedRound) return;
+    _expandedMapIndex = parsedMap;
+    _overviewMapIndex = parsedMap;
+    _overviewRoundId = parsedRound;
+    sdSelectRound(parsedRound, roundDate || _sessionDate, roundStartUnix);
+    if (_activeTab === 'summary') _renderSummaryTab(true);
+}
+
+export function sdClearRoundKeepMap() {
+    _activeRoundId = null;
+    _activeRoundStartUnix = null;
+    _activeRoundSessionDate = null;
+    _overviewRoundId = null;
+    _signalsLoaded = null;
+    _vizLoaded = null;
+    _playersScopeLoaded = null;
+    _refreshRoundScopeUi();
+    if (_activeTab === 'summary') _renderSummaryTab(true);
+    else if (_activeTab === 'players') _renderPlayersTab(true);
+}
+
+export function sdClearHeaderMapScope() {
+    _expandedMapIndex = null;
+    _overviewMapIndex = null;
+    _overviewRoundId = null;
+    sdClearRoundScope();
+    _refreshRoundScopeUi();
+    if (_activeTab === 'summary') _renderSummaryTab(true);
+}
+
 window.sdSwitchTab = sdSwitchTab;
 window.sdSelectOverviewMap = sdSelectOverviewMap;
 window.sdSelectOverviewRound = sdSelectOverviewRound;
@@ -2756,3 +2873,7 @@ window.sdClearOverviewScope = sdClearOverviewScope;
 window.sdSelectRound = sdSelectRound;
 window.sdClearRoundScope = sdClearRoundScope;
 window.sdTogglePlayerPanel = sdTogglePlayerPanel;
+window.sdSelectHeaderMap = sdSelectHeaderMap;
+window.sdSelectHeaderRound = sdSelectHeaderRound;
+window.sdClearRoundKeepMap = sdClearRoundKeepMap;
+window.sdClearHeaderMapScope = sdClearHeaderMapScope;

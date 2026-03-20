@@ -533,7 +533,8 @@ class PlayerAnalyticsService:
                          THEN (SUM(damage_given) * 60.0) / SUM(time_played_seconds)
                          ELSE 0 END as dpm,
                     SUM(damage_given) as total_damage,
-                    SUM(damage_received) as total_received
+                    SUM(damage_received) as total_received,
+                    COUNT(DISTINCT round_id) as rounds_played
                 FROM player_comprehensive_stats
                 WHERE round_id IN ({placeholders})
                 GROUP BY player_guid
@@ -548,9 +549,9 @@ class PlayerAnalyticsService:
             awards = []
 
             # Convert to dicts for easier processing
-            # Each row: guid, name, revived, revives, gibs, hs_kills, hs, planted, defused, spree, useful, kills, deaths, dpm, damage, received
             players = []
             for row in rows:
+                rp = max(1, int(row[16] or 1))
                 players.append({
                     'guid': row[0],
                     'name': row[1],
@@ -567,7 +568,8 @@ class PlayerAnalyticsService:
                     'deaths': int(row[12] or 0),
                     'dpm': float(row[13] or 0),
                     'damage': int(row[14] or 0),
-                    'received': int(row[15] or 0)
+                    'received': int(row[15] or 0),
+                    'rounds': rp,
                 })
 
             # Safety check: need at least 1 player for awards
@@ -575,9 +577,13 @@ class PlayerAnalyticsService:
                 logger.debug("No qualifying players for awards (all <120s played)")
                 return []
 
+            # Award thresholds use per-round rates so they scale
+            # correctly for long sessions (BO6-BO13).
+            # Display values remain absolute totals for impact.
+
             # 1. Zombie Mode - Most times revived
             zombie = max(players, key=lambda p: p['revived'])
-            if zombie['revived'] >= 3:
+            if zombie['revived'] / max(1, zombie['rounds']) >= 1.5:
                 awards.append(FunAward(
                     award_name="Zombie Mode",
                     emoji="🧟",
@@ -589,7 +595,7 @@ class PlayerAnalyticsService:
 
             # 2. Team Dad - Most revives given
             medic = max(players, key=lambda p: p['revives'])
-            if medic['revives'] >= 5:
+            if medic['revives'] / max(1, medic['rounds']) >= 2.5:
                 awards.append(FunAward(
                     award_name="Team Dad",
                     emoji="💉",
@@ -601,7 +607,7 @@ class PlayerAnalyticsService:
 
             # 3. Cleanup Crew - Most gibs
             gibber = max(players, key=lambda p: p['gibs'])
-            if gibber['gibs'] >= 5:
+            if gibber['gibs'] / max(1, gibber['rounds']) >= 2.5:
                 awards.append(FunAward(
                     award_name="Cleanup Crew",
                     emoji="💀",
@@ -615,7 +621,7 @@ class PlayerAnalyticsService:
             for p in players:
                 p['hs_ratio'] = p['hs_kills'] / p['kills'] * 100 if p['kills'] > 5 else 0
             sniper = max(players, key=lambda p: p['hs_ratio'])
-            if sniper['hs_ratio'] >= 20 and sniper['hs_kills'] >= 3:
+            if sniper['hs_ratio'] >= 20 and sniper['hs_kills'] / max(1, sniper['rounds']) >= 1.5:
                 awards.append(FunAward(
                     award_name="Silent Assassin",
                     emoji="🎯",
@@ -627,7 +633,7 @@ class PlayerAnalyticsService:
 
             # 5. Demolition Expert - Most dynamites planted
             demo = max(players, key=lambda p: p['planted'])
-            if demo['planted'] >= 2:
+            if demo['planted'] / max(1, demo['rounds']) >= 1.0:
                 awards.append(FunAward(
                     award_name="Demolition Expert",
                     emoji="💣",
@@ -639,7 +645,7 @@ class PlayerAnalyticsService:
 
             # 6. Bomb Squad - Most dynamites defused
             defuser = max(players, key=lambda p: p['defused'])
-            if defuser['defused'] >= 2:
+            if defuser['defused'] / max(1, defuser['rounds']) >= 1.0:
                 awards.append(FunAward(
                     award_name="Bomb Squad",
                     emoji="🛡️",
@@ -649,7 +655,7 @@ class PlayerAnalyticsService:
                     description=f"Defused {defuser['defused']} dynamites"
                 ))
 
-            # 7. Hot Streak - Best killing spree
+            # 7. Hot Streak - Best killing spree (MAX not SUM, already scale-independent)
             streaker = max(players, key=lambda p: p['spree'])
             if streaker['spree'] >= 5:
                 awards.append(FunAward(
@@ -661,9 +667,8 @@ class PlayerAnalyticsService:
                     description=f"Best killing spree: {streaker['spree']} kills"
                 ))
 
-            # 8. Glass Cannon - High DPM but also high deaths (dies more than kills)
+            # 8. Glass Cannon - High DPM but also high deaths (DPM is per-minute, already scale-independent)
             for p in players:
-                # Glass cannon = high damage output, high risk (more deaths than kills)
                 if p['deaths'] > 0 and p['kills'] > 0:
                     death_ratio = p['deaths'] / p['kills']
                     p['glass_score'] = p['dpm'] * death_ratio if death_ratio >= 1.0 else 0
@@ -684,7 +689,7 @@ class PlayerAnalyticsService:
             for p in players:
                 p['useful_ratio'] = p['useful'] / p['kills'] * 100 if p['kills'] > 5 else 0
             useful = max(players, key=lambda p: p['useful_ratio'])
-            if useful['useful_ratio'] >= 30 and useful['useful'] >= 5:
+            if useful['useful_ratio'] >= 30 and useful['useful'] / max(1, useful['rounds']) >= 2.5:
                 awards.append(FunAward(
                     award_name="Impactful Fragger",
                     emoji="⭐",
@@ -694,9 +699,9 @@ class PlayerAnalyticsService:
                     description=f"{useful['useful_ratio']:.0f}% useful kills ({useful['useful']} impact frags)"
                 ))
 
-            # 10. Tank - Most damage received and survived
+            # 10. Tank - Most damage received per round
             tank = max(players, key=lambda p: p['received'])
-            if tank['received'] >= 2000:
+            if tank['received'] / max(1, tank['rounds']) >= 1000:
                 awards.append(FunAward(
                     award_name="The Tank",
                     emoji="🛡️",

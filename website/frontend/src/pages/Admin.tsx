@@ -396,8 +396,8 @@ export default function Admin() {
 
   if (!auth) {
     return (
-      <>
-        <PageHeader title="Admin Panel" subtitle="System diagnostics and architecture" />
+      <div className="page-shell">
+        <PageHeader title="Admin Panel" subtitle="Operational diagnostics and architecture." eyebrow="Advanced" />
         <div className="text-center py-16">
           <div className="text-4xl mb-4">{'\u{1F512}'}</div>
           <p className="text-slate-400 text-lg mb-4">Admin access requires authentication.</p>
@@ -405,15 +405,15 @@ export default function Admin() {
             Login with Discord
           </a>
         </div>
-      </>
+      </div>
     );
   }
 
   if (diagLoading) return <Skeleton variant="card" count={4} />;
 
   return (
-    <>
-      <PageHeader title="Admin Panel" subtitle="System diagnostics and operational overview" />
+    <div className="page-shell">
+      <PageHeader title="Admin Panel" subtitle="System diagnostics and operational overview." eyebrow="Advanced" />
 
       <div className="flex items-center justify-between mb-4">
         <div className="text-[11px] text-slate-500">
@@ -451,6 +451,6 @@ export default function Admin() {
       <div className="mt-4">
         <NodeExplorer />
       </div>
-    </>
+    </div>
   );
 }

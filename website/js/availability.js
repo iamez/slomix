@@ -543,6 +543,7 @@ function renderPlanningRoom() {
     const participants = Array.isArray(data.participants) ? data.participants : [];
     const sessionReady = data.session_ready || {};
     const unlocked = Boolean(data.unlocked || session);
+    const isMock = Boolean(data.is_mock || session?.is_mock);
     const linked = accessState.linkedDiscord;
     const authenticated = accessState.authenticated;
     const participantIds = new Set(participants.map((row) => Number(row?.user_id || 0)).filter((value) => value > 0));
@@ -557,12 +558,12 @@ function renderPlanningRoom() {
         errorEl.textContent = '';
     }
 
-    if (!authenticated) {
+    if (!authenticated && !isMock) {
         openBtn.disabled = false;
         openBtn.textContent = 'Log in to plan';
         openBtn.classList.remove('opacity-60', 'cursor-not-allowed');
         statusEl.textContent = 'Planning room is available to linked users once session-ready threshold is met.';
-    } else if (!linked) {
+    } else if (!linked && !isMock) {
         openBtn.disabled = false;
         openBtn.textContent = 'Link Discord';
         openBtn.classList.remove('opacity-60', 'cursor-not-allowed');
@@ -572,7 +573,9 @@ function renderPlanningRoom() {
         openBtn.textContent = planningState.panelOpen ? 'Hide planning room' : 'Open planning room';
         openBtn.classList.remove('opacity-60', 'cursor-not-allowed');
         const threadSuffix = session.discord_thread_id ? `, thread: ${session.discord_thread_id}` : '';
-        statusEl.textContent = `Session active for ${String(data.date || '--')} (${participants.length} participants${threadSuffix}).`;
+        statusEl.textContent = isMock
+            ? `Test planning room active for ${String(data.date || '--')} (${participants.length} participants).`
+            : `Session active for ${String(data.date || '--')} (${participants.length} participants${threadSuffix}).`;
     } else if (unlocked) {
         openBtn.disabled = false;
         openBtn.textContent = 'Create planning room';
@@ -785,6 +788,7 @@ function reconcilePlanningAssignments() {
 function canManagePlanningTeams(session) {
     if (!session) return false;
     if (!accessState.canSubmit) return false;
+    if (session.is_mock) return true;
     const viewerWebsiteId = Number(planningState.data?.viewer?.website_user_id || currentUser?.id || 0);
     if (viewerWebsiteId > 0 && viewerWebsiteId === Number(session.created_by_user_id || 0)) return true;
     return Boolean(accessState.canPromote);
@@ -1199,18 +1203,19 @@ async function confirmAvailabilityPromote() {
 }
 
 async function openAvailabilityPlanningRoom() {
-    if (!accessState.authenticated) {
+    const data = planningState.data || {};
+    const session = data.session || null;
+    const isMock = Boolean(data.is_mock || session?.is_mock);
+
+    if (!accessState.authenticated && !isMock) {
         window.location.href = `${AUTH_BASE}/login`;
         return;
     }
-    if (!accessState.linkedDiscord) {
+    if (!accessState.linkedDiscord && !isMock) {
         startAvailabilityLinkFlow();
         return;
     }
     if (planningActionInFlight) return;
-
-    const data = planningState.data || {};
-    const session = data.session || null;
 
     if (session) {
         planningState.panelOpen = !planningState.panelOpen;

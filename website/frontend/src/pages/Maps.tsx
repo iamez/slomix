@@ -107,8 +107,8 @@ export default function MapsPage() {
 
   if (isLoading) {
     return (
-      <div className="mt-6">
-        <PageHeader title="Maps" subtitle="Map statistics and analytics" />
+      <div className="page-shell">
+        <PageHeader title="Maps" subtitle="Historical map context once the main session and player questions are already answered." eyebrow="More" />
         <Skeleton variant="table" count={8} />
       </div>
     );
@@ -116,8 +116,8 @@ export default function MapsPage() {
 
   if (isError || !maps) {
     return (
-      <div className="mt-6">
-        <PageHeader title="Maps" subtitle="Map statistics and analytics" />
+      <div className="page-shell">
+        <PageHeader title="Maps" subtitle="Map statistics and analytics" eyebrow="More" />
         <div className="text-center text-red-400 py-12">Failed to load map data.</div>
       </div>
     );
@@ -127,8 +127,8 @@ export default function MapsPage() {
   const totalPlayers = new Set(maps.map((m) => m.unique_players)).size;
 
   return (
-    <div className="mt-6">
-      <PageHeader title="Maps" subtitle={`${maps.length} maps tracked`}>
+    <div className="page-shell">
+      <PageHeader title="Maps" subtitle={`${maps.length} maps tracked across the archive.`} eyebrow="More">
         <div className="flex gap-1 bg-slate-800 rounded-lg p-0.5">
           <button
             onClick={() => setView('table')}
@@ -168,15 +168,13 @@ export default function MapsPage() {
       </div>
 
       {view === 'table' ? (
-        <div className="glass-panel rounded-xl p-0 overflow-hidden">
-          <DataTable
-            columns={columns}
-            data={maps}
-            keyFn={(row) => row.name}
-            defaultSort={{ key: 'matches_played', dir: 'desc' }}
-            stickyHeader
-          />
-        </div>
+        <DataTable
+          columns={columns}
+          data={maps}
+          keyFn={(row) => row.name}
+          defaultSort={{ key: 'matches_played', dir: 'desc' }}
+          stickyHeader
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {maps.map((m) => (

@@ -115,10 +115,12 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed1.add_field(
             name="💀 Kill Milestones",
             value=(
-                "🎯 **Thousand Killer** - 1,000 kills\n"
-                "💀 **Death Incarnate** - 5,000 kills\n"
-                "☠️ **Elite Slayer** - 10,000 kills\n"
-                "👑 **Legendary God** - 20,000 kills"
+                "🎯 **First Blood Century** - 100 kills\n"
+                "💥 **Killing Machine** - 500 kills\n"
+                "💀 **Thousand Killer** - 1,000 kills\n"
+                "⚔️ **Elite Warrior** - 2,500 kills\n"
+                "☠️ **Death Incarnate** - 5,000 kills\n"
+                "👑 **Legendary Slayer** - 10,000 kills"
             ),
             inline=False
         )
@@ -126,11 +128,12 @@ class AchievementsCog(commands.Cog, name="Achievements"):
         embed1.add_field(
             name="🎮 Game Milestones",
             value=(
-                "🎮 **Getting Started** - 50 games\n"
-                "🕹️ **Regular Player** - 500 games\n"
-                "🏆 **Dedicated Gamer** - 5,000 games\n"
-                "⭐ **Community Veteran** - 10,000 games\n"
-                "💎 **Legendary Champion** - 30,000 games"
+                "🎮 **Getting Started** - 10 games\n"
+                "🎯 **Regular Player** - 50 games\n"
+                "🏆 **Dedicated Gamer** - 100 games\n"
+                "⭐ **Community Veteran** - 250 games\n"
+                "💎 **Hardcore Legend** - 500 games\n"
+                "👑 **Ultimate Champion** - 1,000 games"
             ),
             inline=False
         )

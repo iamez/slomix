@@ -11,7 +11,8 @@ export function GlassCard({ children, className, onClick }: GlassCardProps) {
   return (
     <div
       className={cn(
-        'glass-card rounded-xl p-6 border border-white/5 hover:border-white/10 hover:bg-white/[0.03] transition-all cursor-pointer',
+        'glass-card rounded-[24px] p-6 border border-white/8 transition-all',
+        onClick ? 'cursor-pointer hover:-translate-y-0.5' : 'cursor-default',
         className,
       )}
       onClick={onClick}
