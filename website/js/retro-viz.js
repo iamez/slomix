@@ -8,7 +8,7 @@ import { API_BASE, fetchJSON, escapeHtml, formatNumber } from './utils.js';
 import { PageHeader, LoadingSkeleton, EmptyState } from './components.js';
 
 // Chart instances for cleanup
-let _charts = [];
+export let _rvCharts = [];
 
 function _hasChartJs() {
     return typeof Chart !== 'undefined';
@@ -153,8 +153,8 @@ async function loadRound(roundId) {
     if (!panels) return;
 
     // Destroy previous charts
-    _charts.forEach(c => c.destroy());
-    _charts = [];
+    _rvCharts.forEach(c => c.destroy());
+    _rvCharts = [];
 
     replaceElementHtml(panels, LoadingSkeleton('card', 6));
 
@@ -237,7 +237,7 @@ function renderPanels(container, data) {
 // 1. MATCH SUMMARY
 // ============================================================================
 
-function renderMatchSummary(data) {
+export function renderMatchSummary(data) {
     const el = document.getElementById('rv-summary');
     if (!el) return;
 
@@ -300,7 +300,7 @@ function renderMatchSummary(data) {
 // 2. COMBAT OVERVIEW (Radar)
 // ============================================================================
 
-function renderCombatRadar(data, canvasOverride) {
+export function renderCombatRadar(data, canvasOverride) {
     const canvas = canvasOverride || document.getElementById('rv-radar');
     if (!canvas) return;
 
@@ -362,7 +362,7 @@ function renderCombatRadar(data, canvasOverride) {
             },
         },
     });
-    _charts.push(chart);
+    _rvCharts.push(chart);
     return chart;
 }
 
@@ -370,7 +370,7 @@ function renderCombatRadar(data, canvasOverride) {
 // 3. TOP FRAGGERS (Horizontal bar)
 // ============================================================================
 
-function renderTopFraggers(data, canvasOverride) {
+export function renderTopFraggers(data, canvasOverride) {
     const canvas = canvasOverride || document.getElementById('rv-fraggers');
     if (!canvas) return;
 
@@ -411,7 +411,7 @@ function renderTopFraggers(data, canvasOverride) {
             },
         },
     });
-    _charts.push(chart);
+    _rvCharts.push(chart);
     return chart;
 }
 
@@ -419,7 +419,7 @@ function renderTopFraggers(data, canvasOverride) {
 // 4. DAMAGE BREAKDOWN (HTML heatmap table)
 // ============================================================================
 
-function renderDamageBreakdown(data) {
+export function renderDamageBreakdown(data) {
     const el = document.getElementById('rv-damage-table');
     if (!el) return;
     replaceElementHtml(el, buildDamageTableHtml(data));
@@ -465,7 +465,7 @@ function buildDamageTableHtml(data) {
 // 5. SUPPORT PERFORMANCE (Grouped horizontal bar)
 // ============================================================================
 
-function renderSupportPerformance(data, canvasOverride) {
+export function renderSupportPerformance(data, canvasOverride) {
     const canvas = canvasOverride || document.getElementById('rv-support');
     if (!canvas) return;
 
@@ -511,7 +511,7 @@ function renderSupportPerformance(data, canvasOverride) {
             },
         },
     });
-    _charts.push(chart);
+    _rvCharts.push(chart);
     return chart;
 }
 
@@ -519,7 +519,7 @@ function renderSupportPerformance(data, canvasOverride) {
 // 6. TIME DISTRIBUTION (Stacked bar)
 // ============================================================================
 
-function renderTimeDistribution(data, canvasOverride) {
+export function renderTimeDistribution(data, canvasOverride) {
     const canvas = canvasOverride || document.getElementById('rv-time');
     if (!canvas) return;
 
@@ -553,7 +553,7 @@ function renderTimeDistribution(data, canvasOverride) {
             },
         },
     });
-    _charts.push(chart);
+    _rvCharts.push(chart);
     return chart;
 }
 
@@ -602,7 +602,7 @@ function openChartLightbox(title, renderFn) {
         const canvas = document.getElementById('rv-lightbox-canvas');
         if (canvas) {
             const chart = renderFn(canvas);
-            if (chart) _charts.push(chart);
+            if (chart) _rvCharts.push(chart);
         }
     });
 

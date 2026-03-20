@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Check for large files (>500KB)
         run: |
-          large_files=$(find . -type f -size +500k -not -path './.git/*' -not -path './local_stats/*' -not -path './node_modules/*' -not -path './.venv/*' -not -path './website/data/uploads/*')
+          large_files=$(find . -type f -size +500k -not -path './.git/*' -not -path './local_stats/*' -not -path './node_modules/*' -not -path './.venv/*' -not -path './website/data/uploads/*' -not -path './website/assets/*')
           if [ -n "$large_files" ]; then
             echo "::error::Large files detected (>500KB):"
             echo "$large_files"

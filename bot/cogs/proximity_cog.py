@@ -961,6 +961,65 @@ class ProximityCog(commands.Cog, name="Proximity"):
             await ctx.send(f"Error: {e}")
 
 
+    # ── SESSION SCORE ──────────────────────────────────────────────────
+
+    @commands.command(name="proximity_session", aliases=["psession", "pscore"])
+    async def proximity_session_scores(self, ctx, session_date: str = None):
+        """Per-session proximity combat scores.
+
+        Usage: !psession [YYYY-MM-DD]
+        Shows composite score (0-100) from 7 categories:
+        Kill Timing, Crossfire, Focus Fire, Trades, Survivability, Movement, Reactions
+        """
+        try:
+            from bot.services.proximity_session_score_service import ProximitySessionScoreService
+            svc = ProximitySessionScoreService(self.bot.db_adapter)
+
+            if not session_date:
+                session_date = await svc.get_latest_session_date()
+            if not session_date:
+                await ctx.send("No proximity data found.")
+                return
+
+            results = await svc.compute_session_scores(session_date)
+            if not results:
+                await ctx.send(f"No proximity data for session {session_date} (min {3} engagements required).")
+                return
+
+            embed = discord.Embed(
+                title=f"Proximity Session Score — {session_date}",
+                description="Composite combat performance from proximity analytics",
+                color=discord.Color.teal(),
+            )
+
+            medal = ["🥇", "🥈", "🥉"]
+            for i, p in enumerate(results[:12]):
+                cat = p["categories"]
+                prefix = medal[i] if i < 3 else f"{i+1}."
+                embed.add_field(
+                    name=f"{prefix} {p['name']} — **{p['total_score']:.1f}** / 100",
+                    value=(
+                        f"⏱ Tim: {cat['kill_timing']['weighted']:.0f} "
+                        f"✕ XF: {cat['crossfire']['weighted']:.0f} "
+                        f"🎯 FF: {cat['focus_fire']['weighted']:.0f} "
+                        f"⚔ Trd: {cat['trades']['weighted']:.0f}\n"
+                        f"🛡 Srv: {cat['survivability']['weighted']:.0f} "
+                        f"💨 Mov: {cat['movement']['weighted']:.0f} "
+                        f"⚡ Rct: {cat['reactions']['weighted']:.0f} "
+                        f"({p['engagement_count']} eng)"
+                    ),
+                    inline=False,
+                )
+
+            total_eng = sum(p["engagement_count"] for p in results)
+            embed.set_footer(text=f"{len(results)} players, {total_eng} total engagements")
+            await ctx.send(embed=embed)
+
+        except Exception as e:
+            logger.error(f"psession error: {e}", exc_info=True)
+            await ctx.send(f"Error: {e}")
+
+
 async def setup(bot):
     """Setup function for cog loading"""
     await bot.add_cog(ProximityCog(bot))

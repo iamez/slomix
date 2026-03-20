@@ -34,9 +34,11 @@ index_temp_*.html
 SESSION_NOTES_*.md
 REVIEW_NOTES.md
 
-# Screenshots
+# Screenshots (root-level only, allow assets/)
 *.png
 *.jpg
+!assets/**/*.png
+!assets/**/*.jpg
 
 # AI rules (local)
 .github/instructions/

@@ -248,6 +248,8 @@ class EndStatsParser:
 
         awards = []
         vs_stats = []
+        current_subject = None  # Tracks which player's VS block we're in
+        current_subject_guid = None
 
         try:
             with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
@@ -265,6 +267,13 @@ class EndStatsParser:
 
             # Split by tab
             parts = line.split('\t')
+
+            # Check for VS_HEADER marker: VS_HEADER\tPlayerName\tGUID
+            if parts[0].strip() == 'VS_HEADER':
+                current_subject = parts[1].strip() if len(parts) > 1 else None
+                current_subject_guid = parts[2].strip() if len(parts) > 2 else None
+                logger.debug(f"VS_HEADER: subject={current_subject} guid={current_subject_guid}")
+                continue
 
             if len(parts) < 3:
                 logger.debug(f"Line {line_num}: Skipping (less than 3 parts): {line[:50]}")
@@ -298,11 +307,13 @@ class EndStatsParser:
                     deaths = int(parts[2].strip())
 
                     vs_stats.append({
+                        'subject': current_subject,
+                        'subject_guid': current_subject_guid,
                         'player': player_name,
                         'kills': kills,
                         'deaths': deaths,
                     })
-                    logger.debug(f"VS Stats: {player_name} -> {kills}K/{deaths}D")
+                    logger.debug(f"VS Stats: {current_subject} vs {player_name} -> {kills}K/{deaths}D")
 
                 except (ValueError, IndexError):
                     logger.debug(f"Line {line_num}: Could not parse as award or VS stats: {line[:50]}")

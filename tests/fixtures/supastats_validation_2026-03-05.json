@@ -1,0 +1,248 @@
+{
+  "gaming_session_id": 95,
+  "match_pairs": [
+    {
+      "durations": [
+        382,
+        382
+      ],
+      "map_name": "etl_adlernest",
+      "order": 1,
+      "round_ids": [
+        10021,
+        10022
+      ],
+      "round_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "durations": [
+        719,
+        712
+      ],
+      "map_name": "supply",
+      "order": 2,
+      "round_ids": [
+        10024,
+        10025
+      ],
+      "round_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "durations": [
+        265,
+        264
+      ],
+      "map_name": "etl_sp_delivery",
+      "order": 3,
+      "round_ids": [
+        10027,
+        10028
+      ],
+      "round_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "durations": [
+        215,
+        177
+      ],
+      "map_name": "te_escape2",
+      "order": 4,
+      "round_ids": [
+        10030,
+        10031
+      ],
+      "round_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "durations": [
+        380,
+        211
+      ],
+      "map_name": "te_escape2",
+      "order": 5,
+      "round_ids": [
+        10033,
+        10034
+      ],
+      "round_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "durations": [
+        265,
+        181
+      ],
+      "map_name": "te_escape2",
+      "order": 6,
+      "round_ids": [
+        10036,
+        10037
+      ],
+      "round_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "durations": [
+        272,
+        272
+      ],
+      "map_name": "et_brewdog",
+      "order": 7,
+      "round_ids": [
+        10039,
+        10040
+      ],
+      "round_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "durations": [
+        719,
+        573
+      ],
+      "map_name": "sw_goldrush_te",
+      "order": 8,
+      "round_ids": [
+        10042,
+        10043
+      ],
+      "round_numbers": [
+        1,
+        2
+      ]
+    }
+  ],
+  "players": [
+    {
+      "damage_given": 24374,
+      "damage_received": 31388,
+      "deaths": 131,
+      "gibs": 35,
+      "kd": 1.08,
+      "kill_assists": 34,
+      "kills": 142,
+      "player_guid": "5D989160",
+      "player_name": ".olz",
+      "self_kills": 59,
+      "supastats_tmp_pct": 79.3,
+      "supastats_tmp_ratio": 0.793
+    },
+    {
+      "damage_given": 31247,
+      "damage_received": 25324,
+      "deaths": 141,
+      "gibs": 51,
+      "kd": 1.16,
+      "kill_assists": 44,
+      "kills": 164,
+      "player_guid": "2B5938F5",
+      "player_name": "bronze.",
+      "self_kills": 70,
+      "supastats_tmp_pct": 81.5,
+      "supastats_tmp_ratio": 0.815
+    },
+    {
+      "damage_given": 31698,
+      "damage_received": 26871,
+      "deaths": 135,
+      "gibs": 31,
+      "kd": 1.04,
+      "kill_assists": 40,
+      "kills": 140,
+      "player_guid": "0A26D447",
+      "player_name": "carniee",
+      "self_kills": 47,
+      "supastats_tmp_pct": 78.7,
+      "supastats_tmp_ratio": 0.787
+    },
+    {
+      "damage_given": 24242,
+      "damage_received": 27368,
+      "deaths": 132,
+      "gibs": 46,
+      "kd": 0.91,
+      "kill_assists": 37,
+      "kills": 120,
+      "player_guid": "DB00AA45",
+      "player_name": "Cru3lzor.",
+      "self_kills": 50,
+      "supastats_tmp_pct": 79.4,
+      "supastats_tmp_ratio": 0.794
+    },
+    {
+      "damage_given": 25861,
+      "damage_received": 26289,
+      "deaths": 146,
+      "gibs": 48,
+      "kd": 0.91,
+      "kill_assists": 42,
+      "kills": 133,
+      "player_guid": "EDBB5DA9",
+      "player_name": "SuperBoyy",
+      "self_kills": 49,
+      "supastats_tmp_pct": 76.7,
+      "supastats_tmp_ratio": 0.767
+    },
+    {
+      "damage_given": 29310,
+      "damage_received": 29367,
+      "deaths": 146,
+      "gibs": 30,
+      "kd": 0.91,
+      "kill_assists": 43,
+      "kills": 133,
+      "player_guid": "D8423F90",
+      "player_name": "vid",
+      "self_kills": 55,
+      "supastats_tmp_pct": 79.9,
+      "supastats_tmp_ratio": 0.799
+    }
+  ],
+  "session_date": "2026-03-05",
+  "teams": [
+    {
+      "damage_given": 87187,
+      "damage_received": 79563,
+      "deaths": 408,
+      "gibs": 128,
+      "kill_assists": 121,
+      "kills": 424,
+      "self_kills": 167,
+      "team_name": "Team A"
+    },
+    {
+      "damage_given": 79545,
+      "damage_received": 87044,
+      "deaths": 423,
+      "gibs": 113,
+      "kill_assists": 119,
+      "kills": 408,
+      "self_kills": 163,
+      "team_name": "Team B"
+    }
+  ],
+  "unresolved_fields": [
+    "A",
+    "EFFORT",
+    "EXPECTED",
+    "PERF"
+  ]
+}

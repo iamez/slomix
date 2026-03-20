@@ -19,12 +19,14 @@ class _FakeBot:
     _queue_pending_metadata = UltimateETLegacyBot._queue_pending_metadata
 
     def __init__(self):
+        from bot.services.webhook_round_metadata_service import WebhookRoundMetadataService
         self.ssh_enabled = False
         self.stored_rounds = []
         self.stored_spawn_batches = []
         self._pending_round_metadata = defaultdict(list)
         self._pending_metadata_ttl_seconds = 3 * 3600
         self._pending_metadata_max_per_key = 8
+        self.webhook_round_metadata_service = WebhookRoundMetadataService()
 
     async def _store_lua_round_teams(self, round_metadata: dict):
         self.stored_rounds.append(round_metadata)
