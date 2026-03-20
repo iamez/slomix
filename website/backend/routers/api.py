@@ -5068,10 +5068,6 @@ async def get_session_graph_stats(
         kd = stats["kills"] / stats["deaths"] if stats["deaths"] > 0 else stats["kills"]
         dpm = stats["damage_given"] / time_minutes
 
-        # Advanced metrics
-        time_dead_seconds = stats.get("time_dead_minutes", 0) * 60
-        time_alive_seconds = max(1, stats["time_played"] - time_dead_seconds)
-
         # Damage Efficiency: ratio of damage given to received (>1 is good)
         damage_efficiency = stats["damage_given"] / max(1, stats["damage_received"])
 

@@ -150,8 +150,8 @@ class ProximitySessionScoreService:
                 dampener = min(events / 3.0, 1.0)
                 scores[guid]["focus_fire"] = avg_ff * 100 * dampener
                 scores[guid]["_ff_events"] = events
-        except Exception:
-            pass  # table may not exist yet
+        except Exception as exc:
+            logger.debug("focus_fire query skipped (table may not exist): %s", exc)
 
         # ── 5. Trade kills (spawn-timing-weighted) ────────────────────
         # Cross-join trade kills with spawn timing to weight each trade

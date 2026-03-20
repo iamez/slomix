@@ -47,8 +47,9 @@ const MAP_IMAGE_MAP = {
     "missile_b3": "assets/maps/levelshots/missile_b3.png",
     "missile_b4": "assets/maps/levelshots/missile_b4.png",
 };
-const AXIS_ICON = "assets/icons/axis.svg";
-const ALLIES_ICON = "assets/icons/allies.svg";
+// Team icons available for future use
+// const AXIS_ICON = "assets/icons/axis.svg";
+// const ALLIES_ICON = "assets/icons/allies.svg";
 
 // ---- Utility functions (copied from sessions.js — pure/stateless) ----
 

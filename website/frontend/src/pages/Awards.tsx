@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { Trophy, Swords, Skull, Target, Bomb, Heart, Flag, Timer } from 'lucide-react';
 import { useAwardsLeaderboard, useAwards } from '../api/hooks';
 import type { AwardLeaderboardEntry, RoundAward } from '../api/types';
 import { DataTable, type Column } from '../components/DataTable';
-import { GlassCard } from '../components/GlassCard';
 import { PageHeader } from '../components/PageHeader';
 import { SelectFilter, FilterBar } from '../components/FilterBar';
 import { Skeleton } from '../components/Skeleton';
