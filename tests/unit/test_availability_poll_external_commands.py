@@ -58,6 +58,10 @@ class _FakeDB:
     async def fetch_one(self, query: str, params=None):
         normalized = self._normalize(query)
 
+        if "from information_schema.tables" in normalized:
+            # Pretend all tables exist
+            return (1,)
+
         if "select user_id from availability_channel_links" in normalized:
             channel_type = str(params[0]).strip().lower()
             destination = str(params[1]).strip()

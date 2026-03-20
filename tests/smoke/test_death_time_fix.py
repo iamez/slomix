@@ -58,22 +58,26 @@ def test_r2_differential_death_time():
     parser = C0RNP0RN3StatsParser()
 
     r1_data = {
-        'players': [r1_player], 
-        'map_name': 'supply', 
-        'map_time': 1200, 
+        'players': [r1_player],
+        'map_name': 'supply',
+        'map_time': 1200,
         'actual_time': '20:00',
         'round_outcome': 'Axis',
         'round_num': 1,
-        'success': True
+        'success': True,
+        'defender_team': 1,
+        'winner_team': 2,
     }
     r2_data = {
-        'players': [r2_cumulative_player], 
-        'map_name': 'supply', 
-        'map_time': 2700, 
+        'players': [r2_cumulative_player],
+        'map_name': 'supply',
+        'map_time': 2700,
         'actual_time': '45:00',
         'round_outcome': 'Allied',
         'round_num': 2,
-        'success': True
+        'success': True,
+        'defender_team': 2,
+        'winner_team': 1,
     }
 
     result = parser.calculate_round_2_differential(r1_data, r2_data)
@@ -160,22 +164,26 @@ def test_impossible_death_time_capped():
     
     parser = C0RNP0RN3StatsParser()
     r1_data = {
-        'players': [r1_player], 
-        'map_name': 'test', 
-        'map_time': 600, 
+        'players': [r1_player],
+        'map_name': 'test',
+        'map_time': 600,
         'actual_time': '10:00',
         'round_outcome': 'Axis',
         'round_num': 1,
-        'success': True
+        'success': True,
+        'defender_team': 1,
+        'winner_team': 2,
     }
     r2_data = {
-        'players': [r2_cumulative_player], 
-        'map_name': 'test', 
-        'map_time': 1200, 
+        'players': [r2_cumulative_player],
+        'map_name': 'test',
+        'map_time': 1200,
         'actual_time': '20:00',
         'round_outcome': 'Allied',
         'round_num': 2,
-        'success': True
+        'success': True,
+        'defender_team': 2,
+        'winner_team': 1,
     }
 
     result = parser.calculate_round_2_differential(r1_data, r2_data)

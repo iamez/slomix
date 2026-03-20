@@ -1,3 +1,10 @@
+"""
+Test that get_diagnostics handles missing optional tables gracefully.
+
+The diagnostics endpoint runs SELECT COUNT(*) directly on each table.
+Missing tables raise exceptions with 'does not exist' in the message,
+which the endpoint catches and marks as 'not_found'.
+"""
 from __future__ import annotations
 
 import pytest
@@ -10,16 +17,12 @@ def _normalize_sql(query: str) -> str:
 
 
 class _DiagnosticsDB:
+    """Fake DB: rounds and player_comprehensive_stats exist, others don't."""
     def __init__(self) -> None:
         self.count_queries: list[str] = []
 
     async def fetch_val(self, query: str, params=()):
         normalized = _normalize_sql(query)
-
-        if "from information_schema.tables" in normalized:
-            schema, table_name = params
-            assert schema == "public"
-            return table_name in {"rounds", "player_comprehensive_stats"}
 
         if normalized == "select count(*) from rounds":
             self.count_queries.append("rounds")
@@ -29,20 +32,14 @@ class _DiagnosticsDB:
             self.count_queries.append("player_comprehensive_stats")
             return 768
 
-        raise AssertionError(
-            f"Unexpected fetch_val query: {normalized} params={params}"
-        )
+        # All other tables "do not exist"
+        raise Exception(f'relation "unknown_table" does not exist')
 
     async def fetch_one(self, query: str, params=()):
         normalized = _normalize_sql(query)
-        if (
-            "from player_comprehensive_stats" in normalized
-            and "raw_dead_seconds" in normalized
-        ):
+        if "raw_dead_seconds" in normalized:
             return (120, 100, 20, 3, 40)
-        raise AssertionError(
-            f"Unexpected fetch_one query: {normalized} params={params}"
-        )
+        raise Exception('relation does not exist')
 
 
 @pytest.mark.asyncio

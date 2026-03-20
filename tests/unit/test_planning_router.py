@@ -359,6 +359,7 @@ def _xhr_headers() -> dict[str, str]:
 @pytest.fixture(autouse=True)
 def _disable_planning_discord_thread_creation(monkeypatch):
     monkeypatch.setenv("AVAILABILITY_PLANNING_DISCORD_CREATE_THREAD", "false")
+    monkeypatch.setenv("AVAILABILITY_PLANNING_FAKE_ROOM", "false")
     # Keep test env deterministic even if workstation env has Discord bot settings.
     monkeypatch.delenv("AVAILABILITY_PLANNING_THREAD_PARENT_CHANNEL_ID", raising=False)
     monkeypatch.delenv("AVAILABILITY_PLANNING_DISCORD_BOT_TOKEN", raising=False)

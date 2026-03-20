@@ -1,3 +1,8 @@
+"""
+Test that _store_lua_round_teams produces the correct number of SQL parameters
+for both with-round_id and without-round_id code paths.
+"""
+import json
 import re
 
 import pytest
@@ -12,18 +17,27 @@ class _FakeDB:
     async def execute(self, query, params):
         self.calls.append((query, params))
 
+    async def fetch_one(self, query, params=None):
+        # Return None for lua_round_teams ID lookup
+        return None
+
 
 class _FakeBot:
     def __init__(self, has_round_id: bool, resolved_round_id):
         self.db_adapter = _FakeDB()
         self._has_round_id = has_round_id
         self._resolved_round_id = resolved_round_id
+        # correlation_service is checked via hasattr
+        self.correlation_service = None
 
     async def _resolve_round_id_for_metadata(self, _unused, _round_metadata):
         return self._resolved_round_id
 
     async def _has_lua_round_teams_round_id(self):
         return self._has_round_id
+
+    async def _resolve_round_correlation_context(self, round_id, fallback_match_id, fallback_map_name, fallback_round_number):
+        return fallback_match_id, fallback_map_name, fallback_round_number
 
 
 def _sample_round_metadata():
@@ -70,7 +84,7 @@ async def test_store_lua_round_teams_param_count_with_round_id_column():
     assert len(fake_bot.db_adapter.calls) == 1
     query, params = fake_bot.db_adapter.calls[0]
     assert len(params) == 24
-    assert params[2] == 9825
+    assert params[2] == 9825  # round_id is 3rd param
     assert "round_id" in query
     _assert_query_placeholders_align(query, 24)
 
@@ -87,4 +101,3 @@ async def test_store_lua_round_teams_param_count_without_round_id_column():
     assert len(params) == 23
     assert "round_id" not in query
     _assert_query_placeholders_align(query, 23)
-

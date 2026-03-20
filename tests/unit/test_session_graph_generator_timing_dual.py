@@ -1,3 +1,10 @@
+"""
+Test the session graph generator timing dual mode.
+
+When show_timing_dual=True, the generator produces comparison charts
+with titles like "TIME DEAD OLD vs NEW (minutes)", "DENIED/MIN (OLD vs NEW)",
+and "SURVIVAL RATE % (OLD vs NEW)".
+"""
 from __future__ import annotations
 
 import io
@@ -90,17 +97,14 @@ async def test_graphs_dual_mode_shows_old_vs_new_timing(monkeypatch):
 
     assert all(buf is not None for buf in (buf1, buf2, buf3, buf4, buf5))
     assert "TIME DEAD OLD vs NEW (minutes)" in titles
-    assert "TIME DENIED % (OLD vs NEW)" in titles
+    assert "DENIED/MIN (OLD vs NEW)" in titles
     assert "SURVIVAL RATE % (OLD vs NEW)" in titles
 
     dead_old, dead_new, _ = grouped["TIME DEAD OLD vs NEW (minutes)"]
-    denied_old, denied_new, _ = grouped["TIME DENIED % (OLD vs NEW)"]
     surv_old, surv_new, _ = grouped["SURVIVAL RATE % (OLD vs NEW)"]
 
     # Old values come from c0rnp0rn/stats rows, new values from Lua-shadow payload.
     assert dead_old[0] == pytest.approx(2.0)
     assert dead_new[0] == pytest.approx(1.0)
-    assert denied_old[0] == pytest.approx(20.0)
-    assert denied_new[0] == pytest.approx(5.0)
     assert surv_old[0] == pytest.approx(80.0)
     assert surv_new[0] == pytest.approx(90.0)

@@ -33,87 +33,50 @@ class _FakeSessionDetailDB:
 
 
 @pytest.mark.asyncio
-async def test_session_detail_returns_dual_tmp_and_drift_fields(monkeypatch):
+async def test_session_detail_returns_dual_alive_pct_fields(monkeypatch):
     async def _fake_build_session_scoring(*_args, **_kwargs):
         return {"available": False}, None, None
 
     monkeypatch.setattr(api_router, "build_session_scoring", _fake_build_session_scoring)
 
-    # Tuple shape follows get_stats_session_detail SELECT:
-    # guid,name,kills,deaths,dmg_g,dmg_r,dpm,kd,hs,total_kills,gibs,self,
-    # revives_given,times_revived,time_played,time_dead_min,denied,total_hits,total_shots,
-    # dead_ratio_lua_weighted_sum,dead_ratio_lua_weight,played_seconds_lua_sum
+    # Tuple shape follows get_stats_session_detail SELECT order (22 columns):
+    # 0:guid, 1:name, 2:kills, 3:deaths, 4:dmg_g, 5:dmg_r, 6:dpm, 7:kd,
+    # 8:headshot_kills, 9:total_kills_for_hs, 10:gibs, 11:self_kills,
+    # 12:revives_given, 13:times_revived, 14:time_played_seconds, 15:kill_assists,
+    # 16:time_dead_minutes, 17:denied_playtime, 18:total_hits, 19:total_shots,
+    # 20:tpp_weighted_sum, 21:tpp_weight
     player_rows = [
         (
-            "g-alpha",
-            "Alpha",
-            20,
-            10,
-            2400,
-            1800,
-            240.0,
-            2.0,
-            8,
-            20,
-            3,
-            1,
-            4,
-            2,
-            600,
-            2.0,  # dead minutes => computed TMP = 80.0
-            0,
-            120,
-            240,
-            10800.0,  # lua dead ratio = 18.0 => alive% = 82.0
-            600.0,
-            570.0,  # raw TAB[8] reconstructed play seconds across scope => 47.5%
+            "g-alpha", "Alpha",
+            20, 10, 2400, 1800, 240.0, 2.0, 8, 20, 3, 1, 4, 2,
+            600,     # time_played_seconds (= 10 min)
+            5,       # kill_assists
+            2.0,     # time_dead_minutes => computed alive% = 100-(2/10*100) = 80.0
+            0,       # denied_playtime
+            120, 240,
+            49200.0,  # tpp_weighted_sum = 82.0 * 600 => engine alive% = 82.0
+            600.0,    # tpp_weight
         ),
         (
-            "g-bravo",
-            "Bravo",
-            18,
-            9,
-            2200,
-            1700,
-            220.0,
-            2.0,
-            6,
-            18,
-            2,
-            1,
-            3,
-            2,
+            "g-bravo", "Bravo",
+            18, 9, 2200, 1700, 220.0, 2.0, 6, 18, 2, 1, 3, 2,
             600,
-            2.0,  # computed TMP = 80.0
+            4,
+            2.0,     # computed alive% = 80.0
             0,
-            110,
-            220,
-            10740.0,  # lua dead ratio = 17.9 => alive% = 82.1
+            110, 220,
+            49260.0,  # tpp_weighted_sum = 82.1 * 600 => engine alive% = 82.1
             600.0,
-            585.0,  # raw TAB[8] reconstructed play seconds across scope => 48.8%
         ),
         (
-            "g-charlie",
-            "Charlie",
-            10,
-            12,
-            1500,
-            1900,
-            150.0,
-            0.83,
-            4,
-            10,
-            1,
-            2,
-            1,
-            3,
+            "g-charlie", "Charlie",
+            10, 12, 1500, 1900, 150.0, 0.83, 4, 10, 1, 2, 1, 3,
             600,
-            1.5,  # computed TMP = 85.0
+            3,
+            1.5,     # computed alive% = 100-(1.5/10*100) = 85.0
             0,
-            80,
-            200,
-            0.0,  # no lua ratio available
-            0.0,
+            80, 200,
+            0.0,     # no engine data available
             0.0,
         ),
     ]
@@ -124,37 +87,26 @@ async def test_session_detail_returns_dual_tmp_and_drift_fields(monkeypatch):
 
     players = {p["player_name"]: p for p in payload["players"]}
 
+    # Alpha: has engine data, so alive_pct = engine value
     alpha = players["Alpha"]
-    assert alpha["tmp_pct"] == 80.0
-    assert alpha["tmp_pct_computed"] == 80.0
-    assert alpha["tmp_pct_lua"] == 82.0
-    assert alpha["tmp_pct_diff"] == 2.0
-    assert alpha["tmp_pct_drift"] is False
-    assert alpha["alive_pct"] == 80.0
-    assert alpha["alive_pct_lua"] == 82.0
-    assert alpha["time_dead_ratio"] == 18.0
-    assert alpha["played_pct"] == 50.0
-    assert alpha["played_pct_lua"] == 47.5
-    assert alpha["played_pct_diff"] == 2.5
-    assert alpha["played_pct_drift"] is True
+    assert alpha["alive_pct"] == 82.0       # engine value (primary)
+    assert alpha["alive_pct_lua"] == 82.0   # engine value
+    assert alpha["alive_pct_diff"] == 2.0   # |82.0 - 80.0|
+    assert alpha["alive_pct_drift"] is False  # 2.0 not > 2.0
+    assert alpha["played_pct"] == 50.0      # 600/1200
 
+    # Bravo: engine alive% differs by 2.1% from computed
     bravo = players["Bravo"]
-    assert bravo["tmp_pct_computed"] == 80.0
-    assert bravo["tmp_pct_lua"] == 82.1
-    assert bravo["tmp_pct_diff"] == 2.1
-    assert bravo["tmp_pct_drift"] is True
-    assert bravo["time_dead_ratio"] == 17.9
+    assert bravo["alive_pct"] == 82.1       # engine value (primary)
+    assert bravo["alive_pct_lua"] == 82.1
+    assert bravo["alive_pct_diff"] == 2.1
+    assert bravo["alive_pct_drift"] is True  # 2.1 > 2.0
     assert bravo["played_pct"] == 50.0
-    assert bravo["played_pct_lua"] == 48.8
-    assert bravo["played_pct_diff"] == 1.2
-    assert bravo["played_pct_drift"] is False
 
+    # Charlie: no engine data, falls back to computed
     charlie = players["Charlie"]
-    assert charlie["tmp_pct_computed"] == 85.0
-    assert charlie["tmp_pct_lua"] is None
-    assert charlie["tmp_pct_diff"] is None
-    assert charlie["tmp_pct_drift"] is False
+    assert charlie["alive_pct"] == 85.0       # computed fallback
+    assert charlie["alive_pct_lua"] is None   # no engine data
+    assert charlie["alive_pct_diff"] is None
+    assert charlie["alive_pct_drift"] is False
     assert charlie["played_pct"] == 50.0
-    assert charlie["played_pct_lua"] is None
-    assert charlie["played_pct_diff"] is None
-    assert charlie["played_pct_drift"] is False
