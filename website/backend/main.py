@@ -216,6 +216,20 @@ _ENTRYPOINT_NO_CACHE_PATHS = {
 }
 
 
+# Block access to sensitive files via static file serving
+_BLOCKED_PATHS = {".env", ".env.example", ".env.production", ".git", ".gitignore"}
+_BLOCKED_PREFIXES = (".env", "backend/", "frontend/src/", "__pycache__/")
+
+
+@app.middleware("http")
+async def block_sensitive_files(request, call_next):
+    """Prevent static file serving from exposing sensitive files."""
+    path = request.url.path.lstrip("/")
+    if path in _BLOCKED_PATHS or any(path.startswith(p) for p in _BLOCKED_PREFIXES):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def add_static_cache_headers(request, call_next):
     response = await call_next(request)
