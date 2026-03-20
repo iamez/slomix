@@ -459,22 +459,15 @@ class UltimateETLegacyBot(commands.Bot):
         Supports both SQLite and PostgreSQL
         """
         try:
-            # Query schema based on database type
-            if self.config.database_type == 'sqlite':
-                # SQLite: Use PRAGMA table_info
-                query = "PRAGMA table_info(player_comprehensive_stats)"
-                columns = await self.db_adapter.fetch_all(query)
-                column_names = [col[1] for col in columns]
-            else:
-                # PostgreSQL: Query information_schema
-                query = """
-                    SELECT column_name
-                    FROM information_schema.columns
-                    WHERE table_name = 'player_comprehensive_stats'
-                    ORDER BY ordinal_position
-                """
-                columns = await self.db_adapter.fetch_all(query)
-                column_names = [col[0] for col in columns]
+            # Query schema (PostgreSQL)
+            query = """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'player_comprehensive_stats'
+                ORDER BY ordinal_position
+            """
+            columns = await self.db_adapter.fetch_all(query)
+            column_names = [col[0] for col in columns]
 
             actual_columns = len(column_names)
             # Additive columns are valid; only the required unified-schema contract matters.
@@ -978,18 +971,11 @@ class UltimateETLegacyBot(commands.Bot):
             "processed_files",
         ]
 
-        # Query depends on database type
-        if self.config.database_type == 'sqlite':
-            query = """
-                SELECT name FROM sqlite_master
-                WHERE type='table' AND name IN (?, ?, ?, ?, ?)
-            """
-        else:
-            # PostgreSQL: Query information_schema
-            query = """
-                SELECT table_name FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name IN ($1, $2, $3, $4, $5)
-            """
+        # Query table existence (PostgreSQL)
+        query = """
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name IN ($1, $2, $3, $4, $5)
+        """
 
         rows = await self.db_adapter.fetch_all(query, tuple(required_tables))
         existing_tables = [row[0] for row in rows]
@@ -1827,20 +1813,14 @@ class UltimateETLegacyBot(commands.Bot):
             # Cache player_comprehensive_stats columns for optional fields
             if not hasattr(self, "_player_stats_columns"):
                 try:
-                    if self.config.database_type == "sqlite":
-                        cols = await self.db_adapter.fetch_all(
-                            "PRAGMA table_info(player_comprehensive_stats)"
-                        )
-                        self._player_stats_columns = {c[1] for c in cols}
-                    else:
-                        cols = await self.db_adapter.fetch_all(
-                            """
-                            SELECT column_name
-                            FROM information_schema.columns
-                            WHERE table_name = 'player_comprehensive_stats'
-                            """
-                        )
-                        self._player_stats_columns = {c[0] for c in cols}
+                    cols = await self.db_adapter.fetch_all(
+                        """
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_name = 'player_comprehensive_stats'
+                        """
+                    )
+                    self._player_stats_columns = {c[0] for c in cols}
                 except Exception:
                     self._player_stats_columns = set()
 
@@ -1896,18 +1876,14 @@ class UltimateETLegacyBot(commands.Bot):
             self._rounds_col_import_count = import_count
             if not hasattr(self, "_rounds_columns") or import_count % 100 == 1:
                 try:
-                    if self.config.database_type == 'sqlite':
-                        cols = await self.db_adapter.fetch_all("PRAGMA table_info(rounds)")
-                        self._rounds_columns = {c[1] for c in cols}
-                    else:
-                        cols = await self.db_adapter.fetch_all(
-                            """
-                            SELECT column_name
-                            FROM information_schema.columns
-                            WHERE table_name = 'rounds'
-                            """
-                        )
-                        self._rounds_columns = {c[0] for c in cols}
+                    cols = await self.db_adapter.fetch_all(
+                        """
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_name = 'rounds'
+                        """
+                    )
+                    self._rounds_columns = {c[0] for c in cols}
                 except Exception:
                     if not hasattr(self, "_rounds_columns"):
                         self._rounds_columns = set()
@@ -2552,20 +2528,14 @@ class UltimateETLegacyBot(commands.Bot):
         try:
             weapon_stats = player.get("weapon_stats", {}) or {}
             if weapon_stats:
-                # Get table column info (database-agnostic)
-                if self.config.database_type == 'sqlite':
-                    col_query = "PRAGMA table_info(weapon_comprehensive_stats)"
-                    pragma_rows = await self.db_adapter.fetch_all(col_query)
-                    cols = [r[1] for r in pragma_rows]
-                else:
-                    # PostgreSQL: Query information_schema
-                    col_query = """
-                        SELECT column_name FROM information_schema.columns
-                        WHERE table_name = 'weapon_comprehensive_stats'
-                        ORDER BY ordinal_position
-                    """
-                    pragma_rows = await self.db_adapter.fetch_all(col_query)
-                    cols = [r[0] for r in pragma_rows]
+                # Get table column info (PostgreSQL)
+                col_query = """
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'weapon_comprehensive_stats'
+                    ORDER BY ordinal_position
+                """
+                pragma_rows = await self.db_adapter.fetch_all(col_query)
+                cols = [r[0] for r in pragma_rows]
 
                 # Include session metadata columns if present (they're NOT NULL in some schemas)
                 insert_cols = ["round_id"]

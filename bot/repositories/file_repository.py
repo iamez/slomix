@@ -37,10 +37,7 @@ class FileRepository:
             Set[str]: Set of filenames that were successfully processed
         """
         try:
-            if self.config.database_type == "sqlite":
-                query = "SELECT filename FROM processed_files WHERE success = 1"
-            else:
-                query = "SELECT filename FROM processed_files WHERE success = true"
+            query = "SELECT filename FROM processed_files WHERE success = true"
 
             rows = await self.db_adapter.fetch_all(query)
             filenames = {row[0] for row in rows}
@@ -65,10 +62,7 @@ class FileRepository:
             Set[str]: Set of newly processed filenames
         """
         try:
-            if self.config.database_type == "sqlite":
-                query = "SELECT filename FROM processed_files WHERE success = 1 AND processed_at > ?"
-            else:
-                query = "SELECT filename FROM processed_files WHERE success = true AND processed_at > $1"
+            query = "SELECT filename FROM processed_files WHERE success = true AND processed_at > $1"
 
             rows = await self.db_adapter.fetch_all(query, (since,))
             filenames = {row[0] for row in rows}
