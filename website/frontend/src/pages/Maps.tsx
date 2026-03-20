@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Map, Users, Clock, Skull, Crosshair } from 'lucide-react';
+import { Users, Clock, Skull, Crosshair } from 'lucide-react';
 import { useMapStats } from '../api/hooks';
 import type { MapStats } from '../api/types';
 import { DataTable, type Column } from '../components/DataTable';

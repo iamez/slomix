@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Info } from 'lucide-react';
+import { ChevronUp, Info } from 'lucide-react';
 
 const STORAGE_KEY = 'proximity-intro-dismissed';
 

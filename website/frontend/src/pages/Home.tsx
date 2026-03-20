@@ -1,12 +1,11 @@
 import { useMemo } from 'react';
-import { ArrowRight, CalendarDays, ChevronRight, Radar, Search, Trophy, Users, Zap } from 'lucide-react';
+import { ArrowRight, CalendarDays, ChevronRight, Radar, Users } from 'lucide-react';
 import { ChartCanvas } from '../components/Chart';
 import { GlassCard } from '../components/GlassCard';
 import { GlassPanel } from '../components/GlassPanel';
 import { PlayerLookup } from '../components/PlayerLookup';
 import { Skeleton } from '../components/Skeleton';
 import { useLatestSession, useLiveStatus, useOverview, useQuickLeaders, useSeason, useTrends } from '../api/hooks';
-import { mapLevelshot } from '../lib/game-assets';
 import { formatNumber } from '../lib/format';
 import { navigateTo, navigateToPlayer } from '../lib/navigation';
 
