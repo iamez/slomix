@@ -83,8 +83,15 @@ async def test_sprint_percentage_propagates_to_player_track_insert(tmp_path):
     track_inserts = [(q, p) for q, p in db.calls if "INSERT INTO player_track" in q]
     assert len(track_inserts) == 2
 
-    sprint_values = sorted(float(params[-1]) for _, params in track_inserts)
-    assert sprint_values == [0.0, 50.0]
+    # Find sprint_percentage by column name in the query
+    for query, params in track_inserts:
+        col_part = query.split("(")[1].split(")")[0]
+        columns = [c.strip() for c in col_part.split(",")]
+        sprint_idx = columns.index("sprint_percentage")
+        if "GUIDAXIS001" in params:
+            assert float(params[sprint_idx]) == 50.0
+        else:
+            assert float(params[sprint_idx]) == 0.0
 
     axis_insert = next(params for _, params in track_inserts if "GUIDAXIS001" in params)
     axis_path_json = next(

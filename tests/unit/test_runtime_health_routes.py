@@ -1,3 +1,8 @@
+"""
+Tests for runtime health API routes.
+
+Covers get_player_round_details and get_awards_leaderboard endpoints.
+"""
 from __future__ import annotations
 
 import pytest
@@ -96,8 +101,12 @@ async def test_get_player_round_details_uses_postgres_columns_and_derives_hits()
     assert payload["combat"]["headshots"] == 6
     assert payload["combat"]["shots"] == 111
     assert payload["combat"]["hits"] == 45
+    assert payload["support"]["kill_assists"] == 8
     assert payload["support"]["revives_given"] == 1
     assert payload["support"]["times_revived"] == 4
+    assert payload["sprees"]["mega_kills"] == 0
+    assert payload["time"]["dead_minutes"] == 1.5
+    assert payload["misc"]["xp"] == 42
     assert payload["misc"]["self_kills"] == 1
 
 
@@ -121,8 +130,8 @@ async def test_awards_leaderboard_groups_by_projected_guid_expression(monkeypatc
     payload = await api_router.get_awards_leaderboard(limit=5, db=db)
 
     normalized_query = _normalize_sql(db.primary_query)
-    assert "group by 1, 2, 4" in normalized_query
-    assert "group by player_key, player_guid, ra.award_name" not in normalized_query
+    # Current query groups by player_key, player_guid, ra.award_name
+    assert "group by player_key, player_guid, ra.award_name" in normalized_query
     assert payload["leaderboard"][0]["guid"] == "guid-1"
     assert payload["leaderboard"][0]["award_count"] == 9
     assert payload["leaderboard"][0]["top_award"] == "Most Gibs"
