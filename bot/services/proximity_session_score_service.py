@@ -47,15 +47,28 @@ class ProximitySessionScoreService:
                 names[guid] = name
 
         # ── 1. Engagement base (survivability + player roster) ───────────
+        # Seed roster from BOTH targets AND attackers to avoid excluding dominant fraggers
         eng_rows = await self.db.fetch_all(
             """
-            SELECT target_guid, MAX(target_name) AS name,
-                   COUNT(*) AS total,
-                   SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
-            FROM combat_engagement
-            WHERE session_date = $1
-            GROUP BY target_guid
-            HAVING COUNT(*) >= $2
+            SELECT guid, MAX(name) AS name, SUM(total) AS total, SUM(escapes) AS escapes
+            FROM (
+                SELECT target_guid AS guid, MAX(target_name) AS name,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
+                FROM combat_engagement WHERE session_date = $1
+                GROUP BY target_guid
+                UNION ALL
+                SELECT unnest(string_to_array(attackers, ',')) AS guid, NULL AS name,
+                       0 AS total, 0 AS escapes
+                FROM combat_engagement WHERE session_date = $1
+            ) sub
+            GROUP BY guid
+            HAVING SUM(total) >= $2 OR guid IN (
+                SELECT unnest(string_to_array(attackers, ','))
+                FROM combat_engagement WHERE session_date = $1
+                GROUP BY unnest(string_to_array(attackers, ','))
+                HAVING COUNT(*) >= $2
+            )
             """,
             (session_date, MIN_ENGAGEMENTS),
         )
@@ -127,16 +140,21 @@ class ProximitySessionScoreService:
             scores[guid]["crossfire"] = min(count / 5.0, 1.0) * 100
             scores[guid]["_cf_count"] = count
 
-        # ── 4. Focus fire ────────────────────────────────────────────────
+        # ── 4. Focus fire (credit attackers who coordinate, not victims) ──
         try:
             ff_rows = await self.db.fetch_all(
                 """
-                SELECT target_guid, MAX(target_name),
+                SELECT attacker_guid, MAX(attacker_name),
                        AVG(focus_score) AS avg_score,
                        COUNT(*) AS events
-                FROM proximity_focus_fire
-                WHERE session_date = $1
-                GROUP BY target_guid
+                FROM (
+                    SELECT unnest(string_to_array(attacker_guids, ',')) AS attacker_guid,
+                           unnest(string_to_array(attacker_names, ',')) AS attacker_name,
+                           focus_score
+                    FROM proximity_focus_fire
+                    WHERE session_date = $1
+                ) sub
+                GROUP BY attacker_guid
                 """,
                 (session_date,),
             )
