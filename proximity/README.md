@@ -66,7 +66,7 @@ async def main():
         port=5432,
         database="etlegacy",
         user="etlegacy_user",
-        password="etlegacy_secure_2025",
+        password=os.environ["DB_PASSWORD"],
         min_pool_size=1,
         max_pool_size=2,
     )
