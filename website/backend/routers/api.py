@@ -9870,7 +9870,7 @@ async def get_stats_session_detail(
                 if len(parts) == 2:
                     actual_time_seconds = int(parts[0]) * 60 + int(parts[1])
             except (ValueError, IndexError):
-                pass
+                pass  # actual_time format not M:SS — use default 0
         duration = lua.get("duration_seconds") or actual_time_seconds
 
         round_obj = {

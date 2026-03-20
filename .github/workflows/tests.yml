@@ -97,4 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Build Docker images
-        run: docker compose build api website
+        run: |
+          cp .env.example .env 2>/dev/null || true
+          echo "POSTGRES_PASSWORD=ci_placeholder" >> .env
+          docker compose build api website
