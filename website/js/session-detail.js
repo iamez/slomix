@@ -247,8 +247,14 @@ function _tradeScopeParams() {
     const date = _activeRoundSessionDate || _sessionDate;
     const params = new URLSearchParams();
     if (date) params.set('session_date', date);
-    if (_activeRoundId && _activeRoundStartUnix) {
-        params.set('round_start_unix', String(_activeRoundStartUnix));
+    if (_activeRoundId) {
+        if (_activeRoundStartUnix) {
+            params.set('round_start_unix', String(_activeRoundStartUnix));
+        } else if (_activeRoundMapName && _activeRoundNumber) {
+            // Fallback when round_start_unix is missing/0
+            params.set('map_name', _activeRoundMapName);
+            params.set('round_number', String(_activeRoundNumber));
+        }
     }
     return params.toString();
 }
@@ -262,6 +268,8 @@ let _activeTab = 'summary';
 let _activeRoundId = null;
 let _activeRoundStartUnix = null;
 let _activeRoundSessionDate = null;
+let _activeRoundMapName = null;
+let _activeRoundNumber = null;
 let _signalsLoaded = null;
 let _vizLoaded = null;
 let _overviewMapIndex = null;
@@ -335,7 +343,19 @@ export async function loadSessionDetailView({ sessionId, sessionDate } = {}) {
             }
         }
         if (!_detailData && _sessionDate) {
-            _detailData = await fetchJSON(`${API_BASE}/sessions/${_sessionDate}`);
+            // Date path: resolve session ID first, then load detail
+            const dateResp = await fetchJSON(`${API_BASE}/sessions/${_sessionDate}`);
+            const resolvedId = dateResp.gaming_session_id || dateResp.session_id
+                || (dateResp.sessions && dateResp.sessions[0] && dateResp.sessions[0].gaming_session_id);
+            if (resolvedId) {
+                _sessionId = parseInt(resolvedId, 10);
+                try {
+                    _detailData = await fetchJSON(`${API_BASE}/stats/session/${_sessionId}/detail`);
+                } catch (_) { /* fall through */ }
+            }
+            if (!_detailData) {
+                _detailData = dateResp;
+            }
             _sessionDate = _detailData.date || _sessionDate;
         }
         if (!_detailData) {
@@ -1092,7 +1112,7 @@ function _renderRoundsSection() {
         return `
             <div class="glass-card rounded-lg p-4 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition sd-round-row ${_activeRoundId === r.roundId ? 'ring-1 ring-brand-blue' : ''}"
                  id="sd-round-row-${r.roundId}"
-                 onclick="sdSelectRound(${r.roundId}, '${escapeJsString(r.sessionDate || '')}', ${r.roundStartUnix})">
+                 onclick="sdSelectRound(${r.roundId}, '${escapeJsString(r.sessionDate || '')}', ${r.roundStartUnix}, '${escapeJsString(r.mapName || '')}', ${r.roundNumber || 0})">
                 ${thumb}
                 <div class="flex items-center gap-2">${badge}</div>
                 <div>
@@ -1135,11 +1155,13 @@ function _refreshRoundScopeUi() {
     }
 }
 
-export function sdSelectRound(roundId, sessionDate, roundStartUnix) {
+export function sdSelectRound(roundId, sessionDate, roundStartUnix, mapName, roundNumber) {
     _activeRoundId = coerceRoundId(roundId);
     if (!_activeRoundId) return;
     _activeRoundStartUnix = roundStartUnix || null;
     _activeRoundSessionDate = sessionDate || _sessionDate;
+    _activeRoundMapName = mapName || null;
+    _activeRoundNumber = roundNumber || null;
 
     document.querySelectorAll('.sd-round-row').forEach(el => el.classList.remove('ring-1', 'ring-brand-blue'));
     const row = document.getElementById(`sd-round-row-${_activeRoundId}`);

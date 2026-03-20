@@ -10028,6 +10028,7 @@ async def get_stats_session_detail(
             "alive_pct_diff": alive_pct_diff,
             "alive_pct_drift": alive_pct_drift,
             "played_pct": played_pct,
+            "played_pct_lua": played_pct,  # same source (engine time), kept for frontend compat
         })
 
     # 5. Scoring — reuse StopwatchScoringService for team-aware map scoring
