@@ -6,7 +6,6 @@ via dedicated writeV5*() helper functions.
 """
 from pathlib import Path
 
-import pytest
 
 
 def _lua_source() -> str:

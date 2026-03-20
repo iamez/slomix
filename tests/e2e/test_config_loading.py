@@ -7,8 +7,6 @@ This is a lightweight E2E test that does not require Discord or database
 connections.
 """
 
-import pytest
-import os
 
 
 class TestConfigLoadingE2E:
