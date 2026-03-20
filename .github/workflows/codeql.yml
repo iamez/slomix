@@ -31,8 +31,7 @@ jobs:
       with:
         languages: ${{ matrix.language }}
         queries: security-and-quality
-        # Use the full code scanning suite
-        # queries: github/codeql/python:ql/src/Security.ql
+        config-file: ./.github/codeql/codeql-config.yml
 
     - name: Set up Python (for Python analysis)
       if: matrix.language == 'python'
