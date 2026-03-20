@@ -948,6 +948,9 @@ export interface ProximityLeaderboardEntry {
   sprint_pct?: number;
   total_distance?: number;
   tracks?: number;
+  times_focused?: number;
+  avg_attackers?: number;
+  avg_damage?: number;
 }
 
 export interface ProximityLeaderboardResponse {

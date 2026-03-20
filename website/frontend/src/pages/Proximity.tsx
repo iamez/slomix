@@ -79,6 +79,9 @@ function fmtMs(v: number | null | undefined) { return v != null ? `${v.toFixed(0
 function fmtDist(v: number | null | undefined) { return v != null ? `${Math.round(v)}u` : '--'; }
 function fmtPct(v: number | null | undefined) { return v != null ? `${v.toFixed(1)}%` : '--'; }
 
+/** Strip ET:Legacy color codes (^0-^9, ^a-^z, ^A-^Z) from player names */
+function stripColors(name: string): string { return name.replace(/\^[0-9a-zA-Z]/g, ''); }
+
 function buildParams(state: { sessionDate: string | null; mapName: string | null; roundNumber: number | null; roundStartUnix: number | null }) {
   const p = new URLSearchParams();
   if (state.sessionDate) p.set('session_date', state.sessionDate);
@@ -171,7 +174,7 @@ function LeaderList({ title, rows, format, tip }: { title: string; rows: LeaderR
         <div className="space-y-1">
           {rows.map((r, i) => (
             <div key={i} className="flex items-center justify-between text-xs">
-              <span className="text-slate-200 truncate">{r.name}</span>
+              <span className="text-slate-200 truncate">{stripColors(String(r.name))}</span>
               <span className="text-cyan-400 font-mono text-[11px]">{format(r)}</span>
             </div>
           ))}
@@ -197,9 +200,9 @@ function EventList({ events }: { events: EventItem[] }) {
         {events.map((e, i) => (
           <div key={e.id ?? i} className="flex items-center justify-between text-xs rounded-lg border border-white/5 bg-slate-950/30 px-2.5 py-1.5">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-blue-400 truncate">{e.attacker_name}</span>
+              <span className="text-blue-400 truncate">{stripColors(e.attacker_name)}</span>
               <span className="text-slate-600">{'\u2192'}</span>
-              <span className="text-rose-400 truncate">{e.target_name}</span>
+              <span className="text-rose-400 truncate">{stripColors(e.target_name)}</span>
             </div>
             <div className="flex items-center gap-3 text-[11px] text-slate-400 shrink-0">
               <span title="Distance (game units)">{fmtDist(e.distance)}</span>
@@ -236,7 +239,7 @@ function TradesPanel({ summary, events }: { summary: TradesSummary | null; event
         <div className="space-y-1">
           {events.slice(0, 8).map((e, i) => (
             <div key={e.id ?? i} className="flex items-center justify-between text-xs">
-              <span className="text-slate-200">{e.killer} {'\u2192'} {e.victim}</span>
+              <span className="text-slate-200">{stripColors(e.killer)} {'\u2192'} {stripColors(e.victim)}</span>
               <span className="text-slate-400">{fmtDist(e.distance)} {e.trade_ms != null ? `${e.trade_ms}ms` : ''}</span>
             </div>
           ))}
@@ -280,7 +283,7 @@ function SessionScorePanel({ sessionDate }: { sessionDate: string | null }) {
                     <span className={`font-bold text-sm ${i < 3 ? 'text-amber-400' : 'text-slate-500'}`}>
                       #{i + 1}
                     </span>
-                    <span className="text-white font-medium text-sm truncate">{p.name}</span>
+                    <span className="text-white font-medium text-sm truncate">{stripColors(p.name)}</span>
                     <span className="text-slate-600 text-[10px]">{p.engagement_count} eng</span>
                   </div>
                   <span className="text-cyan-400 font-mono font-bold text-lg">{p.total_score.toFixed(1)}</span>
@@ -331,7 +334,7 @@ function LeaderboardTabs() {
       label: 'Player',
       render: (row) => (
         <span className="text-slate-200 font-medium truncate">
-          {activeTab === 'crossfire' ? `${row.name} + ${row.partner_name ?? '?'}` : row.name}
+          {activeTab === 'crossfire' ? `${stripColors(row.name)} + ${stripColors(row.partner_name ?? '?')}` : stripColors(row.name)}
         </span>
       ),
     },
