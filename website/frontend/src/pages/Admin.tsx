@@ -35,61 +35,6 @@ interface StatusResponse {
 
 type StatusColor = 'green' | 'red' | 'blue' | 'amber';
 
-// ── Node Data ────────────────────────────────────────────────────────────────
-
-interface NodeInfo {
-  title: string;
-  eli5: string;
-  group: string;
-  files?: string;
-}
-
-const NODES: Record<string, NodeInfo> = {
-  core_game_server:     { title: 'puran.hehe.si (Game Server)',  eli5: 'The live game server where matches are played.',       group: 'infrastructure' },
-  core_postgres:        { title: 'PostgreSQL (Central DB)',      eli5: 'The vault that stores every stat safely.',             group: 'infrastructure' },
-  core_bot_web:         { title: 'Bot + Website Host',           eli5: 'Runs the Discord bot, API backend, and website.',     group: 'infrastructure' },
-  et_server:            { title: 'ET:Legacy Runtime',            eli5: 'The game itself running on the server.',              group: 'game-server' },
-  lua_modules:          { title: 'Lua Modules',                  eli5: 'Scripts that watch the game and write stats files.',  group: 'game-server' },
-  lua_c0rnp0rn7:        { title: 'c0rnp0rn7.lua',               eli5: 'Writes the main stats file after each round.',       group: 'lua', files: 'c0rnp0rn7.lua' },
-  lua_endstats:         { title: 'endstats.lua',                 eli5: 'Writes the awards file when a round ends.',          group: 'lua', files: 'endstats.lua' },
-  lua_webhook:          { title: 'stats_discord_webhook.lua',    eli5: 'Sends a quick ping when rounds start/end.',          group: 'lua', files: 'vps_scripts/stats_discord_webhook.lua' },
-  lua_proximity:        { title: 'proximity_tracker.lua',        eli5: 'Logs how close players are.',                        group: 'lua', files: 'proximity/lua/proximity_tracker.lua' },
-  stats_parser:         { title: 'Stats Parser',                 eli5: 'Turns raw text into clean numbers.',                  group: 'pipeline', files: 'bot/community_stats_parser.py' },
-  differential_calc:    { title: 'R1/R2 Differential',           eli5: 'Computes Round 2 by subtracting Round 1.',           group: 'pipeline', files: 'bot/community_stats_parser.py' },
-  validation_caps:      { title: 'Validation & Caps',            eli5: 'Stops impossible numbers from sneaking in.',         group: 'pipeline', files: 'postgresql_database_manager.py' },
-  ssh_monitor:          { title: 'SSH Monitor',                  eli5: 'Downloads new stats files from the game server.',    group: 'pipeline', files: 'bot/services/automation/ssh_monitor.py' },
-  file_tracker:         { title: 'File Tracker',                 eli5: 'Keeps track of which files are new.',                group: 'pipeline', files: 'bot/automation/file_tracker.py' },
-  webhook_receiver:     { title: 'Webhook Receiver',             eli5: 'Catches Lua timing pings.',                          group: 'pipeline', files: 'bot/ultimate_bot.py' },
-  session_aggregator:   { title: 'Session Aggregator',           eli5: 'Groups rounds into gaming sessions.',                group: 'pipeline', files: 'bot/services/' },
-  discord_bot:          { title: 'Discord Bot',                  eli5: 'Posts stats and handles commands.',                   group: 'output', files: 'bot/ultimate_bot.py' },
-  website_api:          { title: 'Website API',                  eli5: 'Serves stats to the website.',                       group: 'output', files: 'website/backend/main.py' },
-  proximity_parser:     { title: 'Proximity Parser',             eli5: 'Parses proximity engagement logs.',                  group: 'pipeline', files: 'proximity/parser/parser.py' },
-  endstats_parser:      { title: 'Endstats Parser',              eli5: 'Turns awards files into award rows.',                group: 'pipeline', files: 'bot/endstats_parser.py' },
-};
-
-const GROUPS: Record<string, { label: string; color: string }> = {
-  infrastructure: { label: 'Infrastructure', color: 'text-purple-400' },
-  'game-server':  { label: 'Game Server',    color: 'text-cyan-400' },
-  lua:            { label: 'Lua Modules',    color: 'text-amber-400' },
-  pipeline:       { label: 'Data Pipeline',  color: 'text-emerald-400' },
-  output:         { label: 'Output',         color: 'text-blue-400' },
-};
-
-const FLOW_STEPS = [
-  { from: 'ET:Legacy Runtime', to: 'Lua Modules',        label: 'Game events' },
-  { from: 'c0rnp0rn7.lua',    to: 'gamestats/*.txt',     label: 'Stats files' },
-  { from: 'endstats.lua',     to: 'endstats/*.txt',      label: 'Award files' },
-  { from: 'Lua Webhook',      to: 'Webhook Receiver',    label: 'HTTP POST' },
-  { from: 'SSH Monitor',      to: 'File Tracker',        label: 'Sync files' },
-  { from: 'File Tracker',     to: 'Stats Parser',        label: 'Parse queue' },
-  { from: 'Stats Parser',     to: 'R1/R2 Differential',  label: 'R2 split' },
-  { from: 'R1/R2 Differential', to: 'Validation & Caps', label: 'Validate' },
-  { from: 'Validation & Caps',to: 'PostgreSQL',          label: 'Write rows' },
-  { from: 'PostgreSQL',       to: 'Session Aggregator',  label: 'Session totals' },
-  { from: 'Session Aggregator', to: 'Discord Bot',       label: 'Post embeds' },
-  { from: 'PostgreSQL',       to: 'Website API',         label: 'Query data' },
-];
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function statusColor(s: string): StatusColor {
@@ -99,14 +44,20 @@ function statusColor(s: string): StatusColor {
   return 'blue';
 }
 
-function StatusDot({ color }: { color: StatusColor }) {
-  const cls = {
-    green: 'bg-emerald-500 shadow-emerald-500/50',
-    red: 'bg-rose-500 shadow-rose-500/50',
-    amber: 'bg-amber-500 shadow-amber-500/50',
-    blue: 'bg-blue-500 shadow-blue-500/50',
-  }[color];
-  return <span className={`inline-block w-2.5 h-2.5 rounded-full shadow-[0_0_6px] ${cls}`} />;
+const DOT_CLS: Record<StatusColor, string> = {
+  green: 'bg-emerald-500 shadow-emerald-500/50',
+  red:   'bg-rose-500 shadow-rose-500/50',
+  amber: 'bg-amber-500 shadow-amber-500/50',
+  blue:  'bg-blue-500 shadow-blue-500/50',
+};
+
+function StatusDot({ color, pulse }: { color: StatusColor; pulse?: boolean }) {
+  return (
+    <span className="relative flex h-2.5 w-2.5">
+      {pulse && <span className={`absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping ${DOT_CLS[color]}`} />}
+      <span className={`relative inline-flex rounded-full h-2.5 w-2.5 shadow-[0_0_6px] ${DOT_CLS[color]}`} />
+    </span>
+  );
 }
 
 function formatSec(v: number | undefined | null): string {
@@ -124,86 +75,240 @@ function fmtNum(v: number | undefined | null): string {
   return v.toLocaleString();
 }
 
-// ── Health Dashboard ─────────────────────────────────────────────────────────
+function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return 'never';
+  const d = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(d / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
-function HealthDashboard({ diag, apiStatus }: { diag: DiagnosticsResponse | undefined; apiStatus: StatusResponse | undefined }) {
+// ── Version & Config ─────────────────────────────────────────────────────────
+
+const SYSTEM_VERSION = '1.0.8';
+const SCHEMA_VERSION = '2.0';
+
+// ── Architecture Data ────────────────────────────────────────────────────────
+
+interface PipelineNode {
+  id: string;
+  label: string;
+  desc: string;
+  icon: string;
+  layer: 'server' | 'lua' | 'transport' | 'pipeline' | 'storage' | 'output';
+}
+
+const PIPELINE: PipelineNode[] = [
+  { id: 'et',         label: 'ET:Legacy',              desc: 'Game server running matches',                 icon: '\u{1F3AE}', layer: 'server' },
+  { id: 'c0rn',       label: 'c0rnp0rn7.lua',          desc: 'Writes gamestats/*.txt after each round',     icon: '\u{1F4DD}', layer: 'lua' },
+  { id: 'endstats',   label: 'endstats.lua',            desc: 'Writes endstats awards files',                icon: '\u{1F3C6}', layer: 'lua' },
+  { id: 'webhook',    label: 'stats_webhook.lua',       desc: 'Real-time round start/end notifications',     icon: '\u{1F4E1}', layer: 'lua' },
+  { id: 'proximity',  label: 'proximity_tracker.lua',   desc: 'Tracks player positions & engagements',       icon: '\u{1F4CD}', layer: 'lua' },
+  { id: 'ssh',        label: 'SSH Monitor',             desc: 'Downloads new files every 60s',               icon: '\u{1F50D}', layer: 'transport' },
+  { id: 'filetrack',  label: 'File Tracker',            desc: '5-layer dedup with SHA256 integrity',         icon: '\u{1F4C1}', layer: 'transport' },
+  { id: 'webhookrx',  label: 'Webhook Receiver',        desc: 'Catches Lua timing pings via HTTP',           icon: '\u{1F4E5}', layer: 'transport' },
+  { id: 'parser',     label: 'Stats Parser',            desc: 'Parses 56 fields, R2 differential calc',      icon: '\u{2699}\u{FE0F}',  layer: 'pipeline' },
+  { id: 'validate',   label: 'Validation & Caps',       desc: 'Prevents impossible values, caps outliers',   icon: '\u{1F6E1}\u{FE0F}', layer: 'pipeline' },
+  { id: 'session',    label: 'Session Aggregator',      desc: 'Groups rounds into sessions (60-min gap)',    icon: '\u{1F4CA}', layer: 'pipeline' },
+  { id: 'correlate',  label: 'Round Correlation',       desc: 'Tracks R1+R2 data completeness',              icon: '\u{1F517}', layer: 'pipeline' },
+  { id: 'postgres',   label: 'PostgreSQL',              desc: '68 tables, 56+ columns in player stats',     icon: '\u{1F5C4}\u{FE0F}', layer: 'storage' },
+  { id: 'redis',      label: 'Redis',                   desc: 'Cache layer, session data',                   icon: '\u{26A1}',  layer: 'storage' },
+  { id: 'bot',        label: 'Discord Bot',             desc: '80+ commands across 18 Cogs',                 icon: '\u{1F916}', layer: 'output' },
+  { id: 'website',    label: 'Website API',             desc: 'FastAPI backend, 88 endpoints',               icon: '\u{1F310}', layer: 'output' },
+];
+
+const LAYER_META: Record<string, { label: string; color: string; border: string }> = {
+  server:    { label: 'Game Server',    color: 'text-rose-400',    border: 'border-rose-500/30' },
+  lua:       { label: 'Lua Scripts',    color: 'text-amber-400',   border: 'border-amber-500/30' },
+  transport: { label: 'Transport',      color: 'text-cyan-400',    border: 'border-cyan-500/30' },
+  pipeline:  { label: 'Processing',     color: 'text-emerald-400', border: 'border-emerald-500/30' },
+  storage:   { label: 'Storage',        color: 'text-purple-400',  border: 'border-purple-500/30' },
+  output:    { label: 'Output',         color: 'text-blue-400',    border: 'border-blue-500/30' },
+};
+
+const LAYER_ORDER = ['server', 'lua', 'transport', 'pipeline', 'storage', 'output'] as const;
+
+const FLOW_ARROWS: Array<[string, string, string]> = [
+  ['ET:Legacy',             'Lua Scripts',    'game events'],
+  ['Lua Scripts',           'Transport',      'files + HTTP'],
+  ['Transport',             'Processing',     'parse queue'],
+  ['Processing',            'Storage',        'write rows'],
+  ['Storage',               'Output',         'query + post'],
+];
+
+// ── Table categories ─────────────────────────────────────────────────────────
+
+const TABLE_CATEGORIES: Record<string, string[]> = {
+  'Core Stats':   ['rounds', 'player_comprehensive_stats', 'weapon_comprehensive_stats', 'player_links'],
+  'Sessions':     ['sessions', 'session_teams', 'gaming_sessions'],
+  'Lua & Timing': ['lua_round_teams', 'lua_spawn_stats', 'round_correlations'],
+  'Proximity':    ['proximity_engagements', 'proximity_spawn_timing', 'proximity_team_cohesion', 'proximity_crossfire_opportunity', 'proximity_team_push', 'proximity_lua_trade_kill'],
+  'Monitoring':   ['server_status_history', 'voice_status_history', 'processed_files'],
+  'Users':        ['discord_users', 'players'],
+};
+
+// ── Service Status Card ──────────────────────────────────────────────────────
+
+function ServiceCard({ title, status, detail, pulse }: { title: string; status: StatusColor; detail: string; pulse?: boolean }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4 hover:border-white/20 transition">
+      <div className="flex items-center gap-2.5 mb-1.5">
+        <StatusDot color={status} pulse={pulse} />
+        <span className="text-sm font-bold text-white">{title}</span>
+      </div>
+      <div className="text-xs text-slate-400 pl-5">{detail}</div>
+    </div>
+  );
+}
+
+// ── Health Banner ────────────────────────────────────────────────────────────
+
+function HealthBanner({ diag, apiStatus }: { diag: DiagnosticsResponse | undefined; apiStatus: StatusResponse | undefined }) {
   const { data: live } = useLiveStatus();
 
   const dbColor = statusColor(diag?.database?.status ?? 'unknown');
   const apiColor = statusColor(apiStatus?.status ?? 'unknown');
-  const gameColor = live?.game_server?.online ? 'green' as StatusColor : 'red' as StatusColor;
-  const overallColor = diag?.issues?.length ? 'red' as StatusColor : diag?.warnings?.length ? 'amber' as StatusColor : 'green' as StatusColor;
+  const gameOnline = live?.game_server?.online ?? false;
+  const gameColor: StatusColor = gameOnline ? 'green' : 'red';
+  const voiceCount = live?.voice_channel?.count ?? 0;
+  const overallColor: StatusColor = diag?.issues?.length ? 'red' : diag?.warnings?.length ? 'amber' : 'green';
+
+  const playerCountText = gameOnline
+    ? `${live?.game_server?.player_count ?? 0}/${live?.game_server?.max_players ?? 20} players`
+    : 'offline';
 
   return (
     <GlassPanel>
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-xs font-bold uppercase tracking-widest text-slate-400">System Health</div>
-        <div className="flex items-center gap-2">
-          <StatusDot color={overallColor} />
-          <span className="text-xs text-slate-300">{diag?.status?.toUpperCase() ?? 'CHECKING'}</span>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+        <div className="flex items-center gap-3">
+          <StatusDot color={overallColor} pulse={overallColor !== 'green'} />
+          <div>
+            <span className="text-sm font-bold text-white">System {diag?.status?.toUpperCase() ?? 'CHECKING'}</span>
+            <span className="text-xs text-slate-500 ml-2">v{SYSTEM_VERSION} / schema {SCHEMA_VERSION}</span>
+          </div>
+        </div>
+        <div className="text-[11px] text-slate-500 tabular-nums">
+          {diag?.timestamp ? new Date(diag.timestamp).toLocaleString() : '--'}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
-          <div className="flex items-center gap-2 mb-1"><StatusDot color={dbColor} /><span className="text-xs font-bold text-white">Database</span></div>
-          <div className="text-[11px] text-slate-400">{diag?.database?.status ?? 'unknown'}</div>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
-          <div className="flex items-center gap-2 mb-1"><StatusDot color={apiColor} /><span className="text-xs font-bold text-white">API</span></div>
-          <div className="text-[11px] text-slate-400">{apiStatus?.status ?? 'unknown'}</div>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
-          <div className="flex items-center gap-2 mb-1"><StatusDot color={gameColor} /><span className="text-xs font-bold text-white">Game Server</span></div>
-          <div className="text-[11px] text-slate-400">
-            {live?.game_server?.online
-              ? `${live.game_server.player_count}/${live.game_server.max_players} players`
-              : 'offline'}
-          </div>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
-          <div className="flex items-center gap-2 mb-1"><StatusDot color={live?.voice_channel?.count ? 'green' : 'blue'} /><span className="text-xs font-bold text-white">Voice</span></div>
-          <div className="text-[11px] text-slate-400">{live?.voice_channel?.count ?? 0} in voice</div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <ServiceCard title="Database"    status={dbColor}   detail={diag?.database?.status ?? 'unknown'} />
+        <ServiceCard title="API"         status={apiColor}  detail={apiStatus?.database ?? 'unknown'} />
+        <ServiceCard title="Game Server" status={gameColor} detail={playerCountText} pulse={gameOnline} />
+        <ServiceCard title="Voice"       status={voiceCount > 0 ? 'green' : 'blue'} detail={`${voiceCount} in channel`} pulse={voiceCount > 0} />
       </div>
     </GlassPanel>
   );
 }
 
-// ── Tables Status ────────────────────────────────────────────────────────────
+// ── Architecture Pipeline ────────────────────────────────────────────────────
 
-function TablesStatus({ tables }: { tables: DiagnosticsResponse['tables'] }) {
-  if (!tables.length) return null;
+function ArchitecturePipeline() {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const layers = useMemo(() => {
+    return LAYER_ORDER.map((layer) => ({
+      ...LAYER_META[layer],
+      id: layer,
+      nodes: PIPELINE.filter((n) => n.layer === layer),
+    }));
+  }, []);
+
   return (
-    <GlassCard>
-      <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Database Tables</div>
-      <div className="space-y-1.5">
-        {tables.map((t) => (
-          <div key={t.name} className="flex items-center justify-between rounded-lg border border-white/10 bg-slate-950/30 px-3 py-2">
-            <div className="flex items-center gap-2">
-              <StatusDot color={statusColor(t.status)} />
-              <span className="text-xs text-white font-mono">{t.name}</span>
-              {t.required && <span className="text-[9px] text-amber-400 font-bold">REQ</span>}
-            </div>
-            <div className="text-[11px] text-slate-400">
-              {t.status === 'ok' ? `${fmtNum(t.row_count)} rows` : t.status}
+    <GlassPanel>
+      <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">Data Pipeline Architecture</div>
+
+      {/* Flow arrows between layers */}
+      <div className="hidden lg:flex items-center justify-center gap-0 mb-6 px-4">
+        {FLOW_ARROWS.map(([from, to, label], i) => (
+          <div key={i} className="flex items-center">
+            {i > 0 && <div className="w-px h-4 bg-slate-700 mx-1" />}
+            <div className="flex flex-col items-center px-2">
+              <span className="text-[10px] text-cyan-400 font-mono whitespace-nowrap">{from}</span>
+              <div className="flex items-center gap-1 my-0.5">
+                <div className="w-8 h-px bg-gradient-to-r from-cyan-500/50 to-emerald-500/50" />
+                <span className="text-[9px] text-slate-500">{label}</span>
+                <div className="w-8 h-px bg-gradient-to-r from-emerald-500/50 to-cyan-500/50" />
+              </div>
+              <span className="text-[10px] text-emerald-400 font-mono whitespace-nowrap">{to}</span>
             </div>
           </div>
         ))}
       </div>
-    </GlassCard>
+
+      {/* Layer groups */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {layers.map((layer) => (
+          <div key={layer.id} className={`rounded-xl border ${layer.border} bg-slate-950/30 p-3`}>
+            <div className={`text-[10px] font-bold uppercase tracking-wider ${layer.color} mb-2`}>
+              {layer.label}
+            </div>
+            <div className="space-y-1">
+              {layer.nodes.map((node) => (
+                <button
+                  key={node.id}
+                  onClick={() => setExpanded(expanded === node.id ? null : node.id)}
+                  className="w-full text-left rounded-lg border border-white/5 bg-slate-950/40 px-3 py-2 hover:border-white/15 transition"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{node.icon}</span>
+                    <span className="text-xs font-semibold text-white">{node.label}</span>
+                  </div>
+                  {expanded === node.id && (
+                    <div className="mt-1.5 text-[11px] text-slate-400 pl-6">{node.desc}</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </GlassPanel>
   );
 }
 
-// ── Warnings Panel ───────────────────────────────────────────────────────────
+// ── Quick Stats Bar ──────────────────────────────────────────────────────────
 
-function WarningsPanel({ issues, warnings }: { issues: string[]; warnings: string[] }) {
+function QuickStats({ tables }: { tables: DiagnosticsResponse['tables'] }) {
+  const get = (name: string) => tables.find((t) => t.name === name)?.row_count;
+
+  const stats = [
+    { label: 'Rounds',       value: fmtNum(get('rounds')),                        icon: '\u{1F3AF}' },
+    { label: 'Player Stats', value: fmtNum(get('player_comprehensive_stats')),     icon: '\u{1F4CA}' },
+    { label: 'Players',      value: fmtNum(get('players')),                        icon: '\u{1F465}' },
+    { label: 'Linked Users', value: fmtNum(get('discord_users')),                  icon: '\u{1F517}' },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {stats.map(({ label, value, icon }) => (
+        <GlassCard key={label}>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{icon}</span>
+            <div>
+              <div className="text-lg font-bold text-white tabular-nums">{value}</div>
+              <div className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</div>
+            </div>
+          </div>
+        </GlassCard>
+      ))}
+    </div>
+  );
+}
+
+// ── Alerts Panel ─────────────────────────────────────────────────────────────
+
+function AlertsPanel({ issues, warnings }: { issues: string[]; warnings: string[] }) {
   if (!issues.length && !warnings.length) {
     return (
       <GlassCard>
         <div className="flex items-center gap-2">
           <StatusDot color="green" />
-          <span className="text-xs text-slate-300">Diagnostics clean. No critical warnings detected.</span>
+          <span className="text-xs text-slate-300">All systems operational. No alerts.</span>
         </div>
       </GlassCard>
     );
@@ -213,37 +318,113 @@ function WarningsPanel({ issues, warnings }: { issues: string[]; warnings: strin
       <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Alerts</div>
       <div className="space-y-2">
         {issues.map((msg, i) => (
-          <div key={`i${i}`} className="flex items-start gap-2">
-            <StatusDot color="red" /><span className="text-xs text-rose-400">{msg}</span>
+          <div key={`i${i}`} className="flex items-start gap-2 rounded-lg bg-rose-500/5 border border-rose-500/20 px-3 py-2">
+            <StatusDot color="red" /><span className="text-xs text-rose-300">{msg}</span>
           </div>
         ))}
         {warnings.map((msg, i) => (
-          <div key={`w${i}`} className="flex items-start gap-2">
-            <StatusDot color="blue" /><span className="text-xs text-blue-400">{msg}</span>
+          <div key={`w${i}`} className="flex items-start gap-2 rounded-lg bg-amber-500/5 border border-amber-500/20 px-3 py-2">
+            <StatusDot color="amber" /><span className="text-xs text-amber-300">{msg}</span>
           </div>
         ))}
       </div>
     </GlassCard>
+  );
+}
+
+// ── Tables Overview ──────────────────────────────────────────────────────────
+
+function TablesOverview({ tables }: { tables: DiagnosticsResponse['tables'] }) {
+  const [openCat, setOpenCat] = useState<string | null>('Core Stats');
+
+  if (!tables.length) return null;
+
+  // Group known tables into categories, put unknowns in "Other"
+  const categorized = useMemo(() => {
+    const known = new Set(Object.values(TABLE_CATEGORIES).flat());
+    const other = tables.filter((t) => !known.has(t.name));
+    return { ...TABLE_CATEGORIES, ...(other.length ? { Other: other.map((t) => t.name) } : {}) };
+  }, [tables]);
+
+  const tableMap = useMemo(() => {
+    const m: Record<string, (typeof tables)[0]> = {};
+    for (const t of tables) m[t.name] = t;
+    return m;
+  }, [tables]);
+
+  return (
+    <GlassPanel>
+      <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">
+        Database Tables ({tables.length})
+      </div>
+      <div className="space-y-2">
+        {Object.entries(categorized).map(([cat, names]) => {
+          const catTables = names.map((n) => tableMap[n]).filter(Boolean);
+          const total = catTables.reduce((s, t) => s + (t.row_count ?? 0), 0);
+          const hasError = catTables.some((t) => t.status !== 'ok');
+          const isOpen = openCat === cat;
+
+          return (
+            <div key={cat} className="rounded-xl border border-white/10 bg-slate-950/30 overflow-hidden">
+              <button
+                onClick={() => setOpenCat(isOpen ? null : cat)}
+                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition"
+              >
+                <div className="flex items-center gap-2">
+                  <StatusDot color={hasError ? 'amber' : 'green'} />
+                  <span className="text-xs font-bold text-white">{cat}</span>
+                  <span className="text-[10px] text-slate-500">{catTables.length} tables</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-slate-400 tabular-nums">{fmtNum(total)} rows</span>
+                  <span className="text-slate-500 text-[11px]">{isOpen ? '\u25B2' : '\u25BC'}</span>
+                </div>
+              </button>
+
+              {isOpen && (
+                <div className="border-t border-white/5 px-4 py-2 space-y-1">
+                  {catTables.map((t) => (
+                    <div key={t.name} className="flex items-center justify-between py-1">
+                      <div className="flex items-center gap-2">
+                        <StatusDot color={statusColor(t.status)} />
+                        <span className="text-[11px] text-white font-mono">{t.name}</span>
+                        {t.required && <span className="text-[9px] text-amber-400 font-bold ml-1">REQ</span>}
+                      </div>
+                      <span className="text-[11px] text-slate-400 tabular-nums">
+                        {t.status === 'ok' ? fmtNum(t.row_count) : t.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </GlassPanel>
   );
 }
 
 // ── Time Metrics ─────────────────────────────────────────────────────────────
 
 function TimeMetrics({ time }: { time: DiagnosticsResponse['time'] }) {
+  const metrics = [
+    { label: 'Raw Dead Time',    value: formatSec(time.raw_dead_seconds),    sub: 'Total across all players' },
+    { label: 'Capped Dead Time', value: formatSec(time.agg_dead_seconds),    sub: 'After per-round capping' },
+    { label: 'Time Removed',     value: formatSec(time.cap_seconds),         sub: 'Saved by capping' },
+    { label: 'Cap Triggers',     value: fmtNum(time.cap_hits),               sub: 'Rows where cap applied' },
+    { label: 'Denied Time',      value: formatSec(time.raw_denied_seconds),  sub: 'Total denied playtime' },
+  ];
+
   return (
     <GlassCard>
-      <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Timing Metrics</div>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {[
-          { label: 'Raw Dead', value: formatSec(time.raw_dead_seconds) },
-          { label: 'Capped Dead', value: formatSec(time.agg_dead_seconds) },
-          { label: 'Raw Denied', value: formatSec(time.raw_denied_seconds) },
-          { label: 'Cap Hits', value: fmtNum(time.cap_hits) },
-          { label: 'Cap Seconds', value: formatSec(time.cap_seconds) },
-        ].map(({ label, value }) => (
+      <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Timing Audit</div>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+        {metrics.map(({ label, value, sub }) => (
           <div key={label} className="text-center">
-            <div className="text-[10px] text-slate-500 uppercase">{label}</div>
-            <div className="text-sm font-bold text-white font-mono">{value}</div>
+            <div className="text-[10px] text-slate-500 uppercase mb-0.5">{label}</div>
+            <div className="text-base font-bold text-white font-mono tabular-nums">{value}</div>
+            <div className="text-[9px] text-slate-600 mt-0.5">{sub}</div>
           </div>
         ))}
       </div>
@@ -251,7 +432,7 @@ function TimeMetrics({ time }: { time: DiagnosticsResponse['time'] }) {
   );
 }
 
-// ── Monitoring ───────────────────────────────────────────────────────────────
+// ── Monitoring Panel ─────────────────────────────────────────────────────────
 
 function MonitoringPanel({ monitoring }: { monitoring: DiagnosticsResponse['monitoring'] }) {
   const entries = Object.entries(monitoring);
@@ -259,116 +440,21 @@ function MonitoringPanel({ monitoring }: { monitoring: DiagnosticsResponse['moni
   return (
     <GlassCard>
       <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Monitoring History</div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {entries.map(([key, info]) => (
           <div key={key} className="rounded-lg border border-white/10 bg-slate-950/30 p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <StatusDot color={info.error ? 'amber' : info.count > 0 ? 'green' : 'blue'} />
-              <span className="text-xs font-bold text-white capitalize">{key}</span>
-            </div>
-            <div className="text-[11px] text-slate-400">
-              {fmtNum(info.count)} records
-              {info.last_recorded_at && <> &middot; Last: {new Date(info.last_recorded_at).toLocaleString()}</>}
-            </div>
-          </div>
-        ))}
-      </div>
-    </GlassCard>
-  );
-}
-
-// ── Data Flow ────────────────────────────────────────────────────────────────
-
-function DataFlowPanel() {
-  return (
-    <GlassCard>
-      <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Data Flow Pipeline</div>
-      <div className="space-y-1">
-        {FLOW_STEPS.map((step, i) => (
-          <div key={i} className="flex items-center gap-2 text-xs">
-            <span className="text-cyan-400 font-mono min-w-[140px] text-right">{step.from}</span>
-            <span className="text-slate-600">{'\u2192'}</span>
-            <span className="text-emerald-400 font-mono min-w-[140px]">{step.to}</span>
-            <span className="text-slate-500 text-[11px]">{step.label}</span>
-          </div>
-        ))}
-      </div>
-    </GlassCard>
-  );
-}
-
-// ── Node Explorer ────────────────────────────────────────────────────────────
-
-function NodeExplorer() {
-  const [search, setSearch] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return Object.entries(NODES).filter(([_, n]) => {
-      if (selectedGroup && n.group !== selectedGroup) return false;
-      if (q && !n.title.toLowerCase().includes(q) && !n.eli5.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [search, selectedGroup]);
-
-  return (
-    <GlassPanel>
-      <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">System Components ({Object.keys(NODES).length})</div>
-
-      <div className="flex flex-wrap gap-2 mb-3">
-        <button
-          onClick={() => setSelectedGroup(null)}
-          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${!selectedGroup ? 'border-cyan-500/50 text-cyan-400 bg-cyan-500/10' : 'border-white/15 text-slate-400 hover:text-white'}`}
-        >
-          All
-        </button>
-        {Object.entries(GROUPS).map(([key, g]) => (
-          <button
-            key={key}
-            onClick={() => setSelectedGroup(selectedGroup === key ? null : key)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${selectedGroup === key ? 'border-cyan-500/50 text-cyan-400 bg-cyan-500/10' : 'border-white/15 text-slate-400 hover:text-white'}`}
-          >
-            {g.label}
-          </button>
-        ))}
-      </div>
-
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search components..."
-        className="w-full rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-500/50 mb-3"
-      />
-
-      <div className="space-y-1.5 max-h-[500px] overflow-y-auto">
-        {filtered.map(([id, node]) => (
-          <button
-            key={id}
-            onClick={() => setExpanded(expanded === id ? null : id)}
-            className="w-full text-left rounded-lg border border-white/10 bg-slate-950/30 px-3 py-2 hover:border-cyan-500/30 transition"
-          >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
-                <span className={`text-[10px] font-bold ${GROUPS[node.group]?.color ?? 'text-slate-500'}`}>
-                  {GROUPS[node.group]?.label ?? node.group}
-                </span>
-                <span className="text-xs font-semibold text-white">{node.title}</span>
+                <StatusDot color={info.error ? 'amber' : info.count > 0 ? 'green' : 'blue'} />
+                <span className="text-xs font-bold text-white capitalize">{key}</span>
               </div>
-              <span className="text-[11px] text-slate-500">{expanded === id ? '\u25B2' : '\u25BC'}</span>
+              <span className="text-[10px] text-slate-500">{timeAgo(info.last_recorded_at)}</span>
             </div>
-            {expanded === id && (
-              <div className="mt-2 space-y-1 text-[11px]">
-                <div className="text-slate-300">{node.eli5}</div>
-                {node.files && <div className="text-slate-500 font-mono">{node.files}</div>}
-              </div>
-            )}
-          </button>
+            <div className="text-[11px] text-slate-400 pl-5">{fmtNum(info.count)} records</div>
+          </div>
         ))}
-        {filtered.length === 0 && <div className="text-xs text-slate-500 text-center py-4">No matching components.</div>}
       </div>
-    </GlassPanel>
+    </GlassCard>
   );
 }
 
@@ -397,7 +483,7 @@ export default function Admin() {
   if (!auth) {
     return (
       <div className="page-shell">
-        <PageHeader title="Admin Panel" subtitle="Operational diagnostics and architecture." eyebrow="Advanced" />
+        <PageHeader title="System Overview" subtitle="Operational diagnostics and architecture." eyebrow="Admin" />
         <div className="text-center py-16">
           <div className="text-4xl mb-4">{'\u{1F512}'}</div>
           <p className="text-slate-400 text-lg mb-4">Admin access requires authentication.</p>
@@ -413,26 +499,34 @@ export default function Admin() {
 
   return (
     <div className="page-shell">
-      <PageHeader title="Admin Panel" subtitle="System diagnostics and operational overview." eyebrow="Advanced" />
+      <PageHeader title="System Overview" subtitle="Real-time diagnostics, architecture, and operational health." eyebrow="Admin" />
 
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-[11px] text-slate-500">
-          Last refresh: {diag?.timestamp ? new Date(diag.timestamp).toLocaleTimeString() : '--'}
-        </div>
+      {/* Refresh button */}
+      <div className="flex items-center justify-end mb-4">
         <button
           onClick={handleRefresh}
           className="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 text-slate-300 hover:border-cyan-500/40 hover:text-white transition"
         >
-          Refresh Now
+          Refresh
         </button>
       </div>
 
-      {/* Health Dashboard */}
-      <HealthDashboard diag={diag} apiStatus={apiStatus} />
+      {/* Health Banner */}
+      <HealthBanner diag={diag} apiStatus={apiStatus} />
 
-      {/* Warnings */}
+      {/* Alerts */}
       <div className="mt-4">
-        <WarningsPanel issues={diag?.issues ?? []} warnings={diag?.warnings ?? []} />
+        <AlertsPanel issues={diag?.issues ?? []} warnings={diag?.warnings ?? []} />
+      </div>
+
+      {/* Quick Stats */}
+      <div className="mt-4">
+        <QuickStats tables={diag?.tables ?? []} />
+      </div>
+
+      {/* Architecture Pipeline */}
+      <div className="mt-4">
+        <ArchitecturePipeline />
       </div>
 
       {/* Time Metrics + Monitoring */}
@@ -441,15 +535,9 @@ export default function Admin() {
         <MonitoringPanel monitoring={diag?.monitoring ?? {}} />
       </div>
 
-      {/* Tables + Data Flow */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-        <TablesStatus tables={diag?.tables ?? []} />
-        <DataFlowPanel />
-      </div>
-
-      {/* Node Explorer */}
+      {/* Database Tables */}
       <div className="mt-4">
-        <NodeExplorer />
+        <TablesOverview tables={diag?.tables ?? []} />
       </div>
     </div>
   );
