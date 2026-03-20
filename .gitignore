@@ -12,6 +12,9 @@
 .env
 .prodenv
 .envcopy
+.db_credentials
+.redis_credentials
+.ssh/
 *.pem
 *.key
 
@@ -30,6 +33,8 @@ env/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.cache/
 .coverage
 coverage.xml
 htmlcov/
@@ -194,6 +199,7 @@ INSTALL_*.md
 # ============================================
 *.bat
 *.ps1
+freshinstall.sh
 setup_linux_bot.sh
 setup_linux_env.sh
 vps_install.sh
@@ -203,11 +209,13 @@ check_before_commit.sh
 
 # Personal automation scripts
 run_claude_auto.sh
+update_bot.sh
 
 # ============================================
 # PERSONAL / SCRATCH FILES AT ROOT
 # ============================================
 *.docx
+# Local runtime config stays machine-specific; keep sanitized examples instead.
 config.json
 bot_config.json
 fiveeyes_config.json
@@ -261,7 +269,6 @@ WEBSITE_STAT_BUGS_FOUND.md
 # ============================================
 # DEV DIRECTORIES (NEVER COMMIT)
 # ============================================
-/analytics/
 /archive/
 /asdf/
 /backups/
@@ -275,11 +282,13 @@ WEBSITE_STAT_BUGS_FOUND.md
 /local_gametimes/
 /local_proximity/
 /data/
-/monitoring/
 /node_modules/
 /prompt_instructions/
 /server/
 /temp/
+/etmain/
+/screenshots/
+/test-results/
 /test_files/
 /test_suite/
 /tmp/
@@ -372,6 +381,11 @@ tools/*
 # DOCS ARCHIVE (historical, not needed)
 # ============================================
 docs/archive/
+
+# Internal research / prompt / report corpora stay local unless explicitly promoted.
+docs/reports/
+docs/instructions/
+docs/research/inbox/
 
 # ============================================
 # DOCS — INTERNAL DEV ARTIFACTS (gitignore)
@@ -620,8 +634,6 @@ proximity/map_rotation.txt
 !postgresql_database_manager.py
 !install.sh
 !start_bot.sh
-!update_bot.sh
-!freshinstall.sh
 !Makefile
 !docker-compose.yml
 !pyproject.toml

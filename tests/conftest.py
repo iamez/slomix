@@ -82,9 +82,75 @@ async def db_adapter(test_db_config):
 
     try:
         await adapter.connect()
+        # Ensure minimal schema exists for integration tests
+        await _ensure_test_schema(adapter)
         yield adapter
     finally:
         await adapter.close()
+
+
+async def _ensure_test_schema(adapter):
+    """Create minimal tables if they don't exist (CI has empty test DB)."""
+    try:
+        await adapter.execute("""
+            CREATE TABLE IF NOT EXISTS rounds (
+                id SERIAL PRIMARY KEY,
+                match_id TEXT,
+                round_number INTEGER DEFAULT 0,
+                round_date TEXT,
+                round_time TEXT,
+                map_name TEXT,
+                time_limit TEXT DEFAULT '0',
+                actual_time TEXT,
+                defender_team INTEGER DEFAULT 0,
+                winner_team INTEGER DEFAULT 0,
+                is_tied BOOLEAN DEFAULT FALSE,
+                round_outcome TEXT,
+                gaming_session_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                round_status TEXT
+            )
+        """)
+        await adapter.execute("""
+            CREATE TABLE IF NOT EXISTS player_comprehensive_stats (
+                id SERIAL PRIMARY KEY,
+                round_id INTEGER REFERENCES rounds(id) ON DELETE CASCADE,
+                round_date TEXT,
+                map_name TEXT,
+                round_number INTEGER DEFAULT 0,
+                player_guid TEXT,
+                player_name TEXT,
+                clean_name TEXT,
+                team INTEGER DEFAULT 0,
+                kills INTEGER DEFAULT 0,
+                deaths INTEGER DEFAULT 0,
+                damage_given INTEGER DEFAULT 0,
+                UNIQUE(round_id, player_guid)
+            )
+        """)
+        await adapter.execute("""
+            CREATE TABLE IF NOT EXISTS weapon_comprehensive_stats (
+                id SERIAL PRIMARY KEY,
+                round_id INTEGER REFERENCES rounds(id) ON DELETE CASCADE,
+                round_date TEXT,
+                map_name TEXT,
+                round_number INTEGER DEFAULT 0,
+                player_guid TEXT,
+                weapon_name TEXT,
+                kills INTEGER DEFAULT 0,
+                deaths INTEGER DEFAULT 0,
+                hits INTEGER DEFAULT 0,
+                shots INTEGER DEFAULT 0,
+                headshots INTEGER DEFAULT 0,
+                accuracy REAL DEFAULT 0
+            )
+        """)
+        await adapter.execute("CREATE TABLE IF NOT EXISTS processed_files (id SERIAL PRIMARY KEY, filename TEXT UNIQUE, sha256_hash TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+        await adapter.execute("CREATE TABLE IF NOT EXISTS session_teams (id SERIAL PRIMARY KEY, gaming_session_id INTEGER, team_name TEXT, player_guid TEXT)")
+        await adapter.execute("CREATE TABLE IF NOT EXISTS player_aliases (id SERIAL PRIMARY KEY, player_guid TEXT, player_name TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+        await adapter.execute("CREATE TABLE IF NOT EXISTS player_links (id SERIAL PRIMARY KEY, discord_id TEXT, player_guid TEXT)")
+    except Exception:
+        pass  # Tables may already exist or schema may differ slightly
 
 
 @pytest.fixture

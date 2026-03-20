@@ -4,7 +4,7 @@ Session Graph Generator - Creates beautiful performance graphs
 This service generates 5 themed graph images:
 1. Combat Stats (Offense) - Kills/Deaths grouped, Damage grouped, K/D, DPM
 2. Combat Stats (Defense/Support) - Revives grouped, Time grouped, Gibs, Headshots
-3. Advanced Metrics - FragPotential, Damage Efficiency, Denied Playtime, Survival Rate, Useful Kills, Self Kills, Full Selfkills
+3. Advanced Metrics - K/D Ratio, Damage Efficiency, Denied Playtime, Survival Rate, Useful Kills, Self Kills, Full Selfkills
 4. Playstyle Analysis - Player Playstyles + Legend
 5. DPM Timeline - Performance evolution over rounds
 """
@@ -856,14 +856,22 @@ class SessionGraphGenerator:
                 fontsize=18, fontweight="bold", color='white', y=0.98
             )
 
-            # FragPotential
-            fp_colors = [style.color for style in playstyles]
-            bars = axes3[0, 0].bar(x, frag_potentials, color=fp_colors,
+            # K/D Ratio
+            kd_values = [k / max(1, d) for k, d in zip(kills, deaths)]
+            kd_colors = [
+                self.COLORS['green'] if kd >= 2.0
+                else self.COLORS['yellow'] if kd >= 1.0
+                else self.COLORS['red']
+                for kd in kd_values
+            ]
+            bars = axes3[0, 0].bar(x, kd_values, color=kd_colors,
                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes3[0, 0], "FRAGPOTENTIAL (DPM While Alive)")
+            self._style_axis(axes3[0, 0], "K/D RATIO")
+            axes3[0, 0].axhline(y=1.0, color="white", linestyle="--",
+                                 alpha=0.5, linewidth=1)
             axes3[0, 0].set_xticks(x)
             axes3[0, 0].set_xticklabels(display_names, rotation=45, ha="right")
-            self._add_bar_labels(axes3[0, 0], bars, frag_potentials)
+            self._add_bar_labels(axes3[0, 0], bars, kd_values, fmt="{:.2f}")
 
             # Damage Efficiency
             eff_colors = [
@@ -1032,10 +1040,10 @@ class SessionGraphGenerator:
                 fontsize=18, fontweight="bold", color='white', y=0.98
             )
 
-            # Player Playstyles (horizontal bars)
+            # Player Playstyles (horizontal bars using DPM)
             style_colors = [s.color for s in playstyles]
             y_pos = np.arange(n_players)
-            bars = ax4a.barh(y_pos, frag_potentials, color=style_colors,
+            bars = ax4a.barh(y_pos, dpm, color=style_colors,
                               edgecolor='white', linewidth=0.5)
             ax4a.set_yticks(y_pos)
             ax4a.set_yticklabels(display_names, color='white', fontsize=10)
@@ -1043,7 +1051,7 @@ class SessionGraphGenerator:
             ax4a.set_facecolor(self.COLORS['bg_panel'])
             ax4a.set_title("PLAYER PLAYSTYLES", fontweight="bold",
                            color='white', fontsize=14, pad=10)
-            ax4a.set_xlabel("FragPotential", color='white', fontsize=11)
+            ax4a.set_xlabel("DPM", color='white', fontsize=11)
             ax4a.tick_params(colors='white')
             for spine in ['bottom', 'left']:
                 ax4a.spines[spine].set_color('#404249')
@@ -1052,11 +1060,12 @@ class SessionGraphGenerator:
             ax4a.grid(True, alpha=0.15, color='white', axis='x', linestyle='--')
 
             # Add playstyle labels
-            for bar, style, fp in zip(bars, playstyles, frag_potentials):
+            max_dpm = max(dpm) if dpm else 1
+            for bar, style, d in zip(bars, playstyles, dpm):
                 width = bar.get_width()
-                ax4a.text(width + (max(frag_potentials) * 0.02),
+                ax4a.text(width + (max_dpm * 0.02),
                           bar.get_y() + bar.get_height() / 2,
-                          f"{style.name_display} ({int(fp)})",
+                          f"{style.name_display} ({int(d)})",
                           va='center', color='white', fontsize=9, fontweight='bold')
 
             # Playstyle Legend

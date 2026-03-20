@@ -19,9 +19,7 @@ A standalone validate_stats_filename() was extracted to bot.core.utils to
 make it testable without the bot. The bot's own copy should be kept in sync.
 """
 
-import pytest
 import re
-from pathlib import Path
 
 # Production imports - these are the REAL validators being tested
 from bot.core.utils import (

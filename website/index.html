@@ -1207,6 +1207,8 @@
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Achievements</button>
                         <button id="link-retro-viz" role="menuitem" tabindex="-1" data-click-action="navigateTo('retro-viz')"
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Retro Viz</button>
+                        <button id="link-sessions2" role="menuitem" tabindex="-1" data-click-action="navigateTo('sessions2')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Sessions 2.0</button>
                     </div>
                 </div>
 
@@ -1272,6 +1274,7 @@
                 </div>
             </div>
         </div>
+
     </nav>
 
     <main class="flex-1">
@@ -1683,7 +1686,7 @@
                                 </div>
                                 <div class="text-xl font-black text-white mt-1">Recent Matches</div>
                             </div>
-                            <button data-click-action="navigateTo('sessions')"
+                            <button data-click-action="navigateTo('sessions2')"
                                 class="text-xs font-bold text-brand-purple hover:text-white transition">VIEW
                                 ALL</button>
                         </div>
@@ -1778,6 +1781,36 @@
                         Load More Sessions
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!-- SESSIONS 2.0 VIEW -->
+        <div id="view-sessions2" class="view-section hidden"
+             data-prototype-title="Sessions 2.0" data-prototype-message="Drill-down session explorer — work in progress." data-prototype-tone="cyan">
+            <div class="max-w-7xl mx-auto px-6 py-12">
+                <div id="prototype-slot-sessions2"></div>
+                <h1 class="text-3xl font-black text-white mb-6">Sessions 2.0</h1>
+                <div class="mb-6 relative">
+                    <input id="sessions2-search-input" type="text" placeholder="Search by map, player, date..."
+                        class="w-full md:w-80 bg-slate-900/60 border border-white/10 rounded-xl px-4 py-2 pr-8 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-blue/50" />
+                    <button id="sessions2-search-clear"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white text-sm hidden">&times;</button>
+                </div>
+                <div id="sessions2-search-count" class="text-xs text-slate-400 mb-4 hidden"></div>
+                <div id="sessions2-list" class="space-y-4"></div>
+                <div class="text-center mt-8">
+                    <button onclick="loadMoreSessions2()" id="sessions2-load-more"
+                        class="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-sm font-bold text-slate-300 transition hidden">
+                        Load More
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SESSION DETAIL VIEW -->
+        <div id="view-session-detail" class="view-section hidden">
+            <div class="max-w-7xl mx-auto px-6 py-12" id="session-detail-container">
+                <!-- Populated by session-detail.js -->
             </div>
         </div>
 
@@ -2462,6 +2495,11 @@
 
             </div>
         </div>
+
+        <!-- PROXIMITY DETAIL VIEWS -->
+        <div id="view-proximity-player" class="view-section hidden"></div>
+        <div id="view-proximity-replay" class="view-section hidden"></div>
+        <div id="view-proximity-teams" class="view-section hidden"></div>
 
         <!-- GREATSHOT VIEW -->
         <div id="view-greatshot" class="view-section">
@@ -5233,9 +5271,8 @@
     </script>
 
     <!-- JavaScript (ES6 Modules) -->
-    <script type="module" src="js/app.js"></script>
-    <script type="module" src="js/records.js"></script>
-    <script type="module" src="js/inline-actions.js"></script>
+    <script type="module" src="js/app.js?v=20260312-site-recovery2"></script>
+    <script type="module" src="js/inline-actions.js?v=20260312-site-recovery2"></script>
     <script src="js/diagnostics.js"></script>
     <script src="js/lucide-init.js"></script>
 

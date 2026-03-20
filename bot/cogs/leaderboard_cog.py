@@ -313,7 +313,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
             deaths = deaths or 0
             kd_ratio = StatsCalculator.calculate_kd(kills, deaths)
             accuracy = StatsCalculator.calculate_accuracy(hits, shots)
-            hs_pct = StatsCalculator.calculate_headshot_percentage(hs, hits)
+            hs_pct = (hs / kills * 100) if kills > 0 else 0.0  # headshot_kills / kills
 
             # Get formatted player name with badges and custom display name
             formatted_name = await self.player_formatter.format_player(
@@ -336,7 +336,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 value=(
                     f"**Rounds Played:** `{games:,}`\n"
                     f"**K/D Ratio:** `{kd_ratio:.2f}`\n"
-                    f"**Avg DPM:** `{avg_dpm:.1f}`" if avg_dpm else "`0.0`"
+                    f"**Avg DPM:** `{avg_dpm:.1f}`" if avg_dpm else "**Avg DPM:** `0.0`"
                 ),
                 inline=True,
             )

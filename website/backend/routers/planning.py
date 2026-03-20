@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -17,6 +17,7 @@ router = APIRouter()
 
 PLANNING_COMMITTED_STATUSES = {"LOOKING", "AVAILABLE"}
 PLANNING_PARTICIPANT_STATUSES = {"LOOKING", "AVAILABLE", "MAYBE"}
+_fake_planning_rooms: dict[str, Dict[str, Any]] = {}
 
 
 def _require_user(request: Request) -> Dict[str, Any]:
@@ -92,6 +93,188 @@ def _session_ready_threshold() -> int:
     return max(1, value)
 
 
+def _planning_fake_room_enabled() -> bool:
+    return os.getenv("AVAILABILITY_PLANNING_FAKE_ROOM", "false").lower() == "true"
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _build_default_fake_room(target_date: date) -> Dict[str, Any]:
+    date_iso = target_date.isoformat()
+    now_iso = _now_iso()
+    participants = [
+        {"user_id": 910001, "display_name": "Mock Alpha", "status": "LOOKING"},
+        {"user_id": 910002, "display_name": "Mock Bravo", "status": "LOOKING"},
+        {"user_id": 910003, "display_name": "Mock Charlie", "status": "AVAILABLE"},
+        {"user_id": 910004, "display_name": "Mock Delta", "status": "LOOKING"},
+        {"user_id": 910005, "display_name": "Mock Echo", "status": "MAYBE"},
+        {"user_id": 910006, "display_name": "Mock Foxtrot", "status": "LOOKING"},
+    ]
+    return {
+        "date": date_iso,
+        "participants": participants,
+        "session": {
+            "id": -int(target_date.strftime("%Y%m%d")),
+            "session_date": date_iso,
+            "created_by_user_id": 0,
+            "discord_thread_id": "mock-planning-room",
+            "created_at": now_iso,
+            "updated_at": now_iso,
+            "is_mock": True,
+        },
+        "suggestions": [
+            {
+                "id": 1,
+                "name": "North Hold",
+                "suggested_by_user_id": 910001,
+                "suggested_by_name": "Mock Alpha",
+                "created_at": now_iso,
+                "voter_ids": {910001, 910003},
+            },
+            {
+                "id": 2,
+                "name": "Bridge Rush",
+                "suggested_by_user_id": 910002,
+                "suggested_by_name": "Mock Bravo",
+                "created_at": now_iso,
+                "voter_ids": {910002},
+            },
+        ],
+        "teams": {
+            "A": {"side": "A", "captain_user_id": 910001, "member_ids": [910001, 910003, 910005]},
+            "B": {"side": "B", "captain_user_id": 910002, "member_ids": [910002, 910004, 910006]},
+        },
+        "next_suggestion_id": 3,
+    }
+
+
+def _ensure_fake_room(target_date: date) -> Dict[str, Any]:
+    key = target_date.isoformat()
+    room = _fake_planning_rooms.get(key)
+    if room is None:
+        room = _build_default_fake_room(target_date)
+        _fake_planning_rooms[key] = room
+    return room
+
+
+def _display_name_for_session_user(user: Dict[str, Any], discord_user_id: int) -> str:
+    linked_player = user.get("linked_player")
+    if isinstance(linked_player, str) and linked_player.strip():
+        return linked_player.strip()
+    username = user.get("username")
+    if isinstance(username, str) and username.strip():
+        return username.strip()
+    return f"User {discord_user_id}"
+
+
+def _fake_room_participant_map(room: Dict[str, Any]) -> Dict[int, str]:
+    return {
+        int(row["user_id"]): str(row.get("display_name") or f"User {row['user_id']}")
+        for row in room.get("participants", [])
+        if row.get("user_id") is not None
+    }
+
+
+def _fake_room_response(
+    room: Dict[str, Any],
+    *,
+    request: Request,
+) -> Dict[str, Any]:
+    user = _optional_user(request)
+    viewer_website_user_id = _website_user_id_from_user(user) if user else None
+    viewer_linked = bool(user)
+
+    participants = [
+        {
+            "user_id": int(row["user_id"]),
+            "display_name": str(row.get("display_name") or f"User {row['user_id']}"),
+            "status": str(row.get("status") or "LOOKING").upper(),
+        }
+        for row in room.get("participants", [])
+    ]
+    participant_name_map = _fake_room_participant_map(room)
+
+    suggestions: list[Dict[str, Any]] = []
+    for row in room.get("suggestions", []):
+        voter_ids = {int(value) for value in row.get("voter_ids", set())}
+        suggestions.append(
+            {
+                "id": int(row["id"]),
+                "name": str(row["name"]),
+                "suggested_by_user_id": int(row.get("suggested_by_user_id") or 0),
+                "suggested_by_name": str(row.get("suggested_by_name") or "Unknown"),
+                "votes": len(voter_ids),
+                "voted_by_me": viewer_website_user_id is not None and int(viewer_website_user_id) in voter_ids,
+                "created_at": str(row.get("created_at") or room["session"]["created_at"]),
+            }
+        )
+    suggestions.sort(key=lambda item: (-int(item["votes"]), str(item["name"]).lower(), int(item["id"])))
+
+    teams: Dict[str, Dict[str, Any]] = {}
+    for side in ("A", "B"):
+        raw_team = room.get("teams", {}).get(side, {})
+        captain_user_id = raw_team.get("captain_user_id")
+        captain_int = int(captain_user_id) if captain_user_id is not None else None
+        member_ids = [int(value) for value in raw_team.get("member_ids", [])]
+        teams[side] = {
+            "side": side,
+            "captain_user_id": captain_int,
+            "captain_name": participant_name_map.get(captain_int) if captain_int is not None else None,
+            "members": [
+                {
+                    "user_id": user_id,
+                    "display_name": participant_name_map.get(user_id, f"User {user_id}"),
+                }
+                for user_id in member_ids
+            ],
+        }
+
+    looking_count = sum(1 for row in participants if row["status"] == "LOOKING")
+    threshold = _session_ready_threshold()
+
+    return {
+        "date": room["date"],
+        "session_ready": {
+            "ready": True,
+            "looking_count": max(looking_count, threshold),
+            "threshold": threshold,
+        },
+        "unlocked": True,
+        "participant_count": len(participants),
+        "participants": participants,
+        "committed_count": sum(1 for row in participants if row["status"] in PLANNING_COMMITTED_STATUSES),
+        "viewer": {
+            "authenticated": bool(user),
+            "linked_discord": viewer_linked,
+            "website_user_id": int(viewer_website_user_id) if viewer_website_user_id is not None else None,
+        },
+        "session": {
+            "id": int(room["session"]["id"]),
+            "session_date": str(room["session"]["session_date"]),
+            "created_by_user_id": int(room["session"].get("created_by_user_id") or 0),
+            "discord_thread_id": room["session"].get("discord_thread_id"),
+            "created_at": str(room["session"]["created_at"]),
+            "updated_at": str(room["session"]["updated_at"]),
+            "suggestions": suggestions,
+            "my_vote_suggestion_id": next(
+                (item["id"] for item in suggestions if item["voted_by_me"]),
+                None,
+            ),
+            "teams": teams,
+            "is_mock": True,
+        },
+        "is_mock": True,
+    }
+
+
+def _maybe_fake_room_for_date(target_date: date) -> Optional[Dict[str, Any]]:
+    if not _planning_fake_room_enabled():
+        return None
+    return _ensure_fake_room(target_date)
+
+
 async def _current_db_date(db) -> date:
     value = await db.fetch_val("SELECT CURRENT_DATE")
     if isinstance(value, date):
@@ -132,7 +315,7 @@ async def _is_discord_linked(user: Dict[str, Any], db) -> bool:
             )
             if row:
                 return True
-        except Exception:
+        except Exception:  # noqa: BLE001 — fallthrough to discord_id check
             pass
 
     try:
@@ -415,6 +598,9 @@ async def get_today_planning_room(
 ):
     resolved_date = target_date or await _current_db_date(db)
     session_row = await _session_row_for_date(db, resolved_date)
+    fake_room = _maybe_fake_room_for_date(resolved_date)
+    if not session_row and fake_room is not None:
+        return _fake_room_response(fake_room, request=request)
     return await _planning_state(db, request=request, target_date=resolved_date, session_row=session_row)
 
 
@@ -425,6 +611,7 @@ async def create_today_planning_room(request: Request, db=Depends(get_db)):
 
     target_date = await _current_db_date(db)
     existing = await _session_row_for_date(db, target_date)
+    fake_room = _maybe_fake_room_for_date(target_date)
 
     if existing:
         return {
@@ -432,6 +619,15 @@ async def create_today_planning_room(request: Request, db=Depends(get_db)):
             "created": False,
             "thread_created": bool(existing[3]),
             "state": await _planning_state(db, request=request, target_date=target_date, session_row=existing),
+        }
+    if fake_room is not None:
+        fake_room["session"]["created_by_user_id"] = int(website_user_id)
+        fake_room["session"]["updated_at"] = _now_iso()
+        return {
+            "success": True,
+            "created": False,
+            "thread_created": False,
+            "state": _fake_room_response(fake_room, request=request),
         }
 
     _threshold, _looking_count, ready = await _today_readiness(db, target_date)
@@ -491,6 +687,27 @@ async def join_today_planning_room(request: Request, db=Depends(get_db)):
 
     target_date = await _current_db_date(db)
     session_row = await _session_row_for_date(db, target_date)
+    fake_room = _maybe_fake_room_for_date(target_date)
+    if not session_row and fake_room is not None:
+        participant_name = _display_name_for_session_user(user, int(discord_user_id))
+        existing_idx = next(
+            (idx for idx, row in enumerate(fake_room["participants"]) if int(row["user_id"]) == int(discord_user_id)),
+            None,
+        )
+        participant_payload = {
+            "user_id": int(discord_user_id),
+            "display_name": participant_name,
+            "status": "LOOKING",
+        }
+        if existing_idx is None:
+            fake_room["participants"].insert(0, participant_payload)
+        else:
+            fake_room["participants"][existing_idx] = participant_payload
+        fake_room["session"]["updated_at"] = _now_iso()
+        return {
+            "success": True,
+            "state": _fake_room_response(fake_room, request=request),
+        }
     if not session_row:
         raise HTTPException(status_code=404, detail="Planning room is not created yet")
 
@@ -527,6 +744,41 @@ async def add_planning_name_suggestion(request: Request, db=Depends(get_db)):
 
     target_date = await _current_db_date(db)
     session_row = await _session_row_for_date(db, target_date)
+    fake_room = _maybe_fake_room_for_date(target_date)
+    if not session_row and fake_room is not None:
+        body = await request.json()
+        name = str(body.get("name") or "").strip()
+        if len(name) < 2:
+            raise HTTPException(status_code=400, detail="Suggestion name must be at least 2 characters")
+        if len(name) > 48:
+            raise HTTPException(status_code=400, detail="Suggestion name must be at most 48 characters")
+        duplicate = next(
+            (
+                row for row in fake_room["suggestions"]
+                if str(row.get("name") or "").strip().lower() == name.lower()
+            ),
+            None,
+        )
+        if duplicate:
+            raise HTTPException(status_code=409, detail="Suggestion already exists")
+        suggestion_id = int(fake_room["next_suggestion_id"])
+        fake_room["next_suggestion_id"] = suggestion_id + 1
+        fake_room["suggestions"].append(
+            {
+                "id": suggestion_id,
+                "name": name,
+                "suggested_by_user_id": int(website_user_id),
+                "suggested_by_name": _display_name_for_session_user(_user, int(_discord_user_id)),
+                "created_at": _now_iso(),
+                "voter_ids": set(),
+            }
+        )
+        fake_room["session"]["updated_at"] = _now_iso()
+        return {
+            "success": True,
+            "suggestion_id": suggestion_id,
+            "state": _fake_room_response(fake_room, request=request),
+        }
     if not session_row:
         raise HTTPException(status_code=404, detail="Planning room is not created yet")
 
@@ -568,6 +820,32 @@ async def vote_planning_name(request: Request, db=Depends(get_db)):
 
     target_date = await _current_db_date(db)
     session_row = await _session_row_for_date(db, target_date)
+    fake_room = _maybe_fake_room_for_date(target_date)
+    if not session_row and fake_room is not None:
+        body = await request.json()
+        try:
+            suggestion_id = int(body.get("suggestion_id"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="suggestion_id must be an integer")
+
+        target_row = next(
+            (row for row in fake_room["suggestions"] if int(row["id"]) == int(suggestion_id)),
+            None,
+        )
+        if not target_row:
+            raise HTTPException(status_code=404, detail="Suggestion not found")
+
+        for row in fake_room["suggestions"]:
+            voter_ids = {int(value) for value in row.get("voter_ids", set())}
+            voter_ids.discard(int(website_user_id))
+            if int(row["id"]) == int(suggestion_id):
+                voter_ids.add(int(website_user_id))
+            row["voter_ids"] = voter_ids
+        fake_room["session"]["updated_at"] = _now_iso()
+        return {
+            "success": True,
+            "state": _fake_room_response(fake_room, request=request),
+        }
     if not session_row:
         raise HTTPException(status_code=404, detail="Planning room is not created yet")
 
@@ -609,6 +887,47 @@ async def save_planning_teams(request: Request, db=Depends(get_db)):
 
     target_date = await _current_db_date(db)
     session_row = await _session_row_for_date(db, target_date)
+    fake_room = _maybe_fake_room_for_date(target_date)
+    if not session_row and fake_room is not None:
+        body = await request.json()
+        side_a = _coerce_user_id_list(body.get("side_a"))
+        side_b = _coerce_user_id_list(body.get("side_b"))
+
+        overlap = sorted(set(side_a) & set(side_b))
+        if overlap:
+            raise HTTPException(status_code=400, detail="A player cannot be on both teams")
+
+        participant_ids = {int(row["user_id"]) for row in fake_room.get("participants", [])}
+        unknown = [uid for uid in (*side_a, *side_b) if uid not in participant_ids]
+        if unknown:
+            raise HTTPException(status_code=400, detail="Team members must be in today's participant pool")
+
+        captain_a = body.get("captain_a")
+        captain_b = body.get("captain_b")
+        try:
+            captain_a_id = int(captain_a) if captain_a is not None else None
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="captain_a must be an integer or null")
+        try:
+            captain_b_id = int(captain_b) if captain_b is not None else None
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="captain_b must be an integer or null")
+
+        if captain_a_id is not None and captain_a_id not in side_a:
+            raise HTTPException(status_code=400, detail="captain_a must be a member of side A")
+        if captain_b_id is not None and captain_b_id not in side_b:
+            raise HTTPException(status_code=400, detail="captain_b must be a member of side B")
+
+        fake_room["session"]["created_by_user_id"] = int(website_user_id)
+        fake_room["teams"] = {
+            "A": {"side": "A", "captain_user_id": captain_a_id, "member_ids": list(side_a)},
+            "B": {"side": "B", "captain_user_id": captain_b_id, "member_ids": list(side_b)},
+        }
+        fake_room["session"]["updated_at"] = _now_iso()
+        return {
+            "success": True,
+            "state": _fake_room_response(fake_room, request=request),
+        }
     if not session_row:
         raise HTTPException(status_code=404, detail="Planning room is not created yet")
 

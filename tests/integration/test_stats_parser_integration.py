@@ -10,7 +10,6 @@ data (database imports, Discord embeds, leaderboards) will be wrong.
 """
 
 import pytest
-import os
 from pathlib import Path
 
 from bot.community_stats_parser import C0RNP0RN3StatsParser

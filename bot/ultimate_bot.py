@@ -454,7 +454,7 @@ class UltimateETLegacyBot(commands.Bot):
 
     async def validate_database_schema(self):
         """
-        ✅ CRITICAL: Validate database has correct unified schema (55 columns)
+        ✅ CRITICAL: Validate database has the required unified schema columns
         Prevents silent failures if wrong schema is used
         Supports both SQLite and PostgreSQL
         """
@@ -476,43 +476,47 @@ class UltimateETLegacyBot(commands.Bot):
                 columns = await self.db_adapter.fetch_all(query)
                 column_names = [col[0] for col in columns]
 
-            expected_columns = {55, 56}  # 56 includes optional full_selfkills
             actual_columns = len(column_names)
-
-            if actual_columns not in expected_columns:
-                error_msg = (
-                    f"❌ DATABASE SCHEMA MISMATCH!\n"
-                    f"Expected: {sorted(expected_columns)} columns (UNIFIED)\n"
-                    f"Found: {actual_columns} columns\n\n"
-                    f"Schema: {'SPLIT (deprecated)' if actual_columns == 35 else 'UNKNOWN'}\n\n"
-                    f"Solution:\n"
-                    f"1. Backup database\n"
-                    f"2. Run schema conversion script\n"
-                    f"3. Re-import data\n"
-                )
-
-                logger.error(error_msg)
-                raise RuntimeError(error_msg)
-
-            # Verify objective stats columns exist
-            required_stats = [
+            # Additive columns are valid; only the required unified-schema contract matters.
+            required_columns = [
+                "round_id",
+                "player_guid",
+                "player_name",
+                "kills",
+                "deaths",
+                "damage_given",
+                "damage_received",
+                "time_played_seconds",
+                "time_dead_minutes",
+                "time_dead_ratio",
                 "kill_assists",
                 "dynamites_planted",
                 "times_revived",
                 "revives_given",
                 "most_useful_kills",
                 "useless_kills",
+                "kill_steals",
+                "denied_playtime",
+                "constructions",
             ]
 
             missing = [
-                col for col in required_stats if col not in column_names
+                col for col in required_columns if col not in column_names
             ]
             if missing:
-                logger.error(f"❌ MISSING COLUMNS: {missing}")
-                raise RuntimeError(f"Missing objective stats: {missing}")
+                schema_hint = "SPLIT (deprecated)" if actual_columns == 35 else "UNKNOWN"
+                error_msg = (
+                    f"❌ DATABASE SCHEMA MISMATCH!\n"
+                    f"Found: {actual_columns} columns\n"
+                    f"Schema: {schema_hint}\n"
+                    f"Missing required unified-schema columns: {missing}"
+                )
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
 
             logger.info(
-                f"✅ Schema validated: {actual_columns} columns (UNIFIED) on {self.config.database_type.upper()}"
+                f"✅ Schema validated: {actual_columns} columns with required unified schema on "
+                f"{self.config.database_type.upper()}"
             )
 
         except Exception as e:
@@ -2335,8 +2339,24 @@ class UltimateETLegacyBot(commands.Bot):
             gap = current_dt - prev_dt
             gap_minutes = gap.total_seconds() / 60
 
-            # If gap > session_gap_minutes, start new session
+            # Determine effective session gap: if players are still in voice
+            # channels, use the competitive gap (for BO6-BO13 halftime breaks).
+            effective_gap = self.config.session_gap_minutes
             if gap_minutes > self.config.session_gap_minutes:
+                voice_players = 0
+                for channel_id in getattr(self, 'gaming_voice_channels', []):
+                    channel = self.get_channel(channel_id)
+                    if channel and hasattr(channel, "members"):
+                        voice_players += sum(1 for m in channel.members if not m.bot)
+                if voice_players >= 2:
+                    effective_gap = self.config.competitive_session_gap_minutes
+                    logger.info(
+                        f"🎮 Voice-aware gap extension: {voice_players} players in voice, "
+                        f"using {effective_gap}min gap (competitive mode)"
+                    )
+
+            # If gap > effective session gap, start new session
+            if gap_minutes > effective_gap:
                 # Get max session_id and increment
                 max_query = "SELECT MAX(gaming_session_id) FROM rounds WHERE gaming_session_id IS NOT NULL"
                 max_session = await self.db_adapter.fetch_val(max_query, ())
@@ -2404,6 +2424,7 @@ class UltimateETLegacyBot(commands.Bot):
         time_dead_minutes = raw_dead_minutes
         time_dead_mins = time_dead_minutes
         time_dead_ratio = td_percent
+        time_played_pct = float(obj_stats.get("time_played_percent", 0) or 0)
 
         # ═══════════════════════════════════════════════════════════════════
         # TIME DEBUG: Validate time values before DB insert
@@ -2457,6 +2478,7 @@ class UltimateETLegacyBot(commands.Bot):
             time_minutes,
             time_dead_mins,
             time_dead_ratio,
+            time_played_pct,
             obj_stats.get("xp", 0),
             kd_ratio,
             dpm,
@@ -2495,7 +2517,7 @@ class UltimateETLegacyBot(commands.Bot):
                 team_damage_given, team_damage_received,
                 gibs, self_kills, team_kills, team_gibs, headshot_kills, headshots,
                 time_played_seconds, time_played_minutes,
-                time_dead_minutes, time_dead_ratio,
+                time_dead_minutes, time_dead_ratio, time_played_percent,
                 xp, kd_ratio, dpm, efficiency,
                 bullets_fired, accuracy,
                 kill_assists,
@@ -2510,7 +2532,7 @@ class UltimateETLegacyBot(commands.Bot):
                 killing_spree_best, death_spree_worst
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
         """
@@ -2893,6 +2915,10 @@ class UltimateETLegacyBot(commands.Bot):
 
             # Process Lua gametimes fallback files (JSON) if enabled
             await self._process_remote_gametimes_files()
+
+            # Retroactively apply timing from lua_round_teams to rounds that were
+            # processed before gametime data arrived (backlog replay scenario)
+            await self._reconcile_missing_round_timing()
 
             if new_files_count == 0:
                 logger.debug(f"✅ All {len(remote_files)} files already processed")
@@ -4150,6 +4176,32 @@ class UltimateETLegacyBot(commands.Bot):
             else:
                 webhook_logger.warning(f"⚠️ Gametime file processing failed: {filename}")
 
+    async def _reconcile_missing_round_timing(self):
+        """Backfill rounds.actual_duration_seconds from lua_round_teams
+        for rounds that were processed before gametime data arrived."""
+        query = """
+            UPDATE rounds r SET
+              actual_duration_seconds = lrt.actual_duration_seconds,
+              round_start_unix = lrt.round_start_unix,
+              round_end_unix = lrt.round_end_unix,
+              end_reason = lrt.end_reason,
+              total_pause_seconds = lrt.total_pause_seconds,
+              pause_count = lrt.pause_count
+            FROM lua_round_teams lrt
+            WHERE lrt.round_id = r.id
+              AND r.actual_duration_seconds IS NULL
+              AND lrt.actual_duration_seconds IS NOT NULL
+        """
+        try:
+            result = await self.db_adapter.execute(query)
+            # asyncpg returns status string like "UPDATE 5"
+            if result and isinstance(result, str):
+                parts = result.split()
+                if len(parts) == 2 and parts[1] != '0':
+                    logger.info(f"[TIMING RECONCILE] Backfilled timing for {parts[1]} rounds")
+        except Exception as e:
+            logger.warning(f"[TIMING RECONCILE] Failed: {e}")
+
     async def _store_lua_round_teams(self, round_metadata: dict):
         """
         Store Lua-captured team composition and timing data in database.
@@ -4775,6 +4827,62 @@ class UltimateETLegacyBot(commands.Bot):
         except (TypeError, ValueError, IndexError):
             return (0, 0)
 
+    @staticmethod
+    def _hhmmss_to_seconds(t: str) -> int | None:
+        """Convert HHMMSS string to total seconds."""
+        if not t or len(t) < 6:
+            return None
+        try:
+            return int(t[:2]) * 3600 + int(t[2:4]) * 60 + int(t[4:6])
+        except (ValueError, TypeError):
+            return None
+
+    async def _resolve_endstats_round_id(
+        self,
+        round_date: str | None,
+        round_time: str | None,
+        map_name: str | None,
+        round_number: int | None,
+        stats_filename: str,
+        round_meta: dict,
+    ) -> tuple:
+        """
+        Resolve round_id for an endstats file.
+
+        Uses narrow time window (30s) to match endstats to the correct round,
+        handling replayed maps (same map played multiple times in a session).
+        Falls back to fuzzy round_linker if narrow match fails.
+
+        Returns (round_id, resolve_method).
+        """
+        # Narrow time match: endstats timestamp is within ~2s of stats timestamp,
+        # but we use 30s window for safety. This prevents matching against a
+        # different play of the same map (which would be 5+ minutes apart).
+        if round_date and round_time and map_name and round_number:
+            target_secs = self._hhmmss_to_seconds(round_time)
+            if target_secs is not None:
+                rows = await self.db_adapter.fetch_all(
+                    "SELECT id, round_time FROM rounds "
+                    "WHERE round_date = ? AND map_name = ? AND round_number = ?",
+                    (round_date, map_name, round_number),
+                )
+                if rows:
+                    best_id = None
+                    best_diff = 31  # 30-second max window
+                    for row in rows:
+                        row_secs = self._hhmmss_to_seconds(row[1])
+                        if row_secs is not None:
+                            diff = abs(row_secs - target_secs)
+                            if diff < best_diff:
+                                best_diff = diff
+                                best_id = row[0]
+                    if best_id is not None:
+                        return best_id, "narrow_time_match"
+
+        # Fallback: fuzzy round_linker (45min window, for edge cases)
+        round_id = await self._resolve_round_id_for_metadata(stats_filename, round_meta)
+        return round_id, "round_linker"
+
     async def _is_endstats_round_already_processed(
         self,
         round_id: int,
@@ -5037,7 +5145,10 @@ class UltimateETLegacyBot(commands.Bot):
                 'round_time': round_time,
             }
             stats_filename = filename.replace("-endstats.txt", ".txt")
-            round_id = await self._resolve_round_id_for_metadata(stats_filename, round_meta)
+            round_id, resolve_method = await self._resolve_endstats_round_id(
+                round_date, round_time, map_name, round_number,
+                stats_filename, round_meta,
+            )
 
             if not round_id:
                 self._log_endstats_transition(
@@ -5059,6 +5170,7 @@ class UltimateETLegacyBot(commands.Bot):
                 "round_id_resolved",
                 filename,
                 round_id=round_id,
+                detail=f"resolve_method={resolve_method}",
             )
 
             if await self._is_endstats_round_already_processed(
@@ -5269,9 +5381,10 @@ class UltimateETLegacyBot(commands.Bot):
 
             log.info(f"✅ Stored {len(awards)} awards")
 
-            # Store VS stats in database
+            # Store VS stats in database (with subject context from VS_HEADER)
             for vs in vs_stats:
-                player_guid = None
+                # Resolve opponent GUID
+                opponent_guid = None
                 alias_query = """
                     SELECT guid FROM player_aliases
                     WHERE alias = $1
@@ -5279,17 +5392,28 @@ class UltimateETLegacyBot(commands.Bot):
                 """
                 alias_result = await self.db_adapter.fetch_one(alias_query, (vs['player'],))
                 if alias_result:
-                    player_guid = alias_result[0]
+                    opponent_guid = alias_result[0]
+
+                # Subject (the player whose stats these are) from VS_HEADER
+                subject_name = vs.get('subject')
+                subject_guid = vs.get('subject_guid')
+                # If parser didn't provide GUID, try to resolve from alias
+                if subject_name and not subject_guid:
+                    subj_result = await self.db_adapter.fetch_one(alias_query, (subject_name,))
+                    if subj_result:
+                        subject_guid = subj_result[0]
 
                 insert_query = """
                     INSERT INTO round_vs_stats
                     (round_id, round_date, map_name, round_number,
-                     player_name, player_guid, kills, deaths)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                     player_name, player_guid, kills, deaths,
+                     subject_name, subject_guid)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                 """
                 await self.db_adapter.execute(insert_query, (
                     round_id, round_date, map_name, round_number,
-                    vs['player'], player_guid, vs['kills'], vs['deaths']
+                    vs['player'], opponent_guid, vs['kills'], vs['deaths'],
+                    subject_name, subject_guid
                 ))
 
             log.info(f"✅ Stored {len(vs_stats)} VS stats")
@@ -5511,7 +5635,10 @@ class UltimateETLegacyBot(commands.Bot):
             }
 
             stats_filename = filename.replace("-endstats.txt", ".txt")
-            round_id = await self._resolve_round_id_for_metadata(stats_filename, round_meta)
+            round_id, resolve_method = await self._resolve_endstats_round_id(
+                round_date, round_time, map_name, round_number,
+                stats_filename, round_meta,
+            )
 
             if not round_id:
                 self._log_endstats_transition(
@@ -5532,6 +5659,7 @@ class UltimateETLegacyBot(commands.Bot):
                 "round_id_resolved",
                 filename,
                 round_id=round_id,
+                detail=f"resolve_method={resolve_method}",
             )
 
             if await self._is_endstats_round_already_processed(
@@ -5686,7 +5814,10 @@ class UltimateETLegacyBot(commands.Bot):
                 'round_time': round_time,
             }
             stats_filename = filename.replace("-endstats.txt", ".txt")
-            round_id = await self._resolve_round_id_for_metadata(stats_filename, round_meta)
+            round_id, resolve_method = await self._resolve_endstats_round_id(
+                round_date, round_time, map_name, round_number,
+                stats_filename, round_meta,
+            )
 
             if not round_id:
                 self._log_endstats_transition(
@@ -5712,6 +5843,7 @@ class UltimateETLegacyBot(commands.Bot):
                 "round_id_resolved",
                 filename,
                 round_id=round_id,
+                detail=f"resolve_method={resolve_method}",
             )
 
             if await self._is_endstats_round_already_processed(

@@ -359,6 +359,87 @@ class TestRound2CounterResetFallback:
         assert normal_player["damage_given"] == 1000
         assert normal_player["objective_stats"]["time_played_minutes"] == pytest.approx(5.0)
 
+    def test_match_summary_recomputes_time_dead_ratio_from_aggregated_totals(self, parser, monkeypatch):
+        round_1_data = {
+            "success": True,
+            "map_name": "supply",
+            "round_num": 1,
+            "defender_team": 1,
+            "winner_team": 2,
+            "map_time": "20:00",
+            "actual_time": "10:00",
+            "round_outcome": "Completed",
+            "players": [
+                {
+                    "guid": "AAA11111",
+                    "name": "Alpha",
+                    "team": 1,
+                    "kills": 10,
+                    "deaths": 5,
+                    "headshots": 2,
+                    "damage_given": 2000,
+                    "damage_received": 1500,
+                    "weapon_stats": {},
+                    "objective_stats": {
+                        "time_played_minutes": 10.0,
+                        "time_dead_minutes": 2.0,
+                        "time_dead_ratio": 20.0,
+                        "denied_playtime": 40,
+                    },
+                    "time_played_seconds": 600,
+                    "dpm": 200.0,
+                    "efficiency": 66.7,
+                    "kd_ratio": 2.0,
+                }
+            ],
+        }
+        round_2_data = {
+            "success": True,
+            "map_name": "supply",
+            "round_num": 2,
+            "defender_team": 2,
+            "winner_team": 1,
+            "map_time": "20:00",
+            "actual_time": "9:00",
+            "round_outcome": "Completed",
+            "players": [
+                {
+                    "guid": "AAA11111",
+                    "name": "Alpha",
+                    "team": 1,
+                    "kills": 18,
+                    "deaths": 9,
+                    "headshots": 3,
+                    "damage_given": 3200,
+                    "damage_received": 2600,
+                    "weapon_stats": {},
+                    "objective_stats": {
+                        "time_played_minutes": 19.0,
+                        "time_dead_minutes": 3.5,
+                        "time_dead_ratio": 27.8,
+                        "denied_playtime": 30,
+                    },
+                    "time_played_seconds": 1140,
+                    "dpm": 168.4,
+                    "efficiency": 66.7,
+                    "kd_ratio": 2.0,
+                }
+            ],
+        }
+
+        monkeypatch.setattr(parser, "find_corresponding_round_1_file", lambda _path: "round1.txt")
+
+        def _fake_parse(path: str):
+            return round_1_data if path == "round1.txt" else round_2_data
+
+        monkeypatch.setattr(parser, "parse_regular_stats_file", _fake_parse)
+
+        result = parser.parse_round_2_with_differential("round2.txt")
+        match_player = result["match_summary"]["players"][0]
+
+        assert match_player["objective_stats"]["time_dead_minutes"] == pytest.approx(5.5)
+        assert match_player["objective_stats"]["time_dead_ratio"] == pytest.approx(28.9)
+
 
 class TestEdgeCases:
     """Edge case and error handling tests"""
