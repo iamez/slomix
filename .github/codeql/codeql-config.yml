@@ -1,0 +1,12 @@
+name: "Slomix CodeQL config"
+
+# Exclude paths that generate false positives:
+# - Minified Vite build output (not hand-written code)
+# - Archived/deprecated scripts (reference only)
+# - Test files (style issues are not security concerns)
+paths-ignore:
+  - "website/static/modern/chunks"
+  - "website/static/modern/route-host.js"
+  - "scripts/archive"
+  - "tools/archive"
+  - "tests"
