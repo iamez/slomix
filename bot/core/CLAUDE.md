@@ -14,15 +14,13 @@ This package contains the foundational components used by cogs and services.
 | `database_adapter.py` | Async PostgreSQL/SQLite abstraction |
 | `stats_cache.py` | 5-minute TTL query caching |
 
-### Team Detection (5 modules work together)
+### Team Detection (3 modules work together)
 
 | Module | Purpose |
 |--------|---------|
 | `team_manager.py` | Orchestrates team detection + real-time tracking |
 | `advanced_team_detector.py` | Multi-strategy detection with confidence |
-| `team_detector_integration.py` | Integration layer for team detection |
 | `substitution_detector.py` | Detects mid-session player swaps |
-| `team_history.py` | Historical team pairing data |
 
 **Real-Time Team Tracking (Feb 2026):**
 

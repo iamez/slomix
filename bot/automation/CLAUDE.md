@@ -105,15 +105,13 @@ REMOTE_STATS_PATH=/home/et/.etlegacy/nitmod/stats/
 
 ## Timeout Values (CRITICAL)
 
-There's a mismatch that needs attention:
+Timing configuration (from config.py):
 
 | Component | Value | Purpose |
 |-----------|-------|---------|
-| `community_stats_parser.py:384` | 30 min | R1-R2 matching window |
-| `ultimate_bot.py:1636` | 30 min | Grace period |
-| `config.py` | 60 min | Session gap threshold |
-
-**Risk**: Edge cases at 45-minute mark may behave unexpectedly.
+| `ROUND_MATCH_WINDOW_MINUTES` | 45 min | R1-R2 matching window |
+| `MONITORING_GRACE_PERIOD_MINUTES` | 45 min | Grace period after voice empties |
+| `SESSION_GAP_MINUTES` | 60 min | Session gap threshold |
 
 ## Adding New Automation
 

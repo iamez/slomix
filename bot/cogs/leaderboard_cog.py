@@ -40,13 +40,8 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
         logger.info("🏆 LeaderboardCog initializing...")
 
     async def _enable_sql_diag(self):
-        """Enable SQL diagnostics for troubleshooting (SQLite only)"""
-        try:
-            # PRAGMA is SQLite-specific
-            if self.bot.config.database_type == 'sqlite':
-                await self.bot.db_adapter.execute("PRAGMA case_sensitive_like = ON")
-        except Exception:  # nosec B110
-            pass  # PRAGMA is optional optimization
+        """Enable SQL diagnostics for troubleshooting (no-op for PostgreSQL)"""
+        pass
 
     @is_public_channel()
     @commands.cooldown(1, 5, commands.BucketType.user)

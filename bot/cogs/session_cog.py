@@ -443,93 +443,49 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     return
 
                 # Query by gaming_session_id to properly show individual sessions
-                if self.bot.config.database_type == 'sqlite':
-                    query = """
-                        SELECT
-                            r.gaming_session_id,
-                            SUBSTR(r.round_date, 1, 10) as date,
-                            MIN(r.round_date || ' ' || r.round_time) as session_start,
-                            MAX(r.round_date || ' ' || r.round_time) as session_end,
-                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) / 2 as maps,
-                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) as rounds,
-                            (SELECT COUNT(DISTINCT p.player_guid)
-                             FROM player_comprehensive_stats p
-                             WHERE p.round_id IN (
-                                SELECT id FROM rounds WHERE gaming_session_id = r.gaming_session_id
-                             )) as players
-                        FROM rounds r
-                        WHERE r.gaming_session_id IS NOT NULL
-                          AND SUBSTR(r.round_date, 1, 7) = ?
-                        GROUP BY r.gaming_session_id, SUBSTR(r.round_date, 1, 10)
-                        ORDER BY r.gaming_session_id DESC
-                    """
-                    sessions = await self.bot.db_adapter.fetch_all(query, (month_filter,))
-                else:  # PostgreSQL
-                    query = """
-                        SELECT
-                            r.gaming_session_id,
-                            SUBSTR(r.round_date, 1, 10) as date,
-                            MIN(r.round_date || ' ' || r.round_time) as session_start,
-                            MAX(r.round_date || ' ' || r.round_time) as session_end,
-                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) / 2 as maps,
-                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) as rounds,
-                            (SELECT COUNT(DISTINCT p.player_guid)
-                             FROM player_comprehensive_stats p
-                             WHERE p.round_id IN (
-                                SELECT id FROM rounds WHERE gaming_session_id = r.gaming_session_id
-                             )) as players
-                        FROM rounds r
-                        WHERE r.gaming_session_id IS NOT NULL
-                          AND r.round_date LIKE ?
-                        GROUP BY r.gaming_session_id, SUBSTR(r.round_date, 1, 10)
-                        ORDER BY r.gaming_session_id DESC
-                    """
-                    sessions = await self.bot.db_adapter.fetch_all(query, (f"{month_filter}%",))
+                query = """
+                    SELECT
+                        r.gaming_session_id,
+                        SUBSTR(r.round_date, 1, 10) as date,
+                        MIN(r.round_date || ' ' || r.round_time) as session_start,
+                        MAX(r.round_date || ' ' || r.round_time) as session_end,
+                        COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) / 2 as maps,
+                        COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) as rounds,
+                        (SELECT COUNT(DISTINCT p.player_guid)
+                         FROM player_comprehensive_stats p
+                         WHERE p.round_id IN (
+                            SELECT id FROM rounds WHERE gaming_session_id = r.gaming_session_id
+                         )) as players
+                    FROM rounds r
+                    WHERE r.gaming_session_id IS NOT NULL
+                      AND r.round_date LIKE ?
+                    GROUP BY r.gaming_session_id, SUBSTR(r.round_date, 1, 10)
+                    ORDER BY r.gaming_session_id DESC
+                """
+                sessions = await self.bot.db_adapter.fetch_all(query, (f"{month_filter}%",))
                 filter_text = month_filter
             else:
                 # Query by gaming_session_id to properly show individual sessions
-                if self.bot.config.database_type == 'sqlite':
-                    query = """
-                        SELECT
-                            r.gaming_session_id,
-                            SUBSTR(r.round_date, 1, 10) as date,
-                            MIN(r.round_date || ' ' || r.round_time) as session_start,
-                            MAX(r.round_date || ' ' || r.round_time) as session_end,
-                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) / 2 as maps,
-                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) as rounds,
-                            (SELECT COUNT(DISTINCT p.player_guid)
-                             FROM player_comprehensive_stats p
-                             WHERE p.round_id IN (
-                                SELECT id FROM rounds WHERE gaming_session_id = r.gaming_session_id
-                             )) as players
-                        FROM rounds r
-                        WHERE r.gaming_session_id IS NOT NULL
-                        GROUP BY r.gaming_session_id, SUBSTR(r.round_date, 1, 10)
-                        ORDER BY r.gaming_session_id DESC
-                        LIMIT 20
-                    """
-                    sessions = await self.bot.db_adapter.fetch_all(query)
-                else:  # PostgreSQL
-                    query = """
-                        SELECT
-                            r.gaming_session_id,
-                            SUBSTR(r.round_date, 1, 10) as date,
-                            MIN(r.round_date || ' ' || r.round_time) as session_start,
-                            MAX(r.round_date || ' ' || r.round_time) as session_end,
-                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) / 2 as maps,
-                            COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) as rounds,
-                            (SELECT COUNT(DISTINCT p.player_guid)
-                             FROM player_comprehensive_stats p
-                             WHERE p.round_id IN (
-                                SELECT id FROM rounds WHERE gaming_session_id = r.gaming_session_id
-                             )) as players
-                        FROM rounds r
-                        WHERE r.gaming_session_id IS NOT NULL
-                        GROUP BY r.gaming_session_id, SUBSTR(r.round_date, 1, 10)
-                        ORDER BY r.gaming_session_id DESC
-                        LIMIT 20
-                    """
-                    sessions = await self.bot.db_adapter.fetch_all(query)
+                query = """
+                    SELECT
+                        r.gaming_session_id,
+                        SUBSTR(r.round_date, 1, 10) as date,
+                        MIN(r.round_date || ' ' || r.round_time) as session_start,
+                        MAX(r.round_date || ' ' || r.round_time) as session_end,
+                        COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) / 2 as maps,
+                        COUNT(DISTINCT CASE WHEN r.round_number IN (1, 2) THEN r.id END) as rounds,
+                        (SELECT COUNT(DISTINCT p.player_guid)
+                         FROM player_comprehensive_stats p
+                         WHERE p.round_id IN (
+                            SELECT id FROM rounds WHERE gaming_session_id = r.gaming_session_id
+                         )) as players
+                    FROM rounds r
+                    WHERE r.gaming_session_id IS NOT NULL
+                    GROUP BY r.gaming_session_id, SUBSTR(r.round_date, 1, 10)
+                    ORDER BY r.gaming_session_id DESC
+                    LIMIT 20
+                """
+                sessions = await self.bot.db_adapter.fetch_all(query)
                 filter_text = "all time (last 20)"
 
             if not sessions:

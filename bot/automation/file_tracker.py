@@ -170,12 +170,8 @@ class FileTracker:
     async def _is_in_processed_files_table(self, filename: str) -> bool:
         """Check if filename exists in processed_files table"""
         try:
-            if self.config.database_type == "sqlite":
-                query = """SELECT 1 FROM processed_files
-                           WHERE filename = ? AND success = 1"""
-            else:  # PostgreSQL
-                query = """SELECT 1 FROM processed_files
-                           WHERE filename = $1 AND success = true"""
+            query = """SELECT 1 FROM processed_files
+                       WHERE filename = $1 AND success = true"""
 
             result = await self.db_adapter.fetch_one(query, (filename,))
             return result is not None
@@ -197,30 +193,17 @@ class FileTracker:
             file_date = file_info["date"]
             file_time = file_info["time"]
 
-            if self.config.database_type == "sqlite":
-                query = """
-                    SELECT 1 FROM rounds
-                    WHERE round_date = ?
-                      AND map_name = ?
-                      AND round_number = ?
-                      AND (
-                            round_time = ?
-                            OR REPLACE(CAST(round_time AS TEXT), ':', '') = ?
-                      )
-                    LIMIT 1
-                """
-            else:  # PostgreSQL
-                query = """
-                    SELECT 1 FROM rounds
-                    WHERE round_date = $1
-                      AND map_name = $2
-                      AND round_number = $3
-                      AND (
-                            round_time = $4
-                            OR REPLACE(CAST(round_time AS TEXT), ':', '') = $5
-                      )
-                    LIMIT 1
-                """
+            query = """
+                SELECT 1 FROM rounds
+                WHERE round_date = $1
+                  AND map_name = $2
+                  AND round_number = $3
+                  AND (
+                        round_time = $4
+                        OR REPLACE(CAST(round_time AS TEXT), ':', '') = $5
+                  )
+                LIMIT 1
+            """
 
             result = await self.db_adapter.fetch_one(
                 query,
@@ -261,50 +244,32 @@ class FileTracker:
                 except Exception as e:
                     logger.warning(f"Could not calculate hash for {filename}: {e}")
 
-            # Database-specific syntax for INSERT OR REPLACE
-            if self.config.database_type == "sqlite":
-                query = """
-                    INSERT OR REPLACE INTO processed_files
-                    (filename, file_hash, success, error_message, processed_at)
-                    VALUES (?, ?, ?, ?, ?)
-                """
-                await self.db_adapter.execute(
-                    query,
-                    (
-                        filename,
-                        file_hash,
-                        1 if success else 0,
-                        error_msg,
-                        datetime.now().isoformat(),
-                    ),
-                )
-            else:  # PostgreSQL
-                query = """
-                    INSERT INTO processed_files
-                    (filename, file_hash, success, error_message, processed_at)
-                    VALUES ($1, $2, $3, $4, $5)
-                    ON CONFLICT (filename) DO UPDATE SET
-                        file_hash = COALESCE(EXCLUDED.file_hash, processed_files.file_hash),
-                        success = EXCLUDED.success,
-                        error_message = EXCLUDED.error_message,
-                        processed_at = EXCLUDED.processed_at
-                """
-                await self.db_adapter.execute(
-                    query,
-                    (
-                        filename,
-                        file_hash,
-                        success,  # PostgreSQL uses boolean directly
-                        error_msg,
-                        datetime.now(),
-                    ),
-                )
+            query = """
+                INSERT INTO processed_files
+                (filename, file_hash, success, error_message, processed_at)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (filename) DO UPDATE SET
+                    file_hash = COALESCE(EXCLUDED.file_hash, processed_files.file_hash),
+                    success = EXCLUDED.success,
+                    error_message = EXCLUDED.error_message,
+                    processed_at = EXCLUDED.processed_at
+            """
+            await self.db_adapter.execute(
+                query,
+                (
+                    filename,
+                    file_hash,
+                    success,
+                    error_msg,
+                    datetime.now(),
+                ),
+            )
 
             if file_hash:
                 logger.debug(f"Stored hash for {filename}: {file_hash[:16]}...")
 
         except Exception as e:
-            logger.debug(f"Error marking file as processed: {e}")
+            logger.error(f"Error marking file as processed: {e}")
 
     async def verify_file_integrity(self, filename: str, file_path: str) -> Tuple[bool, str]:
         """
@@ -324,10 +289,7 @@ class FileTracker:
                 return False, f"File not found: {file_path}"
 
             # Get stored hash from database
-            if self.config.database_type == "sqlite":
-                query = "SELECT file_hash FROM processed_files WHERE filename = ?"
-            else:
-                query = "SELECT file_hash FROM processed_files WHERE filename = $1"
+            query = "SELECT file_hash FROM processed_files WHERE filename = $1"
 
             result = await self.db_adapter.fetch_one(query, (filename,))
 
@@ -376,10 +338,7 @@ class FileTracker:
             # Check which files are NOT in processed_files table
             unimported = []
             for filename in files:
-                if self.config.database_type == "sqlite":
-                    check_query = "SELECT 1 FROM processed_files WHERE filename = ?"
-                else:  # PostgreSQL
-                    check_query = "SELECT 1 FROM processed_files WHERE filename = $1"
+                check_query = "SELECT 1 FROM processed_files WHERE filename = $1"
 
                 existing = await self.db_adapter.fetch_one(check_query, (filename,))
 
@@ -409,13 +368,10 @@ class FileTracker:
                         f"⚠️  Found {len(actionable_unimported)} unimported recent files in local_stats/ "
                         f"(total unimported: {len(unimported)}, total files: {len(files)})"
                     )
-                    if self.config.database_type == "postgresql":
-                        logger.warning(
-                            "💡 To import them, use: python postgresql_database_manager.py "
-                            "or !import command"
-                        )
-                    else:
-                        logger.warning("💡 To import them, use the !import command")
+                    logger.warning(
+                        "💡 To import them, use: python postgresql_database_manager.py "
+                        "or !import command"
+                    )
 
                     # Show a few examples (don't spam log)
                     if len(actionable_unimported) <= 5:
