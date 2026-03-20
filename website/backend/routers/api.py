@@ -3615,7 +3615,7 @@ async def get_leaderboard(
                     SUM(damage_given) as total_damage,
                     SUM(time_played_seconds) as total_time,
                     ROUND((SUM(damage_given)::numeric / NULLIF(SUM(time_played_seconds), 0) * 60), 2) as value,
-                    ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
+                    CASE WHEN SUM(deaths) > 0 THEN ROUND(SUM(kills)::numeric / SUM(deaths), 2) ELSE SUM(kills)::numeric END as kd_ratio
                 FROM player_comprehensive_stats
                 {where_clause}
                 {group_by}
@@ -3642,7 +3642,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
+                CASE WHEN SUM(deaths) > 0 THEN ROUND(SUM(kills)::numeric / SUM(deaths), 2) ELSE SUM(kills)::numeric END as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -3659,7 +3659,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
+                CASE WHEN SUM(deaths) > 0 THEN ROUND(SUM(kills)::numeric / SUM(deaths), 2) ELSE SUM(kills)::numeric END as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -3676,7 +3676,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
+                CASE WHEN SUM(deaths) > 0 THEN ROUND(SUM(kills)::numeric / SUM(deaths), 2) ELSE SUM(kills)::numeric END as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -3693,7 +3693,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
+                CASE WHEN SUM(deaths) > 0 THEN ROUND(SUM(kills)::numeric / SUM(deaths), 2) ELSE SUM(kills)::numeric END as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -3711,7 +3711,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
+                CASE WHEN SUM(deaths) > 0 THEN ROUND(SUM(kills)::numeric / SUM(deaths), 2) ELSE SUM(kills)::numeric END as kd_ratio
             FROM player_comprehensive_stats
             {where_clause} AND bullets_fired > 100
             {group_by}
@@ -3728,7 +3728,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
+                CASE WHEN SUM(deaths) > 0 THEN ROUND(SUM(kills)::numeric / SUM(deaths), 2) ELSE SUM(kills)::numeric END as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -3745,7 +3745,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
+                CASE WHEN SUM(deaths) > 0 THEN ROUND(SUM(kills)::numeric / SUM(deaths), 2) ELSE SUM(kills)::numeric END as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -3762,7 +3762,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
+                CASE WHEN SUM(deaths) > 0 THEN ROUND(SUM(kills)::numeric / SUM(deaths), 2) ELSE SUM(kills)::numeric END as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -4068,6 +4068,7 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
                 SUM(CASE WHEN LOWER(w.weapon_name) LIKE '%mortar%' THEN w.kills ELSE 0 END) as mortar_kills
             FROM weapon_comprehensive_stats w
             WHERE w.map_name IS NOT NULL
+              AND w.round_number IN (1, 2)
             GROUP BY w.map_name
         )
         SELECT
@@ -5117,6 +5118,7 @@ async def get_session_graph_stats(
                     "self_kills": stats["self_kills"],
                 },
                 "advanced_metrics": {
+                    "frag_potential": round((stats["damage_given"] / max(1, stats["time_played"] - stats.get("time_dead_minutes", 0) * 60)) * 60, 1),
                     "damage_efficiency": round(damage_efficiency, 1),
                     "survival_rate": round(survival_rate, 1),
                     "time_denied": round(time_denied, 1),
