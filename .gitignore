@@ -299,6 +299,7 @@ WEBSITE_STAT_BUGS_FOUND.md
 /bin/
 /opusreview/
 /deployed_lua/
+/monitoring/
 
 # ============================================
 # KEEP ESSENTIAL ROOT SCRIPTS
