@@ -5096,9 +5096,6 @@ async def get_session_graph_stats(
             else 0
         )
 
-        # FragPotential: still computed for playstyle classification, but hidden from display
-        frag_potential = (stats["damage_given"] / time_alive_seconds) * 60
-
         # Playstyle classification (8 categories like Discord bot)
         playstyle = classify_playstyle(stats, dpm, kd, avg_accuracy, survival_rate)
         rounds_played = max(1, stats["rounds_played"])
@@ -5285,7 +5282,6 @@ def classify_playstyle(
 
     # Normalize stats per round for fair comparison
     revives_pr = stats["revives"] / rounds
-    gibs_pr = stats["gibs"] / rounds
     assists_pr = stats.get("kill_assists", 0) / rounds
     constructions_pr = stats.get("constructions", 0) / rounds
     obj_actions_pr = (
@@ -10497,8 +10493,8 @@ async def get_proximity_round_team_comparison(
             """,
             (round_id,),
         )
-        # Kill matchups
-        matchups = await db.fetch_all(
+        # Kill matchups (query result used for future kill-feed feature)
+        _matchups = await db.fetch_all(
             """
             SELECT e.attackers, e.target_guid, e.target_name, e.target_team
             FROM combat_engagement e

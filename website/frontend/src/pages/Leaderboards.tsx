@@ -5,7 +5,7 @@ import { useLeaderboard } from '../api/hooks';
 import type { LeaderboardEntry } from '../api/types';
 import { DataTable, type Column } from '../components/DataTable';
 import { PageHeader } from '../components/PageHeader';
-import { SelectFilter, FilterBar } from '../components/FilterBar';
+import { FilterBar } from '../components/FilterBar';
 import { Skeleton } from '../components/Skeleton';
 import { cn } from '../lib/cn';
 import { formatNumber } from '../lib/format';

@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Activity,
   ArrowLeft,
-  ChartColumn,
   Clock,
   Crosshair,
   Gamepad2,
