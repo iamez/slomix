@@ -30,11 +30,11 @@ class PredictionEngine:
     - SUB_WEIGHT: 0.15 (substitution impact)
     """
 
-    # Configurable weights
-    H2H_WEIGHT = 0.40
-    FORM_WEIGHT = 0.25
-    MAP_WEIGHT = 0.20
-    SUB_WEIGHT = 0.15
+    # Configurable weights — Subs redistributed until implemented
+    H2H_WEIGHT = 0.45
+    FORM_WEIGHT = 0.30
+    MAP_WEIGHT = 0.25
+    SUB_WEIGHT = 0.00
 
     # Minimum data thresholds
     MIN_H2H_MATCHES = 3  # Need 3+ matches for H2H to count
@@ -541,19 +541,63 @@ class PredictionEngine:
         team_b_guids: List[str]
     ) -> Dict:
         """
-        Analyze recent form (last 5 sessions, regardless of opponent).
+        Analyze recent form using average DPM over last 30 days.
 
-        Returns score: >0.5 = Team A has better form
+        Returns score: >0.5 = Team A has better recent form
         """
-        # Placeholder - will be implemented when we have session results (Phase 4)
-        logger.debug("Form analysis not yet implemented (Phase 4 dependency)")
-        return {
-            'score': 0.5,
-            'details': 'Form analysis requires session results (Phase 4)',
-            'team_a_form': '?-?',
-            'team_b_form': '?-?',
-            'confidence': 'low'
-        }
+        try:
+            async def _team_avg_dpm(guids: List[str]) -> float:
+                if not guids:
+                    return 0.0
+                placeholders = ','.join([f'${i+1}' for i in range(len(guids))])
+                n = len(guids)
+                query = f"""
+                    SELECT AVG(dpm) FROM (
+                        SELECT player_guid, AVG(dpm) as dpm
+                        FROM player_comprehensive_stats
+                        WHERE player_guid IN ({placeholders})
+                          AND round_date >= (CURRENT_DATE - ${n+1} * INTERVAL '1 day')::text
+                          AND round_number IN (1, 2)
+                          AND time_played_seconds > 60
+                        GROUP BY player_guid
+                    ) sub
+                """
+                result = await self.db.fetch_one(query, tuple(guids) + (30,))
+                return float(result[0] or 0) if result and result[0] else 0.0
+
+            team_a_dpm = await _team_avg_dpm(team_a_guids)
+            team_b_dpm = await _team_avg_dpm(team_b_guids)
+            total = team_a_dpm + team_b_dpm
+
+            if total < 1:
+                return {
+                    'score': 0.5,
+                    'details': 'Insufficient recent data for form analysis',
+                    'team_a_form': f'{team_a_dpm:.0f}',
+                    'team_b_form': f'{team_b_dpm:.0f}',
+                    'confidence': 'low'
+                }
+
+            score = team_a_dpm / total
+            diff = abs(team_a_dpm - team_b_dpm)
+            confidence = 'high' if diff > 50 else ('medium' if diff > 20 else 'low')
+
+            return {
+                'score': score,
+                'details': f'Team A avg DPM: {team_a_dpm:.0f}, Team B: {team_b_dpm:.0f} (30d)',
+                'team_a_form': f'{team_a_dpm:.0f}',
+                'team_b_form': f'{team_b_dpm:.0f}',
+                'confidence': confidence
+            }
+        except Exception as e:
+            logger.error(f"Form analysis failed: {e}", exc_info=True)
+            return {
+                'score': 0.5,
+                'details': f'Form analysis error: {e}',
+                'team_a_form': '?',
+                'team_b_form': '?',
+                'confidence': 'low'
+            }
 
     async def _analyze_map_performance(
         self,
@@ -562,7 +606,7 @@ class PredictionEngine:
         map_name: Optional[str]
     ) -> Dict:
         """
-        Analyze map-specific performance.
+        Analyze map-specific DPM performance.
 
         Returns score: >0.5 = Team A better on this map
         """
@@ -573,13 +617,53 @@ class PredictionEngine:
                 'confidence': 'low'
             }
 
-        # Placeholder - will be implemented with map_performance table (Phase 4)
-        logger.debug(f"Map performance analysis for {map_name} not yet implemented")
-        return {
-            'score': 0.5,
-            'details': f'Map performance on {map_name} not yet tracked (Phase 4)',
-            'confidence': 'low'
-        }
+        try:
+            async def _team_map_dpm(guids: List[str]) -> float:
+                if not guids:
+                    return 0.0
+                placeholders = ','.join([f'${i+1}' for i in range(len(guids))])
+                n = len(guids)
+                query = f"""
+                    SELECT AVG(dpm) FROM (
+                        SELECT player_guid, AVG(dpm) as dpm
+                        FROM player_comprehensive_stats
+                        WHERE player_guid IN ({placeholders})
+                          AND map_name = ${n+1}
+                          AND round_number IN (1, 2)
+                          AND time_played_seconds > 60
+                        GROUP BY player_guid
+                    ) sub
+                """
+                result = await self.db.fetch_one(query, tuple(guids) + (map_name,))
+                return float(result[0] or 0) if result and result[0] else 0.0
+
+            team_a_dpm = await _team_map_dpm(team_a_guids)
+            team_b_dpm = await _team_map_dpm(team_b_guids)
+            total = team_a_dpm + team_b_dpm
+
+            if total < 1:
+                return {
+                    'score': 0.5,
+                    'details': f'No data for {map_name}',
+                    'confidence': 'low'
+                }
+
+            score = team_a_dpm / total
+            diff = abs(team_a_dpm - team_b_dpm)
+            confidence = 'high' if diff > 50 else ('medium' if diff > 20 else 'low')
+
+            return {
+                'score': score,
+                'details': f'{map_name}: Team A {team_a_dpm:.0f} DPM vs Team B {team_b_dpm:.0f} DPM',
+                'confidence': confidence
+            }
+        except Exception as e:
+            logger.error(f"Map analysis failed: {e}", exc_info=True)
+            return {
+                'score': 0.5,
+                'details': f'Map analysis error: {e}',
+                'confidence': 'low'
+            }
 
     async def _analyze_substitution_impact(
         self,

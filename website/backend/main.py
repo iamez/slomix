@@ -205,13 +205,26 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # File extensions that get Cache-Control headers
 _CACHE_1D_EXTS = (".js", ".css", ".woff2", ".woff", ".ttf")
 _CACHE_7D_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp")
+_ENTRYPOINT_NO_CACHE_PATHS = {
+    "/",
+    "/index.html",
+    "/js/app.js",
+    "/js/route-registry.js",
+    "/js/modern-route-host.js",
+    "/static/modern/route-host.js",
+    "/static/modern/route-host.css",
+}
 
 
 @app.middleware("http")
 async def add_static_cache_headers(request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if path.endswith(_CACHE_1D_EXTS):
+    if path in _ENTRYPOINT_NO_CACHE_PATHS:
+        response.headers["Cache-Control"] = "no-cache"
+    elif path.startswith("/static/modern/chunks/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif path.endswith(_CACHE_1D_EXTS):
         response.headers["Cache-Control"] = "public, max-age=86400"
     elif path.endswith(_CACHE_7D_EXTS):
         response.headers["Cache-Control"] = "public, max-age=604800"

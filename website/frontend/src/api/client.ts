@@ -17,6 +17,14 @@ import type {
   RecentRound,
   RoundVizData,
   SessionDetailResponse,
+  SessionGraphsResponse,
+  ProximityScope,
+  ProximityTradeSummaryResponse,
+  ProximityTradeEventsResponse,
+  ProximityDuosResponse,
+  ProximityTeamplayResponse,
+  ProximityMoversResponse,
+  RoundPlayerDetailResponse,
   UploadListResponse,
   UploadDetail,
   PopularTag,
@@ -37,19 +45,64 @@ import type {
 } from './types';
 
 const API_BASE = '/api';
+const responseCache = new Map<string, unknown>();
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
+function stripConditionalHeaders(headers?: HeadersInit): Headers {
+  const cleaned = new Headers(headers);
+  cleaned.delete('if-none-match');
+  cleaned.delete('If-None-Match');
+  cleaned.delete('if-modified-since');
+  cleaned.delete('If-Modified-Since');
+  return cleaned;
+}
+
+async function get<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const cacheKey = `${init.method ?? 'GET'}:${path}`;
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, init);
+
+  if (res.status === 304) {
+    const cached = responseCache.get(cacheKey);
+    if (cached !== undefined) return cached as T;
+
+    const retryRes = await fetch(url, {
+      ...init,
+      cache: 'no-store',
+      headers: stripConditionalHeaders(init.headers),
+    });
+    if (!retryRes.ok) throw new Error(`API ${retryRes.status}: ${path}`);
+    const retryData = await retryRes.json() as T;
+    responseCache.set(cacheKey, retryData);
+    return retryData;
+  }
+
   if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
-  return res.json();
+  const data = await res.json() as T;
+  responseCache.set(cacheKey, data);
+  return data;
+}
+
+function buildScopedQuery(params?: ProximityScope, extra?: Record<string, string | number | boolean | null | undefined>) {
+  const q = new URLSearchParams();
+  if (params?.session_date) q.set('session_date', params.session_date);
+  if (params?.map_name) q.set('map_name', params.map_name);
+  if (params?.round_number != null) q.set('round_number', String(params.round_number));
+  if (params?.round_start_unix != null) q.set('round_start_unix', String(params.round_start_unix));
+  if (params?.range_days != null) q.set('range_days', String(params.range_days));
+  if (extra) {
+    Object.entries(extra).forEach(([key, value]) => {
+      if (value != null) q.set(key, String(value));
+    });
+  }
+  return q.toString();
 }
 
 export const api = {
   // Home / Overview
-  getOverview: () => get<OverviewStats>('/stats/overview'),
-  getLiveStatus: () => get<LiveStatusResponse>('/live-status'),
+  getOverview: () => get<OverviewStats>('/stats/overview', { cache: 'no-store' }),
+  getLiveStatus: () => get<LiveStatusResponse>('/live-status', { cache: 'no-store' }),
   getTrends: (days = 14) => get<TrendsResponse>(`/stats/trends?days=${days}`),
-  getSeason: () => get<SeasonInfo>('/seasons/current'),
+  getSeason: () => get<SeasonInfo>('/seasons/current', { cache: 'no-store' }),
 
   // Records
   getRecords: (mapName?: string) =>
@@ -105,9 +158,9 @@ export const api = {
     get<WeaponStat[]>(`/stats/weapons?period=${period}&limit=${limit}`),
   getWeaponHoF: (period = 'all') =>
     get<WeaponHoFResponse>(`/stats/weapons/hall-of-fame?period=${period}`),
-  getWeaponsByPlayer: (period = 'all', playerLimit = 24, weaponLimit = 4) =>
+  getWeaponsByPlayer: (period = 'all', playerLimit = 24, weaponLimit = 4, playerGuid?: string, gamingSessionId?: number) =>
     get<WeaponByPlayerResponse>(
-      `/stats/weapons/by-player?period=${period}&player_limit=${playerLimit}&weapon_limit=${weaponLimit}`,
+      `/stats/weapons/by-player?period=${period}&player_limit=${playerLimit}&weapon_limit=${weaponLimit}${playerGuid ? `&player_guid=${encodeURIComponent(playerGuid)}` : ''}${gamingSessionId ? `&gaming_session_id=${gamingSessionId}` : ''}`,
     ),
 
   // Round Viz
@@ -115,12 +168,72 @@ export const api = {
     get<RecentRound[]>(`/rounds/recent?limit=${limit}`),
   getRoundViz: (roundId: number) =>
     get<RoundVizData>(`/rounds/${roundId}/viz`),
+  getRoundPlayerDetails: (roundId: number, playerGuid: string) =>
+    get<RoundPlayerDetailResponse>(`/rounds/${roundId}/player/${encodeURIComponent(playerGuid)}/details`),
 
   // Session Detail
   getSessionDetail: (sessionId: number) =>
     get<SessionDetailResponse>(`/stats/session/${sessionId}/detail`),
   getSessionByDate: (date: string) =>
     get<SessionDetailResponse>(`/sessions/${encodeURIComponent(date)}`),
+  getSessionGraphs: (date: string, gamingSessionId?: number | null) =>
+    get<SessionGraphsResponse>(
+      `/sessions/${encodeURIComponent(date)}/graphs${gamingSessionId ? `?gaming_session_id=${gamingSessionId}` : ''}`,
+    ),
+  getProximityTradeSummary: (params?: ProximityScope) =>
+    get<ProximityTradeSummaryResponse>(`/proximity/trades/summary${buildScopedQuery(params) ? `?${buildScopedQuery(params)}` : ''}`),
+  getProximityTradeEvents: (params?: ProximityScope, limit = 250) =>
+    get<ProximityTradeEventsResponse>(`/proximity/trades/events?${buildScopedQuery(params, { limit })}`),
+  getProximityDuos: (params?: ProximityScope, limit = 8) =>
+    get<ProximityDuosResponse>(`/proximity/duos?${buildScopedQuery(params, { limit })}`),
+  getProximityTeamplay: (params?: ProximityScope) =>
+    get<ProximityTeamplayResponse>(`/proximity/teamplay${buildScopedQuery(params) ? `?${buildScopedQuery(params)}` : ''}`),
+  getProximityMovers: (params?: ProximityScope, limit = 5) =>
+    get<ProximityMoversResponse>(`/proximity/movers?${buildScopedQuery(params, { limit })}`),
+
+  // Proximity Player Profile
+  getProximityPlayerProfile: (guid: string, rangeDays = 90) =>
+    get<import('./types').ProximityPlayerProfile>(`/proximity/player/${encodeURIComponent(guid)}/profile?range_days=${rangeDays}`),
+  getProximityPlayerRadar: (guid: string, rangeDays = 90) =>
+    get<import('./types').ProximityRadar>(`/proximity/player/${encodeURIComponent(guid)}/radar?range_days=${rangeDays}`),
+
+  // Proximity Round
+  getProximityRoundTimeline: (roundId: number) =>
+    get<import('./types').ProximityTimelineResponse>(`/proximity/round/${roundId}/timeline`),
+  getProximityRoundTracks: (roundId: number) =>
+    get<import('./types').ProximityTracksResponse>(`/proximity/round/${roundId}/tracks`),
+  getProximityRoundTeamComparison: (roundId: number) =>
+    get<import('./types').ProximityTeamComparisonResponse>(`/proximity/round/${roundId}/team-comparison`),
+
+  // Proximity Leaderboards
+  getProximityLeaderboards: (category = 'power', rangeDays = 30, limit = 10) =>
+    get<import('./types').ProximityLeaderboardResponse>(
+      `/proximity/leaderboards?category=${category}&range_days=${rangeDays}&limit=${limit}`,
+    ),
+
+  getProximitySessionScores: (sessionDate?: string) =>
+    get<import('./types').ProximitySessionScoresResponse>(
+      `/proximity/session-scores${sessionDate ? `?session_date=${sessionDate}` : ''}`,
+    ),
+
+  // Weapon Accuracy
+  getProximityWeaponAccuracy: (params?: { player_guid?: string; map_name?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.player_guid) q.set('player_guid', params.player_guid);
+    if (params?.map_name) q.set('map_name', params.map_name);
+    if (params?.limit) q.set('limit', String(params.limit));
+    return get<import('./types').ProximityWeaponAccuracyResponse>(`/proximity/weapon-accuracy?${q.toString()}`);
+  },
+
+  // VS Stats
+  getPlayerVsStats: (guid: string, scope = 'all', sessionId?: number, roundId?: number, limit = 5) => {
+    const q = new URLSearchParams();
+    q.set('scope', scope);
+    if (sessionId) q.set('session_id', String(sessionId));
+    if (roundId) q.set('round_id', String(roundId));
+    q.set('limit', String(limit));
+    return get<import('./types').PlayerVsStatsResponse>(`/player/${encodeURIComponent(guid)}/vs-stats?${q.toString()}`);
+  },
 
   // Sessions
   getSessions: (params?: { limit?: number; offset?: number; search?: string }) => {

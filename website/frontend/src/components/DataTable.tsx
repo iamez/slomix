@@ -17,6 +17,7 @@ interface DataTableProps<T> {
   data: T[];
   keyFn: (row: T, index: number) => string;
   onRowClick?: (row: T) => void;
+  rowClassName?: (row: T, index: number) => string | undefined;
   emptyMessage?: string;
   className?: string;
   defaultSort?: { key: string; dir: 'asc' | 'desc' };
@@ -28,6 +29,7 @@ export function DataTable<T>({
   data,
   keyFn,
   onRowClick,
+  rowClassName,
   emptyMessage = 'No data available.',
   className,
   defaultSort,
@@ -61,12 +63,12 @@ export function DataTable<T>({
   }
 
   if (data.length === 0) {
-    return <div className="text-center text-slate-400 py-12">{emptyMessage}</div>;
+    return <div className="glass-panel rounded-[24px] py-12 text-center text-slate-400">{emptyMessage}</div>;
   }
 
   return (
-    <div className={cn('overflow-x-auto', className)}>
-      <table className="w-full text-left">
+    <div className={cn('table-shell overflow-x-auto rounded-[24px]', className)}>
+      <table className="min-w-[720px] w-full text-left">
         <thead>
           <tr className={cn('border-b border-white/10', stickyHeader && 'sticky top-0 bg-slate-900/95 backdrop-blur-sm z-10')}>
             {columns.map((col) => (
@@ -96,7 +98,8 @@ export function DataTable<T>({
               className={cn(
                 'border-b border-white/5 transition',
                 onRowClick && 'cursor-pointer hover:bg-white/[0.03]',
-                i % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.01]',
+                i % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.015]',
+                rowClassName?.(row, i),
               )}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >

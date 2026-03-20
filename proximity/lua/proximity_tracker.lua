@@ -194,6 +194,9 @@ local config = {
 
         -- Focus fire: minimum teammates engaging same target
         focus_fire_min_attackers = 2,
+
+        -- Safety cap for pending crossfire opportunities (FIFO eviction above this)
+        max_crossfire_pending = 200,
     },
 }
 
@@ -291,6 +294,68 @@ local function has_flag(value, flag)
     return math.floor(value / flag) % 2 == 1
 end
 
+-- ===== MOD → WEAPON MAPPING =====
+-- Maps meansOfDeath_t → weapon_t for accurate weapon attribution.
+-- meansOfDeath is always correct (set by the engine when damage occurs),
+-- unlike ps.weapon which reflects the currently held weapon and can be wrong
+-- for delayed-damage weapons (grenades, artillery, mines, etc).
+-- Source: etlegacy/src/game/bg_public.h meansOfDeath_t + weapon_t enums
+local MOD_TO_WEAPON = {
+    [4] = 4,     -- MOD_GRENADE → WP_GRENADE_LAUNCHER
+    [5] = 1,     -- MOD_KNIFE → WP_KNIFE
+    [6] = 2,     -- MOD_LUGER → WP_LUGER
+    [7] = 7,     -- MOD_COLT → WP_COLT
+    [8] = 3,     -- MOD_MP40 → WP_MP40
+    [9] = 8,     -- MOD_THOMPSON → WP_THOMPSON
+    [10] = 10,   -- MOD_STEN → WP_STEN
+    [11] = 25,   -- MOD_GARAND → WP_GARAND
+    [12] = 14,   -- MOD_SILENCER → WP_SILENCER
+    [13] = 32,   -- MOD_FG42 → WP_FG42
+    [14] = 42,   -- MOD_FG42SCOPE → WP_FG42_SCOPE
+    [15] = 5,    -- MOD_PANZERFAUST → WP_PANZERFAUST
+    [16] = 4,    -- MOD_GRENADE_LAUNCHER → WP_GRENADE_LAUNCHER
+    [17] = 6,    -- MOD_FLAMETHROWER → WP_FLAMETHROWER
+    [18] = 9,    -- MOD_GRENADE_PINEAPPLE → WP_GRENADE_PINEAPPLE
+    [19] = 17,   -- MOD_MAPMORTAR → WP_MAPMORTAR
+    [20] = 17,   -- MOD_MAPMORTAR_SPLASH → WP_MAPMORTAR
+    [22] = 15,   -- MOD_DYNAMITE → WP_DYNAMITE
+    [23] = 55,   -- MOD_AIRSTRIKE → WP_AIRSTRIKE
+    [24] = 11,   -- MOD_SYRINGE → WP_MEDIC_SYRINGE
+    [25] = 12,   -- MOD_AMMO → WP_AMMO
+    [26] = 13,   -- MOD_ARTY → WP_ARTY
+    [37] = 24,   -- MOD_CARBINE → WP_CARBINE
+    [38] = 23,   -- MOD_KAR98 → WP_KAR98
+    [39] = 37,   -- MOD_GPG40 → WP_GPG40
+    [40] = 38,   -- MOD_M7 → WP_M7
+    [41] = 26,   -- MOD_LANDMINE → WP_LANDMINE
+    [42] = 27,   -- MOD_SATCHEL → WP_SATCHEL
+    [43] = 29,   -- MOD_SMOKEBOMB → WP_SMOKE_BOMB
+    [44] = 30,   -- MOD_MOBILE_MG42 → WP_MOBILE_MG42
+    [45] = 39,   -- MOD_SILENCED_COLT → WP_SILENCED_COLT
+    [46] = 40,   -- MOD_GARAND_SCOPE → WP_GARAND_SCOPE
+    [50] = 31,   -- MOD_K43 → WP_K43
+    [51] = 41,   -- MOD_K43_SCOPE → WP_K43_SCOPE
+    [52] = 34,   -- MOD_MORTAR → WP_MORTAR
+    [53] = 35,   -- MOD_AKIMBO_COLT → WP_AKIMBO_COLT
+    [54] = 36,   -- MOD_AKIMBO_LUGER → WP_AKIMBO_LUGER
+    [55] = 45,   -- MOD_AKIMBO_SILENCEDCOLT → WP_AKIMBO_SILENCEDCOLT
+    [56] = 46,   -- MOD_AKIMBO_SILENCEDLUGER → WP_AKIMBO_SILENCEDLUGER
+    [57] = 29,   -- MOD_SMOKEGRENADE → WP_SMOKE_BOMB
+    [61] = 48,   -- MOD_KNIFE_KABAR → WP_KNIFE_KABAR
+    [62] = 49,   -- MOD_MOBILE_BROWNING → WP_MOBILE_BROWNING
+    [63] = 51,   -- MOD_MORTAR2 → WP_MORTAR2
+    [64] = 53,   -- MOD_BAZOOKA → WP_BAZOOKA
+    [65] = 1,    -- MOD_BACKSTAB → WP_KNIFE
+    [66] = 54,   -- MOD_MP34 → WP_MP34
+}
+
+-- Headshot tracking: HR_HEAD = 0 in hitRegion_t enum.
+-- pers.playerStats.hitRegions[HR_HEAD] is incremented by G_LogRegionHit()
+-- BEFORE the Lua et_Damage hook fires (g_combat.c:1689 vs 1811).
+-- We detect headshots by tracking the delta in hitRegions[0].
+local HR_HEAD = 0
+local last_hr_head = {}  -- [clientnum] = last known hitRegions[HR_HEAD] count
+
 -- ===== MODULE DATA =====
 local tracker = {
     -- v4 data
@@ -316,8 +381,10 @@ local tracker = {
     -- ===== v5 TEAMPLAY DATA =====
     -- Spawn wave tracking
     spawn = {
-        axis_interval = 0,      -- ms from cvar
-        allies_interval = 0,    -- ms from cvar
+        axis_interval = 0,          -- ms from cvar
+        allies_interval = 0,        -- ms from cvar
+        axis_reinf_offset = 0,      -- random 0-15s offset from CS_REINFSEEDS
+        allies_reinf_offset = 0,    -- random 0-15s offset from CS_REINFSEEDS
         -- Kill timing records
         kill_timings = {},       -- array of {killer_guid, victim_guid, kill_time, enemy_interval, time_to_next, score}
     },
@@ -353,11 +420,25 @@ local tracker = {
         events = {},            -- array of {orig_time, trade_time, delta, orig_victim_guid, orig_killer_guid, trader_guid, trader_name}
         recent_kills = {},      -- ring buffer of recent kills for trade detection
     },
+
+    -- Revive tracking
+    revives = {},               -- array of {time, medic_guid, medic_name, revived_guid, revived_name, x, y, z, distance_to_enemy, under_fire}
+
+    -- Weapon fire tracking (for accuracy)
+    weapon_fire = {},           -- [guid] = { [weapon_id] = { shots=N, hits=N, kills=N, headshots=N } }
+
+    -- Kill outcome tracking (v5.1)
+    -- State machine: ALIVE→DEAD→gibbed/revived/tapped_out
+    kill_outcomes = {
+        dead_players = {},      -- [clientnum] = {kill_time, killer_guid, killer_name, kill_mod, victim_guid, victim_name, pos, body_damage}
+        completed = {},         -- array of completed outcomes for output
+    },
 }
 
 local round_start_unix = 0
 local round_end_unix = 0
 local client_cache = {}
+local frame_level_time = 0  -- updated each et_RunFrame; freezes during pause (unlike trap_Milliseconds)
 
 -- ===== UTILITY FUNCTIONS =====
 
@@ -397,6 +478,7 @@ local function sanitizeName(name)
     name = string.gsub(name, ",", "_")
     name = string.gsub(name, "\n", "")
     name = string.gsub(name, "\r", "")
+    name = string.gsub(name, "\t", "_")
     if config.max_string_length and #name > config.max_string_length then
         name = string.sub(name, 1, config.max_string_length)
     end
@@ -494,7 +576,10 @@ local function getGridKey(x, y)
 end
 
 local function gameTime()
-    return et.trap_Milliseconds() - tracker.round.start_time
+    -- Use frame_level_time (from et_RunFrame) instead of trap_Milliseconds.
+    -- trap_Milliseconds is wall-clock and keeps ticking during pause;
+    -- levelTime freezes during pause, giving correct game-relative timestamps.
+    return frame_level_time - tracker.round.start_time
 end
 
 local function getMapName()
@@ -556,6 +641,8 @@ local function angularSeparation(target_pos, pos_a, pos_b)
     if not target_pos or not pos_a or not pos_b then return 0 end
     local ax, ay = normalize2D(pos_a.x - target_pos.x, pos_a.y - target_pos.y)
     local bx, by = normalize2D(pos_b.x - target_pos.x, pos_b.y - target_pos.y)
+    -- Bug 12 fix: zero vectors (overlapping positions) would produce false 90° angle
+    if (ax == 0 and ay == 0) or (bx == 0 and by == 0) then return 0 end
     local dot = clamp(ax*bx + ay*by, -1, 1)
     return math.deg(math.acos(dot))
 end
@@ -567,16 +654,27 @@ end
 
 local last_trace_error_time = 0
 
-local function hasLineOfSight(pos_a, pos_b, ignore_ent)
-    -- Raise trace slightly above ground to avoid floor clipping
-    local start_pos = {pos_a.x, pos_a.y, pos_a.z + 36}  -- ~eye height
-    local end_pos = {pos_b.x, pos_b.y, pos_b.z + 36}
+local function getEyeHeight(clientnum)
+    if not isValidClient(clientnum) then return 36 end
+    local pm_flags = tonumber(safe_gentity_get(clientnum, "ps.pm_flags")) or 0
+    if has_flag(pm_flags, PMF_PRONE) then return 12 end
+    if has_flag(pm_flags, PMF_DUCKED) then return 36 end
+    return 56  -- standing
+end
+
+local function hasLineOfSight(pos_a, pos_b, ignore_ent, slot_a, slot_b)
+    -- Use stance-appropriate eye height for each player
+    local eye_a = (slot_a and getEyeHeight(slot_a)) or 36
+    local eye_b = (slot_b and getEyeHeight(slot_b)) or 36
+    local start_pos = {pos_a.x, pos_a.y, pos_a.z + eye_a}
+    local end_pos = {pos_b.x, pos_b.y, pos_b.z + eye_b}
     local mins = {0, 0, 0}
     local maxs = {0, 0, 0}
 
-    -- Content mask: CONTENTS_SOLID(1) + CONTENTS_PLAYERCLIP(0x10000) + CONTENTS_SHOTCLIP(0x40000) = 327681
-    -- This blocks traces through clip brushes that stop bullets, not just solid walls
-    local ok, result = pcall(et.trap_Trace, start_pos, mins, maxs, end_pos, ignore_ent or -1, 327681)
+    -- MASK_SOLID (CONTENTS_SOLID = 0x1): LOS through world geometry only.
+    -- Using MASK_SOLID instead of MASK_SHOT (0x06000001) to avoid player bodies blocking LOS checks
+    -- between teammates, which would cause false negatives in crossfire detection.
+    local ok, result = pcall(et.trap_Trace, start_pos, mins, maxs, end_pos, ignore_ent or -1, 1)
     if not ok then
         local now = et.trap_Milliseconds()
         if now - last_trace_error_time > 10000 then
@@ -637,6 +735,12 @@ end
 -- ===== DEATH TYPE CATEGORIZATION =====
 local MOD_SELFKILL = 37
 local MOD_FALLING = 38
+
+-- ===== KILL OUTCOME CONSTANTS =====
+local PM_DEAD = 3
+local PMF_LIMBO = 16384        -- 0x4000
+local GIB_HEALTH = -175
+local KILL_OUTCOME_TIMEOUT = 30000  -- cleanup stale entries after 30s
 
 local function getDeathType(victim, killer, meansOfDeath)
     if meansOfDeath == MOD_SELFKILL then return "selfkill" end
@@ -1029,6 +1133,28 @@ local function closeEngagement(engagement, outcome, killer_slot)
     -- v5: Focus fire detection
     if isFeatureEnabled("focus_fire") and #engagement.attacker_order >= config.teamplay.focus_fire_min_attackers then
         local guids_str = table.concat(engagement.attacker_order, ",")
+
+        -- Compute focus_score: measures coordination quality (0-1 scale)
+        -- timing_tightness: how quickly all attackers converged on the target
+        -- dps_score: damage output rate (higher = faster kill via coordination)
+        local min_first_hit, max_first_hit = math.huge, 0
+        for _, atk in pairs(engagement.attackers) do
+            if atk.first_hit then
+                if atk.first_hit < min_first_hit then min_first_hit = atk.first_hit end
+                if atk.first_hit > max_first_hit then max_first_hit = atk.first_hit end
+            end
+        end
+        local spread = max_first_hit - min_first_hit
+        -- 0ms spread = perfect timing (1.0), 2000ms+ spread = poor (0.0)
+        local timing_tightness = 1.0 - math.min(spread / 2000, 1.0)
+
+        local dur = math.max(engagement.duration or 100, 100)
+        local dps = (engagement.total_damage / dur) * 1000  -- damage per second
+        -- 500+ dps = max score (1.0), scales linearly below
+        local dps_score = math.min(dps / 500, 1.0)
+
+        local focus_score = timing_tightness * 0.6 + dps_score * 0.4
+
         table.insert(tracker.focus_fire.events, {
             engagement_id = engagement.id,
             target_guid = engagement.target_guid,
@@ -1037,7 +1163,7 @@ local function closeEngagement(engagement, outcome, killer_slot)
             attacker_guids = guids_str,
             total_damage = engagement.total_damage,
             duration = engagement.duration or 0,
-            focus_score = 0  -- Will be computed below
+            focus_score = focus_score
         })
     end
 
@@ -1091,14 +1217,62 @@ end
 
 -- ===== 1. SPAWN WAVE TRACKING =====
 
+-- Reinforcement seeds array from ET:Legacy bg_misc.c
+-- Used to decode the per-team random spawn offset from CS_REINFSEEDS
+local REINF_SEEDS = {11, 3, 13, 7, 2, 5, 1, 17}
+
+local function parseReinfOffsets()
+    -- CS_REINFSEEDS (configstring 31) format: "<blue_packed> <red_packed> <seed0> ... <seed7>"
+    local cs = et.trap_GetConfigstring(31)
+    if not cs or cs == "" then return 0, 0 end
+    local parts = {}
+    for token in string.gmatch(cs, "%S+") do
+        table.insert(parts, tonumber(token) or 0)
+    end
+    if #parts < 10 then return 0, 0 end
+    local blue_packed = parts[1]
+    local red_packed = parts[2]
+    -- Extract 0-based index into seed array (REINF_BLUEDELT=3, REINF_REDDELT=2)
+    local blue_idx = math.floor(blue_packed / 8) % 8   -- >> 3, clamp 0-7
+    local red_idx = math.floor(red_packed / 4) % 8      -- >> 2, clamp 0-7
+    -- Seeds at parts[3..10] map to C's seeds[0..7]
+    local blue_seed = parts[blue_idx + 3] or 0
+    local red_seed = parts[red_idx + 3] or 0
+    local blue_div = REINF_SEEDS[blue_idx + 1] or 1  -- +1 for Lua 1-indexing
+    local red_div = REINF_SEEDS[red_idx + 1] or 1
+    -- Offsets in ms (0 to ~15000ms)
+    local allies_offset = blue_div > 0 and math.floor(1000 * blue_seed / blue_div) or 0
+    local axis_offset = red_div > 0 and math.floor(1000 * red_seed / red_div) or 0
+    return axis_offset, allies_offset
+end
+
 local function refreshSpawnTimers()
-    local axis_ms = tonumber(et.trap_Cvar_Get("g_axisSpawnTime")) or 0
-    local allies_ms = tonumber(et.trap_Cvar_Get("g_alliedSpawnTime")) or 0
-    -- Convert seconds to ms if values look like seconds (< 1000)
+    -- ET:Legacy sets spawn times via map scripts (wm_axis_respawntime / wm_allied_respawntime)
+    -- which store values in g_redlimbotime (Axis) and g_bluelimbotime (Allies) in MILLISECONDS.
+    -- g_userAxisRespawnTime / g_userAlliedRespawnTime are admin overrides (in seconds).
+    -- The old cvars g_axisSpawnTime / g_alliedSpawnTime do NOT exist in ET:Legacy.
+    local axis_ms = tonumber(et.trap_Cvar_Get("g_redlimbotime")) or 0
+    local allies_ms = tonumber(et.trap_Cvar_Get("g_bluelimbotime")) or 0
+    -- Fallback: try user override cvars (in seconds, need *1000)
+    if axis_ms <= 0 then
+        local user_axis = tonumber(et.trap_Cvar_Get("g_userAxisRespawnTime")) or 0
+        if user_axis > 0 then axis_ms = user_axis * 1000 end
+    end
+    if allies_ms <= 0 then
+        local user_allies = tonumber(et.trap_Cvar_Get("g_userAlliedRespawnTime")) or 0
+        if user_allies > 0 then allies_ms = user_allies * 1000 end
+    end
+    -- Safety: convert seconds to ms if values look like seconds (< 1000)
     if axis_ms > 0 and axis_ms < 1000 then axis_ms = axis_ms * 1000 end
     if allies_ms > 0 and allies_ms < 1000 then allies_ms = allies_ms * 1000 end
     tracker.spawn.axis_interval = axis_ms
     tracker.spawn.allies_interval = allies_ms
+    -- Parse random reinforcement offsets from CS_REINFSEEDS configstring
+    tracker.spawn.axis_reinf_offset, tracker.spawn.allies_reinf_offset = parseReinfOffsets()
+    if config.debug then
+        et.G_Printf("[PROX] Reinf offsets: Axis=%dms, Allies=%dms\n",
+            tracker.spawn.axis_reinf_offset, tracker.spawn.allies_reinf_offset)
+    end
 end
 
 -- Calculate spawn timing score for a kill
@@ -1113,8 +1287,16 @@ local function calculateSpawnTimingScore(kill_game_time, victim_team_num)
 
     if interval <= 0 then return 0, 0 end
 
-    -- Time elapsed in the current spawn cycle
-    local cycle_elapsed = kill_game_time % interval
+    -- ET:Legacy spawn formula (from CG_CalculateReinfTime in cg_draw.c):
+    --   time_to_next = 1 + (interval - ((reinf_offset + elapsed_time) % interval)) / 1000
+    -- Where reinf_offset is a per-team random 0-15s offset set at match start via CS_REINFSEEDS.
+    local reinf_offset = 0
+    if victim_team_num == 1 then
+        reinf_offset = tracker.spawn.axis_reinf_offset or 0
+    else
+        reinf_offset = tracker.spawn.allies_reinf_offset or 0
+    end
+    local cycle_elapsed = (reinf_offset + kill_game_time) % interval
     -- Time until the next spawn wave fires for the victim's team
     local time_to_next = interval - cycle_elapsed
 
@@ -1157,7 +1339,7 @@ local function analyzeTeamCohesion(team_num, now)
     local team_name = team_num == 1 and "AXIS" or "ALLIES"
     local members = getAliveTeamMembers(team_num)
 
-    if #members < config.teamplay.min_team_size or #members == 0 then return end
+    if #members < config.teamplay.min_team_size then return end
 
     -- Calculate centroid
     local cx, cy = 0, 0
@@ -1223,6 +1405,24 @@ end
 -- ===== 3. CROSSFIRE OPPORTUNITIES =====
 
 local function analyzeCrossfireOpportunities(now)
+    -- Safety: FIFO eviction if pending queue exceeds cap
+    local max_pending = config.teamplay.max_crossfire_pending
+    while #tracker.crossfire_opps.pending > max_pending do
+        local evicted = table.remove(tracker.crossfire_opps.pending, 1)
+        -- Record evicted opportunity as not-executed
+        table.insert(tracker.crossfire_opps.events, {
+            time = evicted.detect_time,
+            target_guid = evicted.target_guid,
+            target_name = evicted.target_name,
+            target_team = evicted.target_team,
+            teammate1_guid = evicted.t1_guid,
+            teammate2_guid = evicted.t2_guid,
+            angular_separation = evicted.angle,
+            was_executed = "0",
+            damage_within_window = evicted.damage_dealt,
+        })
+    end
+
     -- Dedup: track which (target, t1, t2) triples we've already recorded this tick
     local seen = {}
 
@@ -1238,7 +1438,7 @@ local function analyzeCrossfireOpportunities(now)
                 for _, mate in ipairs(teammates) do
                     local dist = distance2D(mate.pos, enemy.pos)
                     if dist <= config.teamplay.los_max_range then
-                        if hasLineOfSight(mate.pos, enemy.pos, mate.slot) then
+                        if hasLineOfSight(mate.pos, enemy.pos, mate.slot, mate.slot, enemy.slot) then
                             table.insert(los_teammates, mate)
                         end
                     end
@@ -1515,13 +1715,132 @@ local function checkTradeKill(killer_slot, victim_slot, kill_time)
     end
 end
 
+-- ===== v5.1 KILL OUTCOME STATE MACHINE =====
+
+local function recordKillOutcomeDeath(victim_slot, killer_slot, meansOfDeath)
+    local now = gameTime()
+    local victim_guid = getPlayerGUID(victim_slot)
+    local victim_name = getPlayerName(victim_slot)
+    local killer_guid = (killer_slot and isValidClient(killer_slot)) and getPlayerGUID(killer_slot) or ""
+    local killer_name = (killer_slot and isValidClient(killer_slot)) and getPlayerName(killer_slot) or ""
+    local pos = getPlayerPos(victim_slot)
+
+    tracker.kill_outcomes.dead_players[victim_slot] = {
+        kill_time = now,
+        victim_guid = victim_guid,
+        victim_name = victim_name,
+        killer_guid = killer_guid,
+        killer_name = killer_name,
+        kill_mod = meansOfDeath or 0,
+        pos = pos,
+        body_damage = 0,
+        body_hits = 0,
+        last_damager_guid = "",
+        last_damager_name = "",
+        last_damage_mod = 0,
+    }
+end
+
+local function recordKillOutcomeBodyDamage(victim_slot, attacker_slot, damage, meansOfDeath)
+    local info = tracker.kill_outcomes.dead_players[victim_slot]
+    if not info then return end
+    info.body_damage = info.body_damage + damage
+    info.body_hits = info.body_hits + 1
+    if isValidClient(attacker_slot) then
+        info.last_damager_guid = getPlayerGUID(attacker_slot)
+        info.last_damager_name = getPlayerName(attacker_slot)
+        info.last_damage_mod = meansOfDeath or 0
+    end
+end
+
+local function finalizeKillOutcome(victim_slot, outcome, resolver_guid, resolver_name)
+    local info = tracker.kill_outcomes.dead_players[victim_slot]
+    if not info then return end
+
+    local now = gameTime()
+    local delta_ms = now - info.kill_time
+
+    -- Calculate effective denied time
+    -- For "revived": effective = time dead until revive
+    -- For "gibbed"/"tapped_out": effective = time until next spawn wave
+    local effective_denied_ms = delta_ms
+    if outcome == "gibbed" or outcome == "tapped_out" then
+        -- Time until next spawn wave from NOW
+        local victim_team_num = 0
+        if isValidClient(victim_slot) then
+            victim_team_num = getPlayerTeamNum(victim_slot)
+        end
+        local interval = 0
+        local reinf_offset = 0
+        if victim_team_num == 1 then
+            interval = tracker.spawn.axis_interval
+            reinf_offset = tracker.spawn.axis_reinf_offset or 0
+        elseif victim_team_num == 2 then
+            interval = tracker.spawn.allies_interval
+            reinf_offset = tracker.spawn.allies_reinf_offset or 0
+        end
+        if interval > 0 then
+            local cycle_pos = (reinf_offset + now) % interval
+            local remaining = interval - cycle_pos
+            effective_denied_ms = delta_ms + remaining
+        end
+    end
+
+    table.insert(tracker.kill_outcomes.completed, {
+        kill_time = info.kill_time,
+        victim_guid = info.victim_guid,
+        victim_name = info.victim_name,
+        killer_guid = info.killer_guid,
+        killer_name = info.killer_name,
+        kill_mod = info.kill_mod,
+        outcome = outcome,
+        outcome_time = now,
+        delta_ms = delta_ms,
+        effective_denied_ms = round(effective_denied_ms, 0),
+        gibber_guid = outcome == "gibbed" and info.last_damager_guid or "",
+        gibber_name = outcome == "gibbed" and info.last_damager_name or "",
+        reviver_guid = outcome == "revived" and (resolver_guid or "") or "",
+        reviver_name = outcome == "revived" and (resolver_name or "") or "",
+    })
+
+    tracker.kill_outcomes.dead_players[victim_slot] = nil
+
+    if config.debug then
+        et.G_Printf("[PROX] Kill outcome: %s → %s (%dms, effective=%dms)\n",
+            info.victim_name, outcome, delta_ms, effective_denied_ms)
+    end
+end
+
+local function pollKillOutcomes(now)
+    for slot, info in pairs(tracker.kill_outcomes.dead_players) do
+        -- Check for PMF_LIMBO transition
+        local pm_flags = safe_gentity_get(slot, "ps.pm_flags")
+        if pm_flags and has_flag(pm_flags, PMF_LIMBO) then
+            -- Player went to limbo — gib or tapout?
+            local health = tonumber(safe_gentity_get(slot, "health")) or 0
+            if health <= GIB_HEALTH then
+                finalizeKillOutcome(slot, "gibbed", nil, nil)
+            else
+                finalizeKillOutcome(slot, "tapped_out", nil, nil)
+            end
+        elseif now - info.kill_time > KILL_OUTCOME_TIMEOUT then
+            -- Stale entry cleanup
+            finalizeKillOutcome(slot, "expired", nil, nil)
+        end
+    end
+end
+
 -- ===== v5 TEAMPLAY FRAME UPDATE =====
 -- Called from et_RunFrame during active play
 
 local function updateTeamplay(now)
-    -- Team cohesion (every 500ms)
+    -- Team cohesion (every 500ms, throttle to 1000ms after 6000 samples to cap memory)
     if isFeatureEnabled("team_cohesion") then
-        if now - tracker.cohesion.last_check_time >= config.teamplay.cohesion_interval_ms then
+        local cohesion_interval = config.teamplay.cohesion_interval_ms
+        if #tracker.cohesion.samples > 6000 then
+            cohesion_interval = cohesion_interval * 2  -- reduce sampling rate for long rounds
+        end
+        if now - tracker.cohesion.last_check_time >= cohesion_interval then
             analyzeTeamCohesion(1, now)  -- Axis
             analyzeTeamCohesion(2, now)  -- Allies
             tracker.cohesion.last_check_time = now
@@ -1544,6 +1863,9 @@ local function updateTeamplay(now)
             tracker.pushes.last_check_time = now
         end
     end
+
+    -- v5.1: Kill outcome polling (check for PMF_LIMBO transitions on dead players)
+    pollKillOutcomes(now)
 end
 
 -- ===== FILE OUTPUT =====
@@ -1583,16 +1905,9 @@ local function serializeTrackPath(path)
     return table.concat(parts, "|")
 end
 
-local function outputData()
-    if config.output_guard and (tracker.output_in_progress or tracker.output_written) then
-        proxPrint("[PROX] Output already written or in progress, skipping\n")
-        return
-    end
-    tracker.output_in_progress = true
-
+local function outputDataInner()
     if #tracker.completed == 0 and #tracker.completed_tracks == 0 then
         proxPrint("[PROX] No data to output\n")
-        tracker.output_in_progress = false
         return
     end
 
@@ -1605,10 +1920,9 @@ local function outputData()
 
     proxPrint("[PROX] Attempting to write: " .. filename .. "\n")
 
-    local fd, len = et.trap_FS_FOpenFile(filename, 1)
+    local fd, len = et.trap_FS_FOpenFile(filename, et.FS_WRITE)
     if not fd or fd == -1 or fd == 0 then
         et.G_Print("[PROX] ERROR: Could not open file: " .. filename .. "\n")
-        tracker.output_in_progress = false
         return
     end
 
@@ -1681,8 +1995,8 @@ local function outputData()
     et.trap_FS_Write(hm_header, string.len(hm_header), fd)
     for key, data in pairs(tracker.kill_heatmap) do
         local gx, gy = string.match(key, "(-?%d+),(-?%d+)")
-        et.trap_FS_Write(string.format("%s;%s;%d;%d\n", gx, gy, data.axis, data.allies),
-            string.len(string.format("%s;%s;%d;%d\n", gx, gy, data.axis, data.allies)), fd)
+        local line = string.format("%s;%s;%d;%d\n", gx, gy, data.axis, data.allies)
+        et.trap_FS_Write(line, string.len(line), fd)
     end
 
     -- ===== MOVEMENT HEATMAP (v4) =====
@@ -1842,6 +2156,67 @@ local function outputData()
         end
     end
 
+    -- ===== REVIVES =====
+    if #tracker.revives > 0 then
+        local rev_header = "\n# REVIVES\n" ..
+            "# time;medic_guid;medic_name;revived_guid;revived_name;x;y;z;distance_to_enemy;nearest_enemy_guid;under_fire\n"
+        et.trap_FS_Write(rev_header, string.len(rev_header), fd)
+        for _, r in ipairs(tracker.revives) do
+            local line = string.format("%d;%s;%s;%s;%s;%.1f;%.1f;%.1f;%.1f;%s;%s\n",
+                r.time, r.medic_guid, r.medic_name,
+                r.revived_guid, r.revived_name,
+                r.x, r.y, r.z,
+                r.distance_to_enemy, r.nearest_enemy_guid, r.under_fire)
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
+
+    -- ===== WEAPON ACCURACY =====
+    local has_weapon_data = false
+    for _, _ in pairs(tracker.weapon_fire) do has_weapon_data = true; break end
+    if has_weapon_data then
+        local wa_header = "\n# WEAPON_ACCURACY\n" ..
+            "# player_guid;player_name;team;weapon_id;shots_fired;hits;kills;headshots\n"
+        et.trap_FS_Write(wa_header, string.len(wa_header), fd)
+        for guid, weapons in pairs(tracker.weapon_fire) do
+            local name = weapons._name or "Unknown"
+            local team = weapons._team or "SPEC"
+            for weapon_id, data in pairs(weapons) do
+                if type(weapon_id) == "number" then
+                    local line = string.format("%s;%s;%s;%d;%d;%d;%d;%d\n",
+                        guid, name, team, weapon_id,
+                        data.shots or 0, data.hits or 0,
+                        data.kills or 0, data.headshots or 0)
+                    et.trap_FS_Write(line, string.len(line), fd)
+                end
+            end
+        end
+    end
+
+    -- ===== KILL OUTCOMES (v5.1) =====
+    -- Finalize any still-pending dead players before output
+    for slot, _ in pairs(tracker.kill_outcomes.dead_players) do
+        finalizeKillOutcome(slot, "round_end", nil, nil)
+    end
+
+    if #tracker.kill_outcomes.completed > 0 then
+        local ko_header = "\n# KILL_OUTCOME\n" ..
+            "# kill_time;victim_guid;victim_name;killer_guid;killer_name;kill_mod;" ..
+            "outcome;outcome_time;delta_ms;effective_denied_ms;" ..
+            "gibber_guid;gibber_name;reviver_guid;reviver_name\n" ..
+            "# outcome: gibbed|revived|tapped_out|round_end|expired\n"
+        et.trap_FS_Write(ko_header, string.len(ko_header), fd)
+        for _, ko in ipairs(tracker.kill_outcomes.completed) do
+            local line = string.format("%d;%s;%s;%s;%s;%d;%s;%d;%d;%d;%s;%s;%s;%s\n",
+                ko.kill_time, ko.victim_guid, ko.victim_name,
+                ko.killer_guid, ko.killer_name, ko.kill_mod,
+                ko.outcome, ko.outcome_time, ko.delta_ms, ko.effective_denied_ms,
+                ko.gibber_guid, ko.gibber_name,
+                ko.reviver_guid, ko.reviver_name)
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
+
     et.trap_FS_FCloseFile(fd)
 
     -- Summary
@@ -1858,6 +2233,9 @@ local function outputData()
         #tracker.completed_tracks, total_samples, #tracker.completed, crossfire_count))
 
     -- v5 summary
+    local weapon_fire_count = 0
+    for _, _ in pairs(tracker.weapon_fire) do weapon_fire_count = weapon_fire_count + 1 end
+
     proxPrint(string.format("[PROX v5] Teamplay: %d spawn timings, %d cohesion samples, %d crossfire opps, %d focus fire, %d pushes, %d trades\n",
         #tracker.spawn.kill_timings,
         #tracker.cohesion.samples,
@@ -1865,6 +2243,8 @@ local function outputData()
         #tracker.focus_fire.events,
         #tracker.pushes.events,
         #tracker.trade_kills.events))
+    proxPrint(string.format("[PROX v5] New: %d revives, %d players with weapon accuracy data, %d kill outcomes\n",
+        #tracker.revives, weapon_fire_count, #tracker.kill_outcomes.completed))
 
     if isFeatureEnabled("reaction_tracking") then
         proxPrint(string.format("[PROX v5] Reaction metrics: %d rows\n", #tracker.reaction_metrics))
@@ -1874,9 +2254,22 @@ local function outputData()
     if config.test_mode.enabled and config.test_mode.lifecycle_log then
         outputLifecycleLog()
     end
+end
 
+-- Bug 15 fix: pcall wrapper ensures output_in_progress is always cleared
+local function outputData()
+    if config.output_guard and (tracker.output_in_progress or tracker.output_written) then
+        proxPrint("[PROX] Output already written or in progress, skipping\n")
+        return
+    end
+    tracker.output_in_progress = true
+    local ok, err = pcall(outputDataInner)
     tracker.output_in_progress = false
-    tracker.output_written = true
+    if ok then
+        tracker.output_written = true
+    else
+        et.G_Print("[PROX] ERROR in outputData: " .. tostring(err) .. "\n")
+    end
 end
 
 -- ===== LIFECYCLE LOG OUTPUT (v4.1) =====
@@ -1890,7 +2283,7 @@ outputLifecycleLog = function()
         config.output_dir, os.date('%Y-%m-%d-%H%M%S'),
         tracker.round.map_name, tracker.round.round_num)
     proxPrint("[PROX] Writing lifecycle log: " .. filename .. "\n")
-    local fd, len = et.trap_FS_FOpenFile(filename, 1)
+    local fd, len = et.trap_FS_FOpenFile(filename, et.FS_WRITE)
     if not fd or fd == -1 or fd == 0 then
         et.G_Print("[PROX] ERROR: Could not open lifecycle log file\n")
         return
@@ -2010,6 +2403,11 @@ function et_InitGame(levelTime, randomSeed, restart)
     tracker.pushes.last_check_time = 0
     tracker.trade_kills.events = {}
     tracker.trade_kills.recent_kills = {}
+    tracker.revives = {}
+    tracker.weapon_fire = {}
+    tracker.kill_outcomes.dead_players = {}
+    tracker.kill_outcomes.completed = {}
+    last_hr_head = {}
 
     -- Read spawn timers
     refreshSpawnTimers()
@@ -2038,6 +2436,7 @@ local last_gamestate = -1
 
 function et_RunFrame(levelTime)
     if not config.enabled then return end
+    frame_level_time = levelTime  -- Bug 1 fix: store for gameTime(); freezes during pause
 
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
 
@@ -2129,11 +2528,12 @@ function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
     -- Skip friendly fire — team damage should not create engagements or affect crossfire tracking
     if getPlayerTeamNum(target) == getPlayerTeamNum(attacker) then return end
 
+    local weapon = safe_gentity_get(attacker, "ps.weapon") or 0  -- Bug 5 fix: fetch once
+
     -- v4: Engagement tracking
     if isFeatureEnabled("engagement_tracking") then
         local engagement = tracker.engagements[target]
         if not engagement then engagement = createEngagement(target) end
-        local weapon = safe_gentity_get(attacker, "ps.weapon") or 0
         recordHit(engagement, attacker, damage, weapon)
     end
 
@@ -2142,8 +2542,41 @@ function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
         registerReactionSignals(target, attacker, gameTime())
     end
 
+    -- v5.1: Kill outcome — track body damage (gib attempts)
+    local victim_pm_type = safe_gentity_get(target, "ps.pm_type")
+    if victim_pm_type == PM_DEAD then
+        recordKillOutcomeBodyDamage(target, attacker, damage, meansOfDeath)
+    end
+
     -- v5: Crossfire opportunity execution check
     checkCrossfireExecution(attacker, target, damage)
+
+    -- v5: Weapon accuracy — record hit
+    -- Use meansOfDeath → weapon mapping for correct attribution (fixes delayed-damage weapons)
+    local accuracy_weapon = MOD_TO_WEAPON[meansOfDeath] or weapon
+    local atk_guid = getPlayerGUID(attacker)
+    if atk_guid and atk_guid ~= "" then
+        if not tracker.weapon_fire[atk_guid] then
+            tracker.weapon_fire[atk_guid] = {
+                _name = getPlayerName(attacker),
+                _team = getPlayerTeam(attacker),
+            }
+        end
+        if not tracker.weapon_fire[atk_guid][accuracy_weapon] then
+            tracker.weapon_fire[atk_guid][accuracy_weapon] = { shots = 0, hits = 0, kills = 0, headshots = 0 }
+        end
+        tracker.weapon_fire[atk_guid][accuracy_weapon].hits = tracker.weapon_fire[atk_guid][accuracy_weapon].hits + 1
+
+        -- Headshot detection via hitRegions delta.
+        -- G_LogRegionHit(attacker, HR_HEAD) fires BEFORE this Lua callback (g_combat.c:1689 vs 1811),
+        -- so pers.playerStats.hitRegions[0] is already incremented when we read it here.
+        local hr_head = tonumber(safe_gentity_get(attacker, "pers.playerStats.hitRegions", HR_HEAD)) or 0
+        local prev_hr = last_hr_head[attacker] or 0
+        if hr_head > prev_hr then
+            tracker.weapon_fire[atk_guid][accuracy_weapon].headshots = tracker.weapon_fire[atk_guid][accuracy_weapon].headshots + 1
+        end
+        last_hr_head[attacker] = hr_head
+    end
 
     -- v4.1: Action annotation for test mode
     if config.test_mode.enabled and config.test_mode.action_annotations then
@@ -2196,6 +2629,11 @@ function et_Obituary(victim, killer, meansOfDeath)
         end
     end
 
+    -- v5.1: Kill outcome tracking (all deaths from enemy kills)
+    if death_type == "killed" and killer and isValidClient(killer) then
+        recordKillOutcomeDeath(victim, killer, meansOfDeath)
+    end
+
     -- v5: Spawn timing + trade kills (only for enemy kills, not selfkills/world/teamkills)
     if killer and killer ~= 1022 and killer ~= 1023 and killer ~= victim
         and isValidClient(killer) and isPlayerActive(killer)
@@ -2207,6 +2645,15 @@ function et_Obituary(victim, killer, meansOfDeath)
 
         -- Trade kill detection
         checkTradeKill(killer, victim, now)
+
+        -- v5: Weapon accuracy — record kill (use MOD → weapon for correct attribution)
+        local kill_guid = getPlayerGUID(killer)
+        if kill_guid and kill_guid ~= "" then
+            local kill_weapon = MOD_TO_WEAPON[meansOfDeath] or (safe_gentity_get(killer, "ps.weapon") or 0)
+            if tracker.weapon_fire[kill_guid] and tracker.weapon_fire[kill_guid][kill_weapon] then
+                tracker.weapon_fire[kill_guid][kill_weapon].kills = tracker.weapon_fire[kill_guid][kill_weapon].kills + 1
+            end
+        end
     end
 end
 
@@ -2216,23 +2663,96 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
     if gamestate ~= 0 then return end
 
     if revived == 1 then
-        if config.test_mode.enabled and config.test_mode.action_annotations then
-            local track = tracker.player_tracks[clientNum]
-            if track then
-                local now = gameTime()
-                local pos = getPlayerPos(clientNum)
-                if pos then
-                    local health = safe_gentity_get(clientNum, "health") or 100
-                    local weapon = safe_gentity_get(clientNum, "ps.weapon") or 0
-                    local stance, sprint = getPlayerMovementState(clientNum, 0)
-                    table.insert(track.path, {
-                        time = now, x = round(pos.x, 1), y = round(pos.y, 1), z = round(pos.z, 1),
-                        health = health, speed = 0, weapon = weapon,
-                        stance = stance, sprint = sprint, event = "revived"
-                    })
+        -- v5.1: Kill outcome — revive resolves pending death
+        if tracker.kill_outcomes.dead_players[clientNum] then
+            local reviver_client = tonumber(safe_gentity_get(clientNum, "pers.lastrevive_client"))
+            local reviver_guid = (reviver_client and isValidClient(reviver_client)) and getPlayerGUID(reviver_client) or ""
+            local reviver_name = (reviver_client and isValidClient(reviver_client)) and getPlayerName(reviver_client) or ""
+            finalizeKillOutcome(clientNum, "revived", reviver_guid, reviver_name)
+        end
+
+        local track = tracker.player_tracks[clientNum]
+        local now = gameTime()
+        local pos = getPlayerPos(clientNum)
+
+        -- Always record revive event in player track (not just in test mode)
+        if track and pos then
+            local health = safe_gentity_get(clientNum, "health") or 100
+            local weapon = safe_gentity_get(clientNum, "ps.weapon") or 0
+            local stance, sprint = getPlayerMovementState(clientNum, 0)
+            table.insert(track.path, {
+                time = now, x = round(pos.x, 1), y = round(pos.y, 1), z = round(pos.z, 1),
+                health = health, speed = 0, weapon = weapon,
+                stance = stance, sprint = sprint, event = "revived"
+            })
+        end
+
+        -- Record revive event with medic detection
+        if pos then
+            local revived_guid = getPlayerGUID(clientNum)
+            local revived_name = getPlayerName(clientNum)
+            local revived_team_num = safe_gentity_get(clientNum, "sess.sessionTeam") or 0
+
+            -- Find nearest medic-class teammate (the one who revived)
+            local medic_guid, medic_name = "", ""
+            local min_medic_dist = math.huge
+            local max_clients = get_max_clients()
+            for i = 0, max_clients - 1 do
+                if i ~= clientNum and isPlayerAlive(i) then
+                    local t = safe_gentity_get(i, "sess.sessionTeam")
+                    local pclass = safe_gentity_get(i, "sess.playerType")
+                    if t == revived_team_num and pclass == 1 then  -- 1 = MEDIC
+                        local mpos = getPlayerPos(i)
+                        if mpos then
+                            local d = distance3D(pos, mpos)
+                            if d < min_medic_dist then
+                                min_medic_dist = d
+                                medic_guid = getPlayerGUID(i)
+                                medic_name = getPlayerName(i)
+                            end
+                        end
+                    end
                 end
             end
+
+            -- Find distance to nearest enemy
+            local enemy_team_num = revived_team_num == 1 and 2 or 1
+            local min_enemy_dist = math.huge
+            local nearest_enemy_guid = ""
+            for i = 0, max_clients - 1 do
+                if isPlayerAlive(i) then
+                    local t = safe_gentity_get(i, "sess.sessionTeam")
+                    if t == enemy_team_num then
+                        local epos = getPlayerPos(i)
+                        if epos then
+                            local d = distance3D(pos, epos)
+                            if d < min_enemy_dist then
+                                min_enemy_dist = d
+                                nearest_enemy_guid = getPlayerGUID(i)
+                            end
+                        end
+                    end
+                end
+            end
+
+            -- under_fire: was the revived player in an active engagement?
+            local under_fire = tracker.engagements[clientNum] ~= nil and "1" or "0"
+
+            table.insert(tracker.revives, {
+                time = now,
+                medic_guid = medic_guid,
+                medic_name = medic_name,
+                revived_guid = revived_guid,
+                revived_name = revived_name,
+                x = round(pos.x, 1),
+                y = round(pos.y, 1),
+                z = round(pos.z, 1),
+                distance_to_enemy = round(min_enemy_dist == math.huge and 0 or min_enemy_dist, 1),
+                nearest_enemy_guid = nearest_enemy_guid,
+                under_fire = under_fire,
+            })
         end
+
         return
     end
 
@@ -2248,7 +2768,13 @@ function et_ClientDisconnect(clientNum)
         local pos = getPlayerPos(clientNum)
         endPlayerTrack(clientNum, pos, "disconnect")
     end
+    -- Bug 3 fix: close active engagement if this client was the target
+    local engagement = tracker.engagements[clientNum]
+    if engagement then
+        closeEngagement(engagement, "disconnect", nil)
+    end
     tracker.last_stamina[clientNum] = nil
+    last_hr_head[clientNum] = nil
     client_cache[clientNum] = nil
 end
 
@@ -2259,6 +2785,65 @@ end
 
 function et_ClientUserinfoChanged(clientNum)
     updateClientCache(clientNum)
+end
+
+-- ===== WEAPON FIRE TRACKING =====
+
+function et_WeaponFire(clientNum, weapon)
+    if not config.enabled then return end
+    if not isValidClient(clientNum) or not isPlayerActive(clientNum) then return end
+    local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
+    if gamestate ~= 0 then return end
+
+    local guid = getPlayerGUID(clientNum)
+    if not guid or guid == "" then return end
+
+    if not tracker.weapon_fire[guid] then
+        tracker.weapon_fire[guid] = {
+            _name = getPlayerName(clientNum),
+            _team = getPlayerTeam(clientNum),
+        }
+    end
+    if not tracker.weapon_fire[guid][weapon] then
+        tracker.weapon_fire[guid][weapon] = { shots = 0, hits = 0, kills = 0, headshots = 0 }
+    end
+    tracker.weapon_fire[guid][weapon].shots = tracker.weapon_fire[guid][weapon].shots + 1
+end
+
+-- ===== SHUTDOWN HANDLER =====
+-- Saves data if map changes without going through intermission (server crash, map command, etc.)
+function et_ShutdownGame(restart)
+    if not config.enabled then return end
+    if restart == 0 and not tracker.output_written then
+        round_end_unix = os.time()
+        -- End all active player tracks
+        for clientnum, track in pairs(tracker.player_tracks) do
+            local pos = getPlayerPos(clientnum)
+            track.death_time = gameTime()
+            track.death_pos = pos
+            track.death_type = "shutdown"
+            if pos then
+                table.insert(track.path, {
+                    time = track.death_time, x = round(pos.x, 1), y = round(pos.y, 1), z = round(pos.z, 1),
+                    health = safe_gentity_get(clientnum, "health") or 0,
+                    speed = 0, weapon = safe_gentity_get(clientnum, "ps.weapon") or 0,
+                    stance = 0, sprint = 0, event = "shutdown"
+                })
+            end
+            table.insert(tracker.completed_tracks, track)
+        end
+        tracker.player_tracks = {}
+        -- Close all active engagements
+        local active_targets = {}
+        for target_slot, _ in pairs(tracker.engagements) do
+            table.insert(active_targets, target_slot)
+        end
+        for _, target_slot in ipairs(active_targets) do
+            local engagement = tracker.engagements[target_slot]
+            if engagement then closeEngagement(engagement, "shutdown", nil) end
+        end
+        outputData()
+    end
 end
 
 -- ===== MODULE END =====

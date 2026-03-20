@@ -559,8 +559,8 @@ export default function Availability() {
   // Not authenticated
   if (!access?.authenticated || !auth) {
     return (
-      <>
-        <PageHeader title="Availability" subtitle="See when players are looking to play" />
+      <div className="page-shell">
+        <PageHeader title="Availability" subtitle="Planning and coordination for community sessions." eyebrow="Advanced" />
         <div className="text-center py-16">
           <div className="text-4xl mb-4">{'\u{1F512}'}</div>
           <p className="text-slate-400 text-lg mb-4">Log in with Discord to set your availability and view the queue.</p>
@@ -571,7 +571,7 @@ export default function Availability() {
             Login with Discord
           </a>
         </div>
-      </>
+      </div>
     );
   }
 
@@ -580,8 +580,8 @@ export default function Availability() {
   const tomorrowEntry = dayMap.get(tomorrowIso);
 
   return (
-    <>
-      <PageHeader title="Availability" subtitle="Coordinate game sessions with the community" />
+    <div className="page-shell">
+      <PageHeader title="Availability" subtitle="Coordinate game sessions with the community." eyebrow="Advanced" />
 
       {statusMsg && (
         <div className={`mb-4 rounded-xl border px-4 py-2 text-sm ${
@@ -687,6 +687,6 @@ export default function Availability() {
           Link your Discord account to set availability and participate in planning.
         </div>
       )}
-    </>
+    </div>
   );
 }

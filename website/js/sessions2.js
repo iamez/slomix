@@ -351,3 +351,5 @@ function _initS2Search() {
 
     input.dataset.s2ListenersAttached = '1';
 }
+
+window.loadMoreSessions2 = loadMoreSessions2;

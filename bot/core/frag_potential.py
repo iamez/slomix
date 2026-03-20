@@ -274,6 +274,17 @@ class FragPotentialCalculator:
             metrics.objectives_returned
         )
 
+        # Per-round rates for session-length-independent thresholds
+        rp = max(1, rounds_played)
+        kills_pr = metrics.kills / rp
+        deaths_pr = metrics.deaths / rp
+        dmg_given_pr = metrics.damage_given / rp
+        dmg_received_pr = metrics.damage_received / rp
+        revives_per_round = revives / rp
+        obj_pr = total_objectives / rp
+        obj_completed_pr = metrics.objectives_completed / rp
+        obj_destroyed_pr = metrics.objectives_destroyed / rp
+
         # ═══════════════════════════════════════════════════════
         # FRAGGER: High damage dealer, efficient killer
         # ═══════════════════════════════════════════════════════
@@ -285,11 +296,11 @@ class FragPotentialCalculator:
             scores[Playstyle.FRAGGER] += 0.2
 
         # ═══════════════════════════════════════════════════════
-        # SLAYER: Kill-focused, high kill count
+        # SLAYER: Kill-focused, high kill count per round
         # ═══════════════════════════════════════════════════════
-        if metrics.kills >= 20 and kd >= cls.THRESHOLDS['kd_good']:
+        if kills_pr >= 10 and kd >= cls.THRESHOLDS['kd_good']:
             scores[Playstyle.SLAYER] += 0.4
-        if metrics.kills >= 30:
+        if kills_pr >= 15:
             scores[Playstyle.SLAYER] += 0.3
         if fp >= cls.THRESHOLDS['fp_medium']:
             scores[Playstyle.SLAYER] += 0.2
@@ -303,16 +314,15 @@ class FragPotentialCalculator:
             scores[Playstyle.TANK] += 0.2
         if metrics.time_dead_ratio < 20:  # Low death time
             scores[Playstyle.TANK] += 0.2
-        if kd < cls.THRESHOLDS['kd_good'] and metrics.damage_received > 3000:
+        if kd < cls.THRESHOLDS['kd_good'] and dmg_received_pr > 1500:
             scores[Playstyle.TANK] += 0.2
 
         # ═══════════════════════════════════════════════════════
         # MEDIC: Support-focused, high revives
         # ═══════════════════════════════════════════════════════
-        revives_per_round = revives / max(1, rounds_played)
-        if revives >= cls.THRESHOLDS['revives_high']:
-            scores[Playstyle.MEDIC] += 0.5
         if revives_per_round >= cls.THRESHOLDS['revives_per_round']:
+            scores[Playstyle.MEDIC] += 0.5
+        if revives_per_round >= 3:
             scores[Playstyle.MEDIC] += 0.3
         if session_avg_revives and revives > session_avg_revives * 1.5:
             scores[Playstyle.MEDIC] += 0.2
@@ -324,7 +334,7 @@ class FragPotentialCalculator:
             scores[Playstyle.SNIPER] += 0.5
         if hs_pct >= cls.THRESHOLDS['hs_high'] and kd >= cls.THRESHOLDS['kd_good']:
             scores[Playstyle.SNIPER] += 0.3
-        if metrics.deaths < 10 and hs_pct >= cls.THRESHOLDS['hs_high']:
+        if deaths_pr < 5 and hs_pct >= cls.THRESHOLDS['hs_high']:
             scores[Playstyle.SNIPER] += 0.2
 
         # ═══════════════════════════════════════════════════════
@@ -333,9 +343,9 @@ class FragPotentialCalculator:
         if session_avg_deaths:
             if metrics.deaths > session_avg_deaths * cls.THRESHOLDS['deaths_high_mult']:
                 scores[Playstyle.RUSHER] += 0.3
-        if metrics.deaths > 25 and fp >= cls.THRESHOLDS['fp_medium']:
+        if deaths_pr > 12 and fp >= cls.THRESHOLDS['fp_medium']:
             scores[Playstyle.RUSHER] += 0.3
-        if kd < cls.THRESHOLDS['kd_low'] and metrics.damage_given > 2000:
+        if kd < cls.THRESHOLDS['kd_low'] and dmg_given_pr > 1000:
             scores[Playstyle.RUSHER] += 0.2
         if metrics.time_dead_ratio > 35:  # High death time
             scores[Playstyle.RUSHER] += 0.2
@@ -343,11 +353,11 @@ class FragPotentialCalculator:
         # ═══════════════════════════════════════════════════════
         # OBJECTIVE: Objective-focused player
         # ═══════════════════════════════════════════════════════
-        if total_objectives >= cls.THRESHOLDS['obj_high']:
+        if obj_pr >= 1.5:
             scores[Playstyle.OBJECTIVE] += 0.5
-        if metrics.objectives_completed >= 2:
+        if obj_completed_pr >= 1:
             scores[Playstyle.OBJECTIVE] += 0.3
-        if metrics.objectives_destroyed >= 2:
+        if obj_destroyed_pr >= 1:
             scores[Playstyle.OBJECTIVE] += 0.2
 
         # ═══════════════════════════════════════════════════════
@@ -401,7 +411,7 @@ class FragPotentialCalculator:
                 SUM(p.damage_given) as damage_given,
                 SUM(p.damage_received) as damage_received,
                 SUM(p.time_played_seconds) as time_played,
-                SUM(COALESCE(p.time_dead_minutes, 0)) as time_dead_minutes,
+                SUM(LEAST(COALESCE(p.time_dead_minutes, 0) * 60, p.time_played_seconds) / 60.0) as time_dead_minutes,
                 SUM(p.revives_given) as revives,
                 SUM(p.headshot_kills) as headshots,
                 SUM(p.objectives_completed) as obj_completed,

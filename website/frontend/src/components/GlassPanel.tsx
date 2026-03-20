@@ -8,7 +8,7 @@ interface GlassPanelProps {
 
 export function GlassPanel({ children, className }: GlassPanelProps) {
   return (
-    <div className={cn('glass-panel rounded-2xl p-6', className)}>
+    <div className={cn('glass-panel rounded-[26px] p-6', className)}>
       {children}
     </div>
   );

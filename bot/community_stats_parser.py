@@ -586,6 +586,14 @@ class C0RNP0RN3StatsParser:
                         r1_val = r1_obj.get(field, 0) or 0
                         r2_val = obj.get(field, 0) or 0
                         obj[field] = r1_val + r2_val
+                total_time = float(obj.get('time_played_minutes', 0) or 0)
+                total_dead = float(obj.get('time_dead_minutes', 0) or 0)
+                if total_time > 0:
+                    obj['time_dead_ratio'] = round((total_dead / total_time) * 100, 1)
+                else:
+                    obj['time_dead_ratio'] = 0.0
+                # time_played_percent (TAB[8]) is already cumulative in R2 file
+                # = match-level alive%, no fix needed (R2 cumulative IS match total)
             fixed_players.append(player_copy)
         match_summary['players'] = fixed_players
 
@@ -757,6 +765,26 @@ class C0RNP0RN3StatsParser:
                     r1_time = r1_obj.get('time_played_minutes', 0)
                     diff_minutes = max(0, r2_time) if use_r2_raw else max(0, r2_time - r1_time)
                     differential_player['objective_stats']['time_played_minutes'] = diff_minutes
+                elif key == 'time_played_percent':
+                    # TAB[8] is a PERCENTAGE from cumulative data (engine alive%).
+                    # Cannot subtract percentages — recalculate from absolute alive time.
+                    tpp_r2 = r2_obj.get('time_played_percent', 0) or 0
+                    tpp_r1 = r1_obj.get('time_played_percent', 0) or 0
+                    tp_r2 = r2_obj.get('time_played_minutes', 0) or 0
+                    tp_r1 = r1_obj.get('time_played_minutes', 0) or 0
+                    if use_r2_raw:
+                        differential_player['objective_stats']['time_played_percent'] = tpp_r2
+                    else:
+                        alive_r1 = (tpp_r1 / 100.0) * tp_r1
+                        alive_r2_cum = (tpp_r2 / 100.0) * tp_r2
+                        alive_r2_only = max(0, alive_r2_cum - alive_r1)
+                        round_r2_only = max(0, tp_r2 - tp_r1)
+                        if round_r2_only > 0:
+                            differential_player['objective_stats']['time_played_percent'] = round(
+                                (alive_r2_only / round_r2_only) * 100.0, 1
+                            )
+                        else:
+                            differential_player['objective_stats']['time_played_percent'] = 0.0
                 elif isinstance(r2_obj[key], (int, float)):
                     # Cumulative numeric fields - subtract R1 to get R2-only value
                     if use_r2_raw:
@@ -779,6 +807,8 @@ class C0RNP0RN3StatsParser:
                 'time_dead_ratio_r2': r2_obj.get('time_dead_ratio', 0),
                 'denied_playtime_r1': r1_obj.get('denied_playtime', 0),
                 'denied_playtime_r2': r2_obj.get('denied_playtime', 0),
+                'time_played_percent_r1': r1_obj.get('time_played_percent', 0),
+                'time_played_percent_r2': r2_obj.get('time_played_percent', 0),
             }
 
             # Recompute time_dead_ratio after differential (avoid ratio subtraction)

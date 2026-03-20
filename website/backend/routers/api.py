@@ -2278,7 +2278,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """
             SELECT COUNT(DISTINCT player_guid)
             FROM player_comprehensive_stats
-            WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
             """,
             (start_str, end_str),
         )
@@ -2306,7 +2306,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """
             SELECT COALESCE(SUM(kills), 0)
             FROM player_comprehensive_stats
-            WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
             """,
             (start_str, end_str),
         )
@@ -2314,7 +2314,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             f"""
             SELECT COUNT(DISTINCT SUBSTR(CAST(round_date AS TEXT), 1, 10))
             FROM rounds
-            WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
               {round_status_clause}
             """,
             (start_str, end_str),
@@ -2369,7 +2369,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """
             SELECT COUNT(DISTINCT SUBSTR(CAST(round_date AS TEXT), 1, 10))
             FROM rounds
-            WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
             """,
             (start_str, end_str),
             default=None,
@@ -2390,7 +2390,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """
             SELECT COUNT(DISTINCT player_guid)
             FROM player_comprehensive_stats
-            WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
             """,
             (start_str, end_str),
         )
@@ -2398,7 +2398,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """
             SELECT COALESCE(SUM(kills), 0)
             FROM player_comprehensive_stats
-            WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
             """,
             (start_str, end_str),
         )
@@ -3213,27 +3213,23 @@ async def get_live_session(db: DatabaseAdapter = Depends(get_db)):
     if not result or not result[0]:
         return {"active": False}
 
-    # Get latest round details
+    # Get latest round details (actual_duration_seconds lives on rounds table)
     latest_query = """
-        SELECT
-            map_name,
-            round_date,
-            stopwatch_time
-        FROM player_comprehensive_stats
-        WHERE round_date::timestamp >= CURRENT_DATE
-        ORDER BY round_date DESC
+        SELECT DISTINCT ON (p.round_date)
+            p.map_name,
+            p.round_date,
+            r.actual_duration_seconds
+        FROM player_comprehensive_stats p
+        LEFT JOIN rounds r ON r.id = p.round_id
+        WHERE p.round_date::timestamp >= CURRENT_DATE
+        ORDER BY p.round_date DESC
         LIMIT 1
     """
     try:
         latest = await db.fetch_one(latest_query)
-    except Exception:
-        latest_query = (
-            "SELECT map_name, round_date, stopwatch_time "
-            "FROM player_comprehensive_stats "
-            "WHERE date(round_date) = date('now') "
-            "ORDER BY round_date DESC LIMIT 1"
-        )
-        latest = await db.fetch_one(latest_query)
+    except Exception as e:
+        logger.error("Failed to fetch latest round details: %s", e)
+        latest = None
 
     def format_stopwatch_time(seconds: int) -> str:
         if not seconds:
@@ -3280,6 +3276,7 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         FROM player_comprehensive_stats p
         LEFT JOIN rounds r ON r.id = p.round_id
         WHERE p.player_guid = $1
+          AND p.round_number IN (1, 2)
     """
     if not use_guid:
         query = query.replace("p.player_guid = $1", "p.player_name ILIKE $1")
@@ -3480,7 +3477,8 @@ async def compare_players(
             SUM(gibs) as total_gibs,
             SUM(xp) as total_xp
         FROM player_comprehensive_stats
-        WHERE {where_clause}
+        WHERE ({where_clause})
+          AND round_number IN (1, 2)
         GROUP BY player_guid
     """
 
@@ -3597,7 +3595,7 @@ async def get_leaderboard(
 
     # Base query parts
     # nosec B608 - These clauses are static strings, not user-controlled input
-    where_clause = "WHERE time_played_seconds > 0 AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)"
+    where_clause = "WHERE round_number IN (1, 2) AND time_played_seconds > 0 AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)"
     name_select = "MAX(player_name) as player_name"
     guid_select = "player_guid"
     group_by = "GROUP BY player_guid"
@@ -3617,7 +3615,7 @@ async def get_leaderboard(
                     SUM(damage_given) as total_damage,
                     SUM(time_played_seconds) as total_time,
                     ROUND((SUM(damage_given)::numeric / NULLIF(SUM(time_played_seconds), 0) * 60), 2) as value,
-                    ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+                    ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
                 FROM player_comprehensive_stats
                 {where_clause}
                 {group_by}
@@ -3644,7 +3642,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -3657,11 +3655,11 @@ async def get_leaderboard(
             SELECT
                 {guid_select} as player_guid,
                 {name_select},
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as value,
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as value,
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -3674,11 +3672,11 @@ async def get_leaderboard(
             SELECT
                 {guid_select} as player_guid,
                 {name_select},
-                SUM(headshots) as value,
+                SUM(headshot_kills) as value,
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -3695,7 +3693,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -3713,7 +3711,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
             FROM player_comprehensive_stats
             {where_clause} AND bullets_fired > 100
             {group_by}
@@ -3730,7 +3728,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -3747,7 +3745,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -3764,7 +3762,7 @@ async def get_leaderboard(
                 COUNT(*) as rounds_played,
                 SUM(kills) as total_kills,
                 SUM(deaths) as total_deaths,
-                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 1)), 2) as kd_ratio
+                ROUND((SUM(kills)::numeric / NULLIF(SUM(deaths), 0)), 2) as kd_ratio
             FROM player_comprehensive_stats
             {where_clause}
             {group_by}
@@ -4047,6 +4045,7 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
                 ) as max_duration
             FROM rounds r
             WHERE r.map_name IS NOT NULL
+              AND r.round_number IN (1, 2)
             GROUP BY r.map_name
         ),
         player_stats AS (
@@ -4058,6 +4057,7 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
                 COUNT(DISTINCT p.player_guid) as unique_players
             FROM player_comprehensive_stats p
             WHERE p.map_name IS NOT NULL AND p.time_played_seconds > 0
+              AND p.round_number IN (1, 2)
             GROUP BY p.map_name
         ),
         weapon_stats AS (
@@ -4332,6 +4332,7 @@ async def get_weapon_stats_by_player(
     player_limit: int = 25,
     weapon_limit: int = 5,
     player_guid: Optional[str] = None,
+    gaming_session_id: Optional[int] = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -4342,7 +4343,16 @@ async def get_weapon_stats_by_player(
     params: List[Any] = []
     param_idx = 1
 
-    if period == "7d":
+    # Session-scoped: filter to rounds in the given gaming session
+    if gaming_session_id is not None:
+        where_clause += (
+            f" AND round_id IN ("
+            f"SELECT id FROM rounds WHERE gaming_session_id = ${param_idx}"
+            f" AND round_number IN (1, 2))"
+        )
+        params.append(gaming_session_id)
+        param_idx += 1
+    elif period == "7d":
         start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
         where_clause += f" AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST(${param_idx} AS TEXT)"
         params.append(start_date)
@@ -4377,8 +4387,8 @@ async def get_weapon_stats_by_player(
         FROM weapon_comprehensive_stats
         {where_clause}
         GROUP BY player_guid, weapon_name
-        HAVING SUM(kills) > 0
-        ORDER BY player_guid, total_kills DESC
+        HAVING SUM(kills) > 0 OR SUM(hits) > 0
+        ORDER BY player_guid, total_kills DESC, total_hits DESC
     """
 
     try:
@@ -4901,8 +4911,20 @@ async def get_session_graph_stats(
             p.times_revived,
             p.time_dead_minutes,
             p.denied_playtime,
+            p.most_useful_kills,
             p.map_name,
-            r.id as round_id
+            r.id as round_id,
+            p.constructions,
+            p.objectives_stolen,
+            p.dynamites_planted,
+            p.dynamites_defused,
+            p.useless_kills,
+            p.double_kills,
+            p.triple_kills,
+            p.quad_kills,
+            p.mega_kills,
+            p.bullets_fired,
+            p.time_played_percent
         FROM player_comprehensive_stats p
         JOIN rounds r ON p.round_id = r.id
         WHERE {where_clause}
@@ -4942,8 +4964,20 @@ async def get_session_graph_stats(
         times_revived = row[14] or 0
         time_dead_minutes = row[15] or 0
         denied_playtime = row[16] or 0
-        map_name = row[17]
-        round_id = row[18]  # unique identifier for deduplication
+        useful_kills = row[17] or 0
+        map_name = row[18]
+        round_id = row[19]  # unique identifier for deduplication
+        constructions = row[20] or 0
+        objectives_stolen = row[21] or 0
+        dynamites_planted = row[22] or 0
+        dynamites_defused = row[23] or 0
+        useless_kills = row[24] or 0
+        double_kills = row[25] or 0
+        triple_kills = row[26] or 0
+        quad_kills = row[27] or 0
+        mega_kills = row[28] or 0
+        bullets_fired = row[29] or 0
+        time_played_percent = float(row[30]) if row[30] else 0.0
 
         if name not in player_stats:
             player_stats[name] = {
@@ -4956,15 +4990,27 @@ async def get_session_graph_stats(
                 "kill_assists": 0,
                 "gibs": 0,
                 "headshots": 0,
-                "accuracy_sum": 0,
-                "accuracy_count": 0,
+                "accuracy_weighted_sum": 0,
+                "accuracy_bullets_sum": 0,
+                "tpp_weighted_sum": 0,
+                "tpp_weight": 0,
                 "team_kills": 0,
                 "self_kills": 0,
                 "times_revived": 0,
                 "time_dead_minutes": 0,
                 "denied_playtime": 0,
+                "useful_kills": 0,
                 "rounds_played": 0,
                 "seen_rounds": set(),  # Track unique round_ids
+                "constructions": 0,
+                "objectives_stolen": 0,
+                "dynamites_planted": 0,
+                "dynamites_defused": 0,
+                "useless_kills": 0,
+                "double_kills": 0,
+                "triple_kills": 0,
+                "quad_kills": 0,
+                "mega_kills": 0,
             }
             dpm_timeline[name] = []
 
@@ -4983,13 +5029,26 @@ async def get_session_graph_stats(
         ps["kill_assists"] += kill_assists
         ps["gibs"] += gibs
         ps["headshots"] += headshots
-        ps["accuracy_sum"] += accuracy
-        ps["accuracy_count"] += 1
+        ps["accuracy_weighted_sum"] += accuracy * bullets_fired
+        ps["accuracy_bullets_sum"] += bullets_fired
+        if time_played_percent > 0:
+            ps["tpp_weighted_sum"] += time_played_percent * time_played
+            ps["tpp_weight"] += time_played
         ps["team_kills"] += team_kills
         ps["self_kills"] += self_kills
         ps["times_revived"] += times_revived
         ps["time_dead_minutes"] += time_dead_minutes
         ps["denied_playtime"] += denied_playtime
+        ps["useful_kills"] += useful_kills
+        ps["constructions"] += constructions
+        ps["objectives_stolen"] += objectives_stolen
+        ps["dynamites_planted"] += dynamites_planted
+        ps["dynamites_defused"] += dynamites_defused
+        ps["useless_kills"] += useless_kills
+        ps["double_kills"] += double_kills
+        ps["triple_kills"] += triple_kills
+        ps["quad_kills"] += quad_kills
+        ps["mega_kills"] += mega_kills
         ps["rounds_played"] += 1
 
         # DPM for this round
@@ -5009,36 +5068,40 @@ async def get_session_graph_stats(
         kd = stats["kills"] / stats["deaths"] if stats["deaths"] > 0 else stats["kills"]
         dpm = stats["damage_given"] / time_minutes
 
-        # Advanced metrics (aligned with Discord bot's frag_potential.py)
-        # FragPotential: DPM while alive = (damage_given / time_alive_seconds) * 60
+        # Advanced metrics
         time_dead_seconds = stats.get("time_dead_minutes", 0) * 60
         time_alive_seconds = max(1, stats["time_played"] - time_dead_seconds)
-        frag_potential = (stats["damage_given"] / time_alive_seconds) * 60
 
         # Damage Efficiency: ratio of damage given to received (>1 is good)
-        # Aligned with bot's frag_potential.py damage_ratio formula
         damage_efficiency = stats["damage_given"] / max(1, stats["damage_received"])
 
-        # Survival Rate: percentage of time spent alive
-        # Aligned with bot formula: max(0, 100 - (time_dead_minutes / time_played_minutes * 100))
+        # Survival Rate: prefer engine alive% (TAB[8]), fallback to computed
+        tpp_wsum = stats.get("tpp_weighted_sum", 0)
+        tpp_w = stats.get("tpp_weight", 0)
+        survival_rate_engine = round(tpp_wsum / tpp_w, 1) if tpp_w > 0 else None
         time_dead_min = stats.get("time_dead_minutes", 0)
         time_played_min = max(0.01, time_minutes)
-        survival_rate = max(0, 100 - (time_dead_min / time_played_min * 100))
+        survival_rate_computed = max(0, 100 - (time_dead_min / time_played_min * 100))
+        survival_rate = survival_rate_engine if survival_rate_engine is not None else survival_rate_computed
 
         # Time Denied (use Lua denied_playtime when available; normalize per minute)
         time_denied_raw = stats.get("denied_playtime", 0)
         time_denied = (time_denied_raw / time_minutes) if time_minutes > 0 else 0
         time_dead_raw_seconds = stats.get("time_dead_minutes", 0) * 60
 
-        # Avg accuracy
+        # Weighted accuracy (by bullets fired per round)
         avg_accuracy = (
-            stats["accuracy_sum"] / stats["accuracy_count"]
-            if stats["accuracy_count"] > 0
+            stats["accuracy_weighted_sum"] / stats["accuracy_bullets_sum"]
+            if stats["accuracy_bullets_sum"] > 0
             else 0
         )
 
+        # FragPotential: still computed for playstyle classification, but hidden from display
+        frag_potential = (stats["damage_given"] / time_alive_seconds) * 60
+
         # Playstyle classification (8 categories like Discord bot)
-        playstyle = classify_playstyle(stats, dpm, kd, avg_accuracy)
+        playstyle = classify_playstyle(stats, dpm, kd, avg_accuracy, survival_rate)
+        rounds_played = max(1, stats["rounds_played"])
 
         players_data.append(
             {
@@ -5055,22 +5118,29 @@ async def get_session_graph_stats(
                     "kill_assists": stats["kill_assists"],
                     "gibs": stats["gibs"],
                     "headshots": stats["headshots"],
+                    "useful_kills": stats["useful_kills"],
                     "times_revived": stats["times_revived"],
                     "team_kills": stats["team_kills"],
                     "self_kills": stats["self_kills"],
                 },
                 "advanced_metrics": {
-                    "frag_potential": round(frag_potential, 1),
                     "damage_efficiency": round(damage_efficiency, 1),
                     "survival_rate": round(survival_rate, 1),
                     "time_denied": round(time_denied, 1),
                     "time_denied_raw_seconds": int(time_denied_raw or 0),
                     "time_dead_raw_seconds": int(time_dead_raw_seconds or 0),
+                    "useful_kills_per_round": round(
+                        stats["useful_kills"] / rounds_played, 2
+                    ),
+                    "deaths_per_round": round(stats["deaths"] / rounds_played, 2),
+                    "rounds_played": rounds_played,
                 },
                 "playstyle": playstyle,
                 "dpm_timeline": dpm_timeline[name],
             }
         )
+
+    _apply_session_aggression_model(players_data)
 
     # Sort by DPM for consistent ordering
     players_data.sort(key=lambda x: x["combat_offense"]["dpm"], reverse=True)
@@ -5078,7 +5148,135 @@ async def get_session_graph_stats(
     return {"date": date, "player_count": len(players_data), "players": players_data}
 
 
-def classify_playstyle(stats: dict, dpm: float, kd: float, accuracy: float) -> dict:
+def _clamp_percentage(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return round(max(0.0, min(100.0, float(value))), 1)
+
+
+def _score_relative_metric(
+    value: Any, values: List[Any], invert: bool = False, neutral: float = 50.0
+) -> float:
+    """Score a value relative to a set using percentile rank.
+
+    Percentile rank is outlier-resistant: one extreme value cannot
+    compress all others toward 50. Each player's score reflects how
+    many session-mates they beat, not their distance from min/max.
+    """
+    numeric_values: list[float] = []
+    for item in values:
+        try:
+            number = float(item)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(number):
+            numeric_values.append(number)
+
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return neutral
+
+    if not math.isfinite(numeric_value) or not numeric_values:
+        return neutral
+
+    n = len(numeric_values)
+    if n <= 1:
+        return neutral
+
+    count_below = sum(1 for v in numeric_values if v < numeric_value)
+    scaled = (count_below / (n - 1)) * 100.0
+    if invert:
+        scaled = 100.0 - scaled
+    return _clamp_percentage(scaled) or neutral
+
+
+def _apply_session_aggression_model(players_data: List[Dict[str, Any]]) -> None:
+    if not players_data:
+        return
+
+    frag_values = []
+    denied_values = []
+    useful_values = []
+    death_values = []
+    dead_share_values = []
+    efficiency_values = []
+    survival_values = []
+
+    for player in players_data:
+        adv = player.get("advanced_metrics") or {}
+        frag_values.append(float(adv.get("frag_potential") or 0.0))
+        denied_values.append(float(adv.get("time_denied") or 0.0))
+        useful_values.append(float(adv.get("useful_kills_per_round") or 0.0))
+        death_values.append(float(adv.get("deaths_per_round") or 0.0))
+        survival_rate = float(adv.get("survival_rate") or 0.0)
+        dead_share_values.append(max(0.0, 100.0 - survival_rate))
+        efficiency_values.append(float(adv.get("damage_efficiency") or 0.0))
+        survival_values.append(survival_rate)
+
+    for player in players_data:
+        adv = player.get("advanced_metrics") or {}
+        playstyle = player.setdefault("playstyle", {})
+
+        survival_rate = float(adv.get("survival_rate") or 0.0)
+        dead_time_share = max(0.0, 100.0 - survival_rate)
+
+        frag_score = _score_relative_metric(
+            adv.get("frag_potential"), frag_values, neutral=50.0
+        )
+        denied_score = _score_relative_metric(
+            adv.get("time_denied"), denied_values, neutral=50.0
+        )
+        useful_score = _score_relative_metric(
+            adv.get("useful_kills_per_round"), useful_values, neutral=50.0
+        )
+        death_score = _score_relative_metric(
+            adv.get("deaths_per_round"), death_values, neutral=50.0
+        )
+        dead_share_score = _score_relative_metric(
+            dead_time_share, dead_share_values, neutral=50.0
+        )
+        efficiency_score = _score_relative_metric(
+            adv.get("damage_efficiency"), efficiency_values, neutral=50.0
+        )
+        survival_score = _score_relative_metric(
+            survival_rate, survival_values, neutral=50.0
+        )
+
+        pressure_score = (frag_score * 0.50) + (denied_score * 0.25) + (
+            useful_score * 0.25
+        )
+        risk_load = (death_score * 0.60) + (dead_share_score * 0.40)
+        productivity = (pressure_score * 0.65) + (efficiency_score * 0.35)
+        empty_death_burden = max(0.0, risk_load - productivity)
+
+        aggression_score = _clamp_percentage(
+            (pressure_score * 0.80)
+            + (risk_load * 0.20)
+            - (empty_death_burden * 0.50)
+        ) or 0.0
+        discipline_score = _clamp_percentage(
+            (survival_score * 0.45)
+            + (efficiency_score * 0.35)
+            + ((100.0 - empty_death_burden) * 0.20)
+        ) or 0.0
+
+        playstyle["aggression"] = aggression_score
+        adv["aggression_score"] = aggression_score
+        adv["pressure_score"] = round(pressure_score, 1)
+        adv["risk_load"] = round(risk_load, 1)
+        adv["empty_death_burden"] = round(empty_death_burden, 1)
+        adv["discipline_score"] = discipline_score
+        adv["dead_time_share"] = round(dead_time_share, 1)
+
+
+def classify_playstyle(
+    stats: dict,
+    dpm: float,
+    kd: float,
+    accuracy: float,
+    survival_rate: float,
+) -> dict:
     """
     Classify player playstyle into 8 categories (0-100 scale).
     Based on Discord bot's SessionGraphGenerator logic.
@@ -5086,24 +5284,81 @@ def classify_playstyle(stats: dict, dpm: float, kd: float, accuracy: float) -> d
     rounds = stats["rounds_played"] or 1
 
     # Normalize stats per round for fair comparison
-    deaths_pr = stats["deaths"] / rounds
     revives_pr = stats["revives"] / rounds
     gibs_pr = stats["gibs"] / rounds
+    assists_pr = stats.get("kill_assists", 0) / rounds
+    constructions_pr = stats.get("constructions", 0) / rounds
+    obj_actions_pr = (
+        stats.get("objectives_stolen", 0)
+        + stats.get("dynamites_planted", 0)
+        + stats.get("dynamites_defused", 0)
+    ) / rounds
 
     # Calculate each playstyle dimension (0-100)
+    precision = min(100, accuracy * 2)
+    survivability = min(100, max(0, survival_rate))
+    # ET:Legacy support = medic (revives) + teamwork (assists) +
+    # engineer/fieldops (constructions, objectives, dynamites).
+    # Weighted: revives 40%, assists 30%, constructions+objectives 30%
+    support = min(100, (
+        min(100, revives_pr * 20) * 0.40        # medic: caps at 5 rev/round
+        + min(100, assists_pr * 15) * 0.30       # teamwork: caps at 6.7 assists/round
+        + min(100, (constructions_pr + obj_actions_pr) * 30) * 0.30  # engi/obj: caps at 3.3/round
+    ))
+    lethality = min(100, kd * 30)
+
+    # Brutality = smart elimination power (industry-first composite):
+    # - denied_playtime: man-advantage time created (hockey power-play model)
+    # - gib_efficiency: finish rate, kills you complete (Apex "thirst" model)
+    # - useful_kill_ratio: impactful kills (HLTV Round Swing model)
+    # - multi_kill_bonus: domination moments (Quake "Excellent" model)
+    # - useless_kill_penalty: wasted frags (PandaSkill "Worthless Death" model)
+    denied_pr = stats["denied_playtime"] / rounds  # seconds of man-advantage per round
+    total_kills = max(1, stats["kills"])
+    gib_eff = (stats["gibs"] / total_kills) * 100  # % of kills finished
+    useful = stats["useful_kills"]
+    useless = stats.get("useless_kills", 0)
+    useful_ratio = (useful / max(1, useful + useless)) * 100 if (useful + useless) > 0 else 50
+    multi_raw = (
+        stats.get("double_kills", 0)
+        + stats.get("triple_kills", 0) * 2
+        + stats.get("quad_kills", 0) * 3
+        + stats.get("mega_kills", 0) * 4
+    ) / rounds
+    useless_ratio = (useless / total_kills) * 100
+
+    brutality = min(100, max(0, (
+        min(100, denied_pr * 2.5) * 0.35        # ~40s denied/round = 100 (one full spawn wave)
+        + min(100, gib_eff) * 0.25               # 100% gib rate = 100
+        + min(100, useful_ratio) * 0.20           # useful kill ratio
+        + min(100, multi_raw * 25) * 0.10         # ~4 multi events/round = 100
+        - min(100, useless_ratio) * 0.10          # penalty for wasted frags
+    )))
+
+    efficiency = min(
+        100, (stats["damage_given"] / max(1, stats["damage_received"])) * 25
+    )
+
+    # Consistency = well-roundedness across dimensions.
+    # Low deviation across axes → high consistency. Replaces the old
+    # `rounds * 10` formula which capped at 10 rounds and was always
+    # 100 in any BO6+ session.
+    dims = [precision, survivability, support, lethality, brutality, efficiency]
+    dim_mean = sum(dims) / len(dims)
+    dim_dev = (sum((d - dim_mean) ** 2 for d in dims) / len(dims)) ** 0.5
+    consistency = min(100, max(0, 100 - dim_dev * 2))
+
     return {
-        "aggression": min(100, (dpm / 5) * 10),  # High DPM = aggressive
-        "precision": min(100, accuracy * 2),  # Accuracy-based
-        "survivability": min(
-            100, max(0, 100 - deaths_pr * 20)
-        ),  # Low deaths = high survival
-        "support": min(100, revives_pr * 50),  # Revives indicate support play
-        "lethality": min(100, kd * 30),  # K/D ratio
-        "brutality": min(100, gibs_pr * 25),  # Gibs show aggression
-        "consistency": min(100, rounds * 10),  # More rounds = consistent player
-        "efficiency": min(
-            100, (stats["damage_given"] / max(1, stats["damage_received"])) * 25
-        ),
+        # Aggression is session-normalized later using productive pressure
+        # signals. Keep the base classifier neutral on its own.
+        "aggression": 50.0,
+        "precision": precision,
+        "survivability": survivability,
+        "support": support,
+        "lethality": lethality,
+        "brutality": brutality,
+        "consistency": consistency,
+        "efficiency": efficiency,
     }
 
 
@@ -5138,7 +5393,7 @@ async def get_records(
 
     results = {}
 
-    base_where = "WHERE time_played_seconds > 0"
+    base_where = "WHERE round_number IN (1, 2) AND time_played_seconds > 0"
     params = []
 
     if map_name:
@@ -5399,6 +5654,89 @@ async def get_round_vs_stats(round_id: int, db: DatabaseAdapter = Depends(get_db
             }
             for row in rows
         ],
+    }
+
+
+@router.get("/player/{guid}/vs-stats")
+async def get_player_vs_stats(
+    guid: str,
+    scope: str = "all",
+    round_id: Optional[int] = None,
+    session_id: Optional[int] = None,
+    limit: int = Query(default=10, le=50),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Player vs player stats — Easiest Preys and Worst Enemies.
+    Scope: 'round' (single round), 'session' (gaming session), 'all' (all-time).
+    """
+    safe_limit = max(1, min(limit, 50))
+
+    # Build round filter based on scope
+    if scope == "round" and round_id:
+        round_filter = "AND v.round_id = $2"
+        params_base: tuple = (guid, round_id)
+    elif scope == "session" and session_id:
+        round_filter = "AND v.round_id IN (SELECT id FROM rounds WHERE gaming_session_id = $2)"
+        params_base = (guid, session_id)
+    else:
+        round_filter = ""
+        params_base = (guid,)
+
+    limit_param = f"${len(params_base) + 1}"
+
+    # Easiest Preys — opponents this player killed most
+    preys_query = f"""
+        SELECT
+            COALESCE(v.player_guid, v.player_name) AS opponent_key,
+            MAX(v.player_name) AS opponent_name,
+            v.player_guid AS opponent_guid,
+            SUM(v.kills) AS total_kills,
+            SUM(v.deaths) AS total_deaths
+        FROM round_vs_stats v
+        WHERE v.subject_guid = $1 {round_filter}
+          AND v.subject_guid IS NOT NULL
+        GROUP BY opponent_key, v.player_guid
+        ORDER BY total_kills DESC, total_deaths ASC
+        LIMIT {limit_param}
+    """
+    preys_rows = await db.fetch_all(preys_query, params_base + (safe_limit,))
+
+    # Worst Enemies — opponents who killed this player most
+    enemies_query = f"""
+        SELECT
+            COALESCE(v.player_guid, v.player_name) AS opponent_key,
+            MAX(v.player_name) AS opponent_name,
+            v.player_guid AS opponent_guid,
+            SUM(v.kills) AS total_kills,
+            SUM(v.deaths) AS total_deaths
+        FROM round_vs_stats v
+        WHERE v.subject_guid = $1 {round_filter}
+          AND v.subject_guid IS NOT NULL
+        GROUP BY opponent_key, v.player_guid
+        ORDER BY total_deaths DESC, total_kills ASC
+        LIMIT {limit_param}
+    """
+    enemies_rows = await db.fetch_all(enemies_query, params_base + (safe_limit,))
+
+    def build_entry(row):
+        kills = int(row[3] or 0)
+        deaths = int(row[4] or 0)
+        return {
+            "opponent_name": row[1],
+            "opponent_guid": row[2],
+            "kills": kills,
+            "deaths": deaths,
+            "kd": round(kills / max(deaths, 1), 2),
+        }
+
+    return {
+        "guid": guid,
+        "scope": scope,
+        "round_id": round_id if scope == "round" else None,
+        "session_id": session_id if scope == "session" else None,
+        "easiest_preys": [build_entry(r) for r in (preys_rows or [])],
+        "worst_enemies": [build_entry(r) for r in (enemies_rows or [])],
     }
 
 
@@ -5854,7 +6192,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     dmg_given_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(damage_given) as total_damage
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY total_damage DESC
         LIMIT 1
@@ -5862,7 +6200,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     dmg_recv_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(damage_received) as total_damage
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY total_damage DESC
         LIMIT 1
@@ -5870,7 +6208,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     team_dmg_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(team_damage_given) as total_team_damage
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY total_team_damage DESC
         LIMIT 1
@@ -5878,7 +6216,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     fallback_team_dmg = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(team_damage) as total_team_damage
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY total_team_damage DESC
         LIMIT 1
@@ -5886,7 +6224,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     revives_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(revives_given) as total_revives
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY total_revives DESC
         LIMIT 1
@@ -5894,7 +6232,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     deaths_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(deaths) as total_deaths
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY total_deaths DESC
         LIMIT 1
@@ -5902,7 +6240,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     gibs_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(gibs) as total_gibs
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY total_gibs DESC
         LIMIT 1
@@ -5918,7 +6256,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
                     COALESCE(dynamites_defused, 0)
                ) as total_objectives
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY total_objectives DESC
         LIMIT 1
@@ -5926,7 +6264,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     xp_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(xp) as total_xp
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY total_xp DESC
         LIMIT 1
@@ -5934,7 +6272,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     kills_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(kills) as total_kills
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY total_kills DESC
         LIMIT 1
@@ -5943,7 +6281,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         SELECT player_guid, MAX(player_name) as player_name,
                ROUND((SUM(damage_given)::numeric / NULLIF(SUM(time_played_seconds), 0) * 60), 1) as dpm
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         HAVING SUM(time_played_seconds) > 600
         ORDER BY dpm DESC
@@ -5953,7 +6291,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         SELECT player_guid, MAX(player_name) as player_name,
                SUM(time_played_seconds) - SUM(COALESCE(time_dead_minutes, 0) * 60) as time_alive_seconds
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY time_alive_seconds DESC
         LIMIT 1
@@ -5962,7 +6300,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         SELECT player_guid, MAX(player_name) as player_name,
                SUM(time_played_seconds) as time_alive_seconds
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY time_alive_seconds DESC
         LIMIT 1
@@ -5971,7 +6309,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         SELECT player_guid, MAX(player_name) as player_name,
                SUM(COALESCE(time_dead_minutes, 0)) as time_dead_minutes
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY time_dead_minutes DESC
         LIMIT 1
@@ -5980,7 +6318,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         SELECT player_guid, MAX(player_name) as player_name,
                SUM(COALESCE(time_dead_minutes, 0)) as time_dead_minutes
         FROM player_comprehensive_stats
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
         ORDER BY time_dead_minutes DESC
         LIMIT 1
@@ -5988,7 +6326,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     session_query = """
         SELECT gaming_session_id, COUNT(*) as round_count, MIN(round_date) as session_date
         FROM rounds
-        WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY gaming_session_id
         ORDER BY round_count DESC
         LIMIT 1
@@ -6116,8 +6454,8 @@ async def get_player_round_details(
     stats_query = """
         SELECT
             player_name, kills, deaths, damage_given, damage_received,
-            time_played_seconds, headshots, gibs, revives_given, times_revived,
-            accuracy, shots, hits, team_kills, self_kills,
+            time_played_seconds, headshot_kills, headshots, gibs, revives_given, times_revived,
+            accuracy, bullets_fired, team_kills, self_kills,
             most_useful_kills, useless_kills, denied_playtime,
             objectives_stolen, objectives_returned, dynamites_planted, dynamites_defused,
             double_kills, triple_kills, quad_kills, multi_kills, mega_kills,
@@ -6145,10 +6483,44 @@ async def get_player_round_details(
         ORDER BY kills DESC
     """
     weapons = await db.fetch_all(weapon_query, (round_date, map_name, round_number, player_guid))
+    total_hits = sum((w[4] or 0) for w in weapons)
+
+    (
+        player_name,
+        kills,
+        deaths,
+        damage_given,
+        damage_received,
+        time_played_seconds,
+        headshot_kills,
+        headshots,
+        gibs,
+        revives_given,
+        times_revived,
+        accuracy,
+        bullets_fired,
+        team_kills,
+        self_kills,
+        useful_kills,
+        useless_kills,
+        denied_playtime,
+        objectives_stolen,
+        objectives_returned,
+        dynamites_planted,
+        dynamites_defused,
+        double_kills,
+        triple_kills,
+        quad_kills,
+        multi_kills,
+        mega_kills,
+        time_dead_minutes,
+        xp,
+        kill_assists,
+    ) = stats
 
     # Format response
     return {
-        "player_name": stats[0],
+        "player_name": player_name,
         "round": {
             "id": round_id,
             "map_name": map_name,
@@ -6156,45 +6528,46 @@ async def get_player_round_details(
             "round_date": str(round_date)
         },
         "combat": {
-            "kills": stats[1] or 0,
-            "deaths": stats[2] or 0,
-            "damage_given": stats[3] or 0,
-            "damage_received": stats[4] or 0,
-            "headshots": stats[6] or 0,
-            "gibs": stats[7] or 0,
-            "accuracy": round(stats[10] or 0, 1),
-            "shots": stats[11] or 0,
-            "hits": stats[12] or 0
+            "kills": kills or 0,
+            "deaths": deaths or 0,
+            "damage_given": damage_given or 0,
+            "damage_received": damage_received or 0,
+            "headshot_kills": headshot_kills or 0,
+            "headshots": headshots or 0,
+            "gibs": gibs or 0,
+            "accuracy": round(accuracy or 0, 1),
+            "shots": bullets_fired or 0,
+            "hits": total_hits,
         },
         "support": {
-            "revives_given": stats[8] or 0,
-            "times_revived": stats[9] or 0,
-            "useful_kills": stats[15] or 0,
-            "useless_kills": stats[16] or 0,
-            "kill_assists": stats[26] or 0
+            "revives_given": revives_given or 0,
+            "times_revived": times_revived or 0,
+            "useful_kills": useful_kills or 0,
+            "useless_kills": useless_kills or 0,
+            "kill_assists": kill_assists or 0,
         },
         "objectives": {
-            "stolen": stats[18] or 0,
-            "returned": stats[19] or 0,
-            "dynamites_planted": stats[20] or 0,
-            "dynamites_defused": stats[21] or 0
+            "stolen": objectives_stolen or 0,
+            "returned": objectives_returned or 0,
+            "dynamites_planted": dynamites_planted or 0,
+            "dynamites_defused": dynamites_defused or 0,
         },
         "sprees": {
-            "double_kills": stats[22] or 0,
-            "triple_kills": stats[23] or 0,
-            "quad_kills": stats[24] or 0,
-            "multi_kills": stats[25] or 0,
-            "mega_kills": stats[24] or 0
+            "double_kills": double_kills or 0,
+            "triple_kills": triple_kills or 0,
+            "quad_kills": quad_kills or 0,
+            "multi_kills": multi_kills or 0,
+            "mega_kills": mega_kills or 0,
         },
         "time": {
-            "played_seconds": stats[5] or 0,
-            "dead_minutes": stats[26] or 0,
-            "denied_playtime": stats[17] or 0
+            "played_seconds": time_played_seconds or 0,
+            "dead_minutes": time_dead_minutes or 0,
+            "denied_playtime": denied_playtime or 0,
         },
         "misc": {
-            "xp": stats[25] or 0,
-            "team_kills": stats[13] or 0,
-            "self_kills": stats[14] or 0
+            "xp": xp or 0,
+            "team_kills": team_kills or 0,
+            "self_kills": self_kills or 0,
         },
         "weapons": [
             {
@@ -6247,6 +6620,8 @@ def _build_proximity_where_clause(
     round_number: Optional[int],
     round_start_unix: Optional[int],
     alias: Optional[str] = None,
+    player_guid: Optional[str] = None,
+    player_guid_columns: Optional[List[str]] = None,
 ) -> Tuple[str, List[Any], Dict[str, Any]]:
     prefix = f"{alias}." if alias else ""
     params: List[Any] = []
@@ -6281,6 +6656,20 @@ def _build_proximity_where_clause(
         params.append(int(round_start_unix))
         clauses.append(f"{prefix}round_start_unix = ${len(params)}")
 
+    # Player GUID filter — supports OR across multiple column names
+    if player_guid and player_guid.strip():
+        guid_val = player_guid.strip()
+        params.append(guid_val)
+        pidx = len(params)
+        if player_guid_columns and len(player_guid_columns) > 1:
+            or_parts = [f"{prefix}{col} = ${pidx}" for col in player_guid_columns]
+            clauses.append(f"({' OR '.join(or_parts)})")
+        elif player_guid_columns:
+            clauses.append(f"{prefix}{player_guid_columns[0]} = ${pidx}")
+        else:
+            # Default: target_guid (engagement tables)
+            clauses.append(f"{prefix}target_guid = ${pidx}")
+
     scope = {
         "session_date": parsed_session_date.isoformat() if parsed_session_date else None,
         "map_name": normalized_map,
@@ -6288,6 +6677,7 @@ def _build_proximity_where_clause(
         "round_start_unix": int(round_start_unix)
         if round_start_unix is not None and int(round_start_unix) > 0
         else None,
+        "player_guid": player_guid.strip() if player_guid and player_guid.strip() else None,
     }
     return "WHERE " + " AND ".join(clauses), params, scope
 
@@ -7056,6 +7446,7 @@ async def get_proximity_engagements(
     map_name: Optional[str] = None,
     round_number: Optional[int] = None,
     round_start_unix: Optional[int] = None,
+    player_guid: Optional[str] = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -7068,6 +7459,8 @@ async def get_proximity_engagements(
         map_name,
         round_number,
         round_start_unix,
+        player_guid=player_guid,
+        player_guid_columns=["target_guid"],
     )
     query_params = tuple(params)
     try:
@@ -7114,6 +7507,7 @@ async def get_proximity_hotzones(
     map_name: Optional[str] = None,
     round_number: Optional[int] = None,
     round_start_unix: Optional[int] = None,
+    player_guid: Optional[str] = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -7129,6 +7523,7 @@ async def get_proximity_hotzones(
         round_number,
         round_start_unix,
         alias="e",
+        player_guid=player_guid, player_guid_columns=["target_guid"],
     )
     scope["map_name"] = normalized_map
     query_params = tuple(params)
@@ -7191,8 +7586,9 @@ async def get_proximity_hotzones(
                 "map_name": selected_map,
                 "hotzones": [
                     {
-                        "grid_x": row[0],
-                        "grid_y": row[1],
+                        "x": row[0],
+                        "y": row[1],
+                        "count": int(row[3] or 0),
                         "kills": int(row[2] or 0),
                         "deaths": max(int(row[3] or 0) - int(row[2] or 0), 0),
                     }
@@ -7222,6 +7618,7 @@ async def get_proximity_duos(
     map_name: Optional[str] = None,
     round_number: Optional[int] = None,
     round_start_unix: Optional[int] = None,
+    player_guid: Optional[str] = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -7281,6 +7678,7 @@ async def get_proximity_movers(
     map_name: Optional[str] = None,
     round_number: Optional[int] = None,
     round_start_unix: Optional[int] = None,
+    player_guid: Optional[str] = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -7294,6 +7692,7 @@ async def get_proximity_movers(
         map_name,
         round_number,
         round_start_unix,
+        player_guid=player_guid, player_guid_columns=["player_guid"],
     )
 
     try:
@@ -7470,6 +7869,7 @@ async def get_proximity_reactions(
     map_name: Optional[str] = None,
     round_number: Optional[int] = None,
     round_start_unix: Optional[int] = None,
+    player_guid: Optional[str] = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -7484,6 +7884,7 @@ async def get_proximity_reactions(
         round_number,
         round_start_unix,
         alias="r",
+        player_guid=player_guid, player_guid_columns=["target_guid"],
     )
     query_params = tuple(params)
     try:
@@ -7779,6 +8180,121 @@ async def get_proximity_trades_summary(
     return payload
 
 
+@router.get("/proximity/trades/player-stats")
+async def get_proximity_trades_player_stats(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Per-player trade kill stats for session detail views.
+    Returns aggregated trade success/attempt/avenged counts per player.
+    """
+    payload = _proximity_stub_meta(range_days)
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days,
+        session_date,
+        map_name,
+        round_number,
+        round_start_unix,
+    )
+    query_params = tuple(params)
+    try:
+        # Victim-side stats: how often were this player's deaths traded by teammates
+        victim_query = f"""
+            SELECT victim_guid AS guid, victim_name AS name,
+                   SUM(opportunity_count) AS trade_opps,
+                   SUM(attempt_count) AS trade_attempts,
+                   SUM(success_count) AS trade_success,
+                   SUM(missed_count) AS trade_missed,
+                   SUM(CASE WHEN is_isolation_death THEN 1 ELSE 0 END) AS isolation_deaths
+            FROM proximity_trade_event {where_sql}
+            GROUP BY victim_guid, victim_name
+        """
+        victim_rows = await db.fetch_all(victim_query, query_params)
+
+        # Avenger-side stats: how often did this player avenge a teammate's death
+        # successes JSON array contains trader info: each element has trader_guid
+        avenger_where, avenger_params, _ = _build_proximity_where_clause(
+            range_days, session_date, map_name, round_number, round_start_unix,
+            alias="e",
+        )
+        avenger_query = f"""
+            SELECT
+                s->>'guid' AS guid,
+                s->>'name' AS name,
+                COUNT(*) AS avenged_count,
+                COUNT(DISTINCT e.id) AS avenger_attempt_events,
+                COALESCE(SUM(CASE WHEN s->>'damage' IS NOT NULL THEN (s->>'damage')::numeric ELSE 0 END), 0) AS avenger_attempt_damage
+            FROM proximity_trade_event e
+            CROSS JOIN LATERAL jsonb_array_elements(
+                COALESCE(e.successes, '[]'::jsonb)
+            ) AS s
+            {avenger_where}
+            GROUP BY s->>'guid', s->>'name'
+        """
+        avenger_rows = await db.fetch_all(avenger_query, tuple(avenger_params))
+
+        # Merge victim + avenger stats per player
+        players_map = {}
+        for row in victim_rows:
+            guid = row[0] or ""
+            short_guid = guid[:8] if len(guid) > 8 else guid
+            key = short_guid or row[1]
+            players_map[key] = {
+                "guid": short_guid,
+                "name": row[1],
+                "trade_opps": int(row[2] or 0),
+                "trade_attempts": int(row[3] or 0),
+                "trade_success": int(row[4] or 0),
+                "trade_missed": int(row[5] or 0),
+                "isolation_deaths": int(row[6] or 0),
+                "avenged_count": 0,
+                "avenger_attempt_events": 0,
+                "avenger_attempt_damage": 0,
+            }
+        for row in avenger_rows:
+            guid = row[0] or ""
+            short_guid = guid[:8] if len(guid) > 8 else guid
+            key = short_guid or row[1]
+            if key not in players_map:
+                players_map[key] = {
+                    "guid": short_guid,
+                    "name": row[1],
+                    "trade_opps": 0,
+                    "trade_attempts": 0,
+                    "trade_success": 0,
+                    "trade_missed": 0,
+                    "isolation_deaths": 0,
+                    "avenged_count": 0,
+                    "avenger_attempt_events": 0,
+                    "avenger_attempt_damage": 0,
+                }
+            players_map[key]["avenged_count"] = int(row[2] or 0)
+            players_map[key]["avenger_attempt_events"] = int(row[3] or 0)
+            players_map[key]["avenger_attempt_damage"] = float(row[4] or 0)
+
+        payload.update({
+            "status": "ok" if players_map else "prototype",
+            "ready": bool(players_map),
+            "message": None if players_map else payload["message"],
+            "scope": scope,
+            "players": list(players_map.values()),
+        })
+    except Exception as e:
+        payload.update({
+            "status": "error",
+            "ready": False,
+            "message": f"Proximity query failed: {e}",
+            "scope": scope,
+            "players": [],
+        })
+    return payload
+
+
 @router.get("/proximity/trades/events")
 async def get_proximity_trade_events(
     range_days: int = 30,
@@ -7915,11 +8431,13 @@ async def get_proximity_spawn_timing(
     map_name: Optional[str] = None,
     round_number: Optional[int] = None,
     round_start_unix: Optional[int] = None,
+    player_guid: Optional[str] = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Spawn timing efficiency leaderboard and team averages."""
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
+        player_guid=player_guid, player_guid_columns=["killer_guid", "victim_guid"],
     )
     query_params = tuple(params)
     try:
@@ -8057,11 +8575,13 @@ async def get_proximity_crossfire_angles(
     map_name: Optional[str] = None,
     round_number: Optional[int] = None,
     round_start_unix: Optional[int] = None,
+    player_guid: Optional[str] = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Crossfire opportunity analysis: utilization rate, angle buckets, top duos."""
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
+        player_guid=player_guid, player_guid_columns=["teammate1_guid", "teammate2_guid"],
     )
     query_params = tuple(params)
     try:
@@ -8142,11 +8662,13 @@ async def get_proximity_pushes(
     map_name: Optional[str] = None,
     round_number: Optional[int] = None,
     round_start_unix: Optional[int] = None,
+    player_guid: Optional[str] = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Team push analysis: per-team summary and quality distribution."""
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
+        player_guid=player_guid, player_guid_columns=["team"],
     )
     query_params = tuple(params)
     try:
@@ -8210,11 +8732,13 @@ async def get_proximity_lua_trades(
     map_name: Optional[str] = None,
     round_number: Optional[int] = None,
     round_start_unix: Optional[int] = None,
+    player_guid: Optional[str] = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Lua-detected trade kill analysis."""
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
+        player_guid=player_guid, player_guid_columns=["trader_guid", "original_killer_guid", "original_victim_guid"],
     )
     query_params = tuple(params)
     try:
@@ -8380,9 +8904,15 @@ async def get_proximity_events(
                         "date": row[1].isoformat(),
                         "round": row[2],
                         "map": row[3],
+                        "target_name": row[4],
                         "target": row[4],
+                        "attacker_name": "",
+                        "target_team": "",
+                        "attacker_team": "",
                         "outcome": row[5],
+                        "reaction_ms": row[6],
                         "duration_ms": row[6],
+                        "distance": row[7],
                         "distance_traveled": row[7],
                         "attackers": row[8],
                         "crossfire": bool(row[9]),
@@ -8650,7 +9180,7 @@ async def get_hall_of_fame(
                 SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
                        {agg_expr} as value
                 FROM player_comprehensive_stats pcs
-                WHERE pcs.time_played_seconds > 0 {date_filter}
+                WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0 {date_filter}
                 GROUP BY pcs.player_guid
                 ORDER BY value DESC
                 LIMIT {limit_param}
@@ -8674,7 +9204,7 @@ async def get_hall_of_fame(
                    COUNT(*) as value
             FROM player_comprehensive_stats pcs
             JOIN rounds r ON pcs.round_id = r.id
-            WHERE pcs.time_played_seconds > 0
+            WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0
               AND r.winner_team != 0
               AND pcs.team = r.winner_team
               {date_filter}
@@ -8703,7 +9233,7 @@ async def get_hall_of_fame(
                    ROUND((SUM(pcs.damage_given)::numeric / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0)), 2) as value,
                    COUNT(*) as rounds_played
             FROM player_comprehensive_stats pcs
-            WHERE pcs.time_played_seconds > 0 {date_filter}
+            WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0 {date_filter}
             GROUP BY pcs.player_guid
             HAVING COUNT(*) >= {dpm_min_rounds_param}
             ORDER BY value DESC
@@ -9097,12 +9627,14 @@ async def get_stats_sessions(
                 sr.gaming_session_id IN (
                     SELECT r2.gaming_session_id FROM rounds r2
                     WHERE r2.gaming_session_id IS NOT NULL
+                      AND r2.round_number IN (1, 2)
                       AND LOWER(r2.map_name) LIKE LOWER(${param_idx})
                 )
                 OR sr.gaming_session_id IN (
                     SELECT r3.gaming_session_id FROM rounds r3
                     INNER JOIN player_comprehensive_stats p2 ON p2.round_id = r3.id
                     WHERE r3.gaming_session_id IS NOT NULL
+                      AND r3.round_number IN (1, 2)
                       AND LOWER(p2.player_name) LIKE LOWER(${param_idx})
                 )
             )
@@ -9154,6 +9686,17 @@ async def get_stats_sessions(
               AND r.round_number IN (1, 2)
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
+        ),
+        session_names AS (
+            SELECT
+                r.gaming_session_id,
+                STRING_AGG(DISTINCT p.player_name, ', ' ORDER BY p.player_name) as player_names
+            FROM rounds r
+            INNER JOIN player_comprehensive_stats p ON p.round_id = r.id
+            WHERE r.gaming_session_id IS NOT NULL
+              AND r.round_number IN (1, 2)
+              AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+            GROUP BY r.gaming_session_id
         )
         SELECT
             sr.gaming_session_id,
@@ -9168,10 +9711,12 @@ async def get_stats_sessions(
             COALESCE(sp.player_count, 0) as player_count,
             COALESCE(sp.total_kills, 0) as total_kills,
             COALESCE(sp.total_deaths, 0) as total_deaths,
-            COALESCE(sd.total_duration_seconds, 0) as duration_seconds
+            COALESCE(sd.total_duration_seconds, 0) as duration_seconds,
+            COALESCE(sn.player_names, '') as player_names
         FROM session_rounds sr
         LEFT JOIN session_players sp ON sr.gaming_session_id = sp.gaming_session_id
         LEFT JOIN session_duration sd ON sr.gaming_session_id = sd.gaming_session_id
+        LEFT JOIN session_names sn ON sr.gaming_session_id = sn.gaming_session_id
         WHERE 1=1
         {search_filter}
         ORDER BY sr.gaming_session_id DESC
@@ -9200,6 +9745,7 @@ async def get_stats_sessions(
         total_kills = row[10]
         total_deaths = row[11]
         duration_seconds = row[12]
+        player_names_str = row[13] if len(row) > 13 else ""
 
         # Format date
         if isinstance(first_date, str):
@@ -9234,6 +9780,7 @@ async def get_stats_sessions(
             time_ago = dt.strftime("%b %d, %Y")
 
         maps_played = [m.strip() for m in maps_str.split(",")] if maps_str else []
+        player_names = [n.strip() for n in player_names_str.split(",")] if player_names_str else []
 
         sessions.append({
             "session_id": session_id,
@@ -9250,6 +9797,7 @@ async def get_stats_sessions(
             "allies_wins": allies_wins,
             "axis_wins": axis_wins,
             "duration_seconds": duration_seconds,
+            "player_names": player_names,
         })
 
     return sessions
@@ -9267,7 +9815,7 @@ async def get_stats_session_detail(
     # 1. Get all rounds for this session (R1 and R2 only, exclude R0 summaries)
     rounds_query = """
         SELECT r.id, r.map_name, r.round_number, r.winner_team,
-               r.round_date, r.round_time, r.actual_time
+               r.round_date, r.round_time, r.actual_time, r.round_start_unix
         FROM rounds r
         WHERE r.gaming_session_id = $1
           AND r.round_number IN (1, 2)
@@ -9314,7 +9862,17 @@ async def get_stats_session_detail(
         round_time = str(rr[5]) if rr[5] else None
 
         lua = lua_by_round.get(round_id, {})
-        duration = lua.get("duration_seconds", rr[6])
+        # Parse actual_time (MM:SS string) as fallback if lua duration missing
+        actual_time_raw = rr[6]
+        actual_time_seconds = None
+        if actual_time_raw:
+            try:
+                parts = str(actual_time_raw).split(":")
+                if len(parts) == 2:
+                    actual_time_seconds = int(parts[0]) * 60 + int(parts[1])
+            except (ValueError, IndexError):
+                pass
+        duration = lua.get("duration_seconds") or actual_time_seconds
 
         round_obj = {
             "round_id": round_id,
@@ -9326,10 +9884,16 @@ async def get_stats_session_detail(
             "duration_seconds": duration,
             "round_date": round_date,
             "round_time": round_time,
+            "round_start_unix": rr[7] or 0,
         }
 
         # Group consecutive rounds on same map into a match
-        if current_map == map_name:
+        # But R1 after R2 on same map = new match (replayed map)
+        is_new_match = (
+            current_map != map_name
+            or (round_number == 1 and current_rounds and current_rounds[-1]["round_number"] == 2)
+        )
+        if not is_new_match:
             current_rounds.append(round_obj)
         else:
             if current_rounds:
@@ -9372,8 +9936,13 @@ async def get_stats_session_detail(
             SUM(p.revives_given) as revives_given,
             SUM(p.times_revived) as times_revived,
             SUM(p.time_played_seconds) as time_played_seconds,
+            SUM(p.kill_assists) as kill_assists,
+            SUM(p.time_dead_minutes) as time_dead_minutes,
+            SUM(p.denied_playtime) as denied_playtime,
             COALESCE(SUM(w.hits), 0) as total_hits,
-            COALESCE(SUM(w.shots), 0) as total_shots
+            COALESCE(SUM(w.shots), 0) as total_shots,
+            SUM(p.time_played_percent * p.time_played_seconds) as tpp_weighted_sum,
+            SUM(CASE WHEN p.time_played_percent > 0 THEN p.time_played_seconds ELSE 0 END) as tpp_weight
         FROM player_comprehensive_stats p
         LEFT JOIN (
             SELECT round_id, player_guid,
@@ -9388,6 +9957,13 @@ async def get_stats_session_detail(
         ORDER BY dpm DESC
     """
     player_rows = await db.fetch_all(player_query, tuple(round_ids))
+
+    # Use duration from matches (lua fallback to actual_time) for all rounds
+    total_session_duration_seconds = sum(
+        round_obj.get("duration_seconds") or 0
+        for match in matches
+        for round_obj in match["rounds"]
+    )
 
     players = []
     for pr in player_rows:
@@ -9404,12 +9980,33 @@ async def get_stats_session_detail(
         revives_given = pr[12] or 0
         times_revived = pr[13] or 0
         time_played_seconds = pr[14] or 0
-        total_hits = pr[15] or 0
-        total_shots = pr[16] or 0
+        kill_assists = pr[15] or 0
+        time_dead_minutes = float(pr[16]) if pr[16] else 0.0
+        denied_playtime = pr[17] or 0
+        total_hits = pr[18] or 0
+        total_shots = pr[19] or 0
+        tpp_weighted_sum = float(pr[20]) if pr[20] else 0.0
+        tpp_weight = float(pr[21]) if pr[21] else 0.0
 
         hs_pct = round((headshot_kills / total_kills_for_hs * 100), 1) if total_kills_for_hs > 0 else 0
         accuracy = round((total_hits / total_shots * 100), 1) if total_shots > 0 else 0
         efficiency = round((kills / (kills + deaths) * 100), 1) if (kills + deaths) > 0 else 0
+        time_played_minutes = time_played_seconds / 60.0
+
+        # Computed alive% (fallback — ignores limbo time, underestimates)
+        alive_pct_computed = round(max(0.0, 100.0 - (time_dead_minutes / time_played_minutes * 100.0)), 1) if time_played_minutes > 0 else None
+
+        # Engine alive% from TAB[8] (correct — excludes dead + limbo time)
+        alive_pct_engine = round(tpp_weighted_sum / tpp_weight, 1) if tpp_weight > 0 else None
+
+        # Primary: prefer engine value, fallback to computed
+        alive_pct = alive_pct_engine if alive_pct_engine is not None else alive_pct_computed
+
+        # Drift detection between sources
+        alive_pct_diff = round(abs(alive_pct_engine - alive_pct_computed), 1) if (alive_pct_engine is not None and alive_pct_computed is not None) else None
+        alive_pct_drift = (alive_pct_diff is not None and alive_pct_diff > 2.0)
+
+        played_pct = min(100.0, round((time_played_seconds / total_session_duration_seconds) * 100.0, 1)) if total_session_duration_seconds > 0 else None
 
         players.append({
             "player_guid": pr[0],
@@ -9421,13 +10018,22 @@ async def get_stats_session_detail(
             "dpm": dpm,
             "kd": kd,
             "efficiency": efficiency,
+            "headshot_kills": headshot_kills,
             "headshot_pct": hs_pct,
             "gibs": gibs,
             "self_kills": self_kills,
             "revives_given": revives_given,
             "times_revived": times_revived,
+            "kill_assists": kill_assists,
             "accuracy": accuracy,
             "time_played_seconds": time_played_seconds,
+            "time_dead_minutes": round(time_dead_minutes, 2),
+            "denied_playtime": denied_playtime,
+            "alive_pct": alive_pct,
+            "alive_pct_lua": alive_pct_engine,
+            "alive_pct_diff": alive_pct_diff,
+            "alive_pct_drift": alive_pct_drift,
+            "played_pct": played_pct,
         })
 
     # 5. Scoring — reuse StopwatchScoringService for team-aware map scoring
@@ -9455,3 +10061,963 @@ async def get_stats_session_detail(
         "players": players,
         "scoring": scoring_payload,
     }
+
+
+# ========================================
+# PROXIMITY — PLAYER PROFILE & ROUND TIMELINE
+# ========================================
+
+
+@router.get("/proximity/player/{guid}/profile")
+async def get_proximity_player_profile(
+    guid: str,
+    range_days: int = 90,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Aggregated player proximity stats for profile page."""
+    since = datetime.utcnow().date() - timedelta(days=max(1, min(range_days, 3650)))
+    try:
+        # Engagement stats
+        eng_stats = await db.fetch_one(
+            """
+            SELECT COUNT(*) AS total_engagements,
+                   SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes,
+                   SUM(CASE WHEN outcome = 'killed' THEN 1 ELSE 0 END) AS deaths,
+                   ROUND(AVG(duration_ms)::numeric, 0) AS avg_duration,
+                   ROUND(AVG(total_damage_taken)::numeric, 0) AS avg_damage_taken,
+                   ROUND(AVG(distance_traveled)::numeric, 0) AS avg_distance,
+                   SUM(CASE WHEN is_crossfire THEN 1 ELSE 0 END) AS crossfire_count
+            FROM combat_engagement
+            WHERE target_guid = $1 AND session_date >= $2
+            """,
+            (guid, since),
+        )
+        # Kill stats (as attacker)
+        kill_stats = await db.fetch_one(
+            """
+            SELECT COUNT(*) AS total_kills
+            FROM combat_engagement e
+            WHERE e.outcome = 'killed'
+              AND e.session_date >= $2
+              AND EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(COALESCE(e.attackers, '[]'::jsonb)) AS attacker
+                    WHERE attacker->>'guid' = $1
+                      AND COALESCE((attacker->>'got_kill')::boolean, FALSE)
+              )
+            """,
+            (guid, since),
+        )
+        # Spawn timing
+        spawn_timing = await db.fetch_one(
+            """
+            SELECT ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
+                   COUNT(*) AS timed_kills,
+                   ROUND(AVG(time_to_next_spawn)::numeric, 0) AS avg_denial_ms
+            FROM proximity_spawn_timing
+            WHERE killer_guid = $1 AND session_date >= $2
+            """,
+            (guid, since),
+        )
+        # Reaction metrics
+        reactions = await db.fetch_one(
+            """
+            SELECT ROUND(AVG(return_fire_ms)::numeric, 0) AS avg_return_fire,
+                   ROUND(AVG(dodge_reaction_ms)::numeric, 0) AS avg_dodge,
+                   ROUND(AVG(support_reaction_ms)::numeric, 0) AS avg_support,
+                   COUNT(*) AS reaction_samples
+            FROM proximity_reaction_metric
+            WHERE target_guid = $1 AND session_date >= $2
+            """,
+            (guid, since),
+        )
+        # Movement stats
+        movement = await db.fetch_one(
+            """
+            SELECT ROUND(AVG(avg_speed)::numeric, 1) AS avg_speed,
+                   ROUND(AVG(sprint_percentage)::numeric, 1) AS avg_sprint_pct,
+                   ROUND(AVG(total_distance)::numeric, 0) AS avg_distance_per_life,
+                   COUNT(*) AS tracks
+            FROM player_track
+            WHERE player_guid = $1 AND session_date >= $2
+            """,
+            (guid, since),
+        )
+        # Trade kills
+        trade_stats = await db.fetch_one(
+            """
+            SELECT COUNT(*) AS trades_made
+            FROM proximity_lua_trade_kill
+            WHERE trader_guid = $1 AND session_date >= $2
+            """,
+            (guid, since),
+        )
+
+        # Player name lookup
+        name_row = await db.fetch_one(
+            "SELECT player_name FROM player_track WHERE player_guid = $1 ORDER BY session_date DESC LIMIT 1",
+            (guid,),
+        )
+        player_name = name_row[0] if name_row else guid
+
+        # Flat response matching frontend ProfileData interface
+        return {
+            "player_name": player_name,
+            "guid": guid,
+            "total_engagements": int(eng_stats[0] or 0) if eng_stats else 0,
+            "escapes": int(eng_stats[1] or 0) if eng_stats else 0,
+            "deaths": int(eng_stats[2] or 0) if eng_stats else 0,
+            "escape_rate": round(int(eng_stats[1] or 0) / max(int(eng_stats[0] or 0), 1) * 100, 1) if eng_stats else 0,
+            "avg_duration_ms": int(eng_stats[3] or 0) if eng_stats else 0,
+            "total_kills": int(kill_stats[0] or 0) if kill_stats else 0,
+            "crossfire_count": int(eng_stats[6] or 0) if eng_stats else 0,
+            "avg_speed": float(movement[0] or 0) if movement else 0,
+            "sprint_pct": float(movement[1] or 0) if movement else 0,
+            "avg_distance_per_life": int(movement[2] or 0) if movement else 0,
+            "avg_return_fire_ms": int(reactions[0] or 0) if reactions else 0,
+            "avg_dodge_ms": int(reactions[1] or 0) if reactions else 0,
+            "avg_support_reaction_ms": int(reactions[2] or 0) if reactions else 0,
+            "spawn_avg_score": float(spawn_timing[0] or 0) if spawn_timing else 0,
+            "timed_kills": int(spawn_timing[1] or 0) if spawn_timing else 0,
+            "avg_denial_ms": int(spawn_timing[2] or 0) if spawn_timing else 0,
+            "trades_made": int(trade_stats[0] or 0) if trade_stats else 0,
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@router.get("/proximity/player/{guid}/radar")
+async def get_proximity_player_radar(
+    guid: str,
+    range_days: int = 90,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """5-axis radar data: Aggression, Awareness, Teamplay, Timing, Mechanical."""
+    since = datetime.utcnow().date() - timedelta(days=max(1, min(range_days, 3650)))
+    try:
+        # Aggression: sprint %, avg speed, distance per life
+        aggression_row = await db.fetch_one(
+            """
+            SELECT ROUND(AVG(sprint_percentage)::numeric, 1),
+                   ROUND(AVG(avg_speed)::numeric, 1)
+            FROM player_track WHERE player_guid = $1 AND session_date >= $2
+            """, (guid, since),
+        )
+        sprint_pct = float(aggression_row[0] or 0) if aggression_row else 0
+        avg_speed = float(aggression_row[1] or 0) if aggression_row else 0
+        aggression = min(100, (sprint_pct * 0.6) + (min(avg_speed / 300, 1) * 100 * 0.4))
+
+        # Awareness: escape rate + dodge reaction
+        awareness_row = await db.fetch_one(
+            """
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
+            FROM combat_engagement WHERE target_guid = $1 AND session_date >= $2
+            """, (guid, since),
+        )
+        dodge_row = await db.fetch_one(
+            """
+            SELECT ROUND(AVG(dodge_reaction_ms)::numeric, 0)
+            FROM proximity_reaction_metric
+            WHERE target_guid = $1 AND dodge_reaction_ms IS NOT NULL AND session_date >= $2
+            """, (guid, since),
+        )
+        total_eng = int(awareness_row[0] or 0) if awareness_row else 0
+        escapes = int(awareness_row[1] or 0) if awareness_row else 0
+        escape_rate = escapes / max(total_eng, 1) * 100
+        dodge_ms = int(dodge_row[0] or 5000) if dodge_row and dodge_row[0] else 5000
+        dodge_score = max(0, 100 - (dodge_ms / 50))  # Lower dodge = better
+        awareness = min(100, escape_rate * 0.5 + dodge_score * 0.5)
+
+        # Teamplay: crossfire participation + trade kills (per-session average)
+        cf_row = await db.fetch_one(
+            """
+            SELECT COUNT(*),
+                   COUNT(DISTINCT session_date)
+            FROM proximity_crossfire_opportunity
+            WHERE (teammate1_guid = $1 OR teammate2_guid = $1) AND was_executed = true
+            AND session_date >= $2
+            """, (guid, since),
+        )
+        trade_row = await db.fetch_one(
+            """
+            SELECT COUNT(*),
+                   COUNT(DISTINCT session_date)
+            FROM proximity_lua_trade_kill WHERE trader_guid = $1 AND session_date >= $2
+            """, (guid, since),
+        )
+        cf_total = int(cf_row[0] or 0) if cf_row else 0
+        cf_sessions = max(1, int(cf_row[1] or 1) if cf_row else 1)
+        trade_total = int(trade_row[0] or 0) if trade_row else 0
+        trade_sessions = max(1, int(trade_row[1] or 1) if trade_row else 1)
+        # Per-session rates with saturation at 5 crossfires/session and 3 trades/session
+        cf_per_session = cf_total / cf_sessions
+        trade_per_session = trade_total / trade_sessions
+        teamplay = min(100, (min(cf_per_session / 5, 1) * 50) + (min(trade_per_session / 3, 1) * 50))
+
+        # Timing: spawn timing score
+        timing_row = await db.fetch_one(
+            """
+            SELECT ROUND(AVG(spawn_timing_score)::numeric, 3), COUNT(*)
+            FROM proximity_spawn_timing WHERE killer_guid = $1 AND session_date >= $2
+            """, (guid, since),
+        )
+        avg_timing = float(timing_row[0] or 0) if timing_row else 0
+        timing_count = int(timing_row[1] or 0) if timing_row else 0
+        timing = min(100, avg_timing * 100 * min(timing_count / 5, 1))
+
+        # Mechanical: return fire speed + kills
+        rf_row = await db.fetch_one(
+            """
+            SELECT ROUND(AVG(return_fire_ms)::numeric, 0)
+            FROM proximity_reaction_metric
+            WHERE target_guid = $1 AND return_fire_ms IS NOT NULL AND session_date >= $2
+            """, (guid, since),
+        )
+        rf_ms = int(rf_row[0] or 3000) if rf_row and rf_row[0] else 3000
+        rf_score = max(0, 100 - (rf_ms / 30))
+        mechanical = min(100, rf_score)
+
+        return {
+            "axes": [
+                {"label": "Aggression", "value": round(aggression, 1)},
+                {"label": "Awareness", "value": round(awareness, 1)},
+                {"label": "Teamplay", "value": round(teamplay, 1)},
+                {"label": "Timing", "value": round(timing, 1)},
+                {"label": "Mechanical", "value": round(mechanical, 1)},
+            ],
+            "composite": round((aggression + awareness + teamplay + timing + mechanical) / 5, 1),
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@router.get("/proximity/round/{round_id}/timeline")
+async def get_proximity_round_timeline(
+    round_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """All events for a round sorted by time — for round replay UI."""
+    try:
+        # Get round info
+        round_info = await db.fetch_one(
+            "SELECT map_name, round_number, round_date, round_time FROM rounds WHERE id = $1",
+            (round_id,),
+        )
+        if not round_info:
+            raise HTTPException(status_code=404, detail="Round not found")
+
+        # Engagements (kills/escapes)
+        engagements = await db.fetch_all(
+            """
+            SELECT id, start_time_ms, end_time_ms, target_guid, target_name, target_team,
+                   outcome, total_damage_taken, num_attackers, is_crossfire, attackers,
+                   start_x, start_y, end_x, end_y
+            FROM combat_engagement WHERE round_id = $1
+            ORDER BY start_time_ms
+            """,
+            (round_id,),
+        )
+        # Spawn timing events
+        spawn_events = await db.fetch_all(
+            """
+            SELECT kill_time, killer_guid, killer_name, victim_guid, victim_name,
+                   spawn_timing_score
+            FROM proximity_spawn_timing WHERE round_id = $1
+            ORDER BY kill_time
+            """,
+            (round_id,),
+        )
+        # Trade kills
+        trades = await db.fetch_all(
+            """
+            SELECT original_kill_time, traded_kill_time, delta_ms,
+                   original_victim_guid, original_victim_name,
+                   trader_guid, trader_name
+            FROM proximity_lua_trade_kill WHERE round_id = $1
+            ORDER BY traded_kill_time
+            """,
+            (round_id,),
+        )
+        # Team pushes
+        pushes = await db.fetch_all(
+            """
+            SELECT start_time, end_time, team, avg_speed, alignment_score,
+                   push_quality, participant_count, toward_objective
+            FROM proximity_team_push WHERE round_id = $1
+            ORDER BY start_time
+            """,
+            (round_id,),
+        )
+
+        # Round duration (ms) from actual_duration_seconds
+        dur_row = await db.fetch_one(
+            "SELECT actual_duration_seconds FROM rounds WHERE id = $1", (round_id,),
+        )
+        duration_ms = int((dur_row[0] or 0) * 1000) if dur_row and dur_row[0] else 0
+
+        # Build unified event timeline — flat structure matching frontend TimelineEvent
+        events = []
+        for r in (engagements or []):
+            events.append({
+                "type": "engagement",
+                "id": r[0],
+                "time": int(r[1] or 0),
+                "victim_name": r[4],
+                "victim_team": r[5] or "",
+                "outcome": r[6],
+                "damage": int(r[7] or 0),
+                "attackers": int(r[8] or 0),
+            })
+        for r in (spawn_events or []):
+            events.append({
+                "type": "spawn_timing_kill",
+                "time": int(r[0] or 0),
+                "attacker_name": r[2],
+                "victim_name": r[4],
+                "score": float(r[5] or 0),
+            })
+        for r in (trades or []):
+            events.append({
+                "type": "trade_kill",
+                "time": int(r[1] or 0),
+                "trader_name": r[6],
+                "avenged_name": r[4],
+                "delta_ms": int(r[2] or 0),
+            })
+        for r in (pushes or []):
+            push_start = int(r[0] or 0)
+            push_end = int(r[1] or 0)
+            events.append({
+                "type": "team_push",
+                "time": push_start,
+                "team": r[2],
+                "quality": float(r[5] or 0),
+                "alignment": float(r[4] or 0),
+                "participants": int(r[6] or 0),
+                "duration_ms": push_end - push_start if push_end > push_start else 0,
+            })
+
+        events.sort(key=lambda e: e["time"])
+
+        return {
+            "round_id": round_id,
+            "map_name": round_info[0],
+            "round_number": round_info[1],
+            "round_date": str(round_info[2]) if round_info[2] else None,
+            "duration_ms": duration_ms,
+            "events": events,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@router.get("/proximity/round/{round_id}/tracks")
+async def get_proximity_round_tracks(
+    round_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Player track paths for animated map view."""
+    try:
+        tracks = await db.fetch_all(
+            """
+            SELECT player_guid, MAX(player_name) AS name, team, player_class,
+                   spawn_time, death_time, first_move_time, death_type,
+                   path
+            FROM player_track WHERE round_id = $1
+            ORDER BY spawn_time
+            """,
+            (round_id,),
+        )
+        if not tracks:
+            raise HTTPException(status_code=404, detail="No tracks for round")
+
+        return {
+            "status": "ok",
+            "round_id": round_id,
+            "track_count": len(tracks),
+            "tracks": [
+                {
+                    "guid": r[0], "name": r[1], "team": r[2], "class": r[3],
+                    "spawn_time": int(r[4] or 0), "death_time": int(r[5] or 0),
+                    "first_move_time": int(r[6] or 0) if r[6] else None,
+                    "death_type": r[7],
+                    "path": r[8] or [],
+                }
+                for r in tracks
+            ],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@router.get("/proximity/round/{round_id}/team-comparison")
+async def get_proximity_round_team_comparison(
+    round_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Team vs team metrics for a specific round."""
+    try:
+        # Cohesion comparison
+        cohesion = await db.fetch_all(
+            """
+            SELECT team,
+                   ROUND(AVG(dispersion)::numeric, 1) AS avg_dispersion,
+                   ROUND(AVG(max_spread)::numeric, 1) AS avg_max_spread,
+                   ROUND(AVG(straggler_count)::numeric, 2) AS avg_stragglers,
+                   COUNT(*) AS samples
+            FROM proximity_team_cohesion WHERE round_id = $1
+            GROUP BY team ORDER BY team
+            """,
+            (round_id,),
+        )
+        # Push quality
+        pushes = await db.fetch_all(
+            """
+            SELECT team, COUNT(*) AS push_count,
+                   ROUND(AVG(push_quality)::numeric, 3) AS avg_quality,
+                   ROUND(AVG(alignment_score)::numeric, 3) AS avg_alignment
+            FROM proximity_team_push WHERE round_id = $1
+            GROUP BY team ORDER BY team
+            """,
+            (round_id,),
+        )
+        # Crossfire execution
+        crossfire = await db.fetch_all(
+            """
+            SELECT target_team,
+                   COUNT(*) AS total_opportunities,
+                   SUM(CASE WHEN was_executed THEN 1 ELSE 0 END) AS executed
+            FROM proximity_crossfire_opportunity WHERE round_id = $1
+            GROUP BY target_team ORDER BY target_team
+            """,
+            (round_id,),
+        )
+        # Kill matchups
+        matchups = await db.fetch_all(
+            """
+            SELECT e.attackers, e.target_guid, e.target_name, e.target_team
+            FROM combat_engagement e
+            WHERE e.round_id = $1 AND e.outcome = 'killed'
+            """,
+            (round_id,),
+        )
+
+        # Build {axis, allies} cohesion dict from array
+        empty_cohesion = {"avg_dispersion": None, "avg_max_spread": None, "avg_stragglers": None, "samples": None}
+        cohesion_dict = {"axis": dict(empty_cohesion), "allies": dict(empty_cohesion)}
+        for r in (cohesion or []):
+            team_key = (r[0] or "").lower()
+            if team_key in ("axis", "allies"):
+                cohesion_dict[team_key] = {
+                    "avg_dispersion": float(r[1] or 0),
+                    "avg_max_spread": float(r[2] or 0),
+                    "avg_stragglers": float(r[3] or 0),
+                    "samples": int(r[4] or 0),
+                }
+
+        # Build {axis, allies} pushes dict
+        empty_push = {"push_count": None, "avg_quality": None, "avg_alignment": None}
+        pushes_dict = {"axis": dict(empty_push), "allies": dict(empty_push)}
+        for r in (pushes or []):
+            team_key = (r[0] or "").lower()
+            if team_key in ("axis", "allies"):
+                pushes_dict[team_key] = {
+                    "push_count": int(r[1] or 0),
+                    "avg_quality": float(r[2] or 0),
+                    "avg_alignment": float(r[3] or 0),
+                }
+
+        return {
+            "cohesion": cohesion_dict,
+            "pushes": pushes_dict,
+            "crossfire": [
+                {
+                    "target_team": r[0],
+                    "total_opportunities": int(r[1] or 0),
+                    "executed": int(r[2] or 0),
+                    "execution_rate": round(int(r[2] or 0) / max(int(r[1] or 0), 1) * 100, 1),
+                }
+                for r in (crossfire or [])
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@router.get("/proximity/weapon-accuracy")
+async def get_proximity_weapon_accuracy(
+    range_days: int = 30,
+    player_guid: Optional[str] = None,
+    map_name: Optional[str] = None,
+    limit: int = 20,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Weapon accuracy leaderboard or per-player breakdown."""
+    safe_limit = max(1, min(limit, 50))
+    try:
+        clauses = ["shots_fired >= 10"]
+        params: list = []
+
+        if player_guid:
+            params.append(player_guid.strip())
+            clauses.append(f"player_guid = ${len(params)}")
+        if map_name:
+            params.append(map_name.strip())
+            clauses.append(f"map_name = ${len(params)}")
+
+        where = "WHERE " + " AND ".join(clauses)
+
+        rows = await db.fetch_all(
+            f"""
+            SELECT player_guid, MAX(player_name) AS name,
+                   SUM(shots_fired) AS total_shots,
+                   SUM(hits) AS total_hits,
+                   SUM(kills) AS total_kills,
+                   SUM(headshots) AS total_hs,
+                   ROUND((SUM(hits)::REAL / NULLIF(SUM(shots_fired), 0)) * 100, 1) AS accuracy
+            FROM proximity_weapon_accuracy {where}
+            GROUP BY player_guid
+            ORDER BY accuracy DESC
+            LIMIT ${len(params) + 1}
+            """,
+            tuple(params) + (safe_limit,),
+        )
+
+        # Per-weapon breakdown (if player_guid specified)
+        weapon_breakdown = []
+        if player_guid:
+            wrows = await db.fetch_all(
+                """
+                SELECT weapon_id, SUM(shots_fired), SUM(hits), SUM(kills), SUM(headshots),
+                       ROUND((SUM(hits)::REAL / NULLIF(SUM(shots_fired), 0)) * 100, 1)
+                FROM proximity_weapon_accuracy
+                WHERE player_guid = $1 AND shots_fired > 0
+                GROUP BY weapon_id ORDER BY SUM(kills) DESC
+                """,
+                (player_guid.strip(),),
+            )
+            weapon_breakdown = [
+                {
+                    "weapon_id": r[0],
+                    "shots": int(r[1] or 0), "hits": int(r[2] or 0),
+                    "kills": int(r[3] or 0), "headshots": int(r[4] or 0),
+                    "accuracy": float(r[5] or 0),
+                }
+                for r in (wrows or [])
+            ]
+
+        return {
+            "status": "ok",
+            "leaders": [
+                {
+                    "guid": r[0], "name": r[1],
+                    "shots": int(r[2] or 0), "hits": int(r[3] or 0),
+                    "kills": int(r[4] or 0), "headshots": int(r[5] or 0),
+                    "accuracy": float(r[6] or 0),
+                }
+                for r in (rows or [])
+            ],
+            "weapon_breakdown": weapon_breakdown,
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@router.get("/proximity/session-scores")
+async def get_proximity_session_scores(
+    session_date: Optional[str] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Per-session composite proximity combat scores (0-100) across 7 categories."""
+    try:
+        from bot.services.proximity_session_score_service import ProximitySessionScoreService
+        svc = ProximitySessionScoreService(db)
+
+        if not session_date:
+            session_date = await svc.get_latest_session_date()
+        if not session_date:
+            return {"status": "ok", "session_date": None, "players": []}
+
+        results = await svc.compute_session_scores(session_date)
+        return {"status": "ok", "session_date": session_date, "players": results}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+@router.get("/proximity/leaderboards")
+async def get_proximity_leaderboards(
+    category: str = "power",
+    range_days: int = 30,
+    limit: int = 10,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Multi-category proximity leaderboards."""
+    safe_limit = max(1, min(limit, 50))
+    since = datetime.utcnow().date() - timedelta(days=max(1, min(range_days, 3650)))
+
+    try:
+        if category == "power":
+            # Composite radar score — batch queries (7 queries total, not per-player)
+            # 1. Engagement stats + names per player
+            eng_rows = await db.fetch_all(
+                """
+                SELECT target_guid, MAX(target_name) AS name,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
+                FROM combat_engagement
+                WHERE session_date >= $1
+                GROUP BY target_guid
+                HAVING COUNT(*) >= 5
+                ORDER BY COUNT(*) DESC
+                LIMIT 100
+                """,
+                (since,),
+            )
+            if not eng_rows:
+                return {"status": "ok", "category": "power", "entries": []}
+
+            guid_set = {r[0] for r in eng_rows}
+            eng_map: Dict[str, dict] = {}
+            for r in eng_rows:
+                eng_map[r[0]] = {"name": r[1] or r[0][:8], "total": int(r[2] or 0), "escapes": int(r[3] or 0)}
+
+            # 2. Movement (aggression axis)
+            move_rows = await db.fetch_all(
+                """
+                SELECT player_guid,
+                       ROUND(AVG(sprint_percentage)::numeric, 1) AS sp,
+                       ROUND(AVG(avg_speed)::numeric, 1) AS spd
+                FROM player_track
+                WHERE session_date >= $1
+                GROUP BY player_guid
+                """,
+                (since,),
+            )
+            move_map: Dict[str, Tuple[float, float]] = {}
+            for r in (move_rows or []):
+                if r[0] in guid_set:
+                    move_map[r[0]] = (float(r[1] or 0), float(r[2] or 0))
+
+            # 3. Dodge reaction (awareness axis)
+            dodge_rows = await db.fetch_all(
+                """
+                SELECT target_guid,
+                       ROUND(AVG(dodge_reaction_ms)::numeric, 0) AS avg_dodge
+                FROM proximity_reaction_metric
+                WHERE dodge_reaction_ms IS NOT NULL AND session_date >= $1
+                GROUP BY target_guid
+                """,
+                (since,),
+            )
+            dodge_map: Dict[str, int] = {}
+            for r in (dodge_rows or []):
+                if r[0] in guid_set:
+                    dodge_map[r[0]] = int(r[1] or 5000)
+
+            # 4. Crossfire participation (teamplay axis)
+            cf_rows = await db.fetch_all(
+                """
+                SELECT guid, SUM(cnt) AS total FROM (
+                    SELECT teammate1_guid AS guid, COUNT(*) AS cnt
+                    FROM proximity_crossfire_opportunity
+                    WHERE was_executed = true AND session_date >= $1
+                    GROUP BY teammate1_guid
+                    UNION ALL
+                    SELECT teammate2_guid AS guid, COUNT(*) AS cnt
+                    FROM proximity_crossfire_opportunity
+                    WHERE was_executed = true AND session_date >= $1
+                    GROUP BY teammate2_guid
+                ) sub GROUP BY guid
+                """,
+                (since,),
+            )
+            cf_map: Dict[str, int] = {}
+            for r in (cf_rows or []):
+                if r[0] in guid_set:
+                    cf_map[r[0]] = int(r[1] or 0)
+
+            # 5. Trade kills (teamplay axis)
+            trade_rows = await db.fetch_all(
+                """
+                SELECT trader_guid, COUNT(*) AS cnt
+                FROM proximity_lua_trade_kill
+                WHERE session_date >= $1
+                GROUP BY trader_guid
+                """,
+                (since,),
+            )
+            trade_map: Dict[str, int] = {}
+            for r in (trade_rows or []):
+                if r[0] in guid_set:
+                    trade_map[r[0]] = int(r[1] or 0)
+
+            # 6. Spawn timing (timing axis)
+            timing_rows = await db.fetch_all(
+                """
+                SELECT killer_guid,
+                       ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
+                       COUNT(*) AS cnt
+                FROM proximity_spawn_timing
+                WHERE session_date >= $1
+                GROUP BY killer_guid
+                """,
+                (since,),
+            )
+            timing_map: Dict[str, Tuple[float, int]] = {}
+            for r in (timing_rows or []):
+                if r[0] in guid_set:
+                    timing_map[r[0]] = (float(r[1] or 0), int(r[2] or 0))
+
+            # 7. Return fire (mechanical axis)
+            rf_rows = await db.fetch_all(
+                """
+                SELECT target_guid,
+                       ROUND(AVG(return_fire_ms)::numeric, 0) AS avg_rf
+                FROM proximity_reaction_metric
+                WHERE return_fire_ms IS NOT NULL AND session_date >= $1
+                GROUP BY target_guid
+                """,
+                (since,),
+            )
+            rf_map: Dict[str, int] = {}
+            for r in (rf_rows or []):
+                if r[0] in guid_set:
+                    rf_map[r[0]] = int(r[1] or 3000)
+
+            # Compute composite scores
+            results = []
+            for g, info in eng_map.items():
+                sp, spd = move_map.get(g, (0.0, 0.0))
+                aggression = min(100, sp * 0.6 + min(spd / 300, 1) * 100 * 0.4)
+
+                esc_rate = info["escapes"] / max(info["total"], 1) * 100
+                d_ms = dodge_map.get(g, 5000)
+                awareness = min(100, esc_rate * 0.5 + max(0, 100 - d_ms / 50) * 0.5)
+
+                cf_c = cf_map.get(g, 0)
+                tr_c = trade_map.get(g, 0)
+                teamplay = min(100, min(cf_c / 5, 1) * 50 + min(tr_c / 3, 1) * 50)
+
+                avg_tm, tm_cnt = timing_map.get(g, (0.0, 0))
+                timing = min(100, avg_tm * 100 * min(tm_cnt / 5, 1))
+
+                rf_ms = rf_map.get(g, 3000)
+                mechanical = min(100, max(0, 100 - rf_ms / 30))
+
+                composite = round((aggression + awareness + teamplay + timing + mechanical) / 5, 1)
+                results.append({
+                    "guid": g, "name": info["name"], "value": composite,
+                    "axes": {
+                        "aggression": round(aggression, 1), "awareness": round(awareness, 1),
+                        "teamplay": round(teamplay, 1), "timing": round(timing, 1),
+                        "mechanical": round(mechanical, 1),
+                    },
+                })
+
+            results.sort(key=lambda x: x["value"], reverse=True)
+            return {"status": "ok", "category": "power", "entries": results[:safe_limit]}
+
+        elif category == "spawn":
+            rows = await db.fetch_all(
+                """
+                SELECT killer_guid, MAX(killer_name) AS name,
+                       COUNT(*) AS timed_kills,
+                       ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
+                       ROUND(AVG(time_to_next_spawn)::numeric, 0) AS avg_denial_ms
+                FROM proximity_spawn_timing
+                WHERE session_date >= $1
+                GROUP BY killer_guid
+                HAVING COUNT(*) >= 3
+                ORDER BY avg_score DESC
+                LIMIT $2
+                """,
+                (since, safe_limit),
+            )
+            return {
+                "status": "ok", "category": "spawn",
+                "entries": [
+                    {"guid": r[0], "name": r[1], "timed_kills": int(r[2] or 0),
+                     "value": float(r[3] or 0), "avg_denial_ms": int(r[4] or 0)}
+                    for r in (rows or [])
+                ],
+            }
+
+        elif category == "crossfire":
+            duo_rows = await db.fetch_all(
+                """
+                SELECT c.teammate1_guid, c.teammate2_guid,
+                       COALESCE(MAX(t1.player_name), c.teammate1_guid) AS name1,
+                       COALESCE(MAX(t2.player_name), c.teammate2_guid) AS name2,
+                       COUNT(*) AS total,
+                       SUM(CASE WHEN c.was_executed THEN 1 ELSE 0 END) AS executed,
+                       ROUND(AVG(c.damage_within_window)::numeric, 0) AS avg_delay
+                FROM proximity_crossfire_opportunity c
+                LEFT JOIN LATERAL (
+                    SELECT player_name FROM player_track
+                    WHERE player_guid = c.teammate1_guid
+                    ORDER BY session_date DESC LIMIT 1
+                ) t1 ON true
+                LEFT JOIN LATERAL (
+                    SELECT player_name FROM player_track
+                    WHERE player_guid = c.teammate2_guid
+                    ORDER BY session_date DESC LIMIT 1
+                ) t2 ON true
+                WHERE c.session_date >= $1
+                GROUP BY c.teammate1_guid, c.teammate2_guid
+                HAVING SUM(CASE WHEN c.was_executed THEN 1 ELSE 0 END) >= 2
+                ORDER BY executed DESC
+                LIMIT $2
+                """,
+                (since, safe_limit),
+            )
+            return {
+                "status": "ok", "category": "crossfire",
+                "entries": [
+                    {"guid": r[0], "partner_guid": r[1], "name": r[2], "partner_name": r[3],
+                     "total": int(r[4] or 0), "value": int(r[5] or 0),
+                     "avg_delay_ms": int(r[6] or 0)}
+                    for r in (duo_rows or [])
+                ],
+            }
+
+        elif category == "trades":
+            rows = await db.fetch_all(
+                """
+                SELECT trader_guid, MAX(trader_name) AS name,
+                       COUNT(*) AS trades_made,
+                       ROUND(AVG(delta_ms)::numeric, 0) AS avg_trade_ms
+                FROM proximity_lua_trade_kill
+                WHERE session_date >= $1
+                GROUP BY trader_guid
+                HAVING COUNT(*) >= 2
+                ORDER BY trades_made DESC
+                LIMIT $2
+                """,
+                (since, safe_limit),
+            )
+            return {
+                "status": "ok", "category": "trades",
+                "entries": [
+                    {"guid": r[0], "name": r[1], "value": int(r[2] or 0),
+                     "avg_trade_ms": int(r[3] or 0)}
+                    for r in (rows or [])
+                ],
+            }
+
+        elif category == "reactions":
+            rows = await db.fetch_all(
+                """
+                SELECT target_guid, MAX(target_name) AS name,
+                       ROUND(AVG(return_fire_ms)::numeric, 0) AS avg_return_fire,
+                       ROUND(AVG(dodge_reaction_ms)::numeric, 0) AS avg_dodge,
+                       ROUND(AVG(support_reaction_ms)::numeric, 0) AS avg_support,
+                       COUNT(*) AS samples
+                FROM proximity_reaction_metric
+                WHERE session_date >= $1
+                GROUP BY target_guid
+                HAVING COUNT(*) >= 5
+                ORDER BY avg_return_fire ASC
+                LIMIT $2
+                """,
+                (since, safe_limit),
+            )
+            return {
+                "status": "ok", "category": "reactions",
+                "entries": [
+                    {"guid": r[0], "name": r[1], "value": int(r[2] or 0),
+                     "avg_dodge_ms": int(r[3] or 0), "avg_support_ms": int(r[4] or 0),
+                     "samples": int(r[5] or 0)}
+                    for r in (rows or [])
+                ],
+            }
+
+        elif category == "survivors":
+            rows = await db.fetch_all(
+                """
+                SELECT target_guid, MAX(target_name) AS name,
+                       COUNT(*) AS total_engagements,
+                       SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes,
+                       ROUND((SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END)::numeric
+                             / COUNT(*) * 100), 1) AS escape_rate
+                FROM combat_engagement
+                WHERE session_date >= $1
+                GROUP BY target_guid
+                HAVING COUNT(*) >= 10
+                ORDER BY escape_rate DESC
+                LIMIT $2
+                """,
+                (since, safe_limit),
+            )
+            return {
+                "status": "ok", "category": "survivors",
+                "entries": [
+                    {"guid": r[0], "name": r[1], "total": int(r[2] or 0),
+                     "escapes": int(r[3] or 0), "value": float(r[4] or 0)}
+                    for r in (rows or [])
+                ],
+            }
+
+        elif category == "movement":
+            rows = await db.fetch_all(
+                """
+                SELECT player_guid, MAX(player_name) AS name,
+                       ROUND(AVG(avg_speed)::numeric, 1) AS avg_speed,
+                       ROUND(AVG(sprint_percentage)::numeric, 1) AS sprint_pct,
+                       ROUND(SUM(total_distance)::numeric, 0) AS total_distance,
+                       COUNT(*) AS tracks
+                FROM player_track
+                WHERE session_date >= $1
+                GROUP BY player_guid
+                HAVING COUNT(*) >= 3
+                ORDER BY avg_speed DESC
+                LIMIT $2
+                """,
+                (since, safe_limit),
+            )
+            return {
+                "status": "ok", "category": "movement",
+                "entries": [
+                    {"guid": r[0], "name": r[1], "value": float(r[2] or 0),
+                     "sprint_pct": float(r[3] or 0), "total_distance": int(r[4] or 0),
+                     "tracks": int(r[5] or 0)}
+                    for r in (rows or [])
+                ],
+            }
+
+        elif category == "focus_fire":
+            rows = await db.fetch_all(
+                """
+                SELECT target_guid, MAX(target_name) AS name,
+                       COUNT(*) AS times_focused,
+                       ROUND(AVG(focus_score)::numeric, 3) AS avg_score,
+                       ROUND(AVG(attacker_count)::numeric, 1) AS avg_attackers,
+                       ROUND(AVG(total_damage)::numeric, 0) AS avg_damage
+                FROM proximity_focus_fire
+                WHERE session_date >= $1
+                GROUP BY target_guid
+                HAVING COUNT(*) >= 2
+                ORDER BY avg_score DESC
+                LIMIT $2
+                """,
+                (since, safe_limit),
+            )
+            return {
+                "status": "ok", "category": "focus_fire",
+                "entries": [
+                    {"guid": r[0], "name": r[1], "times_focused": int(r[2] or 0),
+                     "value": float(r[3] or 0), "avg_attackers": float(r[4] or 0),
+                     "avg_damage": int(r[5] or 0)}
+                    for r in (rows or [])
+                ],
+            }
+
+        else:
+            return {"status": "error", "detail": f"Unknown category: {category}. Valid: power, spawn, crossfire, trades, reactions, survivors, movement, focus_fire"}
+
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}

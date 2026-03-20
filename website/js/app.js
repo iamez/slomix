@@ -10,7 +10,7 @@
 // IMPORTS
 // ============================================================================
 
-import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js';
+import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js?v=20260312-site-recovery2';
 import { checkLoginStatus, initSearchListeners, setLoadPlayerProfile } from './auth.js';
 import { initLivePolling, initLiveStatusPolling, updateLiveSession } from './live-status.js';
 import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js';
@@ -29,11 +29,22 @@ import {
     loadGreatshotView,
     loadGreatshotDemoDetail,
 } from './greatshot.js';
+import {
+    VIEW_MODE,
+    getRouteDefinition,
+    getRouteHash,
+    getActiveNavKeys,
+    parseHashRoute,
+    loadRoute,
+} from './route-registry.js?v=20260312-site-recovery2';
+import { mountModernRoute, resetModernRouteHost } from './modern-route-host.js?v=20260312-site-recovery2';
 import './compare.js'; // Self-registers to window
 import { getBadgesForPlayer, renderBadges, renderBadge } from './badges.js';
 import { loadSeasonLeaders, loadActivityCalendar, loadSeasonSummary } from './season-stats.js';
 import { loadHallOfFameView } from './hall-of-fame.js';
-import { loadRetroVizView } from './retro-viz.js';
+import { loadRetroVizView } from './retro-viz.js?v=20260312-site-recovery3';
+import { loadSessions2View } from './sessions2.js?v=20260312-site-recovery2';
+import { loadSessionDetailView } from './session-detail.js?v=20260312-site-recovery2';
 
 // ============================================================================
 // NAVIGATION
@@ -66,36 +77,92 @@ const PROTOTYPE_TONE_STYLES = {
     }
 };
 
-function parseHashRoute() {
-    const cleanHash = window.location.hash.replace(/^#\/?/, '');
-    if (!cleanHash) return { viewId: 'home', params: {} };
-    const routePath = cleanHash.split('?')[0];
+const legacyRuntime = {
+    loadSessionsView,
+    initLeaderboardDefaults,
+    loadMapsView,
+    loadWeaponsView,
+    loadRecordsView,
+    loadAwardsView,
+    loadProximityView,
+    loadGreatshotView,
+    loadGreatshotDemoDetail,
+    loadUploadsView,
+    loadUploadDetail,
+    loadAvailabilityView,
+    loadAdminPanelView,
+    loadHallOfFameView,
+    loadRetroVizView,
+    loadSessions2View,
+    loadSessionDetailView,
+};
 
-    const segments = routePath.split('/').filter(Boolean);
-    if (segments[0] === 'greatshot') {
-        if (segments[1] === 'demo' && segments[2]) {
-            return {
-                viewId: 'greatshot-demo',
-                params: { demoId: decodeURIComponent(segments[2]) }
-            };
+const modernRuntime = {
+    mountRoute({ viewId, params = {} }) {
+        const viewElement = document.getElementById(`view-${viewId}`);
+        if (!viewElement) {
+            console.error(`Modern route container missing: view-${viewId}`);
+            return false;
         }
-        const section = ['demos', 'highlights', 'clips', 'renders'].includes(segments[1] || '')
-            ? segments[1]
-            : 'demos';
-        return {
-            viewId: 'greatshot',
-            params: { section }
-        };
+        return mountModernRoute({ viewId, params, viewElement });
+    },
+};
+
+function setActiveView(viewId) {
+    document.querySelectorAll('.view-section').forEach((el) => {
+        el.classList.remove('active');
+        el.classList.add('hidden');
+    });
+
+    const target = document.getElementById(`view-${viewId}`);
+    if (!target) {
+        console.error(`View not found: view-${viewId}`);
+        return null;
     }
 
-    if (segments[0] === 'uploads' && segments[1]) {
-        return {
-            viewId: 'upload-detail',
-            params: { uploadId: decodeURIComponent(segments[1]) }
-        };
+    target.classList.add('active');
+    target.classList.remove('hidden');
+    return target;
+}
+
+function updateNavState(viewId) {
+    document.querySelectorAll('.nav-link').forEach((el) => el.classList.remove('active'));
+    getActiveNavKeys(viewId).forEach((id) => {
+        const link = document.getElementById(id);
+        if (link) link.classList.add('active');
+    });
+}
+
+async function dispatchRoute(viewId, params = {}) {
+    const definition = getRouteDefinition(viewId);
+    if (!definition) {
+        console.warn(`Unknown route: ${viewId}. Falling back to home.`);
+        return dispatchRoute('home', {});
     }
 
-    return { viewId: segments[0] || 'home', params: {} };
+    const target = setActiveView(definition.viewId);
+    if (!target) return;
+
+    updateNavState(definition.viewId);
+    renderPrototypeBanner(target);
+
+    if (definition.mode !== VIEW_MODE.MODERN) {
+        resetModernRouteHost();
+    }
+
+    window.scrollTo(0, 0);
+
+    try {
+        const result = loadRoute(definition.viewId, params, {
+            legacy: legacyRuntime,
+            modern: modernRuntime,
+        });
+        if (result && typeof result.catch === 'function') {
+            await result;
+        }
+    } catch (error) {
+        console.error(`Route dispatch failed for ${definition.viewId}:`, error);
+    }
 }
 
 function initNavDropdowns() {
@@ -224,102 +291,18 @@ function renderPrototypeBanner(viewElement) {
  */
 export function navigateTo(viewId, updateHistory = true, params = {}) {
     console.log('Navigating to:', viewId);
+    const definition = getRouteDefinition(viewId) || getRouteDefinition('home');
+    if (!definition) return;
 
-    // Hide all views
-    document.querySelectorAll('.view-section').forEach(el => {
-        el.classList.remove('active');
-        el.classList.add('hidden');
-    });
-
-    // Show selected view
-    const target = document.getElementById(`view-${viewId}`);
-    if (target) {
-        target.classList.add('active');
-        target.classList.remove('hidden');
-        renderPrototypeBanner(target);
-    } else {
-        console.error(`View not found: view-${viewId}`);
-        return;
-    }
-
-    // Update Nav Links
-    document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-    const viewToNav = { 'greatshot-demo': 'greatshot', 'upload-detail': 'uploads', 'sessions': 'sessions-stats' };
-    const navKey = viewToNav[viewId] || viewId;
-    const statsViews = new Set(['sessions', 'leaderboards', 'maps', 'weapons', 'records', 'awards', 'retro-viz']);
-    const activeKeys = [`link-${navKey}`];
-    if (statsViews.has(viewId)) {
-        activeKeys.push('link-stats');
-    }
-    activeKeys.forEach((id) => {
-        const link = document.getElementById(id);
-        if (link) link.classList.add('active');
-    });
-
-    // Update URL hash
     if (updateHistory) {
-        let hash = '';
-        if (viewId === 'upload-detail' && params.uploadId) {
-            hash = `#/uploads/${encodeURIComponent(params.uploadId)}`;
-        } else if (viewId === 'greatshot-demo' && params.demoId) {
-            hash = `#/greatshot/demo/${encodeURIComponent(params.demoId)}`;
-        } else if (viewId === 'greatshot') {
-            const section = ['demos', 'highlights', 'clips', 'renders'].includes(params.section)
-                ? params.section
-                : 'demos';
-            hash = `#/greatshot/${section}`;
-        } else if (viewId !== 'home') {
-            hash = `#/${viewId}`;
-        }
+        const hash = getRouteHash(definition.viewId, params);
         if (window.location.hash !== hash) {
             window.location.hash = hash;
             return;
         }
     }
 
-    // Scroll to top
-    window.scrollTo(0, 0);
-
-    // Load view-specific data
-    if (viewId === 'sessions') {
-        loadSessionsView();
-    } else if (viewId === 'matches') {
-        loadMatchesView();
-    } else if (viewId === 'community') {
-        loadCommunityView();
-    } else if (viewId === 'maps') {
-        loadMapsView();
-    } else if (viewId === 'leaderboards') {
-        initLeaderboardDefaults();
-    } else if (viewId === 'weapons') {
-        loadWeaponsView();
-    } else if (viewId === 'records') {
-        loadRecordsView();
-    } else if (viewId === 'awards') {
-        loadAwardsView();
-    } else if (viewId === 'proximity') {
-        loadProximityView();
-    } else if (viewId === 'greatshot') {
-        loadGreatshotView(params.section || 'demos');
-    } else if (viewId === 'greatshot-demo') {
-        if (params.demoId) {
-            loadGreatshotDemoDetail(params.demoId);
-        }
-    } else if (viewId === 'upload-detail') {
-        if (params.uploadId) {
-            loadUploadDetail(params.uploadId);
-        }
-    } else if (viewId === 'uploads') {
-        loadUploadsView();
-    } else if (viewId === 'availability') {
-        loadAvailabilityView();
-    } else if (viewId === 'admin') {
-        loadAdminPanelView();
-    } else if (viewId === 'hall-of-fame') {
-        loadHallOfFameView();
-    } else if (viewId === 'retro-viz') {
-        loadRetroVizView();
-    }
+    void dispatchRoute(definition.viewId, params);
 }
 
 // Wire up navigation to modules that need it
@@ -345,6 +328,10 @@ window.toggleSeasonDetails = toggleSeasonDetails;
 
 window.addEventListener('hashchange', () => {
     const route = parseHashRoute();
+    if (!getRouteDefinition(route.viewId)) {
+        navigateTo('home');
+        return;
+    }
     navigateTo(route.viewId, false, route.params);
 });
 
@@ -631,12 +618,15 @@ function renderInsightsCharts(data, days) {
 
     setInsightsMapState('ready');
     const barColors = ['#3b82f6','#06b6d4','#8b5cf6','#10b981','#f43f5e','#f59e0b','#ec4899','#6366f1'];
+    const mapLabels = mapEntries.map(([name]) => name);
+    const mapCounts = mapEntries.map(([, count]) => count);
+    const maxCount = Math.max(...mapCounts, 1);
     insightsMapsChart = new Chart(mapsCtx, {
         type: 'bar',
         data: {
-            labels: mapEntries.map(([name]) => name),
+            labels: mapLabels,
             datasets: [{
-                data: mapEntries.map(([, count]) => count),
+                data: mapCounts,
                 backgroundColor: mapEntries.map((_, i) => barColors[i % barColors.length] + '66'),
                 borderColor: mapEntries.map((_, i) => barColors[i % barColors.length]),
                 borderWidth: 1,
@@ -644,12 +634,21 @@ function renderInsightsCharts(data, days) {
             }],
         },
         options: {
-            ...chartDefaults,
+            responsive: true,
+            maintainAspectRatio: false,
             indexAxis: 'y',
+            plugins: { legend: { display: false }, tooltip: chartDefaults.plugins.tooltip },
             scales: {
-                ...chartDefaults.scales,
-                x: { ...chartDefaults.scales.x, ticks: { ...chartDefaults.scales.x.ticks, maxTicksLimit: 5 } },
-                y: { ...chartDefaults.scales.y, beginAtZero: undefined, ticks: { color: '#94a3b8', font: { size: 11, family: 'JetBrains Mono' } } },
+                x: {
+                    beginAtZero: true,
+                    suggestedMax: Math.ceil(maxCount * 1.15),
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                    ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 5, stepSize: 1, precision: 0 },
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { color: '#94a3b8', font: { size: 11, family: 'JetBrains Mono' } },
+                },
             },
         },
     });
@@ -702,7 +701,10 @@ async function initApp() {
 
     // Check API Status
     try {
-        const status = await fetchJSON(`${API_BASE}/status`);
+        const status = await fetchJSON(`${API_BASE}/status`, {
+            cachePolicy: 'no-store',
+            cache: 'no-store',
+        });
         console.log('API Status:', status);
         const statusDot = document.getElementById('server-status-dot');
         const statusText = document.getElementById('server-status-text');
@@ -719,39 +721,43 @@ async function initApp() {
         if (statusText) statusText.textContent = 'Offline';
     }
 
-    // Load first-screen data first; defer secondary views until browser idle.
-    const criticalLoads = [
-        loadOverviewStats,
-        updateLiveSession,
-        loadQuickLeaders,
-        loadRecentMatches,
-        checkLoginStatus,
-    ];
+    const homeDefinition = getRouteDefinition('home');
+    const legacyHomeEnabled = homeDefinition?.mode === VIEW_MODE.LEGACY;
+
+    const criticalLoads = [checkLoginStatus];
+    if (legacyHomeEnabled) {
+        criticalLoads.unshift(
+            loadOverviewStats,
+            updateLiveSession,
+            loadQuickLeaders,
+            loadRecentMatches,
+        );
+    }
     await Promise.allSettled(criticalLoads.map((task) => task()));
 
-    // Initialize search listeners
     initSearchListeners();
 
-    // Initialize live polling
-    initLivePolling();
-    initLiveStatusPolling();
-
-    // Handle initial URL hash
     const route = parseHashRoute();
-    if (route.viewId && route.viewId !== 'home') {
+    if (getRouteDefinition(route.viewId)) {
         navigateTo(route.viewId, false, route.params);
+    } else {
+        navigateTo('home', false, {});
     }
 
-    scheduleDeferredLoads([
-        { task: loadInsightsCharts, label: 'insights-charts' },
-        { task: loadSeasonInfo, label: 'season-info' },
-        { task: loadLastSession, label: 'last-session' },
-        { task: loadPredictions, label: 'predictions' },
-        { task: loadMatchesView, label: 'matches-view' },
-        { task: loadSeasonLeaders, label: 'season-leaders' },
-        { task: loadActivityCalendar, label: 'activity-calendar' },
-        { task: loadSeasonSummary, label: 'season-summary' },
-    ]);
+    if (legacyHomeEnabled) {
+        initLivePolling();
+        initLiveStatusPolling();
+        scheduleDeferredLoads([
+            { task: loadInsightsCharts, label: 'insights-charts' },
+            { task: loadSeasonInfo, label: 'season-info' },
+            { task: loadLastSession, label: 'last-session' },
+            { task: loadPredictions, label: 'predictions' },
+            { task: loadMatchesView, label: 'matches-view' },
+            { task: loadSeasonLeaders, label: 'season-leaders' },
+            { task: loadActivityCalendar, label: 'activity-calendar' },
+            { task: loadSeasonSummary, label: 'season-summary' },
+        ]);
+    }
 
     console.log('✅ Slomix App Ready');
 }

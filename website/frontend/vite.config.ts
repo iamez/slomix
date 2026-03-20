@@ -24,7 +24,6 @@ export default defineConfig({
       fileName: () => 'route-host.js',
     },
     rollupOptions: {
-      external: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime'],
       output: {
         chunkFileNames: 'chunks/[name]-[hash].js',
         assetFileNames: (assetInfo) => {

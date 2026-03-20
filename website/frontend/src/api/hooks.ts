@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client';
+import type { ProximityScope } from './types';
 
 // Home / Overview
 export const useOverview = () =>
@@ -140,11 +141,19 @@ export const useWeaponHoF = (period = 'all') =>
     staleTime: 120_000,
   });
 
-export const useWeaponsByPlayer = (period = 'all') =>
+export const useWeaponsByPlayer = (
+  period = 'all',
+  playerGuid?: string | null,
+  playerLimit = playerGuid ? 1 : 24,
+  weaponLimit = playerGuid ? 8 : 4,
+  enabled = true,
+  gamingSessionId?: number,
+) =>
   useQuery({
-    queryKey: ['weapons-by-player', period],
-    queryFn: () => api.getWeaponsByPlayer(period),
+    queryKey: ['weapons-by-player', period, playerGuid, playerLimit, weaponLimit, gamingSessionId],
+    queryFn: () => api.getWeaponsByPlayer(period, playerLimit, weaponLimit, playerGuid ?? undefined, gamingSessionId),
     staleTime: 60_000,
+    enabled: enabled && (playerGuid === undefined || !!playerGuid),
   });
 
 // Round Viz
@@ -160,6 +169,14 @@ export const useRoundViz = (roundId: number | null) =>
     queryKey: ['round-viz', roundId],
     queryFn: () => api.getRoundViz(roundId!),
     enabled: roundId !== null && roundId > 0,
+    staleTime: 300_000,
+  });
+
+export const useRoundPlayerDetails = (roundId: number | null, playerGuid: string | null, enabled = true) =>
+  useQuery({
+    queryKey: ['round-player-details', roundId, playerGuid],
+    queryFn: () => api.getRoundPlayerDetails(roundId!, playerGuid!),
+    enabled: enabled && roundId !== null && roundId > 0 && !!playerGuid,
     staleTime: 300_000,
   });
 
@@ -180,11 +197,145 @@ export const useSessionByDate = (date: string | null) =>
     staleTime: 60_000,
   });
 
+export const useSessionGraphs = (date: string | null, sessionId?: number | null, enabled = true) =>
+  useQuery({
+    queryKey: ['session-graphs', date, sessionId],
+    queryFn: () => api.getSessionGraphs(date!, sessionId),
+    enabled: enabled && !!date,
+    staleTime: 60_000,
+  });
+
+export const useProximityTradeSummary = (params?: ProximityScope, enabled = true) =>
+  useQuery({
+    queryKey: ['proximity-trade-summary', params],
+    queryFn: () => api.getProximityTradeSummary(params),
+    enabled,
+    staleTime: 30_000,
+  });
+
+export const useProximityTradeEvents = (params?: ProximityScope, limit = 250, enabled = true) =>
+  useQuery({
+    queryKey: ['proximity-trade-events', params, limit],
+    queryFn: () => api.getProximityTradeEvents(params, limit),
+    enabled,
+    staleTime: 30_000,
+  });
+
+export const useProximityDuos = (params?: ProximityScope, limit = 8, enabled = true) =>
+  useQuery({
+    queryKey: ['proximity-duos', params, limit],
+    queryFn: () => api.getProximityDuos(params, limit),
+    enabled,
+    staleTime: 30_000,
+  });
+
+export const useProximityTeamplay = (params?: ProximityScope, enabled = true) =>
+  useQuery({
+    queryKey: ['proximity-teamplay', params],
+    queryFn: () => api.getProximityTeamplay(params),
+    enabled,
+    staleTime: 30_000,
+  });
+
+export const useProximityMovers = (params?: ProximityScope, limit = 5, enabled = true) =>
+  useQuery({
+    queryKey: ['proximity-movers', params, limit],
+    queryFn: () => api.getProximityMovers(params, limit),
+    enabled,
+    staleTime: 30_000,
+  });
+
+export const useProximityPlayerProfile = (guid: string, rangeDays = 90) =>
+  useQuery({
+    queryKey: ['proximity-player-profile', guid, rangeDays],
+    queryFn: () => api.getProximityPlayerProfile(guid, rangeDays),
+    enabled: !!guid,
+    staleTime: 60_000,
+  });
+
+export const useProximityPlayerRadar = (guid: string, rangeDays = 90) =>
+  useQuery({
+    queryKey: ['proximity-player-radar', guid, rangeDays],
+    queryFn: () => api.getProximityPlayerRadar(guid, rangeDays),
+    enabled: !!guid,
+    staleTime: 60_000,
+  });
+
+export const useProximityRoundTimeline = (roundId: number) =>
+  useQuery({
+    queryKey: ['proximity-round-timeline', roundId],
+    queryFn: () => api.getProximityRoundTimeline(roundId),
+    enabled: roundId > 0,
+    staleTime: 120_000,
+  });
+
+export const useProximityRoundTracks = (roundId: number) =>
+  useQuery({
+    queryKey: ['proximity-round-tracks', roundId],
+    queryFn: () => api.getProximityRoundTracks(roundId),
+    enabled: roundId > 0,
+    staleTime: 120_000,
+  });
+
+export const useProximityRoundTeamComparison = (roundId: number) =>
+  useQuery({
+    queryKey: ['proximity-round-team-comparison', roundId],
+    queryFn: () => api.getProximityRoundTeamComparison(roundId),
+    enabled: roundId > 0,
+    staleTime: 120_000,
+  });
+
+export const useProximityLeaderboards = (category = 'power', rangeDays = 30, limit = 10) =>
+  useQuery({
+    queryKey: ['proximity-leaderboards', category, rangeDays, limit],
+    queryFn: () => api.getProximityLeaderboards(category, rangeDays, limit),
+    staleTime: 60_000,
+  });
+
+export const useProximitySessionScores = (sessionDate?: string) =>
+  useQuery({
+    queryKey: ['proximity-session-scores', sessionDate],
+    queryFn: () => api.getProximitySessionScores(sessionDate),
+    staleTime: 60_000,
+  });
+
+export const useProximityWeaponAccuracy = (params?: { player_guid?: string; map_name?: string; limit?: number }) =>
+  useQuery({
+    queryKey: ['proximity-weapon-accuracy', params],
+    queryFn: () => api.getProximityWeaponAccuracy(params),
+    staleTime: 60_000,
+  });
+
+// VS Stats
+export const usePlayerVsStats = (
+  guid: string | null,
+  scope = 'all',
+  sessionId?: number,
+  roundId?: number,
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: ['player-vs-stats', guid, scope, sessionId, roundId],
+    queryFn: () => api.getPlayerVsStats(guid!, scope, sessionId, roundId),
+    enabled: enabled && !!guid,
+    staleTime: 60_000,
+  });
+
 // Sessions
 export const useSessions = (params?: { limit?: number; offset?: number; search?: string }) =>
   useQuery({
     queryKey: ['sessions', params],
     queryFn: () => api.getSessions(params),
+    staleTime: 30_000,
+  });
+
+export const useLatestSession = () =>
+  useQuery({
+    queryKey: ['latest-session'],
+    queryFn: async () => {
+      const sessions = await api.getSessions({ limit: 1 });
+      return sessions[0] ?? null;
+    },
     staleTime: 30_000,
   });
 

@@ -855,9 +855,23 @@ class StopwatchScoringService:
                 desc = "Map tie: no completion or time data"
                 scoring_source = "time"
 
+                # Detect double fullhold: both defenders won their rounds = map tie
+                r1_defender_won = (r1.get('winner_team') == r1.get('defender_team')
+                                   and r1.get('winner_team') in (1, 2))
+                r2_defender_won = (r2.get('winner_team') == r2.get('defender_team')
+                                   and r2.get('winner_team') in (1, 2))
+
+                if r1_defender_won and r2_defender_won:
+                    # Double fullhold: each team defended and won once = 1-1 draw
+                    team_a_pts = 1
+                    team_b_pts = 1
+                    desc = "Double fullhold: 1-1 draw"
+                    scoring_source = "header"
+                    winner_side = None
                 # Prefer header winner side from R2 (map winner in stopwatch)
-                winner_side = r2.get('winner_team')
-                if winner_side in (1, 2) and team_a_r1_side in (1, 2):
+                elif (r2.get('winner_team') in (1, 2)
+                      and team_a_r1_side in (1, 2)):
+                    winner_side = r2.get('winner_team')
                     team_a_r2_side = 2 if team_a_r1_side == 1 else 1
                     if winner_side == team_a_r2_side:
                         team_a_pts = 1

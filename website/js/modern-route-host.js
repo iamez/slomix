@@ -1,4 +1,4 @@
-const BUILD_VERSION = '20260308-game-assets';
+const BUILD_VERSION = '20260315-session-tabs-v2';
 const MODERN_ENTRY_URL = `/static/modern/route-host.js?v=${BUILD_VERSION}`;
 const MODERN_STYLESHEET_URL = `/static/modern/route-host.css?v=${BUILD_VERSION}`;
 

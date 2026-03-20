@@ -286,9 +286,24 @@ export interface SessionPlayer {
   times_revived: number;
   kill_assists: number;
   time_played_seconds: number;
+  accuracy?: number;
+  headshot_pct?: number;
   efficiency?: number;
-  alive_percent?: number;
-  played_percent?: number;
+  alive_pct?: number | null;
+  alive_pct_lua?: number | null;
+  alive_pct_diff?: number | null;
+  alive_pct_drift?: boolean;
+  played_pct?: number | null;
+  played_pct_lua?: number | null;
+  played_pct_diff?: number | null;
+  played_pct_drift?: boolean;
+  supastats_tmp_pct?: number | null;
+  supastats_tmp_ratio?: number | null;
+  time_dead_minutes?: number | null;
+  denied_playtime?: number | null;
+  time_denied_seconds?: number | null;
+  alive_percent?: number | null;
+  played_percent?: number | null;
 }
 export interface SessionScoringMap {
   map_name: string;
@@ -304,13 +319,243 @@ export interface SessionScoring {
   maps?: SessionScoringMap[];
 }
 export interface SessionDetailResponse {
-  session_id: number;
+  session_id: number | null;
   date: string | null;
   player_count: number;
   round_count: number;
   matches: SessionMatch[];
   players: SessionPlayer[];
   scoring: SessionScoring;
+}
+
+export interface SessionGraphTimelinePoint {
+  label: string;
+  dpm: number;
+}
+
+export interface SessionGraphCombatOffense {
+  kills: number;
+  deaths: number;
+  damage_given: number;
+  kd: number;
+  dpm: number;
+}
+
+export interface SessionGraphCombatDefense {
+  revives: number;
+  kill_assists: number;
+  gibs: number;
+  headshots: number;
+  times_revived: number;
+  team_kills: number;
+  self_kills: number;
+}
+
+export interface SessionGraphAdvancedMetrics {
+  frag_potential: number;
+  damage_efficiency: number;
+  survival_rate: number;
+  time_denied: number;
+  time_denied_raw_seconds: number;
+  time_dead_raw_seconds: number;
+}
+
+export interface SessionGraphPlaystyle {
+  aggression: number;
+  precision: number;
+  survivability: number;
+  support: number;
+  lethality: number;
+  brutality: number;
+  consistency: number;
+  efficiency: number;
+}
+
+export interface SessionGraphPlayer {
+  name: string;
+  combat_offense: SessionGraphCombatOffense;
+  combat_defense: SessionGraphCombatDefense;
+  advanced_metrics: SessionGraphAdvancedMetrics;
+  playstyle: SessionGraphPlaystyle;
+  dpm_timeline: SessionGraphTimelinePoint[];
+}
+
+export interface SessionGraphsResponse {
+  date: string;
+  player_count: number;
+  players: SessionGraphPlayer[];
+}
+
+export interface ProximityScope {
+  range_days?: number;
+  session_date?: string | null;
+  map_name?: string | null;
+  round_number?: number | null;
+  round_start_unix?: number | null;
+}
+
+export interface ProximityTradeSummaryResponse {
+  status: string;
+  ready: boolean;
+  message?: string | null;
+  scope?: Record<string, unknown>;
+  events: number;
+  trade_opportunities: number;
+  trade_attempts: number;
+  trade_success: number;
+  missed_trade_candidates: number;
+  support_uptime_pct: number | null;
+  isolation_deaths: number | null;
+}
+
+export interface ProximityTradeEvent {
+  date: string;
+  round: number;
+  map: string;
+  victim: string;
+  killer: string;
+  opportunities: number;
+  attempts: number;
+  success: number;
+  missed: number;
+  round_id: number | null;
+  round_date: string | null;
+  round_time: string | null;
+  outcome: string;
+}
+
+export interface ProximityTradeEventsResponse {
+  status: string;
+  ready: boolean;
+  message?: string | null;
+  scope?: Record<string, unknown>;
+  limit: number;
+  events: ProximityTradeEvent[];
+}
+
+export interface ProximityDuo {
+  player1?: string;
+  player1_name?: string;
+  player2?: string;
+  player2_name?: string;
+  crossfire_kills?: number;
+  crossfires?: number;
+  avg_delay_ms?: number | null;
+}
+
+export interface ProximityDuosResponse {
+  status: string;
+  ready: boolean;
+  message?: string | null;
+  scope?: Record<string, unknown>;
+  limit: number;
+  duos: ProximityDuo[];
+}
+
+export interface ProximityTeamplayEntry {
+  guid?: string | null;
+  name: string;
+  crossfire_kills?: number;
+  crossfire_participations?: number;
+  crossfire_final_blows?: number;
+  avg_delay_ms?: number | null;
+  count?: number;
+  value?: number;
+  survival_rate_pct?: number | null;
+}
+
+export interface ProximityTeamplayResponse {
+  status: string;
+  ready: boolean;
+  message?: string | null;
+  scope?: Record<string, unknown>;
+  limit: number;
+  sampled_engagements?: number;
+  crossfire_kills: ProximityTeamplayEntry[];
+  sync: ProximityTeamplayEntry[];
+  focus_survival: ProximityTeamplayEntry[];
+}
+
+export interface ProximityMoverEntry {
+  guid?: string | null;
+  name: string;
+  total_distance?: number | null;
+  sprint_pct?: number | null;
+  reaction_ms?: number | null;
+  duration_ms?: number | null;
+  tracks?: number;
+}
+
+export interface ProximityMoversResponse {
+  status: string;
+  ready: boolean;
+  message?: string | null;
+  scope?: Record<string, unknown>;
+  limit: number;
+  distance: ProximityMoverEntry[];
+  sprint: ProximityMoverEntry[];
+  reaction: ProximityMoverEntry[];
+  survival: ProximityMoverEntry[];
+}
+
+export interface RoundPlayerDetailResponse {
+  player_name: string;
+  round: {
+    id: number;
+    map_name: string;
+    round_number: number;
+    round_date: string;
+  };
+  combat: {
+    kills: number;
+    deaths: number;
+    damage_given: number;
+    damage_received: number;
+    headshots: number;
+    gibs: number;
+    accuracy: number;
+    shots: number;
+    hits: number;
+  };
+  support: {
+    revives_given: number;
+    times_revived: number;
+    useful_kills: number;
+    useless_kills: number;
+    kill_assists: number;
+  };
+  objectives: {
+    stolen: number;
+    returned: number;
+    dynamites_planted: number;
+    dynamites_defused: number;
+  };
+  sprees: {
+    double_kills: number;
+    triple_kills: number;
+    quad_kills: number;
+    multi_kills: number;
+    mega_kills: number;
+  };
+  time: {
+    played_seconds: number;
+    dead_minutes: number;
+    denied_playtime: number;
+  };
+  misc: {
+    xp: number;
+    team_kills: number;
+    self_kills: number;
+  };
+  weapons: Array<{
+    name: string;
+    kills: number;
+    deaths: number;
+    headshots: number;
+    hits: number;
+    shots: number;
+    accuracy: number;
+  }>;
 }
 
 // Home / Overview
@@ -567,6 +812,7 @@ export interface PlanningSession {
   date: string;
   created_by_user_id: number;
   discord_thread_id: string | null;
+  is_mock?: boolean;
   suggestions: PlanningSuggestion[];
   teams: Record<string, { members: Array<{ user_id: number }> }>;
 }
@@ -577,6 +823,7 @@ export interface PlanningState {
   unlocked: boolean;
   session_ready: AvailabilitySessionReady;
   viewer: { website_user_id: number };
+  is_mock?: boolean;
 }
 
 export interface PromotionPreview {
@@ -604,4 +851,150 @@ export interface SessionSummary {
   player_names: string[];
   allies_wins: number;
   axis_wins: number;
+}
+
+// Proximity Player Profile
+export interface ProximityPlayerProfile {
+  status: string;
+  guid: string;
+  range_days: number;
+  engagement: {
+    total: number;
+    escapes: number;
+    deaths: number;
+    avg_duration_ms: number;
+    avg_damage_taken: number;
+    avg_distance: number;
+    crossfire_count: number;
+    escape_rate: number;
+  };
+  kills: { total: number };
+  spawn_timing: { avg_score: number; timed_kills: number; avg_denial_ms: number };
+  reactions: { avg_return_fire_ms: number; avg_dodge_ms: number; avg_support_ms: number; samples: number };
+  movement: { avg_speed: number; avg_sprint_pct: number; avg_distance_per_life: number; tracks: number };
+  trades: { made: number };
+}
+
+export interface ProximityRadar {
+  status: string;
+  guid: string;
+  axes: { aggression: number; awareness: number; teamplay: number; timing: number; mechanical: number };
+  composite: number;
+}
+
+// Proximity Round Timeline
+export interface ProximityTimelineEvent {
+  type: string;
+  time: number;
+  end_time?: number;
+  data: Record<string, unknown>;
+}
+
+export interface ProximityTimelineResponse {
+  status: string;
+  round_id: number;
+  map_name: string;
+  round_number: number;
+  round_date: string | null;
+  event_count: number;
+  events: ProximityTimelineEvent[];
+}
+
+export interface ProximityTrack {
+  guid: string;
+  name: string;
+  team: string;
+  class: string;
+  spawn_time: number;
+  death_time: number;
+  first_move_time: number | null;
+  death_type: string;
+  path: unknown[];
+}
+
+export interface ProximityTracksResponse {
+  status: string;
+  round_id: number;
+  track_count: number;
+  tracks: ProximityTrack[];
+}
+
+// Proximity Team Comparison
+export interface ProximityTeamComparisonResponse {
+  status: string;
+  round_id: number;
+  cohesion: Array<{ team: string; avg_dispersion: number; avg_max_spread: number; avg_stragglers: number; samples: number }>;
+  pushes: Array<{ team: string; push_count: number; avg_quality: number; avg_alignment: number }>;
+  crossfire: Array<{ target_team: string; total: number; executed: number; rate: number }>;
+}
+
+// Proximity Leaderboard
+export interface ProximityLeaderboardEntry {
+  guid: string;
+  name: string;
+  value: number;
+  partner_guid?: string;
+  partner_name?: string;
+  axes?: { aggression: number; awareness: number; teamplay: number; timing: number; mechanical: number };
+  timed_kills?: number;
+  avg_denial_ms?: number;
+  total?: number;
+  avg_delay_ms?: number;
+  avg_trade_ms?: number;
+  avg_dodge_ms?: number;
+  avg_support_ms?: number;
+  samples?: number;
+  escapes?: number;
+  sprint_pct?: number;
+  total_distance?: number;
+  tracks?: number;
+}
+
+export interface ProximityLeaderboardResponse {
+  status: string;
+  category: string;
+  entries: ProximityLeaderboardEntry[];
+}
+
+// Proximity Session Scores
+export interface SessionScoreCategory {
+  raw: number;
+  weighted: number;
+  detail?: string;
+}
+export interface SessionScoreEntry {
+  guid: string;
+  name: string;
+  total_score: number;
+  categories: Record<string, SessionScoreCategory>;
+  engagement_count: number;
+}
+export interface ProximitySessionScoresResponse {
+  status: string;
+  session_date: string | null;
+  players: SessionScoreEntry[];
+}
+
+// VS Stats (Easiest Preys / Worst Enemies)
+export interface VsStatsEntry {
+  opponent_name: string;
+  opponent_guid: string | null;
+  kills: number;
+  deaths: number;
+  kd: number;
+}
+export interface PlayerVsStatsResponse {
+  guid: string;
+  scope: string;
+  round_id: number | null;
+  session_id: number | null;
+  easiest_preys: VsStatsEntry[];
+  worst_enemies: VsStatsEntry[];
+}
+
+// Proximity Weapon Accuracy
+export interface ProximityWeaponAccuracyResponse {
+  status: string;
+  leaders: Array<{ guid: string; name: string; shots: number; hits: number; kills: number; headshots: number; accuracy: number }>;
+  weapon_breakdown: Array<{ weapon_id: number; shots: number; hits: number; kills: number; headshots: number; accuracy: number }>;
 }
