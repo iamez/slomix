@@ -213,7 +213,7 @@ class C0RNP0RN3StatsParser:
                 minutes = float(text)
                 return int(minutes * 60)
             return int(text)
-        except BaseException:
+        except (ValueError, TypeError):
             return 0
 
     def format_accuracy_bar(self, accuracy: float) -> str:
@@ -1365,7 +1365,7 @@ class C0RNP0RN3StatsParser:
             else:
                 return "Completed"
 
-        except BaseException:
+        except (ValueError, TypeError):
             return "Unknown"
 
     def _get_error_result(self, error_type: str) -> Dict[str, Any]:

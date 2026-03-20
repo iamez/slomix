@@ -535,6 +535,9 @@ bot/cogs/.oldbackup.CLAUDE.md
 bot/core/.oldbackup.CLAUDE.md
 bot/services/.oldbackup.CLAUDE.md
 bot/schema.json
+# Dead SQLite-only modules (deprecated, not used in PostgreSQL mode)
+bot/core/team_history.py
+bot/core/team_detector_integration.py
 bot/*.db
 bot/*.db.*
 bot/*.bak
