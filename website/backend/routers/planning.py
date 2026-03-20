@@ -315,7 +315,7 @@ async def _is_discord_linked(user: Dict[str, Any], db) -> bool:
             )
             if row:
                 return True
-        except Exception:
+        except Exception:  # noqa: BLE001 — fallthrough to discord_id check
             pass
 
     try:

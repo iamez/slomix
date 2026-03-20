@@ -336,7 +336,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 value=(
                     f"**Rounds Played:** `{games:,}`\n"
                     f"**K/D Ratio:** `{kd_ratio:.2f}`\n"
-                    f"**Avg DPM:** `{avg_dpm:.1f if avg_dpm else 0.0}`"
+                    f"**Avg DPM:** `{avg_dpm:.1f}`" if avg_dpm else f"**Avg DPM:** `0.0`"
                 ),
                 inline=True,
             )

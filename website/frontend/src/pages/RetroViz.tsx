@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { useRecentRounds, useRoundViz } from '../api/hooks';
 import type { RoundVizData, VizPlayer } from '../api/types';
 import { ChartCanvas } from '../components/Chart';
-import { GlassCard } from '../components/GlassCard';
 import { PageHeader } from '../components/PageHeader';
 import { Skeleton } from '../components/Skeleton';
 import { EmptyState } from '../components/EmptyState';
