@@ -953,8 +953,12 @@ class UltimateETLegacyBot(commands.Bot):
 
             if result and result.get('success'):
                 # Post to Discord via round publisher
-                await self.round_publisher.publish_round_stats(filename, result)
-                logger.info(f"✅ WebSocket-triggered import complete: {filename}")
+                try:
+                    await self.round_publisher.publish_round_stats(filename, result)
+                    logger.info(f"✅ WebSocket-triggered import complete: {filename}")
+                except Exception as post_err:
+                    logger.error(f"❌ Discord post FAILED for {filename}: {post_err}", exc_info=True)
+                    await self.track_error("discord_posting", f"Failed to post {filename}: {post_err}", max_consecutive=2)
             else:
                 logger.warning(f"⚠️ File processed but no stats: {filename}")
 
@@ -2870,8 +2874,16 @@ class UltimateETLegacyBot(commands.Bot):
                             # 🆕 AUTO-POST to Discord after processing!
                             if result and result.get('success'):
                                 logger.info(f"📊 Posting to Discord: {result.get('player_count', 0)} players")
-                                await self.round_publisher.publish_round_stats(filename, result)
-                                logger.info(f"✅ Successfully processed and posted: {filename}")
+                                try:
+                                    await self.round_publisher.publish_round_stats(filename, result)
+                                    logger.info(f"✅ Successfully processed and posted: {filename}")
+                                except Exception as post_err:
+                                    logger.error(f"❌ Discord post FAILED for {filename}: {post_err}", exc_info=True)
+                                    await self.track_error(
+                                        "discord_posting",
+                                        f"Failed to post {filename}: {post_err}",
+                                        max_consecutive=2,
+                                    )
 
                                 # 👥 AUTO-DETECT TEAMS after R2 import (FIX 2026-02-01)
                                 # Trigger team detection when we have both rounds of data
@@ -3765,8 +3777,12 @@ class UltimateETLegacyBot(commands.Bot):
             if result and result.get('success'):
                 # Post to production stats channel
                 webhook_logger.info(f"📊 Posting stats: {result.get('player_count', 0)} players")
-                await self.round_publisher.publish_round_stats(filename, result)
-                webhook_logger.info(f"✅ Successfully processed and posted: {filename}")
+                try:
+                    await self.round_publisher.publish_round_stats(filename, result)
+                    webhook_logger.info(f"✅ Successfully processed and posted: {filename}")
+                except Exception as post_err:
+                    webhook_logger.error(f"❌ Discord post FAILED for {filename}: {post_err}", exc_info=True)
+                    await self.track_error("discord_posting", f"Failed to post {filename}: {post_err}", max_consecutive=2)
 
                 # Delete the trigger message (clean up control channel)
                 try:
@@ -4643,8 +4659,12 @@ class UltimateETLegacyBot(commands.Bot):
 
             if result and result.get('success'):
                 webhook_logger.info("📊 Posting stats with accurate timing data")
-                await self.round_publisher.publish_round_stats(filename, result)
-                webhook_logger.info(f"✅ Successfully processed: {filename}")
+                try:
+                    await self.round_publisher.publish_round_stats(filename, result)
+                    webhook_logger.info(f"✅ Successfully processed: {filename}")
+                except Exception as post_err:
+                    webhook_logger.error(f"❌ Discord post FAILED for {filename}: {post_err}", exc_info=True)
+                    await self.track_error("discord_posting", f"Failed to post {filename}: {post_err}", max_consecutive=2)
             else:
                 error_msg = result.get('error', 'Unknown') if result else 'No result'
                 webhook_logger.warning(f"⚠️ Processing failed: {error_msg}")
