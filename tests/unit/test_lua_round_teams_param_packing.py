@@ -2,7 +2,6 @@
 Test that _store_lua_round_teams produces the correct number of SQL parameters
 for both with-round_id and without-round_id code paths.
 """
-import json
 import re
 
 import pytest

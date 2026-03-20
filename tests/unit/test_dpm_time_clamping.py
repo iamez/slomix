@@ -14,7 +14,6 @@ Coverage:
 """
 
 import unittest
-from unittest.mock import MagicMock, patch
 from bot.community_stats_parser import C0RNP0RN3StatsParser
 
 

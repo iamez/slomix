@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from proximity.parser.parser import Attacker, Engagement, FocusFireEvent, ProximityParserV4
+from proximity.parser.parser import Attacker, Engagement, ProximityParserV4
 from website.backend.routers import api as api_router
 
 

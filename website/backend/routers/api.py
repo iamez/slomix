@@ -8482,7 +8482,8 @@ async def get_proximity_spawn_timing(
             ],
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/cohesion")
@@ -8559,7 +8560,8 @@ async def get_proximity_cohesion(
             ],
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/crossfire-angles")
@@ -8646,7 +8648,8 @@ async def get_proximity_crossfire_angles(
             ],
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/pushes")
@@ -8716,7 +8719,8 @@ async def get_proximity_pushes(
             ],
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/lua-trades")
@@ -8801,7 +8805,8 @@ async def get_proximity_lua_trades(
             ],
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/events")
@@ -10178,7 +10183,8 @@ async def get_proximity_player_profile(
             "trades_made": int(trade_stats[0] or 0) if trade_stats else 0,
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/player/{guid}/radar")
@@ -10284,7 +10290,8 @@ async def get_proximity_player_radar(
             "composite": round((aggression + awareness + teamplay + timing + mechanical) / 5, 1),
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/round/{round_id}/timeline")
@@ -10406,7 +10413,8 @@ async def get_proximity_round_timeline(
     except HTTPException:
         raise
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/round/{round_id}/tracks")
@@ -10447,7 +10455,8 @@ async def get_proximity_round_tracks(
     except HTTPException:
         raise
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/round/{round_id}/team-comparison")
@@ -10541,7 +10550,8 @@ async def get_proximity_round_team_comparison(
             ],
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/weapon-accuracy")
@@ -10620,7 +10630,8 @@ async def get_proximity_weapon_accuracy(
             "weapon_breakdown": weapon_breakdown,
         }
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/session-scores")
@@ -10641,7 +10652,8 @@ async def get_proximity_session_scores(
         results = await svc.compute_session_scores(session_date)
         return {"status": "ok", "session_date": session_date, "players": results}
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/leaderboards")
@@ -11015,4 +11027,5 @@ async def get_proximity_leaderboards(
             return {"status": "error", "detail": f"Unknown category: {category}. Valid: power, spawn, crossfire, trades, reactions, survivors, movement, focus_fire"}
 
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}

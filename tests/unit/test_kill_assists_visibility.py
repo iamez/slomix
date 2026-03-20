@@ -3,7 +3,6 @@ Tests for kill_assists visibility in session stats aggregator and session graph 
 """
 from __future__ import annotations
 
-from types import SimpleNamespace
 
 import pytest
 
