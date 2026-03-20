@@ -58,7 +58,7 @@ ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> U
 - **SSH Monitoring**: Only `endstats_monitor` task loop handles SSH (SSHMonitor disabled - race condition fix)
 - **R2 Differential**: Round 2 files contain CUMULATIVE stats; parser subtracts R1 values automatically
 - **Lua Webhook** (`vps_scripts/stats_discord_webhook.lua` v1.6.2): Real-time round notification, fixes surrender timing bug. Data stored in `lua_round_teams` table.
-- **Cog Pattern**: 18 Cogs in `bot/cogs/`, 18 core modules in `bot/core/`, services in `bot/services/`
+- **Cog Pattern**: 18 Cogs in `bot/cogs/`, 16 core modules in `bot/core/`, services in `bot/services/`
 
 ### Timing Configuration
 
@@ -84,9 +84,9 @@ ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> U
 
 All in `bot/cogs/`: achievements, admin, admin_predictions, analytics, availability_poll, last_session, leaderboard, link, matchup, permission_management, predictions, proximity, session, session_management, stats, sync, team, team_management.
 
-### 18 Core Modules
+### 16 Core Modules
 
-All in `bot/core/`: achievement_system, advanced_team_detector, checks, database_adapter, endstats_pagination_view, frag_potential, lazy_pagination_view, match_tracker, pagination_view, round_contract, round_linker, season_manager, stats_cache, substitution_detector, team_detector_integration, team_history, team_manager, utils.
+All in `bot/core/`: achievement_system, advanced_team_detector, checks, database_adapter, endstats_pagination_view, frag_potential, lazy_pagination_view, match_tracker, pagination_view, round_contract, round_linker, season_manager, stats_cache, substitution_detector, team_manager, utils.
 
 ---
 
