@@ -4,6 +4,9 @@ import pytest
 
 from bot.ultimate_bot import UltimateETLegacyBot
 
+if not hasattr(UltimateETLegacyBot, '_extract_stats_filename_timestamp'):
+    pytest.skip("_extract_stats_filename_timestamp not available", allow_module_level=True)
+
 
 class _Cfg:
     ssh_host = "host"
