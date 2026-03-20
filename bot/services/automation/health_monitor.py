@@ -140,10 +140,12 @@ class HealthMonitor:
             'timestamp': datetime.now().isoformat(),
         }
 
-        # Get bot error count
-        health['error_count'] = getattr(self.bot, 'error_count', 0)
-        health['ssh_errors'] = getattr(self.bot, 'ssh_error_count', 0)
-        health['db_errors'] = getattr(self.bot, 'db_error_count', 0)
+        # Get bot error count from track_error() system
+        consecutive = getattr(self.bot, '_consecutive_errors', {})
+        health['error_count'] = sum(consecutive.values())
+        health['ssh_errors'] = consecutive.get('ssh_monitor', 0)
+        health['db_errors'] = consecutive.get('file_processing', 0)
+        health['discord_post_errors'] = consecutive.get('discord_posting', 0)
 
         # Get monitoring status
         health['monitoring_active'] = getattr(self.bot, 'monitoring', False)
@@ -196,6 +198,9 @@ class HealthMonitor:
 
         if health.get('db_errors', 0) > self.db_error_threshold:
             issues.append(f"Database errors: {health['db_errors']}")
+
+        if health.get('discord_post_errors', 0) > 0:
+            issues.append(f"Discord posting errors: {health['discord_post_errors']}")
 
         # Check SSH status
         if health.get('ssh_status') == 'monitoring' and health.get('ssh_errors', 0) > 10:
