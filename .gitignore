@@ -501,6 +501,17 @@ docs/et_stopwatch_proximity_analytics_spec.md
 docs/reference/TESTING_CHECKLIST_*.md
 docs/reference/live_sync_backups/
 
+# Research/investigation scratch docs (local only)
+docs/R0_SEMANTICS_FINDINGS_*.md
+docs/REPEATED_MAP_TIMING_FIX_*.md
+docs/SMART_KILL_ANALYTICS_RESEARCH.md
+docs/SUPASTATS_DATA_FLOW_FINDINGS_*.md
+docs/SUPASTATS_VALIDATION_*.md
+docs/BOT_WEBSITE_RESEARCH_HANDOFF_*.md
+docs/ESSENTIAL_RUNTIME_SCAN_PROMPT.md
+docs/onboarding.md
+docs/workfile.md
+
 # AI agent prompt/handoff docs (internal operations logs)
 docs/AI_AGENT_EXEC_PROMPT_SYSTEM_LOG_AUDIT_*.md
 docs/AI_AGENT_PROMPT_LAUNCH_CARD_*.md
