@@ -285,7 +285,7 @@ class TestDatabaseIntegrity:
         # Insert a processed file hash
         await clean_test_db.execute(
             """
-            INSERT INTO processed_files (filename, file_hash)
+            INSERT INTO processed_files (filename, sha256_hash)
             VALUES ($1, $2)
             """,
             ("file1.txt", "abc123hash")
@@ -295,7 +295,7 @@ class TestDatabaseIntegrity:
         try:
             await clean_test_db.execute(
                 """
-                INSERT INTO processed_files (filename, file_hash)
+                INSERT INTO processed_files (filename, sha256_hash)
                 VALUES ($1, $2)
                 """,
                 ("file1.txt", "different_hash")
