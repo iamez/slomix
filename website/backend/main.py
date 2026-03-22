@@ -50,7 +50,7 @@ setup_logging(
 
 logger = get_app_logger(__name__)
 
-from website.backend.routers import api, auth, predictions, greatshot, greatshot_topshots, uploads, availability, planning
+from website.backend.routers import api, auth, predictions, greatshot, greatshot_topshots, uploads, availability, planning, proximity_router
 from website.backend.dependencies import init_db_pool, close_db_pool, get_db_pool
 from website.backend.services.greatshot_store import get_greatshot_storage
 from website.backend.services.greatshot_jobs import (
@@ -265,6 +265,7 @@ app.include_router(greatshot_topshots.router, prefix="/api", tags=["Greatshot To
 app.include_router(uploads.router, prefix="/api/uploads", tags=["Uploads"])
 app.include_router(availability.router, prefix="/api/availability", tags=["Availability"])
 app.include_router(planning.router, prefix="/api/planning", tags=["Planning"])
+app.include_router(proximity_router.router, prefix="/api", tags=["Proximity"])
 
 if PROMETHEUS_ENABLED and Instrumentator is not None:
     instrumentator = Instrumentator(excluded_handlers=["/metrics"])
