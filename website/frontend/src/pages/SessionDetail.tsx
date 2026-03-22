@@ -51,7 +51,7 @@ import { GlassPanel } from '../components/GlassPanel';
 import { PageHeader } from '../components/PageHeader';
 import { Skeleton } from '../components/Skeleton';
 import { cn } from '../lib/cn';
-import { formatNumber } from '../lib/format';
+import { formatNumber, formatDurationMS as formatDuration } from '../lib/format';
 import { mapLevelshot } from '../lib/game-assets';
 import { navigateTo, navigateToPlayer } from '../lib/navigation';
 
@@ -90,13 +90,6 @@ const CHART_COLORS = [
   'rgba(132, 204, 22, 0.7)',
 ];
 
-function formatDuration(seconds: number | null | undefined): string {
-  const total = Number(seconds || 0);
-  if (!Number.isFinite(total) || total <= 0) return '0:00';
-  const mins = Math.floor(total / 60);
-  const secs = Math.floor(total % 60);
-  return `${mins}:${String(secs).padStart(2, '0')}`;
-}
 
 function formatDenied(seconds: number | null | undefined): string {
   const total = Math.max(0, Math.round(Number(seconds || 0)));
