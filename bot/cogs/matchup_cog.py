@@ -18,6 +18,7 @@ from discord.ext import commands
 from bot.core.checks import is_public_channel
 from bot.core.utils import sanitize_error_message
 from bot.services.matchup_analytics_service import MatchupAnalyticsService
+from bot.services.player_resolver_service import resolve_player_guids
 
 logger = logging.getLogger("bot.cogs.matchup")
 
@@ -31,47 +32,7 @@ class MatchupCog(commands.Cog):
         logger.info("MatchupCog initialized")
 
     async def _resolve_player_guids(self, player_names: List[str]) -> List[str]:
-        """
-        Resolve player names to GUIDs.
-
-        Args:
-            player_names: List of player names
-
-        Returns:
-            List of player GUIDs
-        """
-        guids = []
-        for name in player_names:
-            # Try exact match first
-            query = """
-                SELECT player_guid
-                FROM player_comprehensive_stats
-                WHERE LOWER(player_name) = LOWER($1)
-                GROUP BY player_guid
-                ORDER BY MAX(round_date) DESC
-                LIMIT 1
-            """
-            result = await self.bot.db_adapter.fetch_one(query, (name,))
-
-            if result:
-                guids.append(result[0])
-            else:
-                # Try partial match
-                query = """
-                    SELECT player_guid
-                    FROM player_comprehensive_stats
-                    WHERE LOWER(player_name) LIKE LOWER($1)
-                    GROUP BY player_guid
-                    ORDER BY MAX(round_date) DESC
-                    LIMIT 1
-                """
-                result = await self.bot.db_adapter.fetch_one(query, (f"%{name}%",))
-                if result:
-                    guids.append(result[0])
-                else:
-                    logger.warning(f"Could not resolve player: {name}")
-
-        return guids
+        return await resolve_player_guids(self.bot.db_adapter, player_names)
 
     async def _get_player_name(self, guid: str) -> str:
         """Get the most recent name for a player GUID."""
