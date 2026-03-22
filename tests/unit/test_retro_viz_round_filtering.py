@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from website.backend.routers.api import get_recent_rounds, get_round_viz
+from website.backend.routers.records_router import get_recent_rounds, get_round_viz
 
 
 class _RecentRoundsDB:
