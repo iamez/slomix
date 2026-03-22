@@ -261,3 +261,36 @@ def normalize_player_name(name: str) -> str:
     # Normalize whitespace
     cleaned = ' '.join(cleaned.split())
     return cleaned.strip()
+
+
+def command_error_handler(command_label: str):
+    """
+    Decorator for Discord command methods that wraps the body in
+    try/except with consistent logging and user-facing error messages.
+
+    Usage::
+
+        @commands.command(name="example")
+        @command_error_handler("example")
+        async def example_command(self, ctx, ...):
+            # no try/except needed
+            ...
+    """
+    import functools
+    import logging as _logging
+
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            # args[0] = self (cog), args[1] = ctx
+            ctx = args[1] if len(args) > 1 else kwargs.get("ctx")
+            try:
+                return await func(*args, **kwargs)
+            except Exception as exc:
+                _logger = _logging.getLogger(func.__module__)
+                _logger.error(f"Error in {command_label}: {exc}", exc_info=True)
+                if ctx:
+                    safe_msg = sanitize_error_message(exc)
+                    await ctx.send(f"Error in {command_label}: {safe_msg}")
+        return wrapper
+    return decorator
