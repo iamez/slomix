@@ -845,9 +845,8 @@ class UltimateETLegacyBot(commands.Bot):
         #     self.voice_session_monitor.start()
         logger.info("✅ Background tasks started (optimized SSH monitoring with voice detection)")
 
-        # ========== WEBSOCKET PUSH NOTIFICATIONS (Optional) ==========
-        # If enabled, bot connects OUT to VPS for instant file notifications
-        # Falls back to SSH polling if WebSocket unavailable/disconnected
+        # WebSocket push notifications: disabled in practice (VPS uses webhook instead).
+        # Kept for potential future use; gated behind WS_ENABLED env var.
         self.ws_client = None
         if self.config.ws_enabled and WS_CLIENT_AVAILABLE:
             try:
@@ -856,13 +855,9 @@ class UltimateETLegacyBot(commands.Bot):
                     on_new_file=self._handle_ws_file_notification
                 )
                 self.ws_client.start()
-                logger.info("🔌 WebSocket client started (push notifications enabled)")
+                logger.info("🔌 WebSocket client started")
             except Exception as e:
-                logger.warning(f"⚠️ WebSocket client failed to start: {e}")
-                logger.info("📡 Falling back to SSH polling only")
-        elif self.config.ws_enabled and not WS_CLIENT_AVAILABLE:
-            logger.warning("⚠️ WS_ENABLED=true but websockets library not installed")
-            logger.info("   Run: pip install websockets")
+                logger.warning(f"⚠️ WebSocket client failed: {e}")
         else:
             logger.debug("📡 WebSocket push disabled (using SSH polling)")
 

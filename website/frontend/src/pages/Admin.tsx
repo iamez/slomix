@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '../components/PageHeader';
 import { GlassPanel } from '../components/GlassPanel';
 import { GlassCard } from '../components/GlassCard';
+import { formatSec } from '../lib/format';
 import { Skeleton } from '../components/Skeleton';
 import { useAuthMe, useLiveStatus } from '../api/hooks';
 
@@ -60,15 +61,6 @@ function StatusDot({ color, pulse }: { color: StatusColor; pulse?: boolean }) {
   );
 }
 
-function formatSec(v: number | undefined | null): string {
-  if (v == null || !Number.isFinite(v)) return '--';
-  const neg = v < 0 ? '-' : '';
-  let s = Math.floor(Math.abs(v));
-  const h = Math.floor(s / 3600); s -= h * 3600;
-  const m = Math.floor(s / 60); s = s % 60;
-  if (h > 0) return `${neg}${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${neg}${m}:${String(s).padStart(2, '0')}`;
-}
 
 function fmtNum(v: number | undefined | null): string {
   if (v == null) return '--';

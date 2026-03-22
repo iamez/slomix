@@ -7,14 +7,12 @@ import { PageHeader } from '../components/PageHeader';
 import { Skeleton } from '../components/Skeleton';
 import { GlassCard } from '../components/GlassCard';
 import { cn } from '../lib/cn';
-import { formatNumber } from '../lib/format';
+import { formatNumber, formatDurationMS } from '../lib/format';
 import { mapLevelshot } from '../lib/game-assets';
 
 function formatDuration(seconds: number): string {
   if (!seconds) return '-';
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
+  return formatDurationMS(seconds);
 }
 
 function mapLabel(name: string): string {
