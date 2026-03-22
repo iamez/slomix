@@ -968,20 +968,9 @@ class SynergyAnalytics(commands.Cog):
         return players if len(players) == 2 else None
 
     async def _get_player_guid(self, player_name: str) -> Optional[str]:
-        """Get player GUID from name"""
-        try:
-            row = await self.bot.db_adapter.fetch_one("""
-                SELECT guid
-                FROM player_aliases
-                WHERE LOWER(alias) LIKE LOWER(?)
-                ORDER BY last_seen DESC
-                LIMIT 1
-            """, (f"%{player_name}%",))
-
-            return row[0] if row else None
-        except Exception as e:
-            logger.warning(f"Error getting player GUID: {e}")
-            return None
+        """Get player GUID from name."""
+        from bot.services.player_resolver_service import resolve_player_guid
+        return await resolve_player_guid(self.bot.db_adapter, player_name)
 
     async def _optimize_teams(self, player_list: List[tuple]) -> dict:
         """
