@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS player_comprehensive_stats (
     time_played_minutes REAL DEFAULT 0,
     time_dead_minutes REAL DEFAULT 0,
     time_dead_ratio REAL DEFAULT 0,
+    time_played_percent REAL DEFAULT 0,
     -- Performance metrics
     xp REAL DEFAULT 0,
     kd_ratio REAL DEFAULT 0,

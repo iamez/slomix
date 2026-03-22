@@ -818,24 +818,9 @@ class UltimateETLegacyBot(commands.Bot):
             await self.load_extension("bot.cogs.automation_commands")
             logger.info("✅ Automation Commands cog loaded")
 
-            # NOTE: SSHMonitor service is DISABLED - endstats_monitor task handles everything
-            # SSHMonitor only downloads + imports, but endstats_monitor also posts to Discord.
-            # Having both running causes a race condition where SSHMonitor processes files first,
-            # marking them as "already processed" before endstats_monitor can post to Discord.
-            #
-            # The endstats_monitor task loop (line ~1315) handles:
-            # 1. SSH connection to game server
-            # 2. File download
-            # 3. Database import
-            # 4. Discord posting via RoundPublisherService
-            #
-            # SSHMonitor service remains available for manual control via !automation commands
-            logger.info(f"🔍 Bot ssh_enabled={self.ssh_enabled} (from SSH_ENABLED env var)")
-            if self.ssh_enabled:
-                logger.info("⏭️ SSHMonitor auto-start DISABLED (endstats_monitor handles SSH + Discord posting)")
-                # await self.ssh_monitor.start_monitoring()  # DISABLED - causes race condition
-            else:
-                logger.info("⏭️ SSH monitoring not enabled, skipping auto-start")
+            # SSHMonitor auto-start disabled: endstats_monitor task handles SSH + Discord posting.
+            # SSHMonitor remains available for manual control via !automation commands.
+            logger.info(f"🔍 Bot ssh_enabled={self.ssh_enabled} (SSHMonitor available for manual use only)")
 
         except Exception as e:
             logger.warning(f"⚠️  Could not initialize automation services: {e}", exc_info=True)

@@ -46,6 +46,7 @@ node_modules/
 gemini-website/dist/
 gemini-website/.next/
 build/
+website/static/modern/
 
 # ============================================
 # DATABASE FILES (NEVER COMMIT)
