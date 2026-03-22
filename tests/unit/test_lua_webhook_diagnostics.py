@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from website.backend.routers.api import get_lua_webhook_diagnostics
+from website.backend.routers.diagnostics_router import get_lua_webhook_diagnostics
 
 
 class _FakeDB:
