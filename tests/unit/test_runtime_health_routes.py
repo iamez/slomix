@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from website.backend.routers import api as api_router
+from website.backend.routers import players_router, records_router
 
 
 def _normalize_sql(query: str) -> str:
@@ -86,7 +86,7 @@ class _AwardsLeaderboardDB:
 async def test_get_player_round_details_uses_postgres_columns_and_derives_hits():
     db = _PlayerRoundDetailsDB()
 
-    payload = await api_router.get_player_round_details(
+    payload = await players_router.get_player_round_details(
         round_id=10021,
         player_guid="2B5938F5",
         db=db,
@@ -123,11 +123,11 @@ async def test_awards_leaderboard_groups_by_projected_guid_expression(monkeypatc
     async def _resolve_display_name(_db, _guid, fallback):
         return fallback
 
-    monkeypatch.setattr(api_router, "resolve_alias_guid_map", _resolve_alias_guid_map)
-    monkeypatch.setattr(api_router, "resolve_name_guid_map", _resolve_name_guid_map)
-    monkeypatch.setattr(api_router, "resolve_display_name", _resolve_display_name)
+    monkeypatch.setattr(records_router, "resolve_alias_guid_map", _resolve_alias_guid_map)
+    monkeypatch.setattr(records_router, "resolve_name_guid_map", _resolve_name_guid_map)
+    monkeypatch.setattr(records_router, "resolve_display_name", _resolve_display_name)
 
-    payload = await api_router.get_awards_leaderboard(limit=5, db=db)
+    payload = await records_router.get_awards_leaderboard(limit=5, db=db)
 
     normalized_query = _normalize_sql(db.primary_query)
     # Current query groups by player_key, player_guid, ra.award_name
