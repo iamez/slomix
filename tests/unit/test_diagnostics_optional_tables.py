@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from website.backend.routers import api as api_router
+from website.backend.routers import diagnostics_router as api_router
 
 
 def _normalize_sql(query: str) -> str:
