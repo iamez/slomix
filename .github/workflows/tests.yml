@@ -66,7 +66,7 @@ jobs:
           CACHE_BACKEND: memory
           PROMETHEUS_ENABLED: "false"
           SESSION_SECRET: ci-test-secret-not-for-production
-        run: pytest tests/ -v --tb=short --cov=bot --cov-report=xml --cov-report=term
+        run: pytest tests/ -v --tb=short --cov=bot --cov=website/backend --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673

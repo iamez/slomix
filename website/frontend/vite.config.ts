@@ -7,13 +7,18 @@ const outputDir = path.resolve(__dirname, '../static/modern');
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test-setup.ts'],
+  },
   server: {
     host: '127.0.0.1',
     port: 5173,
   },
-  define: {
-    'process.env.NODE_ENV': JSON.stringify('production'),
-  },
+  define: process.env.VITEST
+    ? {} // Tests need development mode for React.act()
+    : { 'process.env.NODE_ENV': JSON.stringify('production') },
   build: {
     outDir: outputDir,
     emptyOutDir: true,

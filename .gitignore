@@ -46,6 +46,7 @@ node_modules/
 gemini-website/dist/
 gemini-website/.next/
 build/
+website/static/modern/
 
 # ============================================
 # DATABASE FILES (NEVER COMMIT)
@@ -265,6 +266,11 @@ postgres_setup.md
 DATA_ACCURACY_REPORT.md
 TESTING_REQUIRED.md
 WEBSITE_STAT_BUGS_FOUND.md
+
+# ============================================
+# RESTRICTED ACCESS (credentials, SSH docs)
+# ============================================
+/restrictedaccess/
 
 # ============================================
 # DEV DIRECTORIES (NEVER COMMIT)

@@ -35,4 +35,5 @@ export const routeCatalog: RouteSummary[] = [
   { viewId: 'upload-detail', label: 'Upload Detail', description: 'Upload detail and download/share actions', mode: 'modern', migrationWave: 'C', surfaceType: 'mixed' },
   { viewId: 'availability', label: 'Availability', description: 'Planning and promotion flows', mode: 'modern', migrationWave: 'C', surfaceType: 'write/auth-heavy' },
   { viewId: 'admin', label: 'Admin', description: 'Operational diagnostics and tooling', mode: 'modern', migrationWave: 'C', surfaceType: 'write/auth-heavy' },
+  { viewId: 'skill-rating', label: 'ET Rating', description: 'Individual performance skill rating (experimental)', mode: 'modern', migrationWave: 'C', surfaceType: 'read-heavy' },
 ];

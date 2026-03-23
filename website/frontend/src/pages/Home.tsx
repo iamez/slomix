@@ -6,19 +6,11 @@ import { GlassPanel } from '../components/GlassPanel';
 import { PlayerLookup } from '../components/PlayerLookup';
 import { Skeleton } from '../components/Skeleton';
 import { useLatestSession, useLiveStatus, useOverview, useQuickLeaders, useSeason, useTrends } from '../api/hooks';
-import { formatNumber } from '../lib/format';
+import { formatNumber, formatDurationHM as formatDuration } from '../lib/format';
 import { navigateTo, navigateToPlayer } from '../lib/navigation';
 
 function mapLabel(name: string): string {
   return (name || 'Unknown').replace(/^maps[\\/]/, '').replace(/\.(bsp|pk3|arena)$/i, '').replace(/_/g, ' ');
-}
-
-function formatDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return '--';
-  const mins = Math.floor(seconds / 60);
-  const hrs = Math.floor(mins / 60);
-  const remMins = mins % 60;
-  return hrs > 0 ? `${hrs}h ${remMins}m` : `${mins}m`;
 }
 
 function winnerTone(alliesWins: number, axisWins: number) {

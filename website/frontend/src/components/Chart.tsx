@@ -1,22 +1,29 @@
 import { useRef, useEffect } from 'react';
 
-declare const Chart: any;
+/** Minimal Chart.js types for global CDN usage. */
+interface ChartInstance { destroy(): void }
+interface ChartConstructor {
+  new (ctx: CanvasRenderingContext2D | null, config: { type: string; data: ChartData; options?: ChartOptions }): ChartInstance;
+}
+type ChartData = Record<string, unknown>;
+type ChartOptions = Record<string, unknown>;
 
-function getChart(): typeof Chart | null {
-  return typeof window !== 'undefined' && (window as any).Chart ? (window as any).Chart : null;
+function getChart(): ChartConstructor | null {
+  const w = window as unknown as Record<string, unknown>;
+  return typeof window !== 'undefined' && w.Chart ? w.Chart as ChartConstructor : null;
 }
 
 interface ChartProps {
   type: string;
-  data: any;
-  options?: any;
+  data: ChartData;
+  options?: ChartOptions;
   height?: number | string;
   className?: string;
 }
 
 export function ChartCanvas({ type, data, options, height, className }: ChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<any>(null);
+  const chartRef = useRef<ChartInstance | null>(null);
 
   useEffect(() => {
     const ChartJS = getChart();
@@ -43,7 +50,7 @@ export function ChartCanvas({ type, data, options, height, className }: ChartPro
   }
 
   return (
-    <div className={className} style={height ? { height } : undefined}>
+    <div className={className} style={height ? { height } : undefined} role="img" aria-label={`${type} chart`}>
       <canvas ref={canvasRef} />
     </div>
   );
