@@ -15,7 +15,6 @@ Each metric is percentile-normalized (0.0 to 1.0) against the player population.
 
 import json
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

@@ -758,7 +758,7 @@ async def get_session_graph_stats(
         triple_kills = row[26] or 0
         quad_kills = row[27] or 0
         mega_kills = row[28] or 0
-        bullets_fired = row[29] or 0
+        _bullets_fired = row[29] or 0  # noqa: F841 — reserved for accuracy calc
         time_played_percent = float(row[30]) if row[30] else 0.0
 
         if name not in player_stats:
@@ -1513,7 +1513,7 @@ async def get_stats_session_detail(
         dpm = round(float(pr[6]), 1) if pr[6] else 0
         kd = float(pr[7]) if pr[7] else 0
         headshot_kills = pr[8] or 0
-        total_kills_for_hs = pr[9] or 0
+        _total_kills_for_hs = pr[9] or 0  # noqa: F841 — reserved for future headshot% calc
         gibs = pr[10] or 0
         self_kills = pr[11] or 0
         revives_given = pr[12] or 0

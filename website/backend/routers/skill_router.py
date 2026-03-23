@@ -9,7 +9,6 @@ from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.services.skill_rating_service import (
-    compute_all_ratings,
     compute_and_store_ratings,
     WEIGHTS,
     CONSTANT,
