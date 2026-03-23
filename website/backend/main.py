@@ -50,7 +50,7 @@ setup_logging(
 
 logger = get_app_logger(__name__)
 
-from website.backend.routers import api, auth, predictions, greatshot, greatshot_topshots, uploads, availability, planning
+from website.backend.routers import auth, predictions, greatshot, greatshot_topshots, uploads, availability, planning, proximity_router, diagnostics_router, sessions_router, players_router, records_router, skill_router
 from website.backend.dependencies import init_db_pool, close_db_pool, get_db_pool
 from website.backend.services.greatshot_store import get_greatshot_storage
 from website.backend.services.greatshot_jobs import (
@@ -257,7 +257,6 @@ async def add_security_headers(request, call_next):
     return response
 
 # Include Routers
-app.include_router(api.router, prefix="/api", tags=["API"])
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(predictions.router, prefix="/api/predictions", tags=["Predictions"])
 app.include_router(greatshot.router, prefix="/api", tags=["Greatshot"])
@@ -265,6 +264,12 @@ app.include_router(greatshot_topshots.router, prefix="/api", tags=["Greatshot To
 app.include_router(uploads.router, prefix="/api/uploads", tags=["Uploads"])
 app.include_router(availability.router, prefix="/api/availability", tags=["Availability"])
 app.include_router(planning.router, prefix="/api/planning", tags=["Planning"])
+app.include_router(proximity_router.router, prefix="/api", tags=["Proximity"])
+app.include_router(diagnostics_router.router, prefix="/api", tags=["Diagnostics"])
+app.include_router(sessions_router.router, prefix="/api", tags=["Sessions"])
+app.include_router(players_router.router, prefix="/api", tags=["Players"])
+app.include_router(records_router.router, prefix="/api", tags=["Records"])
+app.include_router(skill_router.router, prefix="/api", tags=["Skill Rating"])
 
 if PROMETHEUS_ENABLED and Instrumentator is not None:
     instrumentator = Instrumentator(excluded_handlers=["/metrics"])

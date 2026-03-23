@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from website.backend.routers import api as api_router
+from website.backend.routers import sessions_router as api_router
 
 
 @pytest.mark.skip(reason="get_match_details uses a fixed query without _PLAYER_STATS_COLUMNS_CACHE; test needs full rewrite for current 25-column query shape")

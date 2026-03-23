@@ -7,7 +7,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Skeleton } from '../components/Skeleton';
 import { useSessions } from '../api/hooks';
 import { mapLevelshot } from '../lib/game-assets';
-import { formatNumber } from '../lib/format';
+import { formatNumber, formatDurationHM as formatDuration } from '../lib/format';
 import { navigateTo } from '../lib/navigation';
 
 const PAGE_SIZE = 15;
@@ -18,14 +18,6 @@ function mapLabel(name: string): string {
 
 function stripEtColors(text: string): string {
   return text.replace(/\^[0-9A-Za-z]/g, '');
-}
-
-function formatDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return '--';
-  const mins = Math.floor(seconds / 60);
-  const hrs = Math.floor(mins / 60);
-  const remMins = mins % 60;
-  return hrs > 0 ? `${hrs}h ${remMins}m` : `${mins}m`;
 }
 
 function sessionHash(session: SessionSummary) {

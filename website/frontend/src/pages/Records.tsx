@@ -141,6 +141,7 @@ function RecordModal({
           <button
             className="text-slate-400 hover:text-white transition"
             onClick={onClose}
+            aria-label="Close detail panel"
           >
             <X className="w-5 h-5" />
           </button>

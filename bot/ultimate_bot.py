@@ -818,24 +818,9 @@ class UltimateETLegacyBot(commands.Bot):
             await self.load_extension("bot.cogs.automation_commands")
             logger.info("✅ Automation Commands cog loaded")
 
-            # NOTE: SSHMonitor service is DISABLED - endstats_monitor task handles everything
-            # SSHMonitor only downloads + imports, but endstats_monitor also posts to Discord.
-            # Having both running causes a race condition where SSHMonitor processes files first,
-            # marking them as "already processed" before endstats_monitor can post to Discord.
-            #
-            # The endstats_monitor task loop (line ~1315) handles:
-            # 1. SSH connection to game server
-            # 2. File download
-            # 3. Database import
-            # 4. Discord posting via RoundPublisherService
-            #
-            # SSHMonitor service remains available for manual control via !automation commands
-            logger.info(f"🔍 Bot ssh_enabled={self.ssh_enabled} (from SSH_ENABLED env var)")
-            if self.ssh_enabled:
-                logger.info("⏭️ SSHMonitor auto-start DISABLED (endstats_monitor handles SSH + Discord posting)")
-                # await self.ssh_monitor.start_monitoring()  # DISABLED - causes race condition
-            else:
-                logger.info("⏭️ SSH monitoring not enabled, skipping auto-start")
+            # SSHMonitor auto-start disabled: endstats_monitor task handles SSH + Discord posting.
+            # SSHMonitor remains available for manual control via !automation commands.
+            logger.info(f"🔍 Bot ssh_enabled={self.ssh_enabled} (SSHMonitor available for manual use only)")
 
         except Exception as e:
             logger.warning(f"⚠️  Could not initialize automation services: {e}", exc_info=True)
@@ -860,9 +845,8 @@ class UltimateETLegacyBot(commands.Bot):
         #     self.voice_session_monitor.start()
         logger.info("✅ Background tasks started (optimized SSH monitoring with voice detection)")
 
-        # ========== WEBSOCKET PUSH NOTIFICATIONS (Optional) ==========
-        # If enabled, bot connects OUT to VPS for instant file notifications
-        # Falls back to SSH polling if WebSocket unavailable/disconnected
+        # WebSocket push notifications: disabled in practice (VPS uses webhook instead).
+        # Kept for potential future use; gated behind WS_ENABLED env var.
         self.ws_client = None
         if self.config.ws_enabled and WS_CLIENT_AVAILABLE:
             try:
@@ -871,13 +855,9 @@ class UltimateETLegacyBot(commands.Bot):
                     on_new_file=self._handle_ws_file_notification
                 )
                 self.ws_client.start()
-                logger.info("🔌 WebSocket client started (push notifications enabled)")
+                logger.info("🔌 WebSocket client started")
             except Exception as e:
-                logger.warning(f"⚠️ WebSocket client failed to start: {e}")
-                logger.info("📡 Falling back to SSH polling only")
-        elif self.config.ws_enabled and not WS_CLIENT_AVAILABLE:
-            logger.warning("⚠️ WS_ENABLED=true but websockets library not installed")
-            logger.info("   Run: pip install websockets")
+                logger.warning(f"⚠️ WebSocket client failed: {e}")
         else:
             logger.debug("📡 WebSocket push disabled (using SSH polling)")
 

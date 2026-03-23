@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from bot.services.session_stats_aggregator import SessionStatsAggregator
-from website.backend.routers.api import get_session_graph_stats
+from website.backend.routers.sessions_router import get_session_graph_stats
 
 
 class _AggDB:

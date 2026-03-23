@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from website.backend.routers.api import get_round_linkage_diagnostics
+from website.backend.routers.diagnostics_router import get_round_linkage_diagnostics
 
 
 class _FakeDB:

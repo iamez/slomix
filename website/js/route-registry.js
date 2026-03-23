@@ -243,6 +243,15 @@ const ROUTE_DEFINITIONS = Object.freeze({
         buildHash: () => '#/retro-viz',
         load: ({ legacy }) => legacy.loadRetroVizView(),
     },
+    'skill-rating': {
+        viewId: 'skill-rating',
+        label: 'ET Rating',
+        mode: VIEW_MODE.MODERN,
+        surfaceType: 'read-heavy',
+        migrationWave: 'C',
+        buildHash: () => '#/skill-rating',
+        load: () => undefined,
+    },
     sessions2: {
         viewId: 'sessions2',
         label: 'Sessions 2.0',
