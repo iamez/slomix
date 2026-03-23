@@ -80,6 +80,8 @@ export function DataTable<T>({
                   col.headerClassName,
                 )}
                 onClick={col.sortable ? () => toggleSort(col.key) : undefined}
+                aria-sort={col.sortable && sort?.key === col.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+                role={col.sortable ? 'columnheader button' : 'columnheader'}
               >
                 <span className="inline-flex items-center gap-1">
                   {col.label}

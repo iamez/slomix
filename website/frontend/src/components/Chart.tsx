@@ -50,7 +50,7 @@ export function ChartCanvas({ type, data, options, height, className }: ChartPro
   }
 
   return (
-    <div className={className} style={height ? { height } : undefined}>
+    <div className={className} style={height ? { height } : undefined} role="img" aria-label={`${type} chart`}>
       <canvas ref={canvasRef} />
     </div>
   );
