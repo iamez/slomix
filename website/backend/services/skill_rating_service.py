@@ -13,6 +13,7 @@ Formula:
 Each metric is percentile-normalized (0.0 to 1.0) against the player population.
 """
 
+import bisect
 import json
 import logging
 
@@ -41,7 +42,7 @@ async def compute_population_percentiles(db) -> dict:
     Query aggregate stats for all players with enough rounds,
     return percentile breakpoints for each metric.
     """
-    rows = await db.fetch_all(f"""
+    rows = await db.fetch_all("""
         SELECT
             player_guid,
             COUNT(*) as rounds,
@@ -69,8 +70,8 @@ async def compute_population_percentiles(db) -> dict:
             COALESCE(AVG(NULLIF(accuracy, 0)), 0) as avg_accuracy
         FROM player_comprehensive_stats
         GROUP BY player_guid
-        HAVING COUNT(*) >= {MIN_ROUNDS}
-    """)
+        HAVING COUNT(*) >= $1
+    """, (MIN_ROUNDS,))
 
     if not rows:
         return {}
@@ -92,13 +93,13 @@ async def compute_population_percentiles(db) -> dict:
 
 
 def _percentile(sorted_values: list, value: float) -> float:
-    """Return 0.0–1.0 percentile of value within sorted list."""
+    """Return 0.0–1.0 percentile of value within sorted list (O(log n))."""
     if not sorted_values:
         return 0.5
     n = len(sorted_values)
-    count_below = sum(1 for v in sorted_values if v < value)
-    count_equal = sum(1 for v in sorted_values if v == value)
-    return (count_below + count_equal * 0.5) / n
+    left = bisect.bisect_left(sorted_values, value)
+    right = bisect.bisect_right(sorted_values, value)
+    return (left + right) / (2 * n)
 
 
 def calculate_et_rating(player_stats: dict, percentiles: dict) -> tuple[float, dict]:
@@ -144,7 +145,7 @@ async def compute_all_ratings(db) -> list[dict]:
         return []
 
     logger.info("Querying player aggregates...")
-    rows = await db.fetch_all(f"""
+    rows = await db.fetch_all("""
         SELECT
             player_guid,
             MAX(player_name) as display_name,
@@ -173,9 +174,9 @@ async def compute_all_ratings(db) -> list[dict]:
             COALESCE(AVG(NULLIF(accuracy, 0)), 0) as avg_accuracy
         FROM player_comprehensive_stats
         GROUP BY player_guid
-        HAVING COUNT(*) >= {MIN_ROUNDS}
+        HAVING COUNT(*) >= $1
         ORDER BY player_guid
-    """)
+    """, (MIN_ROUNDS,))
 
     results = []
     for r in rows:

@@ -22,16 +22,9 @@ logger = get_app_logger("api.skill")
 @router.get("/skill/leaderboard")
 async def get_skill_leaderboard(
     limit: int = 50,
-    recalculate: bool = False,
     db: DatabaseAdapter = Depends(get_db),
 ):
-    """
-    Skill rating leaderboard.
-    Pass recalculate=true to recompute from scratch (slow first time).
-    """
-    if recalculate:
-        count = await compute_and_store_ratings(db)
-        logger.info(f"Recalculated {count} player ratings")
+    """Skill rating leaderboard. Auto-computes once if table is empty."""
 
     rows = await db.fetch_all(
         """SELECT player_guid, display_name, et_rating, games_rated,
@@ -61,8 +54,11 @@ async def get_skill_leaderboard(
     players = []
     for i, r in enumerate(rows):
         components = r[5]
-        if isinstance(components, str):
-            components = json.loads(components)
+        try:
+            if isinstance(components, str):
+                components = json.loads(components)
+        except (ValueError, json.JSONDecodeError):
+            components = {}
 
         players.append({
             "rank": i + 1,
@@ -118,15 +114,18 @@ async def get_player_skill(
     if isinstance(components, str):
         components = json.loads(components)
 
-    # Get rank
+    # Get rank + total in one query
     rank_row = await db.fetch_one(
-        "SELECT COUNT(*) + 1 FROM player_skill_ratings WHERE et_rating > $1",
-        (float(row[2]),),
+        """SELECT rank, total FROM (
+            SELECT player_guid,
+                   ROW_NUMBER() OVER (ORDER BY et_rating DESC) as rank,
+                   COUNT(*) OVER () as total
+            FROM player_skill_ratings
+        ) sub WHERE player_guid = $1""",
+        (row[0],),
     )
     rank = int(rank_row[0]) if rank_row else 0
-
-    total_row = await db.fetch_one("SELECT COUNT(*) FROM player_skill_ratings")
-    total = int(total_row[0]) if total_row else 0
+    total = int(rank_row[1]) if rank_row else 0
 
     return {
         "status": "ok",

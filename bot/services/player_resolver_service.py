@@ -12,6 +12,8 @@ and synergy_analytics with a single canonical lookup chain:
 import logging
 from typing import Optional, List
 
+from bot.core.utils import escape_like_pattern
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,12 +52,13 @@ async def resolve_player_guid(db_adapter, identifier: str) -> Optional[str]:
     if row and row[0]:
         return row[0]
 
-    # 3. Partial name LIKE
+    # 3. Partial name LIKE (escaped to prevent wildcard injection)
+    escaped = escape_like_pattern(identifier)
     row = await db_adapter.fetch_one(
         """SELECT player_guid FROM player_comprehensive_stats
            WHERE LOWER(player_name) LIKE LOWER(?)
            GROUP BY player_guid ORDER BY MAX(round_date) DESC LIMIT 1""",
-        (f"%{identifier}%",),
+        (f"%{escaped}%",),
     )
     if row and row[0]:
         return row[0]
@@ -66,7 +69,7 @@ async def resolve_player_guid(db_adapter, identifier: str) -> Optional[str]:
             """SELECT guid FROM player_aliases
                WHERE LOWER(alias) LIKE LOWER(?)
                ORDER BY last_seen DESC LIMIT 1""",
-            (f"%{identifier}%",),
+            (f"%{escaped}%",),
         )
         if row and row[0]:
             return row[0]
