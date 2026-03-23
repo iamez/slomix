@@ -297,7 +297,7 @@ function MapStrip({
             >
               <img
                 src={mapLevelshot(match.map_name)}
-                alt=""
+                alt={match.map_name || 'Map'}
                 className="w-full h-full object-cover opacity-60 group-hover:opacity-75 transition"
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />

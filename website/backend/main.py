@@ -50,7 +50,7 @@ setup_logging(
 
 logger = get_app_logger(__name__)
 
-from website.backend.routers import api, auth, predictions, greatshot, greatshot_topshots, uploads, availability, planning, proximity_router, diagnostics_router, sessions_router, players_router, records_router
+from website.backend.routers import auth, predictions, greatshot, greatshot_topshots, uploads, availability, planning, proximity_router, diagnostics_router, sessions_router, players_router, records_router
 from website.backend.dependencies import init_db_pool, close_db_pool, get_db_pool
 from website.backend.services.greatshot_store import get_greatshot_storage
 from website.backend.services.greatshot_jobs import (
@@ -257,7 +257,6 @@ async def add_security_headers(request, call_next):
     return response
 
 # Include Routers
-app.include_router(api.router, prefix="/api", tags=["API"])
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(predictions.router, prefix="/api/predictions", tags=["Predictions"])
 app.include_router(greatshot.router, prefix="/api", tags=["Greatshot"])
