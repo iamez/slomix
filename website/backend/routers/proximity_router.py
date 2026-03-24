@@ -4184,3 +4184,38 @@ async def get_proximity_movement_stats(
     except Exception as e:
         logger.warning("Proximity movement-stats error: %s", e)
         return {"status": "error", "detail": "Internal error"}
+
+
+# ===== PROXIMITY COMPOSITE SCORES (v5.2) =======================================
+
+@router.get("/proximity/prox-scores")
+async def get_prox_scores(
+    range_days: int = 30,
+    player_guid: Optional[str] = None,
+    limit: int = 50,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Proximity composite scores: prox_combat, prox_team, prox_gamesense, prox_overall.
+    Percentile-based scoring across all proximity metrics.
+    """
+    from website.backend.services.prox_scoring import compute_prox_scores
+    try:
+        results = await compute_prox_scores(db, range_days, player_guid)
+        return {
+            "status": "ok",
+            "version": "1.0",
+            "range_days": range_days,
+            "player_count": len(results),
+            "players": results[:limit],
+        }
+    except Exception as e:
+        logger.warning("Proximity prox-scores error: %s", e)
+        return {"status": "error", "detail": str(e)}
+
+
+@router.get("/proximity/prox-scores/formula")
+async def get_prox_scores_formula():
+    """Return current formula config (weights, metrics, categories) for transparency."""
+    from website.backend.services.prox_scoring import get_formula_config
+    return {"status": "ok", **get_formula_config()}

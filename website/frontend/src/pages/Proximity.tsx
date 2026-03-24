@@ -7,8 +7,8 @@ import { Skeleton } from '../components/Skeleton';
 import { DataTable, type Column } from '../components/DataTable';
 import { InfoTip } from '../components/InfoTip';
 import { ProximityIntro } from '../components/ProximityIntro';
-import { useProximityLeaderboards, useProximitySessionScores, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, useKillLines, useMovementStats } from '../api/hooks';
-import type { ProximityLeaderboardEntry, SessionScoreEntry, HitRegionPlayer, HeadshotRateEntry, MovementStatsPlayer } from '../api/types';
+import { useProximityLeaderboards, useProximitySessionScores, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, useKillLines, useDangerZones, useMovementStats, useProxScores, useProxFormula } from '../api/hooks';
+import type { ProximityLeaderboardEntry, SessionScoreEntry, HitRegionPlayer, HeadshotRateEntry, MovementStatsPlayer, ProxScorePlayer } from '../api/types';
 import { METRICS, LEADERBOARD_HELP } from './proximity-glossary';
 
 const API = '/api';
@@ -250,6 +250,118 @@ function TradesPanel({ summary, events }: { summary: TradesSummary | null; event
   );
 }
 
+// ── Proximity Composite Scores ───────────────────────────────────────────────
+
+const SCORE_COLORS = {
+  prox_combat: '#ef4444',
+  prox_team: '#60a5fa',
+  prox_gamesense: '#f59e0b',
+  prox_overall: '#22c55e',
+};
+
+function ProxScoresPanel() {
+  const [rangeDays, setRangeDays] = useState(30);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const { data, isLoading } = useProxScores(rangeDays, undefined, 30);
+  const { data: formula } = useProxFormula();
+
+  if (isLoading) return <Skeleton variant="card" count={1} />;
+
+  const players = data?.players ?? [];
+  if (players.length === 0) return null;
+
+  return (
+    <div className="mt-6">
+      <GlassPanel>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">
+              Proximity Score
+            </div>
+            <div className="text-[10px] text-slate-500">
+              Composite rating from {Object.keys(formula?.categories ?? {}).length || 3} categories, {
+                Object.values(formula?.categories ?? {}).reduce((a, c) => a + Object.keys(c.metrics).length, 0) || 18
+              } metrics — v{data?.version ?? '1.0'}
+            </div>
+          </div>
+          <div className="flex gap-1">
+            {[14, 30, 90].map(d => (
+              <button
+                key={d}
+                className={`px-2 py-0.5 rounded text-[10px] font-medium ${rangeDays === d ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
+                onClick={() => setRangeDays(d)}
+              >{d}d</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Header row */}
+        <div className="grid grid-cols-[2rem_1fr_4rem_4rem_4rem_4.5rem] gap-1 text-[10px] text-slate-500 font-bold uppercase mb-1 px-1">
+          <span>#</span>
+          <span>Player</span>
+          <span className="text-right" style={{ color: SCORE_COLORS.prox_combat }}>Combat</span>
+          <span className="text-right" style={{ color: SCORE_COLORS.prox_team }}>Team</span>
+          <span className="text-right" style={{ color: SCORE_COLORS.prox_gamesense }}>Sense</span>
+          <span className="text-right" style={{ color: SCORE_COLORS.prox_overall }}>Overall</span>
+        </div>
+
+        <div className="space-y-0.5">
+          {players.map(p => (
+            <div key={p.guid}>
+              <button
+                className="w-full grid grid-cols-[2rem_1fr_4rem_4rem_4rem_4.5rem] gap-1 items-center text-xs px-1 py-1 rounded hover:bg-slate-800/50 transition-colors"
+                onClick={() => setExpanded(expanded === p.guid ? null : p.guid)}
+              >
+                <span className="text-slate-600 font-mono text-right">{p.rank}</span>
+                <span className="truncate text-slate-200 text-left">{stripColors(p.name)}</span>
+                <span className="font-mono font-bold text-right" style={{ color: SCORE_COLORS.prox_combat }}>{p.prox_combat.toFixed(1)}</span>
+                <span className="font-mono font-bold text-right" style={{ color: SCORE_COLORS.prox_team }}>{p.prox_team.toFixed(1)}</span>
+                <span className="font-mono font-bold text-right" style={{ color: SCORE_COLORS.prox_gamesense }}>{p.prox_gamesense.toFixed(1)}</span>
+                <span className="font-mono font-black text-right" style={{ color: SCORE_COLORS.prox_overall }}>{p.prox_overall.toFixed(1)}</span>
+              </button>
+
+              {/* Expanded breakdown */}
+              {expanded === p.guid && (
+                <div className="ml-8 mb-2 p-2 rounded bg-slate-800/30 border border-slate-700/30">
+                  {/* Mini radar */}
+                  <div className="flex gap-4 mb-2">
+                    {p.prox_radar.map((axis, i) => (
+                      <div key={i} className="text-center">
+                        <div className="text-[10px] text-slate-500">{axis.label}</div>
+                        <div className="text-sm font-bold text-white">{axis.value.toFixed(0)}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Per-category metric breakdown */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {Object.entries(p.breakdown).map(([catKey, metrics]) => (
+                      <div key={catKey}>
+                        <div className="text-[10px] font-bold uppercase mb-1" style={{ color: SCORE_COLORS[catKey as keyof typeof SCORE_COLORS] ?? '#94a3b8' }}>
+                          {formula?.categories?.[catKey]?.label ?? catKey}
+                        </div>
+                        {Object.entries(metrics).map(([mk, m]) => (
+                          <div key={mk} className="flex items-center gap-1 text-[10px]">
+                            <span className="text-slate-500 w-20 truncate">{m.label}</span>
+                            <div className="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden">
+                              <div className="h-full rounded-full bg-cyan-500/60" style={{ width: `${m.percentile * 100}%` }} />
+                            </div>
+                            <span className="text-slate-400 font-mono w-8 text-right">{(m.percentile * 100).toFixed(0)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-[10px] text-slate-600 mt-1">{p.engagements} engagements, {p.tracks} tracks</div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </GlassPanel>
+    </div>
+  );
+}
+
 // ── Kill Outcomes (v5.2) ─────────────────────────────────────────────────────
 
 const OUTCOME_COLORS: Record<string, string> = {
@@ -289,7 +401,7 @@ function KillOutcomesPanel() {
         <div className="text-[10px] text-slate-500 mb-4">
           What happens after each kill — gibbed, revived by medic, or tapped out
         </div>
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-4">
           <div className="text-center">
             <div className="text-[10px] text-slate-500">Total Kills</div>
             <div className="text-lg font-bold text-white">{s.total_kills}</div>
@@ -301,6 +413,14 @@ function KillOutcomesPanel() {
           <div className="text-center">
             <div className="text-[10px] text-slate-500">Revive Rate</div>
             <div className="text-lg font-bold text-emerald-400">{s.revive_rate}%</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[10px] text-slate-500">Avg Outcome</div>
+            <div className="text-lg font-bold text-amber-400">{s.avg_delta_ms ? `${(s.avg_delta_ms / 1000).toFixed(1)}s` : '--'}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[10px] text-slate-500">Avg Denied</div>
+            <div className="text-lg font-bold text-purple-400">{s.avg_denied_ms ? `${(s.avg_denied_ms / 1000).toFixed(1)}s` : '--'}</div>
           </div>
         </div>
         <div className="space-y-2">
@@ -336,7 +456,7 @@ function KillOutcomesPanel() {
                 <span className="w-4 text-right text-slate-600 font-mono">{i + 1}</span>
                 <span className="flex-1 truncate text-slate-200">{stripColors(p.name)}</span>
                 <span className="text-cyan-400 font-mono font-bold w-14 text-right">{(p.kpr * 100).toFixed(1)}%</span>
-                <span className="text-slate-500 text-[10px] w-20 text-right">{p.gibs}G / {p.revives_against}R / {p.tapouts}T</span>
+                <span className="text-slate-500 text-[10px] w-28 text-right">{p.gibs}G/{p.revives_against}R/{p.tapouts}T {p.avg_denied_ms ? `${(p.avg_denied_ms / 1000).toFixed(1)}s` : ''}</span>
               </div>
             ))}
           </div>
@@ -357,7 +477,7 @@ function KillOutcomesPanel() {
                   <span className="w-4 text-right text-slate-600 font-mono">{i + 1}</span>
                   <span className="flex-1 truncate text-slate-200">{stripColors(p.name)}</span>
                   <span className="text-emerald-400 font-mono font-bold w-14 text-right">{(p.revive_rate * 100).toFixed(1)}%</span>
-                  <span className="text-slate-500 text-[10px] w-20 text-right">{p.times_revived}R / {p.times_killed} deaths</span>
+                  <span className="text-slate-500 text-[10px] w-28 text-right">{p.times_revived}R/{p.times_killed}D {p.avg_wait_ms ? `${(p.avg_wait_ms / 1000).toFixed(1)}s wait` : ''}</span>
                 </div>
               ))}
             </div>
@@ -430,7 +550,7 @@ function HitRegionsPanel() {
               })}
             </div>
             <div className="text-center text-[10px] text-slate-500 mb-3">
-              {totalHits.toLocaleString()} total hits tracked
+              {totalHits.toLocaleString()} hits &middot; {players.reduce((a, p) => a + p.total_damage, 0).toLocaleString()} damage tracked
             </div>
           </>
         )}
@@ -633,6 +753,160 @@ function MovementStatsPanel() {
             </div>
           ))}
         </div>
+      </GlassPanel>
+    </div>
+  );
+}
+
+// ── Danger Zones (v5.2) ─────────────────────────────────────────────────────
+
+const CLASS_COLORS: Record<string, string> = {
+  SOLDIER: '#ef4444', MEDIC: '#22c55e', ENGINEER: '#f59e0b', FIELDOPS: '#60a5fa', COVERTOPS: '#a855f7',
+};
+
+function DangerZonesPanel() {
+  const [mapName, setMapName] = useState('');
+  const [classFilter, setClassFilter] = useState<string | undefined>(undefined);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const { data, isLoading } = useDangerZones(mapName, { victimClass: classFilter, rangeDays: 30 });
+  const zones = data?.zones ?? [];
+  const gridSize = data?.grid_size ?? 512;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !mapName) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, W, H);
+
+    if (zones.length === 0) {
+      ctx.fillStyle = '#64748b';
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('No danger zone data for this map', W / 2, H / 2);
+      return;
+    }
+
+    const maxDeaths = Math.max(...zones.map(z => z.deaths), 1);
+    for (const zone of zones) {
+      const nx = (zone.x / gridSize) * W;
+      const ny = (zone.y / gridSize) * H;
+      const intensity = zone.deaths / maxDeaths;
+      const radius = 6 + intensity * 18;
+
+      // Color by dominant class
+      const classes = zone.classes ?? {};
+      const dominant = Object.entries(classes).sort((a, b) => b[1] - a[1])[0];
+      const baseColor = dominant ? (CLASS_COLORS[dominant[0]] ?? '#64748b') : '#64748b';
+      const alpha = 0.25 + intensity * 0.55;
+
+      ctx.beginPath();
+      ctx.arc(nx, ny, radius, 0, Math.PI * 2);
+      // Convert hex to rgba
+      const r = parseInt(baseColor.slice(1, 3), 16);
+      const g = parseInt(baseColor.slice(3, 5), 16);
+      const b = parseInt(baseColor.slice(5, 7), 16);
+      ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+      ctx.fill();
+
+      // Death count label for large zones
+      if (intensity > 0.3) {
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(zone.deaths), nx, ny + 3);
+      }
+    }
+  }, [zones, mapName, gridSize]);
+
+  const totalDeaths = zones.reduce((a, z) => a + z.deaths, 0);
+  // Aggregate class breakdown across all zones
+  const classBreakdown: Record<string, number> = {};
+  for (const zone of zones) {
+    for (const [cls, count] of Object.entries(zone.classes ?? {})) {
+      classBreakdown[cls] = (classBreakdown[cls] ?? 0) + count;
+    }
+  }
+  const classSorted = Object.entries(classBreakdown).sort((a, b) => b[1] - a[1]);
+
+  return (
+    <div className="mt-6">
+      <GlassPanel>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">
+              Danger Zones
+            </div>
+            <div className="text-[10px] text-slate-500">
+              Death hotspots colored by class — where do players die most? (last 30 days)
+            </div>
+          </div>
+          <div className="flex gap-2 items-center">
+            <input
+              type="text"
+              placeholder="Map name..."
+              value={mapName}
+              onChange={e => setMapName(e.target.value)}
+              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-32 focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+        </div>
+
+        {/* Class filter buttons */}
+        <div className="flex gap-1 mb-3 flex-wrap">
+          <button
+            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${!classFilter ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
+            onClick={() => setClassFilter(undefined)}
+          >All</button>
+          {Object.entries(CLASS_COLORS).map(([cls, color]) => (
+            <button
+              key={cls}
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors border ${classFilter === cls ? 'border-current' : 'border-slate-700 bg-slate-800'}`}
+              style={{ color: classFilter === cls ? color : undefined }}
+              onClick={() => setClassFilter(classFilter === cls ? undefined : cls)}
+            >{cls}</button>
+          ))}
+        </div>
+
+        {!mapName ? (
+          <div className="flex items-center justify-center h-48 text-xs text-slate-500">
+            Enter a map name to view danger zones
+          </div>
+        ) : isLoading ? (
+          <Skeleton variant="card" count={1} />
+        ) : (
+          <div className="flex gap-4">
+            <canvas ref={canvasRef} width={512} height={512} className="rounded-lg border border-slate-700/50 flex-shrink-0" />
+            {/* Class breakdown sidebar */}
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] text-slate-500 mb-2">{totalDeaths} deaths in {zones.length} zones</div>
+              {classSorted.length > 0 && (
+                <div className="space-y-1.5">
+                  {classSorted.map(([cls, count]) => (
+                    <div key={cls} className="flex items-center gap-2 text-xs">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: CLASS_COLORS[cls] ?? '#64748b' }} />
+                      <span className="text-slate-300 w-20">{cls}</span>
+                      <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div className="h-full rounded-full" style={{
+                          width: `${totalDeaths > 0 ? (count / totalDeaths) * 100 : 0}%`,
+                          backgroundColor: CLASS_COLORS[cls] ?? '#64748b',
+                        }} />
+                      </div>
+                      <span className="text-slate-400 font-mono text-[10px] w-12 text-right">
+                        {totalDeaths > 0 ? ((count / totalDeaths) * 100).toFixed(0) : 0}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </GlassPanel>
     </div>
   );
@@ -1269,17 +1543,23 @@ export default function Proximity() {
         </div>
       )}
 
-      {/* Kill Outcomes */}
-      {ready && <KillOutcomesPanel />}
+      {/* Proximity Composite Scores — the main rating */}
+      <ProxScoresPanel />
 
-      {/* Hit Regions */}
-      {ready && <HitRegionsPanel />}
+      {/* Kill Outcomes — global data, always visible */}
+      <KillOutcomesPanel />
+
+      {/* Hit Regions — global data, always visible */}
+      <HitRegionsPanel />
 
       {/* Movement Analytics */}
       <MovementStatsPanel />
 
-      {/* Combat Heatmap */}
-      {ready && <CombatHeatmapPanel />}
+      {/* Danger Zones — class-specific death hotspots */}
+      <DangerZonesPanel />
+
+      {/* Combat Heatmap — global data, always visible */}
+      <CombatHeatmapPanel />
 
       {/* Session Combat Scores */}
       <SessionScorePanel sessionDate={sessionDate} />

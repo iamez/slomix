@@ -1209,6 +1209,67 @@ export interface DangerZonesResponse {
   zones: DangerZone[];
 }
 
+// Proximity Composite Scores (v5.2)
+export interface ProxMetricBreakdown {
+  raw: number | null;
+  percentile: number;
+  weight: number;
+  contribution: number;
+  label: string;
+}
+
+export interface ProxCategoryBreakdown {
+  [metricKey: string]: ProxMetricBreakdown;
+}
+
+export interface ProxRadarAxis {
+  label: string;
+  value: number;
+}
+
+export interface ProxScorePlayer {
+  rank: number;
+  guid: string;
+  name: string;
+  engagements: number;
+  tracks: number;
+  prox_combat: number;
+  prox_team: number;
+  prox_gamesense: number;
+  prox_overall: number;
+  prox_radar: ProxRadarAxis[];
+  breakdown: Record<string, ProxCategoryBreakdown>;
+}
+
+export interface ProxScoresResponse {
+  status: string;
+  version: string;
+  range_days: number;
+  player_count: number;
+  players: ProxScorePlayer[];
+}
+
+export interface ProxFormulaMetric {
+  label: string;
+  weight: number;
+  invert: boolean;
+}
+
+export interface ProxFormulaCategory {
+  label: string;
+  description: string;
+  weight_in_overall: number;
+  metrics: Record<string, ProxFormulaMetric>;
+}
+
+export interface ProxFormulaResponse {
+  status: string;
+  version: string;
+  min_engagements: number;
+  category_weights: Record<string, number>;
+  categories: Record<string, ProxFormulaCategory>;
+}
+
 // Movement Analytics (Phase A)
 export interface MovementStatsPlayer {
   guid: string;

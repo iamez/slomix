@@ -490,6 +490,37 @@ export const useProximityKillOutcomePlayerStats = (rangeDays = 30, playerGuid?: 
     staleTime: 30_000,
   });
 
+export const useDangerZones = (mapName: string, opts?: { victimClass?: string; rangeDays?: number }) =>
+  useQuery({
+    queryKey: ['danger-zones', mapName, opts],
+    queryFn: () => api.getDangerZones(mapName, opts),
+    enabled: !!mapName,
+    staleTime: 30_000,
+  });
+
+export const useProximityHitRegionsByWeapon = (playerGuid: string, rangeDays = 30) =>
+  useQuery({
+    queryKey: ['proximity-hit-regions-by-weapon', playerGuid, rangeDays],
+    queryFn: () => api.getProximityHitRegionsByWeapon(playerGuid, rangeDays),
+    enabled: !!playerGuid,
+    staleTime: 60_000,
+  });
+
+// Proximity Composite Scores
+export const useProxScores = (rangeDays = 30, playerGuid?: string, limit = 50) =>
+  useQuery({
+    queryKey: ['prox-scores', rangeDays, playerGuid, limit],
+    queryFn: () => api.getProxScores(rangeDays, playerGuid, limit),
+    staleTime: 60_000,
+  });
+
+export const useProxFormula = () =>
+  useQuery({
+    queryKey: ['prox-formula'],
+    queryFn: api.getProxFormula,
+    staleTime: 300_000,
+  });
+
 // Movement Analytics (Phase A)
 export const useMovementStats = (rangeDays = 30, playerGuid?: string) =>
   useQuery({

@@ -243,6 +243,15 @@ export const api = {
     return get<DangerZonesResponse>(`/proximity/combat-positions/danger-zones?${q}`);
   },
 
+  // Proximity Composite Scores
+  getProxScores: (rangeDays = 30, playerGuid?: string, limit = 50) => {
+    const q = new URLSearchParams({ range_days: String(rangeDays), limit: String(limit) });
+    if (playerGuid) q.set('player_guid', playerGuid);
+    return get<import('./types').ProxScoresResponse>(`/proximity/prox-scores?${q}`);
+  },
+  getProxFormula: () =>
+    get<import('./types').ProxFormulaResponse>('/proximity/prox-scores/formula'),
+
   // Movement Analytics
   getMovementStats: (rangeDays = 30, playerGuid?: string) => {
     const q = new URLSearchParams({ range_days: String(rangeDays) });
