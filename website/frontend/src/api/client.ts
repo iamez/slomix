@@ -205,7 +205,7 @@ export const api = {
   getProximityKillOutcomePlayerStats: (rangeDays = 30, playerGuid?: string) => {
     const q = new URLSearchParams({ range_days: String(rangeDays) });
     if (playerGuid) q.set('player_guid', playerGuid);
-    return get<KillOutcomePlayerStatsResponse>(`/proximity/kill-outcomes/player-stats?${q}`);
+    return get<KillOutcomePlayerStatsResponse>(`/proximity/kill-outcomes/player-stats?${q.toString()}`);
   },
 
   // Hit Regions (v5.2)
@@ -215,7 +215,7 @@ export const api = {
     if (params?.session_date) q.set('session_date', params.session_date);
     if (params?.map_name) q.set('map_name', params.map_name);
     if (weaponId != null) q.set('weapon_id', String(weaponId));
-    return get<HitRegionsResponse>(`/proximity/hit-regions?${q}`);
+    return get<HitRegionsResponse>(`/proximity/hit-regions?${q.toString()}`);
   },
   getProximityHitRegionsByWeapon: (playerGuid: string, rangeDays = 30) =>
     get<WeaponHitRegionsResponse>(`/proximity/hit-regions/by-weapon?player_guid=${encodeURIComponent(playerGuid)}&range_days=${rangeDays}`),
@@ -229,25 +229,25 @@ export const api = {
     if (opts?.perspective) q.set('perspective', opts.perspective);
     if (opts?.victimClass) q.set('victim_class', opts.victimClass);
     if (opts?.team) q.set('team', opts.team);
-    return get<CombatHeatmapResponse>(`/proximity/combat-positions/heatmap?${q}`);
+    return get<CombatHeatmapResponse>(`/proximity/combat-positions/heatmap?${q.toString()}`);
   },
   getKillLines: (mapName: string, opts?: { weaponId?: number; attackerGuid?: string; rangeDays?: number; limit?: number }) => {
     const q = new URLSearchParams({ map_name: mapName, range_days: String(opts?.rangeDays ?? 30), limit: String(opts?.limit ?? 100) });
     if (opts?.weaponId != null) q.set('weapon_id', String(opts.weaponId));
     if (opts?.attackerGuid) q.set('attacker_guid', opts.attackerGuid);
-    return get<KillLinesResponse>(`/proximity/combat-positions/kill-lines?${q}`);
+    return get<KillLinesResponse>(`/proximity/combat-positions/kill-lines?${q.toString()}`);
   },
   getDangerZones: (mapName: string, opts?: { victimClass?: string; rangeDays?: number }) => {
     const q = new URLSearchParams({ map_name: mapName, range_days: String(opts?.rangeDays ?? 30) });
     if (opts?.victimClass) q.set('victim_class', opts.victimClass);
-    return get<DangerZonesResponse>(`/proximity/combat-positions/danger-zones?${q}`);
+    return get<DangerZonesResponse>(`/proximity/combat-positions/danger-zones?${q.toString()}`);
   },
 
   // Proximity Composite Scores
   getProxScores: (rangeDays = 30, playerGuid?: string, limit = 50) => {
     const q = new URLSearchParams({ range_days: String(rangeDays), limit: String(limit) });
     if (playerGuid) q.set('player_guid', playerGuid);
-    return get<import('./types').ProxScoresResponse>(`/proximity/prox-scores?${q}`);
+    return get<import('./types').ProxScoresResponse>(`/proximity/prox-scores?${q.toString()}`);
   },
   getProxFormula: () =>
     get<import('./types').ProxFormulaResponse>('/proximity/prox-scores/formula'),
@@ -256,7 +256,7 @@ export const api = {
   getMovementStats: (rangeDays = 30, playerGuid?: string) => {
     const q = new URLSearchParams({ range_days: String(rangeDays) });
     if (playerGuid) q.set('player_guid', playerGuid);
-    return get<import('./types').MovementStatsResponse>(`/proximity/movement-stats?${q}`);
+    return get<import('./types').MovementStatsResponse>(`/proximity/movement-stats?${q.toString()}`);
   },
 
   // Proximity Player Profile

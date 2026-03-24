@@ -137,7 +137,7 @@ function HeroCard({ player }: { player: RatedPlayer }) {
           </div>
           <button
             className="text-2xl font-black text-white hover:text-blue-400 transition truncate block"
-            onClick={() => navigateToPlayer(player.display_name)}
+            onClick={() => { navigateToPlayer(player.display_name); }}
           >
             {player.display_name}
           </button>
@@ -152,10 +152,12 @@ function HeroCard({ player }: { player: RatedPlayer }) {
               .sort(([, a], [, b]) => b.percentile - a.percentile)
               .slice(0, 3)
               .map(([key, comp]) => {
+                // eslint-disable-next-line security/detect-object-injection
                 const Icon = METRIC_ICONS[key] ?? Target;
                 return (
                   <div key={key} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/5">
                     <Icon className="w-3 h-3 text-slate-500" />
+                    {/* eslint-disable-next-line security/detect-object-injection */}
                     <span className="text-[11px] text-slate-400">{METRIC_LABELS[key]}</span>
                     <span className="text-[11px] font-bold text-white">{Math.round(comp.percentile * 100)}%</span>
                   </div>
@@ -176,6 +178,7 @@ function PercentileBar({ metricKey, value, label }: { metricKey: string; value: 
   const tier = isNegative
     ? (pct > 70 ? getTier(0.3) : pct > 40 ? getTier(0.5) : getTier(0.8))
     : getTier(pct > 70 ? 0.9 : pct > 40 ? 0.6 : 0.3);
+  // eslint-disable-next-line security/detect-object-injection
   const Icon = METRIC_ICONS[metricKey] ?? Target;
 
   return (
@@ -350,7 +353,7 @@ export default function SkillRating() {
       )}
 
       {/* Hero - #1 Player */}
-      {topPlayer && <HeroCard player={topPlayer} />}
+      <HeroCard player={topPlayer} />
 
       {/* Rankings list */}
       <div className="table-shell rounded-[24px] overflow-hidden">
@@ -370,7 +373,7 @@ export default function SkillRating() {
             key={p.player_guid}
             player={p}
             isExpanded={expandedGuid === p.player_guid}
-            onToggle={() => setExpandedGuid(expandedGuid === p.player_guid ? null : p.player_guid)}
+            onToggle={() => { setExpandedGuid(expandedGuid === p.player_guid ? null : p.player_guid); }}
           />
         ))}
       </div>

@@ -376,7 +376,7 @@ const SCORE_COLORS: Record<string, string> = {
 
 function PlayerProxScoreSection({ guid }: { guid: string }) {
   const { data } = useProxScores(30, guid, 1);
-  const player = data?.players?.[0];
+  const player = data?.players[0];
   if (!player) return null;
 
   return (
@@ -418,6 +418,7 @@ function PlayerProxScoreSection({ guid }: { guid: string }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {Object.entries(player.breakdown).map(([catKey, metrics]) => (
           <div key={catKey}>
+            {/* eslint-disable-next-line security/detect-object-injection */}
             <div className="text-[10px] font-bold uppercase mb-1.5" style={{ color: SCORE_COLORS[catKey] ?? '#94a3b8' }}>
               {catKey.replace('prox_', '')}
             </div>
@@ -443,8 +444,8 @@ function PlayerProxScoreSection({ guid }: { guid: string }) {
 function PlayerKillOutcomesSection({ guid }: { guid: string }) {
   const { data: stats } = useProximityKillOutcomePlayerStats(90, guid);
 
-  const kprEntry = stats?.kill_permanence_leaders?.find(p => p.guid === guid);
-  const revEntry = stats?.revive_rate_leaders?.find(p => p.guid === guid);
+  const kprEntry = stats?.kill_permanence_leaders.find(p => p.guid === guid);
+  const revEntry = stats?.revive_rate_leaders.find(p => p.guid === guid);
 
   if (!kprEntry && !revEntry) return null;
 
@@ -496,7 +497,7 @@ function PlayerHitRegionsSection({ guid }: { guid: string }) {
   const { data: hitData } = useProximityHitRegions({ range_days: 90 });
   const { data: weaponData } = useProximityHitRegionsByWeapon(guid, 90);
 
-  const player = hitData?.players?.find(p => p.guid === guid);
+  const player = hitData?.players.find(p => p.guid === guid);
   const weapons = weaponData?.weapons ?? [];
 
   if (!player && weapons.length === 0) return null;
@@ -514,6 +515,7 @@ function PlayerHitRegionsSection({ guid }: { guid: string }) {
           </h3>
           <div className="flex items-end gap-2 h-24 mb-3 justify-center">
             {REGION_NAMES.map((name, i) => {
+              // eslint-disable-next-line security/detect-object-injection
               const count = regionCounts[i];
               const pct = total > 0 ? (count / total) * 100 : 0;
               return (
@@ -521,6 +523,7 @@ function PlayerHitRegionsSection({ guid }: { guid: string }) {
                   <span className="text-[10px] font-mono text-slate-300">{pct.toFixed(1)}%</span>
                   <div className="w-full rounded-t" style={{
                     height: `${Math.max((count / maxCount) * 100, 4)}%`,
+                    // eslint-disable-next-line security/detect-object-injection
                     backgroundColor: REGION_COLORS[i],
                     opacity: 0.85,
                   }} />
@@ -575,7 +578,7 @@ function PlayerHitRegionsSection({ guid }: { guid: string }) {
 function PlayerMovementSection({ guid }: { guid: string }) {
   const { data } = useMovementStats(90, guid);
 
-  const player = data?.players?.find(p => p.guid === guid);
+  const player = data?.players.find(p => p.guid === guid);
   if (!player) return null;
 
   const totalStance = player.standing_sec + player.crouching_sec + player.prone_sec;
