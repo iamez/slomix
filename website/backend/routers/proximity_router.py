@@ -2968,15 +2968,7 @@ async def get_proximity_round_team_comparison(
             """,
             (round_id,),
         )
-        # Kill matchups (query result used for future kill-feed feature)
-        _matchups = await db.fetch_all(
-            """
-            SELECT e.attackers, e.target_guid, e.target_name, e.target_team
-            FROM combat_engagement e
-            WHERE e.round_id = $1 AND e.outcome = 'killed'
-            """,
-            (round_id,),
-        )
+        # Kill matchups query reserved for future kill-feed feature
 
         # Build {axis, allies} cohesion dict from array
         empty_cohesion = {"avg_dispersion": None, "avg_max_spread": None, "avg_stragglers": None, "samples": None}

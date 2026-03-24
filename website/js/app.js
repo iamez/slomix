@@ -17,7 +17,7 @@ import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchD
 import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo, initLeaderboardDefaults } from './leaderboard.js';
 import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js';
 import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js';
-import { loadCommunityView } from './community.js';
+
 import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
 import { loadProximityView } from './proximity.js';

@@ -292,5 +292,6 @@ def command_error_handler(command_label: str):
                 if ctx:
                     safe_msg = sanitize_error_message(exc)
                     await ctx.send(f"Error in {command_label}: {safe_msg}")
+                return None
         return wrapper
     return decorator

@@ -635,13 +635,13 @@ class ProximityParserV4:
                         try:
                             self.metadata['axis_spawn_interval'] = int(line.split('=')[1])
                         except ValueError:
-                            pass
+                            self.metadata['axis_spawn_interval'] = 0
                         continue
                     if line.startswith('# allies_spawn_interval='):
                         try:
                             self.metadata['allies_spawn_interval'] = int(line.split('=')[1])
                         except ValueError:
-                            pass
+                            self.metadata['allies_spawn_interval'] = 0
                         continue
                     if line.startswith('# PROXIMITY_TRACKER_V5'):
                         self.metadata['tracker_version'] = 5
