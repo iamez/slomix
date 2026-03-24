@@ -3486,3 +3486,701 @@ async def get_proximity_leaderboards(
     except Exception as e:
         logger.warning("Proximity endpoint error: %s", e)
         return {"status": "error", "detail": "Internal error"}
+
+
+# ===== KILL OUTCOMES (v5.2) =====
+
+
+@router.get("/proximity/kill-outcomes")
+async def get_proximity_kill_outcomes(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    player_guid: Optional[str] = None,
+    limit: int = 200,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Kill outcome summary and events — gib/revive/tapout breakdown."""
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+        player_guid=player_guid, player_guid_columns=["victim_guid", "killer_guid"],
+    )
+    query_params = tuple(params)
+    try:
+        # Summary by outcome type
+        summary_rows = await db.fetch_all(
+            f"""
+            SELECT outcome, COUNT(*) AS cnt,
+                   ROUND(AVG(delta_ms)::numeric, 0) AS avg_delta,
+                   ROUND(AVG(effective_denied_ms)::numeric, 0) AS avg_denied
+            FROM proximity_kill_outcome {where_sql}
+            GROUP BY outcome
+            ORDER BY cnt DESC
+            """,
+            query_params,
+        )
+        total = sum(int(r[1] or 0) for r in (summary_rows or []))
+        outcome_map = {}
+        for r in (summary_rows or []):
+            outcome_map[r[0]] = {
+                "count": int(r[1] or 0),
+                "avg_delta_ms": int(r[2] or 0),
+                "avg_denied_ms": int(r[3] or 0),
+            }
+        gibbed = outcome_map.get("gibbed", {}).get("count", 0)
+        revived = outcome_map.get("revived", {}).get("count", 0)
+        tapped = outcome_map.get("tapped_out", {}).get("count", 0)
+
+        # Recent events
+        safe_limit = max(1, min(limit, 500))
+        events = await db.fetch_all(
+            f"""
+            SELECT kill_time, victim_guid, victim_name, killer_guid, killer_name,
+                   kill_mod, outcome, delta_ms, effective_denied_ms,
+                   gibber_guid, gibber_name, reviver_guid, reviver_name,
+                   session_date, map_name, round_number
+            FROM proximity_kill_outcome {where_sql}
+            ORDER BY session_date DESC, kill_time DESC
+            LIMIT {safe_limit}
+            """,
+            query_params,
+        )
+
+        return {
+            "status": "ok",
+            "scope": scope,
+            "summary": {
+                "total_kills": total,
+                "gibbed": gibbed,
+                "revived": revived,
+                "tapped_out": tapped,
+                "expired": outcome_map.get("expired", {}).get("count", 0),
+                "round_end": outcome_map.get("round_end", {}).get("count", 0),
+                "gib_rate": round(gibbed * 100.0 / total, 1) if total > 0 else 0,
+                "revive_rate": round(revived * 100.0 / total, 1) if total > 0 else 0,
+                "avg_delta_ms": outcome_map.get("gibbed", {}).get("avg_delta_ms", 0),
+                "avg_denied_ms": outcome_map.get("gibbed", {}).get("avg_denied_ms", 0),
+            },
+            "outcomes": outcome_map,
+            "events": [
+                {
+                    "kill_time": int(r[0] or 0),
+                    "victim_guid": r[1], "victim_name": r[2],
+                    "killer_guid": r[3], "killer_name": r[4],
+                    "kill_mod": int(r[5] or 0),
+                    "outcome": r[6],
+                    "delta_ms": int(r[7] or 0),
+                    "effective_denied_ms": int(r[8] or 0),
+                    "gibber_guid": r[9] or "", "gibber_name": r[10] or "",
+                    "reviver_guid": r[11] or "", "reviver_name": r[12] or "",
+                    "session_date": r[13].isoformat() if r[13] else None,
+                    "map_name": r[14], "round_number": int(r[15] or 0),
+                }
+                for r in (events or [])
+            ],
+        }
+    except Exception as e:
+        logger.warning("Proximity kill-outcomes error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
+
+
+@router.get("/proximity/kill-outcomes/player-stats")
+async def get_proximity_kill_outcomes_player_stats(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    player_guid: Optional[str] = None,
+    limit: int = 20,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Per-player kill outcome stats — Kill Permanence Rate (KPR) and revive rates."""
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, None, None,
+    )
+    query_params = tuple(params)
+    safe_limit = max(1, min(limit, 50))
+    try:
+        # As killer: how permanent are their kills?
+        killer_rows = await db.fetch_all(
+            f"""
+            SELECT killer_guid, MAX(killer_name) AS name,
+                   COUNT(*) AS total_kills,
+                   SUM(CASE WHEN outcome = 'gibbed' THEN 1 ELSE 0 END) AS gibs,
+                   SUM(CASE WHEN outcome = 'revived' THEN 1 ELSE 0 END) AS revives,
+                   SUM(CASE WHEN outcome = 'tapped_out' THEN 1 ELSE 0 END) AS tapouts,
+                   ROUND(AVG(effective_denied_ms)::numeric, 0) AS avg_denied_ms
+            FROM proximity_kill_outcome {where_sql}
+            AND killer_guid != ''
+            GROUP BY killer_guid
+            HAVING COUNT(*) >= 3
+            ORDER BY (SUM(CASE WHEN outcome = 'gibbed' THEN 1 ELSE 0 END)::float
+                     / NULLIF(SUM(CASE WHEN outcome IN ('gibbed','revived') THEN 1 ELSE 0 END), 0)) DESC NULLS LAST
+            LIMIT {safe_limit}
+            """,
+            query_params,
+        )
+        # As victim: how often are they revived?
+        victim_rows = await db.fetch_all(
+            f"""
+            SELECT victim_guid, MAX(victim_name) AS name,
+                   COUNT(*) AS times_killed,
+                   SUM(CASE WHEN outcome = 'gibbed' THEN 1 ELSE 0 END) AS times_gibbed,
+                   SUM(CASE WHEN outcome = 'revived' THEN 1 ELSE 0 END) AS times_revived,
+                   SUM(CASE WHEN outcome = 'tapped_out' THEN 1 ELSE 0 END) AS times_tapped,
+                   ROUND(AVG(delta_ms)::numeric, 0) AS avg_wait_ms
+            FROM proximity_kill_outcome {where_sql}
+            GROUP BY victim_guid
+            HAVING COUNT(*) >= 3
+            ORDER BY (SUM(CASE WHEN outcome = 'revived' THEN 1 ELSE 0 END)::float
+                     / NULLIF(COUNT(*), 0)) DESC NULLS LAST
+            LIMIT {safe_limit}
+            """,
+            query_params,
+        )
+
+        def _killer_stats(r):
+            total = int(r[2] or 0)
+            gibs = int(r[3] or 0)
+            revs = int(r[4] or 0)
+            contested = gibs + revs
+            return {
+                "guid": r[0], "name": r[1],
+                "total_kills": total,
+                "gibs": gibs, "revives_against": revs, "tapouts": int(r[5] or 0),
+                "kpr": round(gibs / contested, 3) if contested > 0 else 0,
+                "avg_denied_ms": int(r[6] or 0),
+            }
+
+        def _victim_stats(r):
+            total = int(r[2] or 0)
+            gibbed = int(r[3] or 0)
+            revived = int(r[4] or 0)
+            return {
+                "guid": r[0], "name": r[1],
+                "times_killed": total,
+                "times_gibbed": gibbed, "times_revived": revived,
+                "times_tapped": int(r[5] or 0),
+                "revive_rate": round(revived / total, 3) if total > 0 else 0,
+                "gib_rate": round(gibbed / total, 3) if total > 0 else 0,
+                "avg_wait_ms": int(r[6] or 0),
+            }
+
+        # If specific player requested, filter
+        as_killer = [_killer_stats(r) for r in (killer_rows or [])]
+        as_victim = [_victim_stats(r) for r in (victim_rows or [])]
+        if player_guid and player_guid.strip():
+            g = player_guid.strip()
+            as_killer = [s for s in as_killer if s["guid"] == g] or as_killer[:1]
+            as_victim = [s for s in as_victim if s["guid"] == g] or as_victim[:1]
+
+        return {
+            "status": "ok",
+            "scope": scope,
+            "kill_permanence_leaders": as_killer,
+            "revive_rate_leaders": as_victim,
+        }
+    except Exception as e:
+        logger.warning("Proximity kill-outcomes player-stats error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
+
+
+# ===== HIT REGIONS (v5.2) =====
+
+
+@router.get("/proximity/hit-regions")
+async def get_proximity_hit_regions(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    player_guid: Optional[str] = None,
+    weapon_id: Optional[int] = None,
+    limit: int = 20,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Per-player hit region breakdown — head/arms/body/legs distribution."""
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+        player_guid=player_guid, player_guid_columns=["attacker_guid", "victim_guid"],
+    )
+    if weapon_id is not None:
+        params.append(int(weapon_id))
+        where_sql += f" AND weapon_id = ${len(params)}"
+        scope["weapon_id"] = int(weapon_id)
+    query_params = tuple(params)
+    safe_limit = max(1, min(limit, 50))
+    try:
+        rows = await db.fetch_all(
+            f"""
+            SELECT attacker_guid, MAX(attacker_name) AS name,
+                   SUM(CASE WHEN hit_region = 0 THEN 1 ELSE 0 END) AS head,
+                   SUM(CASE WHEN hit_region = 1 THEN 1 ELSE 0 END) AS arms,
+                   SUM(CASE WHEN hit_region = 2 THEN 1 ELSE 0 END) AS body,
+                   SUM(CASE WHEN hit_region = 3 THEN 1 ELSE 0 END) AS legs,
+                   COUNT(*) AS total_hits,
+                   SUM(damage) AS total_damage
+            FROM proximity_hit_region {where_sql}
+            GROUP BY attacker_guid
+            HAVING COUNT(*) >= 10
+            ORDER BY COUNT(*) DESC
+            LIMIT {safe_limit}
+            """,
+            query_params,
+        )
+
+        players = []
+        for r in (rows or []):
+            total = int(r[6] or 0)
+            head = int(r[2] or 0)
+            players.append({
+                "guid": r[0],
+                "name": r[1],
+                "head": head,
+                "arms": int(r[3] or 0),
+                "body": int(r[4] or 0),
+                "legs": int(r[5] or 0),
+                "head_pct": round(head * 100.0 / total, 1) if total > 0 else 0,
+                "total_hits": total,
+                "total_damage": int(r[7] or 0),
+            })
+
+        return {
+            "status": "ok",
+            "scope": scope,
+            "players": players,
+        }
+    except Exception as e:
+        logger.warning("Proximity hit-regions error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
+
+
+@router.get("/proximity/hit-regions/by-weapon")
+async def get_proximity_hit_regions_by_weapon(
+    range_days: int = 30,
+    player_guid: str = "",
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Per-weapon hit region breakdown for a specific player."""
+    if not player_guid or not player_guid.strip():
+        return {"status": "error", "detail": "player_guid is required"}
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, None, None,
+        player_guid=player_guid, player_guid_columns=["attacker_guid"],
+    )
+    query_params = tuple(params)
+    try:
+        rows = await db.fetch_all(
+            f"""
+            SELECT weapon_id,
+                   SUM(CASE WHEN hit_region = 0 THEN 1 ELSE 0 END) AS head,
+                   SUM(CASE WHEN hit_region = 1 THEN 1 ELSE 0 END) AS arms,
+                   SUM(CASE WHEN hit_region = 2 THEN 1 ELSE 0 END) AS body,
+                   SUM(CASE WHEN hit_region = 3 THEN 1 ELSE 0 END) AS legs,
+                   COUNT(*) AS total,
+                   SUM(damage) AS total_damage
+            FROM proximity_hit_region {where_sql}
+            GROUP BY weapon_id
+            ORDER BY COUNT(*) DESC
+            """,
+            query_params,
+        )
+
+        weapons = []
+        for r in (rows or []):
+            total = int(r[5] or 0)
+            head = int(r[1] or 0)
+            weapons.append({
+                "weapon_id": int(r[0] or 0),
+                "head": head,
+                "body": int(r[3] or 0),
+                "arms": int(r[2] or 0),
+                "legs": int(r[4] or 0),
+                "total": total,
+                "headshot_pct": round(head * 100.0 / total, 1) if total > 0 else 0,
+                "total_damage": int(r[6] or 0),
+            })
+
+        return {
+            "status": "ok",
+            "scope": scope,
+            "weapons": weapons,
+        }
+    except Exception as e:
+        logger.warning("Proximity hit-regions by-weapon error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
+
+
+@router.get("/proximity/hit-regions/headshot-rates")
+async def get_proximity_hit_regions_headshot_rates(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    limit: int = 20,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Headshot percentage leaderboard — minimum 50 hits required."""
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, None, None,
+    )
+    query_params = tuple(params)
+    safe_limit = max(1, min(limit, 50))
+    try:
+        rows = await db.fetch_all(
+            f"""
+            SELECT attacker_guid, MAX(attacker_name) AS name,
+                   SUM(CASE WHEN hit_region = 0 THEN 1 ELSE 0 END) AS head_hits,
+                   COUNT(*) AS total_hits
+            FROM proximity_hit_region {where_sql}
+            GROUP BY attacker_guid
+            HAVING COUNT(*) >= 50
+            ORDER BY (SUM(CASE WHEN hit_region = 0 THEN 1 ELSE 0 END)::float
+                     / NULLIF(COUNT(*), 0)) DESC NULLS LAST
+            LIMIT {safe_limit}
+            """,
+            query_params,
+        )
+
+        leaders = []
+        for r in (rows or []):
+            total = int(r[3] or 0)
+            head = int(r[2] or 0)
+            leaders.append({
+                "guid": r[0],
+                "name": r[1],
+                "headshot_pct": round(head * 100.0 / total, 1) if total > 0 else 0,
+                "head_hits": head,
+                "total_hits": total,
+            })
+
+        return {
+            "status": "ok",
+            "scope": scope,
+            "leaders": leaders,
+        }
+    except Exception as e:
+        logger.warning("Proximity hit-regions headshot-rates error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
+
+
+# ===== COMBAT POSITIONS (v5.2) =====
+
+
+@router.get("/proximity/combat-positions/heatmap")
+async def get_proximity_combat_positions_heatmap(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    weapon_id: Optional[int] = None,
+    victim_class: Optional[str] = None,
+    perspective: str = "kills",
+    team: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Combat position heatmap — grid-binned kill/death positions for map overlay."""
+    if not map_name or not map_name.strip():
+        raise HTTPException(status_code=400, detail="map_name is required")
+    if perspective not in ("kills", "deaths"):
+        raise HTTPException(status_code=400, detail="perspective must be 'kills' or 'deaths'")
+
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+    )
+    query_params_list = list(params)
+
+    # Extra filters
+    extra_clauses = []
+    if weapon_id is not None:
+        query_params_list.append(int(weapon_id))
+        extra_clauses.append(f"AND weapon_id = ${len(query_params_list)}")
+    if victim_class and victim_class.strip():
+        query_params_list.append(victim_class.strip())
+        extra_clauses.append(f"AND victim_class = ${len(query_params_list)}")
+    if team and team.strip():
+        team_val = team.strip()
+        query_params_list.append(team_val)
+        if perspective == "kills":
+            extra_clauses.append(f"AND attacker_team = ${len(query_params_list)}")
+        else:
+            extra_clauses.append(f"AND victim_team = ${len(query_params_list)}")
+
+    extra_sql = " ".join(extra_clauses)
+
+    if perspective == "kills":
+        x_col, y_col = "attacker_x", "attacker_y"
+    else:
+        x_col, y_col = "victim_x", "victim_y"
+
+    query_params = tuple(query_params_list)
+    try:
+        rows = await db.fetch_all(
+            f"""
+            SELECT FLOOR({x_col} / 512.0)::int AS gx,
+                   FLOOR({y_col} / 512.0)::int AS gy,
+                   COUNT(*) AS cnt
+            FROM proximity_combat_position {where_sql}
+            {extra_sql}
+            GROUP BY gx, gy
+            ORDER BY cnt DESC
+            """,
+            query_params,
+        )
+
+        return {
+            "status": "ok",
+            "map_name": map_name.strip(),
+            "grid_size": 512,
+            "perspective": perspective,
+            "hotzones": [
+                {"x": int(r[0] or 0), "y": int(r[1] or 0), "count": int(r[2] or 0)}
+                for r in (rows or [])
+            ],
+        }
+    except Exception as e:
+        logger.warning("Proximity combat-positions heatmap error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
+
+
+@router.get("/proximity/combat-positions/kill-lines")
+async def get_proximity_combat_positions_kill_lines(
+    range_days: int = 30,
+    map_name: Optional[str] = None,
+    weapon_id: Optional[int] = None,
+    attacker_guid: Optional[str] = None,
+    session_date: Optional[str] = None,
+    limit: int = 100,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Raw kill position pairs for drawing kill arrows on map overlay."""
+    if not map_name or not map_name.strip():
+        raise HTTPException(status_code=400, detail="map_name is required")
+
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, None, None,
+    )
+    query_params_list = list(params)
+
+    extra_clauses = []
+    if weapon_id is not None:
+        query_params_list.append(int(weapon_id))
+        extra_clauses.append(f"AND weapon_id = ${len(query_params_list)}")
+    if attacker_guid and attacker_guid.strip():
+        query_params_list.append(attacker_guid.strip())
+        extra_clauses.append(f"AND attacker_guid = ${len(query_params_list)}")
+
+    extra_sql = " ".join(extra_clauses)
+    safe_limit = max(1, min(limit, 500))
+    query_params = tuple(query_params_list)
+
+    try:
+        rows = await db.fetch_all(
+            f"""
+            SELECT attacker_x, attacker_y, victim_x, victim_y,
+                   weapon_id, attacker_team
+            FROM proximity_combat_position {where_sql}
+            {extra_sql}
+            ORDER BY session_date DESC, event_time DESC
+            LIMIT {safe_limit}
+            """,
+            query_params,
+        )
+
+        return {
+            "status": "ok",
+            "map_name": map_name.strip(),
+            "lines": [
+                {
+                    "ax": int(r[0] or 0), "ay": int(r[1] or 0),
+                    "vx": int(r[2] or 0), "vy": int(r[3] or 0),
+                    "weapon_id": int(r[4] or 0),
+                    "attacker_team": r[5] or "",
+                }
+                for r in (rows or [])
+            ],
+        }
+    except Exception as e:
+        logger.warning("Proximity combat-positions kill-lines error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
+
+
+@router.get("/proximity/combat-positions/danger-zones")
+async def get_proximity_combat_positions_danger_zones(
+    range_days: int = 30,
+    map_name: Optional[str] = None,
+    victim_class: Optional[str] = None,
+    session_date: Optional[str] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Danger zones — grid-binned death positions ranked by death count with class breakdown."""
+    if not map_name or not map_name.strip():
+        raise HTTPException(status_code=400, detail="map_name is required")
+
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, None, None,
+    )
+    query_params_list = list(params)
+
+    extra_clauses = []
+    if victim_class and victim_class.strip():
+        query_params_list.append(victim_class.strip())
+        extra_clauses.append(f"AND victim_class = ${len(query_params_list)}")
+
+    extra_sql = " ".join(extra_clauses)
+    query_params = tuple(query_params_list)
+
+    try:
+        # Grid-binned deaths with JSON-aggregated class breakdown
+        rows = await db.fetch_all(
+            f"""
+            SELECT gx, gy, deaths, class_counts
+            FROM (
+                SELECT gx, gy,
+                       SUM(class_cnt) AS deaths,
+                       jsonb_object_agg(vc, class_cnt) AS class_counts
+                FROM (
+                    SELECT FLOOR(victim_x / 512.0)::int AS gx,
+                           FLOOR(victim_y / 512.0)::int AS gy,
+                           COALESCE(victim_class, 'UNKNOWN') AS vc,
+                           COUNT(*) AS class_cnt
+                    FROM proximity_combat_position {where_sql}
+                    {extra_sql}
+                    GROUP BY FLOOR(victim_x / 512.0)::int,
+                             FLOOR(victim_y / 512.0)::int,
+                             COALESCE(victim_class, 'UNKNOWN')
+                ) class_grid
+                GROUP BY gx, gy
+            ) agg
+            ORDER BY deaths DESC
+            """,
+            query_params,
+        )
+
+        zones = []
+        for r in (rows or []):
+            classes_raw = r[3]
+            if isinstance(classes_raw, str):
+                classes_dict = json.loads(classes_raw)
+            elif isinstance(classes_raw, dict):
+                classes_dict = classes_raw
+            else:
+                classes_dict = {}
+            # Ensure all values are ints
+            classes_dict = {k: int(v) for k, v in classes_dict.items()}
+            zones.append({
+                "x": int(r[0] or 0),
+                "y": int(r[1] or 0),
+                "deaths": int(r[2] or 0),
+                "classes": classes_dict,
+            })
+
+        return {
+            "status": "ok",
+            "map_name": map_name.strip(),
+            "grid_size": 512,
+            "zones": zones,
+        }
+    except Exception as e:
+        logger.warning("Proximity combat-positions danger-zones error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
+
+
+# ===== MOVEMENT ANALYTICS (Phase A) =====
+
+@router.get("/proximity/movement-stats")
+async def get_proximity_movement_stats(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    player_guid: Optional[str] = None,
+    limit: int = 20,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Per-player aggregated movement analytics from path samples."""
+    where_parts = ["peak_speed IS NOT NULL"]
+    params: list = []
+
+    if session_date:
+        params.append(session_date)
+        where_parts.append(f"session_date = ${len(params)}")
+    else:
+        params.append(range_days)
+        where_parts.append(f"session_date >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
+    if map_name:
+        params.append(map_name)
+        where_parts.append(f"map_name = ${len(params)}")
+    if player_guid:
+        params.append(player_guid)
+        where_parts.append(f"player_guid = ${len(params)}")
+
+    where_sql = "WHERE " + " AND ".join(where_parts)
+    safe_limit = max(1, min(limit, 50))
+    scope = {"session_date": session_date, "map_name": map_name, "player_guid": player_guid}
+
+    try:
+        rows = await db.fetch_all(
+            f"""
+            SELECT player_guid, MAX(player_name) AS name,
+                   COUNT(*) AS tracks,
+                   ROUND(SUM(duration_ms)::numeric / 1000, 1) AS alive_sec,
+                   ROUND(AVG(peak_speed)::numeric, 1) AS avg_peak_speed,
+                   ROUND(MAX(peak_speed)::numeric, 1) AS max_peak_speed,
+                   ROUND(AVG(avg_speed)::numeric, 1) AS avg_speed,
+                   ROUND(SUM(total_distance)::numeric, 0) AS total_distance,
+                   ROUND(SUM(stance_standing_sec)::numeric, 1) AS standing_sec,
+                   ROUND(SUM(stance_crouching_sec)::numeric, 1) AS crouching_sec,
+                   ROUND(SUM(stance_prone_sec)::numeric, 1) AS prone_sec,
+                   ROUND(SUM(sprint_sec)::numeric, 1) AS sprint_sec,
+                   ROUND(AVG(sprint_percentage)::numeric, 1) AS avg_sprint_pct,
+                   ROUND(AVG(post_spawn_distance)::numeric, 0) AS avg_post_spawn_dist,
+                   ROUND(AVG(CASE WHEN duration_ms > 0 THEN total_distance / (duration_ms::real / 1000) ELSE 0 END)::numeric, 1) AS avg_distance_per_sec
+            FROM player_track {where_sql}
+            GROUP BY player_guid
+            HAVING COUNT(*) >= 3
+            ORDER BY SUM(total_distance) DESC
+            LIMIT {safe_limit}
+            """,
+            tuple(params),
+        )
+
+        players = []
+        for r in (rows or []):
+            alive = float(r[3] or 0)
+            standing = float(r[8] or 0)
+            crouching = float(r[9] or 0)
+            prone = float(r[10] or 0)
+            stance_total = standing + crouching + prone
+            players.append({
+                "guid": r[0],
+                "name": r[1],
+                "tracks": int(r[2] or 0),
+                "alive_sec": alive,
+                "avg_peak_speed": float(r[4] or 0),
+                "max_peak_speed": float(r[5] or 0),
+                "avg_speed": float(r[6] or 0),
+                "total_distance": float(r[7] or 0),
+                "standing_sec": standing,
+                "crouching_sec": crouching,
+                "prone_sec": prone,
+                "standing_pct": round(standing * 100 / stance_total, 1) if stance_total > 0 else 0,
+                "crouching_pct": round(crouching * 100 / stance_total, 1) if stance_total > 0 else 0,
+                "prone_pct": round(prone * 100 / stance_total, 1) if stance_total > 0 else 0,
+                "sprint_sec": float(r[11] or 0),
+                "avg_sprint_pct": float(r[12] or 0),
+                "avg_post_spawn_dist": float(r[13] or 0),
+                "avg_distance_per_sec": float(r[14] or 0),
+            })
+
+        return {
+            "status": "ok",
+            "scope": scope,
+            "players": players,
+        }
+    except Exception as e:
+        logger.warning("Proximity movement-stats error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
