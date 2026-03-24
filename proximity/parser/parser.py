@@ -148,6 +148,54 @@ class PlayerTrack:
         sprinting = sum(1 for p in self.path if p.sprint == 1)
         return (sprinting / len(self.path)) * 100
 
+    @property
+    def peak_speed(self) -> float:
+        """Maximum speed recorded across all samples"""
+        if not self.path:
+            return 0.0
+        return max((p.speed for p in self.path), default=0.0)
+
+    @property
+    def stance_standing_sec(self) -> float:
+        """Seconds spent standing (stance=0), excluding spawn/death events"""
+        return sum(0.2 for p in self.path if p.stance == 0 and p.event == 'sample')
+
+    @property
+    def stance_crouching_sec(self) -> float:
+        """Seconds spent crouching (stance=1)"""
+        return sum(0.2 for p in self.path if p.stance == 1 and p.event == 'sample')
+
+    @property
+    def stance_prone_sec(self) -> float:
+        """Seconds spent prone (stance=2)"""
+        return sum(0.2 for p in self.path if p.stance == 2 and p.event == 'sample')
+
+    @property
+    def sprint_sec(self) -> float:
+        """Seconds spent sprinting"""
+        return sum(0.2 for p in self.path if p.sprint == 1 and p.event == 'sample')
+
+    @property
+    def post_spawn_distance(self) -> float:
+        """Distance traveled in first 3 seconds after spawn (15 samples at 200ms)"""
+        if len(self.path) < 2:
+            return 0.0
+        # Find spawn sample, then measure distance for next 15 samples
+        start_idx = 0
+        for i, p in enumerate(self.path):
+            if p.event == 'spawn':
+                start_idx = i
+                break
+        end_idx = min(start_idx + 16, len(self.path))  # 15 intervals = 16 points
+        total = 0.0
+        for i in range(start_idx + 1, end_idx):
+            p1, p2 = self.path[i-1], self.path[i]
+            dx = p2.x - p1.x
+            dy = p2.y - p1.y
+            dz = p2.z - p1.z
+            total += (dx*dx + dy*dy + dz*dz) ** 0.5
+        return total
+
 
 @dataclass
 class ReactionMetric:
@@ -291,6 +339,40 @@ class KillOutcome:
     reviver_name: str
 
 
+@dataclass
+class HitRegionEvent:
+    time: int
+    attacker_guid: str
+    attacker_name: str
+    victim_guid: str
+    victim_name: str
+    weapon: int
+    region: int       # 0=HEAD, 1=ARMS, 2=BODY, 3=LEGS
+    damage: int
+
+
+@dataclass
+class CombatPosition:
+    time: int
+    event_type: str
+    attacker_guid: str
+    attacker_name: str
+    attacker_team: str
+    attacker_class: str
+    victim_guid: str
+    victim_name: str
+    victim_team: str
+    victim_class: str
+    attacker_x: int
+    attacker_y: int
+    attacker_z: int
+    victim_x: int
+    victim_y: int
+    victim_z: int
+    weapon: int
+    mod: int
+
+
 class ProximityParserV4:
     """Parser for proximity_tracker v4 output files with full player tracking"""
 
@@ -318,6 +400,8 @@ class ProximityParserV4:
         self.weapon_accuracy: List[WeaponAccuracy] = []
         self.focus_fire_events: List[FocusFireEvent] = []
         self.kill_outcomes: List[KillOutcome] = []
+        self.hit_regions: List[HitRegionEvent] = []
+        self.combat_positions: List[CombatPosition] = []
         self.metadata = self._metadata_defaults()
         self._schema_cache: Dict[tuple, bool] = {}
         self._round_link_context: Dict[str, Optional[object]] = {
@@ -447,6 +531,8 @@ class ProximityParserV4:
         self.weapon_accuracy = []
         self.focus_fire_events = []
         self.kill_outcomes = []
+        self.hit_regions = []
+        self.combat_positions = []
 
         section = 'header'
 
@@ -538,6 +624,12 @@ class ProximityParserV4:
                     if line.startswith('# KILL_OUTCOME'):
                         section = 'kill_outcome'
                         continue
+                    if line.startswith('# HIT_REGIONS'):
+                        section = 'hit_regions'
+                        continue
+                    if line.startswith('# COMBAT_POSITIONS'):
+                        section = 'combat_positions'
+                        continue
 
                     if line.startswith('# axis_spawn_interval='):
                         try:
@@ -590,6 +682,10 @@ class ProximityParserV4:
                         self._parse_focus_fire_line(line)
                     elif section == 'kill_outcome':
                         self._parse_kill_outcome_line(line)
+                    elif section == 'hit_regions':
+                        self._parse_hit_region_line(line)
+                    elif section == 'combat_positions':
+                        self._parse_combat_position_line(line)
 
             self._normalize_round_metadata(filepath)
             self.logger.info(
@@ -1080,6 +1176,10 @@ class ProximityParserV4:
                 await self._import_focus_fire_events(session_date)
             if self.kill_outcomes:
                 await self._import_kill_outcomes(session_date)
+            if self.hit_regions:
+                await self._import_hit_regions(session_date)
+            if self.combat_positions:
+                await self._import_combat_positions(session_date)
 
             # Mark file as processed
             await self._mark_file_processed(os.path.basename(filepath))
@@ -1234,6 +1334,8 @@ class ProximityParserV4:
                 "first_move_time_ms", "time_to_first_move_ms",
                 "sample_count", "path",
                 "total_distance", "avg_speed", "sprint_percentage",
+                "peak_speed", "stance_standing_sec", "stance_crouching_sec",
+                "stance_prone_sec", "sprint_sec", "post_spawn_distance",
             ]
             values = [
                 session_date,
@@ -1254,6 +1356,12 @@ class ProximityParserV4:
                 total_distance,
                 avg_speed,
                 sprint_pct,
+                track.peak_speed,
+                track.stance_standing_sec,
+                track.stance_crouching_sec,
+                track.stance_prone_sec,
+                track.sprint_sec,
+                track.post_spawn_distance,
             ]
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
@@ -1812,6 +1920,126 @@ class ProximityParserV4:
                 INSERT INTO proximity_kill_outcome ({", ".join(columns)})
                 VALUES ({placeholders})
                 ON CONFLICT (session_date, round_number, round_start_unix, kill_time, victim_guid)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    def _parse_hit_region_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 8:
+                return
+            self.hit_regions.append(HitRegionEvent(
+                time=int(parts[0]),
+                attacker_guid=parts[1],
+                attacker_name=parts[2],
+                victim_guid=parts[3],
+                victim_name=parts[4],
+                weapon=int(parts[5]),
+                region=int(parts[6]),
+                damage=int(parts[7]),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip hit_region line: {e}")
+
+    async def _import_hit_regions(self, session_date):
+        """Import hit region events to proximity_hit_region table"""
+        if not await self._table_has_column('proximity_hit_region', 'attacker_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_hit_region', 'round_end_unix')
+        for hr in self.hit_regions:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name", "event_time",
+                "attacker_guid", "attacker_name",
+                "victim_guid", "victim_name",
+                "weapon_id", "hit_region", "damage",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                hr.time,
+                hr.attacker_guid, hr.attacker_name,
+                hr.victim_guid, hr.victim_name,
+                hr.weapon, hr.region, hr.damage,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_hit_region", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_hit_region ({", ".join(columns)})
+                VALUES ({placeholders})
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    def _parse_combat_position_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 18:
+                return
+            self.combat_positions.append(CombatPosition(
+                time=int(parts[0]),
+                event_type=parts[1],
+                attacker_guid=parts[2],
+                attacker_name=parts[3],
+                attacker_team=parts[4],
+                attacker_class=parts[5],
+                victim_guid=parts[6],
+                victim_name=parts[7],
+                victim_team=parts[8],
+                victim_class=parts[9],
+                attacker_x=int(parts[10]),
+                attacker_y=int(parts[11]),
+                attacker_z=int(parts[12]),
+                victim_x=int(parts[13]),
+                victim_y=int(parts[14]),
+                victim_z=int(parts[15]),
+                weapon=int(parts[16]),
+                mod=int(parts[17]),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip combat_position line: {e}")
+
+    async def _import_combat_positions(self, session_date):
+        """Import combat position events to proximity_combat_position table"""
+        if not await self._table_has_column('proximity_combat_position', 'attacker_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_combat_position', 'round_end_unix')
+        for cp in self.combat_positions:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name", "event_time", "event_type",
+                "attacker_guid", "attacker_name", "attacker_team", "attacker_class",
+                "victim_guid", "victim_name", "victim_team", "victim_class",
+                "attacker_x", "attacker_y", "attacker_z",
+                "victim_x", "victim_y", "victim_z",
+                "weapon_id", "means_of_death",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                cp.time, cp.event_type,
+                cp.attacker_guid, cp.attacker_name, cp.attacker_team, cp.attacker_class,
+                cp.victim_guid, cp.victim_name, cp.victim_team, cp.victim_class,
+                cp.attacker_x, cp.attacker_y, cp.attacker_z,
+                cp.victim_x, cp.victim_y, cp.victim_z,
+                cp.weapon, cp.mod,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_combat_position", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_combat_position ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, event_time, attacker_guid, victim_guid)
                 DO NOTHING
             """
             await self.db_adapter.execute(query, tuple(values))
@@ -2646,6 +2874,8 @@ class ProximityParserV4:
             'lua_trade_kills': len(self.lua_trade_kills),
             'focus_fire_events': len(self.focus_fire_events),
             'kill_outcomes': len(self.kill_outcomes),
+            'hit_regions': len(self.hit_regions),
+            'combat_positions': len(self.combat_positions),
         }
 
 

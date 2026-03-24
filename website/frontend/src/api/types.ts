@@ -1001,3 +1001,238 @@ export interface ProximityWeaponAccuracyResponse {
   leaders: Array<{ guid: string; name: string; shots: number; hits: number; kills: number; headshots: number; accuracy: number }>;
   weapon_breakdown: Array<{ weapon_id: number; shots: number; hits: number; kills: number; headshots: number; accuracy: number }>;
 }
+
+// Skill Rating
+export interface SkillComponent {
+  raw: number;
+  percentile: number;
+  weight: number;
+  contribution: number;
+}
+
+export interface RatedPlayer {
+  rank: number;
+  player_guid: string;
+  display_name: string;
+  et_rating: number;
+  games_rated: number;
+  last_rated_at: string | null;
+  components: Record<string, SkillComponent>;
+}
+
+export interface SkillLeaderboardResponse {
+  status: string;
+  players: RatedPlayer[];
+  meta: {
+    total: number;
+    min_rounds: number;
+    weights: Record<string, number>;
+    constant: number;
+    version: string;
+  };
+}
+
+export interface SkillFormulaResponse {
+  status: string;
+  version: string;
+  name: string;
+  description: string;
+  formula: string;
+  constant: number;
+  weights: Record<string, number>;
+  min_rounds: number;
+  metrics: Record<string, string>;
+  normalization: string;
+  range: string;
+}
+
+// Kill Outcomes (v5.2)
+export interface KillOutcomeEvent {
+  kill_time: number;
+  victim_guid: string;
+  victim_name: string;
+  killer_guid: string;
+  killer_name: string;
+  kill_mod: number;
+  outcome: string;
+  delta_ms: number;
+  effective_denied_ms: number;
+  gibber_guid: string;
+  gibber_name: string;
+  reviver_guid: string;
+  reviver_name: string;
+  session_date: string | null;
+  map_name: string;
+  round_number: number;
+}
+
+export interface KillOutcomeSummary {
+  total_kills: number;
+  gibbed: number;
+  revived: number;
+  tapped_out: number;
+  expired: number;
+  round_end: number;
+  gib_rate: number;
+  revive_rate: number;
+  avg_delta_ms: number;
+  avg_denied_ms: number;
+}
+
+export interface KillOutcomesResponse {
+  status: string;
+  scope: Record<string, unknown>;
+  summary: KillOutcomeSummary;
+  outcomes: Record<string, { count: number; avg_delta_ms: number; avg_denied_ms: number }>;
+  events: KillOutcomeEvent[];
+}
+
+export interface KillPermanenceEntry {
+  guid: string;
+  name: string;
+  total_kills: number;
+  gibs: number;
+  revives_against: number;
+  tapouts: number;
+  kpr: number;
+  avg_denied_ms: number;
+}
+
+export interface ReviveRateEntry {
+  guid: string;
+  name: string;
+  times_killed: number;
+  times_gibbed: number;
+  times_revived: number;
+  times_tapped: number;
+  revive_rate: number;
+  gib_rate: number;
+  avg_wait_ms: number;
+}
+
+export interface KillOutcomePlayerStatsResponse {
+  status: string;
+  scope: Record<string, unknown>;
+  kill_permanence_leaders: KillPermanenceEntry[];
+  revive_rate_leaders: ReviveRateEntry[];
+}
+
+// Hit Regions (v5.2)
+export interface HitRegionPlayer {
+  guid: string;
+  name: string;
+  head: number;
+  arms: number;
+  body: number;
+  legs: number;
+  head_pct: number;
+  total_hits: number;
+  total_damage: number;
+}
+
+export interface HitRegionsResponse {
+  status: string;
+  scope: Record<string, unknown>;
+  players: HitRegionPlayer[];
+}
+
+export interface WeaponHitRegion {
+  weapon_id: number;
+  head: number;
+  arms: number;
+  body: number;
+  legs: number;
+  total: number;
+  headshot_pct: number;
+  total_damage: number;
+}
+
+export interface WeaponHitRegionsResponse {
+  status: string;
+  weapons: WeaponHitRegion[];
+}
+
+export interface HeadshotRateEntry {
+  guid: string;
+  name: string;
+  headshot_pct: number;
+  head_hits: number;
+  total_hits: number;
+}
+
+export interface HeadshotRatesResponse {
+  status: string;
+  leaders: HeadshotRateEntry[];
+}
+
+// Combat Positions (v5.2)
+export interface HotzonePoint {
+  x: number;
+  y: number;
+  count: number;
+}
+
+export interface CombatHeatmapResponse {
+  status: string;
+  map_name: string;
+  grid_size: number;
+  perspective: 'kills' | 'deaths';
+  hotzones: HotzonePoint[];
+}
+
+export interface KillLine {
+  ax: number;
+  ay: number;
+  vx: number;
+  vy: number;
+  weapon_id: number;
+  attacker_team: string;
+}
+
+export interface KillLinesResponse {
+  status: string;
+  map_name: string;
+  lines: KillLine[];
+}
+
+export interface DangerZone {
+  x: number;
+  y: number;
+  deaths: number;
+  classes: Record<string, number>;
+}
+
+export interface DangerZonesResponse {
+  status: string;
+  map_name: string;
+  grid_size: number;
+  zones: DangerZone[];
+}
+
+// Movement Analytics (Phase A)
+export interface MovementStatsPlayer {
+  guid: string;
+  name: string;
+  tracks: number;
+  alive_sec: number;
+  avg_peak_speed: number;
+  max_peak_speed: number;
+  avg_speed: number;
+  total_distance: number;
+  standing_sec: number;
+  crouching_sec: number;
+  prone_sec: number;
+  standing_pct: number;
+  crouching_pct: number;
+  prone_pct: number;
+  sprint_sec: number;
+  avg_sprint_pct: number;
+  avg_post_spawn_dist: number;
+  avg_distance_per_sec: number;
+}
+
+export interface MovementStatsResponse {
+  status: string;
+  scope: Record<string, unknown>;
+  players: MovementStatsPlayer[];
+}
