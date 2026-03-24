@@ -1119,8 +1119,6 @@ async def get_player_rounds(
         if len(short_map) > 12:
             short_map = short_map[:12]
 
-        date_obj = datetime.strptime(row[0], "%Y-%m-%d") if isinstance(row[0], str) else row[0]
-
         rounds.append(
             {
                 "label": short_map,
