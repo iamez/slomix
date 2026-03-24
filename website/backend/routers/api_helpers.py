@@ -335,7 +335,7 @@ async def batch_resolve_display_names(
                 if row[1]:
                     result[row[0]] = row[1]
         except (OSError, RuntimeError):
-            pass
+            pass  # graceful fallback: name resolution is best-effort
 
     remaining = [g for g in guids if g not in result]
     if not remaining:
@@ -352,7 +352,7 @@ async def batch_resolve_display_names(
             if row[1]:
                 result[row[0]] = row[1]
     except (OSError, RuntimeError):
-        pass
+        pass  # graceful fallback: name resolution is best-effort
 
     remaining = [g for g in guids if g not in result]
     if not remaining:

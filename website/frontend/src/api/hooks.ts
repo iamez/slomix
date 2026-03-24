@@ -321,6 +321,21 @@ export const usePlayerVsStats = (
     staleTime: 60_000,
   });
 
+// Skill Rating
+export const useSkillLeaderboard = (limit = 50) =>
+  useQuery({
+    queryKey: ['skill-leaderboard', limit],
+    queryFn: () => api.getSkillLeaderboard(limit),
+    staleTime: 60_000,
+  });
+
+export const useSkillFormula = () =>
+  useQuery({
+    queryKey: ['skill-formula'],
+    queryFn: api.getSkillFormula,
+    staleTime: 300_000,
+  });
+
 // Sessions
 export const useSessions = (params?: { limit?: number; offset?: number; search?: string }) =>
   useQuery({
@@ -428,4 +443,88 @@ export const usePlanningState = (enabled = true) =>
     staleTime: 30_000,
     refetchInterval: 45_000,
     retry: false,
+  });
+
+// Kill Outcomes (v5.2)
+export const useProximityHitRegions = (params?: ProximityScope, weaponId?: number) =>
+  useQuery({
+    queryKey: ['proximity-hit-regions', params, weaponId],
+    queryFn: () => api.getProximityHitRegions(params, weaponId),
+    staleTime: 30_000,
+  });
+
+export const useProximityHeadshotRates = (rangeDays = 30) =>
+  useQuery({
+    queryKey: ['proximity-headshot-rates', rangeDays],
+    queryFn: () => api.getProximityHeadshotRates(rangeDays),
+    staleTime: 30_000,
+  });
+
+export const useCombatHeatmap = (mapName: string, opts?: { weaponId?: number; perspective?: string; victimClass?: string; team?: string; rangeDays?: number }) =>
+  useQuery({
+    queryKey: ['combat-heatmap', mapName, opts],
+    queryFn: () => api.getCombatHeatmap(mapName, opts),
+    enabled: !!mapName,
+    staleTime: 30_000,
+  });
+
+export const useKillLines = (mapName: string, opts?: { weaponId?: number; attackerGuid?: string; rangeDays?: number; limit?: number }) =>
+  useQuery({
+    queryKey: ['kill-lines', mapName, opts],
+    queryFn: () => api.getKillLines(mapName, opts),
+    enabled: !!mapName,
+    staleTime: 30_000,
+  });
+
+export const useProximityKillOutcomes = (params?: ProximityScope) =>
+  useQuery({
+    queryKey: ['proximity-kill-outcomes', params],
+    queryFn: () => api.getProximityKillOutcomes(params),
+    staleTime: 30_000,
+  });
+
+export const useProximityKillOutcomePlayerStats = (rangeDays = 30, playerGuid?: string) =>
+  useQuery({
+    queryKey: ['proximity-kill-outcome-player-stats', rangeDays, playerGuid],
+    queryFn: () => api.getProximityKillOutcomePlayerStats(rangeDays, playerGuid),
+    staleTime: 30_000,
+  });
+
+export const useDangerZones = (mapName: string, opts?: { victimClass?: string; rangeDays?: number }) =>
+  useQuery({
+    queryKey: ['danger-zones', mapName, opts],
+    queryFn: () => api.getDangerZones(mapName, opts),
+    enabled: !!mapName,
+    staleTime: 30_000,
+  });
+
+export const useProximityHitRegionsByWeapon = (playerGuid: string, rangeDays = 30) =>
+  useQuery({
+    queryKey: ['proximity-hit-regions-by-weapon', playerGuid, rangeDays],
+    queryFn: () => api.getProximityHitRegionsByWeapon(playerGuid, rangeDays),
+    enabled: !!playerGuid,
+    staleTime: 60_000,
+  });
+
+// Proximity Composite Scores
+export const useProxScores = (rangeDays = 30, playerGuid?: string, limit = 50) =>
+  useQuery({
+    queryKey: ['prox-scores', rangeDays, playerGuid, limit],
+    queryFn: () => api.getProxScores(rangeDays, playerGuid, limit),
+    staleTime: 60_000,
+  });
+
+export const useProxFormula = () =>
+  useQuery({
+    queryKey: ['prox-formula'],
+    queryFn: api.getProxFormula,
+    staleTime: 300_000,
+  });
+
+// Movement Analytics (Phase A)
+export const useMovementStats = (rangeDays = 30, playerGuid?: string) =>
+  useQuery({
+    queryKey: ['movement-stats', rangeDays, playerGuid],
+    queryFn: () => api.getMovementStats(rangeDays, playerGuid),
+    staleTime: 60_000,
   });

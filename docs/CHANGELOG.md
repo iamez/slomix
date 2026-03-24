@@ -10,6 +10,48 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — 2026-03-24: Kill Outcomes, Hit Regions, Combat Heatmaps & Movement Analytics
+
+#### Kill Outcome Tracking (Feature 1 — requires Lua deploy)
+- **Lua**: Replaced broken `pollKillOutcomes()` PMF_LIMBO polling with event-driven state machine
+  - Gib detection via `body_damage >= 175` in `et_Damage`
+  - Tap-out detection via `et_ClientSpawn(revived=0)`
+  - Revive detection via existing `et_ClientSpawn(revived=1)`
+  - Stale cleanup throttled to every 5s (was per-frame)
+- **API**: `GET /proximity/kill-outcomes` — outcome distribution + recent events
+- **API**: `GET /proximity/kill-outcomes/player-stats` — Kill Permanence Rate (KPR) leaderboard
+- **Frontend**: KillOutcomesPanel — outcome bars (gibbed/revived/tapped_out), KPR leaderboard, Most Revived
+
+#### Hit Region Tracking (Feature 2 — requires Lua deploy)
+- **Lua**: Full 4-region delta detection (HEAD/ARMS/BODY/LEGS) in `et_Damage` via `pers.playerStats.hitRegions` comparison, 5000-entry cap
+- **Parser**: `HitRegionEvent` dataclass + `_parse_hit_region_line()` + `_import_hit_regions()`
+- **DB**: Migration #025 — `proximity_hit_region` (per-event) + `proximity_hit_region_summary` (aggregate with computed `headshot_pct`)
+- **API**: `GET /proximity/hit-regions` — per-player region breakdown
+- **API**: `GET /proximity/hit-regions/by-weapon` — per-weapon breakdown for a player
+- **API**: `GET /proximity/hit-regions/headshot-rates` — headshot % leaderboard (min 50 hits)
+- **Frontend**: HitRegionsPanel — region distribution bars, headshot leaderboard, most active shooters
+
+#### Combat Position Heatmaps (Feature 3 — requires Lua deploy)
+- **Lua**: Captures killer + victim xyz positions on every kill in `et_Obituary` with team, class, weapon, MOD
+- **Parser**: `CombatPosition` dataclass (18 fields) + `_parse_combat_position_line()` + `_import_combat_positions()`
+- **DB**: Migration #026 — `proximity_combat_position` with UNIQUE constraint and 7 indexes
+- **API**: `GET /proximity/combat-positions/heatmap` — grid-binned hotzone data with kills/deaths perspective toggle
+- **API**: `GET /proximity/combat-positions/kill-lines` — attacker→victim coordinate pairs for map overlay
+- **API**: `GET /proximity/combat-positions/danger-zones` — top death hotspots with class breakdown
+- **Frontend**: CombatHeatmapPanel — canvas heatmap with kills/deaths toggle, kill line overlay, map name input
+
+#### Movement Analytics (Phase A — works with existing data, no Lua changes)
+- **Parser**: 6 new `@property` on `PlayerTrack`: `peak_speed`, `stance_standing_sec`, `stance_crouching_sec`, `stance_prone_sec`, `sprint_sec`, `post_spawn_distance`
+- **DB**: Migration #027 — 6 new columns on `player_track`
+- **Backfill**: `scripts/backfill_player_track_metrics.py` — computed metrics for 13,457 existing tracks from JSONB path data
+- **API**: `GET /proximity/movement-stats` — per-player aggregated movement analytics (stance, speed, distance, sprint)
+- **Frontend**: MovementStatsPanel — stance distribution bar, biggest movers, speed/sprint leaderboards, post-spawn rush ranking
+
+#### Infrastructure
+- **Lua**: Feature flags for all 3 new features (`kill_outcome_tracking`, `hit_region_tracking`, `combat_positions`) — individually toggleable
+- **Frontend**: Fixed pre-existing TS error — added missing `times_focused`, `avg_attackers`, `avg_damage` fields to `ProximityLeaderboardEntry`
+- **Documentation**: `docs/OKSII_COMPARISON_REPORT.md` — comparison with Oksii's game-stats-web.lua, Phase A-D implementation roadmap
+
 ### Fixed — 2026-02-28
 
 - **Lua round_id Linkage Race Condition** — Fixed a race condition where `_link_lua_round_teams()` would permanently link Lua webhook data to the wrong round when the same map was played multiple times in a session:

@@ -291,7 +291,7 @@ function PlanningRoom({ canSubmit, canPromote }: { canSubmit: boolean; canPromot
     );
   }
 
-  const canManage = canSubmit && session && (canPromote || planning?.viewer?.website_user_id === session.created_by_user_id);
+  const canManage = session && (canPromote || planning?.viewer?.website_user_id === session.created_by_user_id);
 
   function cycleAssignment(userId: number) {
     setAssignments((prev) => {
