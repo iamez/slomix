@@ -289,7 +289,7 @@ function ProxScoresPanel() {
               <button
                 key={d}
                 className={`px-2 py-0.5 rounded text-[10px] font-medium ${rangeDays === d ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
-                onClick={() => setRangeDays(d)}
+                onClick={() => { setRangeDays(d); }}
               >{d}d</button>
             ))}
           </div>
@@ -310,7 +310,7 @@ function ProxScoresPanel() {
             <div key={p.guid}>
               <button
                 className="w-full grid grid-cols-[2rem_1fr_4rem_4rem_4rem_4.5rem] gap-1 items-center text-xs px-1 py-1 rounded hover:bg-slate-800/50 transition-colors"
-                onClick={() => setExpanded(expanded === p.guid ? null : p.guid)}
+                onClick={() => { setExpanded(expanded === p.guid ? null : p.guid); }}
               >
                 <span className="text-slate-600 font-mono text-right">{p.rank}</span>
                 <span className="truncate text-slate-200 text-left">{stripColors(p.name)}</span>
@@ -336,8 +336,10 @@ function ProxScoresPanel() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {Object.entries(p.breakdown).map(([catKey, metrics]) => (
                       <div key={catKey}>
-                        <div className="text-[10px] font-bold uppercase mb-1" style={{ color: SCORE_COLORS[catKey as keyof typeof SCORE_COLORS] ?? '#94a3b8' }}>
-                          {formula?.categories?.[catKey]?.label ?? catKey}
+                        {/* eslint-disable-next-line security/detect-object-injection */}
+                        <div className="text-[10px] font-bold uppercase mb-1" style={{ color: SCORE_COLORS[catKey as keyof typeof SCORE_COLORS] }}>
+                          {/* eslint-disable-next-line security/detect-object-injection */}
+                          {formula?.categories?.[catKey].label ?? catKey}
                         </div>
                         {Object.entries(metrics).map(([mk, m]) => (
                           <div key={mk} className="flex items-center gap-1 text-[10px]">
@@ -800,9 +802,10 @@ function DangerZonesPanel() {
       const radius = 6 + intensity * 18;
 
       // Color by dominant class
-      const classes = zone.classes ?? {};
+      const classes = zone.classes;
       const dominant = Object.entries(classes).sort((a, b) => b[1] - a[1])[0];
-      const baseColor = dominant ? (CLASS_COLORS[dominant[0]] ?? '#64748b') : '#64748b';
+      // eslint-disable-next-line security/detect-object-injection
+      const baseColor = CLASS_COLORS[dominant[0]] ?? '#64748b';
       const alpha = 0.25 + intensity * 0.55;
 
       ctx.beginPath();
@@ -828,7 +831,8 @@ function DangerZonesPanel() {
   // Aggregate class breakdown across all zones
   const classBreakdown: Record<string, number> = {};
   for (const zone of zones) {
-    for (const [cls, count] of Object.entries(zone.classes ?? {})) {
+    for (const [cls, count] of Object.entries(zone.classes)) {
+      // eslint-disable-next-line security/detect-object-injection
       classBreakdown[cls] = (classBreakdown[cls] ?? 0) + count;
     }
   }
@@ -851,7 +855,7 @@ function DangerZonesPanel() {
               type="text"
               placeholder="Map name..."
               value={mapName}
-              onChange={e => setMapName(e.target.value)}
+              onChange={e => { setMapName(e.target.value); }}
               className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-32 focus:outline-none focus:border-cyan-500"
             />
           </div>
@@ -861,14 +865,14 @@ function DangerZonesPanel() {
         <div className="flex gap-1 mb-3 flex-wrap">
           <button
             className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${!classFilter ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
-            onClick={() => setClassFilter(undefined)}
+            onClick={() => { setClassFilter(undefined); }}
           >All</button>
           {Object.entries(CLASS_COLORS).map(([cls, color]) => (
             <button
               key={cls}
               className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors border ${classFilter === cls ? 'border-current' : 'border-slate-700 bg-slate-800'}`}
               style={{ color: classFilter === cls ? color : undefined }}
-              onClick={() => setClassFilter(classFilter === cls ? undefined : cls)}
+              onClick={() => { setClassFilter(classFilter === cls ? undefined : cls); }}
             >{cls}</button>
           ))}
         </div>
@@ -889,11 +893,13 @@ function DangerZonesPanel() {
                 <div className="space-y-1.5">
                   {classSorted.map(([cls, count]) => (
                     <div key={cls} className="flex items-center gap-2 text-xs">
+                      {/* eslint-disable-next-line security/detect-object-injection */}
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: CLASS_COLORS[cls] ?? '#64748b' }} />
                       <span className="text-slate-300 w-20">{cls}</span>
                       <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
                         <div className="h-full rounded-full" style={{
                           width: `${totalDeaths > 0 ? (count / totalDeaths) * 100 : 0}%`,
+                          // eslint-disable-next-line security/detect-object-injection
                           backgroundColor: CLASS_COLORS[cls] ?? '#64748b',
                         }} />
                       </div>
@@ -1006,19 +1012,19 @@ function CombatHeatmapPanel() {
               type="text"
               placeholder="Map name..."
               value={mapName}
-              onChange={e => setMapName(e.target.value)}
+              onChange={e => { setMapName(e.target.value); }}
               className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-32 focus:outline-none focus:border-cyan-500"
             />
             <div className="flex gap-1">
               <button
                 className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${perspective === 'kills' ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
-                onClick={() => setPerspective('kills')}
+                onClick={() => { setPerspective('kills'); }}
               >
                 Kills
               </button>
               <button
                 className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${perspective === 'deaths' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
-                onClick={() => setPerspective('deaths')}
+                onClick={() => { setPerspective('deaths'); }}
               >
                 Deaths
               </button>

@@ -11,7 +11,6 @@ Usage:
 import argparse
 import json
 import math
-import sys
 import psycopg2
 
 DB_PARAMS = {
