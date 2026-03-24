@@ -339,7 +339,7 @@ function ProxScoresPanel() {
                         {/* eslint-disable-next-line security/detect-object-injection */}
                         <div className="text-[10px] font-bold uppercase mb-1" style={{ color: SCORE_COLORS[catKey as keyof typeof SCORE_COLORS] }}>
                           {/* eslint-disable-next-line security/detect-object-injection */}
-                          {formula?.categories?.[catKey].label ?? catKey}
+                          {formula?.categories[catKey]?.label ?? catKey}
                         </div>
                         {Object.entries(metrics).map(([mk, m]) => (
                           <div key={mk} className="flex items-center gap-1 text-[10px]">
