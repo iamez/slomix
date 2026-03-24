@@ -497,7 +497,6 @@ class LinkCog(commands.Cog, name="Link"):
                     )
                 else:
                     stats_str = "_(No stats found)_"
-                    last_seen = "Never"
 
                 link_status = f"🔗 Linked to `{link_row[0]}`" if link_row else "❌ Not linked"
 

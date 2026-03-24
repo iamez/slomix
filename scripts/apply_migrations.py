@@ -34,7 +34,7 @@ try:
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 except ImportError:
-    pass
+    pass  # python-dotenv is optional
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 

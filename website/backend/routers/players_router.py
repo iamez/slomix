@@ -886,8 +886,8 @@ async def get_quick_leaders(
                 dpm_rows = await db.fetch_all(
                     fallback_session_dpm, (start_date, limit)
                 )
-            except Exception as e:
-                errors.append(f"dpm_query_failed: {e}")
+            except Exception:
+                errors.append("dpm_query_failed")
                 dpm_rows = []
     dpm_leaders = []
     for i, row in enumerate(dpm_rows):
@@ -1118,10 +1118,6 @@ async def get_player_rounds(
             short_map = short_map.rsplit(".", 1)[0]
         if len(short_map) > 12:
             short_map = short_map[:12]
-
-        date_obj = row[0]
-        if isinstance(date_obj, str):
-            date_obj = datetime.strptime(date_obj, "%Y-%m-%d")
 
         rounds.append(
             {

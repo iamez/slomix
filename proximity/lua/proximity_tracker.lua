@@ -155,6 +155,9 @@ local config = {
         focus_fire = true,
         team_push_detection = true,
         trade_kills = true,
+        kill_outcome_tracking = true,
+        hit_region_tracking = true,
+        combat_positions = true,
     },
 
     -- ===== v5 TEAMPLAY CONFIG =====
@@ -349,12 +352,18 @@ local MOD_TO_WEAPON = {
     [66] = 54,   -- MOD_MP34 → WP_MP34
 }
 
--- Headshot tracking: HR_HEAD = 0 in hitRegion_t enum.
--- pers.playerStats.hitRegions[HR_HEAD] is incremented by G_LogRegionHit()
+-- Hit region tracking: hitRegion_t enum from ET:Legacy source (g_local.h).
+-- pers.playerStats.hitRegions[HR_*] is incremented by G_LogRegionHit()
 -- BEFORE the Lua et_Damage hook fires (g_combat.c:1689 vs 1811).
--- We detect headshots by tracking the delta in hitRegions[0].
+-- We detect hit region by comparing delta across all 4 regions.
 local HR_HEAD = 0
-local last_hr_head = {}  -- [clientnum] = last known hitRegions[HR_HEAD] count
+local HR_ARMS = 1
+local HR_BODY = 2
+local HR_LEGS = 3
+local HR_NUM_HITREGIONS = 4
+local HR_NAMES = { [0] = "HEAD", [1] = "ARMS", [2] = "BODY", [3] = "LEGS" }
+local last_hr_head = {}  -- [clientnum] = last known hitRegions[HR_HEAD] count (legacy, kept for compatibility)
+local last_hr_all = {}   -- [clientnum] = { [0]=N, [1]=N, [2]=N, [3]=N } for hit region delta detection
 
 -- ===== MODULE DATA =====
 local tracker = {
@@ -426,6 +435,12 @@ local tracker = {
 
     -- Weapon fire tracking (for accuracy)
     weapon_fire = {},           -- [guid] = { [weapon_id] = { shots=N, hits=N, kills=N, headshots=N } }
+
+    -- Hit region tracking (v5.2)
+    hit_regions = {},           -- array of {time, attacker_guid, attacker_name, victim_guid, victim_name, weapon, region, damage}
+
+    -- Combat position tracking (v5.2)
+    combat_positions = {},      -- array of kill positions with attacker+victim coords, weapon, class, team
 
     -- Kill outcome tracking (v5.1)
     -- State machine: ALIVE→DEAD→gibbed/revived/tapped_out
@@ -1751,6 +1766,12 @@ local function recordKillOutcomeBodyDamage(victim_slot, attacker_slot, damage, m
         info.last_damager_name = getPlayerName(attacker_slot)
         info.last_damage_mod = meansOfDeath or 0
     end
+
+    -- v5.2: Gib detection via cumulative body damage threshold (replaces broken PMF_LIMBO polling)
+    -- ET:Legacy gibs corpses at -175 health. Body damage accumulates post-mortem from all sources.
+    if info.body_damage >= 175 then
+        finalizeKillOutcome(victim_slot, "gibbed", nil, nil)
+    end
 end
 
 local function finalizeKillOutcome(victim_slot, outcome, resolver_guid, resolver_name)
@@ -1811,20 +1832,18 @@ local function finalizeKillOutcome(victim_slot, outcome, resolver_guid, resolver
     end
 end
 
-local function pollKillOutcomes(now)
+-- v5.2: Simplified cleanup — only handles stale entries (timeout safety net).
+-- Gib detection moved to recordKillOutcomeBodyDamage (body_damage >= 175).
+-- Tap-out detection moved to et_ClientSpawn (revived ~= 1).
+-- Revive detection already handled in et_ClientSpawn (revived == 1).
+local KILL_OUTCOME_CLEANUP_INTERVAL = 5000  -- check every 5s instead of every frame
+local last_kill_outcome_cleanup = 0
+
+local function cleanupStaleKillOutcomes(now)
+    if now - last_kill_outcome_cleanup < KILL_OUTCOME_CLEANUP_INTERVAL then return end
+    last_kill_outcome_cleanup = now
     for slot, info in pairs(tracker.kill_outcomes.dead_players) do
-        -- Check for PMF_LIMBO transition
-        local pm_flags = safe_gentity_get(slot, "ps.pm_flags")
-        if pm_flags and has_flag(pm_flags, PMF_LIMBO) then
-            -- Player went to limbo — gib or tapout?
-            local health = tonumber(safe_gentity_get(slot, "health")) or 0
-            if health <= GIB_HEALTH then
-                finalizeKillOutcome(slot, "gibbed", nil, nil)
-            else
-                finalizeKillOutcome(slot, "tapped_out", nil, nil)
-            end
-        elseif now - info.kill_time > KILL_OUTCOME_TIMEOUT then
-            -- Stale entry cleanup
+        if now - info.kill_time > KILL_OUTCOME_TIMEOUT then
             finalizeKillOutcome(slot, "expired", nil, nil)
         end
     end
@@ -1864,8 +1883,10 @@ local function updateTeamplay(now)
         end
     end
 
-    -- v5.1: Kill outcome polling (check for PMF_LIMBO transitions on dead players)
-    pollKillOutcomes(now)
+    -- v5.2: Kill outcome cleanup (stale entry timeout only, every 5s)
+    if isFeatureEnabled("kill_outcome_tracking") then
+        cleanupStaleKillOutcomes(now)
+    end
 end
 
 -- ===== FILE OUTPUT =====
@@ -2217,6 +2238,39 @@ local function outputDataInner()
         end
     end
 
+    -- ===== HIT REGIONS (v5.2) =====
+    if isFeatureEnabled("hit_region_tracking") and #tracker.hit_regions > 0 then
+        local hr_header = "\n# HIT_REGIONS\n" ..
+            "# time;attacker_guid;attacker_name;victim_guid;victim_name;weapon;region;damage\n" ..
+            "# region: 0=HEAD, 1=ARMS, 2=BODY, 3=LEGS\n"
+        et.trap_FS_Write(hr_header, string.len(hr_header), fd)
+        for _, hr in ipairs(tracker.hit_regions) do
+            local line = string.format("%d;%s;%s;%s;%s;%d;%d;%d\n",
+                hr.time, hr.attacker_guid, hr.attacker_name,
+                hr.victim_guid, hr.victim_name,
+                hr.weapon, hr.region, hr.damage)
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
+
+    -- ===== COMBAT POSITIONS (v5.2) =====
+    if isFeatureEnabled("combat_positions") and #tracker.combat_positions > 0 then
+        local cp_header = "\n# COMBAT_POSITIONS\n" ..
+            "# time;event;atk_guid;atk_name;atk_team;atk_class;" ..
+            "vic_guid;vic_name;vic_team;vic_class;" ..
+            "ax;ay;az;vx;vy;vz;weapon;mod\n"
+        et.trap_FS_Write(cp_header, string.len(cp_header), fd)
+        for _, cp in ipairs(tracker.combat_positions) do
+            local line = string.format("%d;%s;%s;%s;%s;%s;%s;%s;%s;%s;%d;%d;%d;%d;%d;%d;%d;%d\n",
+                cp.time, cp.event_type,
+                cp.attacker_guid, cp.attacker_name, cp.attacker_team, cp.attacker_class,
+                cp.victim_guid, cp.victim_name, cp.victim_team, cp.victim_class,
+                cp.ax, cp.ay, cp.az, cp.vx, cp.vy, cp.vz,
+                cp.weapon, cp.mod)
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
+
     et.trap_FS_FCloseFile(fd)
 
     -- Summary
@@ -2243,8 +2297,8 @@ local function outputDataInner()
         #tracker.focus_fire.events,
         #tracker.pushes.events,
         #tracker.trade_kills.events))
-    proxPrint(string.format("[PROX v5] New: %d revives, %d players with weapon accuracy data, %d kill outcomes\n",
-        #tracker.revives, weapon_fire_count, #tracker.kill_outcomes.completed))
+    proxPrint(string.format("[PROX v5] New: %d revives, %d weapon accuracy players, %d kill outcomes, %d hit regions, %d combat positions\n",
+        #tracker.revives, weapon_fire_count, #tracker.kill_outcomes.completed, #tracker.hit_regions, #tracker.combat_positions))
 
     if isFeatureEnabled("reaction_tracking") then
         proxPrint(string.format("[PROX v5] Reaction metrics: %d rows\n", #tracker.reaction_metrics))
@@ -2407,7 +2461,10 @@ function et_InitGame(levelTime, randomSeed, restart)
     tracker.weapon_fire = {}
     tracker.kill_outcomes.dead_players = {}
     tracker.kill_outcomes.completed = {}
+    tracker.hit_regions = {}
+    tracker.combat_positions = {}
     last_hr_head = {}
+    last_hr_all = {}
 
     -- Read spawn timers
     refreshSpawnTimers()
@@ -2542,10 +2599,12 @@ function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
         registerReactionSignals(target, attacker, gameTime())
     end
 
-    -- v5.1: Kill outcome — track body damage (gib attempts)
-    local victim_pm_type = safe_gentity_get(target, "ps.pm_type")
-    if victim_pm_type == PM_DEAD then
-        recordKillOutcomeBodyDamage(target, attacker, damage, meansOfDeath)
+    -- v5.1: Kill outcome — track body damage (gib detection via threshold)
+    if isFeatureEnabled("kill_outcome_tracking") then
+        local victim_pm_type = safe_gentity_get(target, "ps.pm_type")
+        if victim_pm_type == PM_DEAD then
+            recordKillOutcomeBodyDamage(target, attacker, damage, meansOfDeath)
+        end
     end
 
     -- v5: Crossfire opportunity execution check
@@ -2576,6 +2635,44 @@ function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
             tracker.weapon_fire[atk_guid][accuracy_weapon].headshots = tracker.weapon_fire[atk_guid][accuracy_weapon].headshots + 1
         end
         last_hr_head[attacker] = hr_head
+
+        -- v5.2: Full hit region tracking (HEAD/ARMS/BODY/LEGS)
+        if isFeatureEnabled("hit_region_tracking") then
+            -- Initialize cached region counts for this attacker on first hit
+            if not last_hr_all[attacker] then
+                last_hr_all[attacker] = {}
+                for hr = 0, HR_NUM_HITREGIONS - 1 do
+                    last_hr_all[attacker][hr] = tonumber(safe_gentity_get(attacker, "pers.playerStats.hitRegions", hr)) or 0
+                end
+            end
+            -- Detect which region was hit via delta comparison
+            local detected_region = -1
+            for hr = 0, HR_NUM_HITREGIONS - 1 do
+                local cur = tonumber(safe_gentity_get(attacker, "pers.playerStats.hitRegions", hr)) or 0
+                if cur > (last_hr_all[attacker][hr] or 0) then
+                    detected_region = hr
+                    break
+                end
+            end
+            -- Update cached values
+            for hr = 0, HR_NUM_HITREGIONS - 1 do
+                last_hr_all[attacker][hr] = tonumber(safe_gentity_get(attacker, "pers.playerStats.hitRegions", hr)) or 0
+            end
+            -- Record hit region event
+            if detected_region >= 0 and #tracker.hit_regions < 5000 then
+                local vic_guid = getPlayerGUID(target)
+                table.insert(tracker.hit_regions, {
+                    time = gameTime(),
+                    attacker_guid = atk_guid,
+                    attacker_name = getPlayerName(attacker),
+                    victim_guid = vic_guid or "",
+                    victim_name = getPlayerName(target) or "",
+                    weapon = accuracy_weapon,
+                    region = detected_region,
+                    damage = damage,
+                })
+            end
+        end
     end
 
     -- v4.1: Action annotation for test mode
@@ -2630,7 +2727,7 @@ function et_Obituary(victim, killer, meansOfDeath)
     end
 
     -- v5.1: Kill outcome tracking (all deaths from enemy kills)
-    if death_type == "killed" and killer and isValidClient(killer) then
+    if isFeatureEnabled("kill_outcome_tracking") and death_type == "killed" and killer and isValidClient(killer) then
         recordKillOutcomeDeath(victim, killer, meansOfDeath)
     end
 
@@ -2654,6 +2751,34 @@ function et_Obituary(victim, killer, meansOfDeath)
                 tracker.weapon_fire[kill_guid][kill_weapon].kills = tracker.weapon_fire[kill_guid][kill_weapon].kills + 1
             end
         end
+
+        -- v5.2: Combat position tracking (killer + victim positions on kill)
+        if isFeatureEnabled("combat_positions") then
+            local killer_pos = getPlayerPos(killer)
+            if killer_pos and death_pos then
+                local cp_weapon = MOD_TO_WEAPON[meansOfDeath] or (safe_gentity_get(killer, "ps.weapon") or 0)
+                table.insert(tracker.combat_positions, {
+                    time = now,
+                    event_type = "kill",
+                    attacker_guid = getPlayerGUID(killer) or "",
+                    attacker_name = getPlayerName(killer) or "",
+                    attacker_team = getPlayerTeam(killer) or "",
+                    attacker_class = getPlayerClass(killer) or "",
+                    victim_guid = getPlayerGUID(victim) or "",
+                    victim_name = getPlayerName(victim) or "",
+                    victim_team = getPlayerTeam(victim) or "",
+                    victim_class = getPlayerClass(victim) or "",
+                    ax = round(killer_pos.x, 0),
+                    ay = round(killer_pos.y, 0),
+                    az = round(killer_pos.z, 0),
+                    vx = round(death_pos.x, 0),
+                    vy = round(death_pos.y, 0),
+                    vz = round(death_pos.z, 0),
+                    weapon = cp_weapon,
+                    mod = meansOfDeath or 0,
+                })
+            end
+        end
     end
 end
 
@@ -2664,7 +2789,7 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
 
     if revived == 1 then
         -- v5.1: Kill outcome — revive resolves pending death
-        if tracker.kill_outcomes.dead_players[clientNum] then
+        if isFeatureEnabled("kill_outcome_tracking") and tracker.kill_outcomes.dead_players[clientNum] then
             local reviver_client = tonumber(safe_gentity_get(clientNum, "pers.lastrevive_client"))
             local reviver_guid = (reviver_client and isValidClient(reviver_client)) and getPlayerGUID(reviver_client) or ""
             local reviver_name = (reviver_client and isValidClient(reviver_client)) and getPlayerName(reviver_client) or ""
@@ -2756,6 +2881,11 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
         return
     end
 
+    -- v5.2: Tap-out detection — normal respawn (not revive) resolves pending kill outcome
+    if isFeatureEnabled("kill_outcome_tracking") and tracker.kill_outcomes.dead_players[clientNum] then
+        finalizeKillOutcome(clientNum, "tapped_out", nil, nil)
+    end
+
     if not isPlayerActive(clientNum) then return end
     if tracker.player_tracks[clientNum] then
         endPlayerTrack(clientNum, nil, nil)
@@ -2775,6 +2905,7 @@ function et_ClientDisconnect(clientNum)
     end
     tracker.last_stamina[clientNum] = nil
     last_hr_head[clientNum] = nil
+    last_hr_all[clientNum] = nil
     client_cache[clientNum] = nil
 end
 

@@ -65,7 +65,7 @@
 ]]--
 
 local modname = "stats_discord_webhook"
-local version = "1.6.2"
+local version = "1.6.3"
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -112,13 +112,13 @@ local configuration = {
 local round_start_unix = 0
 local round_end_unix = 0
 local round_end_ms = 0
-local pause_start_time = 0
 local pause_start_unix = 0       -- Unix timestamp when current pause started (v1.3.0)
 local total_pause_seconds = 0
 local pause_count = 0
 local pause_events = {}          -- Array of {start_unix, end_unix, duration_sec} (v1.3.0)
 local last_gamestate = -1
-local last_frame_time = 0
+local frame_level_time = 0       -- levelTime from et_RunFrame (freezes during pause)
+local paused = false              -- true when game is paused (CS_SERVERTOGGLES bit 4)
 local scheduled_send_time = 0
 local send_pending = false
 local round_started = false
@@ -224,6 +224,7 @@ end
 
 local function json_escape(str)
     return tostring(str or ""):gsub("\\", "\\\\"):gsub('"', '\\"')
+        :gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
 end
 
 local function get_gametimes_dir()
@@ -247,7 +248,7 @@ local function ensure_dir(path)
     if configuration.debug then
         log(string.format("ensure_dir: %s (ok=%s)", path, tostring(ok)))
     end
-    return true
+    return (ok == true or ok == 0)
 end
 
 local function log_runtime_paths()
@@ -300,8 +301,15 @@ local function write_gametime_file(payload_json, meta)
         spawn_stats_json
     )
     local gametime_payload = string.format('{"meta":%s,"payload":%s}', meta_json, payload_json)
-    f:write(gametime_payload)
-    f:close()
+    local write_ok, write_err = pcall(function()
+        f:write(gametime_payload)
+        f:close()
+    end)
+    if not write_ok then
+        pcall(function() f:close() end)
+        log(string.format("Failed to write gametime data: %s", tostring(write_err)))
+        return false
+    end
     log(string.format("Gametime file written: %s", filename))
     return true
 end
@@ -333,18 +341,13 @@ local function execute_curl_async(payload_json)
     )
 
     local ok, exit_type, exit_code = os.execute(curl_cmd)
-    os.execute(string.format("sleep 15 && rm -f %s &", shell_escape(temp_file)))
+    os.execute(string.format("sleep 30 && rm -f %s &", shell_escape(temp_file)))
 
     if ok == true or ok == 0 then
-        return true, string.format(
-            "curl started (ok=%s, type=%s, code=%s)",
-            tostring(ok),
-            tostring(exit_type),
-            tostring(exit_code)
-        )
+        return true, "curl launched in background"
     end
     return false, string.format(
-        "curl failed (ok=%s, type=%s, code=%s)",
+        "curl launch failed (ok=%s, type=%s, code=%s)",
         tostring(ok),
         tostring(exit_type),
         tostring(exit_code)
@@ -428,7 +431,7 @@ local function collect_team_data()
             local team = tonumber(safe_gentity_get(clientNum, "sess.sessionTeam")) or 0
 
             -- Clean the name (remove color codes for cleaner display)
-            local clean_name = name:gsub("%^[0-9]", "")
+            local clean_name = strip_color_codes(name)
 
             local player_data = {
                 guid = guid:sub(1, 32),  -- First 32 chars of GUID
@@ -700,22 +703,26 @@ end
 
 local function get_end_reason()
     local time_limit = get_time_limit()
-    local actual_time = round_end_unix - round_start_unix
+    local play_time = round_end_unix - round_start_unix - total_pause_seconds
     local time_limit_seconds = math.floor(time_limit * 60 + 0.5)
 
-    -- If a surrender vote was active and round ended early, it was surrender
+    -- Round reached timelimit → time_expired (regardless of stale surrender votes)
+    if time_limit_seconds > 0 and play_time >= (time_limit_seconds * 0.9) then
+        return "time_expired"
+    end
+
+    -- Round ended early — if surrender vote was active, it's surrender
     if surrender_vote.active and surrender_vote.caller_team > 0 then
         return "surrender"
     end
 
-    -- If round ended significantly before time limit, it was surrender or objective
-    if time_limit_seconds > 0 and actual_time < (time_limit_seconds * 0.9) then
+    -- Round ended early without surrender vote — check winner for objective
+    if time_limit_seconds > 0 then
         local winner = get_winner_team()
         if winner > 0 then
             return "objective"
-        else
-            return "surrender"
         end
+        return "surrender"
     end
 
     return "time_expired"
@@ -1047,6 +1054,7 @@ local function handle_gamestate_change(new_gamestate)
         pause_count = 0
         pause_events = {}        -- Reset pause events array (v1.3.0)
         pause_start_unix = 0
+        paused = false
         send_pending = false
         axis_players_json = "[]"
         allies_players_json = "[]"
@@ -1054,6 +1062,7 @@ local function handle_gamestate_change(new_gamestate)
         allies_names = ""
         reset_spawn_tracking()
         reset_surrender_vote()   -- Reset surrender vote for new round (v1.4.0)
+        round_started = true
         log(string.format("Round started at %d", round_start_unix))
         intermission_handled = false
     end
@@ -1066,42 +1075,37 @@ end
 -- PAUSE DETECTION (OPTIONAL)
 -- ============================================================================
 
-local function detect_pause(level_time)
-    -- Simple pause detection: if frame delta is unusually large, game was paused
-    -- This is a heuristic - ET:Legacy doesn't have explicit pause events
-    if last_frame_time > 0 then
-        local frame_delta = level_time - last_frame_time
+local function detect_pause()
+    -- Authoritative pause detection via CS_SERVERTOGGLES bit 4
+    -- v1.6.3: replaces broken levelTime frame-delta heuristic that never triggered
+    -- (levelTime freezes during pause → frame_delta = 0, never > 2000)
+    local cs = tonumber(et.trap_GetConfigstring(et.CS_SERVERTOGGLES)) or 0
+    local is_paused = bit.band(bit.lshift(1, 4), cs) ~= 0
 
-        -- If more than 2 seconds between frames, consider it a pause
-        if frame_delta > 2000 then
-            if pause_start_time == 0 then
-                pause_start_time = last_frame_time
-                pause_start_unix = os.time()  -- Record when pause started (v1.3.0)
-                pause_count = pause_count + 1
-                log(string.format("Pause #%d detected at %d (unix: %d)",
-                    pause_count, level_time, pause_start_unix))
-            end
-        elseif pause_start_time > 0 then
-            -- Pause ended
-            local pause_duration = (level_time - pause_start_time) / 1000
-            local pause_end_unix = os.time()
-            total_pause_seconds = total_pause_seconds + pause_duration
+    if is_paused and not paused then
+        -- Pause started
+        paused = true
+        pause_start_unix = os.time()
+        pause_count = pause_count + 1
+        log(string.format("Pause #%d started (unix: %d)", pause_count, pause_start_unix))
+    elseif not is_paused and paused then
+        -- Pause ended
+        paused = false
+        local pause_end_unix = os.time()
+        local duration = pause_end_unix - pause_start_unix
+        if duration < 1 then duration = 1 end  -- minimum 1s (os.time resolution)
+        total_pause_seconds = total_pause_seconds + duration
 
-            -- Record this pause event (v1.3.0)
-            table.insert(pause_events, {
-                start_unix = pause_start_unix,
-                end_unix = pause_end_unix,
-                duration_sec = math.floor(pause_duration)
-            })
+        table.insert(pause_events, {
+            start_unix = pause_start_unix,
+            end_unix = pause_end_unix,
+            duration_sec = duration
+        })
 
-            log(string.format("Pause #%d ended, duration: %d sec (total: %d sec)",
-                #pause_events, math.floor(pause_duration), math.floor(total_pause_seconds)))
-            pause_start_time = 0
-            pause_start_unix = 0
-        end
+        log(string.format("Pause #%d ended, duration: %d sec (total: %d sec)",
+            #pause_events, duration, math.floor(total_pause_seconds)))
+        pause_start_unix = 0
     end
-
-    last_frame_time = level_time
 end
 
 -- ============================================================================
@@ -1113,8 +1117,12 @@ function et_InitGame(levelTime, randomSeed, restart)
 
     -- Initialize state
     last_gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
-    last_frame_time = levelTime
+    frame_level_time = levelTime
     map_load_unix = os.time()
+    send_in_progress = false
+    last_sent_signature = ""
+    paused = false
+    pause_start_unix = 0
     reset_spawn_tracking()
 
     -- Check for new map and reset score if needed (v1.4.0)
@@ -1148,7 +1156,7 @@ function et_InitGame(levelTime, randomSeed, restart)
         log(string.format("Map loaded in warmup, tracking from %d", warmup_start_unix))
     end
 
-    et.G_Print(string.format("[%s] v%s loaded - Discord webhook with surrender tracking\n",
+    et.G_Print(string.format("[%s] v%s loaded - Discord webhook with CS_SERVERTOGGLES pause detection\n",
         modname, version))
 
     log_runtime_paths()
@@ -1159,6 +1167,8 @@ function et_InitGame(levelTime, randomSeed, restart)
 end
 
 function et_RunFrame(levelTime)
+    frame_level_time = levelTime
+
     -- Check for gamestate changes
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate"))
     handle_gamestate_change(gamestate)
@@ -1180,6 +1190,7 @@ function et_RunFrame(levelTime)
         pause_count = 0
         pause_events = {}
         pause_start_unix = 0
+        paused = false
         send_pending = false
         axis_players_json = "[]"
         allies_players_json = "[]"
@@ -1197,7 +1208,7 @@ function et_RunFrame(levelTime)
     -- Round ended (intermission reached) - use same pattern as c0rnp0rn7.lua
     if gamestate == GS_INTERMISSION and not intermission_handled and not round_end_emitted then
         round_end_unix = os.time()
-        round_end_ms = et.trap_Milliseconds()
+        round_end_ms = frame_level_time
         log(string.format("Round ended at %d (duration: %d sec)",
             round_end_unix, round_end_unix - round_start_unix))
 
@@ -1221,9 +1232,9 @@ function et_RunFrame(levelTime)
         round_end_emitted = true
     end
 
-    -- Detect pauses (optional feature)
+    -- Detect pauses via CS_SERVERTOGGLES (v1.6.3)
     if gamestate == GS_PLAYING then
-        detect_pause(levelTime)
+        detect_pause()
         track_spawns(levelTime)
     end
 
@@ -1274,7 +1285,7 @@ function et_Obituary(target, attacker, meansOfDeath)
     client_name_cache[target] = name
     local entry = ensure_spawn_entry(guid, name)
     if entry then
-        local death_ms = et.trap_Milliseconds()
+        local death_ms = frame_level_time
         if death_ms and death_ms > 0 then
             entry.death_count = entry.death_count + 1
             entry.last_death_ms = death_ms
@@ -1310,7 +1321,7 @@ function et_ClientCommand(clientNum, command)
             local team = tonumber(safe_gentity_get(clientNum, "sess.sessionTeam")) or 0
 
             -- Clean the name (remove color codes)
-            local clean_name = name:gsub("%^[0-9]", "")
+            local clean_name = strip_color_codes(name)
 
             surrender_vote.caller_guid = guid:sub(1, 32)
             surrender_vote.caller_name = clean_name
@@ -1357,7 +1368,22 @@ function et_ShutdownGame(restart)
         end
 
         round_end_unix = os.time()
-        round_end_ms = (et.trap_Milliseconds and et.trap_Milliseconds()) or 0
+        round_end_ms = frame_level_time
+
+        -- Close active pause if game was paused at shutdown
+        if paused then
+            paused = false
+            local duration = round_end_unix - pause_start_unix
+            if duration < 1 then duration = 1 end
+            total_pause_seconds = total_pause_seconds + duration
+            table.insert(pause_events, {
+                start_unix = pause_start_unix,
+                end_unix = round_end_unix,
+                duration_sec = duration
+            })
+            pause_start_unix = 0
+            log(string.format("Closed active pause at shutdown, duration: %d sec", duration))
+        end
 
         local axis, allies = collect_team_data()
         axis_players_json = format_player_json(axis)
