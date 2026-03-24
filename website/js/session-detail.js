@@ -96,14 +96,7 @@ function mapImageFor(mapName) {
     return "assets/maps/map_generic.svg";
 }
 
-function mapTile(mapName) {
-    const safe = escapeHtml(mapLabel(mapName));
-    const img = mapImageFor(mapName);
-    if (img.includes('map_generic')) {
-        return `<div class="w-16 h-10 rounded-md bg-slate-900/60 border border-white/10 flex items-center justify-center text-[9px] font-bold text-white px-1">${safe}</div>`;
-    }
-    return `<div class="relative w-16 h-10 rounded-md border border-white/10 overflow-hidden bg-slate-900/60"><div class="absolute inset-0 bg-cover bg-center" style="background-image:url('${img}')"></div><div class="absolute bottom-0 left-0 right-0 bg-black/50 text-[9px] text-slate-100 px-1 truncate">${safe}</div></div>`;
-}
+
 
 function formatDuration(seconds) {
     const total = Number(seconds || 0);

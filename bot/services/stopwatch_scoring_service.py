@@ -852,8 +852,6 @@ class StopwatchScoringService:
 
                 team_a_pts = 0
                 team_b_pts = 0
-                desc = "Map tie: no completion or time data"
-                scoring_source = "time"
 
                 # Detect double fullhold: both defenders won their rounds = map tie
                 r1_defender_won = (r1.get('winner_team') == r1.get('defender_team')
