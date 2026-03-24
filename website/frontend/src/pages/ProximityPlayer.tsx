@@ -4,6 +4,7 @@ import { GlassPanel } from '../components/GlassPanel';
 import { GlassCard } from '../components/GlassCard';
 import { Skeleton } from '../components/Skeleton';
 import { navigateTo } from '../lib/navigation';
+import { useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHitRegionsByWeapon, useMovementStats, useProxScores } from '../api/hooks';
 
 const API = '/api';
 
@@ -47,6 +48,16 @@ function fmtMs(v: number | null | undefined) {
 function fmtPct(v: number | null | undefined) {
   return v != null ? `${v.toFixed(1)}%` : '--';
 }
+function stripColors(name: string): string { return name.replace(/\^[0-9a-zA-Z]/g, ''); }
+
+const REGION_NAMES = ['Head', 'Arms', 'Body', 'Legs'] as const;
+const REGION_COLORS = ['#ef4444', '#60a5fa', '#22c55e', '#f59e0b'];
+const WEAPON_NAMES: Record<number, string> = {
+  3: 'Knife', 8: 'MP40', 9: 'Thompson', 10: 'Sten',
+  15: 'Panzerfaust', 19: 'FG42', 23: 'Garand', 28: 'K43',
+  32: 'Colt', 33: 'Luger', 35: 'Grenade', 36: 'Grenade',
+  44: 'Landmine', 47: 'Mortar', 50: 'Dynamite', 57: 'MG42',
+};
 
 // ── Radar Chart ──────────────────────────────────────────────────────────────
 
@@ -345,6 +356,258 @@ export default function ProximityPlayer({ params }: { params?: Record<string, st
           </div>
         </GlassPanel>
       </div>
+
+      {/* Proximity Composite Score */}
+      <PlayerProxScoreSection guid={guid} />
+
+      {/* v5.2 sections */}
+      <PlayerKillOutcomesSection guid={guid} />
+      <PlayerHitRegionsSection guid={guid} />
+      <PlayerMovementSection guid={guid} />
     </div>
+  );
+}
+
+// ── Proximity Composite Score per player ────────────────────────────────────
+
+const SCORE_COLORS: Record<string, string> = {
+  prox_combat: '#ef4444', prox_team: '#60a5fa', prox_gamesense: '#f59e0b', prox_overall: '#22c55e',
+};
+
+function PlayerProxScoreSection({ guid }: { guid: string }) {
+  const { data } = useProxScores(30, guid, 1);
+  const player = data?.players?.[0];
+  if (!player) return null;
+
+  return (
+    <GlassPanel className="mt-6">
+      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
+        Proximity Score
+      </h3>
+      {/* Score tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+        <div className="text-center">
+          <div className="text-[10px] text-slate-500">Combat</div>
+          <div className="text-2xl font-black" style={{ color: SCORE_COLORS.prox_combat }}>{player.prox_combat.toFixed(1)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-[10px] text-slate-500">Team</div>
+          <div className="text-2xl font-black" style={{ color: SCORE_COLORS.prox_team }}>{player.prox_team.toFixed(1)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-[10px] text-slate-500">Game Sense</div>
+          <div className="text-2xl font-black" style={{ color: SCORE_COLORS.prox_gamesense }}>{player.prox_gamesense.toFixed(1)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-[10px] text-slate-500">Overall</div>
+          <div className="text-3xl font-black" style={{ color: SCORE_COLORS.prox_overall }}>{player.prox_overall.toFixed(1)}</div>
+        </div>
+      </div>
+
+      {/* Radar values */}
+      <div className="flex gap-3 justify-center mb-4">
+        {player.prox_radar.map((axis, i) => (
+          <div key={i} className="text-center px-2">
+            <div className="text-[10px] text-slate-500">{axis.label}</div>
+            <div className="text-sm font-bold text-white">{axis.value.toFixed(0)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Per-metric breakdown */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {Object.entries(player.breakdown).map(([catKey, metrics]) => (
+          <div key={catKey}>
+            <div className="text-[10px] font-bold uppercase mb-1.5" style={{ color: SCORE_COLORS[catKey] ?? '#94a3b8' }}>
+              {catKey.replace('prox_', '')}
+            </div>
+            {Object.entries(metrics).map(([mk, m]) => (
+              <div key={mk} className="flex items-center gap-1 text-[10px] mb-0.5">
+                <span className="text-slate-500 w-24 truncate">{m.label}</span>
+                <div className="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden">
+                  <div className="h-full rounded-full bg-cyan-500/60" style={{ width: `${m.percentile * 100}%` }} />
+                </div>
+                <span className="text-slate-400 font-mono w-8 text-right">{(m.percentile * 100).toFixed(0)}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="text-[10px] text-slate-600 mt-2 text-center">Rank #{player.rank} &middot; {player.engagements} engagements &middot; Last 30 days</div>
+    </GlassPanel>
+  );
+}
+
+// ── Kill Outcomes per player ────────────────────────────────────────────────
+
+function PlayerKillOutcomesSection({ guid }: { guid: string }) {
+  const { data: stats } = useProximityKillOutcomePlayerStats(90, guid);
+
+  const kprEntry = stats?.kill_permanence_leaders?.find(p => p.guid === guid);
+  const revEntry = stats?.revive_rate_leaders?.find(p => p.guid === guid);
+
+  if (!kprEntry && !revEntry) return null;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+      {kprEntry && (
+        <GlassPanel>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
+            Kill Permanence (as Killer)
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <StatTile label="KPR" value={`${(kprEntry.kpr * 100).toFixed(1)}%`} color="text-cyan-400" />
+            <StatTile label="Gibs" value={fmtNum(kprEntry.gibs)} color="text-red-400" />
+            <StatTile label="Revived Against" value={fmtNum(kprEntry.revives_against)} color="text-emerald-400" />
+            <StatTile label="Tapouts" value={fmtNum(kprEntry.tapouts)} color="text-amber-400" />
+          </div>
+          {kprEntry.avg_denied_ms > 0 && (
+            <div className="mt-3 text-[10px] text-slate-500">
+              Avg time denied to victims: <span className="text-purple-400 font-mono">{(kprEntry.avg_denied_ms / 1000).toFixed(1)}s</span>
+            </div>
+          )}
+        </GlassPanel>
+      )}
+      {revEntry && (
+        <GlassPanel>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
+            Survivability (as Victim)
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <StatTile label="Revive Rate" value={`${(revEntry.revive_rate * 100).toFixed(1)}%`} color="text-emerald-400" />
+            <StatTile label="Times Killed" value={fmtNum(revEntry.times_killed)} color="text-rose-400" />
+            <StatTile label="Times Revived" value={fmtNum(revEntry.times_revived)} color="text-emerald-400" />
+            <StatTile label="Times Gibbed" value={fmtNum(revEntry.times_gibbed)} color="text-red-400" />
+          </div>
+          {revEntry.avg_wait_ms > 0 && (
+            <div className="mt-3 text-[10px] text-slate-500">
+              Avg wait for revive: <span className="text-amber-400 font-mono">{(revEntry.avg_wait_ms / 1000).toFixed(1)}s</span>
+            </div>
+          )}
+        </GlassPanel>
+      )}
+    </div>
+  );
+}
+
+// ── Hit Regions per player ──────────────────────────────────────────────────
+
+function PlayerHitRegionsSection({ guid }: { guid: string }) {
+  const { data: hitData } = useProximityHitRegions({ range_days: 90 });
+  const { data: weaponData } = useProximityHitRegionsByWeapon(guid, 90);
+
+  const player = hitData?.players?.find(p => p.guid === guid);
+  const weapons = weaponData?.weapons ?? [];
+
+  if (!player && weapons.length === 0) return null;
+
+  const regionCounts = player ? [player.head, player.arms, player.body, player.legs] : [];
+  const total = regionCounts.reduce((a, b) => a + b, 0);
+  const maxCount = Math.max(...regionCounts, 1);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+      {player && total > 0 && (
+        <GlassPanel>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
+            Hit Region Profile
+          </h3>
+          <div className="flex items-end gap-2 h-24 mb-3 justify-center">
+            {REGION_NAMES.map((name, i) => {
+              const count = regionCounts[i];
+              const pct = total > 0 ? (count / total) * 100 : 0;
+              return (
+                <div key={name} className="flex flex-col items-center gap-1 flex-1 max-w-20">
+                  <span className="text-[10px] font-mono text-slate-300">{pct.toFixed(1)}%</span>
+                  <div className="w-full rounded-t" style={{
+                    height: `${Math.max((count / maxCount) * 100, 4)}%`,
+                    backgroundColor: REGION_COLORS[i],
+                    opacity: 0.85,
+                  }} />
+                  <span className="text-[10px] text-slate-400">{name}</span>
+                  <span className="text-[10px] text-slate-600">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="text-center text-[10px] text-slate-500">
+            {total.toLocaleString()} hits &middot; {player.total_damage.toLocaleString()} damage &middot; {player.head_pct.toFixed(1)}% headshot
+          </div>
+        </GlassPanel>
+      )}
+      {weapons.length > 0 && (
+        <GlassPanel>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
+            Per-Weapon Accuracy
+          </h3>
+          <div className="space-y-1.5">
+            {weapons.sort((a, b) => b.total - a.total).slice(0, 8).map(w => {
+              const wTotal = w.total || 1;
+              return (
+                <div key={w.weapon_id} className="flex items-center gap-2 text-xs">
+                  <span className="w-20 truncate text-slate-300">{WEAPON_NAMES[w.weapon_id] ?? `W#${w.weapon_id}`}</span>
+                  <div className="flex-1 flex h-3 rounded-full overflow-hidden bg-slate-800">
+                    <div style={{ width: `${(w.head / wTotal) * 100}%`, backgroundColor: REGION_COLORS[0] }} />
+                    <div style={{ width: `${(w.arms / wTotal) * 100}%`, backgroundColor: REGION_COLORS[1] }} />
+                    <div style={{ width: `${(w.body / wTotal) * 100}%`, backgroundColor: REGION_COLORS[2] }} />
+                    <div style={{ width: `${(w.legs / wTotal) * 100}%`, backgroundColor: REGION_COLORS[3] }} />
+                  </div>
+                  <span className="text-red-400 font-mono w-12 text-right text-[10px]">{w.headshot_pct.toFixed(0)}% HS</span>
+                  <span className="text-slate-500 text-[10px] w-10 text-right">{w.total}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-3 mt-2 text-[10px] text-slate-500 justify-center">
+            <span><span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: REGION_COLORS[0] }} />Head</span>
+            <span><span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: REGION_COLORS[1] }} />Arms</span>
+            <span><span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: REGION_COLORS[2] }} />Body</span>
+            <span><span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: REGION_COLORS[3] }} />Legs</span>
+          </div>
+        </GlassPanel>
+      )}
+    </div>
+  );
+}
+
+// ── Movement per player ─────────────────────────────────────────────────────
+
+function PlayerMovementSection({ guid }: { guid: string }) {
+  const { data } = useMovementStats(90, guid);
+
+  const player = data?.players?.find(p => p.guid === guid);
+  if (!player) return null;
+
+  const totalStance = player.standing_sec + player.crouching_sec + player.prone_sec;
+
+  return (
+    <GlassPanel className="mt-6">
+      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
+        Movement Profile
+      </h3>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-4">
+        <StatTile label="Avg Speed" value={`${player.avg_speed.toFixed(0)} u/s`} color="text-cyan-400" />
+        <StatTile label="Peak Speed" value={`${player.max_peak_speed.toFixed(0)} u/s`} color="text-orange-400" />
+        <StatTile label="Total Distance" value={`${(player.total_distance / 1000).toFixed(1)}K u`} color="text-white" />
+        <StatTile label="Sprint %" value={`${player.avg_sprint_pct.toFixed(1)}%`} color="text-emerald-400" />
+        <StatTile label="Post-Spawn Rush" value={`${player.avg_post_spawn_dist.toFixed(0)} u`} color="text-purple-400" />
+        <StatTile label="Tracks" value={player.tracks} color="text-slate-400" />
+      </div>
+      {totalStance > 0 && (
+        <div>
+          <div className="text-[10px] text-slate-500 mb-1">Stance Distribution</div>
+          <div className="h-4 rounded-full overflow-hidden flex">
+            <div style={{ width: `${(player.standing_sec / totalStance) * 100}%`, backgroundColor: '#60a5fa' }} title={`Standing ${player.standing_pct.toFixed(1)}%`} />
+            <div style={{ width: `${(player.crouching_sec / totalStance) * 100}%`, backgroundColor: '#f59e0b' }} title={`Crouching ${player.crouching_pct.toFixed(1)}%`} />
+            <div style={{ width: `${(player.prone_sec / totalStance) * 100}%`, backgroundColor: '#ef4444' }} title={`Prone ${player.prone_pct.toFixed(1)}%`} />
+          </div>
+          <div className="flex justify-between text-[10px] mt-1">
+            <span className="text-blue-400">Standing {player.standing_pct.toFixed(0)}% ({player.standing_sec.toFixed(0)}s)</span>
+            <span className="text-amber-400">Crouch {player.crouching_pct.toFixed(0)}% ({player.crouching_sec.toFixed(0)}s)</span>
+            <span className="text-red-400">Prone {player.prone_pct.toFixed(0)}% ({player.prone_sec.toFixed(0)}s)</span>
+          </div>
+        </div>
+      )}
+    </GlassPanel>
   );
 }
