@@ -3114,9 +3114,13 @@ async def get_proximity_revives(
             params.append(player_guid.strip())
             clauses.append(f"medic_guid = ${len(params)}")
 
-        where_sql = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        # Apply range_days filter
+        params.append(range_days)
+        clauses.append(f"session_date >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
+
+        where_sql = "WHERE " + " AND ".join(clauses)
         medic_filter = "medic_guid IS NOT NULL AND medic_guid != ''"
-        medic_where = ("WHERE " + " AND ".join(clauses + [medic_filter])) if clauses else f"WHERE {medic_filter}"
+        medic_where = "WHERE " + " AND ".join(clauses + [medic_filter])
         query_params = tuple(params)
 
         # Summary
@@ -4278,7 +4282,7 @@ async def get_prox_scores(
         }
     except Exception as e:
         logger.warning("Proximity prox-scores error: %s", e)
-        return {"status": "error", "detail": str(e)}
+        return {"status": "error", "detail": "Internal error"}
 
 
 @router.get("/proximity/prox-scores/formula")
@@ -4423,7 +4427,7 @@ async def get_proximity_carrier_events(
         return {"status": "ok", "scope": scope, "carriers": carriers, "events": events, "summary": summary}
     except Exception as e:
         logger.warning("Carrier events error: %s", e)
-        return {"status": "error", "detail": str(e), "carriers": [], "events": [], "summary": {}}
+        return {"status": "error", "detail": "Internal error", "carriers": [], "events": [], "summary": {}}
 
 
 @router.get("/proximity/carrier-kills")
@@ -4490,7 +4494,7 @@ async def get_proximity_carrier_kills(
         return {"status": "ok", "killers": killers}
     except Exception as e:
         logger.warning("Carrier kills error: %s", e)
-        return {"status": "error", "detail": str(e), "killers": []}
+        return {"status": "error", "detail": "Internal error", "killers": []}
 
 
 # ========================================
@@ -4580,7 +4584,7 @@ async def get_proximity_carrier_returns(
         return {"status": "ok", "scope": scope, "returners": returners, "events": events, "summary": summary}
     except Exception as e:
         logger.error(f"carrier-returns error: {e}")
-        return {"status": "error", "message": str(e), "returners": [], "events": [], "summary": {}}
+        return {"status": "error", "message": "Internal error", "returners": [], "events": [], "summary": {}}
 
 
 # ========================================
@@ -4638,7 +4642,7 @@ async def get_proximity_vehicle_progress(
         return {"status": "ok", "vehicles": vehicles}
     except Exception as e:
         logger.error(f"vehicle-progress error: {e}")
-        return {"status": "error", "message": str(e), "vehicles": []}
+        return {"status": "error", "message": "Internal error", "vehicles": []}
 
 
 @router.get("/proximity/escort-credits")
@@ -4699,7 +4703,7 @@ async def get_proximity_escort_credits(
         return {"status": "ok", "escorts": escorts}
     except Exception as e:
         logger.error(f"escort-credits error: {e}")
-        return {"status": "error", "message": str(e), "escorts": []}
+        return {"status": "error", "message": "Internal error", "escorts": []}
 
 
 # ========================================
@@ -4779,7 +4783,7 @@ async def get_proximity_construction_events(
         return {"status": "ok", "engineers": engineers, "events": events}
     except Exception as e:
         logger.error(f"construction-events error: {e}")
-        return {"status": "error", "message": str(e), "engineers": [], "events": []}
+        return {"status": "error", "message": "Internal error", "engineers": [], "events": []}
 
 
 # ========================================
@@ -4798,7 +4802,7 @@ async def get_proximity_objective_runs(
     """Objective run intelligence — engineer runs with path clearing attribution"""
     try:
         if not await _table_column_exists(db, 'proximity_objective_run', 'engineer_guid'):
-            return {"objective_runners": [], "recent_runs": [], "summary": None}
+            return {"status": "ok", "objective_runners": [], "recent_runs": [], "summary": None}
 
         where_parts: list = []
         params: list = []
@@ -4899,10 +4903,10 @@ async def get_proximity_objective_runs(
         )
         summary['most_active_objective'] = top_track_rows[0]['track_name'] if top_track_rows else None
 
-        return {"objective_runners": objective_runners, "recent_runs": recent_runs, "summary": summary}
+        return {"status": "ok", "objective_runners": objective_runners, "recent_runs": recent_runs, "summary": summary}
     except Exception as e:
         logger.error(f"objective-runs error: {e}")
-        return {"status": "error", "message": str(e), "objective_runners": [], "recent_runs": [], "summary": None}
+        return {"status": "error", "message": "Internal error", "objective_runners": [], "recent_runs": [], "summary": None}
 
 
 # ========================================
@@ -4998,7 +5002,7 @@ async def get_proximity_focus_fire(
         return {"status": "ok", "summary": summary, "targets": targets, "recent": recent}
     except Exception as e:
         logger.error(f"focus-fire error: {e}")
-        return {"status": "error", "message": str(e), "summary": {}, "targets": [], "recent": []}
+        return {"status": "error", "message": "Internal error", "summary": {}, "targets": [], "recent": []}
 
 
 # ========================================
@@ -5101,7 +5105,7 @@ async def get_proximity_objective_focus(
         return {"status": "ok", "summary": summary, "players": players, "objectives": objectives}
     except Exception as e:
         logger.error(f"objective-focus error: {e}")
-        return {"status": "error", "message": str(e), "summary": {}, "players": [], "objectives": []}
+        return {"status": "error", "message": "Internal error", "summary": {}, "players": [], "objectives": []}
 
 
 # ========================================
@@ -5186,7 +5190,7 @@ async def get_proximity_support_summary(
         return {"status": "ok", "summary": summary, "by_map": by_map, "rounds": rounds}
     except Exception as e:
         logger.error(f"support-summary error: {e}")
-        return {"status": "error", "message": str(e), "summary": {}, "by_map": [], "rounds": []}
+        return {"status": "error", "message": "Internal error", "summary": {}, "by_map": [], "rounds": []}
 
 
 # ========================================
@@ -5287,4 +5291,4 @@ async def get_proximity_combat_position_stats(
         return {"status": "ok", "summary": summary, "by_class": by_class, "by_map": by_map}
     except Exception as e:
         logger.error(f"combat-position-stats error: {e}")
-        return {"status": "error", "message": str(e), "summary": {}, "by_class": [], "by_map": []}
+        return {"status": "error", "message": "Internal error", "summary": {}, "by_class": [], "by_map": []}

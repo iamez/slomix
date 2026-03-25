@@ -288,7 +288,7 @@ function ProxScoresPanel() {
           <div className="flex gap-2 items-center">
             <button
               className={`px-2 py-0.5 rounded text-[10px] font-medium ${showFormula ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
-              onClick={() => { setShowFormula(!showFormula); }}
+              onClick={() => { setShowFormula(prev => !prev); }}
             >Formula</button>
             <div className="flex gap-1">
               {[14, 30, 90].map(d => (

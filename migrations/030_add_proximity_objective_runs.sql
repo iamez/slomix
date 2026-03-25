@@ -64,4 +64,9 @@ CREATE INDEX IF NOT EXISTS idx_prox_obj_run_engineer ON proximity_objective_run(
 CREATE INDEX IF NOT EXISTS idx_prox_obj_run_type ON proximity_objective_run(run_type);
 CREATE INDEX IF NOT EXISTS idx_prox_obj_run_action ON proximity_objective_run(action_type);
 
+-- Track migration
+INSERT INTO schema_migrations (version, filename, applied_at, applied_by, success)
+VALUES ('030_objective_runs', '030_add_proximity_objective_runs.sql', NOW(), 'manual', true)
+ON CONFLICT (version) DO NOTHING;
+
 COMMIT;
