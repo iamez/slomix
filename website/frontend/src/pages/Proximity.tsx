@@ -312,7 +312,8 @@ function ProxScoresPanel() {
               Each metric is ranked as a percentile (0-100) across all players with {formula.min_engagements}+ engagements, then weighted within its category.
               Overall = {Object.entries(formula.category_weights).map(([k, w]) => {
                 const cat = formula.categories[k as keyof typeof formula.categories];
-                return cat ? `${cat.label} ${((w as number) * 100).toFixed(0)}%` : '';
+                if (!cat) return '';
+                return `${cat.label} ${((w as number) * 100).toFixed(0)}%`;
               }).filter(Boolean).join(' + ')}.
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
