@@ -20,7 +20,7 @@ import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from
 
 import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
-import { loadProximityView } from './proximity.js';
+import { loadProximityView } from './proximity.js?v=20260325-v6';
 import { loadAdminPanelView } from './admin-panel.js';
 import { loadUploadsView, loadUploadDetail } from './uploads.js';
 import { loadAvailabilityView } from './availability.js';
