@@ -1296,7 +1296,7 @@ class C0RNP0RN3StatsParser:
             # Fix: for bots, create a unique GUID from the base GUID + bot name.
             # This matches bot identity across R1→R2 within the same round pair.
             if is_bot and clean_name:
-                bot_hash = hashlib.md5(clean_name.encode(), usedforsecurity=False).hexdigest()[:24]
+                bot_hash = hashlib.sha256(clean_name.encode()).hexdigest()[:24]
                 effective_guid = f"{guid[:8]}{bot_hash}"  # e.g. "OMNIBOT0a1b2c3d4e5f6..."
             else:
                 effective_guid = guid[:8]
