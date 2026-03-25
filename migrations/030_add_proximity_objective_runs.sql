@@ -63,6 +63,7 @@ CREATE INDEX IF NOT EXISTS idx_prox_obj_run_map ON proximity_objective_run(map_n
 CREATE INDEX IF NOT EXISTS idx_prox_obj_run_engineer ON proximity_objective_run(engineer_guid);
 CREATE INDEX IF NOT EXISTS idx_prox_obj_run_type ON proximity_objective_run(run_type);
 CREATE INDEX IF NOT EXISTS idx_prox_obj_run_action ON proximity_objective_run(action_type);
+CREATE INDEX IF NOT EXISTS idx_prox_obj_run_round_id ON proximity_objective_run(round_id) WHERE round_id IS NOT NULL;
 
 -- Track migration
 INSERT INTO schema_migrations (version, filename, applied_at, applied_by, success)
