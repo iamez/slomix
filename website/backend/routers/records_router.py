@@ -74,7 +74,7 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
         SELECT EXISTS (
             SELECT 1
             FROM information_schema.tables
-            WHERE table_name = 'sessions'
+            WHERE table_name = 'gaming_sessions'
         )
         """,
         default=False,
