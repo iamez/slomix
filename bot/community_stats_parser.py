@@ -4,6 +4,7 @@ C0RNP0RN3.LUA Format Parser
 Correctly parses the actual weapon format used by c0rnp0rn3.lua
 """
 
+import hashlib
 import logging
 import os
 import re
@@ -1290,8 +1291,18 @@ class C0RNP0RN3StatsParser:
             # These are DIFFERENT stats! Database stores headshot_kills, NOT weapon sum.
             # Validated Nov 3, 2025: 100% accuracy confirmed.
 
+            # Bot GUIDs: ET:Legacy endstats truncates all bot GUIDs to "OMNIBOT0",
+            # making R1/R2 differential matching impossible (all bots collide).
+            # Fix: for bots, create a unique GUID from the base GUID + bot name.
+            # This matches bot identity across R1→R2 within the same round pair.
+            if is_bot and clean_name:
+                bot_hash = hashlib.sha256(clean_name.encode()).hexdigest()[:24]
+                effective_guid = f"{guid[:8]}{bot_hash}"  # e.g. "OMNIBOT0a1b2c3d4e5f6..."
+            else:
+                effective_guid = guid[:8]
+
             return {
-                'guid': guid[:8],  # Truncate GUID
+                'guid': effective_guid,  # Unique per bot via name hash
                 'clean_name': clean_name,  # ✅ FIXED: Use clean_name
                 'name': clean_name,  # Keep both for compatibility
                 'raw_name': raw_name,

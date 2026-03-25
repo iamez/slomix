@@ -373,6 +373,126 @@ class CombatPosition:
     mod: int
 
 
+@dataclass
+class CarrierEvent:
+    carrier_guid: str
+    carrier_name: str
+    carrier_team: str
+    flag_team: str
+    pickup_time: int
+    drop_time: int
+    duration_ms: int
+    outcome: str
+    carry_distance: float
+    beeline_distance: float
+    efficiency: float
+    path_samples: int
+    pickup_x: int
+    pickup_y: int
+    pickup_z: int
+    drop_x: int
+    drop_y: int
+    drop_z: int
+    killer_guid: str
+    killer_name: str
+
+
+@dataclass
+class CarrierKill:
+    kill_time: int
+    carrier_guid: str
+    carrier_name: str
+    carrier_team: str
+    killer_guid: str
+    killer_name: str
+    killer_team: str
+    means_of_death: int
+    carrier_distance_at_kill: float
+    flag_team: str
+
+
+@dataclass
+class CarrierReturn:
+    return_time: int
+    returner_guid: str
+    returner_name: str
+    returner_team: str
+    flag_team: str
+    original_carrier_guid: str
+    drop_time: int
+    return_delay_ms: int
+    drop_x: int
+    drop_y: int
+    drop_z: int
+
+
+@dataclass
+class VehicleProgress:
+    vehicle_name: str
+    vehicle_type: str
+    start_x: int
+    start_y: int
+    start_z: int
+    end_x: int
+    end_y: int
+    end_z: int
+    total_distance: float
+    max_health: int
+    final_health: int
+    destroyed_count: int
+
+
+@dataclass
+class EscortCredit:
+    player_guid: str
+    player_name: str
+    player_team: str
+    vehicle_name: str
+    mounted_time_ms: int
+    proximity_time_ms: int
+    total_escort_distance: float
+    credit_distance: float
+    samples: int
+
+
+@dataclass
+class ConstructionEvent:
+    event_time: int
+    event_type: str
+    player_guid: str
+    player_name: str
+    player_team: str
+    track_name: str
+    player_x: int
+    player_y: int
+    player_z: int
+
+
+@dataclass
+class ObjectiveRun:
+    engineer_guid: str
+    engineer_name: str
+    engineer_team: str
+    action_type: str       # dynamite_plant, objective_destroyed, construction_complete, dynamite_defuse, approach_killed
+    track_name: str
+    action_time: int
+    approach_time_ms: int
+    approach_distance: float
+    beeline_distance: float
+    path_efficiency: float
+    self_kills: int
+    team_kills: int
+    escort_guids: str      # pipe-separated GUIDs
+    enemies_nearby: int
+    nearby_teammates: int
+    run_type: str           # solo, assisted, unopposed, contested_solo, team_effort, denied
+    obj_x: int
+    obj_y: int
+    obj_z: int
+    killer_guid: str
+    killer_name: str
+
+
 class ProximityParserV4:
     """Parser for proximity_tracker v4 output files with full player tracking"""
 
@@ -402,6 +522,15 @@ class ProximityParserV4:
         self.kill_outcomes: List[KillOutcome] = []
         self.hit_regions: List[HitRegionEvent] = []
         self.combat_positions: List[CombatPosition] = []
+        # v6 carrier intelligence
+        self.carrier_events: List[CarrierEvent] = []
+        self.carrier_kills: List[CarrierKill] = []
+        # v6 phases 1.5-4
+        self.carrier_returns: List[CarrierReturn] = []
+        self.vehicle_progress: List[VehicleProgress] = []
+        self.escort_credits: List[EscortCredit] = []
+        self.construction_events: List[ConstructionEvent] = []
+        self.objective_runs: List[ObjectiveRun] = []
         self.metadata = self._metadata_defaults()
         self._schema_cache: Dict[tuple, bool] = {}
         self._round_link_context: Dict[str, Optional[object]] = {
@@ -533,6 +662,13 @@ class ProximityParserV4:
         self.kill_outcomes = []
         self.hit_regions = []
         self.combat_positions = []
+        self.carrier_events = []
+        self.carrier_kills = []
+        self.carrier_returns = []
+        self.vehicle_progress = []
+        self.escort_credits = []
+        self.construction_events = []
+        self.objective_runs = []
 
         section = 'header'
 
@@ -630,6 +766,27 @@ class ProximityParserV4:
                     if line.startswith('# COMBAT_POSITIONS'):
                         section = 'combat_positions'
                         continue
+                    if line.startswith('# CARRIER_EVENTS'):
+                        section = 'carrier_events'
+                        continue
+                    if line.startswith('# CARRIER_KILLS'):
+                        section = 'carrier_kills'
+                        continue
+                    if line.startswith('# CARRIER_RETURNS'):
+                        section = 'carrier_returns'
+                        continue
+                    if line.startswith('# VEHICLE_PROGRESS'):
+                        section = 'vehicle_progress'
+                        continue
+                    if line.startswith('# ESCORT_CREDIT'):
+                        section = 'escort_credit'
+                        continue
+                    if line.startswith('# CONSTRUCTION_EVENTS'):
+                        section = 'construction_events'
+                        continue
+                    if line.startswith('# OBJECTIVE_RUNS'):
+                        section = 'objective_runs'
+                        continue
 
                     if line.startswith('# axis_spawn_interval='):
                         try:
@@ -645,6 +802,9 @@ class ProximityParserV4:
                         continue
                     if line.startswith('# PROXIMITY_TRACKER_V5'):
                         self.metadata['tracker_version'] = 5
+                        continue
+                    if line.startswith('# PROXIMITY_TRACKER_V6'):
+                        self.metadata['tracker_version'] = 6
                         continue
 
                     # Skip other comments
@@ -686,6 +846,20 @@ class ProximityParserV4:
                         self._parse_hit_region_line(line)
                     elif section == 'combat_positions':
                         self._parse_combat_position_line(line)
+                    elif section == 'carrier_events':
+                        self._parse_carrier_event_line(line)
+                    elif section == 'carrier_kills':
+                        self._parse_carrier_kill_line(line)
+                    elif section == 'carrier_returns':
+                        self._parse_carrier_return_line(line)
+                    elif section == 'vehicle_progress':
+                        self._parse_vehicle_progress_line(line)
+                    elif section == 'escort_credit':
+                        self._parse_escort_credit_line(line)
+                    elif section == 'construction_events':
+                        self._parse_construction_event_line(line)
+                    elif section == 'objective_runs':
+                        self._parse_objective_run(line)
 
             self._normalize_round_metadata(filepath)
             self.logger.info(
@@ -695,6 +869,8 @@ class ProximityParserV4:
                 len(self.reaction_metrics),
                 filepath,
             )
+            if self.objective_runs:
+                self.logger.info(f"Objective runs: {len(self.objective_runs)}")
             return True
 
         except Exception as e:
@@ -1180,6 +1356,22 @@ class ProximityParserV4:
                 await self._import_hit_regions(session_date)
             if self.combat_positions:
                 await self._import_combat_positions(session_date)
+            # v6 carrier intelligence
+            if self.carrier_events:
+                await self._import_carrier_events(session_date)
+            if self.carrier_kills:
+                await self._import_carrier_kills(session_date)
+            # v6 phases 1.5-4
+            if self.carrier_returns:
+                await self._import_carrier_returns(session_date)
+            if self.vehicle_progress:
+                await self._import_vehicle_progress(session_date)
+            if self.escort_credits:
+                await self._import_escort_credits(session_date)
+            if self.construction_events:
+                await self._import_construction_events(session_date)
+            if self.objective_runs:
+                await self._import_objective_runs(session_date)
 
             # Mark file as processed
             await self._mark_file_processed(os.path.basename(filepath))
@@ -2004,6 +2196,173 @@ class ProximityParserV4:
         except (ValueError, IndexError) as e:
             self.logger.debug(f"Skip combat_position line: {e}")
 
+    def _parse_carrier_event_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 20:
+                return
+            self.carrier_events.append(CarrierEvent(
+                carrier_guid=parts[0],
+                carrier_name=parts[1],
+                carrier_team=parts[2],
+                flag_team=parts[3],
+                pickup_time=int(parts[4]),
+                drop_time=int(parts[5]),
+                duration_ms=int(parts[6]),
+                outcome=parts[7],
+                carry_distance=float(parts[8]),
+                beeline_distance=float(parts[9]),
+                efficiency=float(parts[10]),
+                path_samples=int(parts[11]),
+                pickup_x=int(parts[12]),
+                pickup_y=int(parts[13]),
+                pickup_z=int(parts[14]),
+                drop_x=int(parts[15]),
+                drop_y=int(parts[16]),
+                drop_z=int(parts[17]),
+                killer_guid=parts[18],
+                killer_name=parts[19].strip(),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip carrier_event line: {e}")
+
+    def _parse_carrier_kill_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 10:
+                return
+            self.carrier_kills.append(CarrierKill(
+                kill_time=int(parts[0]),
+                carrier_guid=parts[1],
+                carrier_name=parts[2],
+                carrier_team=parts[3],
+                killer_guid=parts[4],
+                killer_name=parts[5],
+                killer_team=parts[6],
+                means_of_death=int(parts[7]),
+                carrier_distance_at_kill=float(parts[8]),
+                flag_team=parts[9].strip(),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip carrier_kill line: {e}")
+
+    def _parse_carrier_return_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 11:
+                return
+            self.carrier_returns.append(CarrierReturn(
+                return_time=int(parts[0]),
+                returner_guid=parts[1],
+                returner_name=parts[2],
+                returner_team=parts[3],
+                flag_team=parts[4],
+                original_carrier_guid=parts[5],
+                drop_time=int(parts[6]),
+                return_delay_ms=int(parts[7]),
+                drop_x=int(parts[8]),
+                drop_y=int(parts[9]),
+                drop_z=int(parts[10].strip()),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip carrier_return line: {e}")
+
+    def _parse_vehicle_progress_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 12:
+                return
+            self.vehicle_progress.append(VehicleProgress(
+                vehicle_name=parts[0],
+                vehicle_type=parts[1],
+                start_x=int(parts[2]),
+                start_y=int(parts[3]),
+                start_z=int(parts[4]),
+                end_x=int(parts[5]),
+                end_y=int(parts[6]),
+                end_z=int(parts[7]),
+                total_distance=float(parts[8]),
+                max_health=int(parts[9]),
+                final_health=int(parts[10]),
+                destroyed_count=int(parts[11].strip()),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip vehicle_progress line: {e}")
+
+    def _parse_escort_credit_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 9:
+                return
+            self.escort_credits.append(EscortCredit(
+                player_guid=parts[0],
+                player_name=parts[1],
+                player_team=parts[2],
+                vehicle_name=parts[3],
+                mounted_time_ms=int(parts[4]),
+                proximity_time_ms=int(parts[5]),
+                total_escort_distance=float(parts[6]),
+                credit_distance=float(parts[7]),
+                samples=int(parts[8].strip()),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip escort_credit line: {e}")
+
+    def _parse_construction_event_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 9:
+                return
+            self.construction_events.append(ConstructionEvent(
+                event_time=int(parts[0]),
+                event_type=parts[1],
+                player_guid=parts[2],
+                player_name=parts[3],
+                player_team=parts[4],
+                track_name=parts[5],
+                player_x=int(parts[6]),
+                player_y=int(parts[7]),
+                player_z=int(parts[8].strip()),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip construction_event line: {e}")
+
+    def _parse_objective_run(self, line: str) -> None:
+        """Parse an OBJECTIVE_RUNS line (21 semicolon-separated fields)."""
+        if line.startswith("#") or not line.strip():
+            return
+        parts = line.strip().split(";")
+        if len(parts) < 21:
+            self.logger.warning(f"OBJECTIVE_RUN line has {len(parts)} parts, expected 21: {line[:80]}")
+            return
+        try:
+            run = ObjectiveRun(
+                engineer_guid=parts[0],
+                engineer_name=parts[1],
+                engineer_team=parts[2],
+                action_type=parts[3],
+                track_name=parts[4],
+                action_time=int(parts[5]),
+                approach_time_ms=int(parts[6]),
+                approach_distance=float(parts[7]),
+                beeline_distance=float(parts[8]),
+                path_efficiency=float(parts[9]),
+                self_kills=int(parts[10]),
+                team_kills=int(parts[11]),
+                escort_guids=parts[12],
+                enemies_nearby=int(parts[13]),
+                nearby_teammates=int(parts[14]),
+                run_type=parts[15],
+                obj_x=int(float(parts[16])),
+                obj_y=int(float(parts[17])),
+                obj_z=int(float(parts[18])),
+                killer_guid=parts[19],
+                killer_name=parts[20],
+            )
+            self.objective_runs.append(run)
+        except (ValueError, IndexError) as e:
+            self.logger.warning(f"Failed to parse OBJECTIVE_RUN: {e}")
+
     async def _import_combat_positions(self, session_date):
         """Import combat position events to proximity_combat_position table"""
         if not await self._table_has_column('proximity_combat_position', 'attacker_guid'):
@@ -2041,6 +2400,264 @@ class ProximityParserV4:
                 VALUES ({placeholders})
                 ON CONFLICT (session_date, round_number, round_start_unix, event_time, attacker_guid, victim_guid)
                 DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_carrier_events(self, session_date):
+        """Import v6 carrier event data"""
+        if not await self._table_has_column('proximity_carrier_event', 'carrier_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_carrier_event', 'round_end_unix')
+        for evt in self.carrier_events:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "carrier_guid", "carrier_name", "carrier_team", "flag_team",
+                "pickup_time", "drop_time", "duration_ms", "outcome",
+                "carry_distance", "beeline_distance", "efficiency", "path_samples",
+                "pickup_x", "pickup_y", "pickup_z",
+                "drop_x", "drop_y", "drop_z",
+                "killer_guid", "killer_name",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                evt.carrier_guid, evt.carrier_name, evt.carrier_team, evt.flag_team,
+                evt.pickup_time, evt.drop_time, evt.duration_ms, evt.outcome,
+                evt.carry_distance, evt.beeline_distance, evt.efficiency, evt.path_samples,
+                evt.pickup_x, evt.pickup_y, evt.pickup_z,
+                evt.drop_x, evt.drop_y, evt.drop_z,
+                evt.killer_guid, evt.killer_name,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_carrier_event", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_carrier_event ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, carrier_guid, pickup_time)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_carrier_kills(self, session_date):
+        """Import v6 carrier kill data"""
+        if not await self._table_has_column('proximity_carrier_kill', 'killer_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_carrier_kill', 'round_end_unix')
+        for ck in self.carrier_kills:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "kill_time", "carrier_guid", "carrier_name", "carrier_team",
+                "killer_guid", "killer_name", "killer_team",
+                "means_of_death", "carrier_distance_at_kill", "flag_team",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                ck.kill_time, ck.carrier_guid, ck.carrier_name, ck.carrier_team,
+                ck.killer_guid, ck.killer_name, ck.killer_team,
+                ck.means_of_death, ck.carrier_distance_at_kill, ck.flag_team,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_carrier_kill", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_carrier_kill ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, carrier_guid, kill_time)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_carrier_returns(self, session_date):
+        """Import v6 carrier return data"""
+        if not await self._table_has_column('proximity_carrier_return', 'returner_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_carrier_return', 'round_end_unix')
+        for cr in self.carrier_returns:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "return_time", "returner_guid", "returner_name", "returner_team",
+                "flag_team", "original_carrier_guid", "drop_time", "return_delay_ms",
+                "drop_x", "drop_y", "drop_z",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                cr.return_time, cr.returner_guid, cr.returner_name, cr.returner_team,
+                cr.flag_team, cr.original_carrier_guid, cr.drop_time, cr.return_delay_ms,
+                cr.drop_x, cr.drop_y, cr.drop_z,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_carrier_return", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_carrier_return ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, returner_guid, return_time)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_vehicle_progress(self, session_date):
+        """Import v6 vehicle progress data"""
+        if not await self._table_has_column('proximity_vehicle_progress', 'vehicle_name'):
+            return
+        supports_round_end = await self._table_has_column('proximity_vehicle_progress', 'round_end_unix')
+        for vp in self.vehicle_progress:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "vehicle_name", "vehicle_type",
+                "start_x", "start_y", "start_z",
+                "end_x", "end_y", "end_z",
+                "total_distance", "max_health", "final_health", "destroyed_count",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                vp.vehicle_name, vp.vehicle_type,
+                vp.start_x, vp.start_y, vp.start_z,
+                vp.end_x, vp.end_y, vp.end_z,
+                vp.total_distance, vp.max_health, vp.final_health, vp.destroyed_count,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_vehicle_progress", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_vehicle_progress ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, vehicle_name)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_escort_credits(self, session_date):
+        """Import v6 escort credit data"""
+        if not await self._table_has_column('proximity_escort_credit', 'player_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_escort_credit', 'round_end_unix')
+        for ec in self.escort_credits:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "player_guid", "player_name", "player_team", "vehicle_name",
+                "mounted_time_ms", "proximity_time_ms",
+                "total_escort_distance", "credit_distance", "samples",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                ec.player_guid, ec.player_name, ec.player_team, ec.vehicle_name,
+                ec.mounted_time_ms, ec.proximity_time_ms,
+                ec.total_escort_distance, ec.credit_distance, ec.samples,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_escort_credit", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_escort_credit ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, player_guid, vehicle_name)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_construction_events(self, session_date):
+        """Import v6 construction event data"""
+        if not await self._table_has_column('proximity_construction_event', 'player_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_construction_event', 'round_end_unix')
+        for ce in self.construction_events:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "event_time", "event_type",
+                "player_guid", "player_name", "player_team",
+                "track_name", "player_x", "player_y", "player_z",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                ce.event_time, ce.event_type,
+                ce.player_guid, ce.player_name, ce.player_team,
+                ce.track_name, ce.player_x, ce.player_y, ce.player_z,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_construction_event", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_construction_event ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, player_guid, event_time, event_type)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_objective_runs(self, session_date):
+        """Import objective run records into proximity_objective_run."""
+        if not await self._table_has_column('proximity_objective_run', 'engineer_guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_objective_run', 'round_end_unix')
+        for run in self.objective_runs:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name",
+                "engineer_guid", "engineer_name", "engineer_team",
+                "action_type", "track_name", "action_time",
+                "approach_time_ms", "approach_distance", "beeline_distance", "path_efficiency",
+                "self_kills", "team_kills", "escort_guids", "enemies_nearby", "nearby_teammates",
+                "run_type", "obj_x", "obj_y", "obj_z",
+                "killer_guid", "killer_name",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                run.engineer_guid, run.engineer_name, run.engineer_team,
+                run.action_type, run.track_name, run.action_time,
+                run.approach_time_ms, run.approach_distance, run.beeline_distance, run.path_efficiency,
+                run.self_kills, run.team_kills, run.escort_guids, run.enemies_nearby, run.nearby_teammates,
+                run.run_type, run.obj_x, run.obj_y, run.obj_z,
+                run.killer_guid, run.killer_name,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_objective_run", columns, values)
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_objective_run ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT DO NOTHING
             """
             await self.db_adapter.execute(query, tuple(values))
 
@@ -2876,6 +3493,13 @@ class ProximityParserV4:
             'kill_outcomes': len(self.kill_outcomes),
             'hit_regions': len(self.hit_regions),
             'combat_positions': len(self.combat_positions),
+            'carrier_events': len(self.carrier_events),
+            'carrier_kills': len(self.carrier_kills),
+            'carrier_returns': len(self.carrier_returns),
+            'vehicle_progress': len(self.vehicle_progress),
+            'escort_credits': len(self.escort_credits),
+            'construction_events': len(self.construction_events),
+            'objective_runs': len(self.objective_runs),
         }
 
 

@@ -1,6 +1,6 @@
 -- ============================================================
--- PROXIMITY TRACKER v5.0 - TEAMPLAY ANALYTICS
--- ET:Legacy Lua Module for Combat & Team Coordination Analytics
+-- PROXIMITY TRACKER v6.01 - OBJECTIVE RUN INTELLIGENCE
+-- ET:Legacy Lua Module for Combat, Team Coordination & Objective Analytics
 --
 -- KEY FEATURES (v4 inherited):
 --   * FULL PLAYER TRACKING - All players, spawn to death
@@ -43,7 +43,7 @@
 -- ============================================================
 
 local modname = "proximity_tracker"
-local version = "5.0"
+local version = "6.01"
 
 -- ===== CONFIGURATION =====
 local config = {
@@ -81,29 +81,71 @@ local config = {
     objective_radius = 500,
     objectives = {
         Karsiah_te2 = {},
-        adlernest = {},
+        adlernest = {
+            { name = "allied_cp", x = -412, y = -2064, z = 128, type = "command_post" },
+            { name = "transmitter", x = -298, y = -3288, z = 12, type = "objective" },
+            { name = "documents", x = -676, y = 672, z = 108, type = "objective" },
+            { name = "health_and_ammo_cabinets", x = 1830, y = 992, z = 12, type = "objective" },
+        },
         battery = {},
-        braundorf_b4 = {},
+        braundorf_b4 = {
+            { name = "command_post", x = 4776, y = -256, z = 403, type = "command_post" },
+            { name = "health_and_ammo_cabinets", x = 1094, y = -4170, z = 417, type = "objective" },
+            { name = "the_side_gate", x = 4352, y = 896, z = 152, type = "objective" },
+        },
         bremen_b2 = {},
         bremen_b3 = {
-            { name = "truck_escape", x = -3143, y = -589, z = 128, type = "escort" },
+            { name = "neutral_command_post", x = 2320, y = 2432, z = 366, type = "command_post" },
+            { name = "side_door", x = -1476, y = 1954, z = 296, type = "objective" },
+            { name = "keycard", x = 1260, y = 88, z = 240, type = "objective" },
+            { name = "truck", x = 1716, y = -924, z = 130, type = "escort" },
+            { name = "truck_barrier_1", x = 1744, y = 376, z = 160, type = "escort" },
+            { name = "truck_barrier_2", x = -1428, y = 320, z = 113, type = "escort" },
+            { name = "wooden_barrier", x = 1560, y = 8, z = 112, type = "objective" },
+            { name = "generator", x = 674, y = 2624, z = 140, type = "objective" },
         },
         default = {},
         dubrovnik_final = {},
         erdenberg_t1 = {},
-        erdenberg_t2 = {},
+        erdenberg_t2 = {
+            { name = "neutral_command_post", x = 5568, y = -2264, z = -382, type = "command_post" },
+        },
         et_beach = {},
         et_ice = {},
         et_ufo_final = {},
-        etl_adlernest = {},
-        etl_frostbite = {},
-        etl_ice = {},
-        etl_sp_delivery = {},
-        etl_supply = {
-            { name = "crane_controls", x = 656, y = -1360, z = 372, type = "misc" },
-            { name = "truck_escape", x = 2720, y = 1376, z = 192, type = "escort" },
+        etl_adlernest = {
+            { name = "transmitter", x = -298, y = -3288, z = 24, type = "objective" },
+            { name = "documents", x = -676, y = 672, z = 108, type = "objective" },
+            { name = "health_and_ammo_cabinets", x = 1830, y = 992, z = 12, type = "objective" },
         },
-        frostbite = {},
+        etl_frostbite = {},
+        etl_ice = {
+            { name = "transmitter", x = 328, y = -2792, z = 280, type = "objective" },
+            { name = "documents", x = -6016, y = 2176, z = 1088, type = "objective" },
+        },
+        etl_sp_delivery = {
+            { name = "axis_gold", x = -1160, y = 1332, z = 168, type = "objective" },
+            { name = "getaway_trucks", x = 1456, y = 4280, z = -56, type = "escort" },
+        },
+        etl_supply = {
+            { name = "forward_bunker_gate", x = 56, y = 2368, z = -48, type = "objective" },
+            { name = "truck", x = -2368, y = 688, z = 0, type = "escort" },
+            { name = "depot_fence", x = 144, y = -1792, z = 52, type = "objective" },
+            { name = "command_post", x = 2432, y = 904, z = 288, type = "command_post" },
+            { name = "forward_spawn_door", x = -68, y = 2368, z = 304, type = "objective" },
+            { name = "crane_controls", x = 656, y = -1360, z = 372, type = "objective" },
+        },
+        frostbite = {
+            { name = "main_door", x = -32, y = 208, z = 352, type = "objective" },
+            { name = "storage_wall", x = -32, y = 208, z = 352, type = "objective" },
+            { name = "transmitter", x = -4544, y = 2240, z = -96, type = "objective" },
+            { name = "health_and_ammo_cabinets", x = -150, y = -662, z = 296, type = "objective" },
+            { name = "platform_mg", x = -1512, y = 1868, z = 45, type = "objective" },
+            { name = "axis_command_post", x = -5056, y = 1896, z = -108, type = "command_post" },
+            { name = "documents", x = 816, y = 160, z = 432, type = "objective" },
+            { name = "the_gramophone", x = -299, y = 1264, z = 343, type = "objective" },
+            { name = "allied_command_post", x = -1836, y = 404, z = 444, type = "command_post" },
+        },
         fueldump = {},
         goldrush = {},
         karsiah_te2 = {},
@@ -116,18 +158,48 @@ local config = {
         reactor_final = {},
         sp_delivery_te = {},
         supply = {
-            { name = "crane_controls", x = 656, y = -1360, z = 372, type = "misc" },
-            { name = "truck_escape", x = 2720, y = 1376, z = 192, type = "escort" },
+            { name = "forward_bunker_gate", x = 56, y = 2368, z = -48, type = "objective" },
+            { name = "truck", x = -2368, y = 688, z = 0, type = "escort" },
+            { name = "depot_fence", x = 144, y = -1792, z = 52, type = "objective" },
+            { name = "command_post", x = 2432, y = 904, z = 288, type = "command_post" },
+            { name = "forward_spawn_door", x = -68, y = 2368, z = 304, type = "objective" },
+            { name = "crane_controls", x = 656, y = -1360, z = 372, type = "objective" },
         },
         supplydepot2 = {},
-        sw_battery = {},
-        sw_goldrush_te = {
-            { name = "tank_breakout", x = 1860, y = -80, z = -96, type = "escort" },
-            { name = "truck_escape", x = -3310, y = -1060, z = -31, type = "escort" },
+        sw_battery = {
+            { name = "axis_south_east_mg", x = 4248, y = -4864, z = 1056, type = "objective" },
+            { name = "axis_north_west_mg", x = 1992, y = -4018, z = 1180, type = "objective" },
+            { name = "gun_controls", x = 3200, y = -2924, z = 1016, type = "objective" },
+            { name = "allied_west_mg", x = 992, y = -992, z = 152, type = "objective" },
+            { name = "allied_east_mg", x = 4012, y = -1100, z = 264, type = "objective" },
+            { name = "command_post", x = 6172, y = -3652, z = 1192, type = "command_post" },
+            { name = "generator", x = 3986, y = -5122, z = 1036, type = "objective" },
+            { name = "health_and_ammo_cabinets", x = 3506, y = -4926, z = 1226, type = "objective" },
+            { name = "backdoor_barrier", x = 4600, y = -4640, z = 1132, type = "objective" },
         },
-        sw_oasis_b3 = {},
+        sw_goldrush_te = {
+            { name = "tank_barrier", x = 688, y = 184, z = -11, type = "escort" },
+            { name = "jagdpanther", x = -272, y = 2200, z = 416, type = "objective" },
+            { name = "command_post", x = 1336, y = 264, z = 284, type = "command_post" },
+            { name = "bank_doors", x = 1600, y = -1948, z = -214, type = "objective" },
+            { name = "gold_bars", x = 2480, y = -2248, z = -296, type = "objective" },
+            { name = "health_and_ammo_cabinets", x = -1884, y = 1984, z = 244, type = "objective" },
+            { name = "truck", x = 2315, y = 1047, z = -352, type = "escort" },
+            { name = "truck_barrier", x = 1920, y = 40, z = -368, type = "escort" },
+        },
+        sw_oasis_b3 = {
+            { name = "axis_command_post", x = 8577, y = 5696, z = -120, type = "command_post" },
+            { name = "old_city_wall", x = 4896, y = 7586, z = -420, type = "objective" },
+            { name = "allied_command_post", x = 2393, y = 4678, z = -232, type = "command_post" },
+            { name = "health_and_ammo_cabinets", x = 4182, y = 7470, z = -456, type = "objective" },
+        },
         tc_base = {},
-        te_escape2 = {},
+        te_escape2 = {
+            { name = "secret_exit", x = -6165, y = 1606, z = -20, type = "objective" },
+            { name = "command_post", x = -3340, y = 1372, z = 252, type = "command_post" },
+            { name = "health_and_ammo_cabinets", x = -2362, y = 990, z = 17, type = "objective" },
+            { name = "holy_grail", x = -5828, y = -228, z = -24, type = "objective" },
+        },
         the_station = {},
         warbell = {},
         wolken1_b1 = {},
@@ -158,6 +230,12 @@ local config = {
         kill_outcome_tracking = true,
         hit_region_tracking = true,
         combat_positions = true,
+        -- v6 objective intelligence
+        carrier_tracking = true,
+        carrier_returns = true,
+        vehicle_tracking = true,
+        construction_tracking = true,
+        objective_run_tracking = true,
     },
 
     -- ===== v5 TEAMPLAY CONFIG =====
@@ -200,6 +278,26 @@ local config = {
 
         -- Safety cap for pending crossfire opportunities (FIFO eviction above this)
         max_crossfire_pending = 200,
+
+        -- v6: Carrier tracking
+        carrier_sample_interval_ms = 200,
+        carrier_return_timeout_ms = 35000,
+    },
+
+    -- ===== v6 VEHICLE CONFIG =====
+    vehicle = {
+        sample_interval_ms = 500,
+        escort_radius = 500,
+        min_move_speed = 5,
+        known_script_names = {"tank", "truck", "Tank", "Truck", "tank1", "tank2", "truck1", "truck2"},
+    },
+
+    -- Objective Run Intelligence (v6.01)
+    objective_run = {
+        path_clear_radius = 800,
+        path_clear_window_ms = 30000,
+        constructible_poll_interval_ms = 1000,
+        denied_run_radius = 500,
     },
 }
 
@@ -447,6 +545,36 @@ local tracker = {
     kill_outcomes = {
         dead_players = {},      -- [clientnum] = {kill_time, killer_guid, killer_name, kill_mod, victim_guid, victim_name, pos, body_damage}
         completed = {},         -- array of completed outcomes for output
+    },
+
+    -- v6 carrier tracking
+    carrier = {
+        active = {},        -- [clientNum] = {guid, name, team, flag_team, pickup_time, pickup_pos, last_pos, carry_distance, path_samples, last_sample_time}
+        events = {},        -- completed carrier events for output
+        kills = {},         -- carrier kill events for output
+        returns = {},       -- completed return events for output
+        pending_drops = {}, -- [flag_team] = {flag_team, drop_time, drop_pos, carrier_guid, carrier_name, carrier_team}
+    },
+
+    -- v6 vehicle/escort tracking
+    vehicles = {
+        entities = {},          -- [entNum] = {name, type, start_pos, last_pos, total_distance, max_health, last_health, destroyed_count}
+        escort_credits = {},    -- [guid:vehicle_name] = {player_guid, player_name, player_team, vehicle_name, mounted_ms, proximity_ms, total_escort_dist, credit_dist, samples}
+        last_check_time = 0,
+    },
+
+    -- v6 construction/destruction tracking
+    construction = {
+        events = {},     -- completed construction/destruction events for output
+    },
+
+    -- v6.01 objective run intelligence
+    objective_runs = {
+        completed = {},
+        constructibles = {},   -- [entNum] = {track, x, y, z, scriptName, last_progress}
+        explosives = {},       -- [entNum] = {track, x, y, z, scriptName}
+        checkpoints = {},      -- [entNum] = {x, y, z, scriptName, last_team}
+        last_poll = 0,
     },
 }
 
@@ -891,6 +1019,11 @@ local function endPlayerTrack(clientnum, death_pos, death_type, killer_name)
     end
 end
 
+-- Forward declarations for functions defined after sampleAllPlayers but called within it
+local sampleCarrierPosition
+local checkCarrierPowerups
+local sampleVehiclePositions
+
 local function sampleAllPlayers()
     local now = gameTime()
     if now - tracker.last_sample_time < config.position_sample_interval then return end
@@ -919,6 +1052,29 @@ local function sampleAllPlayers()
                 end
             end
         end
+    end
+
+    -- v6: carrier position sampling + powerup polling
+    if isFeatureEnabled("carrier_tracking") then
+        for clientnum, _ in pairs(tracker.carrier.active) do
+            sampleCarrierPosition(clientnum)
+        end
+        checkCarrierPowerups()
+    end
+
+    -- Phase 1.5: expire stale pending drops
+    if isFeatureEnabled("carrier_returns") then
+        local now = gameTime()
+        for flag_team, pd in pairs(tracker.carrier.pending_drops) do
+            if now - pd.drop_time > config.teamplay.carrier_return_timeout_ms then
+                tracker.carrier.pending_drops[flag_team] = nil
+            end
+        end
+    end
+
+    -- v6: vehicle position sampling
+    if isFeatureEnabled("vehicle_tracking") then
+        sampleVehiclePositions()
     end
 end
 
@@ -1732,47 +1888,8 @@ end
 
 -- ===== v5.1 KILL OUTCOME STATE MACHINE =====
 
-local function recordKillOutcomeDeath(victim_slot, killer_slot, meansOfDeath)
-    local now = gameTime()
-    local victim_guid = getPlayerGUID(victim_slot)
-    local victim_name = getPlayerName(victim_slot)
-    local killer_guid = (killer_slot and isValidClient(killer_slot)) and getPlayerGUID(killer_slot) or ""
-    local killer_name = (killer_slot and isValidClient(killer_slot)) and getPlayerName(killer_slot) or ""
-    local pos = getPlayerPos(victim_slot)
-
-    tracker.kill_outcomes.dead_players[victim_slot] = {
-        kill_time = now,
-        victim_guid = victim_guid,
-        victim_name = victim_name,
-        killer_guid = killer_guid,
-        killer_name = killer_name,
-        kill_mod = meansOfDeath or 0,
-        pos = pos,
-        body_damage = 0,
-        body_hits = 0,
-        last_damager_guid = "",
-        last_damager_name = "",
-        last_damage_mod = 0,
-    }
-end
-
-local function recordKillOutcomeBodyDamage(victim_slot, attacker_slot, damage, meansOfDeath)
-    local info = tracker.kill_outcomes.dead_players[victim_slot]
-    if not info then return end
-    info.body_damage = info.body_damage + damage
-    info.body_hits = info.body_hits + 1
-    if isValidClient(attacker_slot) then
-        info.last_damager_guid = getPlayerGUID(attacker_slot)
-        info.last_damager_name = getPlayerName(attacker_slot)
-        info.last_damage_mod = meansOfDeath or 0
-    end
-
-    -- v5.2: Gib detection via cumulative body damage threshold (replaces broken PMF_LIMBO polling)
-    -- ET:Legacy gibs corpses at -175 health. Body damage accumulates post-mortem from all sources.
-    if info.body_damage >= 175 then
-        finalizeKillOutcome(victim_slot, "gibbed", nil, nil)
-    end
-end
+-- NOTE: finalizeKillOutcome MUST be defined before recordKillOutcomeBodyDamage
+-- because Lua local functions are not visible before their definition point.
 
 local function finalizeKillOutcome(victim_slot, outcome, resolver_guid, resolver_name)
     local info = tracker.kill_outcomes.dead_players[victim_slot]
@@ -1829,6 +1946,48 @@ local function finalizeKillOutcome(victim_slot, outcome, resolver_guid, resolver
     if config.debug then
         et.G_Printf("[PROX] Kill outcome: %s → %s (%dms, effective=%dms)\n",
             info.victim_name, outcome, delta_ms, effective_denied_ms)
+    end
+end
+
+local function recordKillOutcomeDeath(victim_slot, killer_slot, meansOfDeath)
+    local now = gameTime()
+    local victim_guid = getPlayerGUID(victim_slot)
+    local victim_name = getPlayerName(victim_slot)
+    local killer_guid = (killer_slot and isValidClient(killer_slot)) and getPlayerGUID(killer_slot) or ""
+    local killer_name = (killer_slot and isValidClient(killer_slot)) and getPlayerName(killer_slot) or ""
+    local pos = getPlayerPos(victim_slot)
+
+    tracker.kill_outcomes.dead_players[victim_slot] = {
+        kill_time = now,
+        victim_guid = victim_guid,
+        victim_name = victim_name,
+        killer_guid = killer_guid,
+        killer_name = killer_name,
+        kill_mod = meansOfDeath or 0,
+        pos = pos,
+        body_damage = 0,
+        body_hits = 0,
+        last_damager_guid = "",
+        last_damager_name = "",
+        last_damage_mod = 0,
+    }
+end
+
+local function recordKillOutcomeBodyDamage(victim_slot, attacker_slot, damage, meansOfDeath)
+    local info = tracker.kill_outcomes.dead_players[victim_slot]
+    if not info then return end
+    info.body_damage = info.body_damage + damage
+    info.body_hits = info.body_hits + 1
+    if isValidClient(attacker_slot) then
+        info.last_damager_guid = getPlayerGUID(attacker_slot)
+        info.last_damager_name = getPlayerName(attacker_slot)
+        info.last_damage_mod = meansOfDeath or 0
+    end
+
+    -- v5.2: Gib detection via cumulative body damage threshold (replaces broken PMF_LIMBO polling)
+    -- ET:Legacy gibs corpses at -175 health. Body damage accumulates post-mortem from all sources.
+    if info.body_damage >= 175 then
+        finalizeKillOutcome(victim_slot, "gibbed", nil, nil)
     end
 end
 
@@ -1926,6 +2085,677 @@ local function serializeTrackPath(path)
     return table.concat(parts, "|")
 end
 
+local function countTableKeys(t)
+    local count = 0
+    for _ in pairs(t) do count = count + 1 end
+    return count
+end
+
+-- ===== v6 CARRIER TRACKING =====
+
+local function startCarrierTracking(clientNum, flag_team)
+    if not isFeatureEnabled("carrier_tracking") then return end
+    if tracker.carrier.active[clientNum] then return end
+    local pos = getPlayerPos(clientNum)
+    if not pos then return end
+    local now = gameTime()
+    tracker.carrier.active[clientNum] = {
+        guid = getPlayerGUID(clientNum),
+        name = getPlayerName(clientNum),
+        team = getPlayerTeam(clientNum),
+        flag_team = flag_team,
+        pickup_time = now,
+        pickup_pos = { x = round(pos.x, 0), y = round(pos.y, 0), z = round(pos.z, 0) },
+        last_pos = pos,
+        carry_distance = 0,
+        path_samples = 1,
+        last_sample_time = now,
+    }
+    -- Phase 1.5: detect re-pickup
+    if isFeatureEnabled("carrier_returns") and tracker.carrier.pending_drops[flag_team] then
+        local pd = tracker.carrier.pending_drops[flag_team]
+        tracker.carrier.active[clientNum].is_repickup = true
+        tracker.carrier.active[clientNum].repickup_delay_ms = gameTime() - pd.drop_time
+        tracker.carrier.pending_drops[flag_team] = nil
+    end
+    if config.debug then
+        et.G_Print(string.format("[PROX] Carrier started: %s flag=%s\n",
+            getPlayerName(clientNum), flag_team))
+    end
+end
+
+sampleCarrierPosition = function(clientNum)
+    local state = tracker.carrier.active[clientNum]
+    if not state then return end
+    local pos = getPlayerPos(clientNum)
+    if not pos then return end
+    local now = gameTime()
+    if now - state.last_sample_time < config.teamplay.carrier_sample_interval_ms then return end
+    local d = distance3D(pos, state.last_pos)
+    state.carry_distance = state.carry_distance + d
+    state.last_pos = pos
+    state.path_samples = state.path_samples + 1
+    state.last_sample_time = now
+end
+
+local function endCarrierTracking(clientNum, outcome, killer_guid, killer_name)
+    local state = tracker.carrier.active[clientNum]
+    if not state then return end
+    local now = gameTime()
+    local drop_pos = getPlayerPos(clientNum) or state.last_pos
+    local beeline = distance3D(state.pickup_pos, drop_pos)
+    local efficiency = 0
+    if state.carry_distance > 0 then
+        efficiency = beeline / state.carry_distance
+        if efficiency > 1.0 then efficiency = 1.0 end
+    end
+    table.insert(tracker.carrier.events, {
+        carrier_guid = state.guid,
+        carrier_name = state.name,
+        carrier_team = state.team,
+        flag_team = state.flag_team,
+        pickup_time = state.pickup_time,
+        drop_time = now,
+        duration_ms = now - state.pickup_time,
+        outcome = outcome,
+        carry_distance = round(state.carry_distance, 1),
+        beeline_distance = round(beeline, 1),
+        efficiency = round(efficiency, 3),
+        path_samples = state.path_samples,
+        pickup_x = state.pickup_pos.x,
+        pickup_y = state.pickup_pos.y,
+        pickup_z = state.pickup_pos.z,
+        drop_x = round(drop_pos.x, 0),
+        drop_y = round(drop_pos.y, 0),
+        drop_z = round(drop_pos.z, 0),
+        killer_guid = killer_guid or "",
+        killer_name = killer_name or "",
+    })
+    -- Phase 1.5: track pending drops for return detection
+    if (outcome == "killed" or outcome == "dropped") and isFeatureEnabled("carrier_returns") then
+        tracker.carrier.pending_drops[state.flag_team] = {
+            flag_team = state.flag_team,
+            drop_time = now,
+            drop_pos = drop_pos,
+            carrier_guid = state.guid,
+            carrier_name = state.name,
+            carrier_team = state.team,
+        }
+    end
+    if outcome == "killed" and killer_guid and killer_guid ~= "" then
+        table.insert(tracker.carrier.kills, {
+            kill_time = now,
+            carrier_guid = state.guid,
+            carrier_name = state.name,
+            carrier_team = state.team,
+            killer_guid = killer_guid,
+            killer_name = killer_name,
+            killer_team = "",
+            means_of_death = 0,
+            carrier_distance_at_kill = round(state.carry_distance, 1),
+            flag_team = state.flag_team,
+        })
+    end
+    tracker.carrier.active[clientNum] = nil
+    if config.debug then
+        et.G_Print(string.format("[PROX] Carrier ended: %s outcome=%s dist=%.0f eff=%.3f\n",
+            state.name, outcome, state.carry_distance, efficiency))
+    end
+end
+
+checkCarrierPowerups = function()
+    if not isFeatureEnabled("carrier_tracking") then return end
+    local max_clients = get_max_clients()
+    for clientnum = 0, max_clients - 1 do
+        if isPlayerActive(clientnum) and isPlayerAlive(clientnum) then
+            local red_pw = tonumber(safe_gentity_get(clientnum, "ps.powerups", 5)) or 0
+            local blue_pw = tonumber(safe_gentity_get(clientnum, "ps.powerups", 6)) or 0
+            if red_pw > 0 and not tracker.carrier.active[clientnum] then
+                startCarrierTracking(clientnum, "redflag")
+            elseif blue_pw > 0 and not tracker.carrier.active[clientnum] then
+                startCarrierTracking(clientnum, "blueflag")
+            end
+            if tracker.carrier.active[clientnum] then
+                local expected_flag = tracker.carrier.active[clientnum].flag_team
+                local still_carrying = false
+                if expected_flag == "redflag" and red_pw > 0 then still_carrying = true end
+                if expected_flag == "blueflag" and blue_pw > 0 then still_carrying = true end
+                if not still_carrying then
+                    endCarrierTracking(clientnum, "dropped", nil, nil)
+                end
+            end
+        end
+    end
+end
+
+-- ===== v6 VEHICLE/ESCORT TRACKING =====
+
+local function scanVehicleEntities()
+    if not isFeatureEnabled("vehicle_tracking") then return end
+    tracker.vehicles.entities = {}
+    tracker.vehicles.escort_credits = {}
+    tracker.vehicles.last_check_time = 0
+
+    local known = {}
+    for _, name in ipairs(config.vehicle.known_script_names) do
+        known[name] = true
+    end
+
+    for i = 64, 1023 do
+        local ok_cn, classname = pcall(et.gentity_get, i, "classname")
+        if ok_cn and classname == "script_mover" then
+            local ok_sn, script_name = pcall(et.gentity_get, i, "scriptName")
+            local name = (ok_sn and script_name) or ""
+            if known[name] then
+                local ox = tonumber(safe_gentity_get(i, "r.currentOrigin", 1)) or 0
+                local oy = tonumber(safe_gentity_get(i, "r.currentOrigin", 2)) or 0
+                local oz = tonumber(safe_gentity_get(i, "r.currentOrigin", 3)) or 0
+                local health = tonumber(safe_gentity_get(i, "health")) or 0
+                tracker.vehicles.entities[i] = {
+                    name = name,
+                    type = "script_mover",
+                    start_pos = {x = ox, y = oy, z = oz},
+                    last_pos = {x = ox, y = oy, z = oz},
+                    total_distance = 0,
+                    max_health = health,
+                    last_health = health,
+                    destroyed_count = 0,
+                }
+                et.G_Print(string.format("[PROX v6] Vehicle found: ent=%d name=%s pos=(%d,%d,%d) hp=%d\n",
+                    i, name, ox, oy, oz, health))
+            end
+        end
+    end
+end
+
+sampleVehiclePositions = function()
+    if not isFeatureEnabled("vehicle_tracking") then return end
+    local now = gameTime()
+    if now - tracker.vehicles.last_check_time < config.vehicle.sample_interval_ms then return end
+    tracker.vehicles.last_check_time = now
+
+    for entNum, veh in pairs(tracker.vehicles.entities) do
+        local vx = tonumber(safe_gentity_get(entNum, "r.currentOrigin", 1)) or 0
+        local vy = tonumber(safe_gentity_get(entNum, "r.currentOrigin", 2)) or 0
+        local vz = tonumber(safe_gentity_get(entNum, "r.currentOrigin", 3)) or 0
+        local current_pos = {x = vx, y = vy, z = vz}
+
+        local delta = distance3D(current_pos, veh.last_pos)
+        local is_moving = delta > config.vehicle.min_move_speed
+
+        if is_moving then
+            veh.total_distance = veh.total_distance + delta
+        end
+        veh.last_pos = current_pos
+
+        -- Track health changes
+        local health = tonumber(safe_gentity_get(entNum, "health")) or 0
+        if health <= 0 and veh.last_health > 0 then
+            veh.destroyed_count = veh.destroyed_count + 1
+        end
+        if health > veh.max_health then veh.max_health = health end
+        veh.last_health = health
+
+        -- Attribution: check all players for mounted or proximity
+        local max_clients = get_max_clients()
+        for cn = 0, max_clients - 1 do
+            if isPlayerActive(cn) and isPlayerAlive(cn) then
+                local guid = getPlayerGUID(cn)
+                if guid and guid ~= "" then
+                    local key = guid .. ":" .. veh.name
+                    if not tracker.vehicles.escort_credits[key] then
+                        tracker.vehicles.escort_credits[key] = {
+                            player_guid = guid,
+                            player_name = getPlayerName(cn),
+                            player_team = getPlayerTeam(cn),
+                            vehicle_name = veh.name,
+                            mounted_ms = 0,
+                            proximity_ms = 0,
+                            total_escort_distance = 0,
+                            credit_distance = 0,
+                            samples = 0,
+                        }
+                    end
+                    local credit = tracker.vehicles.escort_credits[key]
+
+                    -- Check if mounted on this vehicle
+                    local player_tank = tonumber(safe_gentity_get(cn, "tankLink")) or -1
+                    if player_tank == entNum then
+                        credit.mounted_ms = credit.mounted_ms + config.vehicle.sample_interval_ms
+                        credit.samples = credit.samples + 1
+                        if is_moving then
+                            credit.credit_distance = credit.credit_distance + delta
+                            credit.total_escort_distance = credit.total_escort_distance + delta
+                        end
+                    else
+                        -- Check proximity while vehicle is moving
+                        if is_moving then
+                            local player_pos = getPlayerPos(cn)
+                            if player_pos then
+                                local d = distance3D(player_pos, current_pos)
+                                if d <= config.vehicle.escort_radius then
+                                    credit.proximity_ms = credit.proximity_ms + config.vehicle.sample_interval_ms
+                                    credit.samples = credit.samples + 1
+                                    credit.total_escort_distance = credit.total_escort_distance + delta
+                                    local proximity_factor = 1.0 - (d / config.vehicle.escort_radius)
+                                    credit.credit_distance = credit.credit_distance + (delta * proximity_factor)
+                                end
+                            end
+                        end
+                    end
+                    credit.player_name = getPlayerName(cn)
+                end
+            end
+        end
+    end
+end
+
+-- ===== v6.01 OBJECTIVE RUN INTELLIGENCE =====
+
+local function countByField(tbl, field, value)
+    local count = 0
+    for _, item in ipairs(tbl) do
+        if item[field] == value then count = count + 1 end
+    end
+    return count
+end
+
+local function scanObjectiveEntities()
+    if not isFeatureEnabled("objective_run_tracking") then return end
+    tracker.objective_runs.constructibles = {}
+    tracker.objective_runs.explosives = {}
+    tracker.objective_runs.checkpoints = {}
+
+    local constructible_count = 0
+    local explosive_count = 0
+    local checkpoint_count = 0
+
+    for i = 64, 1023 do
+        local ok_cn, classname = pcall(et.gentity_get, i, "classname")
+        if ok_cn and classname then
+            if classname == "team_WOLF_checkpoint" then
+                local ok_sn, script_name = pcall(et.gentity_get, i, "scriptName")
+                local sname = (ok_sn and script_name) or ""
+                local ox, oy, oz = 0, 0, 0
+                local origin = safe_gentity_get(i, "r.currentOrigin")
+                if origin then
+                    if origin[1] then
+                        ox = tonumber(origin[1]) or 0
+                        oy = tonumber(origin[2]) or 0
+                        oz = tonumber(origin[3]) or 0
+                    elseif origin.x then
+                        ox = tonumber(origin.x) or 0
+                        oy = tonumber(origin.y) or 0
+                        oz = tonumber(origin.z) or 0
+                    end
+                end
+                if ox == 0 and oy == 0 and oz == 0 then
+                    ox = tonumber(safe_gentity_get(i, "r.currentOrigin", 1)) or 0
+                    oy = tonumber(safe_gentity_get(i, "r.currentOrigin", 2)) or 0
+                    oz = tonumber(safe_gentity_get(i, "r.currentOrigin", 3)) or 0
+                end
+                -- count = controlling team (NOT s.teamNum which is for animation)
+                local initial_team = tonumber(safe_gentity_get(i, "count")) or 0
+                tracker.objective_runs.checkpoints[i] = {
+                    x = ox, y = oy, z = oz,
+                    scriptName = sname,
+                    last_team = initial_team,
+                }
+                checkpoint_count = checkpoint_count + 1
+            elseif classname == "func_constructible" then
+                local ok_sn, script_name = pcall(et.gentity_get, i, "scriptName")
+                local sname = (ok_sn and script_name) or ""
+                local ok_tn, track_name = pcall(et.gentity_get, i, "track")
+                local tname = (ok_tn and track_name) or ""
+                -- Get origin (handle table with [1],[2],[3] or .x,.y,.z)
+                local ox, oy, oz = 0, 0, 0
+                local origin = safe_gentity_get(i, "r.currentOrigin")
+                if origin then
+                    if origin[1] then
+                        ox = tonumber(origin[1]) or 0
+                        oy = tonumber(origin[2]) or 0
+                        oz = tonumber(origin[3]) or 0
+                    elseif origin.x then
+                        ox = tonumber(origin.x) or 0
+                        oy = tonumber(origin.y) or 0
+                        oz = tonumber(origin.z) or 0
+                    end
+                end
+                -- Fallback: try indexed access
+                if ox == 0 and oy == 0 and oz == 0 then
+                    ox = tonumber(safe_gentity_get(i, "r.currentOrigin", 1)) or 0
+                    oy = tonumber(safe_gentity_get(i, "r.currentOrigin", 2)) or 0
+                    oz = tonumber(safe_gentity_get(i, "r.currentOrigin", 3)) or 0
+                end
+                tracker.objective_runs.constructibles[i] = {
+                    track = tname,
+                    x = ox, y = oy, z = oz,
+                    scriptName = sname,
+                    last_progress = 0,
+                }
+                constructible_count = constructible_count + 1
+            elseif classname == "func_explosive" then
+                local ok_sn, script_name = pcall(et.gentity_get, i, "scriptName")
+                local sname = (ok_sn and script_name) or ""
+                local ok_tn, track_name = pcall(et.gentity_get, i, "track")
+                local tname = (ok_tn and track_name) or ""
+                local ox, oy, oz = 0, 0, 0
+                local origin = safe_gentity_get(i, "r.currentOrigin")
+                if origin then
+                    if origin[1] then
+                        ox = tonumber(origin[1]) or 0
+                        oy = tonumber(origin[2]) or 0
+                        oz = tonumber(origin[3]) or 0
+                    elseif origin.x then
+                        ox = tonumber(origin.x) or 0
+                        oy = tonumber(origin.y) or 0
+                        oz = tonumber(origin.z) or 0
+                    end
+                end
+                if ox == 0 and oy == 0 and oz == 0 then
+                    ox = tonumber(safe_gentity_get(i, "r.currentOrigin", 1)) or 0
+                    oy = tonumber(safe_gentity_get(i, "r.currentOrigin", 2)) or 0
+                    oz = tonumber(safe_gentity_get(i, "r.currentOrigin", 3)) or 0
+                end
+                tracker.objective_runs.explosives[i] = {
+                    track = tname,
+                    x = ox, y = oy, z = oz,
+                    scriptName = sname,
+                }
+                explosive_count = explosive_count + 1
+            end
+        end
+    end
+
+    et.G_Print(string.format("[PROX v6.01] Objective entities: %d constructibles, %d explosives, %d checkpoints\n",
+        constructible_count, explosive_count, checkpoint_count))
+end
+
+local function findNearestConstructible(pos, max_dist)
+    if not pos then return nil end
+    local best_obj, best_dist = nil, max_dist
+    for _, obj in pairs(tracker.objective_runs.constructibles) do
+        local obj_pos = {x = obj.x, y = obj.y, z = obj.z}
+        local d = distance3D(pos, obj_pos)
+        if d < best_dist then
+            best_dist = d
+            best_obj = obj
+        end
+    end
+    if best_obj then
+        return best_obj, best_dist
+    end
+    return nil
+end
+
+local function findNearestExplosive(pos, max_dist)
+    if not pos then return nil end
+    local best_obj, best_dist = nil, max_dist
+    for _, obj in pairs(tracker.objective_runs.explosives) do
+        local obj_pos = {x = obj.x, y = obj.y, z = obj.z}
+        local d = distance3D(pos, obj_pos)
+        if d < best_dist then
+            best_dist = d
+            best_obj = obj
+        end
+    end
+    if best_obj then
+        return best_obj, best_dist
+    end
+    return nil
+end
+
+local function findNearestCheckpoint(pos, max_dist)
+    if not pos then return nil, nil end
+    local best_obj, best_dist, best_ent = nil, max_dist, nil
+    for entNum, obj in pairs(tracker.objective_runs.checkpoints) do
+        local obj_pos = {x = obj.x, y = obj.y, z = obj.z}
+        local d = distance3D(pos, obj_pos)
+        if d < best_dist then
+            best_dist = d
+            best_obj = obj
+            best_ent = entNum
+        end
+    end
+    if best_obj then
+        return best_obj, best_dist, best_ent
+    end
+    return nil
+end
+
+local function countAreaKills(obj_pos, engineer_guid, engineer_team, action_time, window_ms, radius)
+    local self_kills = 0
+    local team_kills = 0
+    local escort_set = {}
+
+    for i = #tracker.combat_positions, 1, -1 do
+        local cp = tracker.combat_positions[i]
+        local time_before = action_time - cp.time
+        if time_before > window_ms then
+            break  -- too old, stop
+        end
+        if time_before >= 0 then
+            local victim_pos = {x = cp.vx, y = cp.vy, z = cp.vz}
+            local d = distance3D(obj_pos, victim_pos)
+            if d <= radius then
+                if cp.attacker_guid == engineer_guid then
+                    self_kills = self_kills + 1
+                elseif cp.attacker_team == engineer_team then
+                    team_kills = team_kills + 1
+                    escort_set[cp.attacker_guid] = true
+                end
+            end
+        end
+    end
+
+    local escort_guids = {}
+    for guid, _ in pairs(escort_set) do
+        table.insert(escort_guids, guid)
+    end
+    local escort_guids_str = table.concat(escort_guids, "|")
+
+    return self_kills, team_kills, escort_guids_str
+end
+
+local function countNearbyAlive(team, pos, radius, exclude_cn)
+    local teammates_count = 0
+    local enemies_count = 0
+    local max_clients = get_max_clients()
+
+    for cn = 0, max_clients - 1 do
+        if cn ~= exclude_cn and isPlayerActive(cn) and isPlayerAlive(cn) then
+            local p = getPlayerPos(cn)
+            if p then
+                local d = distance3D(pos, p)
+                if d <= radius then
+                    local t = getPlayerTeam(cn)
+                    if t == team then
+                        teammates_count = teammates_count + 1
+                    elseif t ~= "SPEC" then
+                        enemies_count = enemies_count + 1
+                    end
+                end
+            end
+        end
+    end
+
+    return teammates_count, enemies_count
+end
+
+local function calculateApproachMetrics(track, action_time, window_ms)
+    if not track or not track.path or #track.path == 0 then
+        return 0, 0, 0, 0
+    end
+
+    local start_time = action_time - window_ms
+    local first_sample = nil
+    local last_sample = nil
+    local approach_distance = 0
+    local prev_sample = nil
+
+    for _, sample in ipairs(track.path) do
+        if sample.time >= start_time and sample.time <= action_time then
+            if not first_sample then
+                first_sample = sample
+            end
+            if prev_sample then
+                local seg_pos1 = {x = prev_sample.x, y = prev_sample.y, z = prev_sample.z}
+                local seg_pos2 = {x = sample.x, y = sample.y, z = sample.z}
+                approach_distance = approach_distance + distance3D(seg_pos1, seg_pos2)
+            end
+            prev_sample = sample
+            last_sample = sample
+        end
+    end
+
+    if not first_sample or not last_sample then
+        return 0, 0, 0, 0
+    end
+
+    local approach_time_ms = last_sample.time - first_sample.time
+    local first_pos = {x = first_sample.x, y = first_sample.y, z = first_sample.z}
+    local last_pos = {x = last_sample.x, y = last_sample.y, z = last_sample.z}
+    local beeline_distance = distance3D(first_pos, last_pos)
+
+    local path_efficiency = 0
+    if approach_distance > 0 then
+        path_efficiency = beeline_distance / approach_distance
+        if path_efficiency > 1.0 then path_efficiency = 1.0 end
+    end
+
+    return round(approach_time_ms, 0), round(approach_distance, 1), round(beeline_distance, 1), round(path_efficiency, 3)
+end
+
+local function classifyRunType(self_kills, team_kills, nearby_teammates, enemies_nearby)
+    local total_kills = self_kills + team_kills
+
+    if total_kills == 0 and enemies_nearby == 0 then
+        return "unopposed"
+    end
+    if self_kills > 0 and team_kills == 0 and nearby_teammates == 0 then
+        return "solo"
+    end
+    if self_kills > 0 and enemies_nearby > 0 and team_kills == 0 then
+        return "contested_solo"
+    end
+    if team_kills > 0 and self_kills == 0 then
+        return "assisted"
+    end
+    if total_kills >= 3 or (team_kills > 0 and self_kills > 0) then
+        return "team_effort"
+    end
+
+    -- Default fallback
+    if enemies_nearby > 0 then
+        return "contested_solo"
+    end
+    return "unopposed"
+end
+
+local function assembleObjectiveRun(engineer_cn, action_type, track_name, action_pos)
+    if not isFeatureEnabled("objective_run_tracking") then return end
+    if not isValidClient(engineer_cn) then return end
+
+    local track = tracker.player_tracks[engineer_cn]
+    if not track then return end
+
+    local now = gameTime()
+    local pos = action_pos or getPlayerPos(engineer_cn)
+    if not pos then return end
+
+    -- For construction_complete without track_name, use findNearestConstructible to resolve
+    local resolved_track_name = track_name or ""
+    if action_type == "construction_complete" and (resolved_track_name == "" or resolved_track_name == nil) then
+        local nearest = findNearestConstructible(pos, config.objective_run.path_clear_radius)
+        if nearest then
+            resolved_track_name = nearest.track or ""
+        end
+    end
+
+    -- For objective_destroyed, find the explosive entity by track_name for accurate position
+    local obj_pos = pos
+    if action_type == "objective_destroyed" and resolved_track_name ~= "" then
+        for _, exp in pairs(tracker.objective_runs.explosives) do
+            if exp.track == resolved_track_name then
+                obj_pos = {x = exp.x, y = exp.y, z = exp.z}
+                break
+            end
+        end
+    end
+
+    -- Calculate area kills
+    local self_kills, team_kills, escort_guids = countAreaKills(
+        obj_pos, track.guid, track.team, now,
+        config.objective_run.path_clear_window_ms,
+        config.objective_run.path_clear_radius)
+
+    -- Count nearby alive players
+    local nearby_teammates, enemies_nearby = countNearbyAlive(
+        track.team, obj_pos, config.objective_run.path_clear_radius, engineer_cn)
+
+    -- Calculate approach metrics
+    local approach_time_ms, approach_distance, beeline_distance, path_efficiency =
+        calculateApproachMetrics(track, now, config.objective_run.path_clear_window_ms)
+
+    -- Classify run type
+    local run_type = classifyRunType(self_kills, team_kills, nearby_teammates, enemies_nearby)
+
+    table.insert(tracker.objective_runs.completed, {
+        engineer_guid = track.guid,
+        engineer_name = track.name,
+        engineer_team = track.team,
+        action_type = action_type,
+        track_name = resolved_track_name,
+        action_time = now,
+        approach_time_ms = approach_time_ms,
+        approach_distance = approach_distance,
+        beeline_distance = beeline_distance,
+        path_efficiency = path_efficiency,
+        self_kills = self_kills,
+        team_kills = team_kills,
+        escort_guids = escort_guids,
+        enemies_nearby = enemies_nearby,
+        nearby_teammates = nearby_teammates,
+        run_type = run_type,
+        obj_x = round(obj_pos.x, 0),
+        obj_y = round(obj_pos.y, 0),
+        obj_z = round(obj_pos.z, 0),
+        killer_guid = "",
+        killer_name = "",
+    })
+
+    if config.debug then
+        et.G_Print(string.format("[PROX v6.01] Objective run: %s %s track=%s type=%s kills=%d+%d\n",
+            track.name, action_type, resolved_track_name, run_type, self_kills, team_kills))
+    end
+end
+
+local function pollConstructionProgress(now)
+    if not isFeatureEnabled("objective_run_tracking") then return end
+    if now - tracker.objective_runs.last_poll < config.objective_run.constructible_poll_interval_ms then return end
+    tracker.objective_runs.last_poll = now
+
+    for entNum, obj in pairs(tracker.objective_runs.constructibles) do
+        local ok, progress = pcall(et.gentity_get, entNum, "s.angles2", 0)
+        if ok and progress then
+            progress = tonumber(progress) or 0
+            local prev = obj.last_progress or 0
+            if prev == 0 and progress > 0 then
+                if config.debug then
+                    et.G_Print(string.format("[PROX v6.01] Construction started: ent=%d track=%s progress=%.1f\n",
+                        entNum, obj.track or "", progress))
+                end
+            elseif prev > 0 and progress == 0 then
+                if config.debug then
+                    et.G_Print(string.format("[PROX v6.01] Construction interrupted: ent=%d track=%s\n",
+                        entNum, obj.track or ""))
+                end
+            end
+            obj.last_progress = progress
+        end
+    end
+end
+
 local function outputDataInner()
     if #tracker.completed == 0 and #tracker.completed_tracks == 0 then
         proxPrint("[PROX] No data to output\n")
@@ -1949,7 +2779,7 @@ local function outputDataInner()
 
     -- ===== HEADER =====
     local header = string.format(
-        "# PROXIMITY_TRACKER_V5\n" ..
+        "# PROXIMITY_TRACKER_V6\n" ..
         "# map=%s\n" ..
         "# round=%d\n" ..
         "# crossfire_window=%d\n" ..
@@ -2271,6 +3101,139 @@ local function outputDataInner()
         end
     end
 
+    -- ===== CARRIER EVENTS (v6) =====
+    if isFeatureEnabled("carrier_tracking") and #tracker.carrier.events > 0 then
+        local ce_header = "\n# CARRIER_EVENTS\n" ..
+            "# carrier_guid;carrier_name;carrier_team;flag_team;pickup_time;drop_time;duration_ms;" ..
+            "outcome;carry_distance;beeline_distance;efficiency;path_samples;" ..
+            "pickup_x;pickup_y;pickup_z;drop_x;drop_y;drop_z;killer_guid;killer_name\n"
+        et.trap_FS_Write(ce_header, string.len(ce_header), fd)
+        for _, ce in ipairs(tracker.carrier.events) do
+            local line = string.format(
+                "%s;%s;%s;%s;%d;%d;%d;%s;%.1f;%.1f;%.3f;%d;%d;%d;%d;%d;%d;%d;%s;%s\n",
+                ce.carrier_guid, ce.carrier_name, ce.carrier_team, ce.flag_team,
+                ce.pickup_time, ce.drop_time, ce.duration_ms,
+                ce.outcome, ce.carry_distance, ce.beeline_distance, ce.efficiency,
+                ce.path_samples,
+                ce.pickup_x, ce.pickup_y, ce.pickup_z,
+                ce.drop_x, ce.drop_y, ce.drop_z,
+                ce.killer_guid, ce.killer_name)
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
+
+    -- ===== CARRIER KILLS (v6) =====
+    if isFeatureEnabled("carrier_tracking") and #tracker.carrier.kills > 0 then
+        local ck_header = "\n# CARRIER_KILLS\n" ..
+            "# kill_time;carrier_guid;carrier_name;carrier_team;" ..
+            "killer_guid;killer_name;killer_team;means_of_death;" ..
+            "carrier_distance_at_kill;flag_team\n"
+        et.trap_FS_Write(ck_header, string.len(ck_header), fd)
+        for _, ck in ipairs(tracker.carrier.kills) do
+            local line = string.format("%d;%s;%s;%s;%s;%s;%s;%d;%.1f;%s\n",
+                ck.kill_time, ck.carrier_guid, ck.carrier_name, ck.carrier_team,
+                ck.killer_guid, ck.killer_name, ck.killer_team,
+                ck.means_of_death, ck.carrier_distance_at_kill, ck.flag_team)
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
+
+    -- ===== CARRIER RETURNS (v6 Phase 1.5) =====
+    if isFeatureEnabled("carrier_returns") and #tracker.carrier.returns > 0 then
+        local cr_header = "\n# CARRIER_RETURNS\n" ..
+            "# return_time;returner_guid;returner_name;returner_team;flag_team;" ..
+            "original_carrier_guid;drop_time;return_delay_ms;drop_x;drop_y;drop_z\n"
+        et.trap_FS_Write(cr_header, string.len(cr_header), fd)
+        for _, cr in ipairs(tracker.carrier.returns) do
+            local line = string.format("%d;%s;%s;%s;%s;%s;%d;%d;%d;%d;%d\n",
+                cr.return_time, cr.returner_guid, cr.returner_name, cr.returner_team,
+                cr.flag_team, cr.original_carrier_guid, cr.drop_time, cr.return_delay_ms,
+                cr.drop_x, cr.drop_y, cr.drop_z)
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
+
+    -- ===== VEHICLE PROGRESS (v6 Phase 2) =====
+    if isFeatureEnabled("vehicle_tracking") then
+        local vp_items = {}
+        for _, veh in pairs(tracker.vehicles.entities) do
+            if veh.total_distance > 0 or veh.destroyed_count > 0 then
+                table.insert(vp_items, veh)
+            end
+        end
+        if #vp_items > 0 then
+            local vp_header = "\n# VEHICLE_PROGRESS\n" ..
+                "# vehicle_name;vehicle_type;start_x;start_y;start_z;end_x;end_y;end_z;" ..
+                "total_distance;max_health;final_health;destroyed_count\n"
+            et.trap_FS_Write(vp_header, string.len(vp_header), fd)
+            for _, veh in ipairs(vp_items) do
+                local line = string.format("%s;%s;%d;%d;%d;%d;%d;%d;%.1f;%d;%d;%d\n",
+                    veh.name, veh.type,
+                    veh.start_pos.x, veh.start_pos.y, veh.start_pos.z,
+                    veh.last_pos.x, veh.last_pos.y, veh.last_pos.z,
+                    veh.total_distance, veh.max_health, veh.last_health, veh.destroyed_count)
+                et.trap_FS_Write(line, string.len(line), fd)
+            end
+        end
+    end
+
+    -- ===== ESCORT CREDIT (v6 Phase 2) =====
+    if isFeatureEnabled("vehicle_tracking") then
+        local ec_items = {}
+        for _, credit in pairs(tracker.vehicles.escort_credits) do
+            if credit.samples > 0 then
+                table.insert(ec_items, credit)
+            end
+        end
+        if #ec_items > 0 then
+            local ec_header = "\n# ESCORT_CREDIT\n" ..
+                "# player_guid;player_name;player_team;vehicle_name;mounted_time_ms;" ..
+                "proximity_time_ms;total_escort_distance;credit_distance;samples\n"
+            et.trap_FS_Write(ec_header, string.len(ec_header), fd)
+            for _, ec in ipairs(ec_items) do
+                local line = string.format("%s;%s;%s;%s;%d;%d;%.1f;%.1f;%d\n",
+                    ec.player_guid, ec.player_name, ec.player_team, ec.vehicle_name,
+                    ec.mounted_ms, ec.proximity_ms, ec.total_escort_distance,
+                    ec.credit_distance, ec.samples)
+                et.trap_FS_Write(line, string.len(line), fd)
+            end
+        end
+    end
+
+    -- ===== CONSTRUCTION EVENTS (v6 Phase 3) =====
+    if isFeatureEnabled("construction_tracking") and #tracker.construction.events > 0 then
+        local con_header = "\n# CONSTRUCTION_EVENTS\n" ..
+            "# event_time;event_type;player_guid;player_name;player_team;track_name;" ..
+            "player_x;player_y;player_z\n"
+        et.trap_FS_Write(con_header, string.len(con_header), fd)
+        for _, ev in ipairs(tracker.construction.events) do
+            local line = string.format("%d;%s;%s;%s;%s;%s;%d;%d;%d\n",
+                ev.event_time, ev.event_type, ev.player_guid, ev.player_name, ev.player_team,
+                ev.track_name, ev.player_x, ev.player_y, ev.player_z)
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
+
+    -- v6.01: Objective Runs
+    if isFeatureEnabled("objective_run_tracking") and #tracker.objective_runs.completed > 0 then
+        local orun_header = "\n# OBJECTIVE_RUNS\n" ..
+            "# engineer_guid;engineer_name;engineer_team;action_type;track_name;action_time;" ..
+            "approach_time_ms;approach_distance;beeline_distance;path_efficiency;" ..
+            "self_kills;team_kills;escort_guids;enemies_nearby;nearby_teammates;" ..
+            "run_type;obj_x;obj_y;obj_z;killer_guid;killer_name\n"
+        et.trap_FS_Write(orun_header, string.len(orun_header), fd)
+        for _, run in ipairs(tracker.objective_runs.completed) do
+            local line = string.format("%s;%s;%s;%s;%s;%d;%d;%.1f;%.1f;%.3f;%d;%d;%s;%d;%d;%s;%d;%d;%d;%s;%s\n",
+                run.engineer_guid, run.engineer_name, run.engineer_team,
+                run.action_type, run.track_name, run.action_time,
+                run.approach_time_ms, run.approach_distance, run.beeline_distance, run.path_efficiency,
+                run.self_kills, run.team_kills, run.escort_guids, run.enemies_nearby, run.nearby_teammates,
+                run.run_type, run.obj_x, run.obj_y, run.obj_z,
+                run.killer_guid, run.killer_name)
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
+
     et.trap_FS_FCloseFile(fd)
 
     -- Summary
@@ -2303,7 +3266,14 @@ local function outputDataInner()
     if isFeatureEnabled("reaction_tracking") then
         proxPrint(string.format("[PROX v5] Reaction metrics: %d rows\n", #tracker.reaction_metrics))
     end
-    proxPrint(string.format("[PROX v5] Output: %s\n", filename))
+    proxPrint(string.format("[PROX v6] Carrier: %d events, %d kills, %d returns | Construction: %d | Vehicles: %d ent, %d escort credits\n",
+        #tracker.carrier.events, #tracker.carrier.kills, #tracker.carrier.returns,
+        #tracker.construction.events,
+        countTableKeys(tracker.vehicles.entities), countTableKeys(tracker.vehicles.escort_credits)))
+    proxPrint(string.format("[PROX v6.01] Objective runs: %d completed (%d denied)\n",
+        #tracker.objective_runs.completed,
+        countByField(tracker.objective_runs.completed, "run_type", "denied")))
+    proxPrint(string.format("[PROX v6] Output: %s\n", filename))
 
     if config.test_mode.enabled and config.test_mode.lifecycle_log then
         outputLifecycleLog()
@@ -2463,6 +3433,19 @@ function et_InitGame(levelTime, randomSeed, restart)
     tracker.kill_outcomes.completed = {}
     tracker.hit_regions = {}
     tracker.combat_positions = {}
+    -- v6 carrier reset
+    tracker.carrier.active = {}
+    tracker.carrier.events = {}
+    tracker.carrier.kills = {}
+    tracker.carrier.returns = {}
+    tracker.carrier.pending_drops = {}
+    tracker.vehicles = { entities = {}, escort_credits = {}, last_check_time = 0 }
+    tracker.construction = { events = {} }
+    tracker.objective_runs.completed = {}
+    tracker.objective_runs.constructibles = {}
+    tracker.objective_runs.explosives = {}
+    tracker.objective_runs.checkpoints = {}
+    tracker.objective_runs.last_poll = 0
     last_hr_head = {}
     last_hr_all = {}
 
@@ -2475,6 +3458,8 @@ function et_InitGame(levelTime, randomSeed, restart)
     et.G_Print(">>> Spawn timers: Axis=" .. tracker.spawn.axis_interval .. "ms, Allies=" .. tracker.spawn.allies_interval .. "ms\n")
     et.G_Print(">>> Output: " .. config.output_dir .. "\n")
     logObjectiveConfigSummary()
+    scanVehicleEntities()
+    scanObjectiveEntities()
 
     -- v5 feature status
     local v5_features = {"spawn_timing", "team_cohesion", "crossfire_opportunities", "focus_fire", "team_push_detection", "trade_kills"}
@@ -2483,6 +3468,15 @@ function et_InitGame(levelTime, randomSeed, restart)
         if isFeatureEnabled(f) then table.insert(enabled_list, f) end
     end
     et.G_Print(">>> v5 Teamplay: " .. (#enabled_list > 0 and table.concat(enabled_list, ", ") or "NONE") .. "\n")
+
+    -- v6 feature status
+    local v6_features = {"carrier_tracking", "carrier_returns", "vehicle_tracking", "construction_tracking"}
+    local v6_enabled = {}
+    for _, f in ipairs(v6_features) do
+        if isFeatureEnabled(f) then table.insert(v6_enabled, f) end
+    end
+    et.G_Print(">>> v6 Objective: " .. (#v6_enabled > 0 and table.concat(v6_enabled, ", ") or "NONE") .. "\n")
+    et.G_Print(">>> v6.01 Objective runs: " .. (isFeatureEnabled("objective_run_tracking") and "ENABLED" or "DISABLED") .. "\n")
 
     if config.test_mode.enabled then
         et.G_Print(">>> TEST MODE ENABLED\n")
@@ -2542,6 +3536,13 @@ function et_RunFrame(levelTime)
             if engagement then closeEngagement(engagement, "round_end", nil) end
         end
 
+        -- v6: Close all active carriers
+        if isFeatureEnabled("carrier_tracking") then
+            for clientNum, _ in pairs(tracker.carrier.active) do
+                endCarrierTracking(clientNum, "round_end", nil, nil)
+            end
+        end
+
         if config.output_delay_ms and config.output_delay_ms > 0 then
             tracker.output_pending = true
             tracker.output_due_ms = et.trap_Milliseconds() + config.output_delay_ms
@@ -2562,6 +3563,10 @@ function et_RunFrame(levelTime)
 
         -- v5: Run teamplay analysis
         updateTeamplay(gameTime())
+
+        if isFeatureEnabled("objective_run_tracking") then
+            pollConstructionProgress(gameTime())
+        end
     end
 
     -- Handle delayed output
@@ -2779,6 +3784,63 @@ function et_Obituary(victim, killer, meansOfDeath)
                 })
             end
         end
+
+        -- v6: Carrier kill detection
+        if isFeatureEnabled("carrier_tracking") and tracker.carrier.active[victim] then
+            local k_guid = (killer and isValidClient(killer)) and getPlayerGUID(killer) or ""
+            local k_name = (killer and isValidClient(killer)) and getPlayerName(killer) or ""
+            local k_team = (killer and isValidClient(killer)) and getPlayerTeam(killer) or ""
+            endCarrierTracking(victim, "killed", k_guid, k_name)
+            -- Patch killer_team and means_of_death into the last carrier kill entry
+            local kills = tracker.carrier.kills
+            if #kills > 0 then
+                kills[#kills].killer_team = k_team
+                kills[#kills].means_of_death = meansOfDeath or 0
+            end
+        end
+    end
+
+    -- v6.01: Denied objective run detection
+    if isFeatureEnabled("objective_run_tracking") and death_type == "killed" then
+        local orun_track = tracker.player_tracks[victim]
+        if orun_track and orun_track.class == "ENGINEER" then
+            local orun_pos = death_pos or getPlayerPos(victim)
+            if orun_pos then
+                local nearest_obj = findNearestConstructible(orun_pos, config.objective_run.denied_run_radius)
+                if not nearest_obj then
+                    nearest_obj = findNearestExplosive(orun_pos, config.objective_run.denied_run_radius)
+                end
+                if not nearest_obj then
+                    nearest_obj = findNearestCheckpoint(orun_pos, config.objective_run.denied_run_radius)
+                end
+                if nearest_obj then
+                    local obj_p = {x = nearest_obj.x, y = nearest_obj.y, z = nearest_obj.z}
+                    local appr_time, appr_dist, bee_dist, eff =
+                        calculateApproachMetrics(orun_track, gameTime(), config.objective_run.path_clear_window_ms)
+                    local k_guid = (killer and killer ~= 1022 and killer ~= 1023 and isValidClient(killer)) and getPlayerGUID(killer) or ""
+                    local k_name = (killer and killer ~= 1022 and killer ~= 1023 and isValidClient(killer)) and getPlayerName(killer) or ""
+
+                    table.insert(tracker.objective_runs.completed, {
+                        engineer_guid = orun_track.guid,
+                        engineer_name = orun_track.name,
+                        engineer_team = orun_track.team,
+                        action_type = "approach_killed",
+                        track_name = nearest_obj.track or "",
+                        action_time = gameTime(),
+                        approach_time_ms = appr_time,
+                        approach_distance = appr_dist,
+                        beeline_distance = bee_dist,
+                        path_efficiency = eff,
+                        self_kills = 0, team_kills = 0, escort_guids = "",
+                        enemies_nearby = 0, nearby_teammates = 0,
+                        run_type = "denied",
+                        obj_x = round(obj_p.x, 0), obj_y = round(obj_p.y, 0), obj_z = round(obj_p.z, 0),
+                        killer_guid = k_guid,
+                        killer_name = k_name,
+                    })
+                end
+            end
+        end
     end
 end
 
@@ -2903,6 +3965,10 @@ function et_ClientDisconnect(clientNum)
     if engagement then
         closeEngagement(engagement, "disconnect", nil)
     end
+    -- v6: End carrier tracking on disconnect
+    if tracker.carrier.active[clientNum] then
+        endCarrierTracking(clientNum, "disconnected", nil, nil)
+    end
     tracker.last_stamina[clientNum] = nil
     last_hr_head[clientNum] = nil
     last_hr_all[clientNum] = nil
@@ -2973,7 +4039,231 @@ function et_ShutdownGame(restart)
             local engagement = tracker.engagements[target_slot]
             if engagement then closeEngagement(engagement, "shutdown", nil) end
         end
+        -- v6: Close all active carriers
+        if isFeatureEnabled("carrier_tracking") then
+            for clientNum, _ in pairs(tracker.carrier.active) do
+                endCarrierTracking(clientNum, "shutdown", nil, nil)
+            end
+        end
         outputData()
+    end
+end
+
+-- ===== v6 EVENT DETECTION VIA CONSOLE =====
+
+function et_Print(text)
+    if not config.enabled then return end
+    local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
+    if gamestate ~= 0 then return end
+
+    -- v6 Phase 1: Carrier pickup + secure detection
+    if isFeatureEnabled("carrier_tracking") then
+        -- Item pickup detection
+        local pickup_client, pickup_flag = string.match(text, "Item:%s+(%d+)%s+(team_CTF_%a+)")
+        if pickup_client and pickup_flag then
+            local cn = tonumber(pickup_client)
+            if cn and isValidClient(cn) and isPlayerActive(cn) then
+                local flag_team = "redflag"
+                if string.find(pickup_flag, "blue") then flag_team = "blueflag" end
+                startCarrierTracking(cn, flag_team)
+            end
+        end
+
+        -- Secure detection via announce
+        if string.find(text, "legacy announce:") then
+            local lower = string.lower(text)
+            if string.find(lower, "transmitted") or string.find(lower, "secured") or
+               string.find(lower, "delivered") or string.find(lower, "escaped") then
+                for clientnum, state in pairs(tracker.carrier.active) do
+                    local pw5 = tonumber(safe_gentity_get(clientnum, "ps.powerups", 5)) or 0
+                    local pw6 = tonumber(safe_gentity_get(clientnum, "ps.powerups", 6)) or 0
+                    if pw5 == 0 and pw6 == 0 then
+                        endCarrierTracking(clientnum, "secured", nil, nil)
+                    end
+                end
+            end
+        end
+    end
+
+    -- v6 Phase 1.5: Flag return detection
+    if isFeatureEnabled("carrier_returns") then
+        if string.find(text, "legacy popup:") and string.find(string.lower(text), "returned") then
+            -- Find which pending drop matches
+            for flag_team, pd in pairs(tracker.carrier.pending_drops) do
+                -- Attribution: find nearest defending player to drop position
+                local best_client, best_dist = nil, math.huge
+                local max_clients = get_max_clients()
+                for cn = 0, max_clients - 1 do
+                    if isPlayerActive(cn) and isPlayerAlive(cn) then
+                        local team = getPlayerTeam(cn)
+                        local is_defender = (flag_team == "redflag" and team == "AXIS") or
+                                           (flag_team == "blueflag" and team == "ALLIES")
+                        if is_defender then
+                            local pos = getPlayerPos(cn)
+                            if pos and pd.drop_pos then
+                                local d = distance3D(pos, pd.drop_pos)
+                                if d < best_dist then
+                                    best_dist = d
+                                    best_client = cn
+                                end
+                            end
+                        end
+                    end
+                end
+                if best_client then
+                    local now = gameTime()
+                    table.insert(tracker.carrier.returns, {
+                        return_time = now,
+                        returner_guid = getPlayerGUID(best_client),
+                        returner_name = getPlayerName(best_client),
+                        returner_team = getPlayerTeam(best_client),
+                        flag_team = flag_team,
+                        original_carrier_guid = pd.carrier_guid or "",
+                        drop_time = pd.drop_time,
+                        return_delay_ms = now - pd.drop_time,
+                        drop_x = round((pd.drop_pos and pd.drop_pos.x) or 0, 0),
+                        drop_y = round((pd.drop_pos and pd.drop_pos.y) or 0, 0),
+                        drop_z = round((pd.drop_pos and pd.drop_pos.z) or 0, 0),
+                    })
+                end
+                tracker.carrier.pending_drops[flag_team] = nil
+                break  -- only one return per message
+            end
+        end
+    end
+
+    -- v6.01: Flag/checkpoint capture detection
+    if isFeatureEnabled("objective_run_tracking") then
+        if string.find(text, "legacy popup:") and string.find(string.lower(text), "captured") then
+            -- Poll all cached checkpoints to find which one changed team
+            for entNum, cp in pairs(tracker.objective_runs.checkpoints) do
+                local current_team = tonumber(safe_gentity_get(entNum, "count")) or 0
+                if current_team ~= cp.last_team and current_team > 0 then
+                    -- This checkpoint was just captured! Find nearest player of capturing team
+                    local cap_team_str = current_team == 1 and "AXIS" or "ALLIES"
+                    local best_cn, best_dist = nil, 500  -- max 500u from checkpoint
+                    local max_clients = get_max_clients()
+                    for cn = 0, max_clients - 1 do
+                        if isPlayerActive(cn) and isPlayerAlive(cn) and getPlayerTeam(cn) == cap_team_str then
+                            local p = getPlayerPos(cn)
+                            if p then
+                                local d = distance3D(p, {x = cp.x, y = cp.y, z = cp.z})
+                                if d < best_dist then
+                                    best_dist = d
+                                    best_cn = cn
+                                end
+                            end
+                        end
+                    end
+                    if best_cn then
+                        local pos = getPlayerPos(best_cn)
+                        local cap_name = cp.scriptName ~= "" and cp.scriptName or string.format("checkpoint_%d", entNum)
+                        -- Record as construction event
+                        table.insert(tracker.construction.events, {
+                            event_time = gameTime(),
+                            event_type = "flag_captured",
+                            player_guid = getPlayerGUID(best_cn),
+                            player_name = getPlayerName(best_cn),
+                            player_team = getPlayerTeam(best_cn),
+                            track_name = cap_name,
+                            player_x = round((pos and pos.x) or 0, 0),
+                            player_y = round((pos and pos.y) or 0, 0),
+                            player_z = round((pos and pos.z) or 0, 0),
+                        })
+                        -- Also record as objective run
+                        assembleObjectiveRun(best_cn, "flag_captured", cap_name, {x = cp.x, y = cp.y, z = cp.z})
+                    end
+                    cp.last_team = current_team
+                end
+            end
+        end
+    end
+
+    -- v6 Phase 3: Construction/destruction events
+    if isFeatureEnabled("construction_tracking") then
+        -- Dynamite Plant
+        local plant_client, plant_track = string.match(text, "Dynamite_Plant:%s+(%d+)%s+(.+)")
+        if plant_client then
+            local cn = tonumber(plant_client)
+            if cn and isValidClient(cn) and isPlayerActive(cn) then
+                local pos = getPlayerPos(cn)
+                table.insert(tracker.construction.events, {
+                    event_time = gameTime(),
+                    event_type = "dynamite_plant",
+                    player_guid = getPlayerGUID(cn),
+                    player_name = getPlayerName(cn),
+                    player_team = getPlayerTeam(cn),
+                    track_name = plant_track:gsub("%s+$", ""),
+                    player_x = round((pos and pos.x) or 0, 0),
+                    player_y = round((pos and pos.y) or 0, 0),
+                    player_z = round((pos and pos.z) or 0, 0),
+                })
+                assembleObjectiveRun(cn, "dynamite_plant", plant_track:gsub("%s+$", ""), pos and {x=pos.x, y=pos.y, z=pos.z} or nil)
+            end
+        end
+
+        -- Dynamite Diffuse (engine typo for "defuse")
+        local defuse_client, defuse_track = string.match(text, "Dynamite_Diffuse:%s+(%d+)%s+(.+)")
+        if defuse_client then
+            local cn = tonumber(defuse_client)
+            if cn and isValidClient(cn) and isPlayerActive(cn) then
+                local pos = getPlayerPos(cn)
+                table.insert(tracker.construction.events, {
+                    event_time = gameTime(),
+                    event_type = "dynamite_defuse",
+                    player_guid = getPlayerGUID(cn),
+                    player_name = getPlayerName(cn),
+                    player_team = getPlayerTeam(cn),
+                    track_name = defuse_track:gsub("%s+$", ""),
+                    player_x = round((pos and pos.x) or 0, 0),
+                    player_y = round((pos and pos.y) or 0, 0),
+                    player_z = round((pos and pos.z) or 0, 0),
+                })
+                assembleObjectiveRun(cn, "dynamite_defuse", defuse_track:gsub("%s+$", ""), pos and {x=pos.x, y=pos.y, z=pos.z} or nil)
+            end
+        end
+
+        -- Objective Destroyed
+        local destroy_client, destroy_track = string.match(text, "Objective_Destroyed:%s+(%d+)%s+(.+)")
+        if destroy_client then
+            local cn = tonumber(destroy_client)
+            if cn and isValidClient(cn) and isPlayerActive(cn) then
+                local pos = getPlayerPos(cn)
+                table.insert(tracker.construction.events, {
+                    event_time = gameTime(),
+                    event_type = "objective_destroyed",
+                    player_guid = getPlayerGUID(cn),
+                    player_name = getPlayerName(cn),
+                    player_team = getPlayerTeam(cn),
+                    track_name = destroy_track:gsub("%s+$", ""),
+                    player_x = round((pos and pos.x) or 0, 0),
+                    player_y = round((pos and pos.y) or 0, 0),
+                    player_z = round((pos and pos.z) or 0, 0),
+                })
+                assembleObjectiveRun(cn, "objective_destroyed", destroy_track:gsub("%s+$", ""), pos and {x=pos.x, y=pos.y, z=pos.z} or nil)
+            end
+        end
+
+        -- Repair (construction complete) — NO track name available
+        local repair_client = string.match(text, "Repair:%s+(%d+)")
+        if repair_client and not plant_client and not defuse_client and not destroy_client then
+            local cn = tonumber(repair_client)
+            if cn and isValidClient(cn) and isPlayerActive(cn) then
+                local pos = getPlayerPos(cn)
+                table.insert(tracker.construction.events, {
+                    event_time = gameTime(),
+                    event_type = "construction_complete",
+                    player_guid = getPlayerGUID(cn),
+                    player_name = getPlayerName(cn),
+                    player_team = getPlayerTeam(cn),
+                    track_name = "",
+                    player_x = round((pos and pos.x) or 0, 0),
+                    player_y = round((pos and pos.y) or 0, 0),
+                    player_z = round((pos and pos.z) or 0, 0),
+                })
+                assembleObjectiveRun(cn, "construction_complete", "", pos and {x=pos.x, y=pos.y, z=pos.z} or nil)
+            end
+        end
     end
 end
 
