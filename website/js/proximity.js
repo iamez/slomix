@@ -2096,8 +2096,8 @@ function renderKillOutcomes(data) {
             { label: 'Avg Outcome', value: s.avg_delta_ms ? `${(s.avg_delta_ms / 1000).toFixed(1)}s` : '--', cls: 'text-amber-400' },
             { label: 'Avg Denied', value: s.avg_denied_ms ? `${(s.avg_denied_ms / 1000).toFixed(1)}s` : '--', cls: 'text-purple-400' },
         ].map(x => `<div class="text-center">
-            <div class="text-[11px] font-bold text-slate-500 uppercase">${x.label}</div>
-            <div class="text-xl font-black ${x.cls} mt-1">${x.value}</div>
+            <div class="text-[11px] font-bold text-slate-500 uppercase">${escapeHtml(x.label)}</div>
+            <div class="text-xl font-black ${escapeHtml(x.cls)} mt-1">${escapeHtml(x.value)}</div>
         </div>`).join('');
     }
 
@@ -2116,11 +2116,11 @@ function renderKillOutcomes(data) {
             const color = OUTCOME_COLORS[b.key] || '#64748b';
             return `<div>
                 <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-slate-300">${b.label}</span>
-                    <span class="text-slate-500">${formatNumber(b.count)} (${pct}%)</span>
+                    <span class="text-slate-300">${escapeHtml(b.label)}</span>
+                    <span class="text-slate-500">${escapeHtml(formatNumber(b.count))} (${escapeHtml(pct)}%)</span>
                 </div>
                 <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div class="h-full rounded-full" style="width:${(b.count / max) * 100}%;background:${color}"></div>
+                    <div class="h-full rounded-full" style="width:${(b.count / max) * 100}%;background:${escapeHtml(color)}"></div>
                 </div>
             </div>`;
         }).join('');
@@ -2179,13 +2179,13 @@ function renderHitRegions(data) {
                     const pct = ((r.count / total) * 100).toFixed(1);
                     const barH = Math.max((r.count / maxR) * 100, 4);
                     return `<div class="flex flex-col items-center gap-1 flex-1 max-w-16">
-                        <span class="text-[11px] font-mono text-slate-300">${pct}%</span>
-                        <div class="w-full rounded-t" style="height:${barH}%;background:${r.color};opacity:0.85"></div>
-                        <span class="text-[11px] text-slate-400">${r.label}</span>
+                        <span class="text-[11px] font-mono text-slate-300">${escapeHtml(pct)}%</span>
+                        <div class="w-full rounded-t" style="height:${barH}%;background:${escapeHtml(r.color)};opacity:0.85"></div>
+                        <span class="text-[11px] text-slate-400">${escapeHtml(r.label)}</span>
                     </div>`;
                 }).join('')}
             </div>
-            <div class="text-center text-[11px] text-slate-500 mt-2">${formatNumber(total)} hits &middot; ${formatNumber(totalDmg)} damage tracked</div>`;
+            <div class="text-center text-[11px] text-slate-500 mt-2">${escapeHtml(formatNumber(total))} hits &middot; ${escapeHtml(formatNumber(totalDmg))} damage tracked</div>`;
     }
 
     const barsEl = document.getElementById('hit-regions-bars');
@@ -2194,11 +2194,11 @@ function renderHitRegions(data) {
             const pct = ((r.count / total) * 100).toFixed(1);
             return `<div>
                 <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-slate-300">${r.label}</span>
-                    <span class="text-slate-500">${formatNumber(r.count)} (${pct}%)</span>
+                    <span class="text-slate-300">${escapeHtml(r.label)}</span>
+                    <span class="text-slate-500">${escapeHtml(formatNumber(r.count))} (${escapeHtml(pct)}%)</span>
                 </div>
                 <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div class="h-full rounded-full" style="width:${(r.count / maxR) * 100}%;background:${r.color}"></div>
+                    <div class="h-full rounded-full" style="width:${(r.count / maxR) * 100}%;background:${escapeHtml(r.color)}"></div>
                 </div>
             </div>`;
         }).join('');
