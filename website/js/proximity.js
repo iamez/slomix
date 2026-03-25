@@ -2089,14 +2089,14 @@ function _safeRender(el, htmlStr) {
     el.replaceChildren(...doc.body.childNodes);
 }
 
-function _buildStatCard(label, value, cls) {
+function _buildStatCard(label, value, cls, size = 'text-xl') {
     const card = document.createElement('div');
     card.className = 'text-center';
     const lbl = document.createElement('div');
     lbl.className = 'text-[11px] font-bold text-slate-500 uppercase';
     lbl.textContent = label;
     const val = document.createElement('div');
-    val.className = `text-xl font-black ${cls} mt-1`;
+    val.className = `${size} font-black ${cls} mt-1`;
     val.textContent = value;
     card.append(lbl, val);
     return card;
@@ -2533,12 +2533,17 @@ let lbRangeDays = 30;
 function renderLeaderboardTabs() {
     const tabsEl = document.getElementById('leaderboard-tabs');
     if (!tabsEl) return;
-    tabsEl.innerHTML = LB_TABS.map(t => {
+    tabsEl.textContent = '';
+    LB_TABS.forEach(t => {
         const active = t.key === lbActiveTab;
-        return `<button class="lb-tab-btn text-[10px] font-bold px-3 py-1 rounded transition ${active
+        const btn = document.createElement('button');
+        btn.className = `lb-tab-btn text-[10px] font-bold px-3 py-1 rounded transition ${active
             ? 'bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/40'
-            : 'bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300'}" data-tab="${t.key}">${t.label}</button>`;
-    }).join('');
+            : 'bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300'}`;
+        btn.dataset.tab = t.key;
+        btn.textContent = t.label;
+        tabsEl.appendChild(btn);
+    });
 }
 
 function loadLeaderboardData() {
@@ -2553,7 +2558,8 @@ function loadLeaderboardData() {
             contentEl.innerHTML = '<div class="text-[11px] text-slate-500">No leaderboard data yet.</div>';
             return;
         }
-        contentEl.innerHTML = entries.map((e, i) => {
+        contentEl.textContent = '';
+        entries.forEach((e, i) => {
             const name = lbActiveTab === 'crossfire'
                 ? `${stripEtColors(e.name)} + ${stripEtColors(e.partner_name || '?')}`
                 : stripEtColors(e.name);
@@ -2562,11 +2568,20 @@ function loadLeaderboardData() {
             else if (lbActiveTab === 'reactions') val = `${e.value}ms`;
             else if (lbActiveTab === 'survivors') val = `${e.value}%`;
             else if (lbActiveTab === 'movement') val = `${e.value} u/s`;
-            return `<div class="flex items-center justify-between text-[11px] text-slate-300 py-0.5">
-                <span><span class="font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'} mr-2">#${i + 1}</span>${escapeHtml(name)}</span>
-                <span class="text-right text-slate-500">${val}</span>
-            </div>`;
-        }).join('');
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between text-[11px] text-slate-300 py-0.5';
+            const left = document.createElement('span');
+            const rank = document.createElement('span');
+            rank.className = `font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'} mr-2`;
+            rank.textContent = `#${i + 1}`;
+            left.appendChild(rank);
+            left.appendChild(document.createTextNode(name));
+            const right = document.createElement('span');
+            right.className = 'text-right text-slate-500';
+            right.textContent = val;
+            row.append(left, right);
+            contentEl.appendChild(row);
+        });
     }).catch(() => { if (contentEl) contentEl.innerHTML = '<div class="text-[11px] text-slate-500">Failed to load.</div>'; });
 }
 
@@ -2592,17 +2607,23 @@ function renderRevives(data) {
     }
     const summary = data.summary || {};
     if (summaryEl) {
-        const items = [
+        summaryEl.textContent = '';
+        [
             { label: 'Total Revives', value: formatNumber(summary.total_revives || 0), cls: 'text-emerald-400' },
             { label: 'Under Fire', value: `${summary.under_fire_pct || 0}%`, cls: 'text-red-400' },
             { label: 'Avg Enemy Dist', value: `${formatNumber(Math.round(summary.avg_enemy_distance || 0))}u`, cls: 'text-cyan-400' },
-        ];
-        summaryEl.innerHTML = items.map(item =>
-            `<div class="bg-slate-800/60 rounded-lg p-3 text-center">
-                <div class="text-[10px] text-slate-500 uppercase">${item.label}</div>
-                <div class="text-lg font-bold ${item.cls}">${item.value}</div>
-            </div>`
-        ).join('');
+        ].forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'bg-slate-800/60 rounded-lg p-3 text-center';
+            const lbl = document.createElement('div');
+            lbl.className = 'text-[10px] text-slate-500 uppercase';
+            lbl.textContent = item.label;
+            const val = document.createElement('div');
+            val.className = `text-lg font-bold ${item.cls}`;
+            val.textContent = item.value;
+            card.append(lbl, val);
+            summaryEl.appendChild(card);
+        });
     }
     renderLeaderList('revive-leaders', (data.leaders || []).slice(0, 8), (row) => {
         const revives = formatNumber(row.revives || 0);
@@ -2705,14 +2726,12 @@ function renderCarrierIntel(data) {
     const summaryEl = document.getElementById('carrier-summary');
     if (summaryEl && data.summary) {
         const s = data.summary;
-        summaryEl.innerHTML = [
-            { label: 'Total Carries', value: s.total_carries, cls: 'text-white' },
+        summaryEl.textContent = '';
+        [
+            { label: 'Total Carries', value: String(s.total_carries), cls: 'text-white' },
             { label: 'Secures', value: `${s.total_secures} (${s.secure_rate}%)`, cls: 'text-brand-emerald' },
             { label: 'Avg Distance', value: `${s.avg_distance}u`, cls: 'text-brand-cyan' },
-        ].map(x => `<div class="text-center">
-            <div class="text-[11px] font-bold text-slate-500 uppercase">${x.label}</div>
-            <div class="text-lg font-black ${x.cls} mt-1">${x.value}</div>
-        </div>`).join('');
+        ].forEach(x => summaryEl.appendChild(_buildStatCard(x.label, x.value, x.cls, 'text-lg')));
     }
 
     // Carrier leaderboard
