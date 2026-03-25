@@ -2083,6 +2083,12 @@ function renderLuaTrades(data) {
 
 const OUTCOME_COLORS = { gibbed: '#ef4444', revived: '#22c55e', tapped_out: '#f59e0b', expired: '#64748b', round_end: '#6366f1' };
 
+/** Safe DOM render: parses HTML via DOMParser (no innerHTML on live elements). */
+function _safeRender(el, htmlStr) {
+    const doc = new DOMParser().parseFromString(htmlStr, 'text/html');
+    el.replaceChildren(...doc.body.childNodes);
+}
+
 function _buildStatCard(label, value, cls) {
     const card = document.createElement('div');
     card.className = 'text-center';
@@ -2269,7 +2275,7 @@ function renderMovementStats(data) {
         const sp = (totals.standing / totalStance * 100).toFixed(0);
         const cp = (totals.crouching / totalStance * 100).toFixed(0);
         const pp = (totals.prone / totalStance * 100).toFixed(0);
-        stanceEl.innerHTML = `
+        _safeRender(stanceEl, `
             <div class="text-[11px] font-bold text-slate-500 uppercase mb-1">Stance Distribution</div>
             <div class="h-4 rounded-full overflow-hidden flex mb-1">
                 <div style="width:${sp}%;background:#60a5fa" title="Standing ${sp}%"></div>
@@ -2280,19 +2286,28 @@ function renderMovementStats(data) {
                 <span class="text-blue-400">Standing ${sp}%</span>
                 <span class="text-amber-400">Crouch ${cp}%</span>
                 <span class="text-red-400">Prone ${pp}%</span>
-            </div>`;
+            </div>`);
     }
 
     const overEl = document.getElementById('movement-overview');
     if (overEl) {
-        overEl.innerHTML = [
+        overEl.textContent = '';
+        [
             { label: 'Total Distance', value: `${(totals.distance / 1000).toFixed(0)}K u`, cls: 'text-white' },
             { label: 'Alive Time', value: `${(totals.alive / 60).toFixed(0)}m`, cls: 'text-white' },
             { label: 'Sprint Time', value: `${(totals.sprint / 60).toFixed(1)}m`, cls: 'text-brand-cyan' },
-        ].map(x => `<div class="text-center">
-            <div class="text-[11px] font-bold text-slate-500 uppercase">${x.label}</div>
-            <div class="text-lg font-black ${x.cls} mt-1">${x.value}</div>
-        </div>`).join('');
+        ].forEach(x => {
+            const card = document.createElement('div');
+            card.className = 'text-center';
+            const lbl = document.createElement('div');
+            lbl.className = 'text-[11px] font-bold text-slate-500 uppercase';
+            lbl.textContent = x.label;
+            const val = document.createElement('div');
+            val.className = `text-lg font-black ${x.cls} mt-1`;
+            val.textContent = x.value;
+            card.append(lbl, val);
+            overEl.appendChild(card);
+        });
     }
 
     renderLeaderList('movement-distance-leaders',
@@ -2378,17 +2393,17 @@ function renderProxScores(data, formula) {
         </div>`;
     }).join('');
 
-    listEl.innerHTML = hdr + rows;
+    _safeRender(listEl, hdr + rows);
 
     // Formula panel
     const formulaEl = document.getElementById('prox-scores-formula');
     if (formulaEl && formula?.categories) {
-        formulaEl.innerHTML = `
-            <div class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">Scoring Formula v${data.version || '1.0'}</div>
+        _safeRender(formulaEl, `
+            <div class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">Scoring Formula v${escapeHtml(String(data.version || '1.0'))}</div>
             <div class="text-[11px] text-slate-500 mb-3">Each metric is ranked as a percentile (0-100) across all players with ${formula.min_engagements || 30}+ engagements, then weighted.
                 Overall = ${Object.entries(formula.category_weights || {}).map(([k, w]) => {
                     const cat = formula.categories[k];
-                    return cat ? `${cat.label} ${(w * 100).toFixed(0)}%` : '';
+                    return cat ? `${escapeHtml(cat.label)} ${(w * 100).toFixed(0)}%` : '';
                 }).filter(Boolean).join(' + ')}.
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -2396,7 +2411,7 @@ function renderProxScores(data, formula) {
                     const color = SCORE_COLORS[catKey] || '#22d3ee';
                     const weight = formula.category_weights?.[catKey];
                     return `<div>
-                        <div class="text-[11px] font-bold mb-1" style="color:${color}">${escapeHtml(cat.label)} <span class="font-normal text-slate-500">(${weight ? (weight * 100).toFixed(0) : '?'}%)</span></div>
+                        <div class="text-[11px] font-bold mb-1" style="color:${escapeHtml(color)}">${escapeHtml(cat.label)} <span class="font-normal text-slate-500">(${weight ? (weight * 100).toFixed(0) : '?'}%)</span></div>
                         <div class="text-[10px] text-slate-500 mb-1">${escapeHtml(cat.description || '')}</div>
                         ${Object.entries(cat.metrics).map(([, m]) => `<div class="flex items-center justify-between text-[10px]">
                             <span class="text-slate-400">${escapeHtml(m.label)}${m.invert ? ' *' : ''}</span>
@@ -2405,7 +2420,7 @@ function renderProxScores(data, formula) {
                     </div>`;
                 }).join('')}
             </div>
-            <div class="text-[10px] text-slate-600 mt-2">* Inverted: lower = better (e.g. faster reaction scores higher)</div>`;
+            <div class="text-[10px] text-slate-600 mt-2">* Inverted: lower = better (e.g. faster reaction scores higher)</div>`);
     }
 }
 
