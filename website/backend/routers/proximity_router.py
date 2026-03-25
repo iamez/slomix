@@ -4177,7 +4177,7 @@ async def get_proximity_movement_stats(
     params: list = []
 
     if session_date:
-        params.append(session_date)
+        params.append(_parse_iso_date(session_date))
         where_parts.append(f"session_date = ${len(params)}")
     else:
         params.append(range_days)
@@ -4311,7 +4311,7 @@ async def get_proximity_carrier_events(
     params: list = []
 
     if session_date:
-        params.append(session_date)
+        params.append(_parse_iso_date(session_date))
         where_parts.append(f"session_date = ${len(params)}")
     else:
         params.append(range_days)
@@ -4445,7 +4445,7 @@ async def get_proximity_carrier_kills(
     params: list = []
 
     if session_date:
-        params.append(session_date)
+        params.append(_parse_iso_date(session_date))
         where_parts.append(f"session_date = ${len(params)}")
     else:
         params.append(range_days)
@@ -4519,7 +4519,7 @@ async def get_proximity_carrier_returns(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(session_date)
+            params.append(_parse_iso_date(session_date))
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -4608,7 +4608,7 @@ async def get_proximity_vehicle_progress(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(session_date)
+            params.append(_parse_iso_date(session_date))
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -4663,7 +4663,7 @@ async def get_proximity_escort_credits(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(session_date)
+            params.append(_parse_iso_date(session_date))
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -4728,7 +4728,7 @@ async def get_proximity_construction_events(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(session_date)
+            params.append(_parse_iso_date(session_date))
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -4807,7 +4807,7 @@ async def get_proximity_objective_runs(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(session_date)
+            params.append(_parse_iso_date(session_date))
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -4931,7 +4931,7 @@ async def get_proximity_focus_fire(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(session_date)
+            params.append(_parse_iso_date(session_date))
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -5027,7 +5027,7 @@ async def get_proximity_objective_focus(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(session_date)
+            params.append(_parse_iso_date(session_date))
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -5127,7 +5127,7 @@ async def get_proximity_support_summary(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(session_date)
+            params.append(_parse_iso_date(session_date))
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -5212,7 +5212,7 @@ async def get_proximity_combat_position_stats(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(session_date)
+            params.append(_parse_iso_date(session_date))
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
