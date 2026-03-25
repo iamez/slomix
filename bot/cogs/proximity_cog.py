@@ -28,10 +28,10 @@ logger = logging.getLogger(__name__)
 
 # Try to import the proximity parser
 try:
-    from proximity.parser import ProximityParserV3
+    from proximity.parser import ProximityParserV4
     PROXIMITY_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"⚠️ ProximityParserV3 not available: {e}")
+    logger.warning(f"⚠️ ProximityParserV4 not available: {e}")
     PROXIMITY_AVAILABLE = False
 
 
@@ -390,7 +390,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
                 session_date = datetime.now().strftime("%Y-%m-%d")
 
             # Create parser with database adapter
-            parser = ProximityParserV3(
+            parser = ProximityParserV4(
                 db_adapter=self.bot.db_adapter,
                 output_dir=str(filepath.parent),
                 gametimes_dir=getattr(self.bot.config, "gametimes_local_path", "local_gametimes"),
