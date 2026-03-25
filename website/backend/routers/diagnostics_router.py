@@ -70,12 +70,12 @@ async def get_diagnostics(db: DatabaseAdapter = Depends(get_db)):
             "SELECT COUNT(*) FROM player_comprehensive_stats",
             True,
         ),
-        ("sessions", "SELECT COUNT(*) FROM sessions", False),
-        ("players", "SELECT COUNT(*) FROM players", False),
+        ("gaming_sessions", "SELECT COUNT(*) FROM gaming_sessions", False),
+        ("player_links", "SELECT COUNT(*) FROM player_links", False),
         ("lua_spawn_stats", "SELECT COUNT(*) FROM lua_spawn_stats", False),
         ("server_status_history", "SELECT COUNT(*) FROM server_status_history", False),
         ("voice_status_history", "SELECT COUNT(*) FROM voice_status_history", False),
-        ("discord_users", "SELECT COUNT(*) FROM discord_users", False),
+        ("discord_accounts", "SELECT COUNT(*) FROM discord_accounts", False),
     ]
 
     # Test database connectivity and tables
