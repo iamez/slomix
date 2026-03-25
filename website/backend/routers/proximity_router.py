@@ -190,8 +190,8 @@ async def _load_scoped_guid_name_map(
             for row in rows
             if row and row[0] and row[1]
         }
-    except Exception as e:
-        logger.warning("_load_scoped_guid_name_map failed: %s", e)
+    except Exception:
+        logger.warning("_load_scoped_guid_name_map failed", exc_info=True)
         return {}
 
 
@@ -691,12 +691,12 @@ async def get_proximity_scopes(
                 "scope": default_scope,
             }
         )
-    except Exception as e:
+    except Exception:
         payload.update(
             {
                 "status": "error",
                 "ready": False,
-                "message": f"Proximity query failed: {e}",
+                "message": "Proximity query failed",
                 "sessions": [],
                 "scope": {
                     "session_date": None,
@@ -850,12 +850,12 @@ async def get_proximity_summary(
                 "v5_counts": v5_counts,
             }
         )
-    except Exception as e:
+    except Exception:
         payload.update(
             {
                 "status": "error",
                 "ready": False,
-                "message": f"Proximity query failed: {e}",
+                "message": "Proximity query failed",
                 "scope": scope,
                 "total_engagements": None,
                 "avg_distance_m": None,
@@ -916,12 +916,12 @@ async def get_proximity_engagements(
                 ],
             }
         )
-    except Exception as e:
+    except Exception:
         payload.update(
             {
                 "status": "error",
                 "ready": False,
-                "message": f"Proximity query failed: {e}",
+                "message": "Proximity query failed",
                 "scope": scope,
                 "buckets": [],
             }
@@ -1025,12 +1025,12 @@ async def get_proximity_hotzones(
                 ],
             }
         )
-    except Exception as e:
+    except Exception:
         payload.update(
             {
                 "status": "error",
                 "ready": False,
-                "message": f"Proximity query failed: {e}",
+                "message": "Proximity query failed",
                 "scope": scope,
                 "map_name": normalized_map,
                 "hotzones": [],
@@ -1085,12 +1085,12 @@ async def get_proximity_duos(
                 "duos": duos,
             }
         )
-    except Exception as e:
+    except Exception:
         payload.update(
             {
                 "status": "error",
                 "ready": False,
-                "message": f"Proximity query failed: {e}",
+                "message": "Proximity query failed",
                 "scope": scope,
                 "limit": safe_limit,
                 "duos": [],
@@ -1204,12 +1204,12 @@ async def get_proximity_movers(
                 ],
             }
         )
-    except Exception as e:
+    except Exception:
         payload.update(
             {
                 "status": "error",
                 "ready": False,
-                "message": f"Proximity query failed: {e}",
+                "message": "Proximity query failed",
                 "scope": scope,
                 "limit": safe_limit,
                 "distance": [],
@@ -1277,12 +1277,12 @@ async def get_proximity_classes(
                 ],
             }
         )
-    except Exception as e:
+    except Exception:
         payload.update(
             {
                 "status": "error",
                 "ready": False,
-                "message": f"Proximity query failed: {e}",
+                "message": "Proximity query failed",
                 "scope": scope,
                 "classes": [],
             }
@@ -1445,12 +1445,12 @@ async def get_proximity_reactions(
                 ],
             }
         )
-    except Exception as e:
+    except Exception:
         payload.update(
             {
                 "status": "error",
                 "ready": False,
-                "message": f"Proximity query failed: {e}",
+                "message": "Proximity query failed",
                 "scope": scope,
                 "limit": safe_limit,
                 "return_fire": [],
@@ -1515,12 +1515,12 @@ async def get_proximity_teamplay(
                 "focus_survival": computed["focus_survival"],
             }
         )
-    except Exception as e:
+    except Exception:
         payload.update(
             {
                 "status": "error",
                 "ready": False,
-                "message": f"Proximity query failed: {e}",
+                "message": "Proximity query failed",
                 "scope": scope,
                 "limit": safe_limit,
                 "crossfire_kills": [],
@@ -1590,12 +1590,12 @@ async def get_proximity_trades_summary(
                 "isolation_deaths": int(row[5] or 0) if row else 0,
             }
         )
-    except Exception as e:
+    except Exception:
         payload.update(
             {
                 "status": "error",
                 "ready": False,
-                "message": f"Proximity query failed: {e}",
+                "message": "Proximity query failed",
                 "scope": scope,
                 "events": 0,
                 "trade_opportunities": 0,
@@ -1713,11 +1713,11 @@ async def get_proximity_trades_player_stats(
             "scope": scope,
             "players": list(players_map.values()),
         })
-    except Exception as e:
+    except Exception:
         payload.update({
             "status": "error",
             "ready": False,
-            "message": f"Proximity query failed: {e}",
+            "message": "Proximity query failed",
             "scope": scope,
             "players": [],
         })
@@ -1839,12 +1839,12 @@ async def get_proximity_trade_events(
                 ],
             }
         )
-    except Exception as e:
+    except Exception:
         payload.update(
             {
                 "status": "error",
                 "ready": False,
-                "message": f"Proximity query failed: {e}",
+                "message": "Proximity query failed",
                 "scope": scope,
                 "limit": safe_limit,
                 "events": [],
@@ -1916,8 +1916,8 @@ async def get_proximity_spawn_timing(
                 for r in (team_avgs or [])
             ],
         }
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -1994,8 +1994,8 @@ async def get_proximity_cohesion(
                 for r in (buddy_pairs or [])
             ],
         }
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -2082,8 +2082,8 @@ async def get_proximity_crossfire_angles(
                 for r in (top_duos or [])
             ],
         }
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -2153,8 +2153,8 @@ async def get_proximity_pushes(
                 for r in (quality_dist or [])
             ],
         }
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -2239,8 +2239,8 @@ async def get_proximity_lua_trades(
                 for r in (speed_dist or [])
             ],
         }
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -2358,12 +2358,12 @@ async def get_proximity_events(
                 ],
             }
         )
-    except Exception as e:
+    except Exception:
         payload.update(
             {
                 "status": "error",
                 "ready": False,
-                "message": f"Proximity query failed: {e}",
+                "message": "Proximity query failed",
                 "scope": scope,
                 "limit": safe_limit,
                 "events": [],
@@ -2649,8 +2649,8 @@ async def get_proximity_player_profile(
             "avg_denial_ms": int(spawn_timing[2] or 0) if spawn_timing else 0,
             "trades_made": int(trade_stats[0] or 0) if trade_stats else 0,
         }
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -2756,8 +2756,8 @@ async def get_proximity_player_radar(
             ],
             "composite": round((aggression + awareness + teamplay + timing + mechanical) / 5, 1),
         }
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -2879,8 +2879,8 @@ async def get_proximity_round_timeline(
         }
     except HTTPException:
         raise
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -2921,8 +2921,8 @@ async def get_proximity_round_tracks(
         }
     except HTTPException:
         raise
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -3008,8 +3008,8 @@ async def get_proximity_round_team_comparison(
                 for r in (crossfire or [])
             ],
         }
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -3088,8 +3088,8 @@ async def get_proximity_weapon_accuracy(
             ],
             "weapon_breakdown": weapon_breakdown,
         }
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -3167,8 +3167,8 @@ async def get_proximity_revives(
         ]
 
         return {"status": "ok", "summary": summary, "leaders": leaders}
-    except Exception as e:
-        logger.warning("Proximity revives endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity revives endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -3189,8 +3189,8 @@ async def get_proximity_session_scores(
 
         results = await svc.compute_session_scores(session_date)
         return {"status": "ok", "session_date": session_date, "players": results}
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -3554,8 +3554,8 @@ async def get_proximity_leaderboards(
         else:
             return {"status": "error", "detail": f"Unknown category: {category}. Valid: power, spawn, crossfire, trades, reactions, survivors, movement, focus_fire"}
 
-    except Exception as e:
-        logger.warning("Proximity endpoint error: %s", e)
+    except Exception:
+        logger.warning("Proximity endpoint error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -3652,8 +3652,8 @@ async def get_proximity_kill_outcomes(
                 for r in (events or [])
             ],
         }
-    except Exception as e:
-        logger.warning("Proximity kill-outcomes error: %s", e)
+    except Exception:
+        logger.warning("Proximity kill-outcomes error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -3752,8 +3752,8 @@ async def get_proximity_kill_outcomes_player_stats(
             "kill_permanence_leaders": as_killer,
             "revive_rate_leaders": as_victim,
         }
-    except Exception as e:
-        logger.warning("Proximity kill-outcomes player-stats error: %s", e)
+    except Exception:
+        logger.warning("Proximity kill-outcomes player-stats error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -3823,8 +3823,8 @@ async def get_proximity_hit_regions(
             "scope": scope,
             "players": players,
         }
-    except Exception as e:
-        logger.warning("Proximity hit-regions error: %s", e)
+    except Exception:
+        logger.warning("Proximity hit-regions error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -3881,8 +3881,8 @@ async def get_proximity_hit_regions_by_weapon(
             "scope": scope,
             "weapons": weapons,
         }
-    except Exception as e:
-        logger.warning("Proximity hit-regions by-weapon error: %s", e)
+    except Exception:
+        logger.warning("Proximity hit-regions by-weapon error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -3933,8 +3933,8 @@ async def get_proximity_hit_regions_headshot_rates(
             "scope": scope,
             "leaders": leaders,
         }
-    except Exception as e:
-        logger.warning("Proximity hit-regions headshot-rates error: %s", e)
+    except Exception:
+        logger.warning("Proximity hit-regions headshot-rates error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -4013,8 +4013,8 @@ async def get_proximity_combat_positions_heatmap(
                 for r in (rows or [])
             ],
         }
-    except Exception as e:
-        logger.warning("Proximity combat-positions heatmap error: %s", e)
+    except Exception:
+        logger.warning("Proximity combat-positions heatmap error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -4075,8 +4075,8 @@ async def get_proximity_combat_positions_kill_lines(
                 for r in (rows or [])
             ],
         }
-    except Exception as e:
-        logger.warning("Proximity combat-positions kill-lines error: %s", e)
+    except Exception:
+        logger.warning("Proximity combat-positions kill-lines error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -4156,8 +4156,8 @@ async def get_proximity_combat_positions_danger_zones(
             "grid_size": 512,
             "zones": zones,
         }
-    except Exception as e:
-        logger.warning("Proximity combat-positions danger-zones error: %s", e)
+    except Exception:
+        logger.warning("Proximity combat-positions danger-zones error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -4252,8 +4252,8 @@ async def get_proximity_movement_stats(
             "scope": scope,
             "players": players,
         }
-    except Exception as e:
-        logger.warning("Proximity movement-stats error: %s", e)
+    except Exception:
+        logger.warning("Proximity movement-stats error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -4280,8 +4280,8 @@ async def get_prox_scores(
             "player_count": len(results),
             "players": results[:limit],
         }
-    except Exception as e:
-        logger.warning("Proximity prox-scores error: %s", e)
+    except Exception:
+        logger.warning("Proximity prox-scores error", exc_info=True)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -4425,8 +4425,8 @@ async def get_proximity_carrier_events(
         }
 
         return {"status": "ok", "scope": scope, "carriers": carriers, "events": events, "summary": summary}
-    except Exception as e:
-        logger.warning("Carrier events error: %s", e)
+    except Exception:
+        logger.error("Carrier events error", exc_info=True)
         return {"status": "error", "detail": "Internal error", "carriers": [], "events": [], "summary": {}}
 
 
@@ -4492,8 +4492,8 @@ async def get_proximity_carrier_kills(
             })
 
         return {"status": "ok", "killers": killers}
-    except Exception as e:
-        logger.warning("Carrier kills error: %s", e)
+    except Exception:
+        logger.error("Carrier kills error", exc_info=True)
         return {"status": "error", "detail": "Internal error", "killers": []}
 
 
@@ -4582,8 +4582,8 @@ async def get_proximity_carrier_returns(
         summary = dict(summary_row) if summary_row else {"total_returns": 0, "avg_delay_ms": 0}
 
         return {"status": "ok", "scope": scope, "returners": returners, "events": events, "summary": summary}
-    except Exception as e:
-        logger.error(f"carrier-returns error: {e}")
+    except Exception:
+        logger.error("carrier-returns error", exc_info=True)
         return {"status": "error", "message": "Internal error", "returners": [], "events": [], "summary": {}}
 
 
@@ -4640,8 +4640,8 @@ async def get_proximity_vehicle_progress(
         vehicles = [dict(r) for r in (rows or [])]
 
         return {"status": "ok", "vehicles": vehicles}
-    except Exception as e:
-        logger.error(f"vehicle-progress error: {e}")
+    except Exception:
+        logger.error("vehicle-progress error", exc_info=True)
         return {"status": "error", "message": "Internal error", "vehicles": []}
 
 
@@ -4701,8 +4701,8 @@ async def get_proximity_escort_credits(
         escorts = [dict(r) for r in (rows or [])]
 
         return {"status": "ok", "escorts": escorts}
-    except Exception as e:
-        logger.error(f"escort-credits error: {e}")
+    except Exception:
+        logger.error("escort-credits error", exc_info=True)
         return {"status": "error", "message": "Internal error", "escorts": []}
 
 
@@ -4781,8 +4781,8 @@ async def get_proximity_construction_events(
         events = [dict(r) for r in (event_rows or [])]
 
         return {"status": "ok", "engineers": engineers, "events": events}
-    except Exception as e:
-        logger.error(f"construction-events error: {e}")
+    except Exception:
+        logger.error("construction-events error", exc_info=True)
         return {"status": "error", "message": "Internal error", "engineers": [], "events": []}
 
 
@@ -4904,8 +4904,8 @@ async def get_proximity_objective_runs(
         summary['most_active_objective'] = top_track_rows[0]['track_name'] if top_track_rows else None
 
         return {"status": "ok", "objective_runners": objective_runners, "recent_runs": recent_runs, "summary": summary}
-    except Exception as e:
-        logger.error(f"objective-runs error: {e}")
+    except Exception:
+        logger.error("objective-runs error", exc_info=True)
         return {"status": "error", "message": "Internal error", "objective_runners": [], "recent_runs": [], "summary": None}
 
 
@@ -5000,8 +5000,8 @@ async def get_proximity_focus_fire(
         recent = [dict(r) for r in (recent_rows or [])]
 
         return {"status": "ok", "summary": summary, "targets": targets, "recent": recent}
-    except Exception as e:
-        logger.error(f"focus-fire error: {e}")
+    except Exception:
+        logger.error("focus-fire error", exc_info=True)
         return {"status": "error", "message": "Internal error", "summary": {}, "targets": [], "recent": []}
 
 
@@ -5103,8 +5103,8 @@ async def get_proximity_objective_focus(
         objectives = [dict(r) for r in (obj_rows or [])]
 
         return {"status": "ok", "summary": summary, "players": players, "objectives": objectives}
-    except Exception as e:
-        logger.error(f"objective-focus error: {e}")
+    except Exception:
+        logger.error("objective-focus error", exc_info=True)
         return {"status": "error", "message": "Internal error", "summary": {}, "players": [], "objectives": []}
 
 
@@ -5188,8 +5188,8 @@ async def get_proximity_support_summary(
         rounds = [dict(r) for r in (recent_rows or [])]
 
         return {"status": "ok", "summary": summary, "by_map": by_map, "rounds": rounds}
-    except Exception as e:
-        logger.error(f"support-summary error: {e}")
+    except Exception:
+        logger.error("support-summary error", exc_info=True)
         return {"status": "error", "message": "Internal error", "summary": {}, "by_map": [], "rounds": []}
 
 
@@ -5289,6 +5289,6 @@ async def get_proximity_combat_position_stats(
         by_map = [dict(r) for r in (map_rows or [])]
 
         return {"status": "ok", "summary": summary, "by_class": by_class, "by_map": by_map}
-    except Exception as e:
-        logger.error(f"combat-position-stats error: {e}")
+    except Exception:
+        logger.error("combat-position-stats error", exc_info=True)
         return {"status": "error", "message": "Internal error", "summary": {}, "by_class": [], "by_map": []}
