@@ -2083,26 +2083,60 @@ function renderLuaTrades(data) {
 
 const OUTCOME_COLORS = { gibbed: '#ef4444', revived: '#22c55e', tapped_out: '#f59e0b', expired: '#64748b', round_end: '#6366f1' };
 
+function _buildStatCard(label, value, cls) {
+    const card = document.createElement('div');
+    card.className = 'text-center';
+    const lbl = document.createElement('div');
+    lbl.className = 'text-[11px] font-bold text-slate-500 uppercase';
+    lbl.textContent = label;
+    const val = document.createElement('div');
+    val.className = `text-xl font-black ${cls} mt-1`;
+    val.textContent = value;
+    card.append(lbl, val);
+    return card;
+}
+
+function _buildBarRow(label, count, pct, widthPct, color) {
+    const row = document.createElement('div');
+    const header = document.createElement('div');
+    header.className = 'flex justify-between text-[11px] mb-0.5';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'text-slate-300';
+    nameSpan.textContent = label;
+    const countSpan = document.createElement('span');
+    countSpan.className = 'text-slate-500';
+    countSpan.textContent = `${formatNumber(count)} (${pct}%)`;
+    header.append(nameSpan, countSpan);
+    const track = document.createElement('div');
+    track.className = 'h-2 rounded-full bg-slate-800 overflow-hidden';
+    const fill = document.createElement('div');
+    fill.className = 'h-full rounded-full';
+    fill.style.width = `${widthPct}%`;
+    fill.style.background = color;
+    track.appendChild(fill);
+    row.append(header, track);
+    return row;
+}
+
 function renderKillOutcomes(data) {
     const s = data?.summary;
     if (!s || s.total_kills === 0) return;
 
     const statsEl = document.getElementById('kill-outcomes-stats');
     if (statsEl) {
-        statsEl.innerHTML = [
+        statsEl.textContent = '';
+        [
             { label: 'Total Kills', value: formatNumber(s.total_kills), cls: 'text-white' },
             { label: 'Gib Rate', value: `${s.gib_rate}%`, cls: 'text-red-400' },
             { label: 'Revive Rate', value: `${s.revive_rate}%`, cls: 'text-emerald-400' },
             { label: 'Avg Outcome', value: s.avg_delta_ms ? `${(s.avg_delta_ms / 1000).toFixed(1)}s` : '--', cls: 'text-amber-400' },
             { label: 'Avg Denied', value: s.avg_denied_ms ? `${(s.avg_denied_ms / 1000).toFixed(1)}s` : '--', cls: 'text-purple-400' },
-        ].map(x => `<div class="text-center">
-            <div class="text-[11px] font-bold text-slate-500 uppercase">${escapeHtml(x.label)}</div>
-            <div class="text-xl font-black ${escapeHtml(x.cls)} mt-1">${escapeHtml(x.value)}</div>
-        </div>`).join('');
+        ].forEach(x => statsEl.appendChild(_buildStatCard(x.label, x.value, x.cls)));
     }
 
     const barsEl = document.getElementById('kill-outcomes-bars');
     if (barsEl) {
+        barsEl.textContent = '';
         const bars = [
             { key: 'gibbed', label: 'Gibbed', count: s.gibbed },
             { key: 'revived', label: 'Revived', count: s.revived },
@@ -2111,19 +2145,11 @@ function renderKillOutcomes(data) {
             { key: 'round_end', label: 'Round End', count: s.round_end },
         ].filter(b => b.count > 0);
         const max = Math.max(...bars.map(b => b.count), 1);
-        barsEl.innerHTML = bars.map(b => {
+        bars.forEach(b => {
             const pct = s.total_kills > 0 ? ((b.count / s.total_kills) * 100).toFixed(1) : '0';
             const color = OUTCOME_COLORS[b.key] || '#64748b';
-            return `<div>
-                <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-slate-300">${escapeHtml(b.label)}</span>
-                    <span class="text-slate-500">${escapeHtml(formatNumber(b.count))} (${escapeHtml(pct)}%)</span>
-                </div>
-                <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div class="h-full rounded-full" style="width:${(b.count / max) * 100}%;background:${escapeHtml(color)}"></div>
-                </div>
-            </div>`;
-        }).join('');
+            barsEl.appendChild(_buildBarRow(b.label, b.count, pct, (b.count / max) * 100, color));
+        });
     }
 }
 
@@ -2173,35 +2199,41 @@ function renderHitRegions(data) {
 
     const chartEl = document.getElementById('hit-regions-chart');
     if (chartEl) {
-        chartEl.innerHTML = `
-            <div class="flex items-end gap-1 h-28 justify-center">
-                ${regions.map(r => {
-                    const pct = ((r.count / total) * 100).toFixed(1);
-                    const barH = Math.max((r.count / maxR) * 100, 4);
-                    return `<div class="flex flex-col items-center gap-1 flex-1 max-w-16">
-                        <span class="text-[11px] font-mono text-slate-300">${escapeHtml(pct)}%</span>
-                        <div class="w-full rounded-t" style="height:${barH}%;background:${escapeHtml(r.color)};opacity:0.85"></div>
-                        <span class="text-[11px] text-slate-400">${escapeHtml(r.label)}</span>
-                    </div>`;
-                }).join('')}
-            </div>
-            <div class="text-center text-[11px] text-slate-500 mt-2">${escapeHtml(formatNumber(total))} hits &middot; ${escapeHtml(formatNumber(totalDmg))} damage tracked</div>`;
+        chartEl.textContent = '';
+        const barsRow = document.createElement('div');
+        barsRow.className = 'flex items-end gap-1 h-28 justify-center';
+        regions.forEach(r => {
+            const pct = ((r.count / total) * 100).toFixed(1);
+            const barH = Math.max((r.count / maxR) * 100, 4);
+            const col = document.createElement('div');
+            col.className = 'flex flex-col items-center gap-1 flex-1 max-w-16';
+            const pctSpan = document.createElement('span');
+            pctSpan.className = 'text-[11px] font-mono text-slate-300';
+            pctSpan.textContent = `${pct}%`;
+            const bar = document.createElement('div');
+            bar.className = 'w-full rounded-t';
+            bar.style.height = `${barH}%`;
+            bar.style.background = r.color;
+            bar.style.opacity = '0.85';
+            const lbl = document.createElement('span');
+            lbl.className = 'text-[11px] text-slate-400';
+            lbl.textContent = r.label;
+            col.append(pctSpan, bar, lbl);
+            barsRow.appendChild(col);
+        });
+        const summary = document.createElement('div');
+        summary.className = 'text-center text-[11px] text-slate-500 mt-2';
+        summary.textContent = `${formatNumber(total)} hits \u00B7 ${formatNumber(totalDmg)} damage tracked`;
+        chartEl.append(barsRow, summary);
     }
 
     const barsEl = document.getElementById('hit-regions-bars');
     if (barsEl) {
-        barsEl.innerHTML = regions.map(r => {
+        barsEl.textContent = '';
+        regions.forEach(r => {
             const pct = ((r.count / total) * 100).toFixed(1);
-            return `<div>
-                <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-slate-300">${escapeHtml(r.label)}</span>
-                    <span class="text-slate-500">${escapeHtml(formatNumber(r.count))} (${escapeHtml(pct)}%)</span>
-                </div>
-                <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div class="h-full rounded-full" style="width:${(r.count / maxR) * 100}%;background:${escapeHtml(r.color)}"></div>
-                </div>
-            </div>`;
-        }).join('');
+            barsEl.appendChild(_buildBarRow(r.label, r.count, pct, (r.count / maxR) * 100, r.color));
+        });
     }
 }
 
