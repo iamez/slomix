@@ -2089,6 +2089,23 @@ function _safeRender(el, htmlStr) {
     el.replaceChildren(...doc.body.childNodes);
 }
 
+/** Build summary card grid using DOM APIs (avoids innerHTML XSS flags). */
+function _buildSummaryCards(el, items) {
+    el.textContent = '';
+    items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'bg-slate-800/60 rounded-lg p-3 text-center';
+        const lbl = document.createElement('div');
+        lbl.className = 'text-[10px] text-slate-500 uppercase';
+        lbl.textContent = item.label;
+        const val = document.createElement('div');
+        val.className = `text-lg font-bold ${item.cls}`;
+        val.textContent = item.value;
+        card.append(lbl, val);
+        el.appendChild(card);
+    });
+}
+
 function _buildStatCard(label, value, cls, size = 'text-xl') {
     const card = document.createElement('div');
     card.className = 'text-center';
@@ -2737,14 +2754,23 @@ function renderCarrierIntel(data) {
     // Carrier leaderboard
     const leadersEl = document.getElementById('carrier-leaders');
     if (leadersEl && data.carriers && data.carriers.length > 0) {
-        leadersEl.innerHTML = data.carriers.map((c, i) => {
-            const name = escapeHtml(c.name || c.guid?.substring(0, 8) || '?');
-            return `<div class="text-xs text-slate-300 py-0.5">
-                <span class="font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'}">#${i + 1}</span>
-                ${name} — <span class="text-brand-emerald">${c.secures}</span>/${c.carries} secure
-                (${c.secure_rate}%) · ${formatNumber(c.total_distance)}u · eff ${(c.avg_efficiency * 100).toFixed(0)}%
-            </div>`;
-        }).join('');
+        leadersEl.textContent = '';
+        data.carriers.forEach((c, i) => {
+            const row = document.createElement('div');
+            row.className = 'text-xs text-slate-300 py-0.5';
+            const rank = document.createElement('span');
+            rank.className = `font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'}`;
+            rank.textContent = `#${i + 1}`;
+            const name = c.name || c.guid?.substring(0, 8) || '?';
+            const secSpan = document.createElement('span');
+            secSpan.className = 'text-brand-emerald';
+            secSpan.textContent = c.secures;
+            row.appendChild(rank);
+            row.appendChild(document.createTextNode(` ${name} — `));
+            row.appendChild(secSpan);
+            row.appendChild(document.createTextNode(`/${c.carries} secure (${c.secure_rate}%) · ${formatNumber(c.total_distance)}u · eff ${(c.avg_efficiency * 100).toFixed(0)}%`));
+            leadersEl.appendChild(row);
+        });
     } else if (leadersEl) {
         leadersEl.innerHTML = '<div class="text-[11px] text-slate-500">No carrier data yet.</div>';
     }
@@ -2754,21 +2780,24 @@ function renderCarrierIntel(data) {
     if (logEl && data.events && data.events.length > 0) {
         const outcomeIcons = { secured: '+', killed: 'X', dropped: 'D', returned: 'R', round_end: 'E', disconnected: 'DC' };
         const outcomeColors = { secured: 'text-brand-emerald', killed: 'text-brand-rose', dropped: 'text-slate-400', round_end: 'text-slate-500' };
-        logEl.innerHTML = data.events.map(e => {
+        logEl.textContent = '';
+        data.events.forEach(e => {
             const icon = outcomeIcons[e.outcome] || '?';
             const color = outcomeColors[e.outcome] || 'text-slate-400';
-            const name = escapeHtml(e.carrier_name || '?');
             const dur = (e.duration_ms / 1000).toFixed(1);
             const eff = (e.efficiency * 100).toFixed(0);
             let detail = `[${icon}] ${e.outcome} · ${formatNumber(e.carry_distance)}u (${eff}%) · ${dur}s`;
-            if (e.outcome === 'killed' && e.killer_name) {
-                detail += ` by ${escapeHtml(e.killer_name)}`;
-            }
-            return `<div class="flex justify-between text-xs py-0.5">
-                <span>${name} <span class="text-slate-500">(${escapeHtml(e.carrier_team)})</span> on <span class="text-slate-400">${escapeHtml(e.map_name)}</span></span>
-                <span class="${color}">${detail}</span>
-            </div>`;
-        }).join('');
+            if (e.outcome === 'killed' && e.killer_name) detail += ` by ${e.killer_name}`;
+            const row = document.createElement('div');
+            row.className = 'flex justify-between text-xs py-0.5';
+            const left = document.createElement('span');
+            left.textContent = `${e.carrier_name || '?'} (${e.carrier_team}) on ${e.map_name}`;
+            const right = document.createElement('span');
+            right.className = color;
+            right.textContent = detail;
+            row.append(left, right);
+            logEl.appendChild(row);
+        });
     } else if (logEl) {
         logEl.innerHTML = '<div class="text-[11px] text-slate-500">No carrier events yet.</div>';
     }
@@ -2784,14 +2813,23 @@ function renderCarrierKillers(data) {
         return;
     }
 
-    el.innerHTML = data.killers.map((k, i) => {
-        const name = escapeHtml(k.name || k.guid?.substring(0, 8) || '?');
-        return `<div class="text-xs text-slate-300 py-0.5">
-            <span class="font-bold ${i < 3 ? 'text-brand-rose' : 'text-slate-600'}">#${i + 1}</span>
-            ${name} — <span class="text-brand-rose font-bold">${k.carrier_kills}</span> carrier kills
-            · avg stopped at ${formatNumber(k.avg_distance_stopped)}u
-        </div>`;
-    }).join('');
+    el.textContent = '';
+    data.killers.forEach((k, i) => {
+        const row = document.createElement('div');
+        row.className = 'text-xs text-slate-300 py-0.5';
+        const rank = document.createElement('span');
+        rank.className = `font-bold ${i < 3 ? 'text-brand-rose' : 'text-slate-600'}`;
+        rank.textContent = `#${i + 1}`;
+        const kills = document.createElement('span');
+        kills.className = 'text-brand-rose font-bold';
+        kills.textContent = k.carrier_kills;
+        const name = k.name || k.guid?.substring(0, 8) || '?';
+        row.appendChild(rank);
+        row.appendChild(document.createTextNode(` ${name} — `));
+        row.appendChild(kills);
+        row.appendChild(document.createTextNode(` carrier kills · avg stopped at ${formatNumber(k.avg_distance_stopped)}u`));
+        el.appendChild(row);
+    });
 }
 
 // ──────────── v6 Phase 1.5: Flag Returns ────────────
@@ -3033,12 +3071,19 @@ function renderFocusFire(data) {
             { label: 'Avg Score', value: (summary.avg_score || 0).toFixed(2), cls: 'text-amber-400' },
             { label: 'Avg Attackers', value: (summary.avg_attackers || 0).toFixed(1), cls: 'text-cyan-400' },
         ];
-        summaryEl.innerHTML = items.map(item =>
-            `<div class="bg-slate-800/60 rounded-lg p-3 text-center">
-                <div class="text-[10px] text-slate-500 uppercase">${item.label}</div>
-                <div class="text-lg font-bold ${item.cls}">${item.value}</div>
-            </div>`
-        ).join('');
+        summaryEl.textContent = '';
+        items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'bg-slate-800/60 rounded-lg p-3 text-center';
+            const lbl = document.createElement('div');
+            lbl.className = 'text-[10px] text-slate-500 uppercase';
+            lbl.textContent = item.label;
+            const val = document.createElement('div');
+            val.className = `text-lg font-bold ${item.cls}`;
+            val.textContent = item.value;
+            card.append(lbl, val);
+            summaryEl.appendChild(card);
+        });
     }
 
     renderLeaderList('focus-fire-targets', (data.targets || []).slice(0, 8), (row) => {
@@ -3079,12 +3124,7 @@ function renderObjectiveFocus(data) {
             { label: 'Objectives', value: formatNumber(summary.objectives_tracked || 0), cls: 'text-amber-400' },
             { label: 'Avg Time Near Obj', value: `${summary.avg_time_near_obj_s || 0}s`, cls: 'text-emerald-400' },
         ];
-        summaryEl.innerHTML = items.map(item =>
-            `<div class="bg-slate-800/60 rounded-lg p-3 text-center">
-                <div class="text-[10px] text-slate-500 uppercase">${item.label}</div>
-                <div class="text-lg font-bold ${item.cls}">${item.value}</div>
-            </div>`
-        ).join('');
+        _buildSummaryCards(summaryEl, items);
     }
 
     renderLeaderList('obj-focus-players', (data.players || []).slice(0, 8), (row) => {
@@ -3125,12 +3165,7 @@ function renderSupportSummary(data) {
             { label: 'Avg Uptime', value: `${summary.avg_uptime_pct || 0}%`, cls: 'text-emerald-400' },
             { label: 'Best Uptime', value: `${summary.max_uptime_pct || 0}%`, cls: 'text-amber-400' },
         ];
-        summaryEl.innerHTML = items.map(item =>
-            `<div class="bg-slate-800/60 rounded-lg p-3 text-center">
-                <div class="text-[10px] text-slate-500 uppercase">${item.label}</div>
-                <div class="text-lg font-bold ${item.cls}">${item.value}</div>
-            </div>`
-        ).join('');
+        _buildSummaryCards(summaryEl, items);
     }
 
     const mapsEl = document.getElementById('support-summary-maps');
@@ -3163,12 +3198,7 @@ function renderCombatPositionStats(data) {
             { label: 'Avg Kill Dist', value: `${formatNumber(Math.round(summary.avg_kill_distance || 0))}u`, cls: 'text-amber-400' },
             { label: 'Median Dist', value: `${formatNumber(Math.round(summary.median_kill_distance || 0))}u`, cls: 'text-cyan-400' },
         ];
-        summaryEl.innerHTML = items.map(item =>
-            `<div class="bg-slate-800/60 rounded-lg p-3 text-center">
-                <div class="text-[10px] text-slate-500 uppercase">${item.label}</div>
-                <div class="text-lg font-bold ${item.cls}">${item.value}</div>
-            </div>`
-        ).join('');
+        _buildSummaryCards(summaryEl, items);
     }
 
     const classEl = document.getElementById('combat-pos-class');
