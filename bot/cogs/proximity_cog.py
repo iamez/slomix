@@ -1020,6 +1020,191 @@ class ProximityCog(commands.Cog, name="Proximity"):
             await ctx.send(f"Error: {e}")
 
 
+    # ===== v6 CARRIER INTELLIGENCE COMMANDS =====
+
+    @commands.command(name='proximity_carriers', aliases=['pca'])
+    async def proximity_carriers(self, ctx, session_date: str = None):
+        """Top carrier leaderboard - distance, secures, efficiency (v6)"""
+        if not self.commands_enabled and not self.enabled:
+            await ctx.send("Proximity commands are disabled.")
+            return
+
+        try:
+            date_filter = ""
+            params = []
+            if session_date:
+                date_filter = "WHERE session_date = $1"
+                params = [session_date]
+            else:
+                date_filter = "WHERE session_date >= CURRENT_DATE - INTERVAL '30 days'"
+
+            rows = await self.bot.db_adapter.fetch_all(f"""
+                SELECT carrier_guid, MAX(carrier_name) AS name,
+                       COUNT(*) AS carries,
+                       SUM(CASE WHEN outcome = 'secured' THEN 1 ELSE 0 END) AS secures,
+                       SUM(CASE WHEN outcome = 'killed' THEN 1 ELSE 0 END) AS killed,
+                       ROUND(SUM(carry_distance)::numeric, 0) AS total_distance,
+                       ROUND(AVG(efficiency)::numeric, 3) AS avg_efficiency,
+                       ROUND(AVG(duration_ms)::numeric, 0) AS avg_duration
+                FROM proximity_carrier_event
+                {date_filter}
+                GROUP BY carrier_guid
+                HAVING COUNT(*) >= 1
+                ORDER BY secures DESC, total_distance DESC
+                LIMIT 10
+            """, tuple(params))
+
+            if not rows:
+                await ctx.send("No carrier data found.")
+                return
+
+            embed = discord.Embed(
+                title="Objective Carriers - Top 10",
+                description="Flag/docs/gold carrier stats",
+                color=discord.Color.gold()
+            )
+            for i, row in enumerate(rows, 1):
+                name = row[1] or row[0][:8]
+                carries = int(row[2] or 0)
+                secures = int(row[3] or 0)
+                killed = int(row[4] or 0)
+                distance = float(row[5] or 0)
+                eff = float(row[6] or 0)
+                duration = int(row[7] or 0)
+                secure_rate = (secures / carries * 100) if carries > 0 else 0
+                embed.add_field(
+                    name=f"{i}. {name}",
+                    value=(
+                        f"Carries: {carries} | Secures: **{secures}** ({secure_rate:.0f}%)\n"
+                        f"Killed: {killed} | Distance: {distance:.0f}u | Eff: {eff:.1%}\n"
+                        f"Avg carry: {duration/1000:.1f}s"
+                    ),
+                    inline=False
+                )
+
+            await ctx.send(embed=embed)
+        except Exception as e:
+            logger.error(f"carriers error: {e}", exc_info=True)
+            await ctx.send(f"Error: {e}")
+
+    @commands.command(name='proximity_carrier_kills', aliases=['pck'])
+    async def proximity_carrier_kills(self, ctx, session_date: str = None):
+        """Top carrier killers - who stops objective runners (v6)"""
+        if not self.commands_enabled and not self.enabled:
+            await ctx.send("Proximity commands are disabled.")
+            return
+
+        try:
+            date_filter = ""
+            params = []
+            if session_date:
+                date_filter = "WHERE session_date = $1"
+                params = [session_date]
+            else:
+                date_filter = "WHERE session_date >= CURRENT_DATE - INTERVAL '30 days'"
+
+            rows = await self.bot.db_adapter.fetch_all(f"""
+                SELECT killer_guid, MAX(killer_name) AS name,
+                       COUNT(*) AS carrier_kills,
+                       ROUND(AVG(carrier_distance_at_kill)::numeric, 0) AS avg_distance_stopped
+                FROM proximity_carrier_kill
+                {date_filter}
+                GROUP BY killer_guid
+                HAVING COUNT(*) >= 1
+                ORDER BY carrier_kills DESC
+                LIMIT 10
+            """, tuple(params))
+
+            if not rows:
+                await ctx.send("No carrier kill data found.")
+                return
+
+            embed = discord.Embed(
+                title="Carrier Killers - Top 10",
+                description="Most objective carrier kills",
+                color=discord.Color.red()
+            )
+            for i, row in enumerate(rows, 1):
+                name = row[1] or row[0][:8]
+                kills = int(row[2] or 0)
+                avg_dist = float(row[3] or 0)
+                embed.add_field(
+                    name=f"{i}. {name}",
+                    value=f"Carrier kills: **{kills}** | Avg distance stopped: {avg_dist:.0f}u",
+                    inline=False
+                )
+
+            await ctx.send(embed=embed)
+        except Exception as e:
+            logger.error(f"carrier_kills error: {e}", exc_info=True)
+            await ctx.send(f"Error: {e}")
+
+    @commands.command(name='proximity_carry_detail', aliases=['pcd'])
+    async def proximity_carry_detail(self, ctx, session_date: str = None):
+        """Detailed carrier event log for a session (v6)"""
+        if not self.commands_enabled and not self.enabled:
+            await ctx.send("Proximity commands are disabled.")
+            return
+
+        try:
+            date_filter = ""
+            params = []
+            if session_date:
+                date_filter = "WHERE session_date = $1"
+                params = [session_date]
+            else:
+                date_filter = "WHERE session_date = (SELECT MAX(session_date) FROM proximity_carrier_event)"
+
+            rows = await self.bot.db_adapter.fetch_all(f"""
+                SELECT carrier_name, carrier_team, flag_team, outcome,
+                       carry_distance, beeline_distance, efficiency,
+                       duration_ms, map_name, killer_name
+                FROM proximity_carrier_event
+                {date_filter}
+                ORDER BY pickup_time
+                LIMIT 20
+            """, tuple(params))
+
+            if not rows:
+                await ctx.send("No carrier events found.")
+                return
+
+            outcome_icons = {
+                'secured': '+', 'killed': 'X', 'dropped': 'D',
+                'returned': 'R', 'round_end': 'E', 'disconnected': 'DC'
+            }
+
+            embed = discord.Embed(
+                title="Carrier Event Log",
+                description="Recent objective carry events",
+                color=discord.Color.dark_gold()
+            )
+            for row in rows:
+                name = row[0]
+                team = row[1]
+                outcome = row[3]
+                distance = float(row[4] or 0)
+                eff = float(row[6] or 0)
+                duration = int(row[7] or 0)
+                map_name = row[8]
+                killer = row[9]
+                icon = outcome_icons.get(outcome, '?')
+
+                detail = f"[{icon}] {outcome} | {distance:.0f}u ({eff:.0%}) | {duration/1000:.1f}s"
+                if outcome == 'killed' and killer:
+                    detail += f" by {killer}"
+                embed.add_field(
+                    name=f"{name} ({team}) on {map_name}",
+                    value=detail,
+                    inline=False
+                )
+
+            await ctx.send(embed=embed)
+        except Exception as e:
+            logger.error(f"carry_detail error: {e}", exc_info=True)
+            await ctx.send(f"Error: {e}")
+
+
 async def setup(bot):
     """Setup function for cog loading"""
     await bot.add_cog(ProximityCog(bot))

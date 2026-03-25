@@ -2497,6 +2497,399 @@
                     <div id="lua-trades-recent"></div>
                 </div>
 
+                <!-- v5.2 Kill Outcomes -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Kill Outcomes</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-rose/10 text-brand-rose">v5.2</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">What happens after each kill — gibbed, revived by medic, or tapped out.</div>
+                        <div id="kill-outcomes-stats" class="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-4"></div>
+                        <div id="kill-outcomes-bars" class="space-y-2"></div>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Kill Permanence Rate</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-rose/10 text-brand-rose">KPR</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Gibs / (Gibs + Revives) — who makes their kills stick.</div>
+                        <div id="kill-outcomes-kpr" class="space-y-1 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">No kill outcome data yet.</div>
+                        </div>
+                        <div class="text-sm font-bold text-slate-400 mt-4 mb-2">Most Revived</div>
+                        <div class="text-[11px] text-slate-500 mb-2">Players who get revived most often — medic magnet indicator.</div>
+                        <div id="kill-outcomes-revived" class="space-y-1 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">No data yet.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- v5.2 Hit Regions -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Hit Region Distribution</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-amber/10 text-brand-amber">v5.2</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Where shots land — head, arms, body, or legs (last 30 days).</div>
+                        <div id="hit-regions-chart" class="mb-3"></div>
+                        <div id="hit-regions-bars" class="space-y-2"></div>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Best Aimers — Headshot %</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-amber/10 text-brand-amber">v5.2</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Highest headshot percentage (min 50 hits, last 30 days).</div>
+                        <div id="hit-regions-headshot-leaders" class="space-y-1 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">No headshot data yet.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- v5.2 Movement Analytics -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Movement Analytics</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">v5.2</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Stance, speed, and distance from path samples (last 30 days).</div>
+                        <div id="movement-stance-bar" class="mb-3"></div>
+                        <div id="movement-overview" class="grid grid-cols-3 gap-3 mb-4"></div>
+                        <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Biggest Movers</div>
+                        <div id="movement-distance-leaders" class="space-y-1 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">No movement data yet.</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Speed &amp; Sprint Leaders</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">v5.2</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Peak speed and sprint usage (last 30 days).</div>
+                        <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Fastest Peak Speed</div>
+                        <div id="movement-speed-leaders" class="space-y-1 text-xs text-slate-300 mb-4">
+                            <div class="text-[11px] text-slate-500">No data yet.</div>
+                        </div>
+                        <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Most Sprint Time</div>
+                        <div id="movement-sprint-leaders" class="space-y-1 text-xs text-slate-300 mb-4">
+                            <div class="text-[11px] text-slate-500">No data yet.</div>
+                        </div>
+                        <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Post-Spawn Rush (3s distance)</div>
+                        <div id="movement-postspawn-leaders" class="space-y-1 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">No data yet.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- v5.2 Proximity Composite Scores -->
+                <div class="glass-panel p-6 rounded-xl mt-8">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <div class="text-sm font-bold text-slate-400">Proximity Score</div>
+                            <div id="prox-scores-subtitle" class="text-[11px] text-slate-500 mt-1">Composite rating from 3 categories, 18 metrics.</div>
+                        </div>
+                        <div class="flex gap-2 items-center">
+                            <button id="prox-scores-formula-btn" class="text-[10px] font-bold px-2 py-1 rounded bg-slate-800 text-slate-500 border border-white/10 hover:text-brand-emerald hover:border-brand-emerald/40 transition">Formula</button>
+                            <div class="flex gap-1" id="prox-scores-range-btns">
+                                <button class="prox-scores-range-btn text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-500 border border-white/10" data-days="14">14d</button>
+                                <button class="prox-scores-range-btn text-[10px] px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/40" data-days="30">30d</button>
+                                <button class="prox-scores-range-btn text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-500 border border-white/10" data-days="90">90d</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="prox-scores-formula" class="hidden mb-4 p-4 rounded-lg bg-slate-800/40 border border-white/5"></div>
+                    <div id="prox-scores-list"></div>
+                </div>
+
+                <!-- v5.2 Danger Zones -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Danger Zones</div>
+                            <div class="flex gap-2 items-center">
+                                <select id="danger-zones-class" class="rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                                    <option value="">All Classes</option>
+                                    <option value="SOLDIER">Soldier</option>
+                                    <option value="MEDIC">Medic</option>
+                                    <option value="ENGINEER">Engineer</option>
+                                    <option value="FIELDOPS">Field Ops</option>
+                                    <option value="COVERTOPS">Covert Ops</option>
+                                </select>
+                                <input id="danger-zones-map" type="text" placeholder="Map name..." class="w-28 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                            </div>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Death hotspots colored by class — where do players die most?</div>
+                        <div id="danger-zones-stats" class="text-[11px] text-slate-500 mb-2"></div>
+                        <canvas id="danger-zones-canvas" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:512px;aspect-ratio:1"></canvas>
+                    </div>
+
+                    <!-- v5.2 Combat Heatmap -->
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Combat Heatmap</div>
+                            <div class="flex gap-2 items-center">
+                                <select id="combat-heatmap-perspective" class="rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                                    <option value="kills">Kills</option>
+                                    <option value="deaths">Deaths</option>
+                                </select>
+                                <input id="combat-heatmap-map" type="text" placeholder="Map name..." class="w-28 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                            </div>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Kill/death positions with kill lines (last 30 days).</div>
+                        <canvas id="combat-heatmap-canvas" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:512px;aspect-ratio:1"></canvas>
+                    </div>
+                </div>
+
+                <!-- v5.2 Leaderboard Tabs -->
+                <div class="glass-panel p-6 rounded-xl mt-8">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-sm font-bold text-slate-400">Proximity Leaderboards</div>
+                        <div class="flex gap-1" id="lb-range-btns">
+                            <button class="lb-range-btn text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-500 border border-white/10" data-days="14">14d</button>
+                            <button class="lb-range-btn text-[10px] px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/40" data-days="30">30d</button>
+                            <button class="lb-range-btn text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-500 border border-white/10" data-days="90">90d</button>
+                        </div>
+                    </div>
+                    <div id="leaderboard-tabs" class="flex flex-wrap gap-1 mb-4"></div>
+                    <div id="leaderboard-content" class="text-xs text-slate-300">
+                        <div class="text-[11px] text-slate-500">Loading leaderboards...</div>
+                    </div>
+                </div>
+
+                <!-- v5.2 Weapon Accuracy + Revives -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Weapon Accuracy</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-amber/10 text-brand-amber">v5.2</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Hit accuracy leaderboard based on proximity weapon tracking data.</div>
+                        <div id="weapon-accuracy-leaders" class="space-y-1 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">Loading weapon accuracy...</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Revives</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-emerald/10 text-brand-emerald">v5.2</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Medic revive activity — who heals, how fast, how risky.</div>
+                        <div id="revive-summary" class="grid grid-cols-3 gap-3 mb-4"></div>
+                        <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Top Medics</div>
+                        <div id="revive-leaders" class="space-y-1 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">Loading revive data...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- v6.0 Carrier Intelligence -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Objective Carriers</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-amber/10 text-brand-amber">v6.0</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Who carries objectives (flags, docs, gold) the furthest and secures them?</div>
+                        <div id="carrier-summary" class="grid grid-cols-3 gap-3 mb-4"></div>
+                        <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Top Carriers</div>
+                        <div id="carrier-leaders" class="space-y-1 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">No carrier data yet.</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Carrier Killers</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-rose/10 text-brand-rose">v6.0</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Who stops objective runners? Carrier kills and avg distance the carrier had traveled.</div>
+                        <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Top Carrier Killers</div>
+                        <div id="carrier-killer-leaders" class="space-y-1 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">No carrier kill data yet.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- v6.0 Carrier Event Log -->
+                <div class="glass-panel p-6 rounded-xl mt-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-sm font-bold text-slate-400">Carrier Event Log</div>
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-amber/10 text-brand-amber">v6.0</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mb-3">Per-event carrier log: pickup, carry, outcome.</div>
+                    <div id="carrier-event-log" class="space-y-1 text-xs text-slate-300">
+                        <div class="text-[11px] text-slate-500">No carrier events yet.</div>
+                    </div>
+                </div>
+
+                <!-- v6.0 Phase 1.5: Flag Returns -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <div class="flex items-center gap-3 mb-4">
+                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Flag Returns</h3>
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">v6.0</span>
+                    </div>
+                    <div id="returns-summary" class="grid grid-cols-2 gap-3 mb-4"></div>
+                    <div id="returns-leaders" class="space-y-1 text-xs text-slate-300">
+                        <span class="text-slate-500 italic">No return data yet</span>
+                    </div>
+                </div>
+
+                <!-- v6.0 Phase 2: Vehicle & Escort Intelligence -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center gap-3 mb-4">
+                            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Vehicle Progress</h3>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-purple/10 text-brand-purple">v6.0</span>
+                        </div>
+                        <div id="vehicle-progress" class="space-y-1 text-xs text-slate-300">
+                            <span class="text-slate-500 italic">No vehicle data yet</span>
+                        </div>
+                    </div>
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center gap-3 mb-4">
+                            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Escort Leaders</h3>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-purple/10 text-brand-purple">v6.0</span>
+                        </div>
+                        <div id="escort-leaders" class="space-y-1 text-xs text-slate-300">
+                            <span class="text-slate-500 italic">No escort data yet</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- v6.0 Phase 3: Engineer Intelligence -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <div class="flex items-center gap-3 mb-4">
+                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Engineer Intelligence</h3>
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-green/10 text-brand-green">v6.0</span>
+                    </div>
+                    <div id="engineer-leaders" class="space-y-1 text-xs text-slate-300">
+                        <span class="text-slate-500 italic">No engineer data yet</span>
+                    </div>
+                    <div class="mt-4">
+                        <h4 class="text-xs font-semibold text-slate-500 uppercase mb-2">Recent Events</h4>
+                        <div id="construction-event-log" class="space-y-1 text-xs text-slate-300">
+                            <span class="text-slate-500 italic">No events yet</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Objective Run Intelligence (v6.5) -->
+                <div class="glass-panel overflow-hidden">
+                    <div class="p-6 border-b border-white/5">
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-xl font-bold text-white">Objective Run Intelligence</h2>
+                            <span class="text-[10px] font-bold bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30">v6.5</span>
+                        </div>
+                        <p class="text-sm text-slate-400 mt-1">Engineer runs: path clearing, solo vs team, denied approaches</p>
+                    </div>
+                    <div class="p-6 space-y-6">
+                        <div id="objective-run-summary" class="text-slate-500 text-sm">Loading objective run data...</div>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-300 mb-3">Top Objective Runners</h3>
+                                <div id="objective-runners-leaders" class="text-slate-500 text-sm">Loading...</div>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-300 mb-3">Recent Runs</h3>
+                                <div id="objective-runs-log" class="text-slate-500 text-sm">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Focus Fire Intelligence -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-sm font-bold text-slate-400">Focus Fire</div>
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-rose/10 text-brand-rose">v5.0</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mb-3">Coordinated multi-attacker damage bursts — who gets focused and by how many.</div>
+                    <div id="focus-fire-summary" class="grid grid-cols-3 gap-3 mb-4"></div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Most Targeted</div>
+                            <div id="focus-fire-targets" class="space-y-1 text-xs text-slate-300">
+                                <div class="text-[11px] text-slate-500">Loading focus fire data...</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Top Focus Events</div>
+                            <div id="focus-fire-recent" class="space-y-1 text-xs text-slate-300">
+                                <div class="text-[11px] text-slate-500">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Objective Focus -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-sm font-bold text-slate-400">Objective Focus</div>
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">v4.0</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mb-3">Time players spend near objectives — who plays the objective vs who roams.</div>
+                    <div id="obj-focus-summary" class="grid grid-cols-3 gap-3 mb-4"></div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Most Objective-Focused</div>
+                            <div id="obj-focus-players" class="space-y-1 text-xs text-slate-300">
+                                <div class="text-[11px] text-slate-500">Loading objective focus...</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Objectives</div>
+                            <div id="obj-focus-objectives" class="space-y-1 text-xs text-slate-300">
+                                <div class="text-[11px] text-slate-500">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Support Summary -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-sm font-bold text-slate-400">Support Uptime</div>
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-emerald/10 text-brand-emerald">v4.0</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mb-3">Medic support availability per round — how often teammates had nearby medic support.</div>
+                    <div id="support-summary-cards" class="grid grid-cols-3 gap-3 mb-4"></div>
+                    <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">By Map</div>
+                    <div id="support-summary-maps" class="space-y-1 text-xs text-slate-300">
+                        <div class="text-[11px] text-slate-500">Loading support data...</div>
+                    </div>
+                </div>
+
+                <!-- Combat Position Stats -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-sm font-bold text-slate-400">Combat Positions</div>
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-amber/10 text-brand-amber">v5.0</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mb-3">Kill distance statistics — how far players engage by class and map.</div>
+                    <div id="combat-pos-summary" class="grid grid-cols-3 gap-3 mb-4"></div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">By Class</div>
+                            <div id="combat-pos-class" class="space-y-1 text-xs text-slate-300">
+                                <div class="text-[11px] text-slate-500">Loading combat positions...</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">By Map</div>
+                            <div id="combat-pos-map" class="space-y-1 text-xs text-slate-300">
+                                <div class="text-[11px] text-slate-500">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
