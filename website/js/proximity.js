@@ -353,7 +353,7 @@ function getConfidenceFromSamples(sampleCount) {
     return 'Low';
 }
 
-function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data yet') {
+function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data yet', { htmlValues = false } = {}) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
@@ -370,11 +370,12 @@ function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data ye
         const sampleMeta = sampleCount
             ? `n=${formatNumber(sampleCount)} • ${confidence || 'Low'}`
             : '';
+        const displayValue = htmlValues ? value : escapeHtml(value);
         return `
             <div class="flex items-center justify-between text-[11px] text-slate-300">
                 <span>${escapeHtml(label)}</span>
                 <span class="text-right">
-                    <span class="text-slate-500">${escapeHtml(value)}</span>
+                    <span class="text-slate-500">${displayValue}</span>
                     ${sampleMeta ? `<span class="block text-[10px] text-slate-600">${escapeHtml(sampleMeta)}</span>` : ''}
                 </span>
             </div>
@@ -1531,6 +1532,10 @@ async function loadScopeHierarchy() {
         if (!proximityScopeState.sessionDate) {
             proximityScopeState.sessionDate = data?.scope?.session_date || proximityScopeState.sessions[0]?.session_date || null;
         }
+        // Auto-select last round on first visit for better UX
+        if (!proximityScopeState.mapName && !proximityScopeState.roundNumber) {
+            autoSelectLastRound();
+        }
     } catch {
         proximityScopeState.sessions = [];
         proximityScopeState.sessionDate = null;
@@ -1539,6 +1544,25 @@ async function loadScopeHierarchy() {
         proximityScopeState.roundStartUnix = null;
     }
     renderScopeSelectors();
+}
+
+function autoSelectLastRound() {
+    const session = proximityScopeState.sessions.find(
+        (s) => s.session_date === proximityScopeState.sessionDate
+    );
+    if (!session?.maps?.length) return;
+
+    // Pick the last map (most recent) in the session
+    const lastMap = session.maps[session.maps.length - 1];
+    proximityScopeState.mapName = lastMap.map_name;
+
+    // Pick the last round of that map
+    const rounds = lastMap.rounds || [];
+    if (rounds.length > 0) {
+        const lastRound = rounds[rounds.length - 1];
+        proximityScopeState.roundNumber = lastRound.round_number;
+        proximityScopeState.roundStartUnix = lastRound.round_start_unix || null;
+    }
 }
 
 async function loadScopedProximityData() {
@@ -1790,6 +1814,8 @@ async function loadScopedProximityData() {
                 renderCombatPositionStats(combatPosStatsRes.value);
             }
             bindV52PanelEvents();
+            // Reload leaderboards with current scope
+            loadLeaderboardData();
         }
     } catch (e) {
         if (stateEl) {
@@ -2567,8 +2593,9 @@ function loadLeaderboardData() {
     const contentEl = document.getElementById('leaderboard-content');
     if (!contentEl) return;
     contentEl.innerHTML = '<div class="text-[11px] text-slate-500">Loading...</div>';
-    const lbParams = buildScopeParams({ extra: { category: lbActiveTab, limit: 10 } });
-    lbParams.set('range_days', String(lbRangeDays));
+    const hasScope = proximityScopeState.sessionDate || proximityScopeState.mapName || proximityScopeState.roundNumber != null;
+    const lbParams = buildScopeParams({ includeRange: !hasScope, extra: { category: lbActiveTab, limit: 10 } });
+    if (!hasScope) lbParams.set('range_days', String(lbRangeDays));
     fetchJSON(`${API_BASE}/proximity/leaderboards?${lbParams}`).then(data => {
         const entries = data?.entries ?? [];
         if (entries.length === 0) {
@@ -2610,7 +2637,7 @@ function renderWeaponAccuracy(data) {
         const acc = row.accuracy != null ? `${row.accuracy}%` : '--';
         const detail = `${formatNumber(row.hits || 0)}/${formatNumber(row.shots || 0)} shots · ${formatNumber(row.kills || 0)}K · ${formatNumber(row.headshots || 0)}HS`;
         return `<span class="text-brand-amber">${acc}</span> <span class="text-slate-500 text-[10px]">${detail}</span>`;
-    }, 'No weapon accuracy data yet');
+    }, 'No weapon accuracy data yet', { htmlValues: true });
 }
 
 /* ===== v5.2 Revives ===== */
@@ -3091,7 +3118,7 @@ function renderFocusFire(data) {
         const score = (row.avg_score != null) ? row.avg_score.toFixed(2) : '--';
         const dmg = formatNumber(row.total_damage_taken || 0);
         return `<span class="text-rose-400">${times}x focused</span> <span class="text-slate-500 text-[10px]">score ${score} · ${dmg} dmg</span>`;
-    }, 'No focus fire data yet');
+    }, 'No focus fire data yet', { htmlValues: true });
 
     const recentEl = document.getElementById('focus-fire-recent');
     if (recentEl && data.recent && data.recent.length > 0) {
@@ -3132,7 +3159,7 @@ function renderObjectiveFocus(data) {
         const dist = row.avg_dist != null ? `${formatNumber(Math.round(row.avg_dist))}u` : '';
         const objs = row.objectives_played || 0;
         return `<span class="text-cyan-400">${time}</span> <span class="text-slate-500 text-[10px]">${dist} avg · ${objs} obj</span>`;
-    }, 'No objective focus data yet');
+    }, 'No objective focus data yet', { htmlValues: true });
 
     const objEl = document.getElementById('obj-focus-objectives');
     if (objEl && data.objectives && data.objectives.length > 0) {
