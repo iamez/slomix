@@ -2780,6 +2780,116 @@
                     </div>
                 </div>
 
+                <!-- Objective Run Intelligence (v6.5) -->
+                <div class="glass-panel overflow-hidden">
+                    <div class="p-6 border-b border-white/5">
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-xl font-bold text-white">Objective Run Intelligence</h2>
+                            <span class="text-[10px] font-bold bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30">v6.5</span>
+                        </div>
+                        <p class="text-sm text-slate-400 mt-1">Engineer runs: path clearing, solo vs team, denied approaches</p>
+                    </div>
+                    <div class="p-6 space-y-6">
+                        <div id="objective-run-summary" class="text-slate-500 text-sm">Loading objective run data...</div>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-300 mb-3">Top Objective Runners</h3>
+                                <div id="objective-runners-leaders" class="text-slate-500 text-sm">Loading...</div>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-300 mb-3">Recent Runs</h3>
+                                <div id="objective-runs-log" class="text-slate-500 text-sm">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Focus Fire Intelligence -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-sm font-bold text-slate-400">Focus Fire</div>
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-rose/10 text-brand-rose">v5.0</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mb-3">Coordinated multi-attacker damage bursts — who gets focused and by how many.</div>
+                    <div id="focus-fire-summary" class="grid grid-cols-3 gap-3 mb-4"></div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Most Targeted</div>
+                            <div id="focus-fire-targets" class="space-y-1 text-xs text-slate-300">
+                                <div class="text-[11px] text-slate-500">Loading focus fire data...</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Top Focus Events</div>
+                            <div id="focus-fire-recent" class="space-y-1 text-xs text-slate-300">
+                                <div class="text-[11px] text-slate-500">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Objective Focus -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-sm font-bold text-slate-400">Objective Focus</div>
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">v4.0</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mb-3">Time players spend near objectives — who plays the objective vs who roams.</div>
+                    <div id="obj-focus-summary" class="grid grid-cols-3 gap-3 mb-4"></div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Most Objective-Focused</div>
+                            <div id="obj-focus-players" class="space-y-1 text-xs text-slate-300">
+                                <div class="text-[11px] text-slate-500">Loading objective focus...</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Objectives</div>
+                            <div id="obj-focus-objectives" class="space-y-1 text-xs text-slate-300">
+                                <div class="text-[11px] text-slate-500">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Support Summary -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-sm font-bold text-slate-400">Support Uptime</div>
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-emerald/10 text-brand-emerald">v4.0</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mb-3">Medic support availability per round — how often teammates had nearby medic support.</div>
+                    <div id="support-summary-cards" class="grid grid-cols-3 gap-3 mb-4"></div>
+                    <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">By Map</div>
+                    <div id="support-summary-maps" class="space-y-1 text-xs text-slate-300">
+                        <div class="text-[11px] text-slate-500">Loading support data...</div>
+                    </div>
+                </div>
+
+                <!-- Combat Position Stats -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-sm font-bold text-slate-400">Combat Positions</div>
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-amber/10 text-brand-amber">v5.0</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mb-3">Kill distance statistics — how far players engage by class and map.</div>
+                    <div id="combat-pos-summary" class="grid grid-cols-3 gap-3 mb-4"></div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">By Class</div>
+                            <div id="combat-pos-class" class="space-y-1 text-xs text-slate-300">
+                                <div class="text-[11px] text-slate-500">Loading combat positions...</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">By Map</div>
+                            <div id="combat-pos-map" class="space-y-1 text-xs text-slate-300">
+                                <div class="text-[11px] text-slate-500">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
