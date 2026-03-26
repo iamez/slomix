@@ -262,6 +262,7 @@ const SCORE_COLORS = {
 function ProxScoresPanel() {
   const [rangeDays, setRangeDays] = useState(30);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [showFormula, setShowFormula] = useState(false);
   const { data, isLoading } = useProxScores(rangeDays, undefined, 30);
   const { data: formula } = useProxFormula();
 
@@ -284,16 +285,58 @@ function ProxScoresPanel() {
               } metrics — v{data?.version ?? '1.0'}
             </div>
           </div>
-          <div className="flex gap-1">
-            {[14, 30, 90].map(d => (
-              <button
-                key={d}
-                className={`px-2 py-0.5 rounded text-[10px] font-medium ${rangeDays === d ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
-                onClick={() => { setRangeDays(d); }}
-              >{d}d</button>
-            ))}
+          <div className="flex gap-2 items-center">
+            <button
+              className={`px-2 py-0.5 rounded text-[10px] font-medium ${showFormula ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
+              onClick={() => { setShowFormula(prev => !prev); }}
+            >Formula</button>
+            <div className="flex gap-1">
+              {[14, 30, 90].map(d => (
+                <button
+                  key={d}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium ${rangeDays === d ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
+                  onClick={() => { setRangeDays(d); }}
+                >{d}d</button>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Formula transparency panel */}
+        {showFormula && formula && (
+          <div className="mb-4 p-3 rounded-lg bg-slate-800/40 border border-slate-700/40">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+              Scoring Formula v{data?.version ?? '1.0'}
+            </div>
+            <div className="text-[10px] text-slate-500 mb-3">
+              Each metric is ranked as a percentile (0-100) across all players with {formula.min_engagements}+ engagements, then weighted within its category.
+              Overall = {Object.entries(formula.category_weights).map(([k, w]) => {
+                const cat = formula.categories[k as keyof typeof formula.categories];
+                return `${cat.label} ${((w as number) * 100).toFixed(0)}%`;
+              }).filter(Boolean).join(' + ')}.
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {Object.entries(formula.categories).map(([catKey, cat]) => (
+                <div key={catKey}>
+                  {/* eslint-disable-next-line security/detect-object-injection */}
+                  <div className="text-xs font-bold mb-1" style={{ color: SCORE_COLORS[catKey as keyof typeof SCORE_COLORS] }}>
+                    {cat.label} <span className="font-normal text-slate-500">({((formula.category_weights[catKey as keyof typeof formula.category_weights] as number) * 100).toFixed(0)}%)</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mb-1.5">{cat.description}</div>
+                  <div className="space-y-0.5">
+                    {Object.entries(cat.metrics).map(([mk, m]) => (
+                      <div key={mk} className="flex items-center justify-between text-[10px]">
+                        <span className="text-slate-400">{m.label}{m.invert ? ' *' : ''}</span>
+                        <span className="text-slate-600 font-mono">{((m.weight as number) * 100).toFixed(0)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="text-[9px] text-slate-600 mt-2">* Inverted metrics: lower = better (e.g., faster reaction time scores higher)</div>
+          </div>
+        )}
 
         {/* Header row */}
         <div className="grid grid-cols-[2rem_1fr_4rem_4rem_4rem_4.5rem] gap-1 text-[10px] text-slate-500 font-bold uppercase mb-1 px-1">

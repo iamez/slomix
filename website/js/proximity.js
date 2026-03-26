@@ -374,7 +374,7 @@ function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data ye
             <div class="flex items-center justify-between text-[11px] text-slate-300">
                 <span>${escapeHtml(label)}</span>
                 <span class="text-right">
-                    <span class="text-slate-500">${value}</span>
+                    <span class="text-slate-500">${escapeHtml(value)}</span>
                     ${sampleMeta ? `<span class="block text-[10px] text-slate-600">${escapeHtml(sampleMeta)}</span>` : ''}
                 </span>
             </div>
@@ -1555,16 +1555,7 @@ async function loadScopedProximityData() {
     }
 
     try {
-        // --- Composite fetch: 1 request instead of 30 ---
-        let composite = null;
-        try {
-            composite = await fetchJSON(scopedUrl('/proximity/dashboard', { extra: { sections: 'all' } }));
-        } catch (e) {
-            console.warn('[Proximity] Composite endpoint failed, falling back to individual requests', e);
-        }
-        if (loadId !== proximityScopedLoadId) return;
-
-        const data = composite?.sections?.summary || await fetchJSON(scopedUrl('/proximity/summary'));
+        const data = await fetchJSON(scopedUrl('/proximity/summary'));
         if (loadId !== proximityScopedLoadId) return;
         renderSummary(data);
         const ready = data?.ready === true || data?.status === 'ok' || data?.status === 'ready';
@@ -1578,100 +1569,84 @@ async function loadScopedProximityData() {
             }
         } else if (stateEl) {
             const rounds = data.sample_rounds != null ? formatNumber(data.sample_rounds) : 'n/a';
-            const src = composite ? '1 req' : '30 reqs';
             stateEl.innerHTML = `
                 <i data-lucide="activity" class="w-4 h-4 text-brand-emerald"></i>
-                <span>Live proximity snapshot • ${rounds} rounds analyzed • ${escapeHtml(getScopeDescription())} (${src})</span>
+                <span>Live proximity snapshot • ${rounds} rounds analyzed • ${escapeHtml(getScopeDescription())}</span>
             `;
         }
 
         if (ready) {
-            // Extract sections from composite or fall back to individual fetches
-            const sec = composite?.sections || null;
-            let timelineRes, heatmapRes, moversRes, teamplayRes, classRes, reactionRes,
-                eventsRes, tradesSummaryRes, tradesEventsRes, spawnTimingRes, cohesionRes,
-                crossfireAnglesRes, pushesRes, luaTradesRes, killOutcomesRes, killOutcomeStatsRes,
-                hitRegionsRes, headshotRatesRes, movementStatsRes, proxScoresRes, proxFormulaRes,
-                weaponAccuracyRes, revivesRes, carrierEventsRes, carrierKillsRes,
-                carrierReturnsRes, vehicleProgressRes, escortCreditsRes, constructionEventsRes;
-
-            if (sec) {
-                // --- Fast path: extract from composite response ---
-                const wrap = (key) => {
-                    const v = sec[key];
-                    return (v && v.status !== 'error' && !v._error)
-                        ? { status: 'fulfilled', value: v }
-                        : { status: 'rejected', reason: v?._error || 'not loaded' };
-                };
-                timelineRes = wrap('engagements');
-                heatmapRes = wrap('hotzones');
-                moversRes = wrap('movers');
-                teamplayRes = wrap('teamplay');
-                classRes = wrap('classes');
-                reactionRes = wrap('reactions');
-                eventsRes = wrap('events');
-                tradesSummaryRes = wrap('trades_summary');
-                tradesEventsRes = wrap('trades_events');
-                spawnTimingRes = wrap('spawn_timing');
-                cohesionRes = wrap('cohesion');
-                crossfireAnglesRes = wrap('crossfire_angles');
-                pushesRes = wrap('pushes');
-                luaTradesRes = wrap('lua_trades');
-                killOutcomesRes = wrap('kill_outcomes');
-                killOutcomeStatsRes = wrap('kill_outcome_stats');
-                hitRegionsRes = wrap('hit_regions');
-                headshotRatesRes = wrap('headshot_rates');
-                movementStatsRes = wrap('movement_stats');
-                proxScoresRes = wrap('prox_scores');
-                proxFormulaRes = wrap('prox_formula');
-                weaponAccuracyRes = wrap('weapon_accuracy');
-                revivesRes = wrap('revives');
-                carrierEventsRes = wrap('carrier_events');
-                carrierKillsRes = wrap('carrier_kills');
-                carrierReturnsRes = wrap('carrier_returns');
-                vehicleProgressRes = wrap('vehicle_progress');
-                escortCreditsRes = wrap('escort_credits');
-                constructionEventsRes = wrap('construction_events');
-            } else {
-                // --- Fallback: original 29-request pattern ---
-                [timelineRes, heatmapRes, moversRes, teamplayRes, classRes, reactionRes,
-                 eventsRes, tradesSummaryRes, tradesEventsRes, spawnTimingRes, cohesionRes,
-                 crossfireAnglesRes, pushesRes, luaTradesRes, killOutcomesRes, killOutcomeStatsRes,
-                 hitRegionsRes, headshotRatesRes, movementStatsRes, proxScoresRes, proxFormulaRes,
-                 weaponAccuracyRes, revivesRes, carrierEventsRes, carrierKillsRes,
-                 carrierReturnsRes, vehicleProgressRes, escortCreditsRes,
-                 constructionEventsRes] = await Promise.allSettled([
-                    fetchJSON(scopedUrl('/proximity/engagements')),
-                    fetchJSON(scopedUrl('/proximity/hotzones')),
-                    fetchJSON(scopedUrl('/proximity/movers')),
-                    fetchJSON(scopedUrl('/proximity/teamplay', { extra: { limit: 6 } })),
-                    fetchJSON(scopedUrl('/proximity/classes')),
-                    fetchJSON(scopedUrl('/proximity/reactions', { extra: { limit: 6 } })),
-                    fetchJSON(scopedUrl('/proximity/events', { extra: { limit: DEFAULT_EVENTS_LIMIT } })),
-                    fetchJSON(scopedUrl('/proximity/trades/summary')),
-                    fetchJSON(scopedUrl('/proximity/trades/events', { extra: { limit: 10 } })),
-                    fetchJSON(scopedUrl('/proximity/spawn-timing')),
-                    fetchJSON(scopedUrl('/proximity/cohesion')),
-                    fetchJSON(scopedUrl('/proximity/crossfire-angles')),
-                    fetchJSON(scopedUrl('/proximity/pushes')),
-                    fetchJSON(scopedUrl('/proximity/lua-trades')),
-                    fetchJSON(scopedUrl('/proximity/kill-outcomes')),
-                    fetchJSON(scopedUrl('/proximity/kill-outcomes/player-stats')),
-                    fetchJSON(scopedUrl('/proximity/hit-regions')),
-                    fetchJSON(scopedUrl('/proximity/hit-regions/headshot-rates')),
-                    fetchJSON(scopedUrl('/proximity/movement-stats')),
-                    fetchJSON(scopedUrl('/proximity/prox-scores', { extra: { min_engagements: 30 } })),
-                    fetchJSON(scopedUrl('/proximity/prox-scores/formula', { includeRange: false })),
-                    fetchJSON(scopedUrl('/proximity/weapon-accuracy')),
-                    fetchJSON(scopedUrl('/proximity/revives')),
-                    fetchJSON(scopedUrl('/proximity/carrier-events')),
-                    fetchJSON(scopedUrl('/proximity/carrier-kills')),
-                    fetchJSON(scopedUrl('/proximity/carrier-returns')),
-                    fetchJSON(scopedUrl('/proximity/vehicle-progress')),
-                    fetchJSON(scopedUrl('/proximity/escort-credits')),
-                    fetchJSON(scopedUrl('/proximity/construction-events'))
-                ]);
-            }
+            const [
+                timelineRes,
+                heatmapRes,
+                moversRes,
+                teamplayRes,
+                classRes,
+                reactionRes,
+                eventsRes,
+                tradesSummaryRes,
+                tradesEventsRes,
+                spawnTimingRes,
+                cohesionRes,
+                crossfireAnglesRes,
+                pushesRes,
+                luaTradesRes,
+                killOutcomesRes,
+                killOutcomeStatsRes,
+                hitRegionsRes,
+                headshotRatesRes,
+                movementStatsRes,
+                proxScoresRes,
+                proxFormulaRes,
+                weaponAccuracyRes,
+                revivesRes,
+                carrierEventsRes,
+                carrierKillsRes,
+                carrierReturnsRes,
+                vehicleProgressRes,
+                escortCreditsRes,
+                constructionEventsRes,
+                objectiveRunsRes,
+                focusFireRes,
+                objectiveFocusRes,
+                supportSummaryRes,
+                combatPosStatsRes
+            ] = await Promise.allSettled([
+                fetchJSON(scopedUrl('/proximity/engagements')),
+                fetchJSON(scopedUrl('/proximity/hotzones')),
+                fetchJSON(scopedUrl('/proximity/movers')),
+                fetchJSON(scopedUrl('/proximity/teamplay', { extra: { limit: 6 } })),
+                fetchJSON(scopedUrl('/proximity/classes')),
+                fetchJSON(scopedUrl('/proximity/reactions', { extra: { limit: 6 } })),
+                fetchJSON(scopedUrl('/proximity/events', { extra: { limit: DEFAULT_EVENTS_LIMIT } })),
+                fetchJSON(scopedUrl('/proximity/trades/summary')),
+                fetchJSON(scopedUrl('/proximity/trades/events', { extra: { limit: 10 } })),
+                fetchJSON(scopedUrl('/proximity/spawn-timing')),
+                fetchJSON(scopedUrl('/proximity/cohesion')),
+                fetchJSON(scopedUrl('/proximity/crossfire-angles')),
+                fetchJSON(scopedUrl('/proximity/pushes')),
+                fetchJSON(scopedUrl('/proximity/lua-trades')),
+                fetchJSON(scopedUrl('/proximity/kill-outcomes')),
+                fetchJSON(scopedUrl('/proximity/kill-outcomes/player-stats')),
+                fetchJSON(scopedUrl('/proximity/hit-regions')),
+                fetchJSON(scopedUrl('/proximity/hit-regions/headshot-rates')),
+                fetchJSON(scopedUrl('/proximity/movement-stats')),
+                fetchJSON(scopedUrl('/proximity/prox-scores', { extra: { min_engagements: 30 } })),
+                fetchJSON(scopedUrl('/proximity/prox-scores/formula', { includeRange: false })),
+                fetchJSON(scopedUrl('/proximity/weapon-accuracy')),
+                fetchJSON(scopedUrl('/proximity/revives')),
+                fetchJSON(scopedUrl('/proximity/carrier-events')),
+                fetchJSON(scopedUrl('/proximity/carrier-kills')),
+                fetchJSON(scopedUrl('/proximity/carrier-returns')),
+                fetchJSON(scopedUrl('/proximity/vehicle-progress')),
+                fetchJSON(scopedUrl('/proximity/escort-credits')),
+                fetchJSON(scopedUrl('/proximity/construction-events')),
+                fetchJSON(scopedUrl('/proximity/objective-runs')),
+                fetchJSON(scopedUrl('/proximity/focus-fire')),
+                fetchJSON(scopedUrl('/proximity/objective-focus')),
+                fetchJSON(scopedUrl('/proximity/support-summary')),
+                fetchJSON(scopedUrl('/proximity/combat-position-stats'))
+            ]);
             if (loadId !== proximityScopedLoadId) return;
 
             if (timelineRes.status === 'fulfilled') {
@@ -1793,6 +1768,26 @@ async function loadScopedProximityData() {
             // v6 Phase 3: Engineer Intelligence
             if (constructionEventsRes.status === 'fulfilled') {
                 renderEngineerIntel(constructionEventsRes.value);
+            }
+            // v6.5: Objective Run Intelligence
+            if (objectiveRunsRes.status === 'fulfilled') {
+                renderObjectiveRuns(objectiveRunsRes.value);
+            }
+            // Focus Fire
+            if (focusFireRes.status === 'fulfilled') {
+                renderFocusFire(focusFireRes.value);
+            }
+            // Objective Focus
+            if (objectiveFocusRes.status === 'fulfilled') {
+                renderObjectiveFocus(objectiveFocusRes.value);
+            }
+            // Support Summary
+            if (supportSummaryRes.status === 'fulfilled') {
+                renderSupportSummary(supportSummaryRes.value);
+            }
+            // Combat Position Stats
+            if (combatPosStatsRes.status === 'fulfilled') {
+                renderCombatPositionStats(combatPosStatsRes.value);
             }
             bindV52PanelEvents();
         }
@@ -2088,26 +2083,83 @@ function renderLuaTrades(data) {
 
 const OUTCOME_COLORS = { gibbed: '#ef4444', revived: '#22c55e', tapped_out: '#f59e0b', expired: '#64748b', round_end: '#6366f1' };
 
+/** Safe DOM render: parses HTML via DOMParser (no innerHTML on live elements). */
+function _safeRender(el, htmlStr) {
+    const doc = new DOMParser().parseFromString(htmlStr, 'text/html');
+    el.replaceChildren(...doc.body.childNodes);
+}
+
+/** Build summary card grid using DOM APIs (avoids innerHTML XSS flags). */
+function _buildSummaryCards(el, items) {
+    el.textContent = '';
+    items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'bg-slate-800/60 rounded-lg p-3 text-center';
+        const lbl = document.createElement('div');
+        lbl.className = 'text-[10px] text-slate-500 uppercase';
+        lbl.textContent = item.label;
+        const val = document.createElement('div');
+        val.className = `text-lg font-bold ${item.cls}`;
+        val.textContent = item.value;
+        card.append(lbl, val);
+        el.appendChild(card);
+    });
+}
+
+function _buildStatCard(label, value, cls, size = 'text-xl') {
+    const card = document.createElement('div');
+    card.className = 'text-center';
+    const lbl = document.createElement('div');
+    lbl.className = 'text-[11px] font-bold text-slate-500 uppercase';
+    lbl.textContent = label;
+    const val = document.createElement('div');
+    val.className = `${size} font-black ${cls} mt-1`;
+    val.textContent = value;
+    card.append(lbl, val);
+    return card;
+}
+
+function _buildBarRow(label, count, pct, widthPct, color) {
+    const row = document.createElement('div');
+    const header = document.createElement('div');
+    header.className = 'flex justify-between text-[11px] mb-0.5';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'text-slate-300';
+    nameSpan.textContent = label;
+    const countSpan = document.createElement('span');
+    countSpan.className = 'text-slate-500';
+    countSpan.textContent = `${formatNumber(count)} (${pct}%)`;
+    header.append(nameSpan, countSpan);
+    const track = document.createElement('div');
+    track.className = 'h-2 rounded-full bg-slate-800 overflow-hidden';
+    const fill = document.createElement('div');
+    fill.className = 'h-full rounded-full';
+    fill.style.width = `${widthPct}%`;
+    fill.style.background = color;
+    track.appendChild(fill);
+    row.append(header, track);
+    return row;
+}
+
 function renderKillOutcomes(data) {
     const s = data?.summary;
     if (!s || s.total_kills === 0) return;
 
     const statsEl = document.getElementById('kill-outcomes-stats');
     if (statsEl) {
-        statsEl.innerHTML = [
+        statsEl.textContent = '';
+        [
             { label: 'Total Kills', value: formatNumber(s.total_kills), cls: 'text-white' },
             { label: 'Gib Rate', value: `${s.gib_rate}%`, cls: 'text-red-400' },
             { label: 'Revive Rate', value: `${s.revive_rate}%`, cls: 'text-emerald-400' },
             { label: 'Avg Outcome', value: s.avg_delta_ms ? `${(s.avg_delta_ms / 1000).toFixed(1)}s` : '--', cls: 'text-amber-400' },
             { label: 'Avg Denied', value: s.avg_denied_ms ? `${(s.avg_denied_ms / 1000).toFixed(1)}s` : '--', cls: 'text-purple-400' },
-        ].map(x => `<div class="text-center">
-            <div class="text-[11px] font-bold text-slate-500 uppercase">${x.label}</div>
-            <div class="text-xl font-black ${x.cls} mt-1">${x.value}</div>
-        </div>`).join('');
+        ].forEach(x => statsEl.appendChild(_buildStatCard(x.label, x.value, x.cls)));
     }
 
     const barsEl = document.getElementById('kill-outcomes-bars');
     if (barsEl) {
+        barsEl.textContent = '';
         const bars = [
             { key: 'gibbed', label: 'Gibbed', count: s.gibbed },
             { key: 'revived', label: 'Revived', count: s.revived },
@@ -2116,19 +2168,11 @@ function renderKillOutcomes(data) {
             { key: 'round_end', label: 'Round End', count: s.round_end },
         ].filter(b => b.count > 0);
         const max = Math.max(...bars.map(b => b.count), 1);
-        barsEl.innerHTML = bars.map(b => {
+        bars.forEach(b => {
             const pct = s.total_kills > 0 ? ((b.count / s.total_kills) * 100).toFixed(1) : '0';
             const color = OUTCOME_COLORS[b.key] || '#64748b';
-            return `<div>
-                <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-slate-300">${b.label}</span>
-                    <span class="text-slate-500">${formatNumber(b.count)} (${pct}%)</span>
-                </div>
-                <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div class="h-full rounded-full" style="width:${(b.count / max) * 100}%;background:${color}"></div>
-                </div>
-            </div>`;
-        }).join('');
+            barsEl.appendChild(_buildBarRow(b.label, b.count, pct, (b.count / max) * 100, color));
+        });
     }
 }
 
@@ -2178,35 +2222,41 @@ function renderHitRegions(data) {
 
     const chartEl = document.getElementById('hit-regions-chart');
     if (chartEl) {
-        chartEl.innerHTML = `
-            <div class="flex items-end gap-1 h-28 justify-center">
-                ${regions.map(r => {
-                    const pct = ((r.count / total) * 100).toFixed(1);
-                    const barH = Math.max((r.count / maxR) * 100, 4);
-                    return `<div class="flex flex-col items-center gap-1 flex-1 max-w-16">
-                        <span class="text-[11px] font-mono text-slate-300">${pct}%</span>
-                        <div class="w-full rounded-t" style="height:${barH}%;background:${r.color};opacity:0.85"></div>
-                        <span class="text-[11px] text-slate-400">${r.label}</span>
-                    </div>`;
-                }).join('')}
-            </div>
-            <div class="text-center text-[11px] text-slate-500 mt-2">${formatNumber(total)} hits &middot; ${formatNumber(totalDmg)} damage tracked</div>`;
+        chartEl.textContent = '';
+        const barsRow = document.createElement('div');
+        barsRow.className = 'flex items-end gap-1 h-28 justify-center';
+        regions.forEach(r => {
+            const pct = ((r.count / total) * 100).toFixed(1);
+            const barH = Math.max((r.count / maxR) * 100, 4);
+            const col = document.createElement('div');
+            col.className = 'flex flex-col items-center gap-1 flex-1 max-w-16';
+            const pctSpan = document.createElement('span');
+            pctSpan.className = 'text-[11px] font-mono text-slate-300';
+            pctSpan.textContent = `${pct}%`;
+            const bar = document.createElement('div');
+            bar.className = 'w-full rounded-t';
+            bar.style.height = `${barH}%`;
+            bar.style.background = r.color;
+            bar.style.opacity = '0.85';
+            const lbl = document.createElement('span');
+            lbl.className = 'text-[11px] text-slate-400';
+            lbl.textContent = r.label;
+            col.append(pctSpan, bar, lbl);
+            barsRow.appendChild(col);
+        });
+        const summary = document.createElement('div');
+        summary.className = 'text-center text-[11px] text-slate-500 mt-2';
+        summary.textContent = `${formatNumber(total)} hits \u00B7 ${formatNumber(totalDmg)} damage tracked`;
+        chartEl.append(barsRow, summary);
     }
 
     const barsEl = document.getElementById('hit-regions-bars');
     if (barsEl) {
-        barsEl.innerHTML = regions.map(r => {
+        barsEl.textContent = '';
+        regions.forEach(r => {
             const pct = ((r.count / total) * 100).toFixed(1);
-            return `<div>
-                <div class="flex justify-between text-[11px] mb-0.5">
-                    <span class="text-slate-300">${r.label}</span>
-                    <span class="text-slate-500">${formatNumber(r.count)} (${pct}%)</span>
-                </div>
-                <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div class="h-full rounded-full" style="width:${(r.count / maxR) * 100}%;background:${r.color}"></div>
-                </div>
-            </div>`;
-        }).join('');
+            barsEl.appendChild(_buildBarRow(r.label, r.count, pct, (r.count / maxR) * 100, r.color));
+        });
     }
 }
 
@@ -2242,7 +2292,7 @@ function renderMovementStats(data) {
         const sp = (totals.standing / totalStance * 100).toFixed(0);
         const cp = (totals.crouching / totalStance * 100).toFixed(0);
         const pp = (totals.prone / totalStance * 100).toFixed(0);
-        stanceEl.innerHTML = `
+        _safeRender(stanceEl, `
             <div class="text-[11px] font-bold text-slate-500 uppercase mb-1">Stance Distribution</div>
             <div class="h-4 rounded-full overflow-hidden flex mb-1">
                 <div style="width:${sp}%;background:#60a5fa" title="Standing ${sp}%"></div>
@@ -2253,19 +2303,28 @@ function renderMovementStats(data) {
                 <span class="text-blue-400">Standing ${sp}%</span>
                 <span class="text-amber-400">Crouch ${cp}%</span>
                 <span class="text-red-400">Prone ${pp}%</span>
-            </div>`;
+            </div>`);
     }
 
     const overEl = document.getElementById('movement-overview');
     if (overEl) {
-        overEl.innerHTML = [
+        overEl.textContent = '';
+        [
             { label: 'Total Distance', value: `${(totals.distance / 1000).toFixed(0)}K u`, cls: 'text-white' },
             { label: 'Alive Time', value: `${(totals.alive / 60).toFixed(0)}m`, cls: 'text-white' },
             { label: 'Sprint Time', value: `${(totals.sprint / 60).toFixed(1)}m`, cls: 'text-brand-cyan' },
-        ].map(x => `<div class="text-center">
-            <div class="text-[11px] font-bold text-slate-500 uppercase">${x.label}</div>
-            <div class="text-lg font-black ${x.cls} mt-1">${x.value}</div>
-        </div>`).join('');
+        ].forEach(x => {
+            const card = document.createElement('div');
+            card.className = 'text-center';
+            const lbl = document.createElement('div');
+            lbl.className = 'text-[11px] font-bold text-slate-500 uppercase';
+            lbl.textContent = x.label;
+            const val = document.createElement('div');
+            val.className = `text-lg font-black ${x.cls} mt-1`;
+            val.textContent = x.value;
+            card.append(lbl, val);
+            overEl.appendChild(card);
+        });
     }
 
     renderLeaderList('movement-distance-leaders',
@@ -2351,17 +2410,17 @@ function renderProxScores(data, formula) {
         </div>`;
     }).join('');
 
-    listEl.innerHTML = hdr + rows;
+    _safeRender(listEl, hdr + rows);
 
     // Formula panel
     const formulaEl = document.getElementById('prox-scores-formula');
     if (formulaEl && formula?.categories) {
-        formulaEl.innerHTML = `
-            <div class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">Scoring Formula v${data.version || '1.0'}</div>
+        _safeRender(formulaEl, `
+            <div class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">Scoring Formula v${escapeHtml(String(data.version || '1.0'))}</div>
             <div class="text-[11px] text-slate-500 mb-3">Each metric is ranked as a percentile (0-100) across all players with ${formula.min_engagements || 30}+ engagements, then weighted.
                 Overall = ${Object.entries(formula.category_weights || {}).map(([k, w]) => {
                     const cat = formula.categories[k];
-                    return cat ? `${cat.label} ${(w * 100).toFixed(0)}%` : '';
+                    return cat ? `${escapeHtml(cat.label)} ${(w * 100).toFixed(0)}%` : '';
                 }).filter(Boolean).join(' + ')}.
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -2369,7 +2428,7 @@ function renderProxScores(data, formula) {
                     const color = SCORE_COLORS[catKey] || '#22d3ee';
                     const weight = formula.category_weights?.[catKey];
                     return `<div>
-                        <div class="text-[11px] font-bold mb-1" style="color:${color}">${escapeHtml(cat.label)} <span class="font-normal text-slate-500">(${weight ? (weight * 100).toFixed(0) : '?'}%)</span></div>
+                        <div class="text-[11px] font-bold mb-1" style="color:${escapeHtml(color)}">${escapeHtml(cat.label)} <span class="font-normal text-slate-500">(${weight ? (weight * 100).toFixed(0) : '?'}%)</span></div>
                         <div class="text-[10px] text-slate-500 mb-1">${escapeHtml(cat.description || '')}</div>
                         ${Object.entries(cat.metrics).map(([, m]) => `<div class="flex items-center justify-between text-[10px]">
                             <span class="text-slate-400">${escapeHtml(m.label)}${m.invert ? ' *' : ''}</span>
@@ -2378,7 +2437,7 @@ function renderProxScores(data, formula) {
                     </div>`;
                 }).join('')}
             </div>
-            <div class="text-[10px] text-slate-600 mt-2">* Inverted: lower = better (e.g. faster reaction scores higher)</div>`;
+            <div class="text-[10px] text-slate-600 mt-2">* Inverted: lower = better (e.g. faster reaction scores higher)</div>`);
     }
 }
 
@@ -2491,12 +2550,17 @@ let lbRangeDays = 30;
 function renderLeaderboardTabs() {
     const tabsEl = document.getElementById('leaderboard-tabs');
     if (!tabsEl) return;
-    tabsEl.innerHTML = LB_TABS.map(t => {
+    tabsEl.textContent = '';
+    LB_TABS.forEach(t => {
         const active = t.key === lbActiveTab;
-        return `<button class="lb-tab-btn text-[10px] font-bold px-3 py-1 rounded transition ${active
+        const btn = document.createElement('button');
+        btn.className = `lb-tab-btn text-[10px] font-bold px-3 py-1 rounded transition ${active
             ? 'bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/40'
-            : 'bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300'}" data-tab="${t.key}">${t.label}</button>`;
-    }).join('');
+            : 'bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300'}`;
+        btn.dataset.tab = t.key;
+        btn.textContent = t.label;
+        tabsEl.appendChild(btn);
+    });
 }
 
 function loadLeaderboardData() {
@@ -2511,7 +2575,8 @@ function loadLeaderboardData() {
             contentEl.innerHTML = '<div class="text-[11px] text-slate-500">No leaderboard data yet.</div>';
             return;
         }
-        contentEl.innerHTML = entries.map((e, i) => {
+        contentEl.textContent = '';
+        entries.forEach((e, i) => {
             const name = lbActiveTab === 'crossfire'
                 ? `${stripEtColors(e.name)} + ${stripEtColors(e.partner_name || '?')}`
                 : stripEtColors(e.name);
@@ -2520,11 +2585,20 @@ function loadLeaderboardData() {
             else if (lbActiveTab === 'reactions') val = `${e.value}ms`;
             else if (lbActiveTab === 'survivors') val = `${e.value}%`;
             else if (lbActiveTab === 'movement') val = `${e.value} u/s`;
-            return `<div class="flex items-center justify-between text-[11px] text-slate-300 py-0.5">
-                <span><span class="font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'} mr-2">#${i + 1}</span>${escapeHtml(name)}</span>
-                <span class="text-right text-slate-500">${val}</span>
-            </div>`;
-        }).join('');
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between text-[11px] text-slate-300 py-0.5';
+            const left = document.createElement('span');
+            const rank = document.createElement('span');
+            rank.className = `font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'} mr-2`;
+            rank.textContent = `#${i + 1}`;
+            left.appendChild(rank);
+            left.appendChild(document.createTextNode(name));
+            const right = document.createElement('span');
+            right.className = 'text-right text-slate-500';
+            right.textContent = val;
+            row.append(left, right);
+            contentEl.appendChild(row);
+        });
     }).catch(() => { if (contentEl) contentEl.innerHTML = '<div class="text-[11px] text-slate-500">Failed to load.</div>'; });
 }
 
@@ -2550,17 +2624,23 @@ function renderRevives(data) {
     }
     const summary = data.summary || {};
     if (summaryEl) {
-        const items = [
+        summaryEl.textContent = '';
+        [
             { label: 'Total Revives', value: formatNumber(summary.total_revives || 0), cls: 'text-emerald-400' },
             { label: 'Under Fire', value: `${summary.under_fire_pct || 0}%`, cls: 'text-red-400' },
             { label: 'Avg Enemy Dist', value: `${formatNumber(Math.round(summary.avg_enemy_distance || 0))}u`, cls: 'text-cyan-400' },
-        ];
-        summaryEl.innerHTML = items.map(item =>
-            `<div class="bg-slate-800/60 rounded-lg p-3 text-center">
-                <div class="text-[10px] text-slate-500 uppercase">${item.label}</div>
-                <div class="text-lg font-bold ${item.cls}">${item.value}</div>
-            </div>`
-        ).join('');
+        ].forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'bg-slate-800/60 rounded-lg p-3 text-center';
+            const lbl = document.createElement('div');
+            lbl.className = 'text-[10px] text-slate-500 uppercase';
+            lbl.textContent = item.label;
+            const val = document.createElement('div');
+            val.className = `text-lg font-bold ${item.cls}`;
+            val.textContent = item.value;
+            card.append(lbl, val);
+            summaryEl.appendChild(card);
+        });
     }
     renderLeaderList('revive-leaders', (data.leaders || []).slice(0, 8), (row) => {
         const revives = formatNumber(row.revives || 0);
@@ -2663,27 +2743,34 @@ function renderCarrierIntel(data) {
     const summaryEl = document.getElementById('carrier-summary');
     if (summaryEl && data.summary) {
         const s = data.summary;
-        summaryEl.innerHTML = [
-            { label: 'Total Carries', value: s.total_carries, cls: 'text-white' },
+        summaryEl.textContent = '';
+        [
+            { label: 'Total Carries', value: String(s.total_carries), cls: 'text-white' },
             { label: 'Secures', value: `${s.total_secures} (${s.secure_rate}%)`, cls: 'text-brand-emerald' },
             { label: 'Avg Distance', value: `${s.avg_distance}u`, cls: 'text-brand-cyan' },
-        ].map(x => `<div class="text-center">
-            <div class="text-[11px] font-bold text-slate-500 uppercase">${x.label}</div>
-            <div class="text-lg font-black ${x.cls} mt-1">${x.value}</div>
-        </div>`).join('');
+        ].forEach(x => summaryEl.appendChild(_buildStatCard(x.label, x.value, x.cls, 'text-lg')));
     }
 
     // Carrier leaderboard
     const leadersEl = document.getElementById('carrier-leaders');
     if (leadersEl && data.carriers && data.carriers.length > 0) {
-        leadersEl.innerHTML = data.carriers.map((c, i) => {
-            const name = escapeHtml(c.name || c.guid?.substring(0, 8) || '?');
-            return `<div class="text-xs text-slate-300 py-0.5">
-                <span class="font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'}">#${i + 1}</span>
-                ${name} — <span class="text-brand-emerald">${c.secures}</span>/${c.carries} secure
-                (${c.secure_rate}%) · ${formatNumber(c.total_distance)}u · eff ${(c.avg_efficiency * 100).toFixed(0)}%
-            </div>`;
-        }).join('');
+        leadersEl.textContent = '';
+        data.carriers.forEach((c, i) => {
+            const row = document.createElement('div');
+            row.className = 'text-xs text-slate-300 py-0.5';
+            const rank = document.createElement('span');
+            rank.className = `font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'}`;
+            rank.textContent = `#${i + 1}`;
+            const name = c.name || c.guid?.substring(0, 8) || '?';
+            const secSpan = document.createElement('span');
+            secSpan.className = 'text-brand-emerald';
+            secSpan.textContent = c.secures;
+            row.appendChild(rank);
+            row.appendChild(document.createTextNode(` ${name} — `));
+            row.appendChild(secSpan);
+            row.appendChild(document.createTextNode(`/${c.carries} secure (${c.secure_rate}%) · ${formatNumber(c.total_distance)}u · eff ${(c.avg_efficiency * 100).toFixed(0)}%`));
+            leadersEl.appendChild(row);
+        });
     } else if (leadersEl) {
         leadersEl.innerHTML = '<div class="text-[11px] text-slate-500">No carrier data yet.</div>';
     }
@@ -2693,21 +2780,24 @@ function renderCarrierIntel(data) {
     if (logEl && data.events && data.events.length > 0) {
         const outcomeIcons = { secured: '+', killed: 'X', dropped: 'D', returned: 'R', round_end: 'E', disconnected: 'DC' };
         const outcomeColors = { secured: 'text-brand-emerald', killed: 'text-brand-rose', dropped: 'text-slate-400', round_end: 'text-slate-500' };
-        logEl.innerHTML = data.events.map(e => {
+        logEl.textContent = '';
+        data.events.forEach(e => {
             const icon = outcomeIcons[e.outcome] || '?';
             const color = outcomeColors[e.outcome] || 'text-slate-400';
-            const name = escapeHtml(e.carrier_name || '?');
             const dur = (e.duration_ms / 1000).toFixed(1);
             const eff = (e.efficiency * 100).toFixed(0);
             let detail = `[${icon}] ${e.outcome} · ${formatNumber(e.carry_distance)}u (${eff}%) · ${dur}s`;
-            if (e.outcome === 'killed' && e.killer_name) {
-                detail += ` by ${escapeHtml(e.killer_name)}`;
-            }
-            return `<div class="flex justify-between text-xs py-0.5">
-                <span>${name} <span class="text-slate-500">(${escapeHtml(e.carrier_team)})</span> on <span class="text-slate-400">${escapeHtml(e.map_name)}</span></span>
-                <span class="${color}">${detail}</span>
-            </div>`;
-        }).join('');
+            if (e.outcome === 'killed' && e.killer_name) detail += ` by ${e.killer_name}`;
+            const row = document.createElement('div');
+            row.className = 'flex justify-between text-xs py-0.5';
+            const left = document.createElement('span');
+            left.textContent = `${e.carrier_name || '?'} (${e.carrier_team}) on ${e.map_name}`;
+            const right = document.createElement('span');
+            right.className = color;
+            right.textContent = detail;
+            row.append(left, right);
+            logEl.appendChild(row);
+        });
     } else if (logEl) {
         logEl.innerHTML = '<div class="text-[11px] text-slate-500">No carrier events yet.</div>';
     }
@@ -2723,14 +2813,23 @@ function renderCarrierKillers(data) {
         return;
     }
 
-    el.innerHTML = data.killers.map((k, i) => {
-        const name = escapeHtml(k.name || k.guid?.substring(0, 8) || '?');
-        return `<div class="text-xs text-slate-300 py-0.5">
-            <span class="font-bold ${i < 3 ? 'text-brand-rose' : 'text-slate-600'}">#${i + 1}</span>
-            ${name} — <span class="text-brand-rose font-bold">${k.carrier_kills}</span> carrier kills
-            · avg stopped at ${formatNumber(k.avg_distance_stopped)}u
-        </div>`;
-    }).join('');
+    el.textContent = '';
+    data.killers.forEach((k, i) => {
+        const row = document.createElement('div');
+        row.className = 'text-xs text-slate-300 py-0.5';
+        const rank = document.createElement('span');
+        rank.className = `font-bold ${i < 3 ? 'text-brand-rose' : 'text-slate-600'}`;
+        rank.textContent = `#${i + 1}`;
+        const kills = document.createElement('span');
+        kills.className = 'text-brand-rose font-bold';
+        kills.textContent = k.carrier_kills;
+        const name = k.name || k.guid?.substring(0, 8) || '?';
+        row.appendChild(rank);
+        row.appendChild(document.createTextNode(` ${name} — `));
+        row.appendChild(kills);
+        row.appendChild(document.createTextNode(` carrier kills · avg stopped at ${formatNumber(k.avg_distance_stopped)}u`));
+        el.appendChild(row);
+    });
 }
 
 // ──────────── v6 Phase 1.5: Flag Returns ────────────
@@ -2756,7 +2855,7 @@ function renderFlagReturns(data) {
     const leadersEl = document.getElementById('returns-leaders');
     if (leadersEl && data.returners && data.returners.length > 0) {
         leadersEl.innerHTML = data.returners.map((r, i) => {
-            const name = escapeHtml(stripEtColors(r.name || 'Unknown'));
+            const name = escapeHtml(r.name || 'Unknown');
             const avgDelay = r.avg_delay_ms ? (r.avg_delay_ms / 1000).toFixed(1) + 's' : '--';
             return `<div class="flex justify-between items-center py-0.5 ${i < 3 ? 'text-brand-cyan' : 'text-slate-400'}">
                 <span>#${i + 1} ${name}</span>
@@ -2846,5 +2945,292 @@ function renderEngineerIntel(data) {
                 <span class="text-slate-500">${track ? track + ' @ ' : ''}${map}</span>
             </div>`;
         }).join('');
+    }
+}
+
+function renderObjectiveRuns(data) {
+    const summaryEl = document.getElementById('objective-run-summary');
+    const leadersEl = document.getElementById('objective-runners-leaders');
+    const logEl = document.getElementById('objective-runs-log');
+
+    if (!data || !data.summary) {
+        if (summaryEl) summaryEl.innerHTML = '<span class="text-slate-600">No objective run data available</span>';
+        if (leadersEl) leadersEl.innerHTML = '';
+        if (logEl) logEl.innerHTML = '';
+        return;
+    }
+
+    // Summary bar
+    const s = data.summary;
+    if (summaryEl) {
+        summaryEl.innerHTML = `
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div class="bg-white/5 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-white">${s.total_runs || 0}</div>
+                    <div class="text-xs text-slate-400">Total Runs</div>
+                </div>
+                <div class="bg-white/5 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-emerald-400">${s.total_solo || 0}</div>
+                    <div class="text-xs text-slate-400">Solo</div>
+                </div>
+                <div class="bg-white/5 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-blue-400">${s.total_team_effort || 0}</div>
+                    <div class="text-xs text-slate-400">Team Effort</div>
+                </div>
+                <div class="bg-white/5 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-red-400">${s.total_denied || 0}</div>
+                    <div class="text-xs text-slate-400">Denied</div>
+                </div>
+            </div>
+            ${s.most_active_objective ? `<div class="mt-2 text-xs text-slate-500">Most targeted: <span class="text-slate-300">${escapeHtml(s.most_active_objective)}</span> | Avg efficiency: <span class="text-slate-300">${((s.avg_path_efficiency || 0) * 100).toFixed(0)}%</span></div>` : ''}
+        `;
+    }
+
+    // Leaders table
+    if (leadersEl && data.objective_runners && data.objective_runners.length > 0) {
+        const rows = data.objective_runners.map(r => `
+            <tr class="border-b border-white/5">
+                <td class="py-2 px-2 text-white text-sm">${escapeHtml(r.engineer_name)}</td>
+                <td class="py-2 px-2 text-center text-sm">${r.total_runs}</td>
+                <td class="py-2 px-2 text-center text-sm text-emerald-400">${r.solo_runs}</td>
+                <td class="py-2 px-2 text-center text-sm text-blue-400">${r.team_effort_runs}</td>
+                <td class="py-2 px-2 text-center text-sm text-red-400">${r.denied_runs}</td>
+                <td class="py-2 px-2 text-center text-sm text-slate-400">${((r.avg_path_efficiency || 0) * 100).toFixed(0)}%</td>
+            </tr>
+        `).join('');
+        leadersEl.innerHTML = `
+            <table class="w-full text-left">
+                <thead><tr class="text-xs text-slate-500 border-b border-white/10">
+                    <th class="py-1 px-2">Player</th>
+                    <th class="py-1 px-2 text-center">Runs</th>
+                    <th class="py-1 px-2 text-center">Solo</th>
+                    <th class="py-1 px-2 text-center">Team</th>
+                    <th class="py-1 px-2 text-center">Denied</th>
+                    <th class="py-1 px-2 text-center">Eff%</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+    } else if (leadersEl) {
+        leadersEl.innerHTML = '<span class="text-slate-600">No runners yet</span>';
+    }
+
+    // Recent runs log
+    if (logEl && data.recent_runs && data.recent_runs.length > 0) {
+        const typeColors = {
+            'solo': 'text-emerald-400',
+            'assisted': 'text-cyan-400',
+            'team_effort': 'text-blue-400',
+            'unopposed': 'text-slate-400',
+            'contested_solo': 'text-yellow-400',
+            'denied': 'text-red-400'
+        };
+        const actionIcons = {
+            'dynamite_plant': '\uD83D\uDCA3',
+            'objective_destroyed': '\uD83D\uDCA5',
+            'construction_complete': '\uD83D\uDD27',
+            'dynamite_defuse': '\uD83D\uDEE1\uFE0F',
+            'approach_killed': '\u2620\uFE0F'
+        };
+        const items = data.recent_runs.slice(0, 15).map(r => {
+            const icon = actionIcons[r.action_type] || '\u2753';
+            const color = typeColors[r.run_type] || 'text-slate-400';
+            const kills = r.self_kills + (r.team_kills || 0);
+            const eff = ((r.path_efficiency || 0) * 100).toFixed(0);
+            return `
+                <div class="flex items-center justify-between py-1.5 border-b border-white/5">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm">${icon}</span>
+                        <span class="text-sm text-white">${escapeHtml(r.engineer_name)}</span>
+                        <span class="text-xs text-slate-500">${escapeHtml(r.track_name || '?')}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs ${color} font-medium">${r.run_type}</span>
+                        ${kills > 0 ? `<span class="text-xs text-slate-500">${kills} kills</span>` : ''}
+                        <span class="text-xs text-slate-600">${eff}%</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        logEl.innerHTML = items;
+    } else if (logEl) {
+        logEl.innerHTML = '<span class="text-slate-600">No runs recorded yet</span>';
+    }
+}
+
+// ========================================
+// FOCUS FIRE
+// ========================================
+function renderFocusFire(data) {
+    if (!data || data.status === 'error') return;
+    const summary = data.summary || {};
+    const summaryEl = document.getElementById('focus-fire-summary');
+    if (summaryEl) {
+        const items = [
+            { label: 'Total Events', value: formatNumber(summary.total_events || 0), cls: 'text-rose-400' },
+            { label: 'Avg Score', value: (summary.avg_score || 0).toFixed(2), cls: 'text-amber-400' },
+            { label: 'Avg Attackers', value: (summary.avg_attackers || 0).toFixed(1), cls: 'text-cyan-400' },
+        ];
+        summaryEl.textContent = '';
+        items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'bg-slate-800/60 rounded-lg p-3 text-center';
+            const lbl = document.createElement('div');
+            lbl.className = 'text-[10px] text-slate-500 uppercase';
+            lbl.textContent = item.label;
+            const val = document.createElement('div');
+            val.className = `text-lg font-bold ${item.cls}`;
+            val.textContent = item.value;
+            card.append(lbl, val);
+            summaryEl.appendChild(card);
+        });
+    }
+
+    renderLeaderList('focus-fire-targets', (data.targets || []).slice(0, 8), (row) => {
+        const times = formatNumber(row.times_focused || 0);
+        const score = (row.avg_score != null) ? row.avg_score.toFixed(2) : '--';
+        const dmg = formatNumber(row.total_damage_taken || 0);
+        return `<span class="text-rose-400">${times}x focused</span> <span class="text-slate-500 text-[10px]">score ${score} · ${dmg} dmg</span>`;
+    }, 'No focus fire data yet');
+
+    const recentEl = document.getElementById('focus-fire-recent');
+    if (recentEl && data.recent && data.recent.length > 0) {
+        recentEl.innerHTML = data.recent.slice(0, 8).map(r => {
+            const name = stripEtColors(r.target_name || '?');
+            const score = (r.focus_score != null) ? r.focus_score.toFixed(2) : '--';
+            return `<div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-300">${escapeHtml(name)}</span>
+                <span class="text-right">
+                    <span class="text-rose-400">${r.attacker_count}v1</span>
+                    <span class="text-slate-500 text-[10px]">${formatNumber(r.total_damage || 0)} dmg · ${score}</span>
+                </span>
+            </div>`;
+        }).join('');
+    } else if (recentEl) {
+        recentEl.innerHTML = '<span class="text-slate-600">No events</span>';
+    }
+}
+
+// ========================================
+// OBJECTIVE FOCUS
+// ========================================
+function renderObjectiveFocus(data) {
+    if (!data || data.status === 'error') return;
+    const summary = data.summary || {};
+    const summaryEl = document.getElementById('obj-focus-summary');
+    if (summaryEl) {
+        const items = [
+            { label: 'Players Tracked', value: formatNumber(summary.unique_players || 0), cls: 'text-cyan-400' },
+            { label: 'Objectives', value: formatNumber(summary.objectives_tracked || 0), cls: 'text-amber-400' },
+            { label: 'Avg Time Near Obj', value: `${summary.avg_time_near_obj_s || 0}s`, cls: 'text-emerald-400' },
+        ];
+        _buildSummaryCards(summaryEl, items);
+    }
+
+    renderLeaderList('obj-focus-players', (data.players || []).slice(0, 8), (row) => {
+        const time = row.total_time_s != null ? `${formatNumber(Math.round(row.total_time_s))}s` : '--';
+        const dist = row.avg_dist != null ? `${formatNumber(Math.round(row.avg_dist))}u` : '';
+        const objs = row.objectives_played || 0;
+        return `<span class="text-cyan-400">${time}</span> <span class="text-slate-500 text-[10px]">${dist} avg · ${objs} obj</span>`;
+    }, 'No objective focus data yet');
+
+    const objEl = document.getElementById('obj-focus-objectives');
+    if (objEl && data.objectives && data.objectives.length > 0) {
+        objEl.innerHTML = data.objectives.slice(0, 8).map(r => {
+            const name = r.objective || '?';
+            const map = r.map_name || '';
+            return `<div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-300">${escapeHtml(name)}</span>
+                <span class="text-right">
+                    <span class="text-cyan-400">${r.avg_time_s || 0}s</span>
+                    <span class="text-slate-500 text-[10px]">${r.players} players · ${escapeHtml(map)}</span>
+                </span>
+            </div>`;
+        }).join('');
+    } else if (objEl) {
+        objEl.innerHTML = '<span class="text-slate-600">No objectives tracked</span>';
+    }
+}
+
+// ========================================
+// SUPPORT SUMMARY
+// ========================================
+function renderSupportSummary(data) {
+    if (!data || data.status === 'error') return;
+    const summary = data.summary || {};
+    const summaryEl = document.getElementById('support-summary-cards');
+    if (summaryEl) {
+        const items = [
+            { label: 'Rounds Tracked', value: formatNumber(summary.total_rounds || 0), cls: 'text-slate-300' },
+            { label: 'Avg Uptime', value: `${summary.avg_uptime_pct || 0}%`, cls: 'text-emerald-400' },
+            { label: 'Best Uptime', value: `${summary.max_uptime_pct || 0}%`, cls: 'text-amber-400' },
+        ];
+        _buildSummaryCards(summaryEl, items);
+    }
+
+    const mapsEl = document.getElementById('support-summary-maps');
+    if (mapsEl && data.by_map && data.by_map.length > 0) {
+        mapsEl.innerHTML = data.by_map.map(r => {
+            const pct = r.avg_uptime_pct != null ? `${r.avg_uptime_pct}%` : '--';
+            return `<div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-300">${escapeHtml(r.map_name || '?')}</span>
+                <span class="text-right">
+                    <span class="text-emerald-400">${pct} avg</span>
+                    <span class="text-slate-500 text-[10px]">${r.rounds} rounds · max ${r.max_uptime_pct || 0}%</span>
+                </span>
+            </div>`;
+        }).join('');
+    } else if (mapsEl) {
+        mapsEl.innerHTML = '<span class="text-slate-600">No support data yet</span>';
+    }
+}
+
+// ========================================
+// COMBAT POSITION STATS
+// ========================================
+function renderCombatPositionStats(data) {
+    if (!data || data.status === 'error') return;
+    const summary = data.summary || {};
+    const summaryEl = document.getElementById('combat-pos-summary');
+    if (summaryEl) {
+        const items = [
+            { label: 'Tracked Kills', value: formatNumber(summary.total_kills || 0), cls: 'text-rose-400' },
+            { label: 'Avg Kill Dist', value: `${formatNumber(Math.round(summary.avg_kill_distance || 0))}u`, cls: 'text-amber-400' },
+            { label: 'Median Dist', value: `${formatNumber(Math.round(summary.median_kill_distance || 0))}u`, cls: 'text-cyan-400' },
+        ];
+        _buildSummaryCards(summaryEl, items);
+    }
+
+    const classEl = document.getElementById('combat-pos-class');
+    if (classEl && data.by_class && data.by_class.length > 0) {
+        const classColors = { 'SOLDIER': 'text-rose-400', 'MEDIC': 'text-emerald-400', 'ENGINEER': 'text-amber-400', 'FIELDOPS': 'text-cyan-400', 'COVERTOPS': 'text-purple-400' };
+        classEl.innerHTML = data.by_class.map(r => {
+            const cls = r.class || '?';
+            const color = classColors[cls.toUpperCase()] || 'text-slate-300';
+            return `<div class="flex items-center justify-between text-[11px]">
+                <span class="${color}">${escapeHtml(cls)}</span>
+                <span class="text-right">
+                    <span class="text-slate-300">${formatNumber(r.kills || 0)} kills</span>
+                    <span class="text-slate-500 text-[10px]">${formatNumber(Math.round(r.avg_distance || 0))}u avg</span>
+                </span>
+            </div>`;
+        }).join('');
+    } else if (classEl) {
+        classEl.innerHTML = '<span class="text-slate-600">No class data</span>';
+    }
+
+    const mapEl = document.getElementById('combat-pos-map');
+    if (mapEl && data.by_map && data.by_map.length > 0) {
+        mapEl.innerHTML = data.by_map.map(r => {
+            return `<div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-300">${escapeHtml(r.map_name || '?')}</span>
+                <span class="text-right">
+                    <span class="text-amber-400">${formatNumber(r.kills || 0)} kills</span>
+                    <span class="text-slate-500 text-[10px]">${formatNumber(Math.round(r.avg_distance || 0))}u avg</span>
+                </span>
+            </div>`;
+        }).join('');
+    } else if (mapEl) {
+        mapEl.innerHTML = '<span class="text-slate-600">No map data</span>';
     }
 }
