@@ -4652,6 +4652,11 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     await self.round_publisher.publish_round_stats(filename, result)
                     webhook_logger.info(f"✅ Successfully processed: {filename}")
+                    # Trigger proximity scan after stats creates the round in DB
+                    self._safe_create_task(
+                        self._trigger_proximity_scan_after_stats(delay_seconds=8),
+                        name="proximity_post_stats_scan"
+                    )
                 except Exception as post_err:
                     webhook_logger.error(f"❌ Discord post FAILED for {filename}: {post_err}", exc_info=True)
                     await self.track_error("discord_posting", f"Failed to post {filename}: {post_err}", max_consecutive=2)
@@ -4665,6 +4670,19 @@ class UltimateETLegacyBot(commands.Bot):
             if added_processing_marker:
                 self.file_tracker.processed_files.discard(filename)
             webhook_logger.error(f"❌ Error fetching stats file: {e}", exc_info=True)
+
+    async def _trigger_proximity_scan_after_stats(self, delay_seconds: int = 8):
+        """Trigger proximity import after stats creates the round in DB."""
+        try:
+            await asyncio.sleep(delay_seconds)
+            proximity_cog = self.get_cog("Proximity")
+            if proximity_cog and hasattr(proximity_cog, '_scan_and_import'):
+                webhook_logger.info("🎯 Triggering proximity scan after stats import")
+                await proximity_cog._scan_and_import(force=True)
+            else:
+                webhook_logger.debug("Proximity cog not available; skipping post-stats scan")
+        except Exception as e:
+            webhook_logger.warning(f"Post-stats proximity scan failed (non-fatal): {e}")
 
     def _log_endstats_transition(
         self,

@@ -3542,6 +3542,7 @@ async def get_proximity_leaderboards(
             return {"status": "ok", "category": "power", "entries": results[:safe_limit]}
 
         elif category == "spawn":
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=False)
             rows = await db.fetch_all(
                 """
                 SELECT killer_guid, MAX(killer_name) AS name,
@@ -3549,13 +3550,13 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
                        ROUND(AVG(time_to_next_spawn)::numeric, 0) AS avg_denial_ms
                 FROM proximity_spawn_timing
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY killer_guid
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_score DESC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "spawn",
@@ -3567,6 +3568,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "crossfire":
+            scope_where, scope_params, next_idx = _lb_scope(table_alias="c", has_round_number=False)
             rows = await db.fetch_all(
                 """
                 SELECT guid, name, SUM(cnt) AS total, ROUND(AVG(avg_angle)::numeric, 1) AS avg_angle
@@ -3580,7 +3582,7 @@ async def get_proximity_leaderboards(
                         WHERE target_guid = c.teammate1_guid
                         ORDER BY session_date DESC LIMIT 1
                     ) ce ON true
-                    WHERE c.was_executed = true AND c.session_date >= $1
+                    WHERE c.was_executed = true AND {scope_where}
                     GROUP BY c.teammate1_guid
                     UNION ALL
                     SELECT c.teammate2_guid AS guid,
@@ -3592,13 +3594,13 @@ async def get_proximity_leaderboards(
                         WHERE target_guid = c.teammate2_guid
                         ORDER BY session_date DESC LIMIT 1
                     ) ce ON true
-                    WHERE c.was_executed = true AND c.session_date >= $1
+                    WHERE c.was_executed = true AND {scope_where}
                     GROUP BY c.teammate2_guid
                 ) sub GROUP BY guid, name
                 ORDER BY total DESC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "crossfire",
@@ -3610,19 +3612,20 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "trades":
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=False)
             rows = await db.fetch_all(
                 """
                 SELECT trader_guid, MAX(trader_name) AS name,
                        COUNT(*) AS trades,
                        ROUND(AVG(delta_ms)::numeric, 0) AS avg_reaction
                 FROM proximity_lua_trade_kill
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY trader_guid
                 HAVING COUNT(*) >= 2
                 ORDER BY trades DESC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "trades",
@@ -3634,19 +3637,20 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "reactions":
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=False)
             rows = await db.fetch_all(
                 """
                 SELECT target_guid, MAX(target_name) AS name,
                        ROUND(AVG(return_fire_ms)::numeric, 0) AS avg_rf,
                        COUNT(*) AS samples
                 FROM proximity_reaction_metric
-                WHERE return_fire_ms IS NOT NULL AND session_date >= $1
+                WHERE return_fire_ms IS NOT NULL AND {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_rf ASC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "reactions",
@@ -3658,6 +3662,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "survivors":
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=False)
             rows = await db.fetch_all(
                 """
                 SELECT target_guid, MAX(target_name) AS name,
@@ -3666,13 +3671,13 @@ async def get_proximity_leaderboards(
                        COUNT(*) AS total_engagements,
                        ROUND(AVG(duration_ms)::numeric, 0) AS avg_duration
                 FROM combat_engagement
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 5
                 ORDER BY escape_pct DESC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "survivors",
@@ -3684,6 +3689,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "movement":
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=False)
             rows = await db.fetch_all(
                 """
                 SELECT player_guid, MAX(player_name) AS name,
@@ -3692,13 +3698,13 @@ async def get_proximity_leaderboards(
                        SUM(total_distance)::int AS total_distance,
                        COUNT(*) AS tracks
                 FROM player_track
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY player_guid
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_speed DESC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "movement",
@@ -3711,6 +3717,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "focus_fire":
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=False)
             rows = await db.fetch_all(
                 """
                 SELECT target_guid, MAX(target_name) AS name,
@@ -3719,13 +3726,13 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(attacker_count)::numeric, 1) AS avg_attackers,
                        ROUND(AVG(total_damage)::numeric, 0) AS avg_damage
                 FROM proximity_focus_fire
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 2
                 ORDER BY avg_score DESC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "focus_fire",
