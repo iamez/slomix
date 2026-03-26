@@ -733,7 +733,12 @@ async function initApp() {
             loadRecentMatches,
         );
     }
-    await Promise.allSettled(criticalLoads.map((task) => task()));
+    const startupResults = await Promise.allSettled(criticalLoads.map((task) => task()));
+    startupResults.forEach((result, i) => {
+        if (result.status === 'rejected') {
+            console.error(`Startup task ${i} failed:`, result.reason);
+        }
+    });
 
     initSearchListeners();
 

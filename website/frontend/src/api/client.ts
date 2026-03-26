@@ -418,6 +418,13 @@ export const api = {
     get<import('./types').SkillLeaderboardResponse>(`/skill/leaderboard?limit=${limit}`),
   getSkillFormula: () =>
     get<import('./types').SkillFormulaResponse>('/skill/formula'),
+  getSkillHistory: (identifier: string, rangeDays = 30, sessionDate?: string) => {
+    const params = new URLSearchParams({ range_days: String(rangeDays) });
+    if (sessionDate) params.set('session_date', sessionDate);
+    return get<import('./types').SkillHistoryResponse>(
+      `/skill/player/${encodeURIComponent(identifier)}/history?${params}`
+    );
+  },
 
   // Auth
   getAuthMe: async (): Promise<AuthUser | null> => {

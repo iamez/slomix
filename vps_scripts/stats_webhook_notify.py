@@ -171,6 +171,9 @@ def save_state(state: dict, force: bool = False) -> bool:
         return False
 
 
+_in_flight: set = set()  # Files currently being processed (prevents duplicate sends)
+
+
 def is_file_processed(state: dict, filename: str) -> bool:
     """Check if file has already been processed."""
     with _state_lock:
@@ -374,34 +377,43 @@ class StatsFileHandler(FileSystemEventHandler):
             logger.debug(f"⏭️ Skipping non-stats file: {filename}")
             return
         
-        # Check if already processed
-        if is_file_processed(self.state, filename):
-            logger.debug(f"⏭️ Already processed: {filename}")
-            return
-        
-        # Wait for file to finish writing
-        logger.info(f"⏳ Waiting {PROCESS_DELAY}s for file to complete...")
-        time.sleep(PROCESS_DELAY)
-        
-        # Verify file size
-        try:
-            file_size = os.path.getsize(filepath)
-            if file_size < MIN_FILE_SIZE:
-                logger.warning(
-                    f"⚠️ File too small ({file_size} bytes): {filename}"
-                )
+        # Atomically check processed + claim in-flight (prevents race condition)
+        with _state_lock:
+            if filename in self.state.get("processed_files", []):
+                logger.debug(f"⏭️ Already processed: {filename}")
                 return
-        except OSError:
-            logger.error(f"❌ Cannot read file: {filename}")
-            return
-        
-        # Send Discord notification
-        logger.info(f"📤 Sending notification for: {filename}")
-        if send_discord_notification(filename, filepath):
-            mark_file_processed(self.state, filename)
-            logger.info(f"✅ Processed: {filename}")
-        else:
-            logger.error(f"❌ Failed to notify: {filename}")
+            if filename in _in_flight:
+                logger.debug(f"⏭️ Already in-flight: {filename}")
+                return
+            _in_flight.add(filename)
+
+        try:
+            # Wait for file to finish writing
+            logger.info(f"⏳ Waiting {PROCESS_DELAY}s for file to complete...")
+            time.sleep(PROCESS_DELAY)
+
+            # Verify file size
+            try:
+                file_size = os.path.getsize(filepath)
+                if file_size < MIN_FILE_SIZE:
+                    logger.warning(
+                        f"⚠️ File too small ({file_size} bytes): {filename}"
+                    )
+                    return
+            except OSError:
+                logger.error(f"❌ Cannot read file: {filename}")
+                return
+
+            # Send Discord notification
+            logger.info(f"📤 Sending notification for: {filename}")
+            if send_discord_notification(filename, filepath):
+                mark_file_processed(self.state, filename)
+                logger.info(f"✅ Processed: {filename}")
+            else:
+                logger.error(f"❌ Failed to notify: {filename}")
+        finally:
+            with _state_lock:
+                _in_flight.discard(filename)
 
 
 # ==================== MAIN ====================
@@ -440,16 +452,25 @@ def scan_existing_files(state: dict, stats_path: str, max_age_hours: int = 48):
             except OSError:
                 continue
 
-            if is_file_processed(state, filename):
-                continue
+            # Atomically check processed + claim in-flight
+            with _state_lock:
+                if filename in state.get("processed_files", []):
+                    continue
+                if filename in _in_flight:
+                    continue
+                _in_flight.add(filename)
 
             # Process unprocessed file
-            logger.info(f"📤 Found unprocessed file: {filename}")
-            if send_discord_notification(filename, str(filepath)):
-                mark_file_processed(state, filename)
-                new_count += 1
-                # Small delay between notifications to avoid rate limiting
-                time.sleep(1)
+            try:
+                logger.info(f"📤 Found unprocessed file: {filename}")
+                if send_discord_notification(filename, str(filepath)):
+                    mark_file_processed(state, filename)
+                    new_count += 1
+                    # Small delay between notifications to avoid rate limiting
+                    time.sleep(1)
+            finally:
+                with _state_lock:
+                    _in_flight.discard(filename)
 
         logger.info(f"✅ Startup scan complete: {new_count} new files processed, {skipped_old} old files skipped")
 

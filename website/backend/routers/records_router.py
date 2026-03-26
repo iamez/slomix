@@ -1897,49 +1897,54 @@ async def get_player_vs_stats(
     """
     safe_limit = max(1, min(limit, 50))
 
+    # Normalize GUID length: stats uses 8-char, endstats may use 32-char
+    # Match using LEFT(guid, 8) for compatibility across both formats
+    guid_short = guid[:8] if len(guid) > 8 else guid
+
     # Build round filter based on scope
     if scope == "round" and round_id:
         round_filter = "AND v.round_id = $2"
-        params_base: tuple = (guid, round_id)
+        params_base: tuple = (guid_short, round_id)
     elif scope == "session" and session_id:
         round_filter = "AND v.round_id IN (SELECT id FROM rounds WHERE gaming_session_id = $2)"
-        params_base = (guid, session_id)
+        params_base = (guid_short, session_id)
     else:
         round_filter = ""
-        params_base = (guid,)
+        params_base = (guid_short,)
 
     limit_param = f"${len(params_base) + 1}"
 
-    # Easiest Preys — opponents this player killed most
+    # Easiest Preys — opponents this player killed most (player is the attacker)
     preys_query = f"""
         SELECT
-            COALESCE(v.player_guid, v.player_name) AS opponent_key,
-            MAX(v.player_name) AS opponent_name,
-            v.player_guid AS opponent_guid,
+            COALESCE(LEFT(v.subject_guid, 8), v.subject_name) AS opponent_key,
+            MAX(v.subject_name) AS opponent_name,
+            LEFT(v.subject_guid, 8) AS opponent_guid,
             SUM(v.kills) AS total_kills,
             SUM(v.deaths) AS total_deaths
         FROM round_vs_stats v
-        WHERE v.subject_guid = $1 {round_filter}
-          AND v.subject_guid IS NOT NULL
-        GROUP BY opponent_key, v.player_guid
+        WHERE LEFT(v.player_guid, 8) = $1 {round_filter}
+          AND v.player_guid IS NOT NULL
+          AND v.subject_guid IS NOT NULL AND v.subject_guid != ''
+        GROUP BY opponent_key, LEFT(v.subject_guid, 8)
         ORDER BY total_kills DESC, total_deaths ASC
         LIMIT {limit_param}
     """
     preys_rows = await db.fetch_all(preys_query, params_base + (safe_limit,))
 
-    # Worst Enemies — opponents who killed this player most
+    # Worst Enemies — opponents who killed this player most (player is the subject/victim)
     enemies_query = f"""
         SELECT
-            COALESCE(v.player_guid, v.player_name) AS opponent_key,
+            COALESCE(LEFT(v.player_guid, 8), v.player_name) AS opponent_key,
             MAX(v.player_name) AS opponent_name,
-            v.player_guid AS opponent_guid,
+            LEFT(v.player_guid, 8) AS opponent_guid,
             SUM(v.kills) AS total_kills,
             SUM(v.deaths) AS total_deaths
         FROM round_vs_stats v
-        WHERE v.subject_guid = $1 {round_filter}
+        WHERE LEFT(v.subject_guid, 8) = $1 {round_filter}
           AND v.subject_guid IS NOT NULL
-        GROUP BY opponent_key, v.player_guid
-        ORDER BY total_deaths DESC, total_kills ASC
+        GROUP BY opponent_key, LEFT(v.player_guid, 8)
+        ORDER BY total_kills DESC, total_deaths ASC
         LIMIT {limit_param}
     """
     enemies_rows = await db.fetch_all(enemies_query, params_base + (safe_limit,))

@@ -374,7 +374,7 @@ function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data ye
             <div class="flex items-center justify-between text-[11px] text-slate-300">
                 <span>${escapeHtml(label)}</span>
                 <span class="text-right">
-                    <span class="text-slate-500">${escapeHtml(value)}</span>
+                    <span class="text-slate-500">${value}</span>
                     ${sampleMeta ? `<span class="block text-[10px] text-slate-600">${escapeHtml(sampleMeta)}</span>` : ''}
                 </span>
             </div>
@@ -1474,7 +1474,7 @@ function resetProximityValues() {
     updateHeatIntensityLabel();
 
     renderTimeline([]);
-    void renderHeatmap({ hotzones: [] }).catch(() => {});
+    void renderHeatmap({ hotzones: [] }).catch(err => console.warn('Proximity fetch failed:', err));
     renderEventList([]);
     renderTradeEvents([]);
     renderDuos([]);
@@ -1555,7 +1555,16 @@ async function loadScopedProximityData() {
     }
 
     try {
-        const data = await fetchJSON(scopedUrl('/proximity/summary'));
+        // --- Composite fetch: 1 request instead of 30 ---
+        let composite = null;
+        try {
+            composite = await fetchJSON(scopedUrl('/proximity/dashboard', { extra: { sections: 'all' } }));
+        } catch (e) {
+            console.warn('[Proximity] Composite endpoint failed, falling back to individual requests', e);
+        }
+        if (loadId !== proximityScopedLoadId) return;
+
+        const data = composite?.sections?.summary || await fetchJSON(scopedUrl('/proximity/summary'));
         if (loadId !== proximityScopedLoadId) return;
         renderSummary(data);
         const ready = data?.ready === true || data?.status === 'ok' || data?.status === 'ready';
@@ -1569,45 +1578,100 @@ async function loadScopedProximityData() {
             }
         } else if (stateEl) {
             const rounds = data.sample_rounds != null ? formatNumber(data.sample_rounds) : 'n/a';
+            const src = composite ? '1 req' : '30 reqs';
             stateEl.innerHTML = `
                 <i data-lucide="activity" class="w-4 h-4 text-brand-emerald"></i>
-                <span>Live proximity snapshot • ${rounds} rounds analyzed • ${escapeHtml(getScopeDescription())}</span>
+                <span>Live proximity snapshot • ${rounds} rounds analyzed • ${escapeHtml(getScopeDescription())} (${src})</span>
             `;
         }
 
         if (ready) {
-            const scopeParams = buildScopeParams();
-            const [
-                timelineRes,
-                heatmapRes,
-                moversRes,
-                teamplayRes,
-                classRes,
-                reactionRes,
-                eventsRes,
-                tradesSummaryRes,
-                tradesEventsRes,
-                spawnTimingRes,
-                cohesionRes,
-                crossfireAnglesRes,
-                pushesRes,
-                luaTradesRes
-            ] = await Promise.allSettled([
-                fetchJSON(scopedUrl('/proximity/engagements')),
-                fetchJSON(scopedUrl('/proximity/hotzones')),
-                fetchJSON(scopedUrl('/proximity/movers')),
-                fetchJSON(scopedUrl('/proximity/teamplay', { extra: { limit: 6 } })),
-                fetchJSON(scopedUrl('/proximity/classes')),
-                fetchJSON(scopedUrl('/proximity/reactions', { extra: { limit: 6 } })),
-                fetchJSON(scopedUrl('/proximity/events', { extra: { limit: DEFAULT_EVENTS_LIMIT } })),
-                fetchJSON(scopedUrl('/proximity/trades/summary')),
-                fetchJSON(scopedUrl('/proximity/trades/events', { extra: { limit: 10 } })),
-                fetchJSON(`/api/proximity/spawn-timing?${scopeParams}`),
-                fetchJSON(`/api/proximity/cohesion?${scopeParams}`),
-                fetchJSON(`/api/proximity/crossfire-angles?${scopeParams}`),
-                fetchJSON(`/api/proximity/pushes?${scopeParams}`),
-                fetchJSON(`/api/proximity/lua-trades?${scopeParams}`)
-            ]);
+            // Extract sections from composite or fall back to individual fetches
+            const sec = composite?.sections || null;
+            let timelineRes, heatmapRes, moversRes, teamplayRes, classRes, reactionRes,
+                eventsRes, tradesSummaryRes, tradesEventsRes, spawnTimingRes, cohesionRes,
+                crossfireAnglesRes, pushesRes, luaTradesRes, killOutcomesRes, killOutcomeStatsRes,
+                hitRegionsRes, headshotRatesRes, movementStatsRes, proxScoresRes, proxFormulaRes,
+                weaponAccuracyRes, revivesRes, carrierEventsRes, carrierKillsRes,
+                carrierReturnsRes, vehicleProgressRes, escortCreditsRes, constructionEventsRes;
+
+            if (sec) {
+                // --- Fast path: extract from composite response ---
+                const wrap = (key) => {
+                    const v = sec[key];
+                    return (v && v.status !== 'error' && !v._error)
+                        ? { status: 'fulfilled', value: v }
+                        : { status: 'rejected', reason: v?._error || 'not loaded' };
+                };
+                timelineRes = wrap('engagements');
+                heatmapRes = wrap('hotzones');
+                moversRes = wrap('movers');
+                teamplayRes = wrap('teamplay');
+                classRes = wrap('classes');
+                reactionRes = wrap('reactions');
+                eventsRes = wrap('events');
+                tradesSummaryRes = wrap('trades_summary');
+                tradesEventsRes = wrap('trades_events');
+                spawnTimingRes = wrap('spawn_timing');
+                cohesionRes = wrap('cohesion');
+                crossfireAnglesRes = wrap('crossfire_angles');
+                pushesRes = wrap('pushes');
+                luaTradesRes = wrap('lua_trades');
+                killOutcomesRes = wrap('kill_outcomes');
+                killOutcomeStatsRes = wrap('kill_outcome_stats');
+                hitRegionsRes = wrap('hit_regions');
+                headshotRatesRes = wrap('headshot_rates');
+                movementStatsRes = wrap('movement_stats');
+                proxScoresRes = wrap('prox_scores');
+                proxFormulaRes = wrap('prox_formula');
+                weaponAccuracyRes = wrap('weapon_accuracy');
+                revivesRes = wrap('revives');
+                carrierEventsRes = wrap('carrier_events');
+                carrierKillsRes = wrap('carrier_kills');
+                carrierReturnsRes = wrap('carrier_returns');
+                vehicleProgressRes = wrap('vehicle_progress');
+                escortCreditsRes = wrap('escort_credits');
+                constructionEventsRes = wrap('construction_events');
+            } else {
+                // --- Fallback: original 29-request pattern ---
+                [timelineRes, heatmapRes, moversRes, teamplayRes, classRes, reactionRes,
+                 eventsRes, tradesSummaryRes, tradesEventsRes, spawnTimingRes, cohesionRes,
+                 crossfireAnglesRes, pushesRes, luaTradesRes, killOutcomesRes, killOutcomeStatsRes,
+                 hitRegionsRes, headshotRatesRes, movementStatsRes, proxScoresRes, proxFormulaRes,
+                 weaponAccuracyRes, revivesRes, carrierEventsRes, carrierKillsRes,
+                 carrierReturnsRes, vehicleProgressRes, escortCreditsRes,
+                 constructionEventsRes] = await Promise.allSettled([
+                    fetchJSON(scopedUrl('/proximity/engagements')),
+                    fetchJSON(scopedUrl('/proximity/hotzones')),
+                    fetchJSON(scopedUrl('/proximity/movers')),
+                    fetchJSON(scopedUrl('/proximity/teamplay', { extra: { limit: 6 } })),
+                    fetchJSON(scopedUrl('/proximity/classes')),
+                    fetchJSON(scopedUrl('/proximity/reactions', { extra: { limit: 6 } })),
+                    fetchJSON(scopedUrl('/proximity/events', { extra: { limit: DEFAULT_EVENTS_LIMIT } })),
+                    fetchJSON(scopedUrl('/proximity/trades/summary')),
+                    fetchJSON(scopedUrl('/proximity/trades/events', { extra: { limit: 10 } })),
+                    fetchJSON(scopedUrl('/proximity/spawn-timing')),
+                    fetchJSON(scopedUrl('/proximity/cohesion')),
+                    fetchJSON(scopedUrl('/proximity/crossfire-angles')),
+                    fetchJSON(scopedUrl('/proximity/pushes')),
+                    fetchJSON(scopedUrl('/proximity/lua-trades')),
+                    fetchJSON(scopedUrl('/proximity/kill-outcomes')),
+                    fetchJSON(scopedUrl('/proximity/kill-outcomes/player-stats')),
+                    fetchJSON(scopedUrl('/proximity/hit-regions')),
+                    fetchJSON(scopedUrl('/proximity/hit-regions/headshot-rates')),
+                    fetchJSON(scopedUrl('/proximity/movement-stats')),
+                    fetchJSON(scopedUrl('/proximity/prox-scores', { extra: { min_engagements: 30 } })),
+                    fetchJSON(scopedUrl('/proximity/prox-scores/formula', { includeRange: false })),
+                    fetchJSON(scopedUrl('/proximity/weapon-accuracy')),
+                    fetchJSON(scopedUrl('/proximity/revives')),
+                    fetchJSON(scopedUrl('/proximity/carrier-events')),
+                    fetchJSON(scopedUrl('/proximity/carrier-kills')),
+                    fetchJSON(scopedUrl('/proximity/carrier-returns')),
+                    fetchJSON(scopedUrl('/proximity/vehicle-progress')),
+                    fetchJSON(scopedUrl('/proximity/escort-credits')),
+                    fetchJSON(scopedUrl('/proximity/construction-events'))
+                ]);
+            }
             if (loadId !== proximityScopedLoadId) return;
 
             if (timelineRes.status === 'fulfilled') {
@@ -1683,6 +1747,54 @@ async function loadScopedProximityData() {
             if (luaTradesRes.status === 'fulfilled') {
                 renderLuaTrades(luaTradesRes.value);
             }
+            if (killOutcomesRes.status === 'fulfilled') {
+                renderKillOutcomes(killOutcomesRes.value);
+            }
+            if (killOutcomeStatsRes.status === 'fulfilled') {
+                renderKillOutcomePlayerStats(killOutcomeStatsRes.value);
+            }
+            if (hitRegionsRes.status === 'fulfilled') {
+                renderHitRegions(hitRegionsRes.value);
+            }
+            if (headshotRatesRes.status === 'fulfilled') {
+                renderHeadshotRates(headshotRatesRes.value);
+            }
+            if (movementStatsRes.status === 'fulfilled') {
+                renderMovementStats(movementStatsRes.value);
+            }
+            if (proxScoresRes.status === 'fulfilled') {
+                const formula = proxFormulaRes.status === 'fulfilled' ? proxFormulaRes.value : null;
+                renderProxScores(proxScoresRes.value, formula);
+            }
+            if (weaponAccuracyRes.status === 'fulfilled') {
+                renderWeaponAccuracy(weaponAccuracyRes.value);
+            }
+            if (revivesRes.status === 'fulfilled') {
+                renderRevives(revivesRes.value);
+            }
+            // v6 carrier intelligence
+            if (carrierEventsRes.status === 'fulfilled') {
+                renderCarrierIntel(carrierEventsRes.value);
+            }
+            if (carrierKillsRes.status === 'fulfilled') {
+                renderCarrierKillers(carrierKillsRes.value);
+            }
+            // v6 Phase 1.5: Flag Returns
+            if (carrierReturnsRes.status === 'fulfilled') {
+                renderFlagReturns(carrierReturnsRes.value);
+            }
+            // v6 Phase 2: Vehicle + Escort
+            if (vehicleProgressRes.status === 'fulfilled') {
+                renderVehicleProgress(vehicleProgressRes.value);
+            }
+            if (escortCreditsRes.status === 'fulfilled') {
+                renderEscortLeaders(escortCreditsRes.value);
+            }
+            // v6 Phase 3: Engineer Intelligence
+            if (constructionEventsRes.status === 'fulfilled') {
+                renderEngineerIntel(constructionEventsRes.value);
+            }
+            bindV52PanelEvents();
         }
     } catch (e) {
         if (stateEl) {
@@ -1969,5 +2081,770 @@ function renderLuaTrades(data) {
                 ${escapeHtml(t.victim)} killed by ${escapeHtml(t.killer)} &rarr; avenged by <strong>${escapeHtml(t.trader)}</strong> (${t.delta_ms}ms) on ${escapeHtml(t.map)}
             </div>`
         ).join('');
+    }
+}
+
+/* ===== v5.2 Kill Outcomes ===== */
+
+const OUTCOME_COLORS = { gibbed: '#ef4444', revived: '#22c55e', tapped_out: '#f59e0b', expired: '#64748b', round_end: '#6366f1' };
+
+function renderKillOutcomes(data) {
+    const s = data?.summary;
+    if (!s || s.total_kills === 0) return;
+
+    const statsEl = document.getElementById('kill-outcomes-stats');
+    if (statsEl) {
+        statsEl.innerHTML = [
+            { label: 'Total Kills', value: formatNumber(s.total_kills), cls: 'text-white' },
+            { label: 'Gib Rate', value: `${s.gib_rate}%`, cls: 'text-red-400' },
+            { label: 'Revive Rate', value: `${s.revive_rate}%`, cls: 'text-emerald-400' },
+            { label: 'Avg Outcome', value: s.avg_delta_ms ? `${(s.avg_delta_ms / 1000).toFixed(1)}s` : '--', cls: 'text-amber-400' },
+            { label: 'Avg Denied', value: s.avg_denied_ms ? `${(s.avg_denied_ms / 1000).toFixed(1)}s` : '--', cls: 'text-purple-400' },
+        ].map(x => `<div class="text-center">
+            <div class="text-[11px] font-bold text-slate-500 uppercase">${x.label}</div>
+            <div class="text-xl font-black ${x.cls} mt-1">${x.value}</div>
+        </div>`).join('');
+    }
+
+    const barsEl = document.getElementById('kill-outcomes-bars');
+    if (barsEl) {
+        const bars = [
+            { key: 'gibbed', label: 'Gibbed', count: s.gibbed },
+            { key: 'revived', label: 'Revived', count: s.revived },
+            { key: 'tapped_out', label: 'Tapped Out', count: s.tapped_out },
+            { key: 'expired', label: 'Expired', count: s.expired },
+            { key: 'round_end', label: 'Round End', count: s.round_end },
+        ].filter(b => b.count > 0);
+        const max = Math.max(...bars.map(b => b.count), 1);
+        barsEl.innerHTML = bars.map(b => {
+            const pct = s.total_kills > 0 ? ((b.count / s.total_kills) * 100).toFixed(1) : '0';
+            const color = OUTCOME_COLORS[b.key] || '#64748b';
+            return `<div>
+                <div class="flex justify-between text-[11px] mb-0.5">
+                    <span class="text-slate-300">${b.label}</span>
+                    <span class="text-slate-500">${formatNumber(b.count)} (${pct}%)</span>
+                </div>
+                <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div class="h-full rounded-full" style="width:${(b.count / max) * 100}%;background:${color}"></div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+}
+
+function renderKillOutcomePlayerStats(data) {
+    renderLeaderList('kill-outcomes-kpr',
+        data?.kill_permanence_leaders?.slice(0, 10) ?? [],
+        (row) => {
+            const kpr = row.kpr != null ? `${(row.kpr * 100).toFixed(1)}% KPR` : '--';
+            const detail = `${row.gibs || 0}G / ${row.revives_against || 0}R / ${row.tapouts || 0}T`;
+            return `${kpr} — ${detail}`;
+        },
+        'No kill permanence data yet'
+    );
+    renderLeaderList('kill-outcomes-revived',
+        data?.revive_rate_leaders?.slice(0, 5) ?? [],
+        (row) => {
+            const rate = row.revive_rate != null ? `${(row.revive_rate * 100).toFixed(1)}%` : '--';
+            const detail = `${row.times_revived || 0}R / ${row.times_killed || 0}D`;
+            return `${rate} — ${detail}`;
+        },
+        'No revive data yet'
+    );
+}
+
+/* ===== v5.2 Hit Regions ===== */
+
+const REGION_COLORS = ['#ef4444', '#60a5fa', '#22c55e', '#f59e0b'];
+
+function renderHitRegions(data) {
+    const players = data?.players ?? [];
+    if (players.length === 0) return;
+    const totals = players.reduce(
+        (a, p) => ({ head: a.head + p.head, arms: a.arms + p.arms, body: a.body + p.body, legs: a.legs + p.legs }),
+        { head: 0, arms: 0, body: 0, legs: 0 }
+    );
+    const total = totals.head + totals.arms + totals.body + totals.legs;
+    if (total === 0) return;
+
+    const regions = [
+        { label: 'Head', count: totals.head, color: REGION_COLORS[0] },
+        { label: 'Arms', count: totals.arms, color: REGION_COLORS[1] },
+        { label: 'Body', count: totals.body, color: REGION_COLORS[2] },
+        { label: 'Legs', count: totals.legs, color: REGION_COLORS[3] },
+    ];
+    const maxR = Math.max(...regions.map(r => r.count), 1);
+    const totalDmg = players.reduce((a, p) => a + (p.total_damage || 0), 0);
+
+    const chartEl = document.getElementById('hit-regions-chart');
+    if (chartEl) {
+        chartEl.innerHTML = `
+            <div class="flex items-end gap-1 h-28 justify-center">
+                ${regions.map(r => {
+                    const pct = ((r.count / total) * 100).toFixed(1);
+                    const barH = Math.max((r.count / maxR) * 100, 4);
+                    return `<div class="flex flex-col items-center gap-1 flex-1 max-w-16">
+                        <span class="text-[11px] font-mono text-slate-300">${pct}%</span>
+                        <div class="w-full rounded-t" style="height:${barH}%;background:${r.color};opacity:0.85"></div>
+                        <span class="text-[11px] text-slate-400">${r.label}</span>
+                    </div>`;
+                }).join('')}
+            </div>
+            <div class="text-center text-[11px] text-slate-500 mt-2">${formatNumber(total)} hits &middot; ${formatNumber(totalDmg)} damage tracked</div>`;
+    }
+
+    const barsEl = document.getElementById('hit-regions-bars');
+    if (barsEl) {
+        barsEl.innerHTML = regions.map(r => {
+            const pct = ((r.count / total) * 100).toFixed(1);
+            return `<div>
+                <div class="flex justify-between text-[11px] mb-0.5">
+                    <span class="text-slate-300">${r.label}</span>
+                    <span class="text-slate-500">${formatNumber(r.count)} (${pct}%)</span>
+                </div>
+                <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div class="h-full rounded-full" style="width:${(r.count / maxR) * 100}%;background:${r.color}"></div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+}
+
+function renderHeadshotRates(data) {
+    renderLeaderList('hit-regions-headshot-leaders',
+        data?.leaders?.slice(0, 15) ?? [],
+        (row) => {
+            const pct = row.headshot_pct != null ? `${row.headshot_pct.toFixed(1)}%` : '--';
+            return `${pct} — ${row.head_hits || 0}H / ${row.total_hits || 0} total`;
+        },
+        'No headshot data yet'
+    );
+}
+
+/* ===== v5.2 Movement Stats ===== */
+
+function renderMovementStats(data) {
+    const players = data?.players ?? [];
+    if (players.length === 0) return;
+
+    const totals = players.reduce((a, p) => ({
+        distance: a.distance + (p.total_distance || 0),
+        alive: a.alive + (p.alive_sec || 0),
+        sprint: a.sprint + (p.sprint_sec || 0),
+        standing: a.standing + (p.standing_sec || 0),
+        crouching: a.crouching + (p.crouching_sec || 0),
+        prone: a.prone + (p.prone_sec || 0),
+    }), { distance: 0, alive: 0, sprint: 0, standing: 0, crouching: 0, prone: 0 });
+    const totalStance = totals.standing + totals.crouching + totals.prone;
+
+    const stanceEl = document.getElementById('movement-stance-bar');
+    if (stanceEl && totalStance > 0) {
+        const sp = (totals.standing / totalStance * 100).toFixed(0);
+        const cp = (totals.crouching / totalStance * 100).toFixed(0);
+        const pp = (totals.prone / totalStance * 100).toFixed(0);
+        stanceEl.innerHTML = `
+            <div class="text-[11px] font-bold text-slate-500 uppercase mb-1">Stance Distribution</div>
+            <div class="h-4 rounded-full overflow-hidden flex mb-1">
+                <div style="width:${sp}%;background:#60a5fa" title="Standing ${sp}%"></div>
+                <div style="width:${cp}%;background:#f59e0b" title="Crouching ${cp}%"></div>
+                <div style="width:${pp}%;background:#ef4444" title="Prone ${pp}%"></div>
+            </div>
+            <div class="flex justify-between text-[11px]">
+                <span class="text-blue-400">Standing ${sp}%</span>
+                <span class="text-amber-400">Crouch ${cp}%</span>
+                <span class="text-red-400">Prone ${pp}%</span>
+            </div>`;
+    }
+
+    const overEl = document.getElementById('movement-overview');
+    if (overEl) {
+        overEl.innerHTML = [
+            { label: 'Total Distance', value: `${(totals.distance / 1000).toFixed(0)}K u`, cls: 'text-white' },
+            { label: 'Alive Time', value: `${(totals.alive / 60).toFixed(0)}m`, cls: 'text-white' },
+            { label: 'Sprint Time', value: `${(totals.sprint / 60).toFixed(1)}m`, cls: 'text-brand-cyan' },
+        ].map(x => `<div class="text-center">
+            <div class="text-[11px] font-bold text-slate-500 uppercase">${x.label}</div>
+            <div class="text-lg font-black ${x.cls} mt-1">${x.value}</div>
+        </div>`).join('');
+    }
+
+    renderLeaderList('movement-distance-leaders',
+        [...players].sort((a, b) => (b.total_distance || 0) - (a.total_distance || 0)).slice(0, 8),
+        (row) => `${((row.total_distance || 0) / 1000).toFixed(1)}K u — ${(row.avg_speed || 0).toFixed(0)} u/s`,
+        'No movement data yet'
+    );
+
+    renderLeaderList('movement-speed-leaders',
+        [...players].sort((a, b) => (b.max_peak_speed || 0) - (a.max_peak_speed || 0)).slice(0, 8),
+        (row) => `${(row.max_peak_speed || 0).toFixed(0)} u/s — avg ${(row.avg_peak_speed || 0).toFixed(0)}`,
+        'No speed data yet'
+    );
+
+    renderLeaderList('movement-sprint-leaders',
+        [...players].sort((a, b) => (b.avg_sprint_pct || 0) - (a.avg_sprint_pct || 0)).slice(0, 8),
+        (row) => `${(row.avg_sprint_pct || 0).toFixed(1)}% — ${(row.sprint_sec || 0).toFixed(0)}s total`,
+        'No sprint data yet'
+    );
+
+    renderLeaderList('movement-postspawn-leaders',
+        [...players].sort((a, b) => (b.avg_post_spawn_dist || 0) - (a.avg_post_spawn_dist || 0)).slice(0, 5),
+        (row) => `${(row.avg_post_spawn_dist || 0).toFixed(0)} u`,
+        'No post-spawn data yet'
+    );
+}
+
+/* ===== v5.2 Proximity Composite Scores ===== */
+
+const SCORE_COLORS = { prox_combat: '#ef4444', prox_team: '#3b82f6', prox_gamesense: '#a855f7', prox_overall: '#22d3ee' };
+
+function renderProxScores(data, formula) {
+    const players = data?.players ?? [];
+    const listEl = document.getElementById('prox-scores-list');
+    if (!listEl) return;
+    if (players.length === 0) {
+        listEl.innerHTML = '<div class="text-[11px] text-slate-500">No proximity score data yet.</div>';
+        return;
+    }
+
+    const subtitleEl = document.getElementById('prox-scores-subtitle');
+    if (subtitleEl) {
+        const catCount = formula?.categories ? Object.keys(formula.categories).length : 3;
+        const metricCount = formula?.categories
+            ? Object.values(formula.categories).reduce((a, c) => a + Object.keys(c.metrics).length, 0) : 18;
+        subtitleEl.textContent = `Composite rating from ${catCount} categories, ${metricCount} metrics — v${data.version || '1.0'}`;
+    }
+
+    // Header row
+    const hdr = `<div class="flex items-center gap-1 text-[11px] text-slate-500 font-bold uppercase mb-2 px-1">
+        <span class="w-6">#</span><span class="flex-1">Player</span>
+        <span class="w-14 text-right" style="color:${SCORE_COLORS.prox_combat}">Combat</span>
+        <span class="w-14 text-right" style="color:${SCORE_COLORS.prox_team}">Team</span>
+        <span class="w-14 text-right" style="color:${SCORE_COLORS.prox_gamesense}">Sense</span>
+        <span class="w-16 text-right" style="color:${SCORE_COLORS.prox_overall}">Overall</span>
+    </div>`;
+
+    const rows = players.map(p => {
+        const name = stripEtColors(p.name || '');
+        return `<div class="flex items-center gap-1 text-[11px] px-1 py-1 rounded hover:bg-white/5 cursor-pointer prox-score-row" data-guid="${escapeHtml(p.guid)}">
+            <span class="w-6 text-slate-600 font-mono">${p.rank}</span>
+            <span class="flex-1 truncate text-slate-200">${escapeHtml(name)}</span>
+            <span class="w-14 text-right font-mono font-bold" style="color:${SCORE_COLORS.prox_combat}">${p.prox_combat.toFixed(1)}</span>
+            <span class="w-14 text-right font-mono font-bold" style="color:${SCORE_COLORS.prox_team}">${p.prox_team.toFixed(1)}</span>
+            <span class="w-14 text-right font-mono font-bold" style="color:${SCORE_COLORS.prox_gamesense}">${p.prox_gamesense.toFixed(1)}</span>
+            <span class="w-16 text-right font-mono font-black" style="color:${SCORE_COLORS.prox_overall}">${p.prox_overall.toFixed(1)}</span>
+        </div>
+        <div class="prox-score-detail hidden ml-6 mb-2 p-3 rounded-lg bg-slate-800/40 border border-white/5" data-guid="${escapeHtml(p.guid)}">
+            ${p.prox_radar ? `<div class="flex gap-4 mb-2">${p.prox_radar.map(a => `<div class="text-center"><div class="text-[10px] text-slate-500">${escapeHtml(a.label)}</div><div class="text-sm font-bold text-white">${a.value.toFixed(0)}</div></div>`).join('')}</div>` : ''}
+            ${p.breakdown ? `<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">${Object.entries(p.breakdown).map(([catKey, metrics]) => {
+                const catLabel = formula?.categories?.[catKey]?.label ?? catKey;
+                const color = SCORE_COLORS[catKey] || '#22d3ee';
+                return `<div>
+                    <div class="text-[11px] font-bold uppercase mb-1" style="color:${color}">${escapeHtml(catLabel)}</div>
+                    ${Object.entries(metrics).map(([, m]) => `<div class="flex items-center gap-1 text-[10px]">
+                        <span class="text-slate-500 w-20 truncate">${escapeHtml(m.label)}</span>
+                        <div class="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div class="h-full rounded-full bg-cyan-500/60" style="width:${(m.percentile * 100)}%"></div></div>
+                        <span class="text-slate-400 font-mono w-6 text-right">${(m.percentile * 100).toFixed(0)}</span>
+                    </div>`).join('')}
+                </div>`;
+            }).join('')}</div>` : ''}
+            <div class="text-[10px] text-slate-600 mt-2">${p.engagements || 0} engagements, ${p.tracks || 0} tracks</div>
+        </div>`;
+    }).join('');
+
+    listEl.innerHTML = hdr + rows;
+
+    // Formula panel
+    const formulaEl = document.getElementById('prox-scores-formula');
+    if (formulaEl && formula?.categories) {
+        formulaEl.innerHTML = `
+            <div class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">Scoring Formula v${data.version || '1.0'}</div>
+            <div class="text-[11px] text-slate-500 mb-3">Each metric is ranked as a percentile (0-100) across all players with ${formula.min_engagements || 30}+ engagements, then weighted.
+                Overall = ${Object.entries(formula.category_weights || {}).map(([k, w]) => {
+                    const cat = formula.categories[k];
+                    return cat ? `${cat.label} ${(w * 100).toFixed(0)}%` : '';
+                }).filter(Boolean).join(' + ')}.
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                ${Object.entries(formula.categories).map(([catKey, cat]) => {
+                    const color = SCORE_COLORS[catKey] || '#22d3ee';
+                    const weight = formula.category_weights?.[catKey];
+                    return `<div>
+                        <div class="text-[11px] font-bold mb-1" style="color:${color}">${escapeHtml(cat.label)} <span class="font-normal text-slate-500">(${weight ? (weight * 100).toFixed(0) : '?'}%)</span></div>
+                        <div class="text-[10px] text-slate-500 mb-1">${escapeHtml(cat.description || '')}</div>
+                        ${Object.entries(cat.metrics).map(([, m]) => `<div class="flex items-center justify-between text-[10px]">
+                            <span class="text-slate-400">${escapeHtml(m.label)}${m.invert ? ' *' : ''}</span>
+                            <span class="text-slate-600 font-mono">${(m.weight * 100).toFixed(0)}%</span>
+                        </div>`).join('')}
+                    </div>`;
+                }).join('')}
+            </div>
+            <div class="text-[10px] text-slate-600 mt-2">* Inverted: lower = better (e.g. faster reaction scores higher)</div>`;
+    }
+}
+
+/* ===== v5.2 Danger Zones ===== */
+
+const CLASS_COLORS_V52 = { SOLDIER: '#ef4444', MEDIC: '#22c55e', ENGINEER: '#f59e0b', FIELDOPS: '#60a5fa', COVERTOPS: '#a855f7' };
+
+function renderDangerZones(mapName, classFilter) {
+    if (!mapName) return;
+    const params = buildScopeParams({ extra: { map_name: mapName } });
+    if (classFilter) params.set('victim_class', classFilter);
+    fetchJSON(`${API_BASE}/proximity/combat-positions/danger-zones?${params}`).then(data => {
+        const canvas = document.getElementById('danger-zones-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, W, H);
+        const zones = data?.zones ?? [];
+        const gridSize = data?.grid_size ?? 512;
+        const statsEl = document.getElementById('danger-zones-stats');
+        const totalDeaths = zones.reduce((a, z) => a + z.deaths, 0);
+        if (statsEl) statsEl.textContent = zones.length > 0
+            ? `${formatNumber(totalDeaths)} deaths across ${zones.length} zones on ${escapeHtml(mapName)}`
+            : `No danger zone data for ${escapeHtml(mapName)}`;
+        if (zones.length === 0) {
+            ctx.fillStyle = '#64748b'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
+            ctx.fillText('No danger zone data for this map', W / 2, H / 2);
+            return;
+        }
+        const maxDeaths = Math.max(...zones.map(z => z.deaths), 1);
+        for (const zone of zones) {
+            const nx = (zone.x / gridSize) * W, ny = (zone.y / gridSize) * H;
+            const intensity = zone.deaths / maxDeaths;
+            const radius = 6 + intensity * 18;
+            const classes = zone.classes || {};
+            const dominant = Object.entries(classes).sort((a, b) => b[1] - a[1])[0];
+            const baseColor = (dominant && CLASS_COLORS_V52[dominant[0]]) || '#64748b';
+            const alpha = 0.25 + intensity * 0.55;
+            const r = parseInt(baseColor.slice(1, 3), 16), g = parseInt(baseColor.slice(3, 5), 16), b = parseInt(baseColor.slice(5, 7), 16);
+            ctx.beginPath(); ctx.arc(nx, ny, radius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`; ctx.fill();
+            if (intensity > 0.3) {
+                ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+                ctx.fillText(String(zone.deaths), nx, ny + 3);
+            }
+        }
+    }).catch(err => console.warn('Proximity fetch failed:', err));
+}
+
+/* ===== v5.2 Combat Heatmap ===== */
+
+function renderCombatHeatmap(mapName, perspective) {
+    if (!mapName) return;
+    const params1 = buildScopeParams({ extra: { map_name: mapName, perspective: perspective || 'kills' } });
+    const params2 = buildScopeParams({ extra: { map_name: mapName, limit: 200 } });
+    Promise.allSettled([
+        fetchJSON(`${API_BASE}/proximity/combat-positions/heatmap?${params1}`),
+        fetchJSON(`${API_BASE}/proximity/combat-positions/kill-lines?${params2}`)
+    ]).then(([heatRes, lineRes]) => {
+        const canvas = document.getElementById('combat-heatmap-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+        ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
+        const hotzones = heatRes.status === 'fulfilled' ? (heatRes.value.hotzones ?? []) : [];
+        const killLines = lineRes.status === 'fulfilled' ? (lineRes.value.lines ?? []) : [];
+        const gridSize = heatRes.status === 'fulfilled' ? (heatRes.value.grid_size ?? 512) : 512;
+        if (hotzones.length === 0 && killLines.length === 0) {
+            ctx.fillStyle = '#64748b'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
+            ctx.fillText('No combat data for this map yet', W / 2, H / 2);
+            return;
+        }
+        const maxCount = Math.max(...hotzones.map(h => h.count), 1);
+        for (const hz of hotzones) {
+            const nx = (hz.x / gridSize) * W, ny = (hz.y / gridSize) * H;
+            const intensity = hz.count / maxCount;
+            const radius = 4 + intensity * 16;
+            const alpha = 0.2 + intensity * 0.6;
+            ctx.beginPath(); ctx.arc(nx, ny, radius, 0, Math.PI * 2);
+            ctx.fillStyle = perspective === 'deaths' ? `rgba(96,165,250,${alpha})` : `rgba(239,68,68,${alpha})`;
+            ctx.fill();
+        }
+        for (const line of killLines) {
+            const ax = (line.ax / gridSize) * W, ay = (line.ay / gridSize) * H;
+            const vx = (line.vx / gridSize) * W, vy = (line.vy / gridSize) * H;
+            ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(vx, vy);
+            ctx.strokeStyle = line.attacker_team === 'AXIS' ? 'rgba(239,68,68,0.15)' : 'rgba(96,165,250,0.15)';
+            ctx.lineWidth = 1; ctx.stroke();
+        }
+    }).catch(err => console.warn('Proximity fetch failed:', err));
+}
+
+/* ===== v5.2 Leaderboard Tabs ===== */
+
+const LB_TABS = [
+    { key: 'power', label: 'Power Rating' },
+    { key: 'spawn', label: 'Spawn Timing' },
+    { key: 'crossfire', label: 'Crossfire' },
+    { key: 'trades', label: 'Trade Kills' },
+    { key: 'reactions', label: 'Reactions' },
+    { key: 'survivors', label: 'Survivors' },
+    { key: 'movement', label: 'Movement' },
+    { key: 'focus_fire', label: 'Focus Fire' },
+];
+let lbActiveTab = 'power';
+let lbRangeDays = 30;
+
+function renderLeaderboardTabs() {
+    const tabsEl = document.getElementById('leaderboard-tabs');
+    if (!tabsEl) return;
+    tabsEl.innerHTML = LB_TABS.map(t => {
+        const active = t.key === lbActiveTab;
+        return `<button class="lb-tab-btn text-[10px] font-bold px-3 py-1 rounded transition ${active
+            ? 'bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/40'
+            : 'bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300'}" data-tab="${t.key}">${t.label}</button>`;
+    }).join('');
+}
+
+function loadLeaderboardData() {
+    const contentEl = document.getElementById('leaderboard-content');
+    if (!contentEl) return;
+    contentEl.innerHTML = '<div class="text-[11px] text-slate-500">Loading...</div>';
+    const lbParams = buildScopeParams({ extra: { category: lbActiveTab, limit: 10 } });
+    lbParams.set('range_days', String(lbRangeDays));
+    fetchJSON(`${API_BASE}/proximity/leaderboards?${lbParams}`).then(data => {
+        const entries = data?.entries ?? [];
+        if (entries.length === 0) {
+            contentEl.innerHTML = '<div class="text-[11px] text-slate-500">No leaderboard data yet.</div>';
+            return;
+        }
+        contentEl.innerHTML = entries.map((e, i) => {
+            const name = lbActiveTab === 'crossfire'
+                ? `${stripEtColors(e.name)} + ${stripEtColors(e.partner_name || '?')}`
+                : stripEtColors(e.name);
+            let val = String(e.value);
+            if (lbActiveTab === 'spawn' || lbActiveTab === 'focus_fire') val = Number(e.value).toFixed(3);
+            else if (lbActiveTab === 'reactions') val = `${e.value}ms`;
+            else if (lbActiveTab === 'survivors') val = `${e.value}%`;
+            else if (lbActiveTab === 'movement') val = `${e.value} u/s`;
+            return `<div class="flex items-center justify-between text-[11px] text-slate-300 py-0.5">
+                <span><span class="font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'} mr-2">#${i + 1}</span>${escapeHtml(name)}</span>
+                <span class="text-right text-slate-500">${val}</span>
+            </div>`;
+        }).join('');
+    }).catch(() => { if (contentEl) contentEl.innerHTML = '<div class="text-[11px] text-slate-500">Failed to load.</div>'; });
+}
+
+/* ===== v5.2 Weapon Accuracy ===== */
+
+function renderWeaponAccuracy(data) {
+    const leaders = data?.leaders ?? [];
+    renderLeaderList('weapon-accuracy-leaders', leaders.slice(0, 8), (row) => {
+        const acc = row.accuracy != null ? `${row.accuracy}%` : '--';
+        const detail = `${formatNumber(row.hits || 0)}/${formatNumber(row.shots || 0)} shots · ${formatNumber(row.kills || 0)}K · ${formatNumber(row.headshots || 0)}HS`;
+        return `<span class="text-brand-amber">${acc}</span> <span class="text-slate-500 text-[10px]">${detail}</span>`;
+    }, 'No weapon accuracy data yet');
+}
+
+/* ===== v5.2 Revives ===== */
+
+function renderRevives(data) {
+    const summaryEl = document.getElementById('revive-summary');
+    const leadersEl = document.getElementById('revive-leaders');
+    if (!data || data.status === 'error') {
+        if (leadersEl) leadersEl.innerHTML = '<div class="text-[11px] text-slate-500">No revive data available.</div>';
+        return;
+    }
+    const summary = data.summary || {};
+    if (summaryEl) {
+        const items = [
+            { label: 'Total Revives', value: formatNumber(summary.total_revives || 0), cls: 'text-emerald-400' },
+            { label: 'Under Fire', value: `${summary.under_fire_pct || 0}%`, cls: 'text-red-400' },
+            { label: 'Avg Enemy Dist', value: `${formatNumber(Math.round(summary.avg_enemy_distance || 0))}u`, cls: 'text-cyan-400' },
+        ];
+        summaryEl.innerHTML = items.map(item =>
+            `<div class="bg-slate-800/60 rounded-lg p-3 text-center">
+                <div class="text-[10px] text-slate-500 uppercase">${item.label}</div>
+                <div class="text-lg font-bold ${item.cls}">${item.value}</div>
+            </div>`
+        ).join('');
+    }
+    renderLeaderList('revive-leaders', (data.leaders || []).slice(0, 8), (row) => {
+        const revives = formatNumber(row.revives || 0);
+        const risky = row.under_fire_count != null ? ` · ${row.under_fire_count} risky` : '';
+        return `<span class="text-emerald-400">${revives} revives</span><span class="text-slate-500 text-[10px]">${risky}</span>`;
+    }, 'No revive leaders yet');
+}
+
+/* ===== v5.2 Event Bindings ===== */
+
+function bindV52PanelEvents() {
+    // Prox scores expand/collapse
+    document.querySelectorAll('.prox-score-row').forEach(btn => {
+        btn.onclick = () => {
+            const guid = btn.dataset.guid;
+            document.querySelectorAll('.prox-score-detail').forEach(d => {
+                if (d.dataset.guid === guid) d.classList.toggle('hidden');
+                else d.classList.add('hidden');
+            });
+        };
+    });
+
+    // Formula toggle
+    const formulaBtn = document.getElementById('prox-scores-formula-btn');
+    const formulaEl = document.getElementById('prox-scores-formula');
+    if (formulaBtn && formulaEl) {
+        formulaBtn.onclick = () => {
+            const show = formulaEl.classList.toggle('hidden');
+            formulaBtn.classList.toggle('bg-brand-emerald/10', !show);
+            formulaBtn.classList.toggle('text-brand-emerald', !show);
+            formulaBtn.classList.toggle('border-brand-emerald/40', !show);
+        };
+    }
+
+    // Prox scores range
+    document.querySelectorAll('.prox-scores-range-btn').forEach(btn => {
+        btn.onclick = () => {
+            document.querySelectorAll('.prox-scores-range-btn').forEach(b => {
+                b.className = 'prox-scores-range-btn text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-500 border border-white/10';
+            });
+            btn.className = 'prox-scores-range-btn text-[10px] px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/40';
+            const scoreParams = buildScopeParams({ extra: { min_engagements: 30 } });
+            scoreParams.set('range_days', btn.dataset.days);
+            fetchJSON(`${API_BASE}/proximity/prox-scores?${scoreParams}`).then(d => {
+                fetchJSON(scopedUrl('/proximity/prox-scores/formula', { includeRange: false })).then(f => renderProxScores(d, f)).catch(() => renderProxScores(d, null));
+            }).catch(err => console.warn('Proximity fetch failed:', err));
+        };
+    });
+
+    // Danger zones
+    const dzMapInput = document.getElementById('danger-zones-map');
+    const dzClassSelect = document.getElementById('danger-zones-class');
+    const dzLoad = () => renderDangerZones(dzMapInput?.value || '', dzClassSelect?.value || '');
+    if (dzMapInput) {
+        dzMapInput.onchange = dzLoad;
+        dzMapInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') dzLoad(); });
+    }
+    if (dzClassSelect) dzClassSelect.onchange = dzLoad;
+
+    // Combat heatmap
+    const hmMapInput = document.getElementById('combat-heatmap-map');
+    const hmPerspective = document.getElementById('combat-heatmap-perspective');
+    const hmLoad = () => renderCombatHeatmap(hmMapInput?.value || '', hmPerspective?.value || 'kills');
+    if (hmMapInput) {
+        hmMapInput.onchange = hmLoad;
+        hmMapInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') hmLoad(); });
+    }
+    if (hmPerspective) hmPerspective.onchange = hmLoad;
+
+    // Leaderboard tabs
+    renderLeaderboardTabs();
+    loadLeaderboardData();
+    document.getElementById('leaderboard-tabs')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.lb-tab-btn');
+        if (!btn) return;
+        lbActiveTab = btn.dataset.tab;
+        renderLeaderboardTabs();
+        loadLeaderboardData();
+    });
+    document.querySelectorAll('.lb-range-btn').forEach(btn => {
+        btn.onclick = () => {
+            lbRangeDays = Number(btn.dataset.days);
+            document.querySelectorAll('.lb-range-btn').forEach(b => {
+                b.className = 'lb-range-btn text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-500 border border-white/10';
+            });
+            btn.className = 'lb-range-btn text-[10px] px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/40';
+            loadLeaderboardData();
+        };
+    });
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// ===== v6 CARRIER INTELLIGENCE RENDERERS =====
+
+function renderCarrierIntel(data) {
+    if (!data || data.status === 'error') return;
+
+    // Summary stats
+    const summaryEl = document.getElementById('carrier-summary');
+    if (summaryEl && data.summary) {
+        const s = data.summary;
+        summaryEl.innerHTML = [
+            { label: 'Total Carries', value: s.total_carries, cls: 'text-white' },
+            { label: 'Secures', value: `${s.total_secures} (${s.secure_rate}%)`, cls: 'text-brand-emerald' },
+            { label: 'Avg Distance', value: `${s.avg_distance}u`, cls: 'text-brand-cyan' },
+        ].map(x => `<div class="text-center">
+            <div class="text-[11px] font-bold text-slate-500 uppercase">${x.label}</div>
+            <div class="text-lg font-black ${x.cls} mt-1">${x.value}</div>
+        </div>`).join('');
+    }
+
+    // Carrier leaderboard
+    const leadersEl = document.getElementById('carrier-leaders');
+    if (leadersEl && data.carriers && data.carriers.length > 0) {
+        leadersEl.innerHTML = data.carriers.map((c, i) => {
+            const name = escapeHtml(c.name || c.guid?.substring(0, 8) || '?');
+            return `<div class="text-xs text-slate-300 py-0.5">
+                <span class="font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'}">#${i + 1}</span>
+                ${name} — <span class="text-brand-emerald">${c.secures}</span>/${c.carries} secure
+                (${c.secure_rate}%) · ${formatNumber(c.total_distance)}u · eff ${(c.avg_efficiency * 100).toFixed(0)}%
+            </div>`;
+        }).join('');
+    } else if (leadersEl) {
+        leadersEl.innerHTML = '<div class="text-[11px] text-slate-500">No carrier data yet.</div>';
+    }
+
+    // Event log
+    const logEl = document.getElementById('carrier-event-log');
+    if (logEl && data.events && data.events.length > 0) {
+        const outcomeIcons = { secured: '+', killed: 'X', dropped: 'D', returned: 'R', round_end: 'E', disconnected: 'DC' };
+        const outcomeColors = { secured: 'text-brand-emerald', killed: 'text-brand-rose', dropped: 'text-slate-400', round_end: 'text-slate-500' };
+        logEl.innerHTML = data.events.map(e => {
+            const icon = outcomeIcons[e.outcome] || '?';
+            const color = outcomeColors[e.outcome] || 'text-slate-400';
+            const name = escapeHtml(e.carrier_name || '?');
+            const dur = (e.duration_ms / 1000).toFixed(1);
+            const eff = (e.efficiency * 100).toFixed(0);
+            let detail = `[${icon}] ${e.outcome} · ${formatNumber(e.carry_distance)}u (${eff}%) · ${dur}s`;
+            if (e.outcome === 'killed' && e.killer_name) {
+                detail += ` by ${escapeHtml(e.killer_name)}`;
+            }
+            return `<div class="flex justify-between text-xs py-0.5">
+                <span>${name} <span class="text-slate-500">(${escapeHtml(e.carrier_team)})</span> on <span class="text-slate-400">${escapeHtml(e.map_name)}</span></span>
+                <span class="${color}">${detail}</span>
+            </div>`;
+        }).join('');
+    } else if (logEl) {
+        logEl.innerHTML = '<div class="text-[11px] text-slate-500">No carrier events yet.</div>';
+    }
+}
+
+function renderCarrierKillers(data) {
+    if (!data || data.status === 'error') return;
+    const el = document.getElementById('carrier-killer-leaders');
+    if (!el) return;
+
+    if (!data.killers || data.killers.length === 0) {
+        el.innerHTML = '<div class="text-[11px] text-slate-500">No carrier kill data yet.</div>';
+        return;
+    }
+
+    el.innerHTML = data.killers.map((k, i) => {
+        const name = escapeHtml(k.name || k.guid?.substring(0, 8) || '?');
+        return `<div class="text-xs text-slate-300 py-0.5">
+            <span class="font-bold ${i < 3 ? 'text-brand-rose' : 'text-slate-600'}">#${i + 1}</span>
+            ${name} — <span class="text-brand-rose font-bold">${k.carrier_kills}</span> carrier kills
+            · avg stopped at ${formatNumber(k.avg_distance_stopped)}u
+        </div>`;
+    }).join('');
+}
+
+// ──────────── v6 Phase 1.5: Flag Returns ────────────
+function renderFlagReturns(data) {
+    if (!data || data.status !== 'ok') return;
+
+    // Summary
+    const summaryEl = document.getElementById('returns-summary');
+    if (summaryEl && data.summary) {
+        const s = data.summary;
+        summaryEl.innerHTML = `
+            <div class="bg-slate-800/50 rounded-lg p-3 text-center">
+                <div class="text-lg font-bold text-white">${s.total_returns || 0}</div>
+                <div class="text-[10px] text-slate-400 uppercase">Total Returns</div>
+            </div>
+            <div class="bg-slate-800/50 rounded-lg p-3 text-center">
+                <div class="text-lg font-bold text-brand-cyan">${s.avg_delay_ms ? (s.avg_delay_ms / 1000).toFixed(1) + 's' : '--'}</div>
+                <div class="text-[10px] text-slate-400 uppercase">Avg Return Time</div>
+            </div>`;
+    }
+
+    // Returner leaderboard
+    const leadersEl = document.getElementById('returns-leaders');
+    if (leadersEl && data.returners && data.returners.length > 0) {
+        leadersEl.innerHTML = data.returners.map((r, i) => {
+            const name = escapeHtml(stripEtColors(r.name || 'Unknown'));
+            const avgDelay = r.avg_delay_ms ? (r.avg_delay_ms / 1000).toFixed(1) + 's' : '--';
+            return `<div class="flex justify-between items-center py-0.5 ${i < 3 ? 'text-brand-cyan' : 'text-slate-400'}">
+                <span>#${i + 1} ${name}</span>
+                <span>${r.returns} returns (avg ${avgDelay})</span>
+            </div>`;
+        }).join('');
+    }
+}
+
+// ──────────── v6 Phase 2: Vehicle Progress ────────────
+function renderVehicleProgress(data) {
+    if (!data || data.status !== 'ok') return;
+
+    const el = document.getElementById('vehicle-progress');
+    if (!el || !data.vehicles || data.vehicles.length === 0) return;
+
+    el.innerHTML = data.vehicles.map(v => {
+        const name = escapeHtml(v.vehicle_name || 'Unknown');
+        const map = escapeHtml(v.map_name || '');
+        const dist = v.total_distance ? formatNumber(Math.round(v.total_distance)) + 'u' : '0u';
+        const destroyed = v.destroyed_count > 0 ? ` | destroyed: ${v.destroyed_count}x` : '';
+        return `<div class="flex justify-between items-center py-0.5">
+            <span class="text-brand-purple">${name} <span class="text-slate-500">(${map} R${v.round_number || '?'})</span></span>
+            <span class="text-slate-300">${dist}${destroyed}</span>
+        </div>`;
+    }).join('');
+}
+
+// ──────────── v6 Phase 2: Escort Leaders ────────────
+function renderEscortLeaders(data) {
+    if (!data || data.status !== 'ok') return;
+
+    const el = document.getElementById('escort-leaders');
+    if (!el || !data.escorts || data.escorts.length === 0) return;
+
+    el.innerHTML = data.escorts.map((e, i) => {
+        const name = escapeHtml(e.name || 'Unknown');
+        const dist = e.total_credit_distance ? formatNumber(Math.round(e.total_credit_distance)) + 'u' : '0u';
+        const mountedSec = e.total_mounted_ms ? (e.total_mounted_ms / 1000).toFixed(0) + 's mounted' : '';
+        const proxSec = e.total_proximity_ms ? (e.total_proximity_ms / 1000).toFixed(0) + 's nearby' : '';
+        const timeInfo = [mountedSec, proxSec].filter(Boolean).join(', ');
+        return `<div class="flex justify-between items-center py-0.5 ${i < 3 ? 'text-brand-purple' : 'text-slate-400'}">
+            <span>#${i + 1} ${name}</span>
+            <span>${dist} ${timeInfo ? '(' + timeInfo + ')' : ''}</span>
+        </div>`;
+    }).join('');
+}
+
+// ──────────── v6 Phase 3: Engineer Intelligence ────────────
+function renderEngineerIntel(data) {
+    if (!data || data.status !== 'ok') return;
+
+    // Engineer leaderboard
+    const leadersEl = document.getElementById('engineer-leaders');
+    if (leadersEl && data.engineers && data.engineers.length > 0) {
+        leadersEl.innerHTML = data.engineers.map((eng, i) => {
+            const name = escapeHtml(eng.name || 'Unknown');
+            const parts = [];
+            if (eng.plants > 0) parts.push(`${eng.plants} plant`);
+            if (eng.defuses > 0) parts.push(`${eng.defuses} defuse`);
+            if (eng.destructions > 0) parts.push(`${eng.destructions} destroy`);
+            if (eng.constructions > 0) parts.push(`${eng.constructions} build`);
+            return `<div class="flex justify-between items-center py-0.5 ${i < 3 ? 'text-brand-green' : 'text-slate-400'}">
+                <span>#${i + 1} ${name}</span>
+                <span>${parts.join(' | ') || eng.total_events + ' events'}</span>
+            </div>`;
+        }).join('');
+    }
+
+    // Event log
+    const logEl = document.getElementById('construction-event-log');
+    if (logEl && data.events && data.events.length > 0) {
+        const typeIcons = {
+            dynamite_plant: { icon: 'P', color: 'text-brand-rose' },
+            dynamite_defuse: { icon: 'D', color: 'text-brand-cyan' },
+            objective_destroyed: { icon: 'X', color: 'text-red-400' },
+            construction_complete: { icon: 'B', color: 'text-brand-green' },
+        };
+        logEl.innerHTML = data.events.map(ev => {
+            const ti = typeIcons[ev.event_type] || { icon: '?', color: 'text-slate-400' };
+            const name = escapeHtml(ev.player_name || 'Unknown');
+            const track = ev.track_name ? escapeHtml(ev.track_name) : '';
+            const map = escapeHtml(ev.map_name || '');
+            return `<div class="flex items-center gap-2 py-0.5">
+                <span class="font-mono font-bold ${ti.color} w-4 text-center">${ti.icon}</span>
+                <span class="text-slate-300">${name}</span>
+                <span class="text-slate-500">${track ? track + ' @ ' : ''}${map}</span>
+            </div>`;
+        }).join('');
     }
 }

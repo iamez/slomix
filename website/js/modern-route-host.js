@@ -68,6 +68,16 @@ export function resetModernRouteHost(exceptViewId = null) {
         activeMount.unmount();
     }
     activeMount.host.replaceChildren();
+
+    // Restore legacy children that were hidden by ensureHost()
+    const viewElement = activeMount.host.parentElement;
+    if (viewElement) {
+        for (const child of Array.from(viewElement.querySelectorAll('[data-legacy-hidden="true"]'))) {
+            child.style.display = '';
+            child.removeAttribute('data-legacy-hidden');
+        }
+    }
+
     activeMount = null;
 }
 

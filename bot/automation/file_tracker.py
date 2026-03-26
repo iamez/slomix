@@ -168,15 +168,15 @@ class FileTracker:
             return True  # Process on DB error — import uses ON CONFLICT so duplicates are safe
 
     async def _is_in_processed_files_table(self, filename: str) -> bool:
-        """Check if filename exists in processed_files table"""
+        """Check if filename exists in processed_files table (success OR failed)"""
         try:
             query = """SELECT 1 FROM processed_files
-                       WHERE filename = $1 AND success = true"""
+                       WHERE filename = $1"""
 
             result = await self.db_adapter.fetch_one(query, (filename,))
             return result is not None
         except Exception as e:
-            logger.debug(f"Error checking processed_files table: {e}")
+            logger.warning(f"⚠️ DB error checking processed_files table (assuming unprocessed): {e}")
             return False
 
     async def _session_exists_in_db(self, filename: str) -> bool:
@@ -219,7 +219,7 @@ class FileTracker:
             return result is not None
 
         except Exception as e:
-            logger.debug(f"Error checking session in DB: {e}")
+            logger.warning(f"⚠️ DB error checking session in DB (assuming not exists): {e}")
             return False
 
     async def mark_processed(
