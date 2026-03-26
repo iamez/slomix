@@ -2056,9 +2056,11 @@ function renderCrossfireAngles(data) {
 
     const duosEl = document.getElementById('crossfire-top-duos');
     if (duosEl && data.top_duos && data.top_duos.length) {
-        duosEl.innerHTML = '<ol class="list-decimal list-inside text-sm text-slate-300 space-y-1">' + data.top_duos.map(d =>
-            `<li>${d.teammate1_guid.substring(0,8)} + ${d.teammate2_guid.substring(0,8)} = ${d.executions} exec (avg ${d.avg_angle}&deg;)</li>`
-        ).join('') + '</ol>';
+        duosEl.innerHTML = '<ol class="list-decimal list-inside text-sm text-slate-300 space-y-1">' + data.top_duos.map(d => {
+            const name1 = d.name ? escapeHtml(stripEtColors(d.name)) : escapeHtml(d.teammate1_guid.substring(0, 8));
+            const name2 = d.partner_name ? escapeHtml(stripEtColors(d.partner_name)) : escapeHtml(d.teammate2_guid.substring(0, 8));
+            return `<li>${name1} + ${name2} = ${d.executions} exec (avg ${d.avg_angle}&deg;)</li>`;
+        }).join('') + '</ol>';
     }
 }
 
@@ -2594,6 +2596,30 @@ function loadLeaderboardData() {
     if (!contentEl) return;
     contentEl.innerHTML = '<div class="text-[11px] text-slate-500">Loading...</div>';
     const hasScope = proximityScopeState.sessionDate || proximityScopeState.mapName || proximityScopeState.roundNumber != null;
+
+    // Hide range buttons when scope is active (range is meaningless for scoped queries)
+    const rangeContainer = document.getElementById('lb-range-btns');
+    if (rangeContainer) rangeContainer.style.display = hasScope ? 'none' : '';
+
+    // Show scope indicator near leaderboard title when scope is active
+    let scopeIndicator = document.getElementById('lb-scope-indicator');
+    if (hasScope) {
+        const parts = [];
+        if (proximityScopeState.sessionDate) parts.push(proximityScopeState.sessionDate);
+        if (proximityScopeState.mapName) parts.push(proximityScopeState.mapName);
+        if (proximityScopeState.roundNumber != null) parts.push(`R${proximityScopeState.roundNumber}`);
+        const label = parts.join(' / ');
+        if (!scopeIndicator) {
+            scopeIndicator = document.createElement('span');
+            scopeIndicator.id = 'lb-scope-indicator';
+            scopeIndicator.className = 'text-[10px] px-2 py-1 rounded bg-brand-amber/10 text-brand-amber border border-brand-amber/30 ml-2';
+            const titleEl = rangeContainer?.parentElement?.querySelector('.text-sm.font-bold');
+            if (titleEl) titleEl.after(scopeIndicator);
+        }
+        scopeIndicator.textContent = label;
+    } else if (scopeIndicator) {
+        scopeIndicator.remove();
+    }
     const lbParams = buildScopeParams({ includeRange: !hasScope, extra: { category: lbActiveTab, limit: 10 } });
     if (!hasScope) lbParams.set('range_days', String(lbRangeDays));
     fetchJSON(`${API_BASE}/proximity/leaderboards?${lbParams}`).then(data => {

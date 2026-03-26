@@ -11,6 +11,7 @@ Features:
 - Completely isolated - errors here won't crash main bot
 """
 
+import asyncio
 import discord
 from discord.ext import commands, tasks
 import os
@@ -75,6 +76,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
         if self.enabled:
             logger.info("🎯 Proximity Tracker cog initialized (ENABLED)")
             self.scan_engagement_files.start()
+            self.relink_null_rounds.start()
         else:
             logger.info("🎯 Proximity Tracker cog initialized (DISABLED)")
 
@@ -226,6 +228,8 @@ class ProximityCog(commands.Cog, name="Proximity"):
         """Cleanup when cog is unloaded"""
         if self.scan_engagement_files.is_running():
             self.scan_engagement_files.cancel()
+        if self.relink_null_rounds.is_running():
+            self.relink_null_rounds.cancel()
 
     async def cog_command_error(self, ctx, error):
         """Handle errors without crashing bot"""
@@ -293,7 +297,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
             if not self._startup_scan_completed:
                 self._startup_scan_completed = True
 
-    @tasks.loop(minutes=5)
+    @tasks.loop(minutes=2)
     async def scan_engagement_files(self):
         """Periodically scan for new engagement files and import them"""
         await self._scan_and_import(force=False)
@@ -302,6 +306,119 @@ class ProximityCog(commands.Cog, name="Proximity"):
     async def before_scan(self):
         """Wait for bot to be ready before starting scan task"""
         await self.bot.wait_until_ready()
+
+    # =========================================================================
+    # RE-LINKER — fix NULL round_id in proximity tables
+    # =========================================================================
+
+    _PROXIMITY_ROUND_ID_TABLES = [
+        "proximity_carrier_event",
+        "proximity_carrier_kill",
+        "proximity_carrier_return",
+        "proximity_combat_position",
+        "proximity_construction_event",
+        "proximity_crossfire_opportunity",
+        "proximity_escort_credit",
+        "proximity_focus_fire",
+        "proximity_hit_region",
+        "proximity_kill_outcome",
+        "proximity_lua_trade_kill",
+        "proximity_objective_focus",
+        "proximity_objective_run",
+        "proximity_reaction_metric",
+        "proximity_revive",
+        "proximity_spawn_timing",
+        "proximity_support_summary",
+        "proximity_team_cohesion",
+        "proximity_team_push",
+        "proximity_trade_event",
+        "proximity_vehicle_progress",
+        "proximity_weapon_accuracy",
+    ]
+
+    async def _relink_null_round_ids(self) -> None:
+        """Find proximity rows with NULL round_id and attempt to resolve them."""
+        try:
+            from bot.core.round_linker import resolve_round_id
+
+            db = self.bot.db_adapter
+
+            # Find distinct unlinked proximity rounds
+            unlinked = await db.fetch_all(
+                "SELECT DISTINCT map_name, round_number, round_start_unix, session_date "
+                "FROM proximity_reaction_metric "
+                "WHERE round_id IS NULL "
+                "ORDER BY session_date DESC LIMIT 50"
+            )
+
+            if not unlinked:
+                return
+
+            linked = 0
+            failed = 0
+
+            for row in unlinked:
+                map_name = row[0] if isinstance(row, (list, tuple)) else row.get('map_name') or row['map_name']
+                round_number = row[1] if isinstance(row, (list, tuple)) else row.get('round_number') or row['round_number']
+                round_start_unix = row[2] if isinstance(row, (list, tuple)) else row.get('round_start_unix') or row['round_start_unix']
+                session_date = row[3] if isinstance(row, (list, tuple)) else row.get('session_date') or row['session_date']
+
+                # Build target_dt from unix timestamp if available
+                target_dt = None
+                if round_start_unix:
+                    try:
+                        target_dt = datetime.fromtimestamp(int(round_start_unix))
+                    except (ValueError, TypeError, OSError):
+                        pass
+
+                round_date_str = str(session_date) if session_date else None
+
+                round_id = await resolve_round_id(
+                    db,
+                    map_name,
+                    round_number,
+                    target_dt=target_dt,
+                    round_date=round_date_str,
+                )
+
+                if round_id is None:
+                    failed += 1
+                    continue
+
+                # Update all proximity tables that have round_id
+                for table in self._PROXIMITY_ROUND_ID_TABLES:
+                    try:
+                        await db.execute(
+                            f"UPDATE {table} SET round_id = ? "
+                            f"WHERE round_id IS NULL "
+                            f"AND map_name = ? AND round_number = ? "
+                            f"AND session_date = ?",
+                            (round_id, map_name, round_number, session_date),
+                        )
+                    except Exception:
+                        pass  # Table may not have matching rows
+
+                linked += 1
+
+            if linked > 0 or failed > 0:
+                logger.info(
+                    f"🔗 Proximity re-linker: {linked} rounds linked, "
+                    f"{failed} unresolved (of {len(unlinked)} total)"
+                )
+
+        except Exception as e:
+            logger.error(f"Re-linker error: {e}", exc_info=True)
+
+    @tasks.loop(minutes=5)
+    async def relink_null_rounds(self):
+        """Periodically attempt to link NULL round_id rows in proximity tables."""
+        await self._relink_null_round_ids()
+
+    @relink_null_rounds.before_loop
+    async def before_relink(self):
+        """Wait for bot to be ready + 60s before starting re-linker."""
+        await self.bot.wait_until_ready()
+        await asyncio.sleep(60)
 
     # =========================================================================
     # IMPORT LOGIC
