@@ -1089,6 +1089,16 @@ class UltimateETLegacyBot(commands.Bot):
                     await db_manager.disconnect()
 
                 if not success:
+                    # Mark parse failures as processed (with success=FALSE) to prevent
+                    # infinite retry loops on legitimately unparseable files (e.g. header-only)
+                    try:
+                        await self.file_tracker.mark_processed(
+                            filename, success=False, error_msg=message, file_path=local_path
+                        )
+                        self.processed_files.add(filename)
+                        logger.warning(f"Marked {filename} as failed (will not retry): {message}")
+                    except Exception as mark_err:
+                        logger.debug(f"Failed to mark {filename} as failed: {mark_err}")
                     raise Exception(f"Import failed: {message}")
 
                 # Parse file to get player count for return value
@@ -3548,7 +3558,7 @@ class UltimateETLegacyBot(commands.Bot):
         if filename in self.processed_endstats_files:
             return False
 
-        check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
+        check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
         result = await self.db_adapter.fetch_one(check_query, (filename,))
         if result:
             self.processed_endstats_files.add(filename)
@@ -5084,7 +5094,7 @@ class UltimateETLegacyBot(commands.Bot):
                 f"🔄 Endstats retry attempt {attempt}/{self.endstats_retry_max_attempts} for {filename}"
             )
             # If already processed in DB, stop retrying
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
                 self._log_endstats_transition(
@@ -5555,7 +5565,7 @@ class UltimateETLegacyBot(commands.Bot):
                 return
 
             # Then check database table
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
                 self._log_endstats_transition(
@@ -5611,12 +5621,33 @@ class UltimateETLegacyBot(commands.Bot):
             )
 
             if not round_id:
+                # Track retry attempts to prevent infinite loop
+                attempt = self.endstats_retry_counts.get(filename, 0) + 1
+                self.endstats_retry_counts[filename] = attempt
+
+                if attempt > self.endstats_retry_max_attempts:
+                    logger.error(
+                        f"❌ Endstats polling retry limit reached ({self.endstats_retry_max_attempts}) "
+                        f"for {filename} — marking as failed"
+                    )
+                    try:
+                        await self.db_adapter.execute(
+                            "INSERT INTO processed_endstats_files (filename, success, error_message) "
+                            "VALUES ($1, FALSE, $2) ON CONFLICT (filename) DO NOTHING",
+                            (filename, f"round_id_unresolved_after_{self.endstats_retry_max_attempts}_attempts"),
+                        )
+                    except Exception as mark_err:
+                        logger.debug(f"Failed to mark endstats as failed: {mark_err}")
+                    self.endstats_retry_counts.pop(filename, None)
+                    # Keep in processed set so it won't be retried
+                    return
+
                 self._log_endstats_transition(
                     logger,
                     source,
                     "waiting_round_id",
                     filename,
-                    detail="round_id_unresolved_next_poll",
+                    detail=f"round_id_unresolved_poll_attempt_{attempt}/{self.endstats_retry_max_attempts}",
                     level="warning",
                 )
                 # Remove from in-memory set to allow retry on next polling cycle
@@ -5698,7 +5729,7 @@ class UltimateETLegacyBot(commands.Bot):
                 return
 
             # Then check database table
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
                 self._log_endstats_transition(

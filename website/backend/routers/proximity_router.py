@@ -1,5 +1,7 @@
 import math
 import json
+import time
+import asyncio
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from collections import defaultdict
@@ -126,7 +128,8 @@ async def _table_column_exists(db: DatabaseAdapter, table_name: str, column_name
                 (table_name, column_name),
             )
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("_table_column_exists check failed for %s.%s: %s", table_name, column_name, e)
         return False
 
 
@@ -191,7 +194,7 @@ async def _load_scoped_guid_name_map(
             if row and row[0] and row[1]
         }
     except Exception as e:
-        logger.warning("_load_scoped_guid_name_map failed: %s", e)
+        logger.error("_load_scoped_guid_name_map failed (player names will be missing): %s", e)
         return {}
 
 
@@ -461,7 +464,8 @@ def _parse_json_field(value: Any) -> Any:
     if isinstance(value, str):
         try:
             return json.loads(value)
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to parse JSON field: %s", e)
             return None
     return None
 
@@ -555,6 +559,155 @@ def _compute_strafe_metrics(path: List[Dict[str, Any]], min_step: float = 5.0, a
         "turn_count": turn_count,
         "turn_rate": turn_rate,
         "events": turn_events,
+    }
+
+
+# ========================================
+# COMPOSITE DASHBOARD ENDPOINT
+# ========================================
+# Replaces 29+ individual HTTP calls with a single asyncio.gather.
+# Individual endpoints remain unchanged for backward compatibility.
+
+DASHBOARD_SECTION_GROUPS = {
+    "critical": ["summary", "engagements", "hotzones", "movers", "teamplay", "classes", "events"],
+    "combat": ["reactions", "trades_summary", "trades_events", "weapon_accuracy", "revives", "movement_stats"],
+    "teamplay_v5": ["spawn_timing", "cohesion", "crossfire_angles", "pushes", "lua_trades"],
+    "analytics": ["kill_outcomes", "kill_outcome_stats", "hit_regions", "headshot_rates"],
+    "objectives": ["carrier_events", "carrier_kills", "carrier_returns", "vehicle_progress", "escort_credits", "construction_events"],
+    "scoring": ["prox_scores", "prox_formula"],
+}
+DASHBOARD_ALL_SECTIONS = [s for g in DASHBOARD_SECTION_GROUPS.values() for s in g]
+
+
+async def _timed_section(name: str, coro):
+    """Wrap a section coroutine with timing and error handling."""
+    t0 = time.monotonic()
+    try:
+        result = await coro
+        ms = round((time.monotonic() - t0) * 1000, 1)
+        if isinstance(result, dict):
+            result["_timing_ms"] = ms
+        return result
+    except Exception as e:
+        ms = round((time.monotonic() - t0) * 1000, 1)
+        logger.warning("Dashboard section %s failed in %.1fms: %s", name, ms, e)
+        return {"_error": str(e), "status": "error", "_timing_ms": ms}
+
+
+@router.get("/proximity/dashboard")
+async def get_proximity_dashboard(
+    sections: str = "all",
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Composite endpoint: fetches multiple proximity sections in a single request.
+    Replaces 29+ individual HTTP calls with one asyncio.gather.
+
+    sections: "all", a group name (critical/combat/teamplay_v5/analytics/objectives/scoring),
+              or comma-separated section keys.
+    """
+    t0_total = time.monotonic()
+
+    # Parse requested sections
+    requested = set()
+    for part in sections.split(","):
+        part = part.strip()
+        if part == "all":
+            requested = set(DASHBOARD_ALL_SECTIONS)
+            break
+        elif part in DASHBOARD_SECTION_GROUPS:
+            requested.update(DASHBOARD_SECTION_GROUPS[part])
+        elif part in DASHBOARD_ALL_SECTIONS:
+            requested.add(part)
+
+    if not requested:
+        return {"status": "error", "detail": "No valid sections requested"}
+
+    # Pre-parse session_date so all downstream functions receive a date object.
+    # Some v6 endpoints don't call _parse_iso_date() internally.
+    parsed_date = _parse_iso_date(session_date)
+
+    # Full scope kwargs (for endpoints that accept all 5 scope params)
+    full = dict(range_days=range_days, session_date=parsed_date, map_name=map_name,
+                round_number=round_number, round_start_unix=round_start_unix)
+
+    # Section → coroutine dispatchers
+    # Grouped by parameter pattern to avoid passing unsupported kwargs
+    dispatchers = {
+        # --- Full scope ---
+        "summary": lambda: get_proximity_summary(**full, db=db),
+        "engagements": lambda: get_proximity_engagements(**full, db=db),
+        "hotzones": lambda: get_proximity_hotzones(**full, db=db),
+        "movers": lambda: get_proximity_movers(**full, db=db),
+        "teamplay": lambda: get_proximity_teamplay(**full, limit=6, db=db),
+        "classes": lambda: get_proximity_classes(**full, db=db),
+        "events": lambda: get_proximity_events(**full, limit=20, db=db),
+        "trades_summary": lambda: get_proximity_trades_summary(**full, db=db),
+        "trades_events": lambda: get_proximity_trade_events(**full, limit=10, db=db),
+        "spawn_timing": lambda: get_proximity_spawn_timing(**full, db=db),
+        "cohesion": lambda: get_proximity_cohesion(**full, db=db),
+        "crossfire_angles": lambda: get_proximity_crossfire_angles(**full, db=db),
+        "pushes": lambda: get_proximity_pushes(**full, db=db),
+        "lua_trades": lambda: get_proximity_lua_trades(**full, db=db),
+        "kill_outcomes": lambda: get_proximity_kill_outcomes(**full, db=db),
+        "hit_regions": lambda: get_proximity_hit_regions(**full, db=db),
+        "carrier_events": lambda: get_proximity_carrier_events(**full, db=db),
+        "carrier_kills": lambda: get_proximity_carrier_kills(**full, db=db),
+        "carrier_returns": lambda: get_proximity_carrier_returns(**full, db=db),
+        "vehicle_progress": lambda: get_proximity_vehicle_progress(**full, db=db),
+        "escort_credits": lambda: get_proximity_escort_credits(**full, db=db),
+        "construction_events": lambda: get_proximity_construction_events(**full, db=db),
+        # --- Partial scope (no round_number/round_start_unix) ---
+        "reactions": lambda: get_proximity_reactions(**full, limit=6, db=db),
+        "kill_outcome_stats": lambda: get_proximity_kill_outcomes_player_stats(
+            range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
+        "headshot_rates": lambda: get_proximity_hit_regions_headshot_rates(
+            range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
+        "movement_stats": lambda: get_proximity_movement_stats(
+            range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
+        "revives": lambda: get_proximity_revives(
+            range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
+        "weapon_accuracy": lambda: get_proximity_weapon_accuracy(
+            range_days=range_days, map_name=map_name, db=db),
+        # --- Minimal scope ---
+        "prox_scores": lambda: get_prox_scores(range_days=range_days, db=db),
+        "prox_formula": lambda: get_prox_scores_formula(),
+    }
+
+    # Filter to only requested sections, preserve group ordering
+    keys = [s for s in DASHBOARD_ALL_SECTIONS if s in requested and s in dispatchers]
+    coros = [_timed_section(k, dispatchers[k]()) for k in keys]
+
+    results = await asyncio.gather(*coros, return_exceptions=True)
+
+    sections_dict = {}
+    ok_count = 0
+    err_count = 0
+    for key, result in zip(keys, results):
+        if isinstance(result, Exception):
+            sections_dict[key] = {"_error": str(result), "status": "error"}
+            err_count += 1
+        elif isinstance(result, dict) and result.get("status") == "error":
+            sections_dict[key] = result
+            err_count += 1
+        else:
+            sections_dict[key] = result
+            ok_count += 1
+
+    total_ms = round((time.monotonic() - t0_total) * 1000, 1)
+
+    return {
+        "status": "ok",
+        "sections_requested": len(keys),
+        "sections_ok": ok_count,
+        "sections_error": err_count,
+        "total_ms": total_ms,
+        "sections": sections_dict,
     }
 
 
@@ -692,6 +845,7 @@ async def get_proximity_scopes(
             }
         )
     except Exception as e:
+        logger.error("Session scope query failed: %s", e, exc_info=True)
         payload.update(
             {
                 "status": "error",
@@ -787,7 +941,8 @@ async def get_proximity_summary(
                 f"FROM player_track {where_sql}",
                 query_params,
             )
-        except Exception:
+        except Exception as e:
+            logger.warning("Player track aggregate query failed: %s", e)
             track_row = None
 
         duo_rows = await db.fetch_all(
@@ -811,7 +966,8 @@ async def get_proximity_summary(
                     f"SELECT COUNT(*) FROM {tbl} {where_sql}", query_params
                 )
                 v5_counts[tbl] = int(cnt or 0)
-            except Exception:
+            except Exception as e:
+                logger.warning("v5 table %s query failed: %s", tbl, e)
                 v5_counts[tbl] = 0
 
         payload.update(
@@ -851,6 +1007,7 @@ async def get_proximity_summary(
             }
         )
     except Exception as e:
+        logger.error("Engagement query failed: %s", e, exc_info=True)
         payload.update(
             {
                 "status": "error",
@@ -3043,7 +3200,7 @@ async def get_proximity_weapon_accuracy(
                    SUM(hits) AS total_hits,
                    SUM(kills) AS total_kills,
                    SUM(headshots) AS total_hs,
-                   ROUND((SUM(hits)::REAL / NULLIF(SUM(shots_fired), 0)) * 100, 1) AS accuracy
+                   ROUND((SUM(hits)::numeric / NULLIF(SUM(shots_fired), 0)) * 100, 1) AS accuracy
             FROM proximity_weapon_accuracy {where}
             GROUP BY player_guid
             ORDER BY accuracy DESC
@@ -3058,7 +3215,7 @@ async def get_proximity_weapon_accuracy(
             wrows = await db.fetch_all(
                 """
                 SELECT weapon_id, SUM(shots_fired), SUM(hits), SUM(kills), SUM(headshots),
-                       ROUND((SUM(hits)::REAL / NULLIF(SUM(shots_fired), 0)) * 100, 1)
+                       ROUND((SUM(hits)::numeric / NULLIF(SUM(shots_fired), 0)) * 100, 1)
                 FROM proximity_weapon_accuracy
                 WHERE player_guid = $1 AND shots_fired > 0
                 GROUP BY weapon_id ORDER BY SUM(kills) DESC
@@ -3090,6 +3247,93 @@ async def get_proximity_weapon_accuracy(
         }
     except Exception as e:
         logger.warning("Proximity endpoint error: %s", e)
+        return {"status": "error", "detail": "Internal error"}
+
+
+@router.get("/proximity/revives")
+async def get_proximity_revives(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    player_guid: Optional[str] = None,
+    limit: int = 20,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Revive summary and medic leaderboard from proximity_revive table."""
+    safe_limit = max(1, min(limit, 50))
+    try:
+        clauses: list[str] = []
+        params: list = []
+
+        # Date filter via created_at (proximity_revive has no session_date column)
+        parsed_sd = _parse_iso_date(session_date)
+        if parsed_sd is not None:
+            params.append(parsed_sd)
+            clauses.append(f"created_at::date = ${len(params)}")
+        else:
+            safe_range = max(1, min(int(range_days or 30), 3650))
+            since = datetime.utcnow().date() - timedelta(days=safe_range)
+            params.append(since)
+            clauses.append(f"created_at >= ${len(params)}")
+
+        if map_name:
+            params.append(map_name.strip())
+            clauses.append(f"map_name = ${len(params)}")
+        if player_guid:
+            params.append(player_guid.strip())
+            clauses.append(f"medic_guid = ${len(params)}")
+
+        where_sql = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        medic_filter = "medic_guid IS NOT NULL AND medic_guid != ''"
+        medic_where = ("WHERE " + " AND ".join(clauses + [medic_filter])) if clauses else f"WHERE {medic_filter}"
+        query_params = tuple(params)
+
+        # Summary
+        summary_row = await db.fetch_one(
+            f"""
+            SELECT COUNT(*) AS total_revives,
+                   ROUND(AVG(distance_to_enemy)::numeric, 0) AS avg_enemy_distance,
+                   ROUND(100.0 * SUM(CASE WHEN under_fire THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) AS under_fire_pct
+            FROM proximity_revive {where_sql}
+            """,
+            query_params,
+        )
+
+        summary = {
+            "total_revives": int(summary_row[0] or 0) if summary_row else 0,
+            "avg_enemy_distance": float(summary_row[1] or 0) if summary_row else 0,
+            "under_fire_pct": float(summary_row[2] or 0) if summary_row else 0,
+        }
+
+        # Medic leaderboard
+        rows = await db.fetch_all(
+            f"""
+            SELECT medic_guid, MAX(medic_name) AS name,
+                   COUNT(*) AS revives,
+                   SUM(CASE WHEN under_fire THEN 1 ELSE 0 END) AS under_fire_count,
+                   ROUND(AVG(distance_to_enemy)::numeric, 0) AS avg_enemy_dist
+            FROM proximity_revive {medic_where}
+            GROUP BY medic_guid
+            HAVING COUNT(*) >= 2
+            ORDER BY COUNT(*) DESC
+            LIMIT ${len(params) + 1}
+            """,
+            query_params + (safe_limit,),
+        )
+
+        leaders = [
+            {
+                "guid": r[0], "name": r[1],
+                "revives": int(r[2] or 0),
+                "under_fire_count": int(r[3] or 0),
+                "avg_enemy_dist": float(r[4] or 0),
+            }
+            for r in (rows or [])
+        ]
+
+        return {"status": "ok", "summary": summary, "leaders": leaders}
+    except Exception as e:
+        logger.warning("Proximity revives endpoint error: %s", e)
         return {"status": "error", "detail": "Internal error"}
 
 
@@ -4098,7 +4342,7 @@ async def get_proximity_movement_stats(
     params: list = []
 
     if session_date:
-        params.append(session_date)
+        params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
         where_parts.append(f"session_date = ${len(params)}")
     else:
         params.append(range_days)
@@ -4211,3 +4455,497 @@ async def get_prox_scores_formula():
     """Return current formula config (weights, metrics, categories) for transparency."""
     from website.backend.services.prox_scoring import get_formula_config
     return {"status": "ok", **get_formula_config()}
+
+
+# ========================================
+# v6.0 CARRIER INTELLIGENCE
+# ========================================
+
+@router.get("/proximity/carrier-events")
+async def get_proximity_carrier_events(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    limit: int = 10,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Carrier leaderboard + recent events from proximity_carrier_event."""
+    where_parts: list = []
+    params: list = []
+
+    if session_date:
+        params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
+        where_parts.append(f"session_date = ${len(params)}")
+    else:
+        params.append(range_days)
+        where_parts.append(f"session_date >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
+    if map_name:
+        params.append(map_name)
+        where_parts.append(f"map_name = ${len(params)}")
+    if round_number is not None:
+        params.append(round_number)
+        where_parts.append(f"round_number = ${len(params)}")
+    if round_start_unix is not None:
+        params.append(round_start_unix)
+        where_parts.append(f"round_start_unix = ${len(params)}")
+
+    where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+    safe_limit = max(1, min(limit, 50))
+    scope = {"session_date": session_date, "map_name": map_name, "round_number": round_number}
+
+    try:
+        exists = await _table_column_exists(db, "proximity_carrier_event", "carrier_guid")
+        if not exists:
+            return {"status": "ok", "carriers": [], "events": [], "summary": {}}
+
+        # Carrier leaderboard
+        carriers_rows = await db.fetch_all(
+            f"""
+            SELECT carrier_guid, MAX(carrier_name) AS name,
+                   COUNT(*) AS carries,
+                   SUM(CASE WHEN outcome = 'secured' THEN 1 ELSE 0 END) AS secures,
+                   SUM(CASE WHEN outcome = 'killed' THEN 1 ELSE 0 END) AS killed,
+                   SUM(CASE WHEN outcome = 'dropped' THEN 1 ELSE 0 END) AS dropped,
+                   ROUND(SUM(carry_distance)::numeric, 0) AS total_distance,
+                   ROUND(AVG(efficiency)::numeric, 3) AS avg_efficiency,
+                   ROUND(AVG(duration_ms)::numeric, 0) AS avg_duration_ms
+            FROM proximity_carrier_event {where_sql}
+            GROUP BY carrier_guid
+            HAVING COUNT(*) >= 1
+            ORDER BY SUM(CASE WHEN outcome = 'secured' THEN 1 ELSE 0 END) DESC, SUM(carry_distance) DESC
+            LIMIT {safe_limit}
+            """,
+            tuple(params),
+        )
+
+        carriers = []
+        for r in (carriers_rows or []):
+            carries = int(r[2] or 0)
+            secures = int(r[3] or 0)
+            carriers.append({
+                "guid": r[0],
+                "name": r[1],
+                "carries": carries,
+                "secures": secures,
+                "killed": int(r[4] or 0),
+                "dropped": int(r[5] or 0),
+                "total_distance": float(r[6] or 0),
+                "avg_efficiency": float(r[7] or 0),
+                "avg_duration_ms": float(r[8] or 0),
+                "secure_rate": round(secures * 100 / carries, 1) if carries > 0 else 0,
+            })
+
+        # Recent events
+        events_rows = await db.fetch_all(
+            f"""
+            SELECT carrier_name, carrier_team, flag_team, outcome,
+                   carry_distance, beeline_distance, efficiency,
+                   duration_ms, map_name, killer_name, pickup_time
+            FROM proximity_carrier_event {where_sql}
+            ORDER BY session_date DESC, pickup_time DESC
+            LIMIT 20
+            """,
+            tuple(params),
+        )
+
+        events = []
+        for r in (events_rows or []):
+            events.append({
+                "carrier_name": r[0],
+                "carrier_team": r[1],
+                "flag_team": r[2],
+                "outcome": r[3],
+                "carry_distance": float(r[4] or 0),
+                "beeline_distance": float(r[5] or 0),
+                "efficiency": float(r[6] or 0),
+                "duration_ms": int(r[7] or 0),
+                "map_name": r[8],
+                "killer_name": r[9] or "",
+                "pickup_time": int(r[10] or 0),
+            })
+
+        # Summary
+        summary_row = await db.fetch_one(
+            f"""
+            SELECT COUNT(*),
+                   SUM(CASE WHEN outcome = 'secured' THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN outcome = 'killed' THEN 1 ELSE 0 END),
+                   ROUND(AVG(carry_distance)::numeric, 0),
+                   ROUND(AVG(efficiency)::numeric, 3)
+            FROM proximity_carrier_event {where_sql}
+            """,
+            tuple(params),
+        )
+        total = int(summary_row[0] or 0) if summary_row else 0
+        total_secures = int(summary_row[1] or 0) if summary_row else 0
+        summary = {
+            "total_carries": total,
+            "total_secures": total_secures,
+            "total_killed": int(summary_row[2] or 0) if summary_row else 0,
+            "avg_distance": float(summary_row[3] or 0) if summary_row else 0,
+            "avg_efficiency": float(summary_row[4] or 0) if summary_row else 0,
+            "secure_rate": round(total_secures * 100 / total, 1) if total > 0 else 0,
+        }
+
+        return {"status": "ok", "scope": scope, "carriers": carriers, "events": events, "summary": summary}
+    except Exception as e:
+        logger.warning("Carrier events error: %s", e)
+        return {"status": "error", "detail": str(e), "carriers": [], "events": [], "summary": {}}
+
+
+@router.get("/proximity/carrier-kills")
+async def get_proximity_carrier_kills(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    limit: int = 10,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Carrier killer leaderboard from proximity_carrier_kill."""
+    where_parts: list = []
+    params: list = []
+
+    if session_date:
+        params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
+        where_parts.append(f"session_date = ${len(params)}")
+    else:
+        params.append(range_days)
+        where_parts.append(f"session_date >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
+    if map_name:
+        params.append(map_name)
+        where_parts.append(f"map_name = ${len(params)}")
+    if round_number is not None:
+        params.append(round_number)
+        where_parts.append(f"round_number = ${len(params)}")
+    if round_start_unix is not None:
+        params.append(round_start_unix)
+        where_parts.append(f"round_start_unix = ${len(params)}")
+
+    where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+    safe_limit = max(1, min(limit, 50))
+
+    try:
+        exists = await _table_column_exists(db, "proximity_carrier_kill", "killer_guid")
+        if not exists:
+            return {"status": "ok", "killers": []}
+
+        rows = await db.fetch_all(
+            f"""
+            SELECT killer_guid, MAX(killer_name) AS name,
+                   COUNT(*) AS carrier_kills,
+                   ROUND(AVG(carrier_distance_at_kill)::numeric, 0) AS avg_distance_stopped
+            FROM proximity_carrier_kill {where_sql}
+            GROUP BY killer_guid
+            HAVING COUNT(*) >= 1
+            ORDER BY COUNT(*) DESC
+            LIMIT {safe_limit}
+            """,
+            tuple(params),
+        )
+
+        killers = []
+        for r in (rows or []):
+            killers.append({
+                "guid": r[0],
+                "name": r[1],
+                "carrier_kills": int(r[2] or 0),
+                "avg_distance_stopped": float(r[3] or 0),
+            })
+
+        return {"status": "ok", "killers": killers}
+    except Exception as e:
+        logger.warning("Carrier kills error: %s", e)
+        return {"status": "error", "detail": str(e), "killers": []}
+
+
+# ========================================
+# v6.0 Phase 1.5: CARRIER RETURNS
+# ========================================
+
+@router.get("/proximity/carrier-returns")
+async def get_proximity_carrier_returns(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    limit: int = 10,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Carrier return intelligence — Phase 1.5"""
+    try:
+        if not await _table_column_exists(db, 'proximity_carrier_return', 'returner_guid'):
+            return {"status": "ok", "returners": [], "events": [], "summary": {}}
+
+        where_parts: list = []
+        params: list = []
+        if session_date:
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
+            where_parts.append(f"session_date = ${len(params)}")
+        else:
+            params.append(range_days)
+            where_parts.append(f"session_date >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
+        if map_name:
+            params.append(map_name)
+            where_parts.append(f"map_name = ${len(params)}")
+        if round_number is not None:
+            params.append(round_number)
+            where_parts.append(f"round_number = ${len(params)}")
+        if round_start_unix is not None:
+            params.append(round_start_unix)
+            where_parts.append(f"round_start_unix = ${len(params)}")
+
+        where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+        scope = {"range_days": range_days, "session_date": session_date, "map_name": map_name}
+        safe_limit = max(1, min(limit, 50))
+
+        # Returner leaderboard
+        returner_rows = await db.fetch_all(
+            f"""
+            SELECT returner_guid AS guid, MAX(returner_name) AS name,
+                   COUNT(*) AS returns,
+                   ROUND(AVG(return_delay_ms)::numeric, 0) AS avg_delay_ms
+            FROM proximity_carrier_return
+            {where_sql}
+            GROUP BY returner_guid
+            HAVING COUNT(*) >= 1
+            ORDER BY COUNT(*) DESC
+            LIMIT {safe_limit}
+            """,
+            tuple(params),
+        )
+        returners = [dict(r) for r in (returner_rows or [])]
+
+        # Recent events
+        event_rows = await db.fetch_all(
+            f"""
+            SELECT returner_name, returner_team, flag_team, original_carrier_guid,
+                   return_delay_ms, map_name, drop_x, drop_y, drop_z, return_time
+            FROM proximity_carrier_return
+            {where_sql}
+            ORDER BY session_date DESC, return_time DESC
+            LIMIT 20
+            """,
+            tuple(params),
+        )
+        events = [dict(r) for r in (event_rows or [])]
+
+        # Summary
+        summary_row = await db.fetch_one(
+            f"""
+            SELECT COUNT(*) AS total_returns,
+                   ROUND(AVG(return_delay_ms)::numeric, 0) AS avg_delay_ms
+            FROM proximity_carrier_return
+            {where_sql}
+            """,
+            tuple(params),
+        )
+        summary = dict(summary_row) if summary_row else {"total_returns": 0, "avg_delay_ms": 0}
+
+        return {"status": "ok", "scope": scope, "returners": returners, "events": events, "summary": summary}
+    except Exception as e:
+        logger.error(f"carrier-returns error: {e}")
+        return {"status": "error", "message": str(e), "returners": [], "events": [], "summary": {}}
+
+
+# ========================================
+# v6.0 Phase 2: VEHICLE & ESCORT
+# ========================================
+
+@router.get("/proximity/vehicle-progress")
+async def get_proximity_vehicle_progress(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Vehicle progress intelligence — Phase 2"""
+    try:
+        if not await _table_column_exists(db, 'proximity_vehicle_progress', 'vehicle_name'):
+            return {"status": "ok", "vehicles": []}
+
+        where_parts: list = []
+        params: list = []
+        if session_date:
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
+            where_parts.append(f"session_date = ${len(params)}")
+        else:
+            params.append(range_days)
+            where_parts.append(f"session_date >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
+        if map_name:
+            params.append(map_name)
+            where_parts.append(f"map_name = ${len(params)}")
+        if round_number is not None:
+            params.append(round_number)
+            where_parts.append(f"round_number = ${len(params)}")
+        if round_start_unix is not None:
+            params.append(round_start_unix)
+            where_parts.append(f"round_start_unix = ${len(params)}")
+
+        where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+
+        rows = await db.fetch_all(
+            f"""
+            SELECT vehicle_name, vehicle_type, map_name, session_date, round_number,
+                   total_distance, max_health, final_health, destroyed_count,
+                   start_x, start_y, start_z, end_x, end_y, end_z
+            FROM proximity_vehicle_progress
+            {where_sql}
+            ORDER BY session_date DESC, round_number DESC
+            LIMIT 50
+            """,
+            tuple(params),
+        )
+        vehicles = [dict(r) for r in (rows or [])]
+
+        return {"status": "ok", "vehicles": vehicles}
+    except Exception as e:
+        logger.error(f"vehicle-progress error: {e}")
+        return {"status": "error", "message": str(e), "vehicles": []}
+
+
+@router.get("/proximity/escort-credits")
+async def get_proximity_escort_credits(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    limit: int = 10,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Escort credit intelligence — Phase 2"""
+    try:
+        if not await _table_column_exists(db, 'proximity_escort_credit', 'player_guid'):
+            return {"status": "ok", "escorts": []}
+
+        where_parts: list = []
+        params: list = []
+        if session_date:
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
+            where_parts.append(f"session_date = ${len(params)}")
+        else:
+            params.append(range_days)
+            where_parts.append(f"session_date >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
+        if map_name:
+            params.append(map_name)
+            where_parts.append(f"map_name = ${len(params)}")
+        if round_number is not None:
+            params.append(round_number)
+            where_parts.append(f"round_number = ${len(params)}")
+        if round_start_unix is not None:
+            params.append(round_start_unix)
+            where_parts.append(f"round_start_unix = ${len(params)}")
+
+        where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+        safe_limit = max(1, min(limit, 50))
+
+        rows = await db.fetch_all(
+            f"""
+            SELECT player_guid AS guid, MAX(player_name) AS name,
+                   ROUND(SUM(credit_distance)::numeric, 0) AS total_credit_distance,
+                   SUM(mounted_time_ms) AS total_mounted_ms,
+                   SUM(proximity_time_ms) AS total_proximity_ms,
+                   ROUND(SUM(total_escort_distance)::numeric, 0) AS total_escort_distance,
+                   SUM(samples) AS total_samples
+            FROM proximity_escort_credit
+            {where_sql}
+            GROUP BY player_guid
+            HAVING SUM(samples) >= 1
+            ORDER BY SUM(credit_distance) DESC
+            LIMIT {safe_limit}
+            """,
+            tuple(params),
+        )
+        escorts = [dict(r) for r in (rows or [])]
+
+        return {"status": "ok", "escorts": escorts}
+    except Exception as e:
+        logger.error(f"escort-credits error: {e}")
+        return {"status": "error", "message": str(e), "escorts": []}
+
+
+# ========================================
+# v6.0 Phase 3: CONSTRUCTION EVENTS
+# ========================================
+
+@router.get("/proximity/construction-events")
+async def get_proximity_construction_events(
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    limit: int = 10,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Construction/destruction event intelligence — Phase 3"""
+    try:
+        if not await _table_column_exists(db, 'proximity_construction_event', 'player_guid'):
+            return {"status": "ok", "engineers": [], "events": []}
+
+        where_parts: list = []
+        params: list = []
+        if session_date:
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
+            where_parts.append(f"session_date = ${len(params)}")
+        else:
+            params.append(range_days)
+            where_parts.append(f"session_date >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
+        if map_name:
+            params.append(map_name)
+            where_parts.append(f"map_name = ${len(params)}")
+        if round_number is not None:
+            params.append(round_number)
+            where_parts.append(f"round_number = ${len(params)}")
+        if round_start_unix is not None:
+            params.append(round_start_unix)
+            where_parts.append(f"round_start_unix = ${len(params)}")
+
+        where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+        safe_limit = max(1, min(limit, 50))
+
+        # Engineer leaderboard with per-type breakdown
+        engineer_rows = await db.fetch_all(
+            f"""
+            SELECT player_guid AS guid, MAX(player_name) AS name,
+                   COUNT(*) AS total_events,
+                   COUNT(*) FILTER (WHERE event_type = 'dynamite_plant') AS plants,
+                   COUNT(*) FILTER (WHERE event_type = 'dynamite_defuse') AS defuses,
+                   COUNT(*) FILTER (WHERE event_type = 'objective_destroyed') AS destructions,
+                   COUNT(*) FILTER (WHERE event_type = 'construction_complete') AS constructions
+            FROM proximity_construction_event
+            {where_sql}
+            GROUP BY player_guid
+            HAVING COUNT(*) >= 1
+            ORDER BY COUNT(*) DESC
+            LIMIT {safe_limit}
+            """,
+            tuple(params),
+        )
+        engineers = [dict(r) for r in (engineer_rows or [])]
+
+        # Recent events
+        event_rows = await db.fetch_all(
+            f"""
+            SELECT event_type, player_name, player_team, track_name, map_name,
+                   session_date, round_number, event_time
+            FROM proximity_construction_event
+            {where_sql}
+            ORDER BY session_date DESC, event_time DESC
+            LIMIT 20
+            """,
+            tuple(params),
+        )
+        events = [dict(r) for r in (event_rows or [])]
+
+        return {"status": "ok", "engineers": engineers, "events": events}
+    except Exception as e:
+        logger.error(f"construction-events error: {e}")
+        return {"status": "error", "message": str(e), "engineers": [], "events": []}

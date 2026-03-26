@@ -336,6 +336,14 @@ export const useSkillFormula = () =>
     staleTime: 300_000,
   });
 
+export const useSkillHistory = (identifier: string, rangeDays = 30, sessionDate?: string) =>
+  useQuery({
+    queryKey: ['skill-history', identifier, rangeDays, sessionDate],
+    queryFn: () => api.getSkillHistory(identifier, rangeDays, sessionDate),
+    staleTime: 60_000,
+    enabled: !!identifier,
+  });
+
 // Sessions
 export const useSessions = (params?: { limit?: number; offset?: number; search?: string }) =>
   useQuery({

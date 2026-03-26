@@ -50,8 +50,8 @@ class GreatshotStorageService:
         self.root.mkdir(parents=True, exist_ok=True)
         try:
             os.chmod(self.root, 0o700)
-        except OSError:
-            pass
+        except OSError as e:
+            logger.warning("Could not set storage permissions on %s: %s", self.root, e)
 
     def demo_dir(self, demo_id: str) -> Path:
         return self.root / demo_id

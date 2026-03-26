@@ -178,6 +178,21 @@ AUTOMATION_ENABLED=true
 - **WS11**: `scripts/proximity_objective_coords_gate.py` — prevents coordinate regressions
 - **WS12**: `WEBHOOK_TRIGGER_MODE=stats_ready_only` — enforces single trigger path
 
+### ET Rating / Skill Rating (Mar 23-26)
+- **Tables**: `player_skill_ratings` (PK: player_guid), `player_skill_history` (trend tracking)
+- **Service**: `website/backend/services/skill_rating_service.py` (9-metric percentile formula)
+- **Router**: `website/backend/routers/skill_router.py` (4 endpoints)
+- **Endpoints**: `/api/skill/leaderboard`, `/api/skill/player/{id}`, `/api/skill/player/{id}/history`, `/api/skill/formula`
+- **Frontend**: `website/frontend/src/pages/SkillRating.tsx`
+- **Migration**: `migrations/024_add_skill_ratings.sql`, `migrations/030_add_skill_history_session_scope.sql`
+- **Features**: Per-session/map drill-down, confidence indicator, server-side tiers, auto-refresh when stale >1h
+- **Status**: Live, 40 players rated
+
+### Deep RCA Audit (Mar 26)
+- **Docs**: `docs/DEEP_RCA_AUDIT_PLAN.md`, `docs/DEEP_RCA_PROXIMITY_REVIEW.md`, `docs/DEEP_RCA_SKILL_RATING_REVIEW.md`
+- **Fixed**: 20+ error masking issues (silent exceptions, empty catches), retry loop bug, parser file restore
+- **Key fix**: `file_tracker.py` now respects `success=FALSE` entries (was causing infinite retry loops)
+
 ---
 
 ## Common Pitfalls
@@ -227,4 +242,4 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 ---
 
-**Version**: 1.0.8 | **Last Updated**: 2026-02-27 | **Schema Version**: 2.0
+**Version**: 1.0.9 | **Last Updated**: 2026-03-26 | **Schema Version**: 2.1

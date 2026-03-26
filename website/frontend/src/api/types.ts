@@ -1018,6 +1018,8 @@ export interface RatedPlayer {
   games_rated: number;
   last_rated_at: string | null;
   components: Record<string, SkillComponent>;
+  confidence?: number;
+  tier?: string;
 }
 
 export interface SkillLeaderboardResponse {
@@ -1044,6 +1046,36 @@ export interface SkillFormulaResponse {
   metrics: Record<string, string>;
   normalization: string;
   range: string;
+}
+
+// Skill Rating History — session-scoped
+export interface SkillSessionEntry {
+  session_date: string;
+  rounds: number;
+  maps: number;
+  session_rating: number;
+  components: Record<string, SkillComponent>;
+  cumulative_rating: number | null;
+  delta: number | null;
+}
+
+export interface SkillMapEntry {
+  map_name: string;
+  rounds: number;
+  map_rating: number;
+  components: Record<string, SkillComponent>;
+}
+
+export interface SkillHistoryResponse {
+  status: string;
+  player_guid: string;
+  range_days?: number;
+  sessions?: SkillSessionEntry[];
+  total_sessions?: number;
+  // When session_date is specified (drill-down):
+  session_date?: string;
+  session_summary?: SkillSessionEntry | null;
+  maps?: SkillMapEntry[];
 }
 
 // Kill Outcomes (v5.2)

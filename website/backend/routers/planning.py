@@ -297,7 +297,8 @@ async def _is_promoter_user(request: Request, db) -> bool:
         )
         if row and str(row[0] or "").lower() in {"root", "admin"}:
             return True
-    except Exception:
+    except Exception as e:
+        logger.warning("⚠️ _is_admin check failed (demoting to non-admin): %s", e)
         return False
     return False
 

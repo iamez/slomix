@@ -192,6 +192,11 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
                 row[0]: int(row[1] or 0) for row in raw_rows if row and row[0]
             }
         except Exception:
+            logger.warning(
+                "Failed to fetch raw dead-time aggregates for session_ids=%s",
+                session_ids,
+                exc_info=True,
+            )
             raw_dead_map = {}
 
         try:
@@ -199,6 +204,12 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
                 session_ids, session_ids_str
             )
         except Exception:
+            logger.error(
+                "Failed to aggregate player stats for session_ids=%s — "
+                "session will appear empty to the user",
+                session_ids,
+                exc_info=True,
+            )
             player_rows = []
 
         guid_to_team = {}

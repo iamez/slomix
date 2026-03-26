@@ -271,6 +271,7 @@ let _expandedMapIndex = null;
 let _overviewRenderToken = 0;
 const _overviewRoundStatsCache = new Map();
 const _overviewMapStatsCache = new Map();
+const _CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 let _playersRenderToken = 0;
 let _playersScopeLoaded = null;
 let _playerPanels = {};
@@ -670,9 +671,15 @@ async function _fetchOverviewMapPlayers(mapIndex) {
 
     const scopeToken = _sessionId || _sessionDate || 'session';
     const cacheKey = `${scopeToken}:${mapIndex}:${roundIds.join(',')}`;
-    if (_overviewMapStatsCache.has(cacheKey)) return _overviewMapStatsCache.get(cacheKey);
+    const cached = _overviewMapStatsCache.get(cacheKey);
+    if (cached && (Date.now() - cached._ts) < _CACHE_TTL_MS) return cached.data;
 
     const settled = await Promise.allSettled(roundIds.map(rid => _fetchOverviewRoundPlayers(rid)));
+    settled.forEach((result, i) => {
+        if (result.status === 'rejected') {
+            console.error(`Overview round fetch ${i} (round ${roundIds[i]}) failed:`, result.reason);
+        }
+    });
     const byName = new Map();
 
     settled.forEach(result => {
@@ -736,7 +743,7 @@ async function _fetchOverviewMapPlayers(mapIndex) {
     });
 
     const sorted = _sortScopedPlayers(aggregated);
-    _overviewMapStatsCache.set(cacheKey, sorted);
+    _overviewMapStatsCache.set(cacheKey, { data: sorted, _ts: Date.now() });
     return sorted;
 }
 
@@ -1836,7 +1843,13 @@ export async function sdTogglePlayerPanel(playerName, playerGuidOrPanelId, panel
                 ? fetchJSON(`${API_BASE}/player/${encodeURIComponent(playerGuid)}/vs-stats?scope=${_activeRoundId ? 'round' : 'session'}${_activeRoundId ? `&round_id=${_activeRoundId}` : (_sessionId ? `&session_id=${_sessionId}` : '')}&limit=5`)
                 : Promise.resolve(null),
         ];
+        const detailsLabels = ['playerStats', 'graph', 'weapon', 'vsStats'];
         const [playerStatsResult, graphResult, weaponResult, vsStatsResult] = await Promise.allSettled(detailsPromises);
+        [playerStatsResult, graphResult, weaponResult, vsStatsResult].forEach((result, i) => {
+            if (result.status === 'rejected') {
+                console.error(`Player detail fetch "${detailsLabels[i]}" failed:`, result.reason);
+            }
+        });
 
         const playerStatsRows = playerStatsResult.status === 'fulfilled'
             ? (playerStatsResult.value.players || [])
@@ -2155,6 +2168,7 @@ async function _loadSignalsTab() {
     const eventsScope = new URLSearchParams(scopeParams);
     eventsScope.set('limit', '250');
 
+    const teamplayLabels = ['tradesSummary', 'tradesEvents', 'duos', 'teamplay', 'movers'];
     const [tradesSummary, tradesEvents, duos, teamplay, movers] = await Promise.allSettled([
         fetchJSON(withScope(`${API_BASE}/proximity/trades/summary`)),
         fetchJSON(`${API_BASE}/proximity/trades/events?${eventsScope.toString()}`),
@@ -2162,6 +2176,11 @@ async function _loadSignalsTab() {
         fetchJSON(withScope(`${API_BASE}/proximity/teamplay`)),
         fetchJSON(`${withScope(`${API_BASE}/proximity/movers`)}${scopeParams ? '&' : '?'}limit=5`),
     ]);
+    [tradesSummary, tradesEvents, duos, teamplay, movers].forEach((result, i) => {
+        if (result.status === 'rejected') {
+            console.error(`Teamplay fetch "${teamplayLabels[i]}" failed:`, result.reason);
+        }
+    });
     if (requestToken !== _signalsRequestToken) return;
     if (_activeTab !== 'teamplay') return;
     if (((_activeRoundId ? _activeRoundId : 'session')) !== scopeKey) return;

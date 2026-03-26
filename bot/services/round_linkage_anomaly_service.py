@@ -39,11 +39,11 @@ def _row_get(row: Any, index: int, key: str, default: Any = None) -> Any:
         return row.get(key, default)
     try:
         return row[key]  # asyncpg.Record mapping access
-    except Exception:
+    except (KeyError, IndexError, TypeError):
         pass
     try:
         return row[index]  # tuple/list fallback
-    except Exception:
+    except (IndexError, TypeError):
         return default
 
 

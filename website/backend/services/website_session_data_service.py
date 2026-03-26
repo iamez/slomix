@@ -208,10 +208,12 @@ class WebsiteSessionDataService(SessionDataService):
             # Map winner side -> persistent team name if possible
             winner_side = row[4]
             side_to_team = {}
-            if side_counts[team1_name][1] != side_counts[team2_name][1]:
-                side_to_team[1] = team1_name if side_counts[team1_name][1] > side_counts[team2_name][1] else team2_name
-            if side_counts[team1_name][2] != side_counts[team2_name][2]:
-                side_to_team[2] = team1_name if side_counts[team1_name][2] > side_counts[team2_name][2] else team2_name
+            sc1 = side_counts.get(team1_name, {1: 0, 2: 0})
+            sc2 = side_counts.get(team2_name, {1: 0, 2: 0})
+            if sc1[1] != sc2[1]:
+                side_to_team[1] = team1_name if sc1[1] > sc2[1] else team2_name
+            if sc1[2] != sc2[2]:
+                side_to_team[2] = team1_name if sc1[2] > sc2[2] else team2_name
             winner_team_name = side_to_team.get(winner_side) if winner_side in (1, 2) else None
 
             allies_team_name = side_to_team.get(1) or "Allies"

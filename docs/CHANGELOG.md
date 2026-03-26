@@ -10,6 +10,39 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed — 2026-03-26: Deep RCA Audit (Mandelbrot-depth root cause analysis)
+
+Full report: `docs/DEEP_RCA_AUDIT_RESULTS_2026-03-26.md`
+
+#### CRITICAL fixes
+- **Proximity.tsx corruption**: File was overwritten with Python coverage HTML; restored from `8bf2f6e`
+- **Endstats infinite retry loop**: Added max 5 attempts + DB marking; fixed `success=TRUE` filter in dedup check
+- **Phantom processed_files**: 361 entries with `success=TRUE` that were header-only; batch corrected
+- **Promise.allSettled masking**: Added rejection logging in `app.js` and `session-detail.js`
+- **file_tracker.py DB error masking**: `_is_in_processed_files_table` and `_session_exists_in_db` returned False on DB error with only DEBUG logging → upgraded to WARNING
+
+#### HIGH fixes
+- **Proximity date type bug**: 7 v6 endpoints crashed with asyncpg DataError; added `_parse_iso_date()` at all 11 locations
+- **session_teams GRANT**: `website_app` lacked DELETE/INSERT/UPDATE on `session_teams`; GRANT executed
+- **Webhook race condition**: Added `_in_flight` set with atomic check-and-claim under `_state_lock` in `stats_webhook_notify.py`
+- **Team manager silent deserialization failure**: Added warning log for JSON parse errors in `team_manager.py:148`
+- **`_is_admin` silent demotion**: Added warning log for DB errors in `availability.py` and `planning.py`
+
+#### MEDIUM fixes (20+)
+- Error masking audit: 20+ silent `except: pass/return []` patterns fixed with proper logging
+- `proximity_router.py`: Added logging for `_table_column_exists`, `_load_scoped_guid_name_map`, `_parse_json_field`, v5 table counts
+- `proximity.js`: Replaced 4 empty `.catch(() => {})` with `console.warn`
+- `session-detail.js`: Added 5-minute TTL to overview cache
+- `ultimate_bot.py`: Pass `error_msg` to `mark_processed` (was always NULL)
+- `round_linkage_anomaly_service.py`: Narrowed bare `except Exception` to specific types
+
+#### Performance
+- **Composite dashboard endpoint**: `GET /proximity/dashboard?sections=all` reduces 31 HTTP requests to 2-3 (90% reduction, ~467ms total)
+
+#### Infrastructure
+- Round linker cleanup: 329 → 14 unresolved (315 marked abandoned)
+- `!last_session` query verified at 0.4ms with existing indexes
+
 ### Added — 2026-03-24: Kill Outcomes, Hit Regions, Combat Heatmaps & Movement Analytics
 
 #### Kill Outcome Tracking (Feature 1 — requires Lua deploy)
