@@ -287,6 +287,9 @@ WEBSITE_STAT_BUGS_FOUND.md
 /local_stats/
 /local_gametimes/
 /local_proximity/
+/local_proximity_broken/
+/local_stats_broken/
+/.git_corrupted/
 /data/
 /node_modules/
 /prompt_instructions/
