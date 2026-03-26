@@ -3346,29 +3346,56 @@ async def get_proximity_leaderboards(
     category: str = "power",
     range_days: int = 30,
     limit: int = 10,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
-    """Multi-category proximity leaderboards."""
+    """Multi-category proximity leaderboards. Supports scope filtering."""
     safe_limit = max(1, min(limit, 50))
-    since = datetime.utcnow().date() - timedelta(days=max(1, min(range_days, 3650)))
+    parsed_date = _parse_iso_date(session_date) if isinstance(session_date, str) else session_date
+    # When scope is specified, use it instead of range_days
+    if parsed_date:
+        since = parsed_date
+    else:
+        since = datetime.utcnow().date() - timedelta(days=max(1, min(range_days, 3650)))
+
+    # Build scope filter helper for leaderboard queries
+    def _lb_scope(table_alias: str = "", has_round_number: bool = False):
+        """Build WHERE clause fragments and params for leaderboard scope."""
+        prefix = f"{table_alias}." if table_alias else ""
+        clauses = [f"{prefix}session_date >= ${1}"]
+        params = [since]
+        idx = 2
+        if map_name:
+            clauses.append(f"{prefix}map_name = ${idx}")
+            params.append(map_name)
+            idx += 1
+        if has_round_number and round_number is not None:
+            clauses.append(f"{prefix}round_number = ${idx}")
+            params.append(round_number)
+            idx += 1
+        return " AND ".join(clauses), tuple(params), idx
 
     try:
         if category == "power":
+            scope_where, scope_params, _ = _lb_scope(has_round_number=False)
             # Composite radar score — batch queries (7 queries total, not per-player)
             # 1. Engagement stats + names per player
             eng_rows = await db.fetch_all(
-                """
+                f"""
                 SELECT target_guid, MAX(target_name) AS name,
                        COUNT(*) AS total,
                        SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
                 FROM combat_engagement
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 5
                 ORDER BY COUNT(*) DESC
                 LIMIT 100
                 """,
-                (since,),
+                scope_params,
             )
             if not eng_rows:
                 return {"status": "ok", "category": "power", "entries": []}
@@ -3385,10 +3412,10 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(sprint_percentage)::numeric, 1) AS sp,
                        ROUND(AVG(avg_speed)::numeric, 1) AS spd
                 FROM player_track
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY player_guid
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             move_map: Dict[str, Tuple[float, float]] = {}
             for r in (move_rows or []):
@@ -3401,10 +3428,10 @@ async def get_proximity_leaderboards(
                 SELECT target_guid,
                        ROUND(AVG(dodge_reaction_ms)::numeric, 0) AS avg_dodge
                 FROM proximity_reaction_metric
-                WHERE dodge_reaction_ms IS NOT NULL AND session_date >= $1
+                WHERE dodge_reaction_ms IS NOT NULL AND {scope_where}
                 GROUP BY target_guid
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             dodge_map: Dict[str, int] = {}
             for r in (dodge_rows or []):
@@ -3417,16 +3444,16 @@ async def get_proximity_leaderboards(
                 SELECT guid, SUM(cnt) AS total FROM (
                     SELECT teammate1_guid AS guid, COUNT(*) AS cnt
                     FROM proximity_crossfire_opportunity
-                    WHERE was_executed = true AND session_date >= $1
+                    WHERE was_executed = true AND {scope_where}
                     GROUP BY teammate1_guid
                     UNION ALL
                     SELECT teammate2_guid AS guid, COUNT(*) AS cnt
                     FROM proximity_crossfire_opportunity
-                    WHERE was_executed = true AND session_date >= $1
+                    WHERE was_executed = true AND {scope_where}
                     GROUP BY teammate2_guid
                 ) sub GROUP BY guid
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             cf_map: Dict[str, int] = {}
             for r in (cf_rows or []):
@@ -3438,10 +3465,10 @@ async def get_proximity_leaderboards(
                 """
                 SELECT trader_guid, COUNT(*) AS cnt
                 FROM proximity_lua_trade_kill
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY trader_guid
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             trade_map: Dict[str, int] = {}
             for r in (trade_rows or []):
@@ -3455,10 +3482,10 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
                        COUNT(*) AS cnt
                 FROM proximity_spawn_timing
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY killer_guid
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             timing_map: Dict[str, Tuple[float, int]] = {}
             for r in (timing_rows or []):
@@ -3471,10 +3498,10 @@ async def get_proximity_leaderboards(
                 SELECT target_guid,
                        ROUND(AVG(return_fire_ms)::numeric, 0) AS avg_rf
                 FROM proximity_reaction_metric
-                WHERE return_fire_ms IS NOT NULL AND session_date >= $1
+                WHERE return_fire_ms IS NOT NULL AND {scope_where}
                 GROUP BY target_guid
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             rf_map: Dict[str, int] = {}
             for r in (rf_rows or []):
@@ -3544,17 +3571,29 @@ async def get_proximity_leaderboards(
                 """
                 SELECT guid, name, SUM(cnt) AS total, ROUND(AVG(avg_angle)::numeric, 1) AS avg_angle
                 FROM (
-                    SELECT teammate1_guid AS guid, MAX(teammate1_guid) AS name,
-                           COUNT(*) AS cnt, AVG(angular_separation) AS avg_angle
-                    FROM proximity_crossfire_opportunity
-                    WHERE was_executed = true AND session_date >= $1
-                    GROUP BY teammate1_guid
+                    SELECT c.teammate1_guid AS guid,
+                           COALESCE(MAX(ce.target_name), c.teammate1_guid) AS name,
+                           COUNT(*) AS cnt, AVG(c.angular_separation) AS avg_angle
+                    FROM proximity_crossfire_opportunity c
+                    LEFT JOIN LATERAL (
+                        SELECT target_name FROM combat_engagement
+                        WHERE target_guid = c.teammate1_guid
+                        ORDER BY session_date DESC LIMIT 1
+                    ) ce ON true
+                    WHERE c.was_executed = true AND c.session_date >= $1
+                    GROUP BY c.teammate1_guid
                     UNION ALL
-                    SELECT teammate2_guid AS guid, MAX(teammate2_guid) AS name,
-                           COUNT(*) AS cnt, AVG(angular_separation) AS avg_angle
-                    FROM proximity_crossfire_opportunity
-                    WHERE was_executed = true AND session_date >= $1
-                    GROUP BY teammate2_guid
+                    SELECT c.teammate2_guid AS guid,
+                           COALESCE(MAX(ce.target_name), c.teammate2_guid) AS name,
+                           COUNT(*) AS cnt, AVG(c.angular_separation) AS avg_angle
+                    FROM proximity_crossfire_opportunity c
+                    LEFT JOIN LATERAL (
+                        SELECT target_name FROM combat_engagement
+                        WHERE target_guid = c.teammate2_guid
+                        ORDER BY session_date DESC LIMIT 1
+                    ) ce ON true
+                    WHERE c.was_executed = true AND c.session_date >= $1
+                    GROUP BY c.teammate2_guid
                 ) sub GROUP BY guid, name
                 ORDER BY total DESC
                 LIMIT $2
