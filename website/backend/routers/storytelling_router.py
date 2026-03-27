@@ -39,6 +39,26 @@ def _parse_date(val: str) -> date:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
 
 
+@router.get("/storytelling/moments")
+@limiter.limit("10/minute")
+async def get_moments(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    limit: int = Query(default=10, le=50, ge=1),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Match Moments — highlight reel of a session."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    moments = await svc.detect_moments(sd, limit=limit)
+    return {
+        "status": "ok",
+        "session_date": session_date,
+        "moments": moments,
+        "total": len(moments),
+    }
+
+
 @router.get("/storytelling/kill-impact")
 @limiter.limit("10/minute")
 async def get_kill_impact_leaderboard(

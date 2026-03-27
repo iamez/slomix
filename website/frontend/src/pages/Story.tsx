@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useStoryKillImpact } from '../api/hooks';
+import { useStoryKillImpact, useStoryMoments } from '../api/hooks';
 import type { KillImpactEntry } from '../api/types';
 import { Skeleton } from '../components/Skeleton';
 import { StoryHero } from '../components/story/StoryHero';
 import { PlayerStoryCard } from '../components/story/PlayerStoryCard';
+import { MomentCard } from '../components/story/MomentCard';
 import type { PlayerArchetype } from '../components/story/ArchetypeBadge';
 
 const API = '/api';
@@ -67,9 +68,12 @@ export default function Story() {
 
   // KIS data
   const { data: kis, isLoading: kisLoading } = useStoryKillImpact(sessionDate);
+  // Moments data
+  const { data: momentsData, isLoading: momentsLoading } = useStoryMoments(sessionDate);
 
   const entries = useMemo(() => kis?.entries ?? [], [kis]);
   const totalKills = kis?.total_kills ?? 0;
+  const moments = useMemo(() => momentsData?.moments ?? [], [momentsData]);
 
   // Current session metadata
   const currentSession = scopes?.sessions?.find((s) => s.session_date === sessionDate);
@@ -113,6 +117,24 @@ export default function Story() {
             ))}
           </select>
         </div>
+
+        {/* Match Moments — horizontal scroll */}
+        {momentsLoading ? (
+          <div className="flex gap-4 overflow-hidden">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex-shrink-0 w-72 h-32 rounded-2xl bg-slate-700/20 animate-pulse" />
+            ))}
+          </div>
+        ) : moments.length > 0 ? (
+          <div>
+            <h3 className="text-xs text-slate-500 uppercase tracking-wider font-bold mb-3">Match Moments</h3>
+            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-700">
+              {moments.map((m, i) => (
+                <MomentCard key={`${m.type}-${m.time_ms}-${i}`} moment={m} index={i} />
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {/* Player story cards */}
         {kisLoading ? (

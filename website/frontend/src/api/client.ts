@@ -431,6 +431,9 @@ export const api = {
   getStoryKillImpact: (sessionDate: string, limit = 20) =>
     get<import('./types').KillImpactResponse>(`/storytelling/kill-impact?session_date=${sessionDate}&limit=${limit}`),
 
+  getStoryMoments: (sessionDate: string, limit = 10) =>
+    get<import('./types').MomentsResponse>(`/storytelling/moments?session_date=${sessionDate}&limit=${limit}`),
+
   // Auth
   getAuthMe: async (): Promise<AuthUser | null> => {
     try {
