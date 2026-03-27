@@ -765,26 +765,28 @@ class StorytellingService:
         # Objective player — carrier kills are rare and always significant
         if carrier_kills >= 3 or stats.get("carrier_returns", 0) >= 2:
             return "objective_specialist"
-        # Pressure engine — top DPM + top kills (sustained aggression)
-        if dpm >= avg_dpm * 1.15 and kills >= avg_kills * 1.1:
+        # Pressure engine — top DPM OR top kills+KD (sustained aggression)
+        if dpm >= avg_dpm * 1.12 and kills >= avg_kills * 1.05:
             return "pressure_engine"
-        # Medic anchor — SIGNIFICANTLY more revives than average (top reviver)
-        if revives >= avg_revives * 1.4 and revives >= 20:
+        if kills >= avg_kills * 1.1 and kd >= avg_kd * 1.15:
+            return "pressure_engine"
+        # Medic anchor — SIGNIFICANTLY more revives than average
+        if revives >= avg_revives * 1.35 and revives >= 20:
             return "medic_anchor"
-        # Silent assassin — high precision, above average KD
-        if hs_pct >= 0.22 and kd >= avg_kd * 1.1:
+        # Silent assassin — high precision headshot player
+        if hs_pct >= 0.22 and kd >= avg_kd * 1.05:
             return "silent_assassin"
         # Chaos agent — high DPM but terrible KD (aggressive but reckless)
-        if dpm >= avg_dpm * 1.0 and kd < avg_kd * 0.7:
+        if dpm >= avg_dpm * 0.95 and kd < avg_kd * 0.75:
             return "chaos_agent"
-        # Wall breaker — high denied time (denies enemy spawns significantly)
-        if denied_time >= avg_denied * 1.3 and denied_time >= 100:
+        # Wall breaker — high denied time (denies enemy spawns)
+        if denied_time >= avg_denied * 1.2 and denied_time >= 100:
             return "wall_breaker"
         # Trade master — significantly more trades than average
-        if trades >= avg_trades * 1.3 and trades >= 10:
+        if trades >= avg_trades * 1.25 and trades >= 10:
             return "trade_master"
-        # Survivor — best KD + low time dead (stays alive, stays impactful)
-        if kd >= avg_kd * 1.3 and time_dead_pct <= avg_tdp * 0.8:
+        # Survivor — best KD + stays alive
+        if kd >= avg_kd * 1.2 and time_dead_pct <= avg_tdp * 0.85:
             return "survivor"
         # Fallback survivor — great KD even without low time_dead data
         if kd >= avg_kd * 1.3:
