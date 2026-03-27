@@ -33,7 +33,7 @@ const state = {
 
 async function loadPlayerList() {
     try {
-        const data = await fetchJSON(`${API_BASE}/api/rivalries/leaderboard?limit=100`);
+        const data = await fetchJSON(`${API_BASE}/rivalries/leaderboard?limit=100`);
         if (data.status !== 'ok') return;
         // Collect unique players from pairs
         const seen = new Set();
@@ -86,7 +86,7 @@ export async function loadRivalriesView() {
 
 async function loadLeaderboard(container, loadId) {
     try {
-        const data = await fetchJSON(`${API_BASE}/api/rivalries/leaderboard?limit=20`);
+        const data = await fetchJSON(`${API_BASE}/rivalries/leaderboard?limit=20`);
         if (loadId !== rivalriesLoadId) return;
         if (data.status !== 'ok') {
             container.innerHTML = '<div class="text-center text-red-400 py-8">Failed to load rivalries</div>';
@@ -185,7 +185,7 @@ async function loadPlayerRivalries(guid) {
     panel.classList.remove('hidden');
 
     try {
-        const data = await fetchJSON(`${API_BASE}/api/rivalries/player/${encodeURIComponent(guid)}`);
+        const data = await fetchJSON(`${API_BASE}/rivalries/player/${encodeURIComponent(guid)}`);
         if (data.status !== 'ok') {
             panel.innerHTML = '<div class="text-red-400 text-center py-8">Failed to load</div>';
             return;
@@ -298,7 +298,7 @@ async function loadH2HDetail(guid1, guid2) {
     panel.classList.remove('hidden');
 
     try {
-        const data = await fetchJSON(`${API_BASE}/api/rivalries/h2h/${encodeURIComponent(guid1)}/${encodeURIComponent(guid2)}`);
+        const data = await fetchJSON(`${API_BASE}/rivalries/h2h/${encodeURIComponent(guid1)}/${encodeURIComponent(guid2)}`);
         if (data.status !== 'ok') {
             panel.innerHTML = '<div class="text-red-400 text-center py-8">Failed to load H2H</div>';
             return;
