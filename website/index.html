@@ -2929,6 +2929,18 @@
             <select id="story-session-select" class="bg-slate-800 border border-white/10 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-amber-500/50"></select>
           </div>
 
+          <!-- Moments -->
+          <div class="mb-6">
+            <h3 class="text-sm font-bold text-amber-400 tracking-widest uppercase mb-3">&#9889; Key Moments</h3>
+            <div id="story-moments" class="flex gap-3 overflow-x-auto pb-2"></div>
+          </div>
+
+          <!-- Team Synergy -->
+          <div class="mb-6">
+            <h3 class="text-sm font-bold text-amber-400 tracking-widest uppercase mb-3">&#9876;&#65039; Team Synergy</h3>
+            <div id="story-team-synergy"></div>
+          </div>
+
           <!-- Player cards grid -->
           <div id="story-players" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"></div>
 
@@ -2938,11 +2950,6 @@
             <div id="story-kis-breakdown"></div>
           </div>
 
-          <!-- Team Synergy Score -->
-          <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-6 mt-6">
-            <h3 class="text-sm font-bold text-white mb-4">Team Synergy Score</h3>
-            <div id="story-team-synergy"></div>
-          </div>
         </div>
 
         <style>
@@ -2950,6 +2957,16 @@
             0% { border-color: rgba(255,255,255,0.1); }
             50% { border-color: rgba(245,158,11,0.25); }
             100% { border-color: rgba(255,255,255,0.1); }
+          }
+          @keyframes momentFadeUp {
+            from { opacity: 0; transform: translateY(0.75rem); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
           }
         </style>
 
