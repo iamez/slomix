@@ -327,7 +327,7 @@ function renderKISBreakdown(players) {
         const crossfireKIS = p.crossfire_kills * (p.avg_impact || 1) * 0.7;
         const segmentTotal = carrierKIS + pushKIS + crossfireKIS;
         const baseKIS = Math.max(0, (p.total_kis ?? 0) - segmentTotal);
-        const displayTotal = baseKIS + segmentTotal;  // Should equal p.total_kis
+        // baseKIS + segmentTotal should equal p.total_kis
 
         const pct = (v) => ((v / maxKIS) * 100).toFixed(1);
 
