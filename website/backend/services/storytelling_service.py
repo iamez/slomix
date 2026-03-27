@@ -793,7 +793,7 @@ class StorytellingService:
 
         deaths_rows = await self.db.fetch_all(
             "SELECT team, SUM(deaths) FROM player_comprehensive_stats "
-            "WHERE round_date = $1 AND team IN (1, 2) GROUP BY team", (sd,))
+            "WHERE round_date = $1 AND team IN (1, 2) GROUP BY team", (_to_date_str(sd),))
 
         tt = {'AXIS': 0, 'ALLIES': 0}
         for r in (trades or []):
@@ -844,7 +844,7 @@ class StorytellingService:
 
         deaths_rows = await self.db.fetch_all(
             "SELECT team, SUM(deaths) FROM player_comprehensive_stats "
-            "WHERE round_date = $1 AND team IN (1, 2) GROUP BY team", (sd,))
+            "WHERE round_date = $1 AND team IN (1, 2) GROUP BY team", (_to_date_str(sd),))
 
         tr = {'AXIS': 0, 'ALLIES': 0}
         for r in (revives or []):
