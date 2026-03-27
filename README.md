@@ -3,7 +3,7 @@
 > **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Version](https://img.shields.io/badge/version-1.2.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue)](CHANGELOG.md)
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_17-336791)](https://www.postgresql.org/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
@@ -16,19 +16,18 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ## 🔥 Recent Updates (March 2026)
 
-### **🔬 v1.2.0: Deep RCA Audit, Proximity Pipeline Overhaul & Smart Analytics (March 26-27)** 🆕
+### **🧠 v1.3.0: Smart Storytelling Stats, Mandelbrot Audit & 45-Finding Resolution (March 26-27)** 🆕
 
-**Mandelbrot-depth root cause analysis — 26 fixes, proximity pipeline redesign, website overhaul, smart storytelling architecture.**
+**Smart competitive narratives powered by contextual kill scoring, player archetypes, and team synergy — plus a 45-finding audit with 100% resolution.**
 
-- 🔬 **Deep RCA Audit** — 26 fixes across bot, website, proximity (all CRITICAL and HIGH resolved)
+- 🧠 **Smart Storytelling Stats (LIVE)** — Kill Impact Score (7 context multipliers), 9 Player Archetypes, 5 Match Moment detectors, Team Synergy Score (5-axis comparison)
+- 🎭 **Legacy Story Page** — Cinematic hero section, player story cards with archetype badges, moment timeline, KIS breakdown bars, synergy radar panel at `/#/story`
+- 🔬 **Mandelbrot RCA Audit** — 4 parallel Sonnet teams reviewed 32 files line-by-line: 2 CRITICAL, 11 HIGH, 16 MEDIUM, 16 LOW — all 45 findings resolved
 - 🔄 **Proximity Pipeline Redesign** — STATS_READY webhook trigger + re-linker task eliminates 60% linkage failures
 - 🌐 **Proximity Website Overhaul** — Default scope auto-selection, all 7 leaderboard categories scoped, HTML render fixes, GUID→name resolution, metric tooltips
-- 🐛 **Infinite Retry Loop Fix** — `file_tracker.py` now respects `success=FALSE` entries (was retrying forever)
+- 🐛 **Post-Audit Fixes** — Re-linker column cleanup, N+1→executemany batch inserts, TOCTOU race lock, rate limiter proxy awareness, leaderboard round filtering
 - ⚡ **Skill Rating Optimization** — Merged dual GROUP BY into single pass (~50% less DB load)
-- 🛡️ **API Rate Limiting** — slowapi on 3 heavy proximity endpoints
-- 🎬 **Upload Fix** — MP4 download now forces `Content-Disposition: attachment`
-- 📊 **!last_session Graph Fix** — Decimal*float TypeError resolved (16 conversions)
-- 🧠 **Smart Storytelling Stats** — Architecture designed: KIS (Kill Impact Score), 8 Player Archetypes, Match Moments, Team Synergy, Momentum Charts
+- 📊 **21 Code Quality Improvements** — LOW/INFO findings resolved across bot, website, and proximity
 
 ### **📊 v1.1.0: Stats Accuracy Audit, React 19 Frontend & Proximity v5 (March 2026)**
 
@@ -264,15 +263,16 @@ A 9-metric percentile-based skill rating formula that captures the full picture 
 
 ---
 
-### **🧠 Smart Storytelling Stats** *(Coming Soon)*
+### **🧠 Smart Storytelling Stats** 🆕
 
 Transform raw numbers into compelling competitive narratives:
 
-- 💥 **Kill Impact Score (KIS)** — Weights kills by context (clutch kills, opening picks, trade kills)
-- 🎭 **8 Player Archetypes** — Aggressive Fragger, Support Anchor, Objective Specialist, Lurker, and more
-- ⚡ **Match Moments** — Auto-detect clutch rounds, comeback streaks, dominant pushes
-- 🤝 **Team Synergy Score** — Measures duo effectiveness beyond individual stats
-- 📉 **Momentum Charts** — Visualize team momentum swings across a match
+- 💥 **Kill Impact Score (KIS)** — Contextual kill scoring with 7 multipliers: carrier kills (3-5x), push kills (2x), crossfire (1.5x), spawn timing (1-2x), outcome weight, class bonus, distance factor
+- 🎭 **9 Player Archetypes** — Server-side classification using KIS + stats + proximity + combat position: Pressure Engine, Medic Anchor, Silent Assassin, Objective Demon, Trade Specialist, Support Fortress, Flanker, All-Rounder, Wildcard
+- ⚡ **5 Match Moment Detectors** — Kill streaks, carrier interception chains, focus fire survival, team push success, trade kill chains
+- 🤝 **Team Synergy Score** — 5-axis per-faction comparison: crossfire rate, trade coverage, cohesion quality, push success, medic bonds
+- 🎬 **Legacy Story Page** — Cinematic hero, player story cards, moment timeline, KIS breakdown bars, synergy panel at `/#/story`
+- 🗄️ **Backend** — `storytelling_kill_impact` DB table, 4 API endpoints, full data access pipeline
 
 ---
 
