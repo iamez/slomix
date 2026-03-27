@@ -3246,7 +3246,10 @@ async def get_proximity_weapon_accuracy(
 @router.get("/proximity/revives")
 async def get_proximity_revives(
     range_days: int = 30,
+    session_date: Optional[str] = None,
     map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
     player_guid: Optional[str] = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
