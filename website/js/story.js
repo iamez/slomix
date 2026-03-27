@@ -351,6 +351,8 @@ const MOMENT_TYPES = {
     objective_denied:   { icon: '\u{1F6AB}',        color: 'red',     bg: 'bg-red-500/15',     border: 'border-red-500/30',     text: 'text-red-400' },
     objective_run:      { icon: '\u{1F527}',        color: 'blue',    bg: 'bg-blue-500/15',    border: 'border-blue-500/30',    text: 'text-blue-400' },
     multi_revive:       { icon: '\u{1F489}',        color: 'emerald', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', text: 'text-emerald-400' },
+    team_wipe:          { icon: '\u{1F480}',        color: 'rose',    bg: 'bg-rose-500/15',    border: 'border-rose-500/30',    text: 'text-rose-400' },
+    multikill:          { icon: '\u{1F525}',        color: 'amber',   bg: 'bg-amber-500/15',   border: 'border-amber-500/30',   text: 'text-amber-400' },
 };
 
 function renderMoments(data) {
@@ -370,14 +372,45 @@ function renderMoments(data) {
         const safeNarrative = escapeHtml(m.narrative || '');
         const safeMap = escapeHtml(m.map_name || '');
         const roundLabel = (m.round_number || m.round_num) ? `R${m.round_number || m.round_num}` : '';
+        const timeLabel = m.time_formatted || '';
         const delay = idx * 80;
 
+        // Rich kill breakdown for team_wipe and multikill moments
+        let killBreakdown = '';
+        if (Array.isArray(m.kills) && m.kills.length > 0) {
+            const killLines = m.kills.map(k => {
+                const killer = escapeHtml(stripEtColors(k.killer || ''));
+                const victim = escapeHtml(stripEtColors(k.victim || ''));
+                const weapon = escapeHtml(k.weapon || '');
+                const kTime = k.time_formatted || '';
+                return `<div class="flex items-center gap-1">
+                    <span class="text-white">${killer}</span>
+                    <span class="text-slate-600">\u2192</span>
+                    <span class="text-red-400">${victim}</span>
+                    ${weapon ? `<span class="text-slate-600 ml-auto">${weapon}</span>` : ''}
+                    ${kTime ? `<span class="text-slate-700 w-8 text-right">${kTime}</span>` : ''}
+                </div>`;
+            }).join('');
+            const durationLabel = m.duration_ms != null ? `${(m.duration_ms / 1000).toFixed(1)}s` : '';
+            killBreakdown = `
+                <div class="mt-2 pt-2 border-t border-white/5 space-y-0.5 text-[10px]">
+                    ${killLines}
+                    ${durationLabel ? `<div class="text-slate-600 mt-1">Duration: ${durationLabel}</div>` : ''}
+                </div>`;
+        }
+
+        // Wider card for moments with kill breakdown
+        const cardWidth = (m.kills && m.kills.length > 0) ? 'w-72' : 'w-56';
+
         return `
-        <div class="flex-shrink-0 w-56 rounded-xl border ${mt.border} ${mt.bg} p-4 opacity-0 translate-y-3"
+        <div class="flex-shrink-0 ${cardWidth} rounded-xl border ${mt.border} ${mt.bg} p-4 opacity-0 translate-y-3"
              style="animation: momentFadeUp 0.4s ease-out ${delay}ms forwards">
             <div class="flex items-center justify-between mb-2">
                 <span class="text-lg">${mt.icon}</span>
-                <span class="text-amber-400 text-xs tracking-wider">${stars}</span>
+                <div class="flex items-center gap-2">
+                    ${timeLabel ? `<span class="text-[10px] text-slate-500 font-mono">${escapeHtml(timeLabel)}</span>` : ''}
+                    <span class="text-amber-400 text-xs tracking-wider">${stars}</span>
+                </div>
             </div>
             <div class="text-xs font-bold text-white mb-1 truncate" title="${safeName}">${safeName}</div>
             <div class="text-[11px] text-slate-300 mb-2 line-clamp-2 leading-relaxed">${safeNarrative}</div>
@@ -385,6 +418,7 @@ function renderMoments(data) {
                 ${roundLabel ? `<span>${escapeHtml(roundLabel)}</span>` : ''}
                 ${safeMap ? `<span class="truncate">${safeMap}</span>` : ''}
             </div>
+            ${killBreakdown}
         </div>`;
     }).join('');
 }
