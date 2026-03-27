@@ -202,10 +202,9 @@ export const api = {
   // Kill Outcomes (v5.2)
   getProximityKillOutcomes: (params?: ProximityScope) =>
     get<KillOutcomesResponse>(`/proximity/kill-outcomes${buildScopedQuery(params) ? `?${buildScopedQuery(params)}` : ''}`),
-  getProximityKillOutcomePlayerStats: (rangeDays = 30, playerGuid?: string) => {
-    const q = new URLSearchParams({ range_days: String(rangeDays) });
-    if (playerGuid) q.set('player_guid', playerGuid);
-    return get<KillOutcomePlayerStatsResponse>(`/proximity/kill-outcomes/player-stats?${q.toString()}`);
+  getProximityKillOutcomePlayerStats: (params?: ProximityScope, playerGuid?: string) => {
+    const q = buildScopedQuery(params, playerGuid ? { player_guid: playerGuid } : undefined);
+    return get<KillOutcomePlayerStatsResponse>(`/proximity/kill-outcomes/player-stats?${q}`);
   },
 
   // Hit Regions (v5.2)
@@ -219,8 +218,10 @@ export const api = {
   },
   getProximityHitRegionsByWeapon: (playerGuid: string, rangeDays = 30) =>
     get<WeaponHitRegionsResponse>(`/proximity/hit-regions/by-weapon?player_guid=${encodeURIComponent(playerGuid)}&range_days=${rangeDays}`),
-  getProximityHeadshotRates: (rangeDays = 30) =>
-    get<HeadshotRatesResponse>(`/proximity/hit-regions/headshot-rates?range_days=${rangeDays}`),
+  getProximityHeadshotRates: (params?: ProximityScope) => {
+    const q = buildScopedQuery(params);
+    return get<HeadshotRatesResponse>(`/proximity/hit-regions/headshot-rates?${q}`);
+  },
 
   // Combat Positions (v5.2)
   getCombatHeatmap: (mapName: string, opts?: { weaponId?: number; perspective?: string; victimClass?: string; team?: string; rangeDays?: number }) => {

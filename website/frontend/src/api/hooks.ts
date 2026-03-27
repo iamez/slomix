@@ -461,10 +461,10 @@ export const useProximityHitRegions = (params?: ProximityScope, weaponId?: numbe
     staleTime: 30_000,
   });
 
-export const useProximityHeadshotRates = (rangeDays = 30) =>
+export const useProximityHeadshotRates = (params?: ProximityScope) =>
   useQuery({
-    queryKey: ['proximity-headshot-rates', rangeDays],
-    queryFn: () => api.getProximityHeadshotRates(rangeDays),
+    queryKey: ['proximity-headshot-rates', params],
+    queryFn: () => api.getProximityHeadshotRates(params),
     staleTime: 30_000,
   });
 
@@ -491,10 +491,10 @@ export const useProximityKillOutcomes = (params?: ProximityScope) =>
     staleTime: 30_000,
   });
 
-export const useProximityKillOutcomePlayerStats = (rangeDays = 30, playerGuid?: string) =>
+export const useProximityKillOutcomePlayerStats = (params?: ProximityScope, playerGuid?: string) =>
   useQuery({
-    queryKey: ['proximity-kill-outcome-player-stats', rangeDays, playerGuid],
-    queryFn: () => api.getProximityKillOutcomePlayerStats(rangeDays, playerGuid),
+    queryKey: ['proximity-kill-outcome-player-stats', params, playerGuid],
+    queryFn: () => api.getProximityKillOutcomePlayerStats(params, playerGuid),
     staleTime: 30_000,
   });
 
