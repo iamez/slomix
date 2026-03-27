@@ -13,18 +13,18 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from website.backend.rate_limit import limiter
-
 try:
     from prometheus_fastapi_instrumentator import Instrumentator
 except ImportError:  # pragma: no cover - optional dependency fallback
     Instrumentator = None
 
-# Add project root to path
+# Add project root to path (MUST be before website.backend imports)
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(project_root)
+
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from website.backend.rate_limit import limiter
 
 # Load environment variables BEFORE importing logging (for LOG_LEVEL env var)
 website_env = os.path.join(os.path.dirname(__file__), "../.env")
