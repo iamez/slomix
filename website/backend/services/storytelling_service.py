@@ -642,10 +642,15 @@ class StorytellingService:
             WHERE round_date = $1
             GROUP BY player_guid
         """, (_to_date_str(session_date),))
+        # Build short→long GUID lookup (PCS uses 8-char, proximity uses 32-char)
+        short_to_long = {g[:8]: g for g in stats_by_guid}
+
         for r in (pcs_rows or []):
-            guid = r[0]
-            if guid in stats_by_guid:
-                s = stats_by_guid[guid]
+            pcs_guid = r[0]
+            # Match by first 8 chars (PCS stores truncated GUIDs)
+            long_guid = short_to_long.get(pcs_guid) or short_to_long.get(pcs_guid[:8])
+            if long_guid and long_guid in stats_by_guid:
+                s = stats_by_guid[long_guid]
                 s["pcs_kills"] = int(r[1] or 0)  # authoritative kill count
                 s["deaths"] = int(r[2] or 0)
                 s["headshot_kills"] = int(r[3] or 0)
