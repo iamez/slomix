@@ -131,6 +131,12 @@ async function loadStoryData() {
         ).then(synData => {
             if (loadId === storyLoadId) renderTeamSynergy(synData);
         }).catch(() => renderTeamSynergy(null));
+
+        fetchJSON(
+            `${API_BASE}/storytelling/win-contribution?session_date=${encodeURIComponent(storyState.sessionDate)}`
+        ).then(pwcData => {
+            if (loadId === storyLoadId) renderWinContribution(pwcData);
+        }).catch(() => renderWinContribution(null));
     } catch (err) {
         console.error('Story data load failed:', err);
         renderEmpty('Failed to load Smart Stats');
@@ -157,6 +163,8 @@ function renderLoading() {
     if (breakdown) breakdown.innerHTML = '';
     const synergy = document.getElementById('story-team-synergy');
     if (synergy) synergy.innerHTML = '';
+    const pwc = document.getElementById('story-win-contribution');
+    if (pwc) pwc.innerHTML = '';
 }
 
 function renderEmpty(message) {
@@ -180,6 +188,8 @@ function renderEmpty(message) {
     if (breakdown) breakdown.innerHTML = '';
     const synergy2 = document.getElementById('story-team-synergy');
     if (synergy2) synergy2.innerHTML = '';
+    const pwc2 = document.getElementById('story-win-contribution');
+    if (pwc2) pwc2.innerHTML = '';
 }
 
 function renderStoryHero(sessionDate, players) {
@@ -479,6 +489,109 @@ function renderTeamSynergy(data) {
             ${renderPanel('AXIS')}
             ${renderPanel('ALLIES')}
         </div>
+    `;
+}
+
+// ── Player Win Contribution (PWC) ────────────────────────────────
+
+const PWC_COMPONENTS = [
+    { key: 'kills',      label: 'Kills',      color: 'bg-rose-500' },
+    { key: 'damage',     label: 'Damage',     color: 'bg-amber-500' },
+    { key: 'objectives', label: 'Objectives', color: 'bg-blue-500' },
+    { key: 'revives',    label: 'Revives',    color: 'bg-emerald-500' },
+    { key: 'survival',   label: 'Survival',   color: 'bg-cyan-500' },
+];
+
+function renderWinContribution(data) {
+    const container = document.getElementById('story-win-contribution');
+    if (!container) return;
+
+    const players = Array.isArray(data?.players) ? data.players : [];
+    const mvp = data?.mvp;
+
+    if (players.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-500 py-8 text-sm">No win contribution data available</div>';
+        return;
+    }
+
+    // MVP highlight card
+    let mvpCard = '';
+    if (mvp) {
+        const mvpName = escapeHtml(stripEtColors(mvp.name));
+        const wisSign = mvp.wis >= 0 ? '+' : '';
+        mvpCard = `
+            <div class="rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-amber-900/10 to-slate-900 p-5 mb-5">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-lg font-black text-black/80">&#9733;</div>
+                        <div>
+                            <div class="text-xs text-amber-400 font-bold tracking-[0.2em] uppercase">Session MVP</div>
+                            <div class="text-lg font-black text-white">${mvpName}</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-2xl font-black text-amber-400">${mvp.total_pwc.toFixed(2)}</div>
+                        <div class="text-[10px] text-slate-400">PWC &middot; WIS ${wisSign}${mvp.wis.toFixed(3)}</div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    // Legend
+    const legend = PWC_COMPONENTS.map(c =>
+        `<span class="inline-flex items-center gap-1.5 text-[10px] text-slate-400">
+            <span class="w-2.5 h-2.5 rounded-sm ${c.color}"></span>${escapeHtml(c.label)}
+        </span>`
+    ).join('');
+
+    // Per-player stacked bars (top 15)
+    const top = players.slice(0, 15);
+    const maxPWC = Math.max(...top.map(p => p.total_pwc), 0.01);
+
+    const bars = top.map((p, idx) => {
+        const safeName = escapeHtml(stripEtColors(p.name));
+        const comp = p.components || {};
+        const wisSign = p.wis >= 0 ? '+' : '';
+        const rank = idx + 1;
+
+        // Stacked bar segments
+        const segments = PWC_COMPONENTS.map(c => {
+            const val = comp[c.key] || 0;
+            const pct = ((val / maxPWC) * 100).toFixed(1);
+            return `<div class="${c.color}/70 h-full" style="width:${pct}%"></div>`;
+        }).join('');
+
+        // Per-round mini dots
+        const roundDots = (p.per_round || []).map(r =>
+            `<span class="inline-block w-1.5 h-1.5 rounded-full ${r.won ? 'bg-emerald-400' : 'bg-red-400'}" title="R${r.round_number} ${escapeHtml(r.map_name)} — PWC ${r.pwc}${r.won ? ' W' : ' L'}"></span>`
+        ).join('');
+
+        return `
+        <div class="flex items-center gap-3 mb-2 group">
+            <div class="w-5 text-[10px] text-slate-600 text-right font-mono">${rank}</div>
+            <div class="w-24 text-xs text-slate-400 truncate text-right" title="${safeName}">${safeName}</div>
+            <div class="flex-1 h-5 rounded bg-slate-800/50 overflow-hidden flex">${segments}</div>
+            <div class="w-12 text-xs text-slate-400 text-right font-mono">${p.total_pwc.toFixed(2)}</div>
+            <div class="w-16 text-[10px] text-right font-mono ${p.wis >= 0 ? 'text-emerald-400' : 'text-red-400'}">${wisSign}${p.wis.toFixed(3)}</div>
+            <div class="hidden group-hover:flex items-center gap-0.5 w-20">${roundDots}</div>
+        </div>`;
+    }).join('');
+
+    // Column headers
+    const header = `
+        <div class="flex items-center gap-3 mb-2 text-[10px] text-slate-600 uppercase tracking-wider">
+            <div class="w-5 text-right">#</div>
+            <div class="w-24 text-right">Player</div>
+            <div class="flex-1">Contribution</div>
+            <div class="w-12 text-right">PWC</div>
+            <div class="w-16 text-right">WIS</div>
+        </div>`;
+
+    container.innerHTML = `
+        ${mvpCard}
+        <div class="flex gap-4 mb-4">${legend}</div>
+        ${header}
+        ${bars}
     `;
 }
 
