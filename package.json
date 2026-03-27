@@ -1,7 +1,7 @@
 {
   "name": "slomix-web-frontend",
   "private": true,
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "Tooling metadata for Slomix website frontend",
   "engines": {
     "node": ">=22.0.0",
