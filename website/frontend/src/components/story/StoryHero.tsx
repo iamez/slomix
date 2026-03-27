@@ -27,6 +27,7 @@ export function StoryHero({
       className,
     )}>
       {/* Animated gradient background */}
+      {/* gradientShift keyframe is injected by the parent Story page (STORY_STYLES) */}
       <div
         className="absolute inset-0 opacity-30"
         style={{

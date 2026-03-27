@@ -41,6 +41,16 @@ DISTANCE_LONG_RANGE = 1.2           # Kill at >800u (sniper pick)
 DISTANCE_NORMAL = 1.0               # 100-800u
 DISTANCE_MELEE = 0.9                # <100u (knife/close)
 
+# ── Team Synergy Score constants ────────────────────────────────
+SYNERGY_WEIGHTS = {
+    'crossfire': 0.25,
+    'trade': 0.25,
+    'cohesion': 0.20,
+    'push': 0.15,
+    'medic': 0.15,
+}
+COHESION_MAX_DISPERSION = 1500      # Game units; above this = 0 cohesion
+
 
 def _to_date(val: Union[str, date]) -> date:
     """Convert string to datetime.date for asyncpg DATE params."""
@@ -155,13 +165,12 @@ class StorytellingService:
         carrier_mult = 1.0
         is_carrier = False
         ck_key = (killer_guid, round_start_unix, round_number)
-        if ck_key in carrier_kills:
-            ck_time = carrier_kills[ck_key]
+        if ck_key in carrier_kills and kill_time in carrier_kills[ck_key]:
             cr_key = (round_start_unix, round_number)
             if cr_key in carrier_returns:
                 chain = False
                 for ret in carrier_returns[cr_key]:
-                    if 0 < (ret - ck_time) <= 10000:  # returned within 10s
+                    if 0 < (ret - kill_time) <= 10000:  # returned within 10s
                         carrier_mult = CARRIER_CHAIN_MULTIPLIER
                         chain = True
                         break
@@ -212,7 +221,7 @@ class StorytellingService:
         victim_class = victim_classes.get((victim_guid, round_start_unix, round_number), '').upper()
         class_mult = CLASS_WEIGHTS.get(victim_class, 1.0)
 
-        # Distance (not available per-kill yet, placeholder)
+        # TODO: Implement when per-kill distance data available
         dist_mult = DISTANCE_NORMAL
 
         # Total impact = product of all multipliers
@@ -241,7 +250,7 @@ class StorytellingService:
             'is_carrier_kill': is_carrier,
             'is_during_push': is_push,
             'is_crossfire': is_cf,
-            'is_objective_area': False,
+            'is_objective_area': False,  # TODO: Implement when per-kill distance data available
             'kill_time_ms': kill_time,
         }
 
@@ -252,7 +261,7 @@ class StorytellingService:
             "FROM proximity_carrier_kill WHERE session_date = $1", (session_date,))
         result = {}
         for r in (rows or []):
-            result[(r[0], r[1], r[2])] = r[3]
+            result.setdefault((r[0], r[1], r[2]), []).append(r[3])
         return result
 
     async def _load_carrier_returns(self, session_date):
@@ -313,7 +322,7 @@ class StorytellingService:
         return result
 
     async def get_kis_leaderboard(self, session_date: Union[str, date], limit: int = 20) -> list:
-        """Get KIS leaderboard for a session."""
+        """Get KIS leaderboard for a session, including server-side archetype."""
         sd = _to_date(session_date)
         rows = await self.db.fetch_all("""
             SELECT killer_guid, MAX(killer_name) as name,
@@ -330,7 +339,7 @@ class StorytellingService:
             LIMIT $2
         """, (sd, limit))
 
-        return [
+        kis_entries = [
             {
                 "guid": r[0], "name": r[1] or r[0][:8],
                 "total_kis": float(r[2] or 0), "kills": int(r[3] or 0),
@@ -339,3 +348,282 @@ class StorytellingService:
             }
             for r in (rows or [])
         ]
+
+        # Enrich with server-side archetypes
+        if kis_entries:
+            archetypes = await self.classify_players(sd, kis_entries)
+            for entry in kis_entries:
+                entry["archetype"] = archetypes.get(entry["guid"], "frontline_warrior")
+
+        return kis_entries
+
+    # ── Server-side archetype classification ──────────────────────────
+
+    async def classify_players(
+        self, session_date: date, kis_entries: list[dict]
+    ) -> dict[str, str]:
+        """Classify each player's archetype using all available data.
+
+        Returns {guid: archetype_string}.
+        """
+        guids = [e["guid"] for e in kis_entries]
+        if not guids:
+            return {}
+
+        # Build a stats dict per player starting from KIS data
+        stats_by_guid: dict[str, dict] = {}
+        for e in kis_entries:
+            stats_by_guid[e["guid"]] = {
+                "kills": e["kills"],
+                "carrier_kills": e["carrier_kills"],
+                "push_kills": e["push_kills"],
+                "crossfire_kills": e["crossfire_kills"],
+                "avg_impact": e["avg_impact"],
+                "total_kis": e["total_kis"],
+                "deaths": 0,
+                "revives_given": 0,
+                "headshot_kills": 0,
+                "headshot_pct": 0.0,
+                "carrier_returns": 0,
+                "trade_kills": 0,
+                "avg_kill_distance": 0.0,
+            }
+
+        # 1. Deaths + headshots + revives_given from player_comprehensive_stats
+        pcs_rows = await self.db.fetch_all("""
+            SELECT player_guid,
+                   SUM(deaths) as deaths,
+                   SUM(headshot_kills) as hs,
+                   SUM(revives_given) as revives,
+                   SUM(objectives_returned) as obj_returned
+            FROM player_comprehensive_stats
+            WHERE session_date = $1
+            GROUP BY player_guid
+        """, (session_date,))
+        for r in (pcs_rows or []):
+            guid = r[0]
+            if guid in stats_by_guid:
+                s = stats_by_guid[guid]
+                s["deaths"] = int(r[1] or 0)
+                s["headshot_kills"] = int(r[2] or 0)
+                kills = s["kills"]
+                s["headshot_pct"] = s["headshot_kills"] / kills if kills > 0 else 0.0
+                s["revives_given"] = int(r[3] or 0)
+                s["carrier_returns"] = int(r[4] or 0)
+
+        # 2. Trade kills from proximity_lua_trade_kill
+        trade_rows = await self.db.fetch_all("""
+            SELECT trader_guid, COUNT(*) as trades
+            FROM proximity_lua_trade_kill
+            WHERE session_date = $1
+            GROUP BY trader_guid
+        """, (session_date,))
+        for r in (trade_rows or []):
+            guid = r[0]
+            if guid in stats_by_guid:
+                stats_by_guid[guid]["trade_kills"] = int(r[1] or 0)
+
+        # 3. Average kill distance from proximity_combat_position
+        dist_rows = await self.db.fetch_all("""
+            SELECT attacker_guid,
+                   AVG(SQRT(
+                       POWER(attacker_x - victim_x, 2) +
+                       POWER(attacker_y - victim_y, 2) +
+                       POWER(attacker_z - victim_z, 2)
+                   )) as avg_dist
+            FROM proximity_combat_position
+            WHERE session_date = $1
+            GROUP BY attacker_guid
+        """, (session_date,))
+        for r in (dist_rows or []):
+            guid = r[0]
+            if guid in stats_by_guid:
+                stats_by_guid[guid]["avg_kill_distance"] = float(r[1] or 0)
+
+        # Classify each player
+        result = {}
+        for guid, s in stats_by_guid.items():
+            result[guid] = self._classify_archetype(s)
+        return result
+
+    @staticmethod
+    def _classify_archetype(stats: dict) -> str:
+        """Priority-based archetype classification. First match wins."""
+        kills = stats.get("kills", 0)
+        deaths = stats.get("deaths", 0)
+        carrier_kills = stats.get("carrier_kills", 0)
+        revives = stats.get("revives_given", 0)
+        trades = stats.get("trade_kills", 0)
+        crossfire = stats.get("crossfire_kills", 0)
+        avg_impact = stats.get("avg_impact", 0)
+        push_kills = stats.get("push_kills", 0)
+        hs_pct = stats.get("headshot_pct", 0)
+        avg_distance = stats.get("avg_kill_distance", 0)
+        kd = kills / max(deaths, 1)
+
+        if carrier_kills >= 3 or stats.get("carrier_returns", 0) >= 2:
+            return "objective_specialist"
+        if revives >= 8 and kd < 1.5:
+            return "medic_anchor"
+        if avg_distance >= 600 and hs_pct >= 0.15 and kd >= 1.5:
+            return "silent_assassin"
+        if avg_impact >= 5 and kills >= 15 and push_kills >= 5:
+            return "pressure_engine"
+        if trades >= 5:
+            return "trade_master"
+        if kills >= 10 and deaths >= 15 and avg_impact >= 3:
+            return "chaos_agent"
+        if kd >= 2.0 and deaths <= 8:
+            return "survivor"
+        if push_kills >= 8 or crossfire >= 5:
+            return "wall_breaker"
+        return "frontline_warrior"
+
+    # ── Team Synergy Score ──────────────────────────────────────────
+
+    async def compute_team_synergy(self, session_date: Union[str, date]) -> dict:
+        """Compute Team Synergy Score (5 axes) per faction for a session."""
+        sd = _to_date(session_date)
+
+        round_team_map = await self._build_round_team_map(sd)
+        if not round_team_map:
+            return {"status": "no_data", "session_date": str(sd), "teams": {}}
+
+        crossfire = await self._synergy_crossfire(sd)
+        trade = await self._synergy_trade(sd, round_team_map)
+        cohesion = await self._synergy_cohesion(sd)
+        push = await self._synergy_push(sd)
+        medic = await self._synergy_medic(sd, round_team_map)
+
+        teams = {}
+        for faction in ('AXIS', 'ALLIES'):
+            cf = crossfire.get(faction, 0)
+            tr = trade.get(faction, 0)
+            co = cohesion.get(faction, 0)
+            pu = push.get(faction, 0)
+            me = medic.get(faction, 0)
+            composite = (cf * SYNERGY_WEIGHTS['crossfire'] +
+                         tr * SYNERGY_WEIGHTS['trade'] +
+                         co * SYNERGY_WEIGHTS['cohesion'] +
+                         pu * SYNERGY_WEIGHTS['push'] +
+                         me * SYNERGY_WEIGHTS['medic'])
+            teams[faction] = {
+                "crossfire": round(cf, 1),
+                "trade": round(tr, 1),
+                "cohesion": round(co, 1),
+                "push": round(pu, 1),
+                "medic": round(me, 1),
+                "composite": round(composite, 1),
+            }
+
+        logger.info("Synergy computed for %s: AXIS=%.1f, ALLIES=%.1f",
+                     sd, teams.get('AXIS', {}).get('composite', 0),
+                     teams.get('ALLIES', {}).get('composite', 0))
+
+        return {"status": "ok", "session_date": str(sd), "teams": teams,
+                "weights": SYNERGY_WEIGHTS}
+
+    async def _build_round_team_map(self, sd: date) -> dict:
+        """Build (player_guid, round_number) -> faction mapping from PCS."""
+        rows = await self.db.fetch_all(
+            "SELECT player_guid, round_number, team "
+            "FROM player_comprehensive_stats "
+            "WHERE round_date = $1 AND team IN (1, 2)",
+            (sd,))
+        result = {}
+        for r in (rows or []):
+            result[(r[0], r[1])] = 'AXIS' if r[2] == 1 else 'ALLIES'
+        return result
+
+    async def _synergy_crossfire(self, sd: date) -> dict:
+        """Crossfire execution rate per attacking faction (0-100)."""
+        rows = await self.db.fetch_all("""
+            SELECT target_team,
+                   COUNT(*) as total,
+                   COUNT(*) FILTER (WHERE was_executed) as executed
+            FROM proximity_crossfire_opportunity
+            WHERE session_date = $1
+            GROUP BY target_team
+        """, (sd,))
+        result = {}
+        for r in (rows or []):
+            target_team = r[0]
+            if target_team not in ('AXIS', 'ALLIES'):
+                continue
+            attacking = 'ALLIES' if target_team == 'AXIS' else 'AXIS'
+            result[attacking] = min(100, (int(r[2] or 0) / max(int(r[1] or 1), 1)) * 100)
+        return result
+
+    async def _synergy_trade(self, sd: date, rtm: dict) -> dict:
+        """Trade coverage per faction: % of team deaths avenged (0-100)."""
+        trades = await self.db.fetch_all(
+            "SELECT original_victim_guid, round_number, COUNT(*) "
+            "FROM proximity_lua_trade_kill WHERE session_date = $1 "
+            "GROUP BY original_victim_guid, round_number", (sd,))
+
+        deaths_rows = await self.db.fetch_all(
+            "SELECT team, SUM(deaths) FROM player_comprehensive_stats "
+            "WHERE round_date = $1 AND team IN (1, 2) GROUP BY team", (sd,))
+
+        tt = {'AXIS': 0, 'ALLIES': 0}
+        for r in (trades or []):
+            team = rtm.get((r[0], r[1]))
+            if team:
+                tt[team] += int(r[2] or 0)
+
+        td = {'AXIS': 0, 'ALLIES': 0}
+        for r in (deaths_rows or []):
+            td['AXIS' if r[0] == 1 else 'ALLIES'] = int(r[1] or 0)
+
+        return {f: min(100, tt[f] / max(td[f], 1) * 100) for f in ('AXIS', 'ALLIES')}
+
+    async def _synergy_cohesion(self, sd: date) -> dict:
+        """Team cohesion per faction: inverted average dispersion (0-100)."""
+        rows = await self.db.fetch_all(
+            "SELECT team, AVG(dispersion) FROM proximity_team_cohesion "
+            "WHERE session_date = $1 GROUP BY team", (sd,))
+        result = {}
+        for r in (rows or []):
+            if r[0] not in ('AXIS', 'ALLIES'):
+                continue
+            avg_disp = float(r[1] or 0)
+            result[r[0]] = max(0, min(100, (1 - avg_disp / COHESION_MAX_DISPERSION) * 100))
+        return result
+
+    async def _synergy_push(self, sd: date) -> dict:
+        """Push quality per faction: quality + participation bonus (0-100)."""
+        rows = await self.db.fetch_all(
+            "SELECT team, AVG(push_quality), AVG(participant_count) "
+            "FROM proximity_team_push WHERE session_date = $1 GROUP BY team", (sd,))
+        result = {}
+        for r in (rows or []):
+            if r[0] not in ('AXIS', 'ALLIES'):
+                continue
+            quality = min(80, float(r[1] or 0) * 80)
+            participation = min(20, float(r[2] or 0) / 6 * 20)
+            result[r[0]] = min(100, quality + participation)
+        return result
+
+    async def _synergy_medic(self, sd: date, rtm: dict) -> dict:
+        """Medic bond per faction: revive rate scaled to 0-100 (50% revive rate = 100)."""
+        revives = await self.db.fetch_all(
+            "SELECT victim_guid, round_number, COUNT(*) "
+            "FROM proximity_kill_outcome "
+            "WHERE session_date = $1 AND outcome = 'revived' "
+            "GROUP BY victim_guid, round_number", (sd,))
+
+        deaths_rows = await self.db.fetch_all(
+            "SELECT team, SUM(deaths) FROM player_comprehensive_stats "
+            "WHERE round_date = $1 AND team IN (1, 2) GROUP BY team", (sd,))
+
+        tr = {'AXIS': 0, 'ALLIES': 0}
+        for r in (revives or []):
+            team = rtm.get((r[0], r[1]))
+            if team:
+                tr[team] += int(r[2] or 0)
+
+        td = {'AXIS': 0, 'ALLIES': 0}
+        for r in (deaths_rows or []):
+            td['AXIS' if r[0] == 1 else 'ALLIES'] = int(r[1] or 0)
+
+        return {f: min(100, tr[f] / max(td[f], 1) * 200) for f in ('AXIS', 'ALLIES')}

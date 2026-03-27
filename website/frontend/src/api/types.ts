@@ -1340,6 +1340,7 @@ export interface KillImpactEntry {
   push_kills: number;
   crossfire_kills: number;
   avg_impact: number;
+  archetype?: string;
 }
 
 export interface KillImpactResponse {

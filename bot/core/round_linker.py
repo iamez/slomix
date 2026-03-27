@@ -196,7 +196,7 @@ async def resolve_round_id_with_reason(
 
         # Prefer round_start_unix (most accurate for same-map disambiguation)
         candidate_dt = None
-        if r_start_unix and int(r_start_unix or 0) > 0:
+        if r_start_unix and int(r_start_unix) > 0:
             try:
                 candidate_dt = datetime.fromtimestamp(
                     int(r_start_unix), tz=timezone.utc

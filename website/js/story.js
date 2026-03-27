@@ -23,15 +23,15 @@ const storyState = {
 };
 
 const ARCHETYPES = {
-    carrier_hunter:  { icon: '\u{1F3AF}', label: 'Carrier Hunter',  color: 'rose' },
-    crossfire_king:  { icon: '\u{26A1}',  label: 'Crossfire King',  color: 'cyan' },
-    push_leader:     { icon: '\u{1F6E1}\uFE0F',  label: 'Push Leader',    color: 'amber' },
-    impact_elite:    { icon: '\u{1F451}', label: 'Impact Elite',    color: 'yellow' },
-    volume_machine:  { icon: '\u{1F525}', label: 'Volume Machine',  color: 'orange' },
-    tactician:       { icon: '\u{1F9E0}', label: 'Tactician',       color: 'purple' },
-    all_rounder:     { icon: '\u{2B50}',  label: 'All-Rounder',     color: 'emerald' },
-    support_fighter: { icon: '\u{1F91D}', label: 'Support Fighter', color: 'blue' },
-    quiet_blade:     { icon: '\u{1F5E1}\uFE0F',  label: 'Quiet Blade',    color: 'slate' },
+    pressure_engine:      { icon: '\u{1F525}', label: 'Pressure Engine',      color: 'rose' },
+    medic_anchor:         { icon: '\u{1F489}', label: 'Medic Anchor',         color: 'emerald' },
+    silent_assassin:      { icon: '\u{1F3AF}', label: 'Silent Assassin',      color: 'cyan' },
+    frontline_warrior:    { icon: '\u{26A1}',  label: 'Frontline Warrior',    color: 'amber' },
+    wall_breaker:         { icon: '\u{1F6E1}\uFE0F', label: 'Wall Breaker',   color: 'purple' },
+    objective_specialist: { icon: '\u{1F527}', label: 'Objective Specialist', color: 'blue' },
+    trade_master:         { icon: '\u{1F91D}', label: 'Trade Master',         color: 'teal' },
+    survivor:             { icon: '\u{1F3C3}', label: 'Survivor',             color: 'lime' },
+    chaos_agent:          { icon: '\u{1F4A5}', label: 'Chaos Agent',          color: 'orange' },
 };
 
 const ARCHETYPE_COLORS = {
@@ -44,26 +44,13 @@ const ARCHETYPE_COLORS = {
     emerald: { bg: 'bg-emerald-500/20', border: 'border-emerald-500/40', text: 'text-emerald-400' },
     blue:    { bg: 'bg-blue-500/20',    border: 'border-blue-500/40',    text: 'text-blue-400' },
     slate:   { bg: 'bg-slate-500/20',   border: 'border-slate-500/40',   text: 'text-slate-400' },
+    teal:    { bg: 'bg-teal-500/20',    border: 'border-teal-500/40',    text: 'text-teal-400' },
+    lime:    { bg: 'bg-lime-500/20',    border: 'border-lime-500/40',    text: 'text-lime-400' },
 };
 
-function classifyArchetype(player) {
-    const { kills, carrier_kills, push_kills, crossfire_kills, avg_impact, total_kis } = player;
-    if (!kills || kills === 0) return 'quiet_blade';
-
-    const carrierPct = carrier_kills / kills;
-    const pushPct = push_kills / kills;
-    const crossfirePct = crossfire_kills / kills;
-    const contextPct = (carrier_kills + push_kills + crossfire_kills) / kills;
-
-    if (carrierPct >= 0.15 && carrier_kills >= 3) return 'carrier_hunter';
-    if (crossfirePct >= 0.20 && crossfire_kills >= 4) return 'crossfire_king';
-    if (pushPct >= 0.25 && push_kills >= 5) return 'push_leader';
-    if (avg_impact >= 1.8 && kills >= 10) return 'impact_elite';
-    if (kills >= 40 && total_kis >= 30) return 'volume_machine';
-    if (contextPct >= 0.30 && kills >= 10) return 'tactician';
-    if (contextPct >= 0.15 && avg_impact >= 1.2 && kills >= 8) return 'all_rounder';
-    if (kills >= 5 && kills < 20) return 'support_fighter';
-    return 'quiet_blade';
+function getArchetype(player) {
+    const a = player.archetype;
+    return (a && ARCHETYPES[a]) ? a : 'frontline_warrior';
 }
 
 function getKISTier(kis) {
@@ -212,7 +199,7 @@ function renderPlayerCards(players) {
     if (!container) return;
 
     container.innerHTML = players.map((p, idx) => {
-        const archKey = classifyArchetype(p);
+        const archKey = getArchetype(p);
         const arch = ARCHETYPES[archKey];
         const colors = ARCHETYPE_COLORS[arch.color];
         const tier = getKISTier(p.total_kis);
@@ -301,6 +288,8 @@ function renderKISBreakdown(players) {
     ).join('');
 
     const bars = top.map(p => {
+        // NOTE: Segment widths are approximations based on kill counts × avg_impact.
+        // Actual per-kill multipliers vary; this is a visualization heuristic only.
         const carrierKIS = p.carrier_kills * (p.avg_impact || 1);
         const pushKIS = p.push_kills * (p.avg_impact || 1) * 0.8;
         const crossfireKIS = p.crossfire_kills * (p.avg_impact || 1) * 0.7;

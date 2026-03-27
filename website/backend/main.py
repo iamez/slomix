@@ -22,9 +22,13 @@ except ImportError:  # pragma: no cover - optional dependency fallback
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(project_root)
 
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from website.backend.rate_limit import limiter
+try:
+    from slowapi import _rate_limit_exceeded_handler
+    from slowapi.errors import RateLimitExceeded
+    from website.backend.rate_limit import limiter
+    HAS_SLOWAPI = True
+except ImportError:  # pragma: no cover - optional in minimal installs
+    HAS_SLOWAPI = False
 
 # Load environment variables BEFORE importing logging (for LOG_LEVEL env var)
 website_env = os.path.join(os.path.dirname(__file__), "../.env")
@@ -163,8 +167,9 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+if HAS_SLOWAPI:
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS Middleware - must be added before other middleware
 app.add_middleware(

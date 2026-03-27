@@ -20,14 +20,16 @@ interface ScopeData {
   scope?: { session_date: string };
 }
 
-/* ── Archetype classification (client-side, temporary) ── */
+/* ── Archetype from server response ── */
 
-function classifyArchetype(player: KillImpactEntry): PlayerArchetype {
-  if (player.carrier_kills >= 2) return 'objective_specialist';
-  if (player.avg_impact >= 5 && player.kills >= 15) return 'pressure_engine';
-  if (player.crossfire_kills >= 3) return 'trade_master';
-  if (player.kills < 8 && player.avg_impact < 2) return 'survivor';
-  return 'frontline_warrior';
+const VALID_ARCHETYPES = new Set<PlayerArchetype>([
+  'pressure_engine', 'medic_anchor', 'silent_assassin', 'frontline_warrior',
+  'wall_breaker', 'objective_specialist', 'trade_master', 'survivor', 'chaos_agent',
+]);
+
+function getArchetype(player: KillImpactEntry): PlayerArchetype {
+  const a = player.archetype as PlayerArchetype | undefined;
+  return a && VALID_ARCHETYPES.has(a) ? a : 'frontline_warrior';
 }
 
 /* ── CSS Animations (injected once) ── */
@@ -126,7 +128,7 @@ export default function Story() {
                 key={entry.guid}
                 entry={entry}
                 rank={i + 1}
-                archetype={classifyArchetype(entry)}
+                archetype={getArchetype(entry)}
               />
             ))}
           </div>

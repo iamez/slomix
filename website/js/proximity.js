@@ -353,6 +353,8 @@ function getConfidenceFromSamples(sampleCount) {
     return 'Low';
 }
 
+// XSS contract: htmlValues=true is safe ONLY when formatter() returns pre-escaped HTML
+// (e.g. formatNumber() output or escapeHtml()-wrapped strings). Never pass raw user data.
 function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data yet', { htmlValues = false } = {}) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -2057,7 +2059,7 @@ function renderCrossfireAngles(data) {
         duosEl.innerHTML = '<ol class="list-decimal list-inside text-sm text-slate-300 space-y-1">' + data.top_duos.map(d => {
             const name1 = d.name ? escapeHtml(stripEtColors(d.name)) : escapeHtml(d.teammate1_guid.substring(0, 8));
             const name2 = d.partner_name ? escapeHtml(stripEtColors(d.partner_name)) : escapeHtml(d.teammate2_guid.substring(0, 8));
-            return `<li>${name1} + ${name2} = ${d.executions} exec (avg ${d.avg_angle}&deg;)</li>`;
+            return `<li>${name1} + ${name2} = ${formatNumber(d.executions || 0)} exec (avg ${formatNumber(d.avg_angle || 0)}&deg;)</li>`;
         }).join('') + '</ol>';
     }
 }

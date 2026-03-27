@@ -25,6 +25,7 @@ from website.backend.services.storytelling_service import (
     DISTANCE_LONG_RANGE,
     DISTANCE_NORMAL,
     DISTANCE_MELEE,
+    SYNERGY_WEIGHTS,
 )
 
 router = APIRouter()
@@ -57,7 +58,9 @@ async def get_kill_impact_leaderboard(
         "session_date": session_date,
         "compute": compute_result,
         "players": leaderboard,
+        "entries": leaderboard,
         "total": len(leaderboard),
+        "total_kills": sum(p.get("kills", 0) for p in leaderboard),
     }
 
 
@@ -189,3 +192,16 @@ async def get_kis_formula():
         },
         "formula": "total_impact = base(1.0) × carrier × push × crossfire × spawn × outcome × class × distance",
     }
+
+
+@router.get("/storytelling/synergy")
+@limiter.limit("10/minute")
+async def get_team_synergy(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Team Synergy Score: 5-axis coordination metrics per faction."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.compute_team_synergy(sd)

@@ -535,7 +535,7 @@ class SessionGraphGenerator:
             useful_kills = [float(p[13] or 0) for p in top_players]
             self_kills = [float(p[14] or 0) for p in top_players]
             full_selfkills = [float(p[15] or 0) for p in top_players]
-            rounds_played = [float(p[17] or 1) for p in top_players]
+            rounds_played = [max(1, float(p[17] or 0)) for p in top_players]
 
             # Shadow timing payload for dual-mode graphs
             dual_shadow_note = ""
