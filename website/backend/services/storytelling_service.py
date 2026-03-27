@@ -630,9 +630,10 @@ class StorytellingService:
                 "avg_kill_distance": 0.0,
             }
 
-        # 1. Deaths + headshots + revives_given from player_comprehensive_stats
+        # 1. PCS stats: kills, deaths, headshots, revives (PCS kills are authoritative)
         pcs_rows = await self.db.fetch_all("""
             SELECT player_guid,
+                   SUM(kills) as pcs_kills,
                    SUM(deaths) as deaths,
                    SUM(headshot_kills) as hs,
                    SUM(revives_given) as revives,
@@ -645,12 +646,13 @@ class StorytellingService:
             guid = r[0]
             if guid in stats_by_guid:
                 s = stats_by_guid[guid]
-                s["deaths"] = int(r[1] or 0)
-                s["headshot_kills"] = int(r[2] or 0)
-                kills = s["kills"]
-                s["headshot_pct"] = s["headshot_kills"] / kills if kills > 0 else 0.0
-                s["revives_given"] = int(r[3] or 0)
-                s["carrier_returns"] = int(r[4] or 0)
+                s["pcs_kills"] = int(r[1] or 0)  # authoritative kill count
+                s["deaths"] = int(r[2] or 0)
+                s["headshot_kills"] = int(r[3] or 0)
+                pcs_kills = s["pcs_kills"]
+                s["headshot_pct"] = s["headshot_kills"] / pcs_kills if pcs_kills > 0 else 0.0
+                s["revives_given"] = int(r[4] or 0)
+                s["carrier_returns"] = int(r[5] or 0)
 
         # 2. Trade kills from proximity_lua_trade_kill
         trade_rows = await self.db.fetch_all("""
@@ -699,7 +701,8 @@ class StorytellingService:
     def _classify_archetype(stats: dict, session_stats: dict = None) -> str:
         """Priority-based archetype classification using relative thresholds.
         session_stats: {avg_kills, avg_trades, avg_kd} for relative comparison."""
-        kills = stats.get("kills", 0)
+        # Use PCS kills (authoritative) for KD, KIS kills for context scoring
+        pcs_kills = stats.get("pcs_kills", stats.get("kills", 0))
         deaths = stats.get("deaths", 0)
         carrier_kills = stats.get("carrier_kills", 0)
         revives = stats.get("revives_given", 0)
@@ -709,7 +712,8 @@ class StorytellingService:
         push_kills = stats.get("push_kills", 0)
         hs_pct = stats.get("headshot_pct", 0)
         avg_distance = stats.get("avg_kill_distance", 0)
-        kd = kills / max(deaths, 1)
+        kd = pcs_kills / max(deaths, 1)
+        kills = pcs_kills  # use authoritative count for thresholds
 
         # Session averages for relative comparison
         ss = session_stats or {}
