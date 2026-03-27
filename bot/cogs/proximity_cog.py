@@ -386,17 +386,28 @@ class ProximityCog(commands.Cog, name="Proximity"):
                     continue
 
                 # Update all proximity tables that have round_id
+                # Use different WHERE clauses since not all tables have round_number/session_date
                 for table in self._PROXIMITY_ROUND_ID_TABLES:
                     try:
+                        # Try most specific match first (map + round_number + session_date)
                         await db.execute(
-                            f"UPDATE {table} SET round_id = ? "
+                            f"UPDATE {table} SET round_id = $1 "
                             f"WHERE round_id IS NULL "
-                            f"AND map_name = ? AND round_number = ? "
-                            f"AND session_date = ?",
+                            f"AND map_name = $2 AND round_number = $3 "
+                            f"AND session_date = $4",
                             (round_id, map_name, round_number, session_date),
                         )
                     except Exception:
-                        pass  # Table may not have matching rows
+                        # Fallback: some tables lack round_number/session_date columns
+                        try:
+                            await db.execute(
+                                f"UPDATE {table} SET round_id = $1 "
+                                f"WHERE round_id IS NULL AND map_name = $2 "
+                                f"AND round_start_unix = $3",
+                                (round_id, map_name, round_start_unix),
+                            )
+                        except Exception:
+                            pass  # Table may not have matching columns at all
 
                 linked += 1
 
