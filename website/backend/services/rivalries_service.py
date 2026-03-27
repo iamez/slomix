@@ -9,7 +9,6 @@ Uses proximity_kill_outcome to find head-to-head pairs and classify them:
 """
 
 import re
-from typing import Optional
 from website.backend.logging_config import get_app_logger
 
 logger = get_app_logger("rivalries")

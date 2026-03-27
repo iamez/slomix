@@ -3,8 +3,6 @@ Storytelling Stats API — Kill Impact Score (KIS) endpoints.
 """
 
 from datetime import date, datetime
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.requests import Request
 from website.backend.dependencies import get_db
@@ -26,7 +24,6 @@ from website.backend.services.storytelling_service import (
     DISTANCE_LONG_RANGE,
     DISTANCE_NORMAL,
     DISTANCE_MELEE,
-    SYNERGY_WEIGHTS,
 )
 
 router = APIRouter()

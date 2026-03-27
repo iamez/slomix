@@ -321,7 +321,7 @@ class RoundCorrelationService:
             except Exception as e:
                 logger.warning(
                     "FK pre-check DB error for %s.%s=%s: %s (treating as deferred)",
-                    table, pk, value, e,
+                    table, pk, val, e,
                 )
                 exists = None
 
