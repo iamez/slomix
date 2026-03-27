@@ -70,7 +70,7 @@ async def get_diagnostics(db: DatabaseAdapter = Depends(get_db)):
             "SELECT COUNT(*) FROM player_comprehensive_stats",
             True,
         ),
-        ("gaming_sessions", "SELECT COUNT(*) FROM gaming_sessions", False),
+        ("gaming_sessions", "SELECT COUNT(DISTINCT gaming_session_id) FROM rounds WHERE gaming_session_id IS NOT NULL", False),
         ("processed_files", "SELECT COUNT(*) FROM processed_files", True),
         ("lua_round_teams", "SELECT COUNT(*) FROM lua_round_teams", False),
         ("round_correlations", "SELECT COUNT(*) FROM round_correlations", False),
