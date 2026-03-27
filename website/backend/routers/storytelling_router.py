@@ -16,7 +16,7 @@ from website.backend.services.storytelling_service import (
     _strip_et_colors,
     CARRIER_KILL_MULTIPLIER,
     CARRIER_CHAIN_MULTIPLIER,
-    PUSH_MULTIPLIER,
+    PUSH_QUALITY_THRESHOLD,
     CROSSFIRE_MULTIPLIER,
     SPAWN_TIMING_BONUS,
     OUTCOME_GIBBED,
@@ -184,8 +184,9 @@ async def get_kis_formula():
                 "description": "Carrier kill + teammate returned objective within 10s",
             },
             "push": {
-                "value": PUSH_MULTIPLIER,
-                "description": "Kill during coordinated team push",
+                "value": "1.0 + quality×0.5 (range 1.45-2.0, requires quality≥0.9 toward objective)",
+                "threshold": PUSH_QUALITY_THRESHOLD,
+                "description": "Kill during high-quality coordinated team push toward objective",
             },
             "crossfire": {
                 "value": CROSSFIRE_MULTIPLIER,
