@@ -220,7 +220,7 @@ export const api = {
     get<WeaponHitRegionsResponse>(`/proximity/hit-regions/by-weapon?player_guid=${encodeURIComponent(playerGuid)}&range_days=${rangeDays}`),
   getProximityHeadshotRates: (params?: ProximityScope) => {
     const q = buildScopedQuery(params);
-    return get<HeadshotRatesResponse>(`/proximity/hit-regions/headshot-rates?${q}`);
+    return get<HeadshotRatesResponse>(`/proximity/hit-regions/headshot-rates${q ? `?${q}` : ''}`);
   },
 
   // Combat Positions (v5.2)

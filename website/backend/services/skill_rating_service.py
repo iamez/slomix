@@ -100,6 +100,7 @@ def _row_to_stats(r, offset: int = 0) -> dict:
     }
 
 
+# DEPRECATED: Use compute_all_ratings() single-pass instead. Kept for backward compat.
 async def compute_population_percentiles(db) -> dict:
     """
     Query aggregate stats for all players with enough rounds,

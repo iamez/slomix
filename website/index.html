@@ -1152,6 +1152,11 @@
             color: #3b82f6;
             background: rgba(59, 130, 246, 0.1);
         }
+        @keyframes storyGlow {
+            0% { border-color: rgba(255,255,255,0.1); }
+            50% { border-color: rgba(245,158,11,0.25); }
+            100% { border-color: rgba(255,255,255,0.1); }
+        }
     </style>
 
     <!-- Icons -->
@@ -2931,6 +2936,12 @@
           <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <h3 class="text-sm font-bold text-white mb-4">Kill Impact Breakdown</h3>
             <div id="story-kis-breakdown"></div>
+          </div>
+
+          <!-- Team Synergy Score -->
+          <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-6 mt-6">
+            <h3 class="text-sm font-bold text-white mb-4">Team Synergy Score</h3>
+            <div id="story-team-synergy"></div>
           </div>
         </div>
 

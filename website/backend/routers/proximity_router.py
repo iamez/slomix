@@ -3392,7 +3392,7 @@ async def get_proximity_leaderboards(
             # Composite radar score — batch queries (7 queries total, not per-player)
             # 1. Engagement stats + names per player
             eng_rows = await db.fetch_all(
-                f"""
+                """
                 SELECT target_guid, MAX(target_name) AS name,
                        COUNT(*) AS total,
                        SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
@@ -3402,7 +3402,7 @@ async def get_proximity_leaderboards(
                 HAVING COUNT(*) >= 5
                 ORDER BY COUNT(*) DESC
                 LIMIT 100
-                """,
+                """.format(scope_where=scope_where),
                 scope_params,
             )
             if not eng_rows:
