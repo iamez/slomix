@@ -255,11 +255,11 @@ const ROUTE_DEFINITIONS = Object.freeze({
     story: {
         viewId: 'story',
         label: 'Smart Stats',
-        mode: VIEW_MODE.MODERN,
+        mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'C',
         buildHash: () => '#/story',
-        load: () => undefined,
+        load: ({ legacy }) => legacy.loadStoryView(),
     },
     sessions2: {
         viewId: 'sessions2',

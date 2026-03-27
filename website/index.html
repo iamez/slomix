@@ -2906,7 +2906,41 @@
         <div id="view-skill-rating" class="view-section hidden"></div>
 
         <!-- STORY / SMART STATS -->
-        <div id="view-story" class="view-section hidden"></div>
+        <div id="view-story" class="view-section hidden">
+          <!-- Hero -->
+          <div id="story-hero" class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-amber-950/20 to-slate-900 p-8 mb-6" style="animation: storyGlow 6s ease-in-out infinite alternate">
+            <div class="absolute inset-0 bg-gradient-to-r from-amber-500/5 via-transparent to-amber-500/5 pointer-events-none"></div>
+            <div id="story-hero-content" class="relative z-10">
+              <div class="text-amber-400 text-xs font-bold tracking-[0.3em] uppercase mb-2">&#9889; Smart Stats</div>
+              <h2 id="story-title" class="text-3xl font-black text-white mb-2">Loading...</h2>
+              <div id="story-subtitle" class="text-slate-400 text-sm"></div>
+              <div id="story-stats-row" class="flex gap-6 mt-4 text-sm text-slate-300"></div>
+            </div>
+          </div>
+
+          <!-- Session selector -->
+          <div class="flex items-center gap-3 mb-6">
+            <label class="text-xs text-slate-400 font-bold uppercase tracking-wider">Session:</label>
+            <select id="story-session-select" class="bg-slate-800 border border-white/10 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-amber-500/50"></select>
+          </div>
+
+          <!-- Player cards grid -->
+          <div id="story-players" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"></div>
+
+          <!-- KIS Breakdown -->
+          <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+            <h3 class="text-sm font-bold text-white mb-4">Kill Impact Breakdown</h3>
+            <div id="story-kis-breakdown"></div>
+          </div>
+        </div>
+
+        <style>
+          @keyframes storyGlow {
+            0% { border-color: rgba(255,255,255,0.1); }
+            50% { border-color: rgba(245,158,11,0.25); }
+            100% { border-color: rgba(255,255,255,0.1); }
+          }
+        </style>
 
         <!-- GREATSHOT VIEW -->
         <div id="view-greatshot" class="view-section">

@@ -4714,6 +4714,30 @@ class UltimateETLegacyBot(commands.Bot):
         vs_count = len(vs_stats) if isinstance(vs_stats, list) else 0
         return (awards_count, vs_count)
 
+    @staticmethod
+    def _parse_endstats_filename_timestamp(filename: str) -> datetime | None:
+        """Extract datetime from endstats filename (YYYY-MM-DD-HHMMSS-...)."""
+        try:
+            return datetime.strptime(filename[:17], "%Y-%m-%d-%H%M%S")
+        except (ValueError, IndexError):
+            return None
+
+    def _are_endstats_from_same_match(
+        self, filename_a: str, filename_b: str, max_minutes: int = 45
+    ) -> bool:
+        """Check if two endstats filenames are from the same match.
+
+        Compares timestamps embedded in filenames. If the gap exceeds
+        max_minutes, they are from different plays of the same map and
+        must NOT supersede each other.
+        Returns True (assume same match) when either timestamp is unparseable.
+        """
+        ts_a = self._parse_endstats_filename_timestamp(filename_a)
+        ts_b = self._parse_endstats_filename_timestamp(filename_b)
+        if ts_a is None or ts_b is None:
+            return True  # Can't determine — safe default
+        return abs((ts_a - ts_b).total_seconds()) <= max_minutes * 60
+
     def _select_richest_endstats(
         self,
         endstats_data: dict,
@@ -4915,6 +4939,28 @@ class UltimateETLegacyBot(commands.Bot):
                 round_id=round_id,
                 detail=f"existing_filename={existing_filename} processed_at={processed_at}",
                 level="warning",
+            )
+            return True
+
+        # Timestamp guard: prevent supersede across different plays of the same map.
+        # If the incoming file's timestamp is >45 min from the existing file,
+        # they belong to different matches — do NOT allow supersede.
+        if not self._are_endstats_from_same_match(filename, existing_filename):
+            self._log_endstats_transition(
+                log,
+                source,
+                "cross_match_supersede_blocked",
+                filename,
+                round_id=round_id,
+                detail=(
+                    f"existing_filename={existing_filename} "
+                    f"timestamps_too_far_apart_for_same_match"
+                ),
+                level="warning",
+            )
+            await self._mark_endstats_filename_handled(
+                filename,
+                f"cross_match_supersede_blocked_existing:{existing_filename}",
             )
             return True
 
@@ -5256,6 +5302,26 @@ class UltimateETLegacyBot(commands.Bot):
                         round_id=round_id,
                         detail=f"existing_filename={existing_filename} processed_at={processed_at}",
                         level="warning",
+                    )
+                    return True
+
+                # Timestamp guard: block supersede across different plays of the same map.
+                if not self._are_endstats_from_same_match(filename, existing_filename):
+                    self._log_endstats_transition(
+                        log,
+                        source,
+                        "cross_match_supersede_blocked",
+                        filename,
+                        round_id=round_id,
+                        detail=(
+                            f"existing_filename={existing_filename} "
+                            f"timestamps_too_far_apart_for_same_match"
+                        ),
+                        level="warning",
+                    )
+                    await self._mark_endstats_filename_handled(
+                        filename,
+                        f"cross_match_supersede_blocked_existing:{existing_filename}",
                     )
                     return True
 
