@@ -642,7 +642,9 @@ class StorytellingService:
             SELECT player_guid,
                    SUM(kills) as pcs_kills,
                    SUM(deaths) as deaths,
-                   SUM(headshot_kills) as hs,
+                   SUM(headshots) as hs_hits,
+                   SUM(bullets_fired) as shots,
+                   AVG(accuracy) as avg_accuracy,
                    SUM(revives_given) as revives,
                    SUM(objectives_returned) as obj_returned,
                    SUM(damage_given) as dmg,
@@ -664,15 +666,18 @@ class StorytellingService:
                 s = stats_by_guid[long_guid]
                 s["pcs_kills"] = int(r[1] or 0)  # authoritative kill count
                 s["deaths"] = int(r[2] or 0)
-                s["headshot_kills"] = int(r[3] or 0)
-                pcs_kills = s["pcs_kills"]
-                s["headshot_pct"] = s["headshot_kills"] / pcs_kills if pcs_kills > 0 else 0.0
-                s["revives_given"] = int(r[4] or 0)
-                s["carrier_returns"] = int(r[5] or 0)
-                dmg = float(r[6] or 0)
-                time_played = float(r[7] or 0)
-                denied_time = float(r[8] or 0)
-                time_dead = float(r[9] or 0)
+                hs_hits = float(r[3] or 0)
+                shots = float(r[4] or 0)
+                avg_acc = float(r[5] or 0)
+                total_hits = shots * avg_acc / 100 if avg_acc > 0 else 0
+                # Real HS% = headshot HITS / total HITS (not headshot kills / kills!)
+                s["headshot_pct"] = hs_hits / total_hits if total_hits > 0 else 0.0
+                s["revives_given"] = int(r[6] or 0)
+                s["carrier_returns"] = int(r[7] or 0)
+                dmg = float(r[8] or 0)
+                time_played = float(r[9] or 0)
+                denied_time = float(r[10] or 0)
+                time_dead = float(r[11] or 0)
                 s["dpm"] = dmg / max(time_played, 1)
                 s["denied_time"] = denied_time
                 s["time_dead_pct"] = time_dead / max(time_played, 0.1)
@@ -773,8 +778,8 @@ class StorytellingService:
         # Medic anchor — SIGNIFICANTLY more revives than average
         if revives >= avg_revives * 1.35 and revives >= 20:
             return "medic_anchor"
-        # Silent assassin — high precision headshot player
-        if hs_pct >= 0.22 and kd >= avg_kd * 1.05:
+        # Silent assassin — high precision (real HS% = hs_hits/total_hits, typically 10-14%)
+        if hs_pct >= 0.12 and kd >= avg_kd * 1.05:
             return "silent_assassin"
         # Chaos agent — high DPM but terrible KD (aggressive but reckless)
         if dpm >= avg_dpm * 0.95 and kd < avg_kd * 0.75:
