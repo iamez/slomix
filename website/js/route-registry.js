@@ -252,6 +252,15 @@ const ROUTE_DEFINITIONS = Object.freeze({
         buildHash: () => '#/skill-rating',
         load: () => undefined,
     },
+    story: {
+        viewId: 'story',
+        label: 'Smart Stats',
+        mode: VIEW_MODE.MODERN,
+        surfaceType: 'read-heavy',
+        migrationWave: 'C',
+        buildHash: () => '#/story',
+        load: () => undefined,
+    },
     sessions2: {
         viewId: 'sessions2',
         label: 'Sessions 2.0',
