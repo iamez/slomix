@@ -397,7 +397,7 @@ function renderUploadCard(item, index = 0) {
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.54a4.5 4.5 0 00-6.364-6.364L4.5 8.25"/></svg>
                         Share
                     </a>
-                    <a href="${API_BASE}/uploads/${encodeURIComponent(item.id)}/download"
+                    <a href="${API_BASE}/uploads/${encodeURIComponent(item.id)}/download?force_download=true" download
                         class="flex-1 inline-flex items-center justify-center gap-1.5 bg-brand-blue/15 hover:bg-brand-blue/25 text-brand-blue text-xs font-bold px-3 py-2 rounded-lg transition-all duration-200 hover:shadow-[0_0_12px_rgba(59,130,246,0.2)]">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
                         Download
@@ -642,7 +642,7 @@ export async function loadUploadDetail(uploadId) {
         const sizeStr = formatFileSize(data.file_size_bytes || 0);
         const isVideo = data.is_playable || isVideoFile(data.extension);
         const shareUrl = `${window.location.origin}${window.location.pathname}#/uploads/${encodeURIComponent(data.id)}`;
-        const downloadUrl = `${API_BASE}/uploads/${encodeURIComponent(data.id)}/download`;
+        const downloadUrl = `${API_BASE}/uploads/${encodeURIComponent(data.id)}/download?force_download=true`;
         const cat = CATEGORIES[data.category] || { label: data.category, color: 'text-slate-400 border-white/10 bg-white/5', icon: '' };
 
         container.innerHTML = `

@@ -162,14 +162,9 @@ async def compute_all_ratings(db) -> list[dict]:
     """
     Compute ET_Rating for all players with enough rounds.
     Returns sorted list of player rating dicts.
+    Single query: percentiles + ratings computed from the same result set.
     """
-    logger.info("Computing population percentiles...")
-    percentiles = await compute_population_percentiles(db)
-    if not percentiles:
-        logger.warning("No player data for rating computation")
-        return []
-
-    logger.info("Querying player aggregates...")
+    logger.info("Querying player aggregates (single pass)...")
     rows = await db.fetch_all(f"""
         SELECT player_guid, MAX(player_name) as display_name,
                COUNT(*) as rounds, {_METRICS_SQL}
@@ -178,6 +173,16 @@ async def compute_all_ratings(db) -> list[dict]:
         HAVING COUNT(*) >= $1
         ORDER BY player_guid
     """, (MIN_ROUNDS,))
+
+    if not rows:
+        logger.warning("No player data for rating computation")
+        return []
+
+    # Build percentile lookup from the same query results (no second DB call)
+    percentiles = {
+        name: sorted([float(r[i]) for r in rows])
+        for i, name in enumerate(WEIGHTS.keys(), start=3)
+    }
 
     results = []
     for r in rows:

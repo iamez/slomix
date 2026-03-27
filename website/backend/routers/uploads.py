@@ -349,6 +349,7 @@ async def get_upload(upload_id: str, db=Depends(get_db)):
 @router.get("/{upload_id}/download")
 async def download_upload(
     upload_id: str,
+    force_download: bool = False,
     db=Depends(get_db),
     range: Optional[str] = Header(None),
 ):
@@ -384,7 +385,7 @@ async def download_upload(
             pass
 
     # For MP4, allow inline playback with Range request support for seeking
-    if extension.lower() == ".mp4":
+    if extension.lower() == ".mp4" and not force_download:
         file_size = resolved.stat().st_size
 
         base_headers = {
