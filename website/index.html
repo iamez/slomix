@@ -1242,6 +1242,10 @@
                     class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition">
                     ⚡ Smart Stats
                 </button>
+                <button id="link-replay" data-click-action="navigateTo('replay')"
+                    class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-purple-500/40 text-purple-400 hover:bg-purple-500/10 transition">
+                    🎬 Replay
+                </button>
                 <button id="link-admin" data-click-action="navigateTo('admin')"
                     class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">
                     System Overview
@@ -3012,6 +3016,28 @@
             overflow: hidden;
           }
         </style>
+
+        <!-- REPLAY VIEW -->
+        <div id="view-replay" class="view-section hidden"
+            data-prototype="true"
+            data-prototype-title="Round Replay Beta"
+            data-prototype-message="Replay timeline is in active development. Track positions require proximity data."
+            data-prototype-tone="cyan">
+          <div class="max-w-7xl mx-auto px-6 py-8">
+            <div data-prototype-slot></div>
+            <!-- Hero -->
+            <div class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-purple-950/20 to-slate-900 p-8 mb-6">
+              <div class="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-transparent to-purple-500/5 pointer-events-none"></div>
+              <div class="relative z-10">
+                <div class="text-purple-400 text-xs font-bold tracking-[0.3em] uppercase mb-2">Round Replay</div>
+                <h2 class="text-3xl font-black text-white mb-2">Timeline Viewer</h2>
+                <p class="text-slate-400 text-sm">Watch round events unfold on the map. Select a round to explore kills, trades, pushes and player movement.</p>
+              </div>
+            </div>
+            <!-- Dynamic content injected by replay.js -->
+            <div id="replay-container"></div>
+          </div>
+        </div>
 
         <!-- GREATSHOT VIEW -->
         <div id="view-greatshot" class="view-section">

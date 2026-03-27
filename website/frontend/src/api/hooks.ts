@@ -553,3 +553,21 @@ export function useStoryMoments(sessionDate: string | null) {
     enabled: !!sessionDate,
   });
 }
+
+export function useStoryMomentum(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-momentum', sessionDate],
+    queryFn: () => api.getStoryMomentum(sessionDate!),
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}
+
+export function useStoryNarrative(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-narrative', sessionDate],
+    queryFn: () => api.getStoryNarrative(sessionDate!),
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}

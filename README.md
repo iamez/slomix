@@ -3,7 +3,7 @@
 > **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Version](https://img.shields.io/badge/version-1.3.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue)](CHANGELOG.md)
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_17-336791)](https://www.postgresql.org/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
@@ -16,29 +16,24 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ## 🔥 Recent Updates (March 2026)
 
-### **🧠 v1.3.0: Smart Storytelling Stats, Mandelbrot Audit & 45-Finding Resolution (March 26-27)** 🆕
+### **⚔️ v1.4.0: Player Rivalries, Win Contribution & Smart Stats Phase 2 (March 27)** 🆕
 
-**Smart competitive narratives powered by contextual kill scoring, player archetypes, and team synergy — plus a 45-finding audit with 100% resolution.**
+**Full esports analytics upgrade — head-to-head rivalries, per-round win contribution scoring, 11 match moment detectors, 9 server-side archetypes, and 35-weapon name mapping.**
 
-- 🧠 **Smart Storytelling Stats (LIVE)** — Kill Impact Score (7 context multipliers), 9 Player Archetypes, 5 Match Moment detectors, Team Synergy Score (5-axis comparison)
-- 🎭 **Legacy Story Page** — Cinematic hero section, player story cards with archetype badges, moment timeline, KIS breakdown bars, synergy radar panel at `/#/story`
-- 🔬 **Mandelbrot RCA Audit** — 4 parallel Sonnet teams reviewed 32 files line-by-line: 2 CRITICAL, 11 HIGH, 16 MEDIUM, 16 LOW — all 45 findings resolved
-- 🔄 **Proximity Pipeline Redesign** — STATS_READY webhook trigger + re-linker task eliminates 60% linkage failures
-- 🌐 **Proximity Website Overhaul** — Default scope auto-selection, all 7 leaderboard categories scoped, HTML render fixes, GUID→name resolution, metric tooltips
-- 🐛 **Post-Audit Fixes** — Re-linker column cleanup, N+1→executemany batch inserts, TOCTOU race lock, rate limiter proxy awareness, leaderboard round filtering
-- ⚡ **Skill Rating Optimization** — Merged dual GROUP BY into single pass (~50% less DB load)
-- 📊 **21 Code Quality Improvements** — LOW/INFO findings resolved across bot, website, and proximity
+- ⚔️ **Player Rivalries System** — H2H stats for any player pair, nemesis/prey/rival classification, weapon breakdown, per-map drill-down, rivalry leaderboard, new page `/#/rivalries`
+- 🏆 **Win Contribution (PWC/WIS/WAA)** — Per-round 5-component formula (kills, damage, objectives, revives, survival), dynamic weight redistribution when objectives=0, Win Impact Score, MVP detection, stacked bar visualization
+- 🧠 **Smart Stats Phase 2** — 11 moment detectors (team wipe, multikill, kill streak, carrier chain, focus survival, push success, trade chain, objective secured/denied/run, multi-revive) with rich per-kill context (weapon names, timestamps, duration)
+- 🎭 **9 Player Archetypes** — Server-side classification using DPM + denied_time + headshot% + KD + trades + revives; 35-weapon ET:Legacy name mapping
+- 🔬 **Mandelbrot RCA Audit** — 4 parallel Sonnet teams, 32 files, 45 findings — all 45 resolved
+- 🐛 **Bug Fixes** — Headshot% formula corrected (hs_hits/total_hits), GUID 8-char vs 32-char mismatch resolved, ET color code stripping on all names, relative archetype thresholds, moment type diversity, rivalries GROUP BY + threshold fix
+
+### **🧠 v1.3.0: Smart Storytelling Stats, Proximity Pipeline & Deep RCA (March 26-27)**
+
+- Kill Impact Score (7 context multipliers), 5 moment detectors, Team Synergy Score (5-axis), Proximity STATS_READY pipeline redesign, 45-finding audit with 100% resolution
 
 ### **📊 v1.1.0: Stats Accuracy Audit, React 19 Frontend & Proximity v5 (March 2026)**
 
-**Full stats accuracy audit — fixed critical data bugs, modernized frontend, expanded proximity analytics.**
-
-- 🔍 **Stats Accuracy Audit** — Comprehensive review of every stat formula across API, bot, and parser
-- 🐛 **R0 Double-Counting Fix** — Match summary rows were inflating kills by 94% and DPM by 32% across 7+ API endpoints
-- 🎯 **Accuracy Weighted Average** — Session graph stats now weighted by shots fired (not naive per-round average)
-- ⚡ **React 19 + TypeScript 5.9** — Full frontend modernization: Vite 7, Tailwind CSS v4, Framer Motion
-- 🗺️ **Proximity v5.0** — Team pushes, trade kills, spawn timing, team cohesion, crossfire opportunities
-- 🔧 **ET Rating System** — 9-metric percentile formula, per-session/map drill-down, 40 players rated
+- Full stats accuracy audit, R0 double-counting fix, React 19 + TypeScript 5.9, Proximity v5.0, ET Rating system
 
 **[📖 Full Changelog](CHANGELOG.md)**
 
@@ -268,11 +263,37 @@ A 9-metric percentile-based skill rating formula that captures the full picture 
 Transform raw numbers into compelling competitive narratives:
 
 - 💥 **Kill Impact Score (KIS)** — Contextual kill scoring with 7 multipliers: carrier kills (3-5x), push kills (2x), crossfire (1.5x), spawn timing (1-2x), outcome weight, class bonus, distance factor
-- 🎭 **9 Player Archetypes** — Server-side classification using KIS + stats + proximity + combat position: Pressure Engine, Medic Anchor, Silent Assassin, Objective Demon, Trade Specialist, Support Fortress, Flanker, All-Rounder, Wildcard
-- ⚡ **5 Match Moment Detectors** — Kill streaks, carrier interception chains, focus fire survival, team push success, trade kill chains
+- 🎭 **9 Player Archetypes** — Server-side classification using DPM + denied_time + headshot% + KD + trades + revives: Pressure Engine, Medic Anchor, Silent Assassin, Objective Demon, Trade Specialist, Support Fortress, Flanker, All-Rounder, Wildcard
+- ⚡ **11 Match Moment Detectors** — Team wipe, multikill, kill streak, carrier chain, focus survival, push success, trade chain, objective secured, objective denied, objective run, multi-revive — each with per-kill breakdown (weapon names, timestamps, duration)
 - 🤝 **Team Synergy Score** — 5-axis per-faction comparison: crossfire rate, trade coverage, cohesion quality, push success, medic bonds
+- 🔫 **35-Weapon Name Mapping** — Full ET:Legacy weapon name lookup across all moment and archetype displays
 - 🎬 **Legacy Story Page** — Cinematic hero, player story cards, moment timeline, KIS breakdown bars, synergy panel at `/#/story`
 - 🗄️ **Backend** — `storytelling_kill_impact` DB table, 4 API endpoints, full data access pipeline
+
+---
+
+### **⚔️ Player Rivalries** 🆕
+
+Deep head-to-head competitive intelligence between any two players:
+
+- 📊 **H2H Stats** — Kills, deaths, KD ratio, accuracy, DPM head-to-head for any player pair
+- 🏷️ **Nemesis / Prey / Rival Classification** — Automatically determined from win rate and encounter count
+- 🔫 **Weapon Breakdown** — Which weapons each player uses most in this specific matchup
+- 🗺️ **Per-Map H2H Drill-Down** — See how the rivalry plays out map by map
+- 🏆 **Rivalry Leaderboard** — Top rivalry pairs ranked by total encounters
+- 🌐 **Dedicated Page** — Full rivalry dashboard at `/#/rivalries`
+
+---
+
+### **🏆 Win Contribution (PWC / WIS / WAA)** 🆕
+
+Quantify exactly how much each player contributed to a round win:
+
+- 📐 **Per-Round Win Contribution (PWC)** — 5-component formula: kills, damage dealt, objectives secured, revives given, survival time
+- ⚖️ **Dynamic Weight Redistribution** — When a round has zero objectives, objective weight redistributes automatically to kills and damage
+- 📈 **Win Impact Score (WIS)** — avg(PWC in won rounds) − avg(PWC in lost rounds): who actually moves the needle
+- 🥇 **MVP Detection** — Highest WIS player flagged as MVP per session
+- 📊 **Stacked Bar Visualization** — Per-component breakdown bars for every player in every round
 
 ---
 
@@ -425,8 +446,8 @@ See `.env.example` for all options.
 ### **📊 Sessions & Scoring**
 `!last_session` · `!last_session graphs` · `!sessions` · `!awards` · `!last_round`
 
-### **⚔️ Matchups & Predictions**
-`!matchup A vs B` · `!duo_perf p1 p2` · `!nemesis` · `!predictions` · `!prediction_stats` · `!prediction_trends` · `!prediction_leaderboard`
+### **⚔️ Matchups, Rivalries & Predictions**
+`!matchup A vs B` · `!duo_perf p1 p2` · `!nemesis` · `!rivalry <p1> <p2>` · `!rivalry_leaderboard` · `!predictions` · `!prediction_stats` · `!prediction_trends` · `!prediction_leaderboard`
 
 ### **🔗 Account Management**
 `!link` · `!unlink` · `!whoami` · `!set_display_name` · `!achievements`

@@ -50,6 +50,8 @@ import type {
   CombatHeatmapResponse,
   KillLinesResponse,
   DangerZonesResponse,
+  MomentumResponse,
+  NarrativeResponse,
 } from './types';
 
 const API_BASE = '/api';
@@ -433,6 +435,12 @@ export const api = {
 
   getStoryMoments: (sessionDate: string, limit = 10) =>
     get<import('./types').MomentsResponse>(`/storytelling/moments?session_date=${sessionDate}&limit=${limit}`),
+
+  getStoryMomentum: (sessionDate: string) =>
+    get<MomentumResponse>(`/storytelling/momentum?session_date=${sessionDate}`),
+
+  getStoryNarrative: (sessionDate: string) =>
+    get<NarrativeResponse>(`/storytelling/narrative?session_date=${sessionDate}`),
 
   // Auth
   getAuthMe: async (): Promise<AuthUser | null> => {

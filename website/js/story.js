@@ -441,29 +441,31 @@ const SYNERGY_AXES = [
     { key: 'medic',     label: 'Medic Bond' },
 ];
 
-const TEAM_STYLES = {
-    AXIS:   { name: 'Axis',   bar: 'bg-red-500',  text: 'text-red-400',  bg: 'bg-red-500/5',  border: 'border-red-500/20' },
-    ALLIES: { name: 'Allies', bar: 'bg-blue-500', text: 'text-blue-400', bg: 'bg-blue-500/5', border: 'border-blue-500/20' },
+const GROUP_STYLES = {
+    group_a: { bar: 'bg-red-500',  text: 'text-red-400',  bg: 'bg-red-500/5',  border: 'border-red-500/20' },
+    group_b: { bar: 'bg-blue-500', text: 'text-blue-400', bg: 'bg-blue-500/5', border: 'border-blue-500/20' },
 };
 
 function renderTeamSynergy(data) {
     const container = document.getElementById('story-team-synergy');
     if (!container) return;
 
-    const teams = data?.teams;
-    if (!teams || (!teams.AXIS && !teams.ALLIES)) {
+    const groups = data?.groups;
+    if (!groups || (!groups.group_a && !groups.group_b)) {
         container.innerHTML = '<div class="text-center text-slate-500 py-8 text-sm">No synergy data available</div>';
         return;
     }
 
-    function renderPanel(faction) {
-        const style = TEAM_STYLES[faction];
-        const td = teams[faction];
-        if (!td) return '';
-        const composite = td.composite ?? 0;
+    function renderPanel(gkey) {
+        const style = GROUP_STYLES[gkey];
+        const gd = groups[gkey];
+        if (!gd) return '';
+        const composite = gd.composite ?? 0;
+        const players = Array.isArray(gd.players) ? gd.players : [];
+        const nameList = players.map(n => escapeHtml(stripEtColors(n))).join(', ');
 
         const bars = SYNERGY_AXES.map(axis => {
-            const val = td[axis.key] ?? 0;
+            const val = gd[axis.key] ?? 0;
             return `
                 <div class="flex items-center gap-2 mb-2">
                     <div class="w-24 text-[11px] text-slate-400 truncate">${escapeHtml(axis.label)}</div>
@@ -477,7 +479,9 @@ function renderTeamSynergy(data) {
         return `
             <div class="flex-1 rounded-xl border ${style.border} ${style.bg} p-5">
                 <div class="flex items-center justify-between mb-4">
-                    <div class="text-sm font-bold text-white">${escapeHtml(style.name)}</div>
+                    <div>
+                        <div class="text-sm font-bold text-white">${nameList || gkey}</div>
+                    </div>
                     <div class="text-2xl font-black ${style.text}">${composite.toFixed(1)}</div>
                 </div>
                 ${bars}
@@ -486,8 +490,8 @@ function renderTeamSynergy(data) {
 
     container.innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            ${renderPanel('AXIS')}
-            ${renderPanel('ALLIES')}
+            ${renderPanel('group_a')}
+            ${renderPanel('group_b')}
         </div>
     `;
 }
