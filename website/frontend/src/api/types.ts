@@ -1329,3 +1329,40 @@ export interface MovementStatsResponse {
   scope: Record<string, unknown>;
   players: MovementStatsPlayer[];
 }
+
+// ── Storytelling / Smart Stats ──
+export interface KillImpactEntry {
+  guid: string;
+  name: string;
+  total_kis: number;
+  kills: number;
+  carrier_kills: number;
+  push_kills: number;
+  crossfire_kills: number;
+  avg_impact: number;
+}
+
+export interface KillImpactResponse {
+  status: string;
+  session_date: string;
+  entries: KillImpactEntry[];
+  total_kills: number;
+}
+
+export interface KillImpactDetail {
+  kill_id: number;
+  killer_name: string;
+  victim_name: string;
+  round_number: number;
+  kill_time_ms: number;
+  total_impact: number;
+  carrier_multiplier: number;
+  push_multiplier: number;
+  crossfire_multiplier: number;
+  spawn_multiplier: number;
+  outcome_multiplier: number;
+  class_multiplier: number;
+  is_carrier_kill: boolean;
+  is_during_push: boolean;
+  is_crossfire: boolean;
+}

@@ -536,3 +536,12 @@ export const useMovementStats = (rangeDays = 30, playerGuid?: string) =>
     queryFn: () => api.getMovementStats(rangeDays, playerGuid),
     staleTime: 60_000,
   });
+
+// Storytelling / Smart Stats
+export function useStoryKillImpact(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-kill-impact', sessionDate],
+    queryFn: () => api.getStoryKillImpact(sessionDate!),
+    enabled: !!sessionDate,
+  });
+}
