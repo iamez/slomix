@@ -6,6 +6,13 @@
 
 import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js';
 
+function stripEtColors(text) {
+    if (!text) return '';
+    return String(text).replace(/\^[0-9A-Za-z]/g, '');
+}
+
+let storyLoadId = 0;
+
 const DEFAULT_SCOPE_RANGE_DAYS = 365;
 
 const storyState = {
@@ -104,6 +111,7 @@ async function loadStoryData() {
         return;
     }
 
+    const loadId = ++storyLoadId;
     storyState.loading = true;
     renderLoading();
 
@@ -111,6 +119,7 @@ async function loadStoryData() {
         const data = await fetchJSON(
             `${API_BASE}/storytelling/kill-impact?session_date=${encodeURIComponent(storyState.sessionDate)}&limit=50`
         );
+        if (loadId !== storyLoadId) return;
         storyState.players = Array.isArray(data?.players) ? data.players : [];
 
         if (storyState.players.length === 0) {
@@ -173,7 +182,7 @@ function renderStoryHero(sessionDate, players) {
     const totalKills = players.reduce((s, p) => s + (p.kills || 0), 0);
     const topPlayer = players[0];
 
-    if (title) title.textContent = `Session ${escapeHtml(sessionDate)}`;
+    if (title) title.textContent = `Session ${sessionDate}`;
     if (subtitle) subtitle.textContent = `${players.length} players \u2022 Kill Impact Score analysis`;
 
     if (statsRow) {
@@ -192,7 +201,7 @@ function renderStoryHero(sessionDate, players) {
             </div>
             <div class="flex flex-col">
                 <span class="text-xs text-slate-500 uppercase tracking-wider">MVP</span>
-                <span class="text-lg font-bold text-amber-400">${topPlayer ? escapeHtml(topPlayer.name) : '-'}</span>
+                <span class="text-lg font-bold text-amber-400">${topPlayer ? escapeHtml(stripEtColors(topPlayer.name)) : '-'}</span>
             </div>
         `;
     }
@@ -222,7 +231,7 @@ function renderPlayerCards(players) {
                         ${rank}
                     </div>
                     <div>
-                        <div class="text-sm font-semibold text-white leading-tight">${escapeHtml(p.name)}</div>
+                        <div class="text-sm font-semibold text-white leading-tight">${escapeHtml(stripEtColors(p.name))}</div>
                         <div class="flex items-center gap-1.5 mt-0.5">
                             <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${colors.bg} ${colors.border} ${colors.text} border">
                                 ${arch.icon} ${escapeHtml(arch.label)}
@@ -231,7 +240,7 @@ function renderPlayerCards(players) {
                     </div>
                 </div>
                 <div class="text-right">
-                    <div class="text-lg font-black bg-gradient-to-r ${tier.css} bg-clip-text text-transparent">${p.total_kis.toFixed(1)}</div>
+                    <div class="text-lg font-black bg-gradient-to-r ${tier.css} bg-clip-text text-transparent">${(p.total_kis ?? 0).toFixed(1)}</div>
                     <div class="text-[10px] ${tier.textCss} font-bold uppercase tracking-wider">${escapeHtml(tier.label)}</div>
                 </div>
             </div>
@@ -263,7 +272,7 @@ function renderPlayerCards(players) {
                 <div class="bg-cyan-500/80 transition-all" style="width:${crossfireBar}%"></div>
             </div>
             <div class="flex justify-between mt-1 text-[9px] text-slate-600">
-                <span>Avg impact: ${p.avg_impact.toFixed(2)}</span>
+                <span>Avg impact: ${(p.avg_impact ?? 0).toFixed(2)}</span>
                 <span>Context: ${p.kills > 0 ? (((p.carrier_kills + p.push_kills + p.crossfire_kills) / p.kills) * 100).toFixed(0) : 0}%</span>
             </div>
         </div>`;
@@ -295,20 +304,23 @@ function renderKISBreakdown(players) {
         const carrierKIS = p.carrier_kills * (p.avg_impact || 1);
         const pushKIS = p.push_kills * (p.avg_impact || 1) * 0.8;
         const crossfireKIS = p.crossfire_kills * (p.avg_impact || 1) * 0.7;
-        const baseKIS = Math.max(0, p.total_kis - carrierKIS - pushKIS - crossfireKIS);
+        const segmentTotal = carrierKIS + pushKIS + crossfireKIS;
+        const baseKIS = Math.max(0, (p.total_kis ?? 0) - segmentTotal);
+        const displayTotal = baseKIS + segmentTotal;  // Should equal p.total_kis
 
         const pct = (v) => ((v / maxKIS) * 100).toFixed(1);
 
+        const safeName = escapeHtml(stripEtColors(p.name));
         return `
         <div class="flex items-center gap-3 mb-1.5">
-            <div class="w-24 text-xs text-slate-400 truncate text-right" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</div>
+            <div class="w-24 text-xs text-slate-400 truncate text-right" title="${safeName}">${safeName}</div>
             <div class="flex-1 h-5 rounded bg-slate-800/50 overflow-hidden flex">
                 <div class="${SEGMENTS[0].color}/60 h-full" style="width:${pct(baseKIS)}%"></div>
                 <div class="${SEGMENTS[1].color}/80 h-full" style="width:${pct(carrierKIS)}%"></div>
                 <div class="${SEGMENTS[2].color}/80 h-full" style="width:${pct(pushKIS)}%"></div>
                 <div class="${SEGMENTS[3].color}/80 h-full" style="width:${pct(crossfireKIS)}%"></div>
             </div>
-            <div class="w-12 text-xs text-slate-400 text-right font-mono">${p.total_kis.toFixed(1)}</div>
+            <div class="w-12 text-xs text-slate-400 text-right font-mono">${(p.total_kis ?? 0).toFixed(1)}</div>
         </div>`;
     }).join('');
 

@@ -5,10 +5,12 @@ Storytelling Stats API — Kill Impact Score (KIS) endpoints.
 from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from starlette.requests import Request
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
+from website.backend.rate_limit import limiter
 from website.backend.services.storytelling_service import (
     StorytellingService,
     CARRIER_KILL_MULTIPLIER,
@@ -30,19 +32,25 @@ logger = get_app_logger("api.storytelling")
 
 
 def _parse_date(val: str) -> date:
-    return datetime.strptime(val, "%Y-%m-%d").date()
+    try:
+        return datetime.strptime(val, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
 
 
 @router.get("/storytelling/kill-impact")
+@limiter.limit("10/minute")
 async def get_kill_impact_leaderboard(
+    request: Request,
     session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
     limit: int = Query(default=20, le=100, ge=1),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """KIS leaderboard for a session. Lazy-computes if not cached."""
+    sd = _parse_date(session_date)
     svc = StorytellingService(db)
-    compute_result = await svc.compute_session_kis(session_date)
-    leaderboard = await svc.get_kis_leaderboard(session_date, limit=limit)
+    compute_result = await svc.compute_session_kis(sd)
+    leaderboard = await svc.get_kis_leaderboard(sd, limit=limit)
 
     return {
         "status": "ok",
@@ -54,7 +62,9 @@ async def get_kill_impact_leaderboard(
 
 
 @router.get("/storytelling/kill-impact/details")
+@limiter.limit("10/minute")
 async def get_kill_impact_details(
+    request: Request,
     session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
     player_guid: str = Query(..., description="Player GUID"),
     db: DatabaseAdapter = Depends(get_db),

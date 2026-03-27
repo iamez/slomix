@@ -10,12 +10,16 @@ Computes contextual kill impact scores by combining:
 - proximity_reaction_metric (target class info)
 """
 
+import asyncio
 import logging
 from datetime import date, datetime
 from typing import Optional, Union
 from website.backend.logging_config import get_app_logger
 
 logger = get_app_logger("storytelling")
+
+# Per-session locks to prevent concurrent TOCTOU races on lazy compute
+_compute_locks: dict[str, asyncio.Lock] = {}
 
 # Competitive ET:Legacy multipliers (calibrated for pro play)
 CARRIER_KILL_MULTIPLIER = 3.0       # Killed flag/doc carrier
@@ -52,7 +56,15 @@ class StorytellingService:
     async def compute_session_kis(self, session_date: Union[str, date], force: bool = False) -> dict:
         """Compute KIS for all kills in a session. Returns summary stats."""
         sd = _to_date(session_date)
+        lock_key = str(sd)
+        if lock_key not in _compute_locks:
+            _compute_locks[lock_key] = asyncio.Lock()
 
+        async with _compute_locks[lock_key]:
+            return await self._compute_session_kis_locked(sd, force)
+
+    async def _compute_session_kis_locked(self, sd: date, force: bool) -> dict:
+        """Inner compute logic — must be called while holding the session lock."""
         # Check if already computed (unless force)
         if not force:
             existing = await self.db.fetch_one(
@@ -91,13 +103,24 @@ class StorytellingService:
                                       pushes, crossfires, spawn_timings, victim_classes)
             scored.append(impact)
 
-        # 4. Store in DB (delete old, insert new)
+        # 4. Store in DB (delete old, batch insert new)
         await self.db.execute(
             "DELETE FROM storytelling_kill_impact WHERE session_date = $1", (sd,)
         )
 
-        for s in scored:
-            await self.db.execute("""
+        if scored:
+            batch = [
+                (
+                    s['kill_outcome_id'], s['session_date'], s['round_number'], s['round_start_unix'],
+                    s['map_name'], s['killer_guid'], s['killer_name'], s['victim_guid'], s['victim_name'],
+                    s['base_impact'], s['carrier_multiplier'], s['push_multiplier'], s['crossfire_multiplier'],
+                    s['spawn_multiplier'], s['outcome_multiplier'], s['class_multiplier'], s['distance_multiplier'],
+                    s['total_impact'], s['is_carrier_kill'], s['is_during_push'], s['is_crossfire'],
+                    s['is_objective_area'], s['kill_time_ms'],
+                )
+                for s in scored
+            ]
+            await self.db.executemany("""
                 INSERT INTO storytelling_kill_impact
                 (kill_outcome_id, session_date, round_number, round_start_unix, map_name,
                  killer_guid, killer_name, victim_guid, victim_name,
@@ -106,16 +129,9 @@ class StorytellingService:
                  total_impact, is_carrier_kill, is_during_push, is_crossfire, is_objective_area,
                  kill_time_ms)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
-            """, (
-                s['kill_outcome_id'], s['session_date'], s['round_number'], s['round_start_unix'],
-                s['map_name'], s['killer_guid'], s['killer_name'], s['victim_guid'], s['victim_name'],
-                s['base_impact'], s['carrier_multiplier'], s['push_multiplier'], s['crossfire_multiplier'],
-                s['spawn_multiplier'], s['outcome_multiplier'], s['class_multiplier'], s['distance_multiplier'],
-                s['total_impact'], s['is_carrier_kill'], s['is_during_push'], s['is_crossfire'],
-                s['is_objective_area'], s['kill_time_ms']
-            ))
+            """, batch)
 
-        logger.info(f"KIS computed for {session_date}: {len(scored)} kills scored")
+        logger.info("KIS computed for %s: %d kills scored", sd, len(scored))
         return {"status": "computed", "kills_scored": len(scored)}
 
     def _score_kill(self, kill, carrier_kills, carrier_returns, pushes, crossfires,

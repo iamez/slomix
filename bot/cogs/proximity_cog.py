@@ -18,7 +18,7 @@ import os
 import sys
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
 
@@ -63,6 +63,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
         self.import_count = 0
         self.error_count = 0
         self._startup_scan_completed = False
+        self._scan_lock = asyncio.Lock()
 
         # Check if proximity is enabled
         self.enabled = getattr(bot.config, 'proximity_enabled', False)
@@ -249,53 +250,58 @@ class ProximityCog(commands.Cog, name="Proximity"):
         if not force and not self.bot.config.proximity_auto_import:
             return
 
-        try:
-            self.last_scan_time = datetime.now()
+        if self._scan_lock.locked():
+            logger.debug("Proximity scan already in progress, skipping")
+            return
 
-            # Fetch new files from remote server if configured
-            await self._fetch_remote_files()
+        async with self._scan_lock:
+            try:
+                self.last_scan_time = datetime.now()
 
-            # Find all engagement files
-            stats_path = Path(self.local_dir)
-            if not stats_path.exists():
-                if self.debug_log:
-                    logger.debug(f"Stats directory not found: {stats_path}")
-                return
+                # Fetch new files from remote server if configured
+                await self._fetch_remote_files()
 
-            engagement_files = list(stats_path.glob("*_engagements.txt"))
+                # Find all engagement files
+                stats_path = Path(self.local_dir)
+                if not stats_path.exists():
+                    if self.debug_log:
+                        logger.debug(f"Stats directory not found: {stats_path}")
+                    return
 
-            # On startup, respect lookback to avoid replaying stale local files.
-            startup_cutoff = None
-            if (
-                not force
-                and not self._startup_scan_completed
-                and self.lookback_hours
-                and self.lookback_hours > 0
-            ):
-                startup_cutoff = int(datetime.now().timestamp() - (self.lookback_hours * 3600))
+                engagement_files = list(stats_path.glob("*_engagements.txt"))
 
-            new_files = [
-                f for f in engagement_files
-                if f.name not in self.processed_engagement_files
-            ]
+                # On startup, respect lookback to avoid replaying stale local files.
+                startup_cutoff = None
+                if (
+                    not force
+                    and not self._startup_scan_completed
+                    and self.lookback_hours
+                    and self.lookback_hours > 0
+                ):
+                    startup_cutoff = int(datetime.now().timestamp() - (self.lookback_hours * 3600))
 
-            if new_files and self.debug_log:
-                logger.info(f"🎯 Found {len(new_files)} new engagement files")
+                new_files = [
+                    f for f in engagement_files
+                    if f.name not in self.processed_engagement_files
+                ]
 
-            for filepath in sorted(new_files, key=lambda p: p.name):
-                if startup_cutoff is not None:
-                    ts = self._extract_timestamp(filepath.name)
-                    if ts and ts < startup_cutoff:
-                        self._mark_local_processed(filepath.name)
-                        continue
-                await self._import_engagement_file(filepath)
+                if new_files and self.debug_log:
+                    logger.info(f"🎯 Found {len(new_files)} new engagement files")
 
-        except Exception as e:
-            self.error_count += 1
-            logger.error(f"Error in engagement scan: {e}", exc_info=True)
-        finally:
-            if not self._startup_scan_completed:
-                self._startup_scan_completed = True
+                for filepath in sorted(new_files, key=lambda p: p.name):
+                    if startup_cutoff is not None:
+                        ts = self._extract_timestamp(filepath.name)
+                        if ts and ts < startup_cutoff:
+                            self._mark_local_processed(filepath.name)
+                            continue
+                    await self._import_engagement_file(filepath)
+
+            except Exception as e:
+                self.error_count += 1
+                logger.error(f"Error in engagement scan: {e}", exc_info=True)
+            finally:
+                if not self._startup_scan_completed:
+                    self._startup_scan_completed = True
 
     @tasks.loop(minutes=2)
     async def scan_engagement_files(self):
@@ -343,12 +349,33 @@ class ProximityCog(commands.Cog, name="Proximity"):
 
             db = self.bot.db_adapter
 
-            # Find distinct unlinked proximity rounds
+            # Find distinct unlinked proximity rounds across all tables that
+            # carry session_date + round_number + round_start_unix.
+            # Tables without those columns (proximity_revive, proximity_weapon_accuracy)
+            # are excluded; they rely on map_name + round_start_unix fallback only.
             unlinked = await db.fetch_all(
-                "SELECT DISTINCT map_name, round_number, round_start_unix, session_date "
-                "FROM proximity_reaction_metric "
-                "WHERE round_id IS NULL "
-                "ORDER BY session_date DESC LIMIT 50"
+                "SELECT DISTINCT map_name, round_number, round_start_unix, session_date FROM ("
+                "  SELECT map_name, round_number, round_start_unix, session_date FROM proximity_reaction_metric WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_spawn_timing WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_team_cohesion WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_kill_outcome WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_carrier_event WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_carrier_kill WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_carrier_return WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_combat_position WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_construction_event WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_crossfire_opportunity WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_escort_credit WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_focus_fire WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_hit_region WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_lua_trade_kill WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_objective_focus WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_objective_run WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_support_summary WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_team_push WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_trade_event WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_vehicle_progress WHERE round_id IS NULL"
+                ") sub ORDER BY session_date DESC LIMIT 50"
             )
 
             if not unlinked:
@@ -367,7 +394,9 @@ class ProximityCog(commands.Cog, name="Proximity"):
                 target_dt = None
                 if round_start_unix:
                     try:
-                        target_dt = datetime.fromtimestamp(int(round_start_unix))
+                        target_dt = datetime.fromtimestamp(
+                            int(round_start_unix), tz=timezone.utc
+                        ).replace(tzinfo=None)
                     except (ValueError, TypeError, OSError):
                         pass
 
@@ -397,7 +426,8 @@ class ProximityCog(commands.Cog, name="Proximity"):
                             f"AND session_date = $4",
                             (round_id, map_name, round_number, session_date),
                         )
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"Re-linker: {table} primary update failed: {e}")
                         # Fallback: some tables lack round_number/session_date columns
                         try:
                             await db.execute(
@@ -406,8 +436,8 @@ class ProximityCog(commands.Cog, name="Proximity"):
                                 f"AND round_start_unix = $3",
                                 (round_id, map_name, round_start_unix),
                             )
-                        except Exception:
-                            pass  # Table may not have matching columns at all
+                        except Exception as e:
+                            logger.warning(f"Re-linker: {table} fallback update failed: {e}")
 
                 linked += 1
 
