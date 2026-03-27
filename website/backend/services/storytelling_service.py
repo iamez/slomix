@@ -12,6 +12,8 @@ Computes contextual kill impact scores by combining:
 
 import asyncio
 import logging
+import re
+import traceback
 from datetime import date, datetime
 from typing import Optional, Union
 from website.backend.logging_config import get_app_logger
@@ -65,6 +67,13 @@ def _to_date_str(val: Union[str, date]) -> str:
         return val.isoformat()
     datetime.strptime(val, "%Y-%m-%d")  # validate
     return val
+
+
+def _strip_et_colors(name: str) -> str:
+    """Remove ET:Legacy color codes (^0-^9, ^a-^z, ^A-^Z) from names."""
+    if not name:
+        return name
+    return re.sub(r'\^[0-9a-zA-Z]', '', name)
 
 
 class StorytellingService:
@@ -347,9 +356,11 @@ class StorytellingService:
         for detector in detectors:
             try:
                 found = await detector(sd)
+                logger.info("Moment detector %s returned %d results", detector.__name__, len(found))
                 moments.extend(found)
             except Exception as e:
-                logger.warning("Moment detector %s failed: %s", detector.__name__, e)
+                logger.error("Moment detector %s failed: %s\n%s",
+                             detector.__name__, e, traceback.format_exc())
 
         # Sort by impact_stars desc, then by time
         moments.sort(key=lambda m: (-m["impact_stars"], m.get("time_ms", 0)))
@@ -386,7 +397,7 @@ class StorytellingService:
             if key not in seen or streak > seen[key]["streak"]:
                 seen[key] = {
                     "killer_guid": killer_guid,
-                    "killer_name": killer_name or killer_guid[:8],
+                    "killer_name": _strip_et_colors(killer_name or killer_guid[:8]),
                     "kill_time": kill_time,
                     "round_number": round_number,
                     "map_name": map_name,
@@ -428,8 +439,8 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            killer_name = r[1] or r[0][:8]
-            returner_name = r[4] or r[3][:8]
+            killer_name = _strip_et_colors(r[1] or r[0][:8])
+            returner_name = _strip_et_colors(r[4] or r[3][:8])
             delta_s = round((r[5] - r[2]) / 1000, 1)
             moments.append({
                 "type": "carrier_chain",
@@ -460,7 +471,7 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            name = r[1] or r[0][:8]
+            name = _strip_et_colors(r[1] or r[0][:8])
             attackers = int(r[2])
             score = float(r[3])
             stars = 3 if attackers == 3 else (4 if attackers == 4 else 5)
@@ -531,9 +542,9 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            trader_name = r[1] or r[0][:8]
-            victim_name = r[3] or r[2][:8]
-            avenger_target = r[5] or r[4][:8]
+            trader_name = _strip_et_colors(r[1] or r[0][:8])
+            victim_name = _strip_et_colors(r[3] or r[2][:8])
+            avenger_target = _strip_et_colors(r[5] or r[4][:8])
             delta_s = round(int(r[6]) / 1000, 1)
             stars = 4 if delta_s <= 2 else 3
             moments.append({
@@ -571,7 +582,7 @@ class StorytellingService:
 
         kis_entries = [
             {
-                "guid": r[0], "name": r[1] or r[0][:8],
+                "guid": r[0], "name": _strip_et_colors(r[1] or r[0][:8]),
                 "total_kis": float(r[2] or 0), "kills": int(r[3] or 0),
                 "carrier_kills": int(r[4] or 0), "push_kills": int(r[5] or 0),
                 "crossfire_kills": int(r[6] or 0), "avg_impact": float(r[7] or 0),
@@ -697,9 +708,9 @@ class StorytellingService:
             return "medic_anchor"
         if avg_distance >= 600 and hs_pct >= 0.15 and kd >= 1.5:
             return "silent_assassin"
-        if avg_impact >= 5 and kills >= 15 and push_kills >= 5:
+        if avg_impact >= 4.5 and kills >= 15 and push_kills >= 5:
             return "pressure_engine"
-        if trades >= 5:
+        if trades >= 8:
             return "trade_master"
         if kills >= 10 and deaths >= 15 and avg_impact >= 3:
             return "chaos_agent"
@@ -795,9 +806,17 @@ class StorytellingService:
             "SELECT team, SUM(deaths) FROM player_comprehensive_stats "
             "WHERE round_date = $1 AND team IN (1, 2) GROUP BY team", (_to_date_str(sd),))
 
+        # Build guid-only fallback map (majority team assignment)
+        guid_teams: dict[str, list[str]] = {}
+        for (g, _rn), faction in rtm.items():
+            guid_teams.setdefault(g, []).append(faction)
+        guid_majority: dict[str, str] = {}
+        for g, teams in guid_teams.items():
+            guid_majority[g] = 'AXIS' if teams.count('AXIS') >= teams.count('ALLIES') else 'ALLIES'
+
         tt = {'AXIS': 0, 'ALLIES': 0}
         for r in (trades or []):
-            team = rtm.get((r[0], r[1]))
+            team = rtm.get((r[0], r[1])) or guid_majority.get(r[0])
             if team:
                 tt[team] += int(r[2] or 0)
 
@@ -846,9 +865,17 @@ class StorytellingService:
             "SELECT team, SUM(deaths) FROM player_comprehensive_stats "
             "WHERE round_date = $1 AND team IN (1, 2) GROUP BY team", (_to_date_str(sd),))
 
+        # Build guid-only fallback map (majority team assignment)
+        guid_teams: dict[str, list[str]] = {}
+        for (g, _rn), faction in rtm.items():
+            guid_teams.setdefault(g, []).append(faction)
+        guid_majority: dict[str, str] = {}
+        for g, teams in guid_teams.items():
+            guid_majority[g] = 'AXIS' if teams.count('AXIS') >= teams.count('ALLIES') else 'ALLIES'
+
         tr = {'AXIS': 0, 'ALLIES': 0}
         for r in (revives or []):
-            team = rtm.get((r[0], r[1]))
+            team = rtm.get((r[0], r[1])) or guid_majority.get(r[0])
             if team:
                 tr[team] += int(r[2] or 0)
 
