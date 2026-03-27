@@ -442,7 +442,7 @@ function PlayerProxScoreSection({ guid }: { guid: string }) {
 // ── Kill Outcomes per player ────────────────────────────────────────────────
 
 function PlayerKillOutcomesSection({ guid }: { guid: string }) {
-  const { data: stats } = useProximityKillOutcomePlayerStats(90, guid);
+  const { data: stats } = useProximityKillOutcomePlayerStats({ range_days: 90 }, guid);
 
   const kprEntry = stats?.kill_permanence_leaders.find(p => p.guid === guid);
   const revEntry = stats?.revive_rate_leaders.find(p => p.guid === guid);

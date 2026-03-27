@@ -8,7 +8,7 @@ import { DataTable, type Column } from '../components/DataTable';
 import { InfoTip } from '../components/InfoTip';
 import { ProximityIntro } from '../components/ProximityIntro';
 import { useProximityLeaderboards, useProximitySessionScores, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, useKillLines, useDangerZones, useMovementStats, useProxScores, useProxFormula } from '../api/hooks';
-import type { ProximityLeaderboardEntry, SessionScoreEntry, HitRegionPlayer, HeadshotRateEntry, MovementStatsPlayer, ProxScorePlayer } from '../api/types';
+import type { ProximityLeaderboardEntry, SessionScoreEntry, HitRegionPlayer, HeadshotRateEntry, MovementStatsPlayer, ProxScorePlayer, ProximityScope } from '../api/types';
 import { METRICS, LEADERBOARD_HELP } from './proximity-glossary';
 
 const API = '/api';
@@ -417,9 +417,9 @@ const OUTCOME_COLORS: Record<string, string> = {
   round_end: '#6366f1',  // indigo
 };
 
-function KillOutcomesPanel() {
-  const { data: outcomes, isLoading: outcomesLoading } = useProximityKillOutcomes();
-  const { data: playerStats, isLoading: statsLoading } = useProximityKillOutcomePlayerStats(30);
+function KillOutcomesPanel({ scope }: { scope?: ProximityScope }) {
+  const { data: outcomes, isLoading: outcomesLoading } = useProximityKillOutcomes(scope);
+  const { data: playerStats, isLoading: statsLoading } = useProximityKillOutcomePlayerStats(scope);
 
   if (outcomesLoading && statsLoading) return <Skeleton variant="card" count={1} />;
 
@@ -538,9 +538,9 @@ function KillOutcomesPanel() {
 const REGION_NAMES = ['Head', 'Arms', 'Body', 'Legs'] as const;
 const REGION_COLORS = ['#ef4444', '#60a5fa', '#22c55e', '#f59e0b']; // red, blue, green, amber
 
-function HitRegionsPanel() {
-  const { data: hitData, isLoading: hitLoading } = useProximityHitRegions();
-  const { data: hsData, isLoading: hsLoading } = useProximityHeadshotRates(30);
+function HitRegionsPanel({ scope }: { scope?: ProximityScope }) {
+  const { data: hitData, isLoading: hitLoading } = useProximityHitRegions(scope);
+  const { data: hsData, isLoading: hsLoading } = useProximityHeadshotRates(scope);
 
   if (hitLoading && hsLoading) return <Skeleton variant="card" count={1} />;
 
@@ -1286,6 +1286,12 @@ export default function Proximity() {
 
   const scope = useMemo(() => ({ sessionDate, mapName, roundNumber, roundStartUnix }), [sessionDate, mapName, roundNumber, roundStartUnix]);
   const scopeParams = useMemo(() => buildParams(scope), [scope]);
+  const apiScope = useMemo<ProximityScope>(() => ({
+    session_date: sessionDate,
+    map_name: mapName,
+    round_number: roundNumber,
+    round_start_unix: roundStartUnix,
+  }), [sessionDate, mapName, roundNumber, roundStartUnix]);
 
   // Scopes
   const { data: scopes, isLoading: scopesLoading } = useQuery<ScopeData>({
@@ -1595,11 +1601,11 @@ export default function Proximity() {
       {/* Proximity Composite Scores — the main rating */}
       <ProxScoresPanel />
 
-      {/* Kill Outcomes — global data, always visible */}
-      <KillOutcomesPanel />
+      {/* Kill Outcomes — scoped to current selection */}
+      <KillOutcomesPanel scope={apiScope} />
 
-      {/* Hit Regions — global data, always visible */}
-      <HitRegionsPanel />
+      {/* Hit Regions — scoped to current selection */}
+      <HitRegionsPanel scope={apiScope} />
 
       {/* Movement Analytics */}
       <MovementStatsPanel />
