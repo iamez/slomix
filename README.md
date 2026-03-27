@@ -3,7 +3,7 @@
 > **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Version](https://img.shields.io/badge/version-1.1.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue)](CHANGELOG.md)
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_14-336791)](https://www.postgresql.org/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
@@ -16,20 +16,30 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ## 🔥 Recent Updates (March 2026)
 
-### **📊 v1.1.0: Stats Accuracy Audit, React 19 Frontend & Proximity v5 (March 2026)** 🆕
+### **🔬 v1.2.0: Deep RCA Audit, Proximity Pipeline Overhaul & Smart Analytics (March 26-27)** 🆕
+
+**Mandelbrot-depth root cause analysis — 26 fixes, proximity pipeline redesign, website overhaul, smart storytelling architecture.**
+
+- 🔬 **Deep RCA Audit** — 26 fixes across bot, website, proximity (all CRITICAL and HIGH resolved)
+- 🔄 **Proximity Pipeline Redesign** — STATS_READY webhook trigger + re-linker task eliminates 60% linkage failures
+- 🌐 **Proximity Website Overhaul** — Default scope auto-selection, all 7 leaderboard categories scoped, HTML render fixes, GUID→name resolution, metric tooltips
+- 🐛 **Infinite Retry Loop Fix** — `file_tracker.py` now respects `success=FALSE` entries (was retrying forever)
+- ⚡ **Skill Rating Optimization** — Merged dual GROUP BY into single pass (~50% less DB load)
+- 🛡️ **API Rate Limiting** — slowapi on 3 heavy proximity endpoints
+- 🎬 **Upload Fix** — MP4 download now forces `Content-Disposition: attachment`
+- 📊 **!last_session Graph Fix** — Decimal*float TypeError resolved (16 conversions)
+- 🧠 **Smart Storytelling Stats** — Architecture designed: KIS (Kill Impact Score), 8 Player Archetypes, Match Moments, Team Synergy, Momentum Charts
+
+### **📊 v1.1.0: Stats Accuracy Audit, React 19 Frontend & Proximity v5 (March 2026)**
 
 **Full stats accuracy audit — fixed critical data bugs, modernized frontend, expanded proximity analytics.**
 
 - 🔍 **Stats Accuracy Audit** — Comprehensive review of every stat formula across API, bot, and parser
-- 🐛 **R0 Double-Counting Fix** — Match summary rows were inflating kills by 94% and DPM by 32% across 7+ API endpoints (profile, leaderboard, compare, records, maps, hall of fame, season leaders)
-- 🐛 **NULLIF KD Bug Fix** — `NULLIF(deaths, 1)` → `NULLIF(deaths, 0)` in all 10 leaderboard KD formulas
+- 🐛 **R0 Double-Counting Fix** — Match summary rows were inflating kills by 94% and DPM by 32% across 7+ API endpoints
 - 🎯 **Accuracy Weighted Average** — Session graph stats now weighted by shots fired (not naive per-round average)
-- 💀 **Alive% Engine Value** — Now uses ET:Legacy `sess.time_played` (TAB[8]) which correctly excludes dead + limbo time. Backfilled 8,799 rows (99.9% coverage)
-- 🔧 **Headshot Leaderboard** — Changed from headshot hit events to headshot kills
 - ⚡ **React 19 + TypeScript 5.9** — Full frontend modernization: Vite 7, Tailwind CSS v4, Framer Motion
 - 🗺️ **Proximity v5.0** — Team pushes, trade kills, spawn timing, team cohesion, crossfire opportunities
-- 🌐 **3 New Proximity Pages** — ProximityPlayer, ProximityReplay, ProximityTeams
-- 🔧 **14 Bug Fixes** — await on sync methods, achievement help text, survival_rate formula, FragPotential hidden from displays
+- 🔧 **ET Rating System** — 9-metric percentile formula, per-session/map drill-down, 40 players rated
 
 **[📖 Full Changelog](CHANGELOG.md)**
 
@@ -60,8 +70,8 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 | **Damage Dealt** | 15.7 million |
 | **Revives Given** | 5,655 |
 | **Rounds Parsed** | 1,320 |
-| **Gaming Sessions** | 98 |
-| **Unique Players** | 33 |
+| **Gaming Sessions** | 103+ |
+| **Unique Players** | 40+ |
 | **Stats Per Player Per Round** | 57 fields |
 | **Discord Commands** | ~99 across 21 cogs |
 | **Database Tables** | 80 |
@@ -86,7 +96,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 │  ┌──────┴──────┐         │         ┌──────┴──────┐            │
 │  │ LUA WEBHOOK │         │         │  PROXIMITY  │            │
 │  │ (Real-time) │         │         │  TRACKER    │            │
-│  │  ✅ PROD    │         │         │  🔶 PROTO   │            │
+│  │  ✅ PROD    │         │         │  ✅ PROD    │            │
 │  └──────┬──────┘         │         └──────┬──────┘            │
 │         │                │                │                    │
 │         └────────────────┼────────────────┘                    │
@@ -104,7 +114,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 | **Website** (`/website/`) | ✅ Production | FastAPI + React 19/TypeScript SPA: profiles, sessions, leaderboards, proximity, greatshot |
 | **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, surrender timing fix, team capture |
 | **Greatshot** (`/greatshot/`) | ✅ Production | Demo upload, highlight detection, clip extraction, render pipeline |
-| **Proximity** (`/proximity/`) | ✅ Production | Lua v5.0 teamplay analytics — engagement, cohesion, crossfire, trade kills |
+| **Proximity** (`/proximity/`) | ✅ Production | Lua v6.01 teamplay analytics — engagement, cohesion, crossfire, trade kills, objective intelligence |
 
 ---
 
@@ -217,6 +227,52 @@ Upload ET:Legacy `.dm_84` demo files through the website. The system will:
 **All results stored in PostgreSQL** — analysis JSON, highlight metadata, clip paths, render status. Full API for listing, detail views, and downloads.
 
 **Based on [greatshot-web](https://github.com/mittermichal/greatshot-web) by Kimi (mittermichal).** We adapted his scanner/highlight/cutter/renderer architecture, integrated it with our auth system and PostgreSQL schema, and built UDT from source with [ET:Legacy protocol 84 support](https://github.com/mightycow/uberdemotools/pull/2).
+
+---
+
+### **🎯 Proximity Analytics — Teamplay Intelligence** 🆕
+
+Real-time Lua telemetry (v6.01) tracks every player position, engagement, and objective interaction on the game server. The data flows through a dedicated parser into 22+ database tables, powering deep teamplay analytics:
+
+- 📍 **Combat Engagements** — Every 1v1/NvN encounter with distance, duration, and outcome
+- 🔥 **Crossfire Detection** — LOS-verified crossfire angles with execution tracking
+- 👥 **Team Cohesion** — Periodic team shape snapshots (centroid, dispersion, buddy pairs)
+- ⚡ **Team Pushes** — Coordinated movement detection with objective orientation
+- 💀 **Trade Kills** — Server-side trade kill detection with reaction timing
+- ⏱️ **Spawn Timing** — Per-kill spawn wave efficiency scoring
+- 🎯 **Kill Outcomes** — Gib/revive/tap-out tracking with Kill Permanence Rate (KPR)
+- 🗺️ **Combat Heatmaps** — Grid-binned kill/death hotzones with map overlay
+- 🦴 **Hit Regions** — HEAD/ARMS/BODY/LEGS hit distribution per weapon
+- 🏗️ **Objective Intelligence** — Carrier tracking, construction events, vehicle progress
+
+**Pipeline:** STATS_READY webhook triggers proximity import → re-linker task fixes orphaned data → 2min fallback polling. Eliminates 60% of historical linkage failures.
+
+**Website:** Full React dashboard with scope filtering (session/map/round), 7 leaderboard categories, metric tooltips, and GUID→name resolution.
+
+---
+
+### **📈 ET Rating — Skill Rating System** 🆕
+
+A 9-metric percentile-based skill rating formula that captures the full picture of competitive ET:Legacy performance:
+
+- 🏅 **Percentile Formula** — Combines KD, DPM, accuracy, headshot%, revives, objectives, alive%, efficiency, damage per round
+- 📊 **Per-Session Drill-Down** — See how your rating changes across gaming sessions and maps
+- 🎯 **Confidence Indicator** — Low/Medium/High based on rounds played
+- 🏆 **Server-Side Tiers** — Bronze through Diamond rankings with auto-refresh when stale
+- 📈 **History Tracking** — Trend charts showing rating progression over time
+- 👥 **40 Players Rated** — Live leaderboard at `/api/skill/leaderboard`
+
+---
+
+### **🧠 Smart Storytelling Stats** *(Coming Soon)*
+
+Transform raw numbers into compelling competitive narratives:
+
+- 💥 **Kill Impact Score (KIS)** — Weights kills by context (clutch kills, opening picks, trade kills)
+- 🎭 **8 Player Archetypes** — Aggressive Fragger, Support Anchor, Objective Specialist, Lurker, and more
+- ⚡ **Match Moments** — Auto-detect clutch rounds, comeback streaks, dominant pushes
+- 🤝 **Team Synergy Score** — Measures duo effectiveness beyond individual stats
+- 📉 **Momentum Charts** — Visualize team momentum swings across a match
 
 ---
 
@@ -424,10 +480,10 @@ slomix/
 │   ├── js/                          # Legacy JS fallback modules
 │   └── index.html                   # Main SPA entry point
 │
-├── 🎯 proximity/                    # Combat engagement tracker
-│   ├── lua/                         # Game server Lua mod
-│   ├── parser/                      # Engagement data parser
-│   └── schema/                      # Database schema
+├── 🎯 proximity/                    # Teamplay analytics engine (v6.01)
+│   ├── lua/                         # Game server Lua mod (positions, objectives, hit regions)
+│   ├── parser/                      # Engagement + objective data parser
+│   └── schema/                      # Database schema (22+ tables)
 │
 ├── 🔧 bin/                          # Compiled binaries (UDT_json, UDT_cutter)
 ├── 📜 vps_scripts/                  # Game server Lua scripts
@@ -448,7 +504,7 @@ slomix/
 | `bot/services/prediction_engine.py` | AI match prediction engine (4-factor algorithm) |
 | `website/backend/main.py` | FastAPI app with auth, routers, greatshot job workers |
 | `greatshot/scanner/api.py` | Demo analysis entry point (UDT → events → highlights) |
-| `vps_scripts/stats_discord_webhook.lua` | Game server Lua script (v1.6.0) |
+| `vps_scripts/stats_discord_webhook.lua` | Game server Lua script (v1.6.2) |
 
 ---
 

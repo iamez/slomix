@@ -10,6 +10,50 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### [1.2.0] — 2026-03-26/27: Deep RCA Audit, Proximity Pipeline Overhaul & Smart Analytics
+
+**Mandelbrot-depth root cause analysis across the entire stack — 26 fixes, proximity pipeline redesign, website overhaul, and smart storytelling architecture.**
+
+*8 commits, 25+ files modified, ~800 lines changed. 17/21 tasks completed across 4 parallel agent teams.*
+
+#### Infrastructure Recovery
+- **Power outage filesystem recovery**: Recovered from corrupted `.git` objects caused by power failure
+- **Branch merge reconciliation**: Merged 17 divergent commits (9 local RCA audit + 8 remote Codacy/XSS fixes)
+- **Orphan branch cleanup**: Cleaned up 4 orphaned feature branches
+
+#### Proximity Pipeline Redesign
+- **STATS_READY webhook trigger**: Proximity import now fires on STATS_READY event instead of independent polling — eliminates 60% of historical linkage failures
+- **Re-linker background task**: New periodic task fixes NULL `round_id` references across 22 proximity tables
+- **Polling reduction**: Fallback polling reduced from 5min to 2min
+- **Root cause**: Two independent polling loops with no coordination (identified via Mandelbrot-depth RCA)
+
+#### Proximity Website — Complete Overhaul
+- **Default scope auto-selection**: First visit auto-selects last round (was showing empty state)
+- **Leaderboard scoping**: ALL 7 categories (Damage, KD, Efficiency, Headshots, Revives, Accuracy, Alive%) now respect session/map/round selection
+- **HTML render bug fixes**: Fixed double-escape in 3 panels (Focus Fire, Objective Focus, Weapon Accuracy)
+- **Crossfire GUID→name resolution**: LATERAL JOIN replaces raw GUIDs with player names
+- **Metric tooltips**: Added explanatory tooltips for Focus Fire, Objective Focus, Combat Positions
+- **Support Uptime rename**: "Support Uptime" → "Teammate Combat Support" (was incorrectly labeled medic-specific)
+- **Scope UX improvements**: Range buttons hidden when scope active, scope indicator badge displayed
+- **React Proximity.tsx scope fix**: KillOutcomes, HitRegions, HeadshotRates panels now pass scope params correctly
+
+#### Bug Fixes
+- **!last_session graph crash**: `Decimal * float` TypeError — applied 16 float conversions across graph generation
+- **Round correlation FK cascade**: Pre-validate FK references before insert; boolean completeness flags set independently
+- **Upload Library MP4 download**: Now forces `Content-Disposition: attachment` (was streaming inline)
+- **Skill Rating optimization**: Merged dual `GROUP BY` query in `compute_all_ratings` into single pass (~50% less DB load)
+- **API rate limiting**: Added slowapi rate limits on 3 heavy proximity endpoints
+- **Import column compatibility**: Fixed re-linker column name compatibility with schema changes
+
+#### Research & Design
+- **Smart Storytelling Stats architecture**: Full design for KIS (Kill Impact Score), 8 Player Archetypes, Match Moments detection, Team Synergy Score, Momentum Charts
+- **ET:Legacy competitive mechanics reference**: Game mechanics documentation for analytics context
+- **Lua (0,0,0) position audit**: Audited all proximity data — 0 bad rows found (latent risk documented)
+- **Kill Outcomes verification**: 4,503 rows across 54 rounds confirmed healthy
+- **Session 103 pipeline trace**: Full 21-round pipeline verification — all clean
+
+---
+
 ### Fixed — 2026-03-26: Deep RCA Audit (Mandelbrot-depth root cause analysis)
 
 Full report: `docs/DEEP_RCA_AUDIT_RESULTS_2026-03-26.md`
