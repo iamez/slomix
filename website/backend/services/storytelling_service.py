@@ -692,9 +692,13 @@ class StorytellingService:
         all_stats = list(stats_by_guid.values())
         session_stats = {}
         if all_stats:
-            session_stats["avg_kills"] = sum(s.get("kills", 0) for s in all_stats) / len(all_stats)
+            session_stats["avg_kills"] = sum(s.get("pcs_kills", s.get("kills", 0)) for s in all_stats) / len(all_stats)
             session_stats["avg_trades"] = sum(s.get("trade_kills", 0) for s in all_stats) / len(all_stats)
-            session_stats["avg_kd"] = sum(s.get("kills", 0) / max(s.get("deaths", 1), 1) for s in all_stats) / len(all_stats)
+            session_stats["avg_revives"] = sum(s.get("revives_given", 0) for s in all_stats) / len(all_stats)
+            session_stats["avg_kd"] = sum(
+                s.get("pcs_kills", s.get("kills", 0)) / max(s.get("deaths", 1), 1)
+                for s in all_stats
+            ) / len(all_stats)
 
         # Classify each player relative to session
         result = {}
@@ -722,32 +726,37 @@ class StorytellingService:
 
         # Session averages for relative comparison
         ss = session_stats or {}
-        avg_session_kills = ss.get("avg_kills", kills)
-        avg_session_trades = ss.get("avg_trades", trades)
+        avg_kills = ss.get("avg_kills", kills)
+        avg_trades = ss.get("avg_trades", trades)
+        avg_revives = ss.get("avg_revives", revives)
+        avg_kd = ss.get("avg_kd", kd)
+
+        # In competitive 3v3, everyone does everything. Archetypes must be
+        # RELATIVE to the session — who stands out in what dimension.
 
         # Objective player — carrier kills are rare and always significant
         if carrier_kills >= 3 or stats.get("carrier_returns", 0) >= 2:
             return "objective_specialist"
-        # Medic — high revives, low KD
-        if revives >= 8 and kd < 1.5:
-            return "medic_anchor"
-        # Sniper — long range, precise
-        if avg_distance >= 600 and hs_pct >= 0.15 and kd >= 1.5:
-            return "silent_assassin"
-        # Pressure engine — top fragger with highest kills + impact
-        if kills >= avg_session_kills * 1.15 and avg_impact >= 4.0 and push_kills >= 5:
+        # Pressure engine — top fragger (most kills relative to session)
+        if kills >= avg_kills * 1.15 and kd >= avg_kd * 1.1:
             return "pressure_engine"
-        # Chaos agent — dies a lot but makes an impact
-        if deaths >= kills * 1.3 and kills >= 10 and avg_impact >= 3:
+        # Medic anchor — SIGNIFICANTLY more revives than average (top reviver)
+        if revives >= avg_revives * 1.4 and revives >= 20:
+            return "medic_anchor"
+        # Silent assassin — high precision, above average KD
+        if hs_pct >= 0.22 and kd >= avg_kd * 1.1:
+            return "silent_assassin"
+        # Chaos agent — dies way more than kills, but still active
+        if kd < avg_kd * 0.7 and kills >= avg_kills * 0.5:
             return "chaos_agent"
-        # Survivor — rarely dies
-        if kd >= 2.0 and deaths <= kills * 0.6:
-            return "survivor"
         # Trade master — significantly more trades than average
-        if trades >= avg_session_trades * 1.3 and trades >= 10:
+        if trades >= avg_trades * 1.3 and trades >= 10:
             return "trade_master"
+        # Survivor — best KD in the session
+        if kd >= avg_kd * 1.3:
+            return "survivor"
         # Wall breaker — push/crossfire focused
-        if push_kills >= kills * 0.6 or crossfire >= 5:
+        if push_kills >= 8 or crossfire >= 5:
             return "wall_breaker"
         return "frontline_warrior"
 
