@@ -117,6 +117,13 @@ async function loadStoryData() {
         renderStoryHero(storyState.sessionDate, storyState.players);
         renderPlayerCards(storyState.players);
         renderKISBreakdown(storyState.players);
+
+        // Fetch team synergy in parallel (non-blocking)
+        fetchJSON(
+            `${API_BASE}/storytelling/synergy?session_date=${encodeURIComponent(storyState.sessionDate)}`
+        ).then(synData => {
+            if (loadId === storyLoadId) renderTeamSynergy(synData);
+        }).catch(() => renderTeamSynergy(null));
     } catch (err) {
         console.error('Story data load failed:', err);
         renderEmpty('Failed to load Smart Stats');
@@ -139,6 +146,8 @@ function renderLoading() {
     if (players) players.innerHTML = '<div class="col-span-full text-center text-slate-500 py-12">Loading kill impact data...</div>';
     const breakdown = document.getElementById('story-kis-breakdown');
     if (breakdown) breakdown.innerHTML = '';
+    const synergy = document.getElementById('story-team-synergy');
+    if (synergy) synergy.innerHTML = '';
 }
 
 function renderEmpty(message) {
@@ -158,6 +167,8 @@ function renderEmpty(message) {
     }
     const breakdown = document.getElementById('story-kis-breakdown');
     if (breakdown) breakdown.innerHTML = '';
+    const synergy2 = document.getElementById('story-team-synergy');
+    if (synergy2) synergy2.innerHTML = '';
 }
 
 function renderStoryHero(sessionDate, players) {
@@ -316,6 +327,65 @@ function renderKISBreakdown(players) {
     container.innerHTML = `
         <div class="flex gap-4 mb-4">${legend}</div>
         ${bars}
+    `;
+}
+
+const SYNERGY_AXES = [
+    { key: 'crossfire', label: 'Crossfire Rate' },
+    { key: 'trade',     label: 'Trade Coverage' },
+    { key: 'cohesion',  label: 'Cohesion' },
+    { key: 'push',      label: 'Push Quality' },
+    { key: 'medic',     label: 'Medic Bond' },
+];
+
+const TEAM_STYLES = {
+    AXIS:   { name: 'Axis',   bar: 'bg-red-500',  text: 'text-red-400',  bg: 'bg-red-500/5',  border: 'border-red-500/20' },
+    ALLIES: { name: 'Allies', bar: 'bg-blue-500', text: 'text-blue-400', bg: 'bg-blue-500/5', border: 'border-blue-500/20' },
+};
+
+function renderTeamSynergy(data) {
+    const container = document.getElementById('story-team-synergy');
+    if (!container) return;
+
+    const teams = data?.teams;
+    if (!teams || (!teams.AXIS && !teams.ALLIES)) {
+        container.innerHTML = '<div class="text-center text-slate-500 py-8 text-sm">No synergy data available</div>';
+        return;
+    }
+
+    function renderPanel(faction) {
+        const style = TEAM_STYLES[faction];
+        const td = teams[faction];
+        if (!td) return '';
+        const composite = td.composite ?? 0;
+
+        const bars = SYNERGY_AXES.map(axis => {
+            const val = td[axis.key] ?? 0;
+            return `
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="w-24 text-[11px] text-slate-400 truncate">${escapeHtml(axis.label)}</div>
+                    <div class="flex-1 h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div class="${style.bar}/70 h-full rounded-full transition-all duration-500" style="width:${val.toFixed(1)}%"></div>
+                    </div>
+                    <div class="w-8 text-[11px] text-slate-400 text-right font-mono">${val.toFixed(0)}</div>
+                </div>`;
+        }).join('');
+
+        return `
+            <div class="flex-1 rounded-xl border ${style.border} ${style.bg} p-5">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-sm font-bold text-white">${escapeHtml(style.name)}</div>
+                    <div class="text-2xl font-black ${style.text}">${composite.toFixed(1)}</div>
+                </div>
+                ${bars}
+            </div>`;
+    }
+
+    container.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            ${renderPanel('AXIS')}
+            ${renderPanel('ALLIES')}
+        </div>
     `;
 }
 

@@ -1350,6 +1350,25 @@ export interface KillImpactResponse {
   total_kills: number;
 }
 
+// ── Match Moments ──
+export interface MatchMoment {
+  type: 'kill_streak' | 'carrier_chain' | 'focus_survival' | 'push_success' | 'trade_chain';
+  round_number: number;
+  map_name: string;
+  time_ms: number;
+  player: string;
+  narrative: string;
+  impact_stars: number;
+  detail: Record<string, unknown>;
+}
+
+export interface MomentsResponse {
+  status: string;
+  session_date: string;
+  moments: MatchMoment[];
+  total: number;
+}
+
 export interface KillImpactDetail {
   kill_id: number;
   killer_name: string;

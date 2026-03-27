@@ -545,3 +545,11 @@ export function useStoryKillImpact(sessionDate: string | null) {
     enabled: !!sessionDate,
   });
 }
+
+export function useStoryMoments(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-moments', sessionDate],
+    queryFn: () => api.getStoryMoments(sessionDate!),
+    enabled: !!sessionDate,
+  });
+}

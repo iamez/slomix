@@ -321,6 +321,228 @@ class StorytellingService:
                 result[key] = r[3] or ''
         return result
 
+    # ── Match Moments Detection ──
+
+    async def detect_moments(self, session_date: Union[str, date], limit: int = 10) -> list:
+        """Detect highlight-reel moments for a session across 5 detectors."""
+        sd = _to_date(session_date)
+        moments = []
+
+        # Run all 5 detectors
+        detectors = [
+            self._detect_kill_streaks,
+            self._detect_carrier_chains,
+            self._detect_focus_survivals,
+            self._detect_push_successes,
+            self._detect_trade_chains,
+        ]
+        for detector in detectors:
+            try:
+                found = await detector(sd)
+                moments.extend(found)
+            except Exception as e:
+                logger.warning("Moment detector %s failed: %s", detector.__name__, e)
+
+        # Sort by impact_stars desc, then by time
+        moments.sort(key=lambda m: (-m["impact_stars"], m.get("time_ms", 0)))
+        return moments[:limit]
+
+    async def _detect_kill_streaks(self, sd: date) -> list:
+        """Detector A: Multi-kill streaks (3+ kills within 10s window)."""
+        rows = await self.db.fetch_all("""
+            WITH windowed AS (
+                SELECT killer_guid, killer_name, kill_time, round_number, map_name,
+                       round_start_unix,
+                       COUNT(*) OVER (
+                           PARTITION BY killer_guid, round_start_unix
+                           ORDER BY kill_time
+                           RANGE BETWEEN 10000 PRECEDING AND CURRENT ROW
+                       ) AS streak
+                FROM proximity_kill_outcome
+                WHERE session_date = $1
+            )
+            SELECT killer_guid, killer_name, kill_time, round_number, map_name,
+                   round_start_unix, streak
+            FROM windowed
+            WHERE streak >= 3
+            ORDER BY streak DESC, kill_time
+        """, (sd,))
+
+        # Group by (killer_guid, round_start_unix) and take best streak per player per round
+        seen = {}
+        for r in (rows or []):
+            killer_guid, killer_name, kill_time, round_number, map_name, round_start_unix, streak = (
+                r[0], r[1], r[2], r[3], r[4], r[5], int(r[6])
+            )
+            key = (killer_guid, round_start_unix)
+            if key not in seen or streak > seen[key]["streak"]:
+                seen[key] = {
+                    "killer_guid": killer_guid,
+                    "killer_name": killer_name or killer_guid[:8],
+                    "kill_time": kill_time,
+                    "round_number": round_number,
+                    "map_name": map_name,
+                    "streak": streak,
+                }
+
+        moments = []
+        for info in seen.values():
+            streak = info["streak"]
+            stars = min(5, streak - 1)  # 3-kill=2★, 4-kill=3★, 5-kill=4★, 6+=5★
+            name = info["killer_name"]
+            moments.append({
+                "type": "kill_streak",
+                "round_number": info["round_number"],
+                "map_name": info["map_name"],
+                "time_ms": info["kill_time"] or 0,
+                "player": name,
+                "narrative": f"{name} went on a {streak}-kill streak in 10s",
+                "impact_stars": stars,
+                "detail": {"streak_count": streak, "killer_guid": info["killer_guid"]},
+            })
+        return moments
+
+    async def _detect_carrier_chains(self, sd: date) -> list:
+        """Detector B: Carrier kill → teammate returns within 10s."""
+        rows = await self.db.fetch_all("""
+            SELECT ck.killer_guid, ck.killer_name, ck.kill_time,
+                   cr.returner_guid, cr.returner_name, cr.return_time,
+                   ck.round_number, ck.map_name
+            FROM proximity_carrier_kill ck
+            JOIN proximity_carrier_return cr
+                ON cr.session_date = ck.session_date
+                AND cr.round_number = ck.round_number
+                AND cr.round_start_unix = ck.round_start_unix
+            WHERE ck.session_date = $1
+                AND (cr.return_time - ck.kill_time) BETWEEN 0 AND 10000
+            ORDER BY ck.kill_time
+        """, (sd,))
+
+        moments = []
+        for r in (rows or []):
+            killer_name = r[1] or r[0][:8]
+            returner_name = r[4] or r[3][:8]
+            delta_s = round((r[5] - r[2]) / 1000, 1)
+            moments.append({
+                "type": "carrier_chain",
+                "round_number": r[6],
+                "map_name": r[7],
+                "time_ms": r[2] or 0,
+                "player": killer_name,
+                "narrative": f"{killer_name} intercepted the carrier, {returner_name} returned it {delta_s}s later",
+                "impact_stars": 5,
+                "detail": {
+                    "killer_guid": r[0], "returner_guid": r[3],
+                    "returner_name": returner_name, "delta_ms": r[5] - r[2],
+                },
+            })
+        return moments
+
+    async def _detect_focus_survivals(self, sd: date) -> list:
+        """Detector C: Survived 3v1+ focus fire."""
+        rows = await self.db.fetch_all("""
+            SELECT target_guid, target_name, attacker_count, focus_score,
+                   round_number, map_name, engagement_id
+            FROM proximity_focus_fire
+            WHERE session_date = $1 AND attacker_count >= 3
+                AND focus_score >= 0.5
+            ORDER BY focus_score DESC
+            LIMIT 10
+        """, (sd,))
+
+        moments = []
+        for r in (rows or []):
+            name = r[1] or r[0][:8]
+            attackers = int(r[2])
+            score = float(r[3])
+            stars = 3 if attackers == 3 else (4 if attackers == 4 else 5)
+            moments.append({
+                "type": "focus_survival",
+                "round_number": r[4],
+                "map_name": r[5],
+                "time_ms": 0,
+                "player": name,
+                "narrative": f"{name} survived a {attackers}v1 focus fire (score {score:.0%})",
+                "impact_stars": stars,
+                "detail": {
+                    "target_guid": r[0], "attacker_count": attackers,
+                    "focus_score": score,
+                },
+            })
+        return moments
+
+    async def _detect_push_successes(self, sd: date) -> list:
+        """Detector D: High-quality team pushes (3+ participants, high push_quality)."""
+        rows = await self.db.fetch_all("""
+            SELECT team, participant_count, push_quality, alignment_score,
+                   toward_objective, round_number, map_name, start_time
+            FROM proximity_team_push
+            WHERE session_date = $1
+                AND participant_count >= 3
+                AND push_quality >= 0.7
+                AND toward_objective != 'NO'
+            ORDER BY push_quality DESC
+            LIMIT 5
+        """, (sd,))
+
+        moments = []
+        for r in (rows or []):
+            team = r[0] or "Unknown"
+            count = int(r[1])
+            quality = float(r[2])
+            objective = r[4] or "objective"
+            stars = 3 if quality < 0.8 else (4 if quality < 0.9 else 5)
+            obj_label = objective.replace('_', ' ')
+            moments.append({
+                "type": "push_success",
+                "round_number": r[5],
+                "map_name": r[6],
+                "time_ms": r[7] or 0,
+                "player": f"Team {team}",
+                "narrative": f"Team {team} pushed {obj_label} with {count} players (quality {quality:.0%})",
+                "impact_stars": stars,
+                "detail": {
+                    "team": team, "participant_count": count,
+                    "push_quality": quality, "alignment_score": float(r[3] or 0),
+                    "objective": objective,
+                },
+            })
+        return moments
+
+    async def _detect_trade_chains(self, sd: date) -> list:
+        """Detector E: Trade kills (A kills B, C avenges A within delta_ms)."""
+        rows = await self.db.fetch_all("""
+            SELECT trader_guid, trader_name, original_victim_guid, original_victim_name,
+                   original_killer_guid, original_killer_name, delta_ms,
+                   round_number, map_name, traded_kill_time
+            FROM proximity_lua_trade_kill
+            WHERE session_date = $1 AND delta_ms <= 5000
+            ORDER BY delta_ms ASC
+            LIMIT 10
+        """, (sd,))
+
+        moments = []
+        for r in (rows or []):
+            trader_name = r[1] or r[0][:8]
+            victim_name = r[3] or r[2][:8]
+            avenger_target = r[5] or r[4][:8]
+            delta_s = round(int(r[6]) / 1000, 1)
+            stars = 4 if delta_s <= 2 else 3
+            moments.append({
+                "type": "trade_chain",
+                "round_number": r[7],
+                "map_name": r[8],
+                "time_ms": r[9] or 0,
+                "player": trader_name,
+                "narrative": f"{trader_name} avenged {victim_name} by trading {avenger_target} in {delta_s}s",
+                "impact_stars": stars,
+                "detail": {
+                    "trader_guid": r[0], "victim_guid": r[2],
+                    "target_guid": r[4], "delta_ms": int(r[6]),
+                },
+            })
+        return moments
+
     async def get_kis_leaderboard(self, session_date: Union[str, date], limit: int = 20) -> list:
         """Get KIS leaderboard for a session, including server-side archetype."""
         sd = _to_date(session_date)
