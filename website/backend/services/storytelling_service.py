@@ -2256,7 +2256,7 @@ class StorytellingService:
 
         # 7. Session ID from gaming sessions
         session_id_row = await self.db.fetch_one(
-            "SELECT gaming_session_id FROM player_comprehensive_stats "
+            "SELECT gaming_session_id FROM rounds "
             "WHERE round_date = $1 LIMIT 1",
             (sd_str,))
         session_id = session_id_row[0] if session_id_row else "?"
