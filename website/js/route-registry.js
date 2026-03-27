@@ -252,6 +252,15 @@ const ROUTE_DEFINITIONS = Object.freeze({
         buildHash: () => '#/skill-rating',
         load: () => undefined,
     },
+    rivalries: {
+        viewId: 'rivalries',
+        label: 'Rivalries',
+        mode: VIEW_MODE.LEGACY,
+        surfaceType: 'read-heavy',
+        migrationWave: 'C',
+        buildHash: () => '#/rivalries',
+        load: ({ legacy }) => legacy.loadRivalriesView(),
+    },
     story: {
         viewId: 'story',
         label: 'Smart Stats',

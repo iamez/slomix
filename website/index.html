@@ -1234,6 +1234,10 @@
                     class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition">
                     ET Rating
                 </button>
+                <button id="link-rivalries" data-click-action="navigateTo('rivalries')"
+                    class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 transition">
+                    Rivalries
+                </button>
                 <button id="link-story" data-click-action="navigateTo('story')"
                     class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition">
                     ⚡ Smart Stats
@@ -2910,6 +2914,39 @@
         <!-- SKILL RATING (experimental) -->
         <div id="view-skill-rating" class="view-section hidden"></div>
 
+        <!-- RIVALRIES -->
+        <div id="view-rivalries" class="view-section hidden">
+          <div class="max-w-6xl mx-auto px-4 py-8">
+            <!-- Hero -->
+            <div class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-rose-950/20 to-slate-900 p-8 mb-6">
+              <div class="absolute inset-0 bg-gradient-to-r from-rose-500/5 via-transparent to-rose-500/5 pointer-events-none"></div>
+              <div class="relative z-10">
+                <div class="text-rose-400 text-xs font-bold tracking-[0.3em] uppercase mb-2">Player Rivalries</div>
+                <h2 class="text-3xl font-black text-white mb-2">Head-to-Head Analysis</h2>
+                <p class="text-slate-400 text-sm">Discover your nemesis, prey and rivals across all matches.</p>
+              </div>
+            </div>
+
+            <!-- Player Select -->
+            <div class="glass-panel rounded-xl border border-white/10 p-4 mb-6">
+              <label class="text-xs text-slate-400 uppercase tracking-wider font-bold mb-2 block">Select Player</label>
+              <select id="rivalries-player-select"
+                class="w-full md:w-80 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-rose-500/50">
+                <option value="">-- Select Player --</option>
+              </select>
+            </div>
+
+            <!-- Player Rivalries Panel -->
+            <div id="rivalries-player-panel" class="mb-6 hidden"></div>
+
+            <!-- H2H Detail Panel -->
+            <div id="rivalries-h2h-panel" class="mb-6 hidden"></div>
+
+            <!-- Leaderboard -->
+            <div id="rivalries-content"></div>
+          </div>
+        </div>
+
         <!-- STORY / SMART STATS -->
         <div id="view-story" class="view-section hidden">
           <!-- Hero -->
@@ -2948,6 +2985,12 @@
           <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <h3 class="text-sm font-bold text-white mb-4">Kill Impact Breakdown</h3>
             <div id="story-kis-breakdown"></div>
+          </div>
+
+          <!-- Win Contribution -->
+          <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-6 mt-6">
+            <h3 class="text-sm font-bold text-amber-400 tracking-widest uppercase mb-4">&#9733; Player Win Contribution</h3>
+            <div id="story-win-contribution"></div>
           </div>
 
         </div>

@@ -1631,3 +1631,221 @@ class StorytellingService:
             td['AXIS' if r[0] == 1 else 'ALLIES'] = int(r[1] or 0)
 
         return {f: min(100, tr[f] / max(td[f], 1) * 200) for f in ('AXIS', 'ALLIES')}
+
+    # ── Player Win Contribution (PWC) ────────────────────────────────
+
+    # PWC weights (normal / objectives-absent)
+    _PWC_W_KILLS = 0.30
+    _PWC_W_DAMAGE = 0.15
+    _PWC_W_OBJECTIVES = 0.25
+    _PWC_W_REVIVES = 0.15
+    _PWC_W_SURVIVAL = 0.15
+
+    async def compute_win_contribution(self, session_date: Union[str, date]) -> dict:
+        """Compute Player Win Contribution for every player in a session.
+
+        Returns dict with 'mvp', 'players' list (sorted by total_pwc desc),
+        and 'session_date'.
+        """
+        sd_str = _to_date_str(session_date)
+
+        # 1. Fetch per-player per-round stats from PCS joined with rounds
+        rows = await self.db.fetch_all("""
+            SELECT pcs.player_guid, pcs.player_name, pcs.round_number,
+                   r.map_name, pcs.team, r.winner_team,
+                   pcs.kills, pcs.damage_given,
+                   COALESCE(pcs.objectives_completed, 0)
+                     + COALESCE(pcs.objectives_destroyed, 0)
+                     + COALESCE(pcs.objectives_stolen, 0)
+                     + COALESCE(pcs.objectives_returned, 0)
+                     + COALESCE(pcs.dynamites_planted, 0)
+                     + COALESCE(pcs.dynamites_defused, 0)
+                     + COALESCE(pcs.constructions, 0) AS objectives,
+                   pcs.revives_given,
+                   pcs.time_played_minutes,
+                   r.id AS round_id
+            FROM player_comprehensive_stats pcs
+            JOIN rounds r ON r.id = pcs.round_id
+            WHERE pcs.round_date = $1
+              AND pcs.round_number IN (1, 2)
+              AND r.round_number IN (1, 2)
+              AND pcs.time_played_seconds > 0
+            ORDER BY r.id, pcs.player_guid
+        """, (sd_str,))
+
+        if not rows:
+            return {"session_date": sd_str, "mvp": None, "players": []}
+
+        # 2. Group by round_id to compute team totals
+        from collections import defaultdict
+
+        # round_id → list of player rows
+        rounds_map: dict[int, list] = defaultdict(list)
+        for r in rows:
+            rounds_map[r[11]].append(r)  # r[11] = round_id
+
+        # 3. Compute PWC per player per round
+        # player_guid → {name, per_round: [...], total_pwc, won_pwc, lost_pwc, rounds_won, rounds_lost}
+        player_data: dict[str, dict] = {}
+
+        for round_id, round_rows in rounds_map.items():
+            winner_team = round_rows[0][5]  # same for all rows in this round
+            map_name = round_rows[0][3]
+            round_number = round_rows[0][2]
+
+            # Team totals (per team integer: 1=Allies, 2=Axis)
+            team_kills: dict[int, int] = defaultdict(int)
+            team_damage: dict[int, int] = defaultdict(int)
+            team_objectives: dict[int, int] = defaultdict(int)
+            team_revives: dict[int, int] = defaultdict(int)
+            team_alive: dict[int, float] = defaultdict(float)
+            team_count: dict[int, int] = defaultdict(int)
+
+            for r in round_rows:
+                t = r[4]  # team
+                team_kills[t] += int(r[6] or 0)
+                team_damage[t] += int(r[7] or 0)
+                team_objectives[t] += int(r[8] or 0)
+                team_revives[t] += int(r[9] or 0)
+                team_alive[t] += float(r[10] or 0)
+                team_count[t] += 1
+
+            # Check if objectives are zero for ALL players in this round
+            all_objectives_zero = all(int(r[8] or 0) == 0 for r in round_rows)
+
+            for r in round_rows:
+                guid = r[0]
+                name = _strip_et_colors(r[1] or guid[:8])
+                t = r[4]
+                p_kills = int(r[6] or 0)
+                p_damage = int(r[7] or 0)
+                p_objectives = int(r[8] or 0)
+                p_revives = int(r[9] or 0)
+                p_alive = float(r[10] or 0)
+
+                tk = max(team_kills[t], 1)
+                td = max(team_damage[t], 1)
+                to = max(team_objectives[t], 1)
+                tr = max(team_revives[t], 1)
+                team_avg_alive = team_alive[t] / max(team_count[t], 1)
+                ta = max(team_avg_alive, 0.01)
+
+                kill_share = p_kills / tk
+                damage_share = p_damage / td
+                obj_share = p_objectives / to
+                revive_share = p_revives / tr
+                survival_share = min(p_alive / ta, 2.0)  # cap at 2x
+
+                if all_objectives_zero:
+                    # Redistribute 0.25 objectives weight: +0.10 kills, +0.10 damage, +0.05 revives
+                    pwc = ((self._PWC_W_KILLS + 0.10) * kill_share
+                           + (self._PWC_W_DAMAGE + 0.10) * damage_share
+                           + (self._PWC_W_REVIVES + 0.05) * revive_share
+                           + self._PWC_W_SURVIVAL * survival_share)
+                else:
+                    pwc = (self._PWC_W_KILLS * kill_share
+                           + self._PWC_W_DAMAGE * damage_share
+                           + self._PWC_W_OBJECTIVES * obj_share
+                           + self._PWC_W_REVIVES * revive_share
+                           + self._PWC_W_SURVIVAL * survival_share)
+
+                won = (t == winner_team and winner_team in (1, 2))
+
+                if guid not in player_data:
+                    player_data[guid] = {
+                        "guid": guid,
+                        "name": name,
+                        "total_pwc": 0.0,
+                        "won_pwc": 0.0,
+                        "lost_pwc": 0.0,
+                        "rounds_won": 0,
+                        "rounds_lost": 0,
+                        "per_round": [],
+                        "components": {
+                            "kills": 0.0, "damage": 0.0,
+                            "objectives": 0.0, "revives": 0.0,
+                            "survival": 0.0,
+                        },
+                    }
+                else:
+                    # Update name to latest non-empty
+                    if name and name != guid[:8]:
+                        player_data[guid]["name"] = name
+
+                pd = player_data[guid]
+                pd["total_pwc"] += pwc
+                if won:
+                    pd["won_pwc"] += pwc
+                    pd["rounds_won"] += 1
+                else:
+                    pd["lost_pwc"] += pwc
+                    pd["rounds_lost"] += 1
+
+                # Accumulate component contributions for stacked bars
+                if all_objectives_zero:
+                    pd["components"]["kills"] += (self._PWC_W_KILLS + 0.10) * kill_share
+                    pd["components"]["damage"] += (self._PWC_W_DAMAGE + 0.10) * damage_share
+                    pd["components"]["revives"] += (self._PWC_W_REVIVES + 0.05) * revive_share
+                else:
+                    pd["components"]["kills"] += self._PWC_W_KILLS * kill_share
+                    pd["components"]["damage"] += self._PWC_W_DAMAGE * damage_share
+                    pd["components"]["objectives"] += self._PWC_W_OBJECTIVES * obj_share
+                    pd["components"]["revives"] += self._PWC_W_REVIVES * revive_share
+                pd["components"]["survival"] += self._PWC_W_SURVIVAL * survival_share
+
+                pd["per_round"].append({
+                    "round_number": round_number,
+                    "map_name": map_name,
+                    "pwc": round(pwc, 4),
+                    "won": won,
+                    "kills": p_kills,
+                    "damage": p_damage,
+                    "objectives": p_objectives,
+                    "revives": p_revives,
+                })
+
+        # 4. Compute WIS (Win Impact Score) per player
+        players_list = []
+        for guid, pd in player_data.items():
+            avg_won = pd["won_pwc"] / max(pd["rounds_won"], 1)
+            avg_lost = pd["lost_pwc"] / max(pd["rounds_lost"], 1)
+            wis = avg_won - avg_lost
+            total_rounds = pd["rounds_won"] + pd["rounds_lost"]
+            waa = pd["won_pwc"] / max(total_rounds, 1)  # Win-Adjusted Average
+
+            players_list.append({
+                "guid": pd["guid"],
+                "name": pd["name"],
+                "total_pwc": round(pd["total_pwc"], 3),
+                "wis": round(wis, 3),
+                "waa": round(waa, 3),
+                "rounds_won": pd["rounds_won"],
+                "rounds_lost": pd["rounds_lost"],
+                "components": {k: round(v, 3) for k, v in pd["components"].items()},
+                "per_round": pd["per_round"],
+            })
+
+        # Sort by total_pwc descending
+        players_list.sort(key=lambda p: p["total_pwc"], reverse=True)
+
+        # 5. Session MVP = highest total_pwc across won rounds
+        mvp = None
+        if players_list:
+            # MVP by won_pwc (contribution in rounds the team actually won)
+            mvp_candidates = [p for p in players_list if p["rounds_won"] > 0]
+            if mvp_candidates:
+                mvp_player = max(mvp_candidates, key=lambda p: float(p["waa"]))
+            else:
+                mvp_player = players_list[0]
+            mvp = {
+                "guid": mvp_player["guid"],
+                "name": mvp_player["name"],
+                "total_pwc": mvp_player["total_pwc"],
+                "wis": mvp_player["wis"],
+            }
+
+        return {
+            "session_date": sd_str,
+            "mvp": mvp,
+            "players": players_list,
+        }

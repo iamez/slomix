@@ -226,3 +226,17 @@ async def get_team_synergy(
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
     return await svc.compute_team_synergy(sd)
+
+
+@router.get("/storytelling/win-contribution")
+@limiter.limit("10/minute")
+async def get_win_contribution(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Player Win Contribution (PWC): per-round contribution + Win Impact Score."""
+    _parse_date(session_date)  # validate
+    svc = StorytellingService(db)
+    result = await svc.compute_win_contribution(session_date)
+    return {"status": "ok", **result}
