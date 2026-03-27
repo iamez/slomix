@@ -4654,7 +4654,7 @@ class UltimateETLegacyBot(commands.Bot):
                     webhook_logger.info(f"✅ Successfully processed: {filename}")
                     # Trigger proximity scan after stats creates the round in DB
                     self._safe_create_task(
-                        self._trigger_proximity_scan_after_stats(delay_seconds=8),
+                        self._trigger_proximity_scan_after_stats(),
                         name="proximity_post_stats_scan"
                     )
                 except Exception as post_err:
@@ -4671,18 +4671,34 @@ class UltimateETLegacyBot(commands.Bot):
                 self.file_tracker.processed_files.discard(filename)
             webhook_logger.error(f"❌ Error fetching stats file: {e}", exc_info=True)
 
-    async def _trigger_proximity_scan_after_stats(self, delay_seconds: int = 8):
-        """Trigger proximity import after stats creates the round in DB."""
-        try:
-            await asyncio.sleep(delay_seconds)
-            proximity_cog = self.get_cog("Proximity")
-            if proximity_cog and hasattr(proximity_cog, '_scan_and_import'):
-                webhook_logger.info("🎯 Triggering proximity scan after stats import")
-                await proximity_cog._scan_and_import(force=True)
-            else:
-                webhook_logger.debug("Proximity cog not available; skipping post-stats scan")
-        except Exception as e:
-            webhook_logger.warning(f"Post-stats proximity scan failed (non-fatal): {e}")
+    async def _trigger_proximity_scan_after_stats(self, round_id: int = None, delay_seconds: int = 5, max_retries: int = 3):
+        """Trigger proximity import after stats creates the round in DB.
+
+        Polls until the Proximity cog is available rather than sleeping a fixed duration.
+        """
+        for attempt in range(max_retries):
+            try:
+                await asyncio.sleep(delay_seconds)
+                proximity_cog = self.get_cog("Proximity")
+                if proximity_cog and hasattr(proximity_cog, '_scan_and_import'):
+                    webhook_logger.info(
+                        "🎯 Triggering proximity scan after stats import (attempt %d/%d, round_id=%s)",
+                        attempt + 1, max_retries, round_id,
+                    )
+                    await proximity_cog._scan_and_import(force=True)
+                    return
+                webhook_logger.debug(
+                    "Proximity cog not available (attempt %d/%d); retrying",
+                    attempt + 1, max_retries,
+                )
+            except Exception as e:
+                webhook_logger.warning(
+                    "Post-stats proximity scan failed on attempt %d/%d (non-fatal): %s",
+                    attempt + 1, max_retries, e,
+                )
+        webhook_logger.warning(
+            "Proximity scan: gave up after %d attempts (round_id=%s)", max_retries, round_id
+        )
 
     def _log_endstats_transition(
         self,

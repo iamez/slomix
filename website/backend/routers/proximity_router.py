@@ -3388,7 +3388,7 @@ async def get_proximity_leaderboards(
 
     try:
         if category == "power":
-            scope_where, scope_params, _ = _lb_scope(has_round_number=False)
+            scope_where, scope_params, _ = _lb_scope(has_round_number=True)
             # Composite radar score — batch queries (7 queries total, not per-player)
             # 1. Engagement stats + names per player
             eng_rows = await db.fetch_all(
@@ -3550,7 +3550,7 @@ async def get_proximity_leaderboards(
             return {"status": "ok", "category": "power", "entries": results[:safe_limit]}
 
         elif category == "spawn":
-            scope_where, scope_params, next_idx = _lb_scope(has_round_number=False)
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT killer_guid, MAX(killer_name) AS name,
@@ -3576,7 +3576,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "crossfire":
-            scope_where, scope_params, next_idx = _lb_scope(table_alias="c", has_round_number=False)
+            scope_where, scope_params, next_idx = _lb_scope(table_alias="c", has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT guid, name, SUM(cnt) AS total, ROUND(AVG(avg_angle)::numeric, 1) AS avg_angle
@@ -3620,7 +3620,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "trades":
-            scope_where, scope_params, next_idx = _lb_scope(has_round_number=False)
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT trader_guid, MAX(trader_name) AS name,
@@ -3645,7 +3645,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "reactions":
-            scope_where, scope_params, next_idx = _lb_scope(has_round_number=False)
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT target_guid, MAX(target_name) AS name,
@@ -3670,7 +3670,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "survivors":
-            scope_where, scope_params, next_idx = _lb_scope(has_round_number=False)
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT target_guid, MAX(target_name) AS name,
@@ -3697,7 +3697,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "movement":
-            scope_where, scope_params, next_idx = _lb_scope(has_round_number=False)
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT player_guid, MAX(player_name) AS name,
@@ -3725,7 +3725,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "focus_fire":
-            scope_where, scope_params, next_idx = _lb_scope(has_round_number=False)
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT target_guid, MAX(target_name) AS name,

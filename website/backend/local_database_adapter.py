@@ -61,6 +61,14 @@ class SQLiteAdapter(DatabaseAdapter):
             await conn.execute(query, params or ())
             await conn.commit()
 
+    async def executemany(self, query: str, params_list) -> None:
+        """Batch execute query on SQLite."""
+        if not params_list:
+            return
+        async with self.connection() as conn:
+            await conn.executemany(query, params_list)
+            await conn.commit()
+
     async def fetch_one(
         self, query: str, params: Optional[Tuple] = None
     ) -> Optional[Any]:

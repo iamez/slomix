@@ -318,7 +318,11 @@ class RoundCorrelationService:
                 exists = await self.db.fetch_one(
                     f"SELECT 1 FROM {table} WHERE {pk} = ?", (val,)
                 )
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    "FK pre-check DB error for %s.%s=%s: %s (treating as deferred)",
+                    table, pk, value, e,
+                )
                 exists = None
 
             if not exists:

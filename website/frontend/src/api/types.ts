@@ -1356,6 +1356,9 @@ export interface KillImpactDetail {
   round_number: number;
   kill_time_ms: number;
   total_impact: number;
+  base_impact: number;
+  distance_multiplier: number;
+  is_objective_area: boolean;
   carrier_multiplier: number;
   push_multiplier: number;
   crossfire_multiplier: number;

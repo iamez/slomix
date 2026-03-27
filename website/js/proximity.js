@@ -1554,15 +1554,13 @@ function autoSelectLastRound() {
 
     // Pick the last map (most recent) in the session
     const lastMap = session.maps[session.maps.length - 1];
-    proximityScopeState.mapName = lastMap.map_name;
-
-    // Pick the last round of that map
     const rounds = lastMap.rounds || [];
-    if (rounds.length > 0) {
-        const lastRound = rounds[rounds.length - 1];
-        proximityScopeState.roundNumber = lastRound.round_number;
-        proximityScopeState.roundStartUnix = lastRound.round_start_unix || null;
-    }
+    if (rounds.length === 0) return;  // Don't set partial scope (mapName without a round)
+
+    proximityScopeState.mapName = lastMap.map_name;
+    const lastRound = rounds[rounds.length - 1];
+    proximityScopeState.roundNumber = lastRound.round_number;
+    proximityScopeState.roundStartUnix = lastRound.round_start_unix || null;
 }
 
 async function loadScopedProximityData() {
@@ -2595,7 +2593,7 @@ function loadLeaderboardData() {
     const contentEl = document.getElementById('leaderboard-content');
     if (!contentEl) return;
     contentEl.innerHTML = '<div class="text-[11px] text-slate-500">Loading...</div>';
-    const hasScope = proximityScopeState.sessionDate || proximityScopeState.mapName || proximityScopeState.roundNumber != null;
+    const hasScope = proximityScopeState.mapName || proximityScopeState.roundNumber != null;
 
     // Hide range buttons when scope is active (range is meaningless for scoped queries)
     const rangeContainer = document.getElementById('lb-range-btns');

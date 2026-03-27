@@ -428,10 +428,8 @@ export const api = {
   },
 
   // Storytelling / Smart Stats
-  getStoryKillImpact: async (sessionDate: string, limit = 20): Promise<import('./types').KillImpactResponse> => {
-    const res = await fetch(`${API_BASE}/storytelling/kill-impact?session_date=${sessionDate}&limit=${limit}`);
-    return res.json();
-  },
+  getStoryKillImpact: (sessionDate: string, limit = 20) =>
+    get<import('./types').KillImpactResponse>(`/storytelling/kill-impact?session_date=${sessionDate}&limit=${limit}`),
 
   // Auth
   getAuthMe: async (): Promise<AuthUser | null> => {

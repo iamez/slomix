@@ -15,7 +15,7 @@ Matching strategy:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger("bot.core.round_linker")
@@ -198,7 +198,9 @@ async def resolve_round_id_with_reason(
         candidate_dt = None
         if r_start_unix and int(r_start_unix or 0) > 0:
             try:
-                candidate_dt = datetime.fromtimestamp(int(r_start_unix))
+                candidate_dt = datetime.fromtimestamp(
+                    int(r_start_unix), tz=timezone.utc
+                ).replace(tzinfo=None)
             except (ValueError, TypeError, OSError):
                 candidate_dt = None
 

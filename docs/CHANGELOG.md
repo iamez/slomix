@@ -10,7 +10,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-### [1.2.0] — 2026-03-26/27: Deep RCA Audit, Proximity Pipeline Overhaul & Smart Analytics
+---
+
+## [1.2.0] — 2026-03-27: Deep RCA Audit, Proximity Pipeline Overhaul & Smart Analytics
 
 **Mandelbrot-depth root cause analysis across the entire stack — 26 fixes, proximity pipeline redesign, website overhaul, and smart storytelling architecture.**
 
