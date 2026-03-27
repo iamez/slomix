@@ -52,11 +52,13 @@ SYNERGY_WEIGHTS = {
 COHESION_MAX_DISPERSION = 1500      # Game units; above this = 0 cohesion
 
 
-def _to_date(val: Union[str, date]) -> date:
-    """Convert string to datetime.date for asyncpg DATE params."""
+def _to_date(val: Union[str, date]) -> str:
+    """Normalize to YYYY-MM-DD string (session_date/round_date are TEXT columns)."""
     if isinstance(val, date):
-        return val
-    return datetime.strptime(val, "%Y-%m-%d").date()
+        return val.isoformat()
+    # Validate format
+    datetime.strptime(val, "%Y-%m-%d")
+    return val
 
 
 class StorytellingService:
