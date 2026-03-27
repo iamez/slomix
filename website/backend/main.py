@@ -221,6 +221,7 @@ _ENTRYPOINT_NO_CACHE_PATHS = {
     "/",
     "/index.html",
     "/js/app.js",
+    "/js/proximity.js",
     "/js/route-registry.js",
     "/js/modern-route-host.js",
     "/static/modern/route-host.js",

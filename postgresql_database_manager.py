@@ -1664,6 +1664,42 @@ class PostgreSQLDatabaseManager:
                 logger.debug(f"🎯 Round 1 detected (round_number={round_num}), attempting auto-team assignment for {file_date}")
                 await self._auto_assign_teams_from_r1(round_id, file_date)
 
+            # 🔗 CORRELATION: notify correlation service AFTER transaction commit
+            # Must be outside the transaction so the round is visible to other connections.
+            if hasattr(self, '_correlation_service') and self._correlation_service and round_id:
+                try:
+                    # Derive match_id from filename (same logic as _create_round_postgresql)
+                    _corr_map = parsed_data.get('map_name', 'unknown')
+                    if '-round-2.txt' in filename.lower():
+                        _corr_rnum = 2
+                    elif '-round-1.txt' in filename.lower():
+                        _corr_rnum = 1
+                    else:
+                        _corr_rnum = parsed_data.get('round_num', parsed_data.get('round_number', 1))
+                    r1_fn = parsed_data.get('r1_filename')
+                    if r1_fn and _corr_rnum == 2:
+                        r1_base = r1_fn.replace('.txt', '')
+                        r1_m = re.match(r'^(\d{4}-\d{2}-\d{2})-(\d{6})-.+$', r1_base)
+                        _corr_mid = f"{r1_m.group(1)}-{r1_m.group(2)}" if r1_m else f"{file_date}-{round_time}"
+                    else:
+                        _corr_mid = f"{file_date}-{round_time}"
+                    await self._correlation_service.on_round_imported(
+                        match_id=_corr_mid,
+                        round_number=_corr_rnum,
+                        round_id=round_id,
+                        map_name=_corr_map,
+                    )
+                    # Also notify for match summary if present
+                    if match_summary_id:
+                        await self._correlation_service.on_round_imported(
+                            match_id=_corr_mid,
+                            round_number=0,
+                            round_id=match_summary_id,
+                            map_name=_corr_map,
+                        )
+                except Exception as corr_err:
+                    logger.warning(f"[CORRELATION] hook error (non-fatal): {corr_err}")
+
             return True, f"Processed: {player_count} players, {weapon_count} weapons{' (WITH WARNINGS)' if not validation_passed else ''}"
         
         except Exception as e:
@@ -2175,17 +2211,9 @@ class PostgreSQLDatabaseManager:
             if is_match_summary:
                 logger.debug(f"✓ Created match summary (round_number=0) with ID {round_id}")
 
-            # 🔗 CORRELATION: notify correlation service of round import
-            if hasattr(self, '_correlation_service') and self._correlation_service:
-                try:
-                    await self._correlation_service.on_round_imported(
-                        match_id=match_id,
-                        round_number=round_number,
-                        round_id=round_id,
-                        map_name=map_name,
-                    )
-                except Exception as corr_err:
-                    logger.warning(f"[CORRELATION] hook error (non-fatal): {corr_err}")
+            # NOTE: Correlation hook moved to process_file() AFTER transaction commits.
+            # Calling it here would use a different DB connection that can't see
+            # the uncommitted round INSERT, causing FK violations.
 
             return round_id
         except Exception as e:
