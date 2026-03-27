@@ -240,3 +240,29 @@ async def get_win_contribution(
     svc = StorytellingService(db)
     result = await svc.compute_win_contribution(session_date)
     return {"status": "ok", **result}
+
+
+@router.get("/storytelling/momentum")
+@limiter.limit("10/minute")
+async def get_momentum(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Momentum chart: per-round team momentum in 30-second windows."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.compute_momentum(sd)
+
+
+@router.get("/storytelling/narrative")
+@limiter.limit("10/minute")
+async def get_narrative(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Session narrative: human-readable summary paragraph."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.generate_narrative(sd)

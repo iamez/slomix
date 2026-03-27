@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useStoryKillImpact, useStoryMoments } from '../api/hooks';
+import { useStoryKillImpact, useStoryMoments, useStoryMomentum, useStoryNarrative } from '../api/hooks';
 import type { KillImpactEntry } from '../api/types';
 import { Skeleton } from '../components/Skeleton';
 import { StoryHero } from '../components/story/StoryHero';
 import { PlayerStoryCard } from '../components/story/PlayerStoryCard';
 import { MomentCard } from '../components/story/MomentCard';
+import { MomentumChart } from '../components/story/MomentumChart';
+import { NarrativePanel } from '../components/story/NarrativePanel';
 import type { PlayerArchetype } from '../components/story/ArchetypeBadge';
 
 const API = '/api';
@@ -70,10 +72,15 @@ export default function Story() {
   const { data: kis, isLoading: kisLoading } = useStoryKillImpact(sessionDate);
   // Moments data
   const { data: momentsData, isLoading: momentsLoading } = useStoryMoments(sessionDate);
+  // Momentum + Narrative (fetched in parallel with KIS/moments)
+  const { data: momentumData, isLoading: momentumLoading } = useStoryMomentum(sessionDate);
+  const { data: narrativeData, isLoading: narrativeLoading } = useStoryNarrative(sessionDate);
 
   const entries = useMemo(() => kis?.entries ?? [], [kis]);
   const totalKills = kis?.total_kills ?? 0;
   const moments = useMemo(() => momentsData?.moments ?? [], [momentsData]);
+  const momentumRounds = useMemo(() => momentumData?.rounds ?? [], [momentumData]);
+  const narrative = narrativeData?.narrative ?? '';
 
   // Current session metadata
   const currentSession = scopes?.sessions?.find((s) => s.session_date === sessionDate);
@@ -118,6 +125,13 @@ export default function Story() {
           </select>
         </div>
 
+        {/* Session Narrative */}
+        {narrativeLoading ? (
+          <div className="h-20 rounded-2xl bg-slate-700/20 animate-pulse" />
+        ) : narrative ? (
+          <NarrativePanel narrative={narrative} />
+        ) : null}
+
         {/* Match Moments — horizontal scroll */}
         {momentsLoading ? (
           <div className="flex gap-4 overflow-hidden">
@@ -134,6 +148,13 @@ export default function Story() {
               ))}
             </div>
           </div>
+        ) : null}
+
+        {/* Momentum Chart */}
+        {momentumLoading ? (
+          <div className="h-64 rounded-2xl bg-slate-700/20 animate-pulse" />
+        ) : momentumRounds.length > 0 ? (
+          <MomentumChart rounds={momentumRounds} />
         ) : null}
 
         {/* Player story cards */}

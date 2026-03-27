@@ -26,7 +26,9 @@ _compute_locks: dict[str, asyncio.Lock] = {}
 # Competitive ET:Legacy multipliers (calibrated for pro play)
 CARRIER_KILL_MULTIPLIER = 3.0       # Killed flag/doc carrier
 CARRIER_CHAIN_MULTIPLIER = 5.0      # Carrier kill + teammate returned within 10s
-PUSH_MULTIPLIER = 2.0               # Kill during coordinated team push
+PUSH_QUALITY_THRESHOLD = 0.9          # Minimum push_quality to earn bonus
+PUSH_BUFFER_MS = 2000                 # Tighter window (was 5000ms)
+PUSH_TOWARD_EXCLUDE = frozenset(('NO', 'N/A', ''))  # Not a real objective push
 CROSSFIRE_MULTIPLIER = 1.5          # Kill as part of crossfire setup
 SPAWN_TIMING_BONUS = 1.0            # Added to 1.0 (so range 1.0-2.0 based on score 0-1)
 OUTCOME_GIBBED = 1.3                # Kill was permanent (gibbed, no revive possible)
@@ -229,15 +231,20 @@ class StorytellingService:
                 carrier_mult = CARRIER_KILL_MULTIPLIER
             is_carrier = True
 
-        # Push context (kill within 5s of push start_time)
+        # Push context — quality-gated with tighter window
         push_mult = 1.0
         is_push = False
         if round_key in pushes:
-            for push_start, push_end in pushes[round_key]:
-                if push_start <= kill_time <= push_end + 5000:
-                    push_mult = PUSH_MULTIPLIER
-                    is_push = True
-                    break
+            best_pq = 0.0
+            for push_start, push_end, pq, toward_obj in pushes[round_key]:
+                if push_start <= kill_time <= push_end + PUSH_BUFFER_MS:
+                    if (pq >= PUSH_QUALITY_THRESHOLD
+                            and toward_obj not in PUSH_TOWARD_EXCLUDE):
+                        if pq > best_pq:
+                            best_pq = pq
+            if best_pq > 0:
+                push_mult = 1.0 + min(best_pq * 0.5, 1.0)
+                is_push = True
 
         # Crossfire context (kill within 3s of crossfire event)
         cf_mult = 1.0
@@ -325,14 +332,19 @@ class StorytellingService:
         return result
 
     async def _load_pushes(self, session_date):
-        """Load push events indexed by (round_start_unix, round_number) as (start_time, end_time) pairs."""
+        """Load push events indexed by (round_start_unix, round_number).
+
+        Each entry is (start_time, end_time, push_quality, toward_objective).
+        """
         rows = await self.db.fetch_all(
-            "SELECT round_start_unix, round_number, start_time, end_time "
+            "SELECT round_start_unix, round_number, start_time, end_time, "
+            "push_quality, toward_objective "
             "FROM proximity_team_push WHERE session_date = $1", (session_date,))
         result = {}
         for r in (rows or []):
             key = (r[0], r[1])
-            result.setdefault(key, []).append((r[2], r[3]))
+            result.setdefault(key, []).append(
+                (r[2], r[3], float(r[4] or 0), r[5] or ''))
         return result
 
     async def _load_crossfires(self, session_date):
@@ -1470,32 +1482,42 @@ class StorytellingService:
     # ── Team Synergy Score ──────────────────────────────────────────
 
     async def compute_team_synergy(self, session_date: Union[str, date]) -> dict:
-        """Compute Team Synergy Score (5 axes) per faction for a session."""
+        """Compute Team Synergy Score (5 axes) per stable player group.
+
+        In stopwatch mode teams swap sides between R1/R2, so aggregating
+        by faction (AXIS/ALLIES) mixes two different player compositions.
+        Instead, we identify the two stable player groups and aggregate
+        synergy per group.
+        """
         sd = _to_date(session_date)
 
-        round_team_map = await self._build_round_team_map(sd)
-        if not round_team_map:
-            return {"status": "no_data", "session_date": str(sd), "teams": {}}
+        groups = await self._build_player_groups(sd)
+        if not groups:
+            return {"status": "no_data", "session_date": str(sd), "groups": {}}
 
-        crossfire = await self._synergy_crossfire(sd)
-        trade = await self._synergy_trade(sd, round_team_map)
-        cohesion = await self._synergy_cohesion(sd)
-        push = await self._synergy_push(sd)
-        medic = await self._synergy_medic(sd, round_team_map)
+        rmap = groups['round_map']
+        g2g = groups['guid_to_group']
 
-        teams = {}
-        for faction in ('AXIS', 'ALLIES'):
-            cf = crossfire.get(faction, 0)
-            tr = trade.get(faction, 0)
-            co = cohesion.get(faction, 0)
-            pu = push.get(faction, 0)
-            me = medic.get(faction, 0)
+        crossfire = await self._synergy_crossfire(sd, rmap)
+        trade = await self._synergy_trade(sd, g2g)
+        cohesion = await self._synergy_cohesion(sd, rmap)
+        push = await self._synergy_push(sd, rmap)
+        medic = await self._synergy_medic(sd, g2g)
+
+        result_groups = {}
+        for gkey in ('group_a', 'group_b'):
+            cf = crossfire.get(gkey, 0)
+            tr = trade.get(gkey, 0)
+            co = cohesion.get(gkey, 0)
+            pu = push.get(gkey, 0)
+            me = medic.get(gkey, 0)
             composite = (cf * SYNERGY_WEIGHTS['crossfire'] +
                          tr * SYNERGY_WEIGHTS['trade'] +
                          co * SYNERGY_WEIGHTS['cohesion'] +
                          pu * SYNERGY_WEIGHTS['push'] +
                          me * SYNERGY_WEIGHTS['medic'])
-            teams[faction] = {
+            result_groups[gkey] = {
+                "players": groups[f'{gkey}_players'],
                 "crossfire": round(cf, 1),
                 "trade": round(tr, 1),
                 "cohesion": round(co, 1),
@@ -1504,12 +1526,15 @@ class StorytellingService:
                 "composite": round(composite, 1),
             }
 
-        logger.info("Synergy computed for %s: AXIS=%.1f, ALLIES=%.1f",
-                     sd, teams.get('AXIS', {}).get('composite', 0),
-                     teams.get('ALLIES', {}).get('composite', 0))
+        logger.info("Synergy computed for %s: A=%.1f (%s), B=%.1f (%s)",
+                     sd,
+                     result_groups.get('group_a', {}).get('composite', 0),
+                     ', '.join(groups['group_a_players'][:3]),
+                     result_groups.get('group_b', {}).get('composite', 0),
+                     ', '.join(groups['group_b_players'][:3]))
 
-        return {"status": "ok", "session_date": str(sd), "teams": teams,
-                "weights": SYNERGY_WEIGHTS}
+        return {"status": "ok", "session_date": str(sd),
+                "groups": result_groups, "weights": SYNERGY_WEIGHTS}
 
     async def _build_round_team_map(self, sd: date) -> dict:
         """Build (player_guid, round_number) -> faction mapping from PCS."""
@@ -1523,114 +1548,221 @@ class StorytellingService:
             result[(r[0], r[1])] = 'AXIS' if r[2] == 1 else 'ALLIES'
         return result
 
-    async def _synergy_crossfire(self, sd: date) -> dict:
-        """Crossfire execution rate per attacking faction (0-100)."""
+    async def _build_player_groups(self, sd: date) -> Optional[dict]:
+        """Identify stable player groups across stopwatch rounds.
+
+        In stopwatch, teams swap sides between R1/R2.  Group A is defined
+        as AXIS (team=1) in the first R1 seen; Group B is ALLIES (team=2).
+        For each round_start_unix we determine which faction corresponds to
+        which group via player-overlap voting.
+
+        Returns dict with group_a_players, group_b_players (sorted name lists),
+        round_map (round_start_unix, faction) -> group key, and
+        guid_to_group mapping, or None if no data.
+        """
+        rows = await self.db.fetch_all(
+            "SELECT pcs.player_guid, pcs.player_name, pcs.round_number, "
+            "pcs.team, r.round_start_unix "
+            "FROM player_comprehensive_stats pcs "
+            "JOIN rounds r ON r.id = pcs.round_id "
+            "WHERE pcs.round_date = $1 AND pcs.round_number IN (1, 2) "
+            "AND pcs.team IN (1, 2)",
+            (_to_date_str(sd),))
+
+        if not rows:
+            return None
+
+        # Find the first R1 (lowest round_start_unix with round_number=1)
+        r1_entries = [r for r in rows if r[2] == 1]
+        if not r1_entries:
+            return None
+
+        first_rsu = min(r[4] for r in r1_entries)
+
+        # Group A = team 1 (AXIS) in first R1, Group B = team 2 (ALLIES)
+        group_a_guids: set[str] = set()
+        group_b_guids: set[str] = set()
+        all_names: dict[str, str] = {}
+
+        for guid, name, _rn, team, rsu in r1_entries:
+            if rsu == first_rsu:
+                if team == 1:
+                    group_a_guids.add(guid)
+                else:
+                    group_b_guids.add(guid)
+
+        # Track latest player names
+        for guid, name, _rn, _team, _rsu in rows:
+            all_names[guid] = name or guid[:8]
+
+        # Build round_map: (round_start_unix, faction) -> group key
+        round_map: dict[tuple, str] = {}
+        round_start_set = set(r[4] for r in rows)
+        for rsu in round_start_set:
+            axis_guids = set(r[0] for r in rows if r[4] == rsu and r[3] == 1)
+            a_overlap = len(axis_guids & group_a_guids)
+            b_overlap = len(axis_guids & group_b_guids)
+            if a_overlap >= b_overlap:
+                round_map[(rsu, 'AXIS')] = 'group_a'
+                round_map[(rsu, 'ALLIES')] = 'group_b'
+            else:
+                round_map[(rsu, 'AXIS')] = 'group_b'
+                round_map[(rsu, 'ALLIES')] = 'group_a'
+
+        # Assign any players not in initial groups (subs, late joins)
+        for guid, _name, rn, team, rsu in rows:
+            if guid not in group_a_guids and guid not in group_b_guids:
+                faction = 'AXIS' if team == 1 else 'ALLIES'
+                group = round_map.get((rsu, faction), 'group_b')
+                if group == 'group_a':
+                    group_a_guids.add(guid)
+                else:
+                    group_b_guids.add(guid)
+
+        # Build guid -> group mapping
+        guid_to_group: dict[str, str] = {}
+        for g in group_a_guids:
+            guid_to_group[g] = 'group_a'
+        for g in group_b_guids:
+            guid_to_group[g] = 'group_b'
+
+        return {
+            'group_a_players': sorted(all_names.get(g, g[:8])
+                                      for g in group_a_guids),
+            'group_b_players': sorted(all_names.get(g, g[:8])
+                                      for g in group_b_guids),
+            'round_map': round_map,
+            'guid_to_group': guid_to_group,
+        }
+
+    async def _synergy_crossfire(self, sd: date, round_map: dict) -> dict:
+        """Crossfire execution rate per player group (0-100)."""
         rows = await self.db.fetch_all("""
-            SELECT target_team,
+            SELECT round_start_unix, target_team,
                    COUNT(*) as total,
                    COUNT(*) FILTER (WHERE was_executed) as executed
             FROM proximity_crossfire_opportunity
             WHERE session_date = $1
-            GROUP BY target_team
+            GROUP BY round_start_unix, target_team
         """, (sd,))
-        result = {}
+        totals: dict[str, int] = {'group_a': 0, 'group_b': 0}
+        executed: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (rows or []):
-            target_team = r[0]
+            rsu, target_team = r[0], r[1]
             if target_team not in ('AXIS', 'ALLIES'):
                 continue
             attacking = 'ALLIES' if target_team == 'AXIS' else 'AXIS'
-            result[attacking] = min(100, (int(r[2] or 0) / max(int(r[1] or 1), 1)) * 100)
-        return result
+            group = round_map.get((rsu, attacking))
+            if not group:
+                continue
+            totals[group] += int(r[2] or 0)
+            executed[group] += int(r[3] or 0)
+        return {g: min(100, executed[g] / max(totals[g], 1) * 100)
+                for g in ('group_a', 'group_b')}
 
-    async def _synergy_trade(self, sd: date, rtm: dict) -> dict:
-        """Trade coverage per faction: % of team deaths avenged (0-100)."""
+    async def _synergy_trade(self, sd: date, guid_to_group: dict) -> dict:
+        """Trade coverage per player group: % of team deaths avenged (0-100)."""
         trades = await self.db.fetch_all(
-            "SELECT original_victim_guid, round_number, COUNT(*) "
+            "SELECT original_victim_guid, COUNT(*) "
             "FROM proximity_lua_trade_kill WHERE session_date = $1 "
-            "GROUP BY original_victim_guid, round_number", (sd,))
+            "GROUP BY original_victim_guid", (sd,))
 
         deaths_rows = await self.db.fetch_all(
-            "SELECT team, SUM(deaths) FROM player_comprehensive_stats "
-            "WHERE round_date = $1 AND team IN (1, 2) GROUP BY team", (_to_date_str(sd),))
+            "SELECT player_guid, SUM(deaths) FROM player_comprehensive_stats "
+            "WHERE round_date = $1 AND round_number IN (1, 2) AND team IN (1, 2) "
+            "GROUP BY player_guid", (_to_date_str(sd),))
 
-        # Build guid-only fallback map (majority team assignment)
-        guid_teams: dict[str, list[str]] = {}
-        for (g, _rn), faction in rtm.items():
-            guid_teams.setdefault(g, []).append(faction)
-        guid_majority: dict[str, str] = {}
-        for g, teams in guid_teams.items():
-            guid_majority[g] = 'AXIS' if teams.count('AXIS') >= teams.count('ALLIES') else 'ALLIES'
-
-        tt = {'AXIS': 0, 'ALLIES': 0}
+        tt: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (trades or []):
-            team = rtm.get((r[0], r[1])) or guid_majority.get(r[0])
-            if team:
-                tt[team] += int(r[2] or 0)
+            group = guid_to_group.get(r[0])
+            if group:
+                tt[group] += int(r[1] or 0)
 
-        td = {'AXIS': 0, 'ALLIES': 0}
+        td: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (deaths_rows or []):
-            td['AXIS' if r[0] == 1 else 'ALLIES'] = int(r[1] or 0)
+            group = guid_to_group.get(r[0])
+            if group:
+                td[group] += int(r[1] or 0)
 
-        return {f: min(100, tt[f] / max(td[f], 1) * 100) for f in ('AXIS', 'ALLIES')}
+        return {g: min(100, tt[g] / max(td[g], 1) * 100)
+                for g in ('group_a', 'group_b')}
 
-    async def _synergy_cohesion(self, sd: date) -> dict:
-        """Team cohesion per faction: inverted average dispersion (0-100)."""
+    async def _synergy_cohesion(self, sd: date, round_map: dict) -> dict:
+        """Team cohesion per player group: inverted average dispersion (0-100)."""
         rows = await self.db.fetch_all(
-            "SELECT team, AVG(dispersion) FROM proximity_team_cohesion "
-            "WHERE session_date = $1 GROUP BY team", (sd,))
-        result = {}
+            "SELECT round_start_unix, team, dispersion "
+            "FROM proximity_team_cohesion WHERE session_date = $1", (sd,))
+        group_dispersions: dict[str, list[float]] = {'group_a': [], 'group_b': []}
         for r in (rows or []):
-            if r[0] not in ('AXIS', 'ALLIES'):
+            rsu, faction = r[0], r[1]
+            if faction not in ('AXIS', 'ALLIES'):
                 continue
-            avg_disp = float(r[1] or 0)
-            result[r[0]] = max(0, min(100, (1 - avg_disp / COHESION_MAX_DISPERSION) * 100))
+            group = round_map.get((rsu, faction))
+            if not group:
+                continue
+            group_dispersions[group].append(float(r[2] or 0))
+        result = {}
+        for g in ('group_a', 'group_b'):
+            if group_dispersions[g]:
+                avg_disp = sum(group_dispersions[g]) / len(group_dispersions[g])
+                result[g] = max(0, min(100, (1 - avg_disp / COHESION_MAX_DISPERSION) * 100))
+            else:
+                result[g] = 0
         return result
 
-    async def _synergy_push(self, sd: date) -> dict:
-        """Push quality per faction: quality + participation bonus (0-100)."""
+    async def _synergy_push(self, sd: date, round_map: dict) -> dict:
+        """Push quality per player group: quality + participation bonus (0-100)."""
         rows = await self.db.fetch_all(
-            "SELECT team, AVG(push_quality), AVG(participant_count) "
-            "FROM proximity_team_push WHERE session_date = $1 GROUP BY team", (sd,))
-        result = {}
+            "SELECT round_start_unix, team, push_quality, participant_count "
+            "FROM proximity_team_push WHERE session_date = $1", (sd,))
+        gq: dict[str, list[float]] = {'group_a': [], 'group_b': []}
+        gp: dict[str, list[float]] = {'group_a': [], 'group_b': []}
         for r in (rows or []):
-            if r[0] not in ('AXIS', 'ALLIES'):
+            rsu, faction = r[0], r[1]
+            if faction not in ('AXIS', 'ALLIES'):
                 continue
-            quality = min(80, float(r[1] or 0) * 80)
-            participation = min(20, float(r[2] or 0) / 6 * 20)
-            result[r[0]] = min(100, quality + participation)
+            group = round_map.get((rsu, faction))
+            if not group:
+                continue
+            gq[group].append(float(r[2] or 0))
+            gp[group].append(float(r[3] or 0))
+        result = {}
+        for g in ('group_a', 'group_b'):
+            if gq[g]:
+                quality = min(80, (sum(gq[g]) / len(gq[g])) * 80)
+                participation = min(20, (sum(gp[g]) / len(gp[g])) / 6 * 20)
+                result[g] = min(100, quality + participation)
+            else:
+                result[g] = 0
         return result
 
-    async def _synergy_medic(self, sd: date, rtm: dict) -> dict:
-        """Medic bond per faction: revive rate scaled to 0-100 (50% revive rate = 100)."""
+    async def _synergy_medic(self, sd: date, guid_to_group: dict) -> dict:
+        """Medic bond per player group: revive rate scaled to 0-100."""
         revives = await self.db.fetch_all(
-            "SELECT victim_guid, round_number, COUNT(*) "
+            "SELECT victim_guid, COUNT(*) "
             "FROM proximity_kill_outcome "
             "WHERE session_date = $1 AND outcome = 'revived' "
-            "GROUP BY victim_guid, round_number", (sd,))
+            "GROUP BY victim_guid", (sd,))
 
         deaths_rows = await self.db.fetch_all(
-            "SELECT team, SUM(deaths) FROM player_comprehensive_stats "
-            "WHERE round_date = $1 AND team IN (1, 2) GROUP BY team", (_to_date_str(sd),))
+            "SELECT player_guid, SUM(deaths) FROM player_comprehensive_stats "
+            "WHERE round_date = $1 AND round_number IN (1, 2) AND team IN (1, 2) "
+            "GROUP BY player_guid", (_to_date_str(sd),))
 
-        # Build guid-only fallback map (majority team assignment)
-        guid_teams: dict[str, list[str]] = {}
-        for (g, _rn), faction in rtm.items():
-            guid_teams.setdefault(g, []).append(faction)
-        guid_majority: dict[str, str] = {}
-        for g, teams in guid_teams.items():
-            guid_majority[g] = 'AXIS' if teams.count('AXIS') >= teams.count('ALLIES') else 'ALLIES'
-
-        tr = {'AXIS': 0, 'ALLIES': 0}
+        tr: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (revives or []):
-            team = rtm.get((r[0], r[1])) or guid_majority.get(r[0])
-            if team:
-                tr[team] += int(r[2] or 0)
+            group = guid_to_group.get(r[0])
+            if group:
+                tr[group] += int(r[1] or 0)
 
-        td = {'AXIS': 0, 'ALLIES': 0}
+        td: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (deaths_rows or []):
-            td['AXIS' if r[0] == 1 else 'ALLIES'] = int(r[1] or 0)
+            group = guid_to_group.get(r[0])
+            if group:
+                td[group] += int(r[1] or 0)
 
-        return {f: min(100, tr[f] / max(td[f], 1) * 200) for f in ('AXIS', 'ALLIES')}
+        return {g: min(100, tr[g] / max(td[g], 1) * 200)
+                for g in ('group_a', 'group_b')}
 
     # ── Player Win Contribution (PWC) ────────────────────────────────
 
@@ -1848,4 +1980,315 @@ class StorytellingService:
             "session_date": sd_str,
             "mvp": mvp,
             "players": players_list,
+        }
+
+    # ── Momentum Chart ──────────────────────────────────────────────
+
+    async def compute_momentum(self, session_date: Union[str, date]) -> dict:
+        """Compute per-round team momentum in 30-second windows.
+
+        Momentum decays each window (×0.85) and gains from kills and objectives.
+        Returns dual-line data (AXIS vs ALLIES) normalized to 0-100 per round.
+        """
+        sd = _to_date(session_date)
+
+        # 1. Get all kills with team info
+        kills = await self.db.fetch_all("""
+            SELECT ko.round_number, ko.round_start_unix, ko.map_name,
+                   ko.kill_time, ko.killer_guid, ko.victim_guid
+            FROM proximity_kill_outcome ko
+            WHERE ko.session_date = $1
+            ORDER BY ko.round_start_unix, ko.kill_time
+        """, (sd,))
+
+        if not kills:
+            return {"status": "no_data", "session_date": str(sd), "rounds": []}
+
+        # 2. Build team map from PCS
+        rtm = await self._build_round_team_map(sd)
+
+        # Fallback: majority-vote per GUID
+        guid_teams: dict[str, list[str]] = {}
+        for (g, _rn), faction in rtm.items():
+            guid_teams.setdefault(g, []).append(faction)
+        guid_majority: dict[str, str] = {}
+        for g, teams in guid_teams.items():
+            guid_majority[g] = 'AXIS' if teams.count('AXIS') >= teams.count('ALLIES') else 'ALLIES'
+
+        # Build short→long for PCS 8-char to proximity 32-char
+        all_guids = set()
+        for k in kills:
+            all_guids.add(k[4])
+            all_guids.add(k[5])
+        short_to_long = {g[:8]: g for g in all_guids}
+
+        def _get_team(guid: str, rn: int) -> str:
+            """Resolve team for a GUID in a round. Try PCS 8-char lookup, then majority."""
+            t = rtm.get((guid[:8], rn)) or rtm.get((guid, rn))
+            if t:
+                return t
+            long = short_to_long.get(guid[:8], guid)
+            t = rtm.get((long[:8], rn))
+            if t:
+                return t
+            return guid_majority.get(guid[:8]) or guid_majority.get(guid) or 'AXIS'
+
+        # 3. Get objective events: carrier pickups/secured
+        carrier_events = await self.db.fetch_all("""
+            SELECT round_number, round_start_unix, map_name,
+                   carrier_team, pickup_time, outcome
+            FROM proximity_carrier_event
+            WHERE session_date = $1
+        """, (sd,))
+
+        # Construction events
+        construction_events = await self.db.fetch_all("""
+            SELECT round_number, round_start_unix, map_name,
+                   player_team, event_time, event_type
+            FROM proximity_construction_event
+            WHERE session_date = $1
+        """, (sd,))
+
+        # 4. Group kills by round
+        rounds_data: dict[tuple[int, int], dict] = {}  # (rn, start_unix) -> {map, kills, objs}
+        for k in kills:
+            rn, start_unix, map_name = k[0], k[1], k[2]
+            key = (rn, start_unix)
+            if key not in rounds_data:
+                rounds_data[key] = {"map_name": map_name, "kills": [], "objectives": []}
+            kill_time_ms = k[3] or 0
+            killer_guid = k[4]
+            killer_team = _get_team(killer_guid, rn)
+            rounds_data[key]["kills"].append({
+                "t_ms": kill_time_ms,
+                "team": killer_team,
+            })
+
+        # Add carrier objectives
+        for ce in (carrier_events or []):
+            rn, start_unix = ce[0], ce[1]
+            key = (rn, start_unix)
+            if key not in rounds_data:
+                rounds_data[key] = {"map_name": ce[2], "kills": [], "objectives": []}
+            team = ce[3] or 'AXIS'
+            pickup_ms = (ce[4] or 0)
+            outcome = ce[5] or ''
+            bonus = 15 if outcome != 'secured' else 30
+            rounds_data[key]["objectives"].append({
+                "t_ms": pickup_ms,
+                "team": team,
+                "bonus": bonus,
+            })
+
+        # Add construction objectives
+        for ce in (construction_events or []):
+            rn, start_unix = ce[0], ce[1]
+            key = (rn, start_unix)
+            if key not in rounds_data:
+                rounds_data[key] = {"map_name": ce[2], "kills": [], "objectives": []}
+            team = ce[3] or 'AXIS'
+            event_time_ms = (ce[4] or 0)
+            rounds_data[key]["objectives"].append({
+                "t_ms": event_time_ms,
+                "team": team,
+                "bonus": 20,
+            })
+
+        # 5. Compute momentum per round
+        WINDOW_MS = 30_000
+        DECAY = 0.85
+        KILL_IMPACT = 5.0
+        result_rounds = []
+
+        for (rn, start_unix), rd in sorted(rounds_data.items()):
+            # Find max time in this round
+            all_times = [k["t_ms"] for k in rd["kills"]]
+            all_times += [o["t_ms"] for o in rd["objectives"]]
+            if not all_times:
+                continue
+            max_time = max(all_times)
+
+            # Build windows
+            axis_raw = 0.0
+            allies_raw = 0.0
+            points = []
+
+            n_windows = max(1, (max_time // WINDOW_MS) + 2)
+            for w in range(n_windows):
+                t_start = w * WINDOW_MS
+                t_end = t_start + WINDOW_MS
+
+                # Decay previous momentum
+                axis_raw *= DECAY
+                allies_raw *= DECAY
+
+                # Sum kill impacts in this window
+                for k in rd["kills"]:
+                    if t_start <= k["t_ms"] < t_end:
+                        if k["team"] == 'AXIS':
+                            axis_raw += KILL_IMPACT
+                            allies_raw -= KILL_IMPACT * 0.3
+                        else:
+                            allies_raw += KILL_IMPACT
+                            axis_raw -= KILL_IMPACT * 0.3
+
+                # Sum objective bonuses
+                for o in rd["objectives"]:
+                    if t_start <= o["t_ms"] < t_end:
+                        if o["team"] == 'AXIS':
+                            axis_raw += o["bonus"]
+                        else:
+                            allies_raw += o["bonus"]
+
+                points.append({
+                    "t_ms": t_start,
+                    "axis_raw": axis_raw,
+                    "allies_raw": allies_raw,
+                })
+
+            # 6. Normalize to 0-100 range
+            all_vals = [abs(p["axis_raw"]) for p in points] + [abs(p["allies_raw"]) for p in points]
+            max_val = max(all_vals) if all_vals else 1.0
+            if max_val < 0.01:
+                max_val = 1.0
+
+            normalized = []
+            for p in points:
+                # Map from raw to 0-100 centered at 50
+                axis_norm = 50 + (p["axis_raw"] / max_val) * 50
+                allies_norm = 50 + (p["allies_raw"] / max_val) * 50
+                # Clamp
+                axis_norm = max(0, min(100, axis_norm))
+                allies_norm = max(0, min(100, allies_norm))
+                normalized.append({
+                    "t_ms": p["t_ms"],
+                    "axis": round(axis_norm, 1),
+                    "allies": round(allies_norm, 1),
+                })
+
+            result_rounds.append({
+                "round_number": rn,
+                "map_name": rd["map_name"],
+                "points": normalized,
+            })
+
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "rounds": result_rounds,
+        }
+
+    # ── Session Narrative ───────────────────────────────────────────
+
+    async def generate_narrative(self, session_date: Union[str, date]) -> dict:
+        """Generate a human-readable paragraph summarizing the session.
+
+        Uses KIS, moments, synergy, archetypes, and PWC data.
+        """
+        sd = _to_date(session_date)
+        sd_str = _to_date_str(sd)
+
+        # 1. Ensure KIS is computed, then fetch leaderboard + archetypes
+        await self.compute_session_kis(sd)
+        kis_board = await self.get_kis_leaderboard(sd, limit=50)
+        archetypes, stats = await self.classify_players(sd, kis_board)
+
+        if not kis_board:
+            return {"status": "no_data", "narrative": ""}
+
+        # 2. Maps played
+        map_rows = await self.db.fetch_all(
+            "SELECT DISTINCT map_name FROM proximity_kill_outcome WHERE session_date = $1",
+            (sd,))
+        maps_played = ", ".join(_strip_et_colors(r[0]) for r in (map_rows or []) if r[0])
+
+        # 3. MVP (top KIS player)
+        mvp = kis_board[0]
+        mvp_name = _strip_et_colors(mvp.get("name", "Unknown"))
+        mvp_archetype = (archetypes.get(mvp["guid"], "frontline_warrior")).replace("_", " ")
+        mvp_guid = mvp["guid"]
+        mvp_stats = stats.get(mvp_guid, {})
+        mvp_dpm = round(mvp_stats.get("dpm", 0), 1)
+        mvp_kis = mvp.get("total_kis", 0)
+
+        # 4. Medic anchor (most revives)
+        medic_name = ""
+        medic_revives = 0
+        for guid, s in stats.items():
+            rev = s.get("revives_given", 0)
+            if rev > medic_revives:
+                medic_revives = rev
+                # Find name from kis_board
+                entry = next((e for e in kis_board if e["guid"] == guid), None)
+                medic_name = _strip_et_colors(entry["name"]) if entry else guid[:8]
+
+        # 5. Top moment
+        moments = await self.detect_moments(sd, limit=1)
+        top_moment_time = ""
+        top_moment_narrative = ""
+        if moments:
+            m = moments[0]
+            top_moment_time = m.get("time_formatted", "")
+            top_moment_narrative = _strip_et_colors(m.get("narrative", "an intense play"))
+
+        # 6. Team synergy
+        synergy = await self.compute_team_synergy(sd)
+        better_team = ""
+        better_composite = 0.0
+        worse_composite = 0.0
+        best_axis_name = ""
+        best_axis_val = 0.0
+        teams = synergy.get("teams", {})
+        if teams:
+            composites = {t: d.get("composite", 0) for t, d in teams.items()}
+            if composites:
+                better_team = max(composites, key=composites.get)
+                worse_team = min(composites, key=composites.get)
+                better_composite = composites.get(better_team, 0)
+                worse_composite = composites.get(worse_team, 0)
+                # Find the best synergy axis for the better team
+                better_data = teams.get(better_team, {})
+                for axis in ('crossfire', 'trade', 'cohesion', 'push', 'medic'):
+                    val = better_data.get(axis, 0)
+                    if val > best_axis_val:
+                        best_axis_val = val
+                        best_axis_name = axis
+
+        # 7. Session ID from gaming sessions
+        session_id_row = await self.db.fetch_one(
+            "SELECT gaming_session_id FROM player_comprehensive_stats "
+            "WHERE round_date = $1 LIMIT 1",
+            (sd_str,))
+        session_id = session_id_row[0] if session_id_row else "?"
+
+        # 8. Build narrative
+        parts = [f"Session {session_id} on {maps_played}"]
+
+        parts.append(
+            f" was defined by {mvp_name}'s {mvp_archetype} performance "
+            f"({mvp_dpm} DPM, {mvp_kis:.0f} KIS)"
+        )
+
+        if medic_name and medic_revives > 0:
+            parts.append(f". {medic_name} anchored the team with {medic_revives} revives")
+
+        if top_moment_narrative:
+            parts.append(
+                f". The session's defining moment came at {top_moment_time} "
+                f"when {top_moment_narrative}"
+            )
+
+        if better_team and better_composite > 0:
+            parts.append(
+                f". Team synergy favored {better_team} "
+                f"({better_composite:.0f} vs {worse_composite:.0f}), "
+                f"driven by superior {best_axis_name} ({best_axis_val:.0f})"
+            )
+
+        narrative = "".join(parts) + "."
+
+        return {
+            "status": "ok",
+            "session_date": sd_str,
+            "narrative": narrative,
         }

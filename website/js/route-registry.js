@@ -270,6 +270,15 @@ const ROUTE_DEFINITIONS = Object.freeze({
         buildHash: () => '#/story',
         load: ({ legacy }) => legacy.loadStoryView(),
     },
+    replay: {
+        viewId: 'replay',
+        label: 'Replay',
+        mode: VIEW_MODE.LEGACY,
+        surfaceType: 'read-heavy',
+        migrationWave: 'C',
+        buildHash: () => '#/replay',
+        load: ({ legacy }) => legacy.loadReplayView(),
+    },
     sessions2: {
         viewId: 'sessions2',
         label: 'Sessions 2.0',

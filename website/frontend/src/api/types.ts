@@ -1389,3 +1389,29 @@ export interface KillImpactDetail {
   is_during_push: boolean;
   is_crossfire: boolean;
 }
+
+// ── Momentum Chart ──
+export interface MomentumPoint {
+  t_ms: number;
+  axis: number;
+  allies: number;
+}
+
+export interface MomentumRound {
+  round_number: number;
+  map_name: string;
+  points: MomentumPoint[];
+}
+
+export interface MomentumResponse {
+  status: string;
+  session_date: string;
+  rounds: MomentumRound[];
+}
+
+// ── Session Narrative ──
+export interface NarrativeResponse {
+  status: string;
+  session_date: string;
+  narrative: string;
+}

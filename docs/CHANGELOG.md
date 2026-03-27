@@ -12,6 +12,47 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.0] — 2026-03-27: Player Rivalries, Win Contribution & Smart Stats Phase 2
+
+**Full esports analytics upgrade: head-to-head rivalry engine, per-round win contribution scoring, 11 match moment detectors with rich context, 9 server-side archetypes, and 35-weapon name mapping.**
+
+*Multiple commits. New: rivalries cog + service, win contribution engine, Smart Stats Phase 2 moment detectors, weapon name mapping, archetype formula v2.*
+
+#### Player Rivalries System — NEW
+- **H2H stats engine**: Complete head-to-head record between any two players — kills, deaths, KD, accuracy, DPM per pairing
+- **Classification**: Nemesis (losing badly), Prey (winning handily), Rival (closely contested) — based on win rate and encounter count
+- **Weapon breakdown**: Per-rivalry weapon usage breakdown for each player in the matchup
+- **Per-map drill-down**: H2H breakdown split by map played
+- **Rivalry leaderboard**: Top rivalry pairs sorted by total encounters
+- **New page `/#/rivalries`**: Full rivalry dashboard with pair lookup, leaderboard, and H2H detail view
+- **Bug fixes**: GROUP BY clause fix in rivalries SQL; player encounter threshold adjusted for competitive play
+
+#### Win Contribution (PWC / WIS / WAA) — NEW
+- **Per-Round Win Contribution (PWC)**: 5-component formula — kills, damage dealt, objectives secured, revives given, survival time
+- **Dynamic weight redistribution**: When a round has zero objectives, objective component weight redistributes automatically to kills and damage proportionally
+- **Win Impact Score (WIS)**: avg(PWC in won rounds) − avg(PWC in lost rounds) — surfaces who actually shifts match outcomes
+- **Win Absolute Average (WAA)**: Cross-session baseline for fair WIS comparison
+- **MVP detection**: Highest WIS player flagged as session MVP per round set
+- **Stacked bar visualization**: Per-component breakdown for every player in every round
+
+#### Smart Stats Phase 2 — Match Moments & Archetypes
+- **11 moment detectors** (up from 5 in Phase 1):
+  - *Existing (enhanced)*: kill streak, trade chain, focus fire survival, team push success, carrier chain
+  - *New*: team wipe, multikill, objective secured, objective denied, objective run, multi-revive
+- **Rich moment context**: Each moment includes per-kill breakdown with weapon names, precise timestamps, duration, and player GUIDs resolved to display names
+- **Moment type diversity**: Score cap per moment type prevents single-category crowding in the timeline
+- **9 Player Archetypes v2**: Formula updated to use DPM + denied_time + headshot% + KD + trade rate + revive count (was KIS + combat position); relative thresholds for competitive server populations
+- **35-weapon name mapping**: Full ET:Legacy weapon ID→name lookup (Thompson, MP40, Sten, Panzerfaust, Panzer, Flamethrower, Mortar, Luger, Colt, etc.) applied across all moment and archetype displays
+
+#### Bug Fixes
+- **Headshot% formula**: Corrected to `hs_hits / total_hits` (was `hs_kills / kills` — significantly different for spray weapons)
+- **GUID mismatch**: Resolved 8-char vs 32-char GUID inconsistency across rivalries service, archetype service, and win contribution engine
+- **ET color code stripping**: Applied `^N` color code regex strip to all player name displays in rivalries and archetypes
+- **Rivalries SQL GROUP BY**: Fixed GROUP BY clause that caused query error on multi-round aggregation
+- **Rivalries threshold**: Player encounter minimum adjusted to surface meaningful competitive pairs
+
+---
+
 ## [1.3.0] — 2026-03-27: Smart Storytelling Stats, Mandelbrot Audit & 45-Finding Resolution
 
 **Smart competitive narratives powered by contextual kill scoring, player archetypes, and team synergy — plus a full-stack Mandelbrot audit with 100% finding resolution.**
