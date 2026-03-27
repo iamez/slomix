@@ -53,6 +53,23 @@ SYNERGY_WEIGHTS = {
 }
 COHESION_MAX_DISPERSION = 1500      # Game units; above this = 0 cohesion
 
+# ── ET:Legacy kill_mod → weapon name mapping (from MOD_* constants) ──
+KILL_MOD_NAMES = {
+    3: "Knife", 4: "Luger", 5: "Colt", 6: "Luger", 7: "Colt",
+    8: "MP40", 9: "Thompson", 10: "Sten", 11: "Garand",
+    12: "Silenced", 13: "FG42", 14: "FG42 Scope", 15: "Panzerfaust",
+    16: "Grenade", 17: "Flamethrower", 18: "Grenade",
+    22: "Dynamite", 23: "Airstrike", 26: "Artillery",
+    37: "Carbine", 38: "K98", 39: "GPG40", 40: "M7",
+    41: "Landmine", 42: "Satchel", 44: "Mobile MG42",
+    45: "Silenced Colt", 46: "Garand Scope",
+    50: "K43", 51: "K43 Scope", 52: "Mortar",
+    53: "Akimbo Colt", 54: "Akimbo Luger",
+    55: "Akimbo Silenced Colt", 56: "Akimbo Silenced Luger",
+    60: "Sten",  # MOD_STEN_DMGBODY
+    66: "Backstab",
+}
+
 
 def _to_date(val: Union[str, date]) -> date:
     """Normalize to datetime.date for asyncpg DATE params (proximity tables use DATE type)."""
@@ -74,6 +91,21 @@ def _strip_et_colors(name: str) -> str:
     if not name:
         return name
     return re.sub(r'\^[0-9a-zA-Z]', '', name)
+
+
+def _format_time_ms(ms: int) -> str:
+    """Format milliseconds from round start as MM:SS."""
+    if not ms or ms <= 0:
+        return "0:00"
+    total_seconds = ms // 1000
+    minutes = total_seconds // 60
+    seconds = total_seconds % 60
+    return f"{minutes}:{seconds:02d}"
+
+
+def _weapon_name(kill_mod: int) -> str:
+    """Map kill_mod (means_of_death) integer to human-readable weapon name."""
+    return KILL_MOD_NAMES.get(kill_mod, f"MOD_{kill_mod}")
 
 
 class StorytellingService:
@@ -341,11 +373,11 @@ class StorytellingService:
     # ── Match Moments Detection ──
 
     async def detect_moments(self, session_date: Union[str, date], limit: int = 10) -> list:
-        """Detect highlight-reel moments for a session across 9 detectors."""
+        """Detect highlight-reel moments for a session across 11 detectors."""
         sd = _to_date(session_date)
         moments = []
 
-        # Run all 9 detectors (5 original + 4 objective-based)
+        # Run all 11 detectors (5 original + 4 objective + 2 combat)
         detectors = [
             self._detect_kill_streaks,
             self._detect_carrier_chains,
@@ -356,6 +388,8 @@ class StorytellingService:
             self._detect_objective_run_moments,
             self._detect_objective_denied,
             self._detect_multi_revive,
+            self._detect_team_wipes,
+            self._detect_multikills,
         ]
         for detector in detectors:
             try:
@@ -365,6 +399,11 @@ class StorytellingService:
             except Exception as e:
                 logger.error("Moment detector %s failed: %s\n%s",
                              detector.__name__, e, traceback.format_exc())
+
+        # Enrich all moments with time_formatted
+        for m in moments:
+            if "time_formatted" not in m:
+                m["time_formatted"] = _format_time_ms(m.get("time_ms", 0))
 
         # Ensure type diversity: reserve one slot per type, fill remainder by stars
         by_type: dict[str, list] = {}
@@ -860,6 +899,334 @@ class StorytellingService:
                 "detail": {"reviver_guid": info["reviver_guid"], "revive_count": burst},
             })
         return moments
+
+    async def _detect_team_wipes(self, sd: date) -> list:
+        """Detector J: Team Wipe — all enemies killed within a 15s window.
+        In competitive 3v3 ET, wiping all 3 enemies is the highest impact play.
+        Uses combat_position for team info + kill_outcome for kill details."""
+
+        # Get all kills with team info for this session
+        rows = await self.db.fetch_all("""
+            SELECT cp.event_time, cp.attacker_guid, cp.attacker_name, cp.attacker_team,
+                   cp.victim_guid, cp.victim_name, cp.victim_team,
+                   cp.means_of_death, cp.round_number, cp.map_name, cp.round_start_unix
+            FROM proximity_combat_position cp
+            WHERE cp.session_date = $1
+                AND cp.event_type = 'kill'
+                AND cp.attacker_team IS NOT NULL
+                AND cp.victim_team IS NOT NULL
+                AND cp.attacker_team != cp.victim_team
+            ORDER BY cp.round_start_unix, cp.event_time
+        """, (sd,))
+
+        if not rows:
+            return []
+
+        # Get team sizes per round
+        team_sizes = await self.db.fetch_all("""
+            SELECT round_start_unix, round_number, attacker_team,
+                   COUNT(DISTINCT attacker_guid) as team_size
+            FROM proximity_combat_position
+            WHERE session_date = $1 AND event_type = 'kill'
+            GROUP BY round_start_unix, round_number, attacker_team
+        """, (sd,))
+
+        ts_map: dict[tuple, dict[str, int]] = {}
+        for r in (team_sizes or []):
+            key = (r[0], r[1])
+            ts_map.setdefault(key, {})[r[2]] = int(r[3])
+
+        # Group kills by round
+        kills_by_round: dict[tuple, list] = {}
+        for r in (rows or []):
+            rkey = (r[10], r[8])  # (round_start_unix, round_number)
+            kills_by_round.setdefault(rkey, []).append({
+                "time": r[0], "killer_guid": r[1],
+                "killer": _strip_et_colors(r[2] or r[1][:8]),
+                "killer_team": r[3],
+                "victim_guid": r[4],
+                "victim": _strip_et_colors(r[5] or r[4][:8]),
+                "victim_team": r[6],
+                "weapon": _weapon_name(r[7] or 0),
+                "kill_mod": r[7] or 0,
+                "round_number": r[8], "map_name": r[9],
+                "round_start_unix": r[10],
+            })
+
+        moments = []
+        for rkey, kills in kills_by_round.items():
+            sizes = ts_map.get(rkey, {})
+            # Check both teams as potential wipe targets
+            for target_team in ('AXIS', 'ALLIES'):
+                enemy_size = sizes.get(target_team, 0)
+                if enemy_size < 2:
+                    continue  # need at least 2 enemies for a meaningful wipe
+
+                # Get kills of this team, sorted by time
+                team_kills = [k for k in kills if k["victim_team"] == target_team]
+                if len(team_kills) < enemy_size:
+                    continue
+
+                # Sliding window: find windows where all enemies die
+                for i in range(len(team_kills)):
+                    window_start = team_kills[i]["time"]
+                    window_kills = []
+                    victims_in_window = set()
+
+                    for j in range(i, len(team_kills)):
+                        if team_kills[j]["time"] - window_start > 15000:
+                            break
+                        window_kills.append(team_kills[j])
+                        victims_in_window.add(team_kills[j]["victim_guid"])
+
+                    if len(victims_in_window) >= enemy_size:
+                        # TEAM WIPE detected!
+                        # Deduplicate: keep first kill per victim (the lethal one)
+                        seen_victims = set()
+                        wipe_kills = []
+                        for k in window_kills:
+                            if k["victim_guid"] not in seen_victims:
+                                seen_victims.add(k["victim_guid"])
+                                wipe_kills.append(k)
+                            if len(seen_victims) >= enemy_size:
+                                break
+
+                        first_kill = wipe_kills[0]
+                        last_kill = wipe_kills[-1]
+                        duration_ms = last_kill["time"] - first_kill["time"]
+                        duration_s = round(duration_ms / 1000, 1)
+                        wiping_team = first_kill["killer_team"]
+                        map_name = first_kill["map_name"]
+                        round_number = first_kill["round_number"]
+
+                        # Build rich kill context
+                        kill_details = []
+                        for k in wipe_kills:
+                            kill_details.append({
+                                "killer": k["killer"],
+                                "killer_guid": k["killer_guid"],
+                                "victim": k["victim"],
+                                "victim_guid": k["victim_guid"],
+                                "weapon": k["weapon"],
+                                "time_ms": k["time"],
+                                "time_formatted": _format_time_ms(k["time"]),
+                            })
+
+                        victims_list = [k["victim"] for k in wipe_kills]
+                        killers = list({k["killer"] for k in wipe_kills})
+
+                        moments.append({
+                            "type": "team_wipe",
+                            "round_number": round_number,
+                            "map_name": map_name,
+                            "time_ms": first_kill["time"],
+                            "time_formatted": _format_time_ms(first_kill["time"]),
+                            "player": killers[0] if len(killers) == 1 else f"Team {wiping_team}",
+                            "impact_stars": 5,
+                            "narrative": (
+                                f"TEAM WIPE — {wiping_team} eliminated all {enemy_size} "
+                                f"{target_team} players in {duration_s}s"
+                            ),
+                            "kills": kill_details,
+                            "team": wiping_team,
+                            "victims": victims_list,
+                            "duration_ms": duration_ms,
+                            "detail": {
+                                "wiping_team": wiping_team,
+                                "wiped_team": target_team,
+                                "team_size": enemy_size,
+                                "killers": killers,
+                                "duration_ms": duration_ms,
+                            },
+                        })
+                        break  # Only report first wipe per team per round
+
+        # Deduplicate: max 1 wipe per (round_start_unix, round_number, wiped_team)
+        seen_wipes = set()
+        unique_moments = []
+        for m in moments:
+            wipe_key = (m["round_number"], m["detail"]["wiped_team"], m.get("map_name"))
+            if wipe_key not in seen_wipes:
+                seen_wipes.add(wipe_key)
+                unique_moments.append(m)
+
+        return unique_moments
+
+    async def _detect_multikills(self, sd: date) -> list:
+        """Detector K: Personal Multikill — a single player kills 2+ enemies
+        in rapid succession (tighter window than kill_streak).
+        - Double kill: 2 kills in 5s → 2★
+        - Triple kill: 3 kills in 5s → 3★
+        - Quad kill: 4 kills in 8s → 4★
+        - Ace (all enemies): 5★
+        Uses combat_position for weapon/team context."""
+
+        # Get all kills with full context
+        rows = await self.db.fetch_all("""
+            SELECT cp.event_time, cp.attacker_guid, cp.attacker_name, cp.attacker_team,
+                   cp.victim_guid, cp.victim_name, cp.victim_team,
+                   cp.means_of_death, cp.round_number, cp.map_name, cp.round_start_unix
+            FROM proximity_combat_position cp
+            WHERE cp.session_date = $1
+                AND cp.event_type = 'kill'
+                AND cp.attacker_team IS NOT NULL
+                AND cp.victim_team IS NOT NULL
+                AND cp.attacker_team != cp.victim_team
+            ORDER BY cp.attacker_guid, cp.round_start_unix, cp.event_time
+        """, (sd,))
+
+        if not rows:
+            return []
+
+        # Get team sizes for ace detection
+        team_sizes = await self.db.fetch_all("""
+            SELECT round_start_unix, round_number, victim_team,
+                   COUNT(DISTINCT victim_guid) as team_size
+            FROM proximity_combat_position
+            WHERE session_date = $1 AND event_type = 'kill'
+                AND attacker_team != victim_team
+            GROUP BY round_start_unix, round_number, victim_team
+        """, (sd,))
+        ts_map: dict[tuple, dict[str, int]] = {}
+        for r in (team_sizes or []):
+            ts_map.setdefault((r[0], r[1]), {})[r[2]] = int(r[3])
+
+        # Group kills by (attacker_guid, round_start_unix)
+        by_player_round: dict[tuple, list] = {}
+        for r in (rows or []):
+            pkey = (r[1], r[10], r[8])  # (attacker_guid, round_start_unix, round_number)
+            by_player_round.setdefault(pkey, []).append({
+                "time": r[0], "killer_guid": r[1],
+                "killer": _strip_et_colors(r[2] or r[1][:8]),
+                "killer_team": r[3],
+                "victim_guid": r[4],
+                "victim": _strip_et_colors(r[5] or r[4][:8]),
+                "victim_team": r[6],
+                "weapon": _weapon_name(r[7] or 0),
+                "kill_mod": r[7] or 0,
+                "round_number": r[8], "map_name": r[9],
+                "round_start_unix": r[10],
+            })
+
+        # Load objective event times for proximity check
+        obj_times = await self._load_objective_event_times(sd)
+
+        moments = []
+        for pkey, kills in by_player_round.items():
+            attacker_guid, round_start_unix, round_number = pkey
+            kills.sort(key=lambda k: k["time"])
+
+            # Sliding window: find best multikill burst per player per round
+            best_burst = None
+            best_count = 0
+
+            for i in range(len(kills)):
+                # Tight window: 5s for double/triple, expand to 8s for quad+
+                window_kills = [kills[i]]
+                distinct_victims = {kills[i]["victim_guid"]}
+
+                for j in range(i + 1, len(kills)):
+                    delta = kills[j]["time"] - kills[i]["time"]
+                    # 5s base window, extend to 8s if already 3+ kills
+                    max_window = 5000 if len(window_kills) < 3 else 8000
+                    if delta > max_window:
+                        break
+                    window_kills.append(kills[j])
+                    distinct_victims.add(kills[j]["victim_guid"])
+
+                n_distinct = len(distinct_victims)
+                if n_distinct >= 2 and n_distinct > best_count:
+                    best_count = n_distinct
+                    best_burst = window_kills[:n_distinct]  # keep only unique-victim kills
+
+            if best_burst and best_count >= 2:
+                # Deduplicate: first kill per unique victim
+                seen_v = set()
+                unique_kills = []
+                for k in best_burst:
+                    if k["victim_guid"] not in seen_v:
+                        seen_v.add(k["victim_guid"])
+                        unique_kills.append(k)
+
+                first_kill = unique_kills[0]
+                last_kill = unique_kills[-1]
+                duration_ms = last_kill["time"] - first_kill["time"]
+                duration_s = round(duration_ms / 1000, 1)
+                name = first_kill["killer"]
+                map_name = first_kill["map_name"]
+                victim_team = first_kill["victim_team"]
+                n = len(unique_kills)
+
+                # Check if ace (killed all enemies)
+                rkey = (round_start_unix, round_number)
+                enemy_size = ts_map.get(rkey, {}).get(victim_team, 0)
+                is_ace = (n >= enemy_size >= 2)
+
+                # Star rating
+                if is_ace:
+                    stars = 5
+                elif n >= 4:
+                    stars = 4
+                elif n >= 3:
+                    stars = 3
+                else:
+                    stars = 2
+
+                # Objective proximity bonus
+                near_obj = False
+                for evt_time in obj_times.get(rkey, []):
+                    if abs(first_kill["time"] - evt_time) <= 15000:
+                        near_obj = True
+                        break
+                if near_obj and stars < 5:
+                    stars += 1
+
+                # Label
+                labels = {2: "DOUBLE KILL", 3: "TRIPLE KILL", 4: "QUAD KILL"}
+                label = "ACE" if is_ace else labels.get(n, f"{n}-KILL")
+
+                # Build rich kill context
+                kill_details = []
+                for k in unique_kills:
+                    kill_details.append({
+                        "killer": k["killer"],
+                        "killer_guid": k["killer_guid"],
+                        "victim": k["victim"],
+                        "victim_guid": k["victim_guid"],
+                        "weapon": k["weapon"],
+                        "time_ms": k["time"],
+                        "time_formatted": _format_time_ms(k["time"]),
+                    })
+
+                obj_suffix = " near objective" if near_obj else ""
+                victims_list = [k["victim"] for k in unique_kills]
+
+                moments.append({
+                    "type": "multikill",
+                    "round_number": round_number,
+                    "map_name": map_name,
+                    "time_ms": first_kill["time"],
+                    "time_formatted": _format_time_ms(first_kill["time"]),
+                    "player": name,
+                    "impact_stars": stars,
+                    "narrative": (
+                        f"{label} — {name} eliminated {n} enemies "
+                        f"in {duration_s}s{obj_suffix}"
+                    ),
+                    "kills": kill_details,
+                    "team": first_kill["killer_team"],
+                    "victims": victims_list,
+                    "duration_ms": duration_ms,
+                    "detail": {
+                        "kill_count": n, "killer_guid": attacker_guid,
+                        "is_ace": is_ace, "near_objective": near_obj,
+                        "duration_ms": duration_ms, "label": label,
+                    },
+                })
+
+        # Sort by stars descending, limit
+        moments.sort(key=lambda m: (-m["impact_stars"], m.get("time_ms", 0)))
+        return moments[:20]
 
     async def get_kis_leaderboard(self, session_date: Union[str, date], limit: int = 20) -> list:
         """Get KIS leaderboard for a session, including server-side archetype."""
