@@ -332,14 +332,14 @@ class ProximityCog(commands.Cog, name="Proximity"):
         "proximity_objective_focus",
         "proximity_objective_run",
         "proximity_reaction_metric",
-        "proximity_revive",
+        # proximity_revive excluded: no round_number/round_start_unix/session_date columns
         "proximity_spawn_timing",
         "proximity_support_summary",
         "proximity_team_cohesion",
         "proximity_team_push",
         "proximity_trade_event",
         "proximity_vehicle_progress",
-        "proximity_weapon_accuracy",
+        # proximity_weapon_accuracy excluded: no round_number/round_start_unix/session_date columns
     ]
 
     async def _relink_null_round_ids(self) -> None:
