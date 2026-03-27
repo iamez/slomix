@@ -5,7 +5,7 @@ Uses proximity_kill_outcome to find head-to-head pairs and classify them:
 - NEMESIS: opponent who kills you >70% of encounters
 - PREY: opponent you kill >70% of encounters
 - RIVAL: balanced matchup (40-60% win rate)
-- INSUFFICIENT_DATA: fewer than 15 total encounters
+- INSUFFICIENT_DATA: fewer than 5 total encounters
 """
 
 import re
@@ -14,7 +14,7 @@ from website.backend.logging_config import get_app_logger
 
 logger = get_app_logger("rivalries")
 
-MIN_ENCOUNTERS = 15
+MIN_ENCOUNTERS = 5
 
 # ET:Legacy kill_mod → weapon name mapping
 KILL_MOD_NAMES = {
@@ -138,6 +138,8 @@ class RivalriesService:
             pairs.append({
                 "opponent_guid": guid,
                 "opponent_name": data["name"],
+                "guid": guid,
+                "name": data["name"],
                 "kills_by_player": data["kills_by_player"],
                 "kills_on_player": data["kills_on_player"],
                 "total_encounters": total,
@@ -282,8 +284,8 @@ class RivalriesService:
             SELECT
                 a.killer_guid as guid1,
                 a.victim_guid as guid2,
-                MAX(a.killer_name) as name1,
-                MAX(a.victim_name) as name2,
+                a.killer_name as name1,
+                a.victim_name as name2,
                 a.kills as kills_1to2,
                 COALESCE(b.kills, 0) as kills_2to1
             FROM (
