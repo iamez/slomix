@@ -590,11 +590,15 @@ class StorytellingService:
             for r in (rows or [])
         ]
 
-        # Enrich with server-side archetypes
+        # Enrich with server-side archetypes and PCS metrics
         if kis_entries:
-            archetypes = await self.classify_players(sd, kis_entries)
+            archetypes, player_stats = await self.classify_players(sd, kis_entries)
             for entry in kis_entries:
                 entry["archetype"] = archetypes.get(entry["guid"], "frontline_warrior")
+                ps = player_stats.get(entry["guid"], {})
+                entry["dpm"] = round(ps.get("dpm", 0), 1)
+                entry["denied_time"] = round(ps.get("denied_time", 0))
+                entry["time_dead_pct"] = round(ps.get("time_dead_pct", 0), 2)
 
         return kis_entries
 
@@ -602,14 +606,14 @@ class StorytellingService:
 
     async def classify_players(
         self, session_date: date, kis_entries: list[dict]
-    ) -> dict[str, str]:
+    ) -> tuple[dict[str, str], dict[str, dict]]:
         """Classify each player's archetype using all available data.
 
-        Returns {guid: archetype_string}.
+        Returns (archetypes: {guid: archetype_string}, stats_by_guid: {guid: stats_dict}).
         """
         guids = [e["guid"] for e in kis_entries]
         if not guids:
-            return {}
+            return {}, {}
 
         # Build a stats dict per player starting from KIS data
         stats_by_guid: dict[str, dict] = {}
@@ -628,6 +632,9 @@ class StorytellingService:
                 "carrier_returns": 0,
                 "trade_kills": 0,
                 "avg_kill_distance": 0.0,
+                "dpm": 0.0,
+                "denied_time": 0,
+                "time_dead_pct": 0.0,
             }
 
         # 1. PCS stats: kills, deaths, headshots, revives (PCS kills are authoritative)
@@ -637,7 +644,11 @@ class StorytellingService:
                    SUM(deaths) as deaths,
                    SUM(headshot_kills) as hs,
                    SUM(revives_given) as revives,
-                   SUM(objectives_returned) as obj_returned
+                   SUM(objectives_returned) as obj_returned,
+                   SUM(damage_given) as dmg,
+                   SUM(time_played_minutes) as time_played,
+                   SUM(denied_playtime) as denied_time,
+                   SUM(time_dead_minutes) as time_dead
             FROM player_comprehensive_stats
             WHERE round_date = $1
             GROUP BY player_guid
@@ -658,6 +669,13 @@ class StorytellingService:
                 s["headshot_pct"] = s["headshot_kills"] / pcs_kills if pcs_kills > 0 else 0.0
                 s["revives_given"] = int(r[4] or 0)
                 s["carrier_returns"] = int(r[5] or 0)
+                dmg = float(r[6] or 0)
+                time_played = float(r[7] or 0)
+                denied_time = float(r[8] or 0)
+                time_dead = float(r[9] or 0)
+                s["dpm"] = dmg / max(time_played, 1)
+                s["denied_time"] = denied_time
+                s["time_dead_pct"] = time_dead / max(time_played, 0.1)
 
         # 2. Trade kills from proximity_lua_trade_kill
         trade_rows = await self.db.fetch_all("""
@@ -699,17 +717,21 @@ class StorytellingService:
                 s.get("pcs_kills", s.get("kills", 0)) / max(s.get("deaths", 1), 1)
                 for s in all_stats
             ) / len(all_stats)
+            session_stats["avg_dpm"] = sum(s.get("dpm", 0) for s in all_stats) / len(all_stats)
+            session_stats["avg_denied"] = sum(s.get("denied_time", 0) for s in all_stats) / len(all_stats)
+            session_stats["avg_time_dead_pct"] = sum(s.get("time_dead_pct", 0) for s in all_stats) / len(all_stats)
 
         # Classify each player relative to session
         result = {}
         for guid, s in stats_by_guid.items():
             result[guid] = self._classify_archetype(s, session_stats)
-        return result
+        return result, stats_by_guid
 
     @staticmethod
     def _classify_archetype(stats: dict, session_stats: dict = None) -> str:
         """Priority-based archetype classification using relative thresholds.
-        session_stats: {avg_kills, avg_trades, avg_kd} for relative comparison."""
+        session_stats: {avg_kills, avg_trades, avg_kd, avg_dpm, avg_denied,
+                        avg_time_dead_pct} for relative comparison."""
         # Use PCS kills (authoritative) for KD, KIS kills for context scoring
         pcs_kills = stats.get("pcs_kills", stats.get("kills", 0))
         deaths = stats.get("deaths", 0)
@@ -721,6 +743,9 @@ class StorytellingService:
         push_kills = stats.get("push_kills", 0)
         hs_pct = stats.get("headshot_pct", 0)
         avg_distance = stats.get("avg_kill_distance", 0)
+        dpm = stats.get("dpm", 0)
+        denied_time = stats.get("denied_time", 0)
+        time_dead_pct = stats.get("time_dead_pct", 0)
         kd = pcs_kills / max(deaths, 1)
         kills = pcs_kills  # use authoritative count for thresholds
 
@@ -730,6 +755,9 @@ class StorytellingService:
         avg_trades = ss.get("avg_trades", trades)
         avg_revives = ss.get("avg_revives", revives)
         avg_kd = ss.get("avg_kd", kd)
+        avg_dpm = ss.get("avg_dpm", dpm)
+        avg_denied = ss.get("avg_denied", denied_time)
+        avg_tdp = ss.get("avg_time_dead_pct", time_dead_pct)
 
         # In competitive 3v3, everyone does everything. Archetypes must be
         # RELATIVE to the session — who stands out in what dimension.
@@ -737,8 +765,8 @@ class StorytellingService:
         # Objective player — carrier kills are rare and always significant
         if carrier_kills >= 3 or stats.get("carrier_returns", 0) >= 2:
             return "objective_specialist"
-        # Pressure engine — top fragger (most kills relative to session)
-        if kills >= avg_kills * 1.15 and kd >= avg_kd * 1.1:
+        # Pressure engine — top DPM + top kills (sustained aggression)
+        if dpm >= avg_dpm * 1.15 and kills >= avg_kills * 1.1:
             return "pressure_engine"
         # Medic anchor — SIGNIFICANTLY more revives than average (top reviver)
         if revives >= avg_revives * 1.4 and revives >= 20:
@@ -746,18 +774,24 @@ class StorytellingService:
         # Silent assassin — high precision, above average KD
         if hs_pct >= 0.22 and kd >= avg_kd * 1.1:
             return "silent_assassin"
-        # Chaos agent — dies way more than kills, but still active
-        if kd < avg_kd * 0.7 and kills >= avg_kills * 0.5:
+        # Chaos agent — high DPM but terrible KD (aggressive but reckless)
+        if dpm >= avg_dpm * 1.0 and kd < avg_kd * 0.7:
             return "chaos_agent"
+        # Wall breaker — high denied time (denies enemy spawns significantly)
+        if denied_time >= avg_denied * 1.3 and denied_time >= 100:
+            return "wall_breaker"
         # Trade master — significantly more trades than average
         if trades >= avg_trades * 1.3 and trades >= 10:
             return "trade_master"
-        # Survivor — best KD in the session
+        # Survivor — best KD + low time dead (stays alive, stays impactful)
+        if kd >= avg_kd * 1.3 and time_dead_pct <= avg_tdp * 0.8:
+            return "survivor"
+        # Fallback survivor — great KD even without low time_dead data
         if kd >= avg_kd * 1.3:
             return "survivor"
-        # Wall breaker — push/crossfire focused
+        # Push/crossfire focused
         if push_kills >= 8 or crossfire >= 5:
-            return "wall_breaker"
+            return "frontline_warrior"
         return "frontline_warrior"
 
     # ── Team Synergy Score ──────────────────────────────────────────
