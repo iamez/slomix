@@ -12,9 +12,40 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.2.0] — 2026-03-27: Deep RCA Audit, Proximity Pipeline Overhaul & Smart Analytics
+## [1.3.0] — 2026-03-27: Smart Storytelling Stats, Mandelbrot Audit & 45-Finding Resolution
 
-**Mandelbrot-depth root cause analysis across the entire stack — 26 fixes, proximity pipeline redesign, website overhaul, and smart storytelling architecture.**
+**Smart competitive narratives powered by contextual kill scoring, player archetypes, and team synergy — plus a full-stack Mandelbrot audit with 100% finding resolution.**
+
+*Multiple commits across 35+ files. 4 parallel Sonnet audit teams reviewed 32 changed files line-by-line.*
+
+#### Smart Storytelling Stats (Phase 1+2) — LIVE
+- **Kill Impact Score (KIS) engine**: Contextual kill scoring with 7 multipliers — carrier kills (3-5x), push kills (2x), crossfire assists (1.5x), spawn timing efficiency (1-2x), outcome weight (gib/revive/tap-out), class bonus (medic/engineer), distance factor
+- **Match Moments**: 5 detectors — kill streaks (3+ rapid kills), carrier interception chains (objective denial sequences), focus fire survival (surviving concentrated enemy fire), team push success (coordinated advances), trade kill chains (revenge kills within window)
+- **Player Archetypes**: 9 server-side types with full data access (KIS + stats + proximity + combat position) — Pressure Engine, Medic Anchor, Silent Assassin, Objective Demon, Trade Specialist, Support Fortress, Flanker, All-Rounder, Wildcard
+- **Team Synergy Score**: 5-axis per-faction comparison — crossfire rate, trade coverage, cohesion quality, push success rate, medic bonds
+- **Legacy `/#/story` page**: Cinematic hero section, player story cards with archetype badges, match moment timeline, KIS breakdown bars with multiplier visualization, team synergy radar panel
+- **Backend**: `storytelling_kill_impact` DB table, 4 API endpoints, storytelling service with full proximity/stats data pipeline
+
+#### Mandelbrot RCA Audit — 45 Findings, 45 Resolved
+- **Audit scope**: 4 parallel Sonnet teams reviewed all 32 changed files line-by-line across bot, website, proximity, and infrastructure
+- **Findings**: 2 CRITICAL, 11 HIGH, 16 MEDIUM, 16 LOW — all resolved across 3 fix commits
+- **CRITICAL**: Re-linker referenced non-existent columns (`proximity_revive`, `proximity_weapon_accuracy`); N+1 INSERT loop in storytelling import
+- **HIGH**: TOCTOU race condition in session processing (→ per-session `asyncio.Lock`); rate limiter blind to `X-Forwarded-For` behind proxy; leaderboard `round_number` filtering disabled; missing error propagation in 6 service methods
+- **MEDIUM/LOW**: 21 code quality improvements — unused imports, missing type hints, inconsistent error handling, docstring gaps
+
+#### Additional Post-Audit Fixes
+- **Re-linker column cleanup**: Removed `proximity_revive` + `proximity_weapon_accuracy` from re-linker table list (columns don't exist in schema)
+- **N+1 INSERT → executemany batch**: Storytelling kill impact inserts batched for performance
+- **TOCTOU race condition**: Per-session `asyncio.Lock` prevents concurrent processing of same session
+- **Rate limiter proxy awareness**: `X-Forwarded-For` header parsing for accurate client IP behind reverse proxy
+- **Leaderboard round filtering**: `round_number` filter parameter now functional in leaderboard queries
+- **21 LOW/INFO code quality improvements**: Resolved across bot, website, and proximity modules
+
+---
+
+## [1.2.0] — 2026-03-26: Deep RCA Audit, Proximity Pipeline Overhaul & Website Redesign
+
+**Mandelbrot-depth root cause analysis across the entire stack — 26 fixes, proximity pipeline redesign, and website overhaul.**
 
 *8 commits, 25+ files modified, ~800 lines changed. 17/21 tasks completed across 4 parallel agent teams.*
 
@@ -48,7 +79,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Import column compatibility**: Fixed re-linker column name compatibility with schema changes
 
 #### Research & Design
-- **Smart Storytelling Stats architecture**: Full design for KIS (Kill Impact Score), 8 Player Archetypes, Match Moments detection, Team Synergy Score, Momentum Charts
 - **ET:Legacy competitive mechanics reference**: Game mechanics documentation for analytics context
 - **Lua (0,0,0) position audit**: Audited all proximity data — 0 bad rows found (latent risk documented)
 - **Kill Outcomes verification**: 4,503 rows across 54 rounds confirmed healthy
