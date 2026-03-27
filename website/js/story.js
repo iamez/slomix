@@ -46,6 +46,7 @@ const ARCHETYPE_COLORS = {
     slate:   { bg: 'bg-slate-500/20',   border: 'border-slate-500/40',   text: 'text-slate-400' },
     teal:    { bg: 'bg-teal-500/20',    border: 'border-teal-500/40',    text: 'text-teal-400' },
     lime:    { bg: 'bg-lime-500/20',    border: 'border-lime-500/40',    text: 'text-lime-400' },
+    red:     { bg: 'bg-red-500/20',     border: 'border-red-500/40',     text: 'text-red-400' },
 };
 
 function getArchetype(player) {
@@ -341,11 +342,15 @@ function renderKISBreakdown(players) {
 }
 
 const MOMENT_TYPES = {
-    push_success:    { icon: '\u{1F6E1}\uFE0F', color: 'amber',   bg: 'bg-amber-500/15',   border: 'border-amber-500/30',   text: 'text-amber-400' },
-    trade_chain:     { icon: '\u26A1',           color: 'cyan',    bg: 'bg-cyan-500/15',    border: 'border-cyan-500/30',    text: 'text-cyan-400' },
-    kill_streak:     { icon: '\u{1F480}',        color: 'rose',    bg: 'bg-rose-500/15',    border: 'border-rose-500/30',    text: 'text-rose-400' },
-    focus_survival:  { icon: '\u{1F48E}',        color: 'purple',  bg: 'bg-purple-500/15',  border: 'border-purple-500/30',  text: 'text-purple-400' },
-    carrier_chain:   { icon: '\u{1F3AF}',        color: 'emerald', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', text: 'text-emerald-400' },
+    push_success:       { icon: '\u{1F6E1}\uFE0F', color: 'amber',   bg: 'bg-amber-500/15',   border: 'border-amber-500/30',   text: 'text-amber-400' },
+    trade_chain:        { icon: '\u26A1',           color: 'cyan',    bg: 'bg-cyan-500/15',    border: 'border-cyan-500/30',    text: 'text-cyan-400' },
+    kill_streak:        { icon: '\u{1F480}',        color: 'rose',    bg: 'bg-rose-500/15',    border: 'border-rose-500/30',    text: 'text-rose-400' },
+    focus_survival:     { icon: '\u{1F48E}',        color: 'purple',  bg: 'bg-purple-500/15',  border: 'border-purple-500/30',  text: 'text-purple-400' },
+    carrier_chain:      { icon: '\u{1F3AF}',        color: 'emerald', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', text: 'text-emerald-400' },
+    objective_secured:  { icon: '\u{1F3C6}',        color: 'yellow',  bg: 'bg-yellow-500/15',  border: 'border-yellow-500/30',  text: 'text-yellow-400' },
+    objective_denied:   { icon: '\u{1F6AB}',        color: 'red',     bg: 'bg-red-500/15',     border: 'border-red-500/30',     text: 'text-red-400' },
+    objective_run:      { icon: '\u{1F527}',        color: 'blue',    bg: 'bg-blue-500/15',    border: 'border-blue-500/30',    text: 'text-blue-400' },
+    multi_revive:       { icon: '\u{1F489}',        color: 'emerald', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', text: 'text-emerald-400' },
 };
 
 function renderMoments(data) {
@@ -360,11 +365,11 @@ function renderMoments(data) {
 
     container.innerHTML = moments.map((m, idx) => {
         const mt = MOMENT_TYPES[m.type] || MOMENT_TYPES.kill_streak;
-        const stars = '\u2605'.repeat(Math.min(Math.max(Math.round(m.impact || 0), 0), 5));
-        const safeName = escapeHtml(stripEtColors(m.player_name || ''));
+        const stars = '\u2605'.repeat(Math.min(Math.max(Math.round(m.impact_stars || m.impact || 0), 0), 5));
+        const safeName = escapeHtml(stripEtColors(m.player || m.player_name || ''));
         const safeNarrative = escapeHtml(m.narrative || '');
         const safeMap = escapeHtml(m.map_name || '');
-        const roundLabel = m.round_num ? `R${m.round_num}` : '';
+        const roundLabel = (m.round_number || m.round_num) ? `R${m.round_number || m.round_num}` : '';
         const delay = idx * 80;
 
         return `

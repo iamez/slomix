@@ -341,17 +341,21 @@ class StorytellingService:
     # ── Match Moments Detection ──
 
     async def detect_moments(self, session_date: Union[str, date], limit: int = 10) -> list:
-        """Detect highlight-reel moments for a session across 5 detectors."""
+        """Detect highlight-reel moments for a session across 9 detectors."""
         sd = _to_date(session_date)
         moments = []
 
-        # Run all 5 detectors
+        # Run all 9 detectors (5 original + 4 objective-based)
         detectors = [
             self._detect_kill_streaks,
             self._detect_carrier_chains,
             self._detect_focus_survivals,
             self._detect_push_successes,
             self._detect_trade_chains,
+            self._detect_objective_secured,
+            self._detect_objective_run_moments,
+            self._detect_objective_denied,
+            self._detect_multi_revive,
         ]
         for detector in detectors:
             try:
@@ -387,7 +391,9 @@ class StorytellingService:
         return result[:limit]
 
     async def _detect_kill_streaks(self, sd: date) -> list:
-        """Detector A: Multi-kill streaks (3+ kills within 10s window)."""
+        """Detector A: Multi-kill streaks (3+ kills within 10s window).
+        Enhanced with objective proximity bonus: +1★ if streak overlaps with
+        carrier event, objective run, or team push in the same round."""
         rows = await self.db.fetch_all("""
             WITH windowed AS (
                 SELECT killer_guid, killer_name, kill_time, round_number, map_name,
@@ -407,6 +413,9 @@ class StorytellingService:
             ORDER BY streak DESC, kill_time
         """, (sd,))
 
+        # Pre-load objective event times for proximity bonus
+        obj_times = await self._load_objective_event_times(sd)
+
         # Group by (killer_guid, round_start_unix) and take best streak per player per round
         seen = {}
         for r in (rows or []):
@@ -421,6 +430,7 @@ class StorytellingService:
                     "kill_time": kill_time,
                     "round_number": round_number,
                     "map_name": map_name,
+                    "round_start_unix": round_start_unix,
                     "streak": streak,
                 }
 
@@ -428,18 +438,60 @@ class StorytellingService:
         for info in seen.values():
             streak = info["streak"]
             stars = min(5, streak - 1)  # 3-kill=2★, 4-kill=3★, 5-kill=4★, 6+=5★
+
+            # Objective proximity bonus: +1★ if streak happened near an objective event
+            near_obj = False
+            rkey = (info["round_start_unix"], info["round_number"])
+            kt = info["kill_time"] or 0
+            for evt_time in obj_times.get(rkey, []):
+                if abs(kt - evt_time) <= 15000:  # within 15s of objective event
+                    near_obj = True
+                    break
+            if near_obj:
+                stars = min(5, stars + 1)
+
             name = info["killer_name"]
+            suffix = " near objective!" if near_obj else ""
             moments.append({
                 "type": "kill_streak",
                 "round_number": info["round_number"],
                 "map_name": info["map_name"],
-                "time_ms": info["kill_time"] or 0,
+                "time_ms": kt,
                 "player": name,
-                "narrative": f"{name} went on a {streak}-kill streak in 10s",
+                "narrative": f"{name} went on a {streak}-kill streak in 10s{suffix}",
                 "impact_stars": stars,
-                "detail": {"streak_count": streak, "killer_guid": info["killer_guid"]},
+                "detail": {"streak_count": streak, "killer_guid": info["killer_guid"],
+                           "near_objective": near_obj},
             })
         return moments
+
+    async def _load_objective_event_times(self, sd: date) -> dict:
+        """Load all objective event timestamps indexed by (round_start_unix, round_number).
+        Combines carrier events, objective runs, and construction events."""
+        result: dict[tuple, list[int]] = {}
+
+        # Carrier pickups/drops/secures
+        rows = await self.db.fetch_all(
+            "SELECT round_start_unix, round_number, pickup_time FROM proximity_carrier_event "
+            "WHERE session_date = $1", (sd,))
+        for r in (rows or []):
+            result.setdefault((r[0], r[1]), []).append(r[2] or 0)
+
+        # Objective runs (plants, constructions, defuses)
+        rows = await self.db.fetch_all(
+            "SELECT round_start_unix, round_number, action_time FROM proximity_objective_run "
+            "WHERE session_date = $1", (sd,))
+        for r in (rows or []):
+            result.setdefault((r[0], r[1]), []).append(r[2] or 0)
+
+        # Construction events
+        rows = await self.db.fetch_all(
+            "SELECT round_start_unix, round_number, event_time FROM proximity_construction_event "
+            "WHERE session_date = $1", (sd,))
+        for r in (rows or []):
+            result.setdefault((r[0], r[1]), []).append(r[2] or 0)
+
+        return result
 
     async def _detect_carrier_chains(self, sd: date) -> list:
         """Detector B: Carrier kill → teammate returns within 10s."""
@@ -579,6 +631,233 @@ class StorytellingService:
                     "trader_guid": r[0], "victim_guid": r[2],
                     "target_guid": r[4], "delta_ms": int(r[6]),
                 },
+            })
+        return moments
+
+    # ── Objective-Based Moment Detectors (OW2/HLTV-inspired) ──
+
+    async def _detect_objective_secured(self, sd: date) -> list:
+        """Detector F: Carrier picks up objective and successfully secures it,
+        OR carrier kill → return chain (enhanced carrier_chain with pickup context)."""
+        rows = await self.db.fetch_all("""
+            SELECT carrier_guid, carrier_name, pickup_time, drop_time,
+                   duration_ms, outcome, carry_distance, map_name,
+                   round_number, efficiency
+            FROM proximity_carrier_event
+            WHERE session_date = $1 AND outcome = 'secured'
+            ORDER BY pickup_time
+        """, (sd,))
+
+        moments = []
+        for r in (rows or []):
+            name = _strip_et_colors(r[1] or r[0][:8])
+            duration_s = round((r[4] or 0) / 1000, 1)
+            distance = int(r[6] or 0)
+            efficiency = float(r[9] or 0)
+            # 5★ always — securing the objective is game-changing
+            stars = 5
+            eff_pct = f" ({efficiency:.0%} efficiency)" if efficiency > 0 else ""
+            moments.append({
+                "type": "objective_secured",
+                "round_number": r[8],
+                "map_name": r[7],
+                "time_ms": r[2] or 0,
+                "player": name,
+                "narrative": f"{name} carried the objective {distance}u in {duration_s}s and secured it{eff_pct}",
+                "impact_stars": stars,
+                "detail": {
+                    "carrier_guid": r[0], "duration_ms": r[4] or 0,
+                    "carry_distance": distance, "efficiency": efficiency,
+                },
+            })
+        return moments
+
+    async def _detect_objective_run_moments(self, sd: date) -> list:
+        """Detector G: Engineer completes objective action under fire (enemies_nearby >= 2)
+        or any successful dynamite plant / construction in contested area."""
+        rows = await self.db.fetch_all("""
+            SELECT engineer_guid, engineer_name, action_type, track_name,
+                   enemies_nearby, nearby_teammates, map_name, round_number,
+                   action_time, approach_distance, self_kills, team_kills
+            FROM proximity_objective_run
+            WHERE session_date = $1
+                AND action_type IN ('dynamite_plant', 'construction_complete', 'objective_destroyed')
+                AND enemies_nearby >= 2
+            ORDER BY enemies_nearby DESC, action_time
+            LIMIT 10
+        """, (sd,))
+
+        moments = []
+        for r in (rows or []):
+            name = _strip_et_colors(r[1] or r[0][:8])
+            action = r[2] or 'objective'
+            track = r[3] or 'the objective'
+            enemies = int(r[4] or 0)
+            teammates = int(r[5] or 0)
+            self_kills = int(r[10] or 0)
+            team_kills = int(r[11] or 0)
+
+            # 4★ base for contested objective, 5★ if solo (no teammates) or many enemies
+            if enemies >= 3 or (enemies >= 2 and teammates == 0):
+                stars = 5
+            else:
+                stars = 4
+
+            action_label = {
+                'dynamite_plant': 'planted dynamite on',
+                'construction_complete': 'built',
+                'objective_destroyed': 'destroyed',
+            }.get(action, 'completed')
+
+            combat_ctx = f" with {enemies} enemies nearby"
+            if self_kills > 0:
+                combat_ctx += f", getting {self_kills} kill{'s' if self_kills > 1 else ''}"
+
+            moments.append({
+                "type": "objective_run",
+                "round_number": r[7],
+                "map_name": r[6],
+                "time_ms": r[8] or 0,
+                "player": name,
+                "narrative": f"{name} {action_label} {track}{combat_ctx}",
+                "impact_stars": stars,
+                "detail": {
+                    "engineer_guid": r[0], "action_type": action,
+                    "track_name": track, "enemies_nearby": enemies,
+                    "nearby_teammates": teammates, "self_kills": self_kills,
+                },
+            })
+        return moments
+
+    async def _detect_objective_denied(self, sd: date) -> list:
+        """Detector H: Player kills carrier before extraction, or defuses dynamite,
+        or kills engineer during construction."""
+        moments = []
+
+        # H1: Carrier killed before extraction (outcome = 'killed')
+        carrier_rows = await self.db.fetch_all("""
+            SELECT ce.carrier_guid, ce.carrier_name, ce.killer_guid, ce.killer_name,
+                   ce.carry_distance, ce.duration_ms, ce.map_name, ce.round_number,
+                   ce.pickup_time
+            FROM proximity_carrier_event ce
+            WHERE ce.session_date = $1 AND ce.outcome = 'killed'
+                AND ce.killer_guid IS NOT NULL AND ce.killer_guid != ''
+            ORDER BY ce.carry_distance DESC
+            LIMIT 10
+        """, (sd,))
+
+        for r in (carrier_rows or []):
+            carrier_name = _strip_et_colors(r[1] or r[0][:8])
+            killer_name = _strip_et_colors(r[3] or r[2][:8])
+            distance = int(r[4] or 0)
+            duration_s = round((r[5] or 0) / 1000, 1)
+            # 4★ base, 5★ if carrier had traveled far (close to scoring)
+            stars = 5 if distance >= 500 else 4
+            moments.append({
+                "type": "objective_denied",
+                "round_number": r[7],
+                "map_name": r[6],
+                "time_ms": r[8] or 0,
+                "player": killer_name,
+                "narrative": f"{killer_name} killed carrier {carrier_name} after {distance}u carry ({duration_s}s)",
+                "impact_stars": stars,
+                "detail": {
+                    "killer_guid": r[2], "carrier_guid": r[0],
+                    "carry_distance": distance, "duration_ms": r[5] or 0,
+                    "sub_type": "carrier_denied",
+                },
+            })
+
+        # H2: Dynamite defused (enemy planted, defender defused)
+        defuse_rows = await self.db.fetch_all("""
+            SELECT engineer_guid, engineer_name, track_name, map_name,
+                   round_number, action_time, enemies_nearby
+            FROM proximity_objective_run
+            WHERE session_date = $1 AND action_type = 'dynamite_defuse'
+            ORDER BY action_time
+            LIMIT 10
+        """, (sd,))
+
+        for r in (defuse_rows or []):
+            name = _strip_et_colors(r[1] or r[0][:8])
+            track = r[2] or 'the dynamite'
+            enemies = int(r[6] or 0)
+            stars = 5 if enemies >= 2 else 4
+            suffix = f" under fire ({enemies} enemies)" if enemies >= 1 else ""
+            moments.append({
+                "type": "objective_denied",
+                "round_number": r[4],
+                "map_name": r[3],
+                "time_ms": r[5] or 0,
+                "player": name,
+                "narrative": f"{name} defused dynamite at {track}{suffix}",
+                "impact_stars": stars,
+                "detail": {
+                    "engineer_guid": r[0], "track_name": track,
+                    "enemies_nearby": enemies, "sub_type": "dynamite_defuse",
+                },
+            })
+
+        return moments
+
+    async def _detect_multi_revive(self, sd: date) -> list:
+        """Detector I: Medic revives 3+ teammates within a 15s window.
+        Inspired by Overwatch's mass-rez moments — in high-TTK games like ET,
+        rapid revives swing fights dramatically."""
+        rows = await self.db.fetch_all("""
+            WITH revives AS (
+                SELECT reviver_guid, reviver_name, outcome_time,
+                       round_number, map_name, round_start_unix,
+                       COUNT(*) OVER (
+                           PARTITION BY reviver_guid, round_start_unix
+                           ORDER BY outcome_time
+                           RANGE BETWEEN 15000 PRECEDING AND CURRENT ROW
+                       ) AS revive_burst
+                FROM proximity_kill_outcome
+                WHERE session_date = $1
+                    AND outcome = 'revived'
+                    AND reviver_guid IS NOT NULL
+                    AND reviver_guid != ''
+            )
+            SELECT reviver_guid, reviver_name, outcome_time, round_number,
+                   map_name, round_start_unix, revive_burst
+            FROM revives
+            WHERE revive_burst >= 3
+            ORDER BY revive_burst DESC, outcome_time
+        """, (sd,))
+
+        # Group by (reviver_guid, round_start_unix) and take best burst per medic per round
+        seen = {}
+        for r in (rows or []):
+            reviver_guid, reviver_name, outcome_time, round_number, map_name, round_start_unix, burst = (
+                r[0], r[1], r[2], r[3], r[4], r[5], int(r[6])
+            )
+            key = (reviver_guid, round_start_unix)
+            if key not in seen or burst > seen[key]["burst"]:
+                seen[key] = {
+                    "reviver_guid": reviver_guid,
+                    "reviver_name": _strip_et_colors(reviver_name or reviver_guid[:8]),
+                    "outcome_time": outcome_time,
+                    "round_number": round_number,
+                    "map_name": map_name,
+                    "burst": burst,
+                }
+
+        moments = []
+        for info in seen.values():
+            burst = info["burst"]
+            # 4★ for 3 revives, 5★ for 4+
+            stars = 5 if burst >= 4 else 4
+            name = info["reviver_name"]
+            moments.append({
+                "type": "multi_revive",
+                "round_number": info["round_number"],
+                "map_name": info["map_name"],
+                "time_ms": info["outcome_time"] or 0,
+                "player": name,
+                "narrative": f"{name} revived {burst} teammates in 15s — team rez!",
+                "impact_stars": stars,
+                "detail": {"reviver_guid": info["reviver_guid"], "revive_count": burst},
             })
         return moments
 
