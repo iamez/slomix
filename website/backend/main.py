@@ -13,6 +13,10 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from website.backend.rate_limit import limiter
+
 try:
     from prometheus_fastapi_instrumentator import Instrumentator
 except ImportError:  # pragma: no cover - optional dependency fallback
@@ -158,6 +162,9 @@ app = FastAPI(
     description="ET:Legacy Stats Website API",
     version="1.0.0",
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS Middleware - must be added before other middleware
 app.add_middleware(

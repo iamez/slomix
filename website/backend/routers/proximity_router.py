@@ -6,10 +6,11 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from collections import defaultdict
 from itertools import combinations
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
+from website.backend.rate_limit import limiter
 
 router = APIRouter()
 logger = get_app_logger("api.proximity")
@@ -595,7 +596,9 @@ async def _timed_section(name: str, coro):
 
 
 @router.get("/proximity/dashboard")
+@limiter.limit("10/minute")
 async def get_proximity_dashboard(
+    request: Request,
     sections: str = "all",
     range_days: int = 30,
     session_date: Optional[str] = None,
@@ -3342,7 +3345,9 @@ async def get_proximity_session_scores(
 
 
 @router.get("/proximity/leaderboards")
+@limiter.limit("10/minute")
 async def get_proximity_leaderboards(
+    request: Request,
     category: str = "power",
     range_days: int = 30,
     limit: int = 10,
@@ -4453,7 +4458,9 @@ async def get_proximity_movement_stats(
 # ===== PROXIMITY COMPOSITE SCORES (v5.2) =======================================
 
 @router.get("/proximity/prox-scores")
+@limiter.limit("15/minute")
 async def get_prox_scores(
+    request: Request,
     range_days: int = 30,
     player_guid: Optional[str] = None,
     limit: int = 50,

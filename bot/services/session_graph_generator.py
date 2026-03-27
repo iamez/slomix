@@ -519,23 +519,23 @@ class SessionGraphGenerator:
             names = [(p[0] or p[16] or f"Player_{i}") for i, p in enumerate(top_players)]
             display_names = [str(n)[:12] for n in names]
             player_guids = [p[16] or "" for p in top_players]
-            kills = [p[1] or 0 for p in top_players]
-            deaths = [p[2] or 0 for p in top_players]
-            damage_given = [p[3] or 0 for p in top_players]
-            damage_received = [p[4] or 0 for p in top_players]
-            dpm = [p[5] or 0 for p in top_players]
-            time_played_sec = [p[6] or 0 for p in top_players]
+            kills = [float(p[1] or 0) for p in top_players]
+            deaths = [float(p[2] or 0) for p in top_players]
+            damage_given = [float(p[3] or 0) for p in top_players]
+            damage_received = [float(p[4] or 0) for p in top_players]
+            dpm = [float(p[5] or 0) for p in top_players]
+            time_played_sec = [float(p[6] or 0) for p in top_players]
             time_played = [t / 60 for t in time_played_sec]
-            time_dead_old_minutes = [p[7] or 0 for p in top_players]
-            revives_given = [p[8] or 0 for p in top_players]
-            times_revived = [p[9] or 0 for p in top_players]
-            gibs = [p[10] or 0 for p in top_players]
-            headshots = [p[11] or 0 for p in top_players]
-            denied_playtime_old_sec = [p[12] or 0 for p in top_players]
-            useful_kills = [p[13] or 0 for p in top_players]
-            self_kills = [p[14] or 0 for p in top_players]
-            full_selfkills = [p[15] or 0 for p in top_players]
-            rounds_played = [p[17] or 1 for p in top_players]
+            time_dead_old_minutes = [float(p[7] or 0) for p in top_players]
+            revives_given = [float(p[8] or 0) for p in top_players]
+            times_revived = [float(p[9] or 0) for p in top_players]
+            gibs = [float(p[10] or 0) for p in top_players]
+            headshots = [float(p[11] or 0) for p in top_players]
+            denied_playtime_old_sec = [float(p[12] or 0) for p in top_players]
+            useful_kills = [float(p[13] or 0) for p in top_players]
+            self_kills = [float(p[14] or 0) for p in top_players]
+            full_selfkills = [float(p[15] or 0) for p in top_players]
+            rounds_played = [float(p[17] or 1) for p in top_players]
 
             # Shadow timing payload for dual-mode graphs
             dual_shadow_note = ""
@@ -1195,8 +1195,8 @@ class SessionGraphGenerator:
                     continue
 
                 round_id = row[9]
-                dmg = row[4] or 0
-                time_sec = row[5] or 0
+                dmg = float(row[4] or 0)
+                time_sec = float(row[5] or 0)
 
                 if time_sec > 0:
                     dpm = (dmg / time_sec) * 60
