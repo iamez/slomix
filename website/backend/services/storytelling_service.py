@@ -52,12 +52,18 @@ SYNERGY_WEIGHTS = {
 COHESION_MAX_DISPERSION = 1500      # Game units; above this = 0 cohesion
 
 
-def _to_date(val: Union[str, date]) -> str:
-    """Normalize to YYYY-MM-DD string (session_date/round_date are TEXT columns)."""
+def _to_date(val: Union[str, date]) -> date:
+    """Normalize to datetime.date for asyncpg DATE params (proximity tables use DATE type)."""
+    if isinstance(val, date):
+        return val
+    return datetime.strptime(val, "%Y-%m-%d").date()
+
+
+def _to_date_str(val: Union[str, date]) -> str:
+    """Normalize to YYYY-MM-DD string for TEXT columns (player_comprehensive_stats.round_date)."""
     if isinstance(val, date):
         return val.isoformat()
-    # Validate format
-    datetime.strptime(val, "%Y-%m-%d")
+    datetime.strptime(val, "%Y-%m-%d")  # validate
     return val
 
 
@@ -621,9 +627,9 @@ class StorytellingService:
                    SUM(revives_given) as revives,
                    SUM(objectives_returned) as obj_returned
             FROM player_comprehensive_stats
-            WHERE session_date = $1
+            WHERE round_date = $1
             GROUP BY player_guid
-        """, (session_date,))
+        """, (_to_date_str(session_date),))
         for r in (pcs_rows or []):
             guid = r[0]
             if guid in stats_by_guid:
@@ -753,7 +759,7 @@ class StorytellingService:
             "SELECT player_guid, round_number, team "
             "FROM player_comprehensive_stats "
             "WHERE round_date = $1 AND team IN (1, 2)",
-            (sd,))
+            (_to_date_str(sd),))
         result = {}
         for r in (rows or []):
             result[(r[0], r[1])] = 'AXIS' if r[2] == 1 else 'ALLIES'
