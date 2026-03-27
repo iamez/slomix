@@ -118,7 +118,13 @@ async function loadStoryData() {
         renderPlayerCards(storyState.players);
         renderKISBreakdown(storyState.players);
 
-        // Fetch team synergy in parallel (non-blocking)
+        // Fetch moments + team synergy in parallel (non-blocking)
+        fetchJSON(
+            `${API_BASE}/storytelling/moments?session_date=${encodeURIComponent(storyState.sessionDate)}&limit=10`
+        ).then(momData => {
+            if (loadId === storyLoadId) renderMoments(momData);
+        }).catch(() => renderMoments(null));
+
         fetchJSON(
             `${API_BASE}/storytelling/synergy?session_date=${encodeURIComponent(storyState.sessionDate)}`
         ).then(synData => {
@@ -142,6 +148,8 @@ function renderLoading() {
         if (subtitle) subtitle.textContent = '';
         if (statsRow) statsRow.innerHTML = '';
     }
+    const moments = document.getElementById('story-moments');
+    if (moments) moments.innerHTML = '';
     const players = document.getElementById('story-players');
     if (players) players.innerHTML = '<div class="col-span-full text-center text-slate-500 py-12">Loading kill impact data...</div>';
     const breakdown = document.getElementById('story-kis-breakdown');
@@ -165,6 +173,8 @@ function renderEmpty(message) {
             <div class="text-slate-400 text-sm">${escapeHtml(message)}</div>
         </div>`;
     }
+    const moments2 = document.getElementById('story-moments');
+    if (moments2) moments2.innerHTML = '';
     const breakdown = document.getElementById('story-kis-breakdown');
     if (breakdown) breakdown.innerHTML = '';
     const synergy2 = document.getElementById('story-team-synergy');
@@ -328,6 +338,50 @@ function renderKISBreakdown(players) {
         <div class="flex gap-4 mb-4">${legend}</div>
         ${bars}
     `;
+}
+
+const MOMENT_TYPES = {
+    push_success:    { icon: '\u{1F6E1}\uFE0F', color: 'amber',   bg: 'bg-amber-500/15',   border: 'border-amber-500/30',   text: 'text-amber-400' },
+    trade_chain:     { icon: '\u26A1',           color: 'cyan',    bg: 'bg-cyan-500/15',    border: 'border-cyan-500/30',    text: 'text-cyan-400' },
+    kill_streak:     { icon: '\u{1F480}',        color: 'rose',    bg: 'bg-rose-500/15',    border: 'border-rose-500/30',    text: 'text-rose-400' },
+    focus_survival:  { icon: '\u{1F48E}',        color: 'purple',  bg: 'bg-purple-500/15',  border: 'border-purple-500/30',  text: 'text-purple-400' },
+    carrier_chain:   { icon: '\u{1F3AF}',        color: 'emerald', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', text: 'text-emerald-400' },
+};
+
+function renderMoments(data) {
+    const container = document.getElementById('story-moments');
+    if (!container) return;
+
+    const moments = Array.isArray(data?.moments) ? data.moments : [];
+    if (moments.length === 0) {
+        container.innerHTML = '<div class="text-slate-500 text-sm py-4">No key moments for this session</div>';
+        return;
+    }
+
+    container.innerHTML = moments.map((m, idx) => {
+        const mt = MOMENT_TYPES[m.type] || MOMENT_TYPES.kill_streak;
+        const stars = '\u2605'.repeat(Math.min(Math.max(Math.round(m.impact || 0), 0), 5));
+        const safeName = escapeHtml(stripEtColors(m.player_name || ''));
+        const safeNarrative = escapeHtml(m.narrative || '');
+        const safeMap = escapeHtml(m.map_name || '');
+        const roundLabel = m.round_num ? `R${m.round_num}` : '';
+        const delay = idx * 80;
+
+        return `
+        <div class="flex-shrink-0 w-56 rounded-xl border ${mt.border} ${mt.bg} p-4 opacity-0 translate-y-3"
+             style="animation: momentFadeUp 0.4s ease-out ${delay}ms forwards">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-lg">${mt.icon}</span>
+                <span class="text-amber-400 text-xs tracking-wider">${stars}</span>
+            </div>
+            <div class="text-xs font-bold text-white mb-1 truncate" title="${safeName}">${safeName}</div>
+            <div class="text-[11px] text-slate-300 mb-2 line-clamp-2 leading-relaxed">${safeNarrative}</div>
+            <div class="flex items-center gap-2 text-[10px] text-slate-500">
+                ${roundLabel ? `<span>${escapeHtml(roundLabel)}</span>` : ''}
+                ${safeMap ? `<span class="truncate">${safeMap}</span>` : ''}
+            </div>
+        </div>`;
+    }).join('');
 }
 
 const SYNERGY_AXES = [

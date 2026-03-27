@@ -362,9 +362,29 @@ class StorytellingService:
                 logger.error("Moment detector %s failed: %s\n%s",
                              detector.__name__, e, traceback.format_exc())
 
-        # Sort by impact_stars desc, then by time
-        moments.sort(key=lambda m: (-m["impact_stars"], m.get("time_ms", 0)))
-        return moments[:limit]
+        # Ensure type diversity: reserve one slot per type, fill remainder by stars
+        by_type: dict[str, list] = {}
+        for m in moments:
+            by_type.setdefault(m["type"], []).append(m)
+        for bucket in by_type.values():
+            bucket.sort(key=lambda m: (-m["impact_stars"], m.get("time_ms", 0)))
+
+        # Pick the best moment from each type first
+        result = []
+        seen_ids = set()
+        for t, bucket in by_type.items():
+            if bucket:
+                best = bucket[0]
+                result.append(best)
+                seen_ids.add(id(best))
+
+        # Fill remaining slots from all moments by stars
+        remaining = [m for m in moments if id(m) not in seen_ids]
+        remaining.sort(key=lambda m: (-m["impact_stars"], m.get("time_ms", 0)))
+        result.extend(remaining[:max(0, limit - len(result))])
+
+        result.sort(key=lambda m: (-m["impact_stars"], m.get("time_ms", 0)))
+        return result[:limit]
 
     async def _detect_kill_streaks(self, sd: date) -> list:
         """Detector A: Multi-kill streaks (3+ kills within 10s window)."""
