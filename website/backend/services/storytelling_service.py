@@ -681,15 +681,24 @@ class StorytellingService:
             if guid in stats_by_guid:
                 stats_by_guid[guid]["avg_kill_distance"] = float(r[1] or 0)
 
-        # Classify each player
+        # Compute session averages for relative classification
+        all_stats = list(stats_by_guid.values())
+        session_stats = {}
+        if all_stats:
+            session_stats["avg_kills"] = sum(s.get("kills", 0) for s in all_stats) / len(all_stats)
+            session_stats["avg_trades"] = sum(s.get("trade_kills", 0) for s in all_stats) / len(all_stats)
+            session_stats["avg_kd"] = sum(s.get("kills", 0) / max(s.get("deaths", 1), 1) for s in all_stats) / len(all_stats)
+
+        # Classify each player relative to session
         result = {}
         for guid, s in stats_by_guid.items():
-            result[guid] = self._classify_archetype(s)
+            result[guid] = self._classify_archetype(s, session_stats)
         return result
 
     @staticmethod
-    def _classify_archetype(stats: dict) -> str:
-        """Priority-based archetype classification. First match wins."""
+    def _classify_archetype(stats: dict, session_stats: dict = None) -> str:
+        """Priority-based archetype classification using relative thresholds.
+        session_stats: {avg_kills, avg_trades, avg_kd} for relative comparison."""
         kills = stats.get("kills", 0)
         deaths = stats.get("deaths", 0)
         carrier_kills = stats.get("carrier_kills", 0)
@@ -702,21 +711,34 @@ class StorytellingService:
         avg_distance = stats.get("avg_kill_distance", 0)
         kd = kills / max(deaths, 1)
 
+        # Session averages for relative comparison
+        ss = session_stats or {}
+        avg_session_kills = ss.get("avg_kills", kills)
+        avg_session_trades = ss.get("avg_trades", trades)
+
+        # Objective player — carrier kills are rare and always significant
         if carrier_kills >= 3 or stats.get("carrier_returns", 0) >= 2:
             return "objective_specialist"
+        # Medic — high revives, low KD
         if revives >= 8 and kd < 1.5:
             return "medic_anchor"
+        # Sniper — long range, precise
         if avg_distance >= 600 and hs_pct >= 0.15 and kd >= 1.5:
             return "silent_assassin"
-        if avg_impact >= 4.5 and kills >= 15 and push_kills >= 5:
+        # Pressure engine — top fragger with highest kills + impact
+        if kills >= avg_session_kills * 1.15 and avg_impact >= 4.0 and push_kills >= 5:
             return "pressure_engine"
-        if trades >= 8:
-            return "trade_master"
-        if kills >= 10 and deaths >= 15 and avg_impact >= 3:
+        # Chaos agent — dies a lot but makes an impact
+        if deaths >= kills * 1.3 and kills >= 10 and avg_impact >= 3:
             return "chaos_agent"
-        if kd >= 2.0 and deaths <= 8:
+        # Survivor — rarely dies
+        if kd >= 2.0 and deaths <= kills * 0.6:
             return "survivor"
-        if push_kills >= 8 or crossfire >= 5:
+        # Trade master — significantly more trades than average
+        if trades >= avg_session_trades * 1.3 and trades >= 10:
+            return "trade_master"
+        # Wall breaker — push/crossfire focused
+        if push_kills >= kills * 0.6 or crossfire >= 5:
             return "wall_breaker"
         return "frontline_warrior"
 
