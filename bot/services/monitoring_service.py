@@ -201,6 +201,7 @@ class MonitoringService:
             row = await self.db.fetch_one(query, (table_name,))
             return bool(row)
         except Exception:
+            logger.warning("DB error checking table %s", table_name, exc_info=True)
             return False
 
     async def _index_exists(self, table_name: str, index_name: str) -> bool:
@@ -216,6 +217,7 @@ class MonitoringService:
             row = await self.db.fetch_one(query, (table_name, index_name))
             return bool(row)
         except Exception:
+            logger.warning("DB error checking index %s on %s", index_name, table_name, exc_info=True)
             return False
 
     async def _table_owner(self, table_name: str) -> Optional[str]:
@@ -229,6 +231,7 @@ class MonitoringService:
             row = await self.db.fetch_one(query, (table_name,))
             return str(row[0]) if row and row[0] else None
         except Exception:
+            logger.warning("DB error checking owner of table %s", table_name, exc_info=True)
             return None
 
     async def _current_db_user(self) -> Optional[str]:
@@ -239,6 +242,7 @@ class MonitoringService:
             if row and row[0]:
                 self._db_user = str(row[0])
         except Exception:
+            logger.warning("DB error fetching current_user", exc_info=True)
             return None
         return self._db_user
 

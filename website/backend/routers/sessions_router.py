@@ -509,7 +509,7 @@ async def get_sessions_list(
     try:
         rows = await db.fetch_all(query, (limit, offset))
     except Exception as e:
-        print(f"Error fetching sessions list: {e}")
+        logger.error(f"Error fetching sessions list: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     sessions = []
@@ -598,7 +598,7 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
                     }
                 )
         except Exception as e:
-            print(f"Error fetching session leaderboard: {e}")
+            logger.error(f"Error fetching session leaderboard: {e}")
 
     # Scoring + team rosters
     scoring_service = StopwatchScoringService(db)
@@ -729,7 +729,7 @@ async def get_session_graph_stats(
     try:
         rows = await db.fetch_all(query, params)
     except Exception as e:
-        print(f"Error fetching session graph stats: {e}")
+        logger.error(f"Error fetching session graph stats: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if not rows:

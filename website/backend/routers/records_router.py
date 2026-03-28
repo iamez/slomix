@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from bot.core.season_manager import SeasonManager
+from bot.core.utils import escape_like_pattern
 from website.backend.logging_config import get_app_logger
 from website.backend.routers.api_helpers import (
     normalize_weapon_key as _normalize_weapon_key,
@@ -611,14 +612,14 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
         try:
             return await db.fetch_val(query, params)
         except Exception as e:
-            print(f"[season_summary] query failed: {e}")
+            logger.error(f"[season_summary] query failed: {e}")
             return default
 
     async def safe_one(query: str, params: Optional[tuple] = None):
         try:
             return await db.fetch_one(query, params)
         except Exception as e:
-            print(f"[season_summary] query failed: {e}")
+            logger.error(f"[season_summary] query failed: {e}")
             return None
 
     round_status_clause = "AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)"
@@ -693,7 +694,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             (start_str, end_str),
         )
     except Exception as e:
-        print(f"[season_summary] round_status filter failed, retrying fallback: {e}")
+        logger.warning(f"[season_summary] round_status filter failed, retrying fallback: {e}")
 
         rounds_count = await safe_val(
             """
@@ -1079,7 +1080,7 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
 
         return maps
     except Exception as e:
-        print(f"Error fetching map stats: {e}")
+        logger.error(f"Error fetching map stats: {e}")
         return []
 
 
@@ -1135,7 +1136,7 @@ async def get_weapon_stats(
     try:
         rows = await db.fetch_all(query, tuple(params))
     except Exception as e:
-        print(f"Error fetching weapon stats: {e}")
+        logger.error(f"Error fetching weapon stats: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if not rows:
@@ -1239,7 +1240,7 @@ async def get_weapon_hall_of_fame(
     try:
         rows = await db.fetch_all(query, tuple(params))
     except Exception as e:
-        print(f"Error fetching weapon hall of fame: {e}")
+        logger.error(f"Error fetching weapon hall of fame: {e}")
         return {"period": period, "leaders": {}}
 
     leaders = {}
@@ -1339,7 +1340,7 @@ async def get_weapon_stats_by_player(
     try:
         rows = await db.fetch_all(query, tuple(params))
     except Exception as e:
-        print(f"Error fetching weapon stats by player: {e}")
+        logger.error(f"Error fetching weapon stats by player: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     players: Dict[str, Dict[str, Any]] = {}
@@ -1483,7 +1484,7 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
     try:
         rows = await db.fetch_all(query, (round_date, map_name, round_number))
     except Exception as e:
-        print(f"Error fetching match details: {e}")
+        logger.error(f"Error fetching match details: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if not rows:
@@ -1657,7 +1658,7 @@ async def get_records(
                     for row in rows
                 ]
         except Exception as e:
-            print(f"Error fetching record for {key}: {e}")
+            logger.error(f"Error fetching record for {key}: {e}")
             results[key] = []
 
     return results
@@ -2297,7 +2298,7 @@ async def list_awards(
             param_idx += 1
         else:
             where_clauses.append(f"ra.player_name ILIKE ${param_idx}")
-            params.append(f"%{player}%")
+            params.append(f"%{escape_like_pattern(player)}%")
             param_idx += 1
 
     if award_type:

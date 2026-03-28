@@ -20,7 +20,25 @@ from website.backend.logging_config import get_app_logger
 logger = get_app_logger("storytelling")
 
 # Per-session locks to prevent concurrent TOCTOU races on lazy compute
-_compute_locks: dict[str, asyncio.Lock] = {}
+class _BoundedLockDict:
+    """Bounded dict of asyncio.Lock — evicts oldest when full."""
+    def __init__(self, maxsize: int = 64):
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._order: list[str] = []
+        self._maxsize = maxsize
+
+    def get(self, key: str) -> asyncio.Lock:
+        if key in self._locks:
+            return self._locks[key]
+        if len(self._locks) >= self._maxsize:
+            oldest = self._order.pop(0)
+            self._locks.pop(oldest, None)
+        lock = asyncio.Lock()
+        self._locks[key] = lock
+        self._order.append(key)
+        return lock
+
+_compute_locks = _BoundedLockDict()
 
 # Competitive ET:Legacy multipliers (calibrated for pro play)
 CARRIER_KILL_MULTIPLIER = 3.0       # Killed flag/doc carrier
@@ -117,10 +135,7 @@ class StorytellingService:
         """Compute KIS for all kills in a session. Returns summary stats."""
         sd = _to_date(session_date)
         lock_key = str(sd)
-        if lock_key not in _compute_locks:
-            _compute_locks[lock_key] = asyncio.Lock()
-
-        async with _compute_locks[lock_key]:
+        async with _compute_locks.get(lock_key):
             return await self._compute_session_kis_locked(sd, force)
 
     async def _compute_session_kis_locked(self, sd: date, force: bool) -> dict:
