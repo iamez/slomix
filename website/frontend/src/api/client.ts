@@ -425,7 +425,7 @@ export const api = {
     const params = new URLSearchParams({ range_days: String(rangeDays) });
     if (sessionDate) params.set('session_date', sessionDate);
     return get<import('./types').SkillHistoryResponse>(
-      `/skill/player/${encodeURIComponent(identifier)}/history?${params}`
+      `/skill/player/${encodeURIComponent(identifier)}/history?${params.toString()}`
     );
   },
 

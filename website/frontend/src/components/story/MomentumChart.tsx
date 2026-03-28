@@ -14,7 +14,7 @@ export function MomentumChart({ rounds }: Props) {
   const [activeRound, setActiveRound] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const round = rounds[activeRound];
+  const round = activeRound >= 0 && activeRound < rounds.length ? rounds[activeRound] : undefined;
   const points = round?.points ?? [];
 
   useEffect(() => {
@@ -146,7 +146,7 @@ export function MomentumChart({ rounds }: Props) {
           {rounds.map((r, i) => (
             <button
               key={`${r.round_number}-${i}`}
-              onClick={() => setActiveRound(i)}
+              onClick={() => { setActiveRound(i); }}
               className={`flex-shrink-0 px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                 i === activeRound
                   ? 'bg-white/10 text-white border border-white/20'

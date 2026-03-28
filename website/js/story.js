@@ -4,11 +4,22 @@
  * @module story
  */
 
-import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js';
+import { API_BASE, fetchJSON, formatNumber } from './utils.js';
 
 function stripEtColors(text) {
     if (!text) return '';
     return String(text).replace(/\^[0-9A-Za-z]/g, '');
+}
+
+/** Safe DOM element factory. Strings become text nodes; null/undefined children are skipped. */
+function _el(tag, className, ...children) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    for (const c of children) {
+        if (c == null) continue;
+        el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    }
+    return el;
 }
 
 let storyLoadId = 0;
@@ -79,13 +90,16 @@ function renderSessionSelector() {
     const select = document.getElementById('story-session-select');
     if (!select) return;
 
-    select.innerHTML = storyState.sessions.map(s => {
+    select.textContent = '';
+    storyState.sessions.forEach(s => {
         const d = s.session_date;
         const count = s.maps?.length || 0;
-        const label = `${escapeHtml(d)} (${count} map${count !== 1 ? 's' : ''})`;
-        const selected = d === storyState.sessionDate ? ' selected' : '';
-        return `<option value="${escapeHtml(d)}"${selected}>${label}</option>`;
-    }).join('');
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = `${d} (${count} map${count !== 1 ? 's' : ''})`;
+        if (d === storyState.sessionDate) opt.selected = true;
+        select.appendChild(opt);
+    });
 
     select.onchange = () => {
         storyState.sessionDate = select.value;
@@ -146,25 +160,26 @@ async function loadStoryData() {
 }
 
 function renderLoading() {
-    const hero = document.getElementById('story-hero-content');
-    if (hero) {
-        const title = document.getElementById('story-title');
-        const subtitle = document.getElementById('story-subtitle');
-        const statsRow = document.getElementById('story-stats-row');
-        if (title) title.textContent = 'Loading...';
-        if (subtitle) subtitle.textContent = '';
-        if (statsRow) statsRow.innerHTML = '';
-    }
+    const title = document.getElementById('story-title');
+    const subtitle = document.getElementById('story-subtitle');
+    const statsRow = document.getElementById('story-stats-row');
+    if (title) title.textContent = 'Loading...';
+    if (subtitle) subtitle.textContent = '';
+    if (statsRow) statsRow.textContent = '';
+
     const moments = document.getElementById('story-moments');
-    if (moments) moments.innerHTML = '';
+    if (moments) moments.textContent = '';
     const players = document.getElementById('story-players');
-    if (players) players.innerHTML = '<div class="col-span-full text-center text-slate-500 py-12">Loading kill impact data...</div>';
+    if (players) {
+        players.textContent = '';
+        players.appendChild(_el('div', 'col-span-full text-center text-slate-500 py-12', 'Loading kill impact data...'));
+    }
     const breakdown = document.getElementById('story-kis-breakdown');
-    if (breakdown) breakdown.innerHTML = '';
+    if (breakdown) breakdown.textContent = '';
     const synergy = document.getElementById('story-team-synergy');
-    if (synergy) synergy.innerHTML = '';
+    if (synergy) synergy.textContent = '';
     const pwc = document.getElementById('story-win-contribution');
-    if (pwc) pwc.innerHTML = '';
+    if (pwc) pwc.textContent = '';
 }
 
 function renderEmpty(message) {
@@ -173,23 +188,20 @@ function renderEmpty(message) {
     const statsRow = document.getElementById('story-stats-row');
     if (title) title.textContent = 'Smart Stats';
     if (subtitle) subtitle.textContent = message;
-    if (statsRow) statsRow.innerHTML = '';
+    if (statsRow) statsRow.textContent = '';
 
     const players = document.getElementById('story-players');
     if (players) {
-        players.innerHTML = `<div class="col-span-full text-center py-16">
-            <div class="text-slate-600 text-4xl mb-3">\u{1F4CA}</div>
-            <div class="text-slate-400 text-sm">${escapeHtml(message)}</div>
-        </div>`;
+        players.textContent = '';
+        players.appendChild(_el('div', 'col-span-full text-center py-16',
+            _el('div', 'text-slate-600 text-4xl mb-3', '\u{1F4CA}'),
+            _el('div', 'text-slate-400 text-sm', message)
+        ));
     }
-    const moments2 = document.getElementById('story-moments');
-    if (moments2) moments2.innerHTML = '';
-    const breakdown = document.getElementById('story-kis-breakdown');
-    if (breakdown) breakdown.innerHTML = '';
-    const synergy2 = document.getElementById('story-team-synergy');
-    if (synergy2) synergy2.innerHTML = '';
-    const pwc2 = document.getElementById('story-win-contribution');
-    if (pwc2) pwc2.innerHTML = '';
+    for (const id of ['story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution']) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '';
+    }
 }
 
 function renderStoryHero(sessionDate, players) {
@@ -205,32 +217,24 @@ function renderStoryHero(sessionDate, players) {
     if (subtitle) subtitle.textContent = `${players.length} players \u2022 Kill Impact Score analysis`;
 
     if (statsRow) {
-        statsRow.innerHTML = `
-            <div class="flex flex-col">
-                <span class="text-xs text-slate-500 uppercase tracking-wider">Total KIS</span>
-                <span class="text-lg font-bold text-amber-400">${formatNumber(Math.round(totalKIS))}</span>
-            </div>
-            <div class="flex flex-col">
-                <span class="text-xs text-slate-500 uppercase tracking-wider">Kills</span>
-                <span class="text-lg font-bold text-white">${formatNumber(totalKills)}</span>
-            </div>
-            <div class="flex flex-col">
-                <span class="text-xs text-slate-500 uppercase tracking-wider">Players</span>
-                <span class="text-lg font-bold text-white">${players.length}</span>
-            </div>
-            <div class="flex flex-col">
-                <span class="text-xs text-slate-500 uppercase tracking-wider">MVP</span>
-                <span class="text-lg font-bold text-amber-400">${topPlayer ? escapeHtml(stripEtColors(topPlayer.name)) : '-'}</span>
-            </div>
-        `;
+        statsRow.textContent = '';
+        const stat = (label, value, cls) => _el('div', 'flex flex-col',
+            _el('span', 'text-xs text-slate-500 uppercase tracking-wider', label),
+            _el('span', `text-lg font-bold ${cls}`, value)
+        );
+        statsRow.appendChild(stat('Total KIS', formatNumber(Math.round(totalKIS)), 'text-amber-400'));
+        statsRow.appendChild(stat('Kills', formatNumber(totalKills), 'text-white'));
+        statsRow.appendChild(stat('Players', String(players.length), 'text-white'));
+        statsRow.appendChild(stat('MVP', topPlayer ? stripEtColors(topPlayer.name) : '-', 'text-amber-400'));
     }
 }
 
 function renderPlayerCards(players) {
     const container = document.getElementById('story-players');
     if (!container) return;
+    container.textContent = '';
 
-    container.innerHTML = players.map((p, idx) => {
+    players.forEach((p, idx) => {
         const archKey = getArchetype(p);
         const arch = ARCHETYPES[archKey];
         const colors = ARCHETYPE_COLORS[arch.color];
@@ -241,68 +245,59 @@ function renderPlayerCards(players) {
         const pushBar = p.kills > 0 ? ((p.push_kills / p.kills) * 100).toFixed(0) : 0;
         const crossfireBar = p.kills > 0 ? ((p.crossfire_kills / p.kills) * 100).toFixed(0) : 0;
 
-        return `
-        <div class="rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-200 p-4 group">
-            <!-- Header -->
-            <div class="flex items-start justify-between mb-3">
-                <div class="flex items-center gap-2.5">
-                    <div class="w-7 h-7 rounded-lg bg-gradient-to-br ${tier.css} flex items-center justify-center text-xs font-black text-black/80">
-                        ${rank}
-                    </div>
-                    <div>
-                        <div class="text-sm font-semibold text-white leading-tight">${escapeHtml(stripEtColors(p.name))}</div>
-                        <div class="flex items-center gap-1.5 mt-0.5">
-                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${colors.bg} ${colors.border} ${colors.text} border">
-                                ${arch.icon} ${escapeHtml(arch.label)}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                <div class="text-right">
-                    <div class="text-lg font-black bg-gradient-to-r ${tier.css} bg-clip-text text-transparent">${(p.total_kis ?? 0).toFixed(1)}</div>
-                    <div class="text-[10px] ${tier.textCss} font-bold uppercase tracking-wider">${escapeHtml(tier.label)}</div>
-                </div>
-            </div>
+        const card = _el('div', 'rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-200 p-4 group');
 
-            <!-- Stats row -->
-            <div class="grid grid-cols-4 gap-2 text-center mb-3">
-                <div>
-                    <div class="text-xs font-bold text-white">${p.kills}</div>
-                    <div class="text-[10px] text-slate-500">Kills</div>
-                </div>
-                <div>
-                    <div class="text-xs font-bold text-rose-400">${p.carrier_kills}</div>
-                    <div class="text-[10px] text-slate-500">Carrier</div>
-                </div>
-                <div>
-                    <div class="text-xs font-bold text-amber-400">${p.push_kills}</div>
-                    <div class="text-[10px] text-slate-500">Push</div>
-                </div>
-                <div>
-                    <div class="text-xs font-bold text-cyan-400">${p.crossfire_kills}</div>
-                    <div class="text-[10px] text-slate-500">Crossfire</div>
-                </div>
-            </div>
+        // Header
+        const headerLeft = _el('div', 'flex items-center gap-2.5',
+            _el('div', `w-7 h-7 rounded-lg bg-gradient-to-br ${tier.css} flex items-center justify-center text-xs font-black text-black/80`, String(rank)),
+            _el('div', null,
+                _el('div', 'text-sm font-semibold text-white leading-tight', stripEtColors(p.name)),
+                _el('div', 'flex items-center gap-1.5 mt-0.5',
+                    _el('span', `inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${colors.bg} ${colors.border} ${colors.text} border`, `${arch.icon} ${arch.label}`)
+                )
+            )
+        );
+        const headerRight = _el('div', 'text-right',
+            _el('div', `text-lg font-black bg-gradient-to-r ${tier.css} bg-clip-text text-transparent`, (p.total_kis ?? 0).toFixed(1)),
+            _el('div', `text-[10px] ${tier.textCss} font-bold uppercase tracking-wider`, tier.label)
+        );
+        card.appendChild(_el('div', 'flex items-start justify-between mb-3', headerLeft, headerRight));
 
-            <!-- Context bar -->
-            <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden flex">
-                <div class="bg-rose-500/80 transition-all" style="width:${carrierBar}%"></div>
-                <div class="bg-amber-500/80 transition-all" style="width:${pushBar}%"></div>
-                <div class="bg-cyan-500/80 transition-all" style="width:${crossfireBar}%"></div>
-            </div>
-            <div class="flex justify-between mt-1 text-[9px] text-slate-600">
-                <span>Avg impact: ${(p.avg_impact ?? 0).toFixed(2)}</span>
-                <span>Context: ${p.kills > 0 ? (((p.carrier_kills + p.push_kills + p.crossfire_kills) / p.kills) * 100).toFixed(0) : 0}%</span>
-            </div>
-        </div>`;
-    }).join('');
+        // Stats grid
+        const statCell = (val, label, cls) => _el('div', null,
+            _el('div', `text-xs font-bold ${cls}`, String(val)),
+            _el('div', 'text-[10px] text-slate-500', label)
+        );
+        card.appendChild(_el('div', 'grid grid-cols-4 gap-2 text-center mb-3',
+            statCell(p.kills, 'Kills', 'text-white'),
+            statCell(p.carrier_kills, 'Carrier', 'text-rose-400'),
+            statCell(p.push_kills, 'Push', 'text-amber-400'),
+            statCell(p.crossfire_kills, 'Crossfire', 'text-cyan-400')
+        ));
+
+        // Context bar
+        const barContainer = _el('div', 'h-1.5 rounded-full bg-slate-800 overflow-hidden flex');
+        const seg = (cls, w) => { const s = _el('div', `${cls} transition-all`); s.style.width = `${w}%`; return s; };
+        barContainer.appendChild(seg('bg-rose-500/80', carrierBar));
+        barContainer.appendChild(seg('bg-amber-500/80', pushBar));
+        barContainer.appendChild(seg('bg-cyan-500/80', crossfireBar));
+        card.appendChild(barContainer);
+
+        // Footer
+        card.appendChild(_el('div', 'flex justify-between mt-1 text-[9px] text-slate-600',
+            _el('span', null, `Avg impact: ${(p.avg_impact ?? 0).toFixed(2)}`),
+            _el('span', null, `Context: ${p.kills > 0 ? (((p.carrier_kills + p.push_kills + p.crossfire_kills) / p.kills) * 100).toFixed(0) : 0}%`)
+        ));
+
+        container.appendChild(card);
+    });
 }
 
 function renderKISBreakdown(players) {
     const container = document.getElementById('story-kis-breakdown');
     if (!container) return;
+    container.textContent = '';
 
-    // Build stacked bar for top 10 players
     const top = players.slice(0, 12);
     const maxKIS = Math.max(...top.map(p => p.total_kis), 1);
 
@@ -313,42 +308,45 @@ function renderKISBreakdown(players) {
         { key: 'crossfire', label: 'Crossfire',  color: 'bg-cyan-500' },
     ];
 
-    const legend = SEGMENTS.map(s =>
-        `<span class="inline-flex items-center gap-1.5 text-[10px] text-slate-400">
-            <span class="w-2.5 h-2.5 rounded-sm ${s.color}"></span>${escapeHtml(s.label)}
-        </span>`
-    ).join('');
+    // Legend
+    const legendRow = _el('div', 'flex gap-4 mb-4');
+    SEGMENTS.forEach(s => {
+        legendRow.appendChild(_el('span', 'inline-flex items-center gap-1.5 text-[10px] text-slate-400',
+            _el('span', `w-2.5 h-2.5 rounded-sm ${s.color}`),
+            s.label
+        ));
+    });
+    container.appendChild(legendRow);
 
-    const bars = top.map(p => {
-        // NOTE: Segment widths are approximations based on kill counts × avg_impact.
+    // Bars
+    top.forEach(p => {
+        // NOTE: Segment widths are approximations based on kill counts x avg_impact.
         // Actual per-kill multipliers vary; this is a visualization heuristic only.
         const carrierKIS = p.carrier_kills * (p.avg_impact || 1);
         const pushKIS = p.push_kills * (p.avg_impact || 1) * 0.8;
         const crossfireKIS = p.crossfire_kills * (p.avg_impact || 1) * 0.7;
         const segmentTotal = carrierKIS + pushKIS + crossfireKIS;
         const baseKIS = Math.max(0, (p.total_kis ?? 0) - segmentTotal);
-        // baseKIS + segmentTotal should equal p.total_kis
-
         const pct = (v) => ((v / maxKIS) * 100).toFixed(1);
+        const safeName = stripEtColors(p.name);
 
-        const safeName = escapeHtml(stripEtColors(p.name));
-        return `
-        <div class="flex items-center gap-3 mb-1.5">
-            <div class="w-24 text-xs text-slate-400 truncate text-right" title="${safeName}">${safeName}</div>
-            <div class="flex-1 h-5 rounded bg-slate-800/50 overflow-hidden flex">
-                <div class="${SEGMENTS[0].color}/60 h-full" style="width:${pct(baseKIS)}%"></div>
-                <div class="${SEGMENTS[1].color}/80 h-full" style="width:${pct(carrierKIS)}%"></div>
-                <div class="${SEGMENTS[2].color}/80 h-full" style="width:${pct(pushKIS)}%"></div>
-                <div class="${SEGMENTS[3].color}/80 h-full" style="width:${pct(crossfireKIS)}%"></div>
-            </div>
-            <div class="w-12 text-xs text-slate-400 text-right font-mono">${(p.total_kis ?? 0).toFixed(1)}</div>
-        </div>`;
-    }).join('');
+        const row = _el('div', 'flex items-center gap-3 mb-1.5');
 
-    container.innerHTML = `
-        <div class="flex gap-4 mb-4">${legend}</div>
-        ${bars}
-    `;
+        const nameDiv = _el('div', 'w-24 text-xs text-slate-400 truncate text-right', safeName);
+        nameDiv.title = safeName;
+        row.appendChild(nameDiv);
+
+        const barTrack = _el('div', 'flex-1 h-5 rounded bg-slate-800/50 overflow-hidden flex');
+        const addSeg = (cls, val) => { const s = _el('div', `${cls} h-full`); s.style.width = `${pct(val)}%`; barTrack.appendChild(s); };
+        addSeg(`${SEGMENTS[0].color}/60`, baseKIS);
+        addSeg(`${SEGMENTS[1].color}/80`, carrierKIS);
+        addSeg(`${SEGMENTS[2].color}/80`, pushKIS);
+        addSeg(`${SEGMENTS[3].color}/80`, crossfireKIS);
+        row.appendChild(barTrack);
+
+        row.appendChild(_el('div', 'w-12 text-xs text-slate-400 text-right font-mono', (p.total_kis ?? 0).toFixed(1)));
+        container.appendChild(row);
+    });
 }
 
 const MOMENT_TYPES = {
@@ -371,66 +369,74 @@ function renderMoments(data) {
 
     const moments = Array.isArray(data?.moments) ? data.moments : [];
     if (moments.length === 0) {
-        container.innerHTML = '<div class="text-slate-500 text-sm py-4">No key moments for this session</div>';
+        container.textContent = '';
+        container.appendChild(_el('div', 'text-slate-500 text-sm py-4', 'No key moments for this session'));
         return;
     }
 
-    container.innerHTML = moments.map((m, idx) => {
+    container.textContent = '';
+    moments.forEach((m, idx) => {
         const mt = MOMENT_TYPES[m.type] || MOMENT_TYPES.kill_streak;
         const stars = '\u2605'.repeat(Math.min(Math.max(Math.round(m.impact_stars || m.impact || 0), 0), 5));
-        const safeName = escapeHtml(stripEtColors(m.player || m.player_name || ''));
-        const safeNarrative = escapeHtml(m.narrative || '');
-        const safeMap = escapeHtml(m.map_name || '');
+        const safeName = stripEtColors(m.player || m.player_name || '');
+        const safeNarrative = m.narrative || '';
+        const safeMap = m.map_name || '';
         const roundLabel = (m.round_number || m.round_num) ? `R${m.round_number || m.round_num}` : '';
         const timeLabel = m.time_formatted || '';
         const delay = idx * 80;
 
-        // Rich kill breakdown for team_wipe and multikill moments
-        let killBreakdown = '';
+        const cardWidth = (m.kills && m.kills.length > 0) ? 'w-72' : 'w-56';
+        const card = _el('div', `flex-shrink-0 ${cardWidth} rounded-xl border ${mt.border} ${mt.bg} p-4 opacity-0 translate-y-3`);
+        card.style.animation = `momentFadeUp 0.4s ease-out ${delay}ms forwards`;
+
+        // Top row: icon + stars + time
+        const topRow = _el('div', 'flex items-center justify-between mb-2');
+        topRow.appendChild(_el('span', 'text-lg', mt.icon));
+        const rightGroup = _el('div', 'flex items-center gap-2');
+        if (timeLabel) rightGroup.appendChild(_el('span', 'text-[10px] text-slate-500 font-mono', timeLabel));
+        rightGroup.appendChild(_el('span', 'text-amber-400 text-xs tracking-wider', stars));
+        topRow.appendChild(rightGroup);
+        card.appendChild(topRow);
+
+        // Name
+        const nameEl = _el('div', 'text-xs font-bold text-white mb-1 truncate', safeName);
+        nameEl.title = safeName;
+        card.appendChild(nameEl);
+
+        // Narrative
+        card.appendChild(_el('div', 'text-[11px] text-slate-300 mb-2 line-clamp-2 leading-relaxed', safeNarrative));
+
+        // Round + map labels
+        const meta = _el('div', 'flex items-center gap-2 text-[10px] text-slate-500');
+        if (roundLabel) meta.appendChild(_el('span', null, roundLabel));
+        if (safeMap) meta.appendChild(_el('span', 'truncate', safeMap));
+        card.appendChild(meta);
+
+        // Kill breakdown
         if (Array.isArray(m.kills) && m.kills.length > 0) {
-            const killLines = m.kills.map(k => {
-                const killer = escapeHtml(stripEtColors(k.killer || ''));
-                const victim = escapeHtml(stripEtColors(k.victim || ''));
-                const weapon = escapeHtml(k.weapon || '');
-                const kTime = k.time_formatted || '';
-                return `<div class="flex items-center gap-1">
-                    <span class="text-white">${killer}</span>
-                    <span class="text-slate-600">\u2192</span>
-                    <span class="text-red-400">${victim}</span>
-                    ${weapon ? `<span class="text-slate-600 ml-auto">${weapon}</span>` : ''}
-                    ${kTime ? `<span class="text-slate-700 w-8 text-right">${kTime}</span>` : ''}
-                </div>`;
-            }).join('');
-            const durationLabel = m.duration_ms != null ? `${(m.duration_ms / 1000).toFixed(1)}s` : '';
-            killBreakdown = `
-                <div class="mt-2 pt-2 border-t border-white/5 space-y-0.5 text-[10px]">
-                    ${killLines}
-                    ${durationLabel ? `<div class="text-slate-600 mt-1">Duration: ${durationLabel}</div>` : ''}
-                </div>`;
+            const breakdown = _el('div', 'mt-2 pt-2 border-t border-white/5 space-y-0.5 text-[10px]');
+            m.kills.forEach(k => {
+                const killRow = _el('div', 'flex items-center gap-1',
+                    _el('span', 'text-white', stripEtColors(k.killer || '')),
+                    _el('span', 'text-slate-600', '\u2192'),
+                    _el('span', 'text-red-400', stripEtColors(k.victim || ''))
+                );
+                if (k.weapon) {
+                    killRow.appendChild(_el('span', 'text-slate-600 ml-auto', k.weapon));
+                }
+                if (k.time_formatted) {
+                    killRow.appendChild(_el('span', 'text-slate-700 w-8 text-right', k.time_formatted));
+                }
+                breakdown.appendChild(killRow);
+            });
+            if (m.duration_ms != null) {
+                breakdown.appendChild(_el('div', 'text-slate-600 mt-1', `Duration: ${(m.duration_ms / 1000).toFixed(1)}s`));
+            }
+            card.appendChild(breakdown);
         }
 
-        // Wider card for moments with kill breakdown
-        const cardWidth = (m.kills && m.kills.length > 0) ? 'w-72' : 'w-56';
-
-        return `
-        <div class="flex-shrink-0 ${cardWidth} rounded-xl border ${mt.border} ${mt.bg} p-4 opacity-0 translate-y-3"
-             style="animation: momentFadeUp 0.4s ease-out ${delay}ms forwards">
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-lg">${mt.icon}</span>
-                <div class="flex items-center gap-2">
-                    ${timeLabel ? `<span class="text-[10px] text-slate-500 font-mono">${escapeHtml(timeLabel)}</span>` : ''}
-                    <span class="text-amber-400 text-xs tracking-wider">${stars}</span>
-                </div>
-            </div>
-            <div class="text-xs font-bold text-white mb-1 truncate" title="${safeName}">${safeName}</div>
-            <div class="text-[11px] text-slate-300 mb-2 line-clamp-2 leading-relaxed">${safeNarrative}</div>
-            <div class="flex items-center gap-2 text-[10px] text-slate-500">
-                ${roundLabel ? `<span>${escapeHtml(roundLabel)}</span>` : ''}
-                ${safeMap ? `<span class="truncate">${safeMap}</span>` : ''}
-            </div>
-            ${killBreakdown}
-        </div>`;
-    }).join('');
+        container.appendChild(card);
+    });
 }
 
 const SYNERGY_AXES = [
@@ -452,48 +458,51 @@ function renderTeamSynergy(data) {
 
     const groups = data?.groups;
     if (!groups || (!groups.group_a && !groups.group_b)) {
-        container.innerHTML = '<div class="text-center text-slate-500 py-8 text-sm">No synergy data available</div>';
+        container.textContent = '';
+        container.appendChild(_el('div', 'text-center text-slate-500 py-8 text-sm', 'No synergy data available'));
         return;
     }
 
-    function renderPanel(gkey) {
+    function buildPanel(gkey) {
         const style = GROUP_STYLES[gkey];
         const gd = groups[gkey];
-        if (!gd) return '';
+        if (!gd) return null;
         const composite = gd.composite ?? 0;
-        const players = Array.isArray(gd.players) ? gd.players : [];
-        const nameList = players.map(n => escapeHtml(stripEtColors(n))).join(', ');
+        const playerList = Array.isArray(gd.players) ? gd.players : [];
+        const nameList = playerList.map(n => stripEtColors(n)).join(', ');
 
-        const bars = SYNERGY_AXES.map(axis => {
+        const panel = _el('div', `flex-1 rounded-xl border ${style.border} ${style.bg} p-5`);
+
+        const panelHeader = _el('div', 'flex items-center justify-between mb-4');
+        panelHeader.appendChild(_el('div', null,
+            _el('div', 'text-sm font-bold text-white', nameList || gkey)
+        ));
+        panelHeader.appendChild(_el('div', `text-2xl font-black ${style.text}`, composite.toFixed(1)));
+        panel.appendChild(panelHeader);
+
+        SYNERGY_AXES.forEach(axis => {
             const val = gd[axis.key] ?? 0;
-            return `
-                <div class="flex items-center gap-2 mb-2">
-                    <div class="w-24 text-[11px] text-slate-400 truncate">${escapeHtml(axis.label)}</div>
-                    <div class="flex-1 h-2.5 rounded-full bg-slate-800 overflow-hidden">
-                        <div class="${style.bar}/70 h-full rounded-full transition-all duration-500" style="width:${val.toFixed(1)}%"></div>
-                    </div>
-                    <div class="w-8 text-[11px] text-slate-400 text-right font-mono">${val.toFixed(0)}</div>
-                </div>`;
-        }).join('');
+            const row = _el('div', 'flex items-center gap-2 mb-2');
+            row.appendChild(_el('div', 'w-24 text-[11px] text-slate-400 truncate', axis.label));
+            const track = _el('div', 'flex-1 h-2.5 rounded-full bg-slate-800 overflow-hidden');
+            const fill = _el('div', `${style.bar}/70 h-full rounded-full transition-all duration-500`);
+            fill.style.width = `${val.toFixed(1)}%`;
+            track.appendChild(fill);
+            row.appendChild(track);
+            row.appendChild(_el('div', 'w-8 text-[11px] text-slate-400 text-right font-mono', val.toFixed(0)));
+            panel.appendChild(row);
+        });
 
-        return `
-            <div class="flex-1 rounded-xl border ${style.border} ${style.bg} p-5">
-                <div class="flex items-center justify-between mb-4">
-                    <div>
-                        <div class="text-sm font-bold text-white">${nameList || gkey}</div>
-                    </div>
-                    <div class="text-2xl font-black ${style.text}">${composite.toFixed(1)}</div>
-                </div>
-                ${bars}
-            </div>`;
+        return panel;
     }
 
-    container.innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            ${renderPanel('group_a')}
-            ${renderPanel('group_b')}
-        </div>
-    `;
+    container.textContent = '';
+    const grid = _el('div', 'grid grid-cols-1 md:grid-cols-2 gap-4');
+    const panelA = buildPanel('group_a');
+    const panelB = buildPanel('group_b');
+    if (panelA) grid.appendChild(panelA);
+    if (panelB) grid.appendChild(panelB);
+    container.appendChild(grid);
 }
 
 // ── Player Win Contribution (PWC) ────────────────────────────────
@@ -514,89 +523,101 @@ function renderWinContribution(data) {
     const mvp = data?.mvp;
 
     if (players.length === 0) {
-        container.innerHTML = '<div class="text-center text-slate-500 py-8 text-sm">No win contribution data available</div>';
+        container.textContent = '';
+        container.appendChild(_el('div', 'text-center text-slate-500 py-8 text-sm', 'No win contribution data available'));
         return;
     }
 
+    container.textContent = '';
+
     // MVP highlight card
-    let mvpCard = '';
     if (mvp) {
-        const mvpName = escapeHtml(stripEtColors(mvp.name));
+        const mvpName = stripEtColors(mvp.name);
         const wisSign = mvp.wis >= 0 ? '+' : '';
-        mvpCard = `
-            <div class="rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-amber-900/10 to-slate-900 p-5 mb-5">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-lg font-black text-black/80">&#9733;</div>
-                        <div>
-                            <div class="text-xs text-amber-400 font-bold tracking-[0.2em] uppercase">Session MVP</div>
-                            <div class="text-lg font-black text-white">${mvpName}</div>
-                        </div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-2xl font-black text-amber-400">${mvp.total_pwc.toFixed(2)}</div>
-                        <div class="text-[10px] text-slate-400">PWC &middot; WIS ${wisSign}${mvp.wis.toFixed(3)}</div>
-                    </div>
-                </div>
-            </div>`;
+
+        const mvpCard = _el('div', 'rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-amber-900/10 to-slate-900 p-5 mb-5');
+        const mvpRow = _el('div', 'flex items-center justify-between');
+
+        const mvpLeft = _el('div', 'flex items-center gap-3',
+            _el('div', 'w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-lg font-black text-black/80', '\u2605'),
+            _el('div', null,
+                _el('div', 'text-xs text-amber-400 font-bold tracking-[0.2em] uppercase', 'Session MVP'),
+                _el('div', 'text-lg font-black text-white', mvpName)
+            )
+        );
+
+        const mvpRight = _el('div', 'text-right',
+            _el('div', 'text-2xl font-black text-amber-400', mvp.total_pwc.toFixed(2)),
+            _el('div', 'text-[10px] text-slate-400', `PWC \u00B7 WIS ${wisSign}${mvp.wis.toFixed(3)}`)
+        );
+
+        mvpRow.appendChild(mvpLeft);
+        mvpRow.appendChild(mvpRight);
+        mvpCard.appendChild(mvpRow);
+        container.appendChild(mvpCard);
     }
 
     // Legend
-    const legend = PWC_COMPONENTS.map(c =>
-        `<span class="inline-flex items-center gap-1.5 text-[10px] text-slate-400">
-            <span class="w-2.5 h-2.5 rounded-sm ${c.color}"></span>${escapeHtml(c.label)}
-        </span>`
-    ).join('');
+    const legendRow = _el('div', 'flex gap-4 mb-4');
+    PWC_COMPONENTS.forEach(c => {
+        legendRow.appendChild(_el('span', 'inline-flex items-center gap-1.5 text-[10px] text-slate-400',
+            _el('span', `w-2.5 h-2.5 rounded-sm ${c.color}`),
+            c.label
+        ));
+    });
+    container.appendChild(legendRow);
+
+    // Column headers
+    const header = _el('div', 'flex items-center gap-3 mb-2 text-[10px] text-slate-600 uppercase tracking-wider');
+    header.appendChild(_el('div', 'w-5 text-right', '#'));
+    header.appendChild(_el('div', 'w-24 text-right', 'Player'));
+    header.appendChild(_el('div', 'flex-1', 'Contribution'));
+    header.appendChild(_el('div', 'w-12 text-right', 'PWC'));
+    header.appendChild(_el('div', 'w-16 text-right', 'WIS'));
+    container.appendChild(header);
 
     // Per-player stacked bars (top 15)
     const top = players.slice(0, 15);
     const maxPWC = Math.max(...top.map(p => p.total_pwc), 0.01);
 
-    const bars = top.map((p, idx) => {
-        const safeName = escapeHtml(stripEtColors(p.name));
+    top.forEach((p, idx) => {
+        const safeName = stripEtColors(p.name);
         const comp = p.components || {};
         const wisSign = p.wis >= 0 ? '+' : '';
         const rank = idx + 1;
 
+        const row = _el('div', 'flex items-center gap-3 mb-2 group');
+        row.appendChild(_el('div', 'w-5 text-[10px] text-slate-600 text-right font-mono', String(rank)));
+
+        const nameDiv = _el('div', 'w-24 text-xs text-slate-400 truncate text-right', safeName);
+        nameDiv.title = safeName;
+        row.appendChild(nameDiv);
+
         // Stacked bar segments
-        const segments = PWC_COMPONENTS.map(c => {
+        const barContainer = _el('div', 'flex-1 h-5 rounded bg-slate-800/50 overflow-hidden flex');
+        PWC_COMPONENTS.forEach(c => {
             const val = comp[c.key] || 0;
             const pct = ((val / maxPWC) * 100).toFixed(1);
-            return `<div class="${c.color}/70 h-full" style="width:${pct}%"></div>`;
-        }).join('');
+            const s = _el('div', `${c.color}/70 h-full`);
+            s.style.width = `${pct}%`;
+            barContainer.appendChild(s);
+        });
+        row.appendChild(barContainer);
+
+        row.appendChild(_el('div', 'w-12 text-xs text-slate-400 text-right font-mono', p.total_pwc.toFixed(2)));
+        row.appendChild(_el('div', `w-16 text-[10px] text-right font-mono ${p.wis >= 0 ? 'text-emerald-400' : 'text-red-400'}`, `${wisSign}${p.wis.toFixed(3)}`));
 
         // Per-round mini dots
-        const roundDots = (p.per_round || []).map(r =>
-            `<span class="inline-block w-1.5 h-1.5 rounded-full ${r.won ? 'bg-emerald-400' : 'bg-red-400'}" title="R${r.round_number} ${escapeHtml(r.map_name)} — PWC ${r.pwc}${r.won ? ' W' : ' L'}"></span>`
-        ).join('');
+        const dotsContainer = _el('div', 'hidden group-hover:flex items-center gap-0.5 w-20');
+        (p.per_round || []).forEach(r => {
+            const dot = _el('span', `inline-block w-1.5 h-1.5 rounded-full ${r.won ? 'bg-emerald-400' : 'bg-red-400'}`);
+            dot.title = `R${r.round_number} ${r.map_name} \u2014 PWC ${r.pwc}${r.won ? ' W' : ' L'}`;
+            dotsContainer.appendChild(dot);
+        });
+        row.appendChild(dotsContainer);
 
-        return `
-        <div class="flex items-center gap-3 mb-2 group">
-            <div class="w-5 text-[10px] text-slate-600 text-right font-mono">${rank}</div>
-            <div class="w-24 text-xs text-slate-400 truncate text-right" title="${safeName}">${safeName}</div>
-            <div class="flex-1 h-5 rounded bg-slate-800/50 overflow-hidden flex">${segments}</div>
-            <div class="w-12 text-xs text-slate-400 text-right font-mono">${p.total_pwc.toFixed(2)}</div>
-            <div class="w-16 text-[10px] text-right font-mono ${p.wis >= 0 ? 'text-emerald-400' : 'text-red-400'}">${wisSign}${p.wis.toFixed(3)}</div>
-            <div class="hidden group-hover:flex items-center gap-0.5 w-20">${roundDots}</div>
-        </div>`;
-    }).join('');
-
-    // Column headers
-    const header = `
-        <div class="flex items-center gap-3 mb-2 text-[10px] text-slate-600 uppercase tracking-wider">
-            <div class="w-5 text-right">#</div>
-            <div class="w-24 text-right">Player</div>
-            <div class="flex-1">Contribution</div>
-            <div class="w-12 text-right">PWC</div>
-            <div class="w-16 text-right">WIS</div>
-        </div>`;
-
-    container.innerHTML = `
-        ${mvpCard}
-        <div class="flex gap-4 mb-4">${legend}</div>
-        ${header}
-        ${bars}
-    `;
+        container.appendChild(row);
+    });
 }
 
 export async function loadStoryView() {

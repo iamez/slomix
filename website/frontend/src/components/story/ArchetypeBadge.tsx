@@ -38,7 +38,7 @@ interface ArchetypeBadgeProps {
 }
 
 export function ArchetypeBadge({ archetype, className, size = 'md' }: ArchetypeBadgeProps) {
-  const def = ARCHETYPES[archetype] ?? ARCHETYPES.frontline_warrior;
+  const def = ARCHETYPES[archetype];
 
   return (
     <span className={cn(
@@ -54,5 +54,5 @@ export function ArchetypeBadge({ archetype, className, size = 'md' }: ArchetypeB
 }
 
 export function getArchetypeDef(archetype: PlayerArchetype): ArchetypeDef {
-  return ARCHETYPES[archetype] ?? ARCHETYPES.frontline_warrior;
+  return ARCHETYPES[archetype];
 }

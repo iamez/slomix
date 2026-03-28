@@ -317,7 +317,8 @@ class ProximityCog(commands.Cog, name="Proximity"):
     # RE-LINKER — fix NULL round_id in proximity tables
     # =========================================================================
 
-    _PROXIMITY_ROUND_ID_TABLES = [
+    # Whitelist of proximity tables that have round_id columns (used in SQL interpolation)
+    _PROXIMITY_ROUND_ID_TABLES = frozenset({
         "proximity_carrier_event",
         "proximity_carrier_kill",
         "proximity_carrier_return",
@@ -340,7 +341,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
         "proximity_trade_event",
         "proximity_vehicle_progress",
         # proximity_weapon_accuracy excluded: no round_number/round_start_unix/session_date columns
-    ]
+    })
 
     async def _relink_null_round_ids(self) -> None:
         """Find proximity rows with NULL round_id and attempt to resolve them."""
@@ -417,6 +418,8 @@ class ProximityCog(commands.Cog, name="Proximity"):
                 # Update all proximity tables that have round_id
                 # Use different WHERE clauses since not all tables have round_number/session_date
                 for table in self._PROXIMITY_ROUND_ID_TABLES:
+                    if table not in self._PROXIMITY_ROUND_ID_TABLES:
+                        continue  # whitelist guard for SQL interpolation safety
                     try:
                         # Try most specific match first (map + round_number + session_date)
                         await db.execute(

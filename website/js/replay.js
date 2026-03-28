@@ -4,11 +4,22 @@
  * @module replay
  */
 
-import { API_BASE, fetchJSON, escapeHtml } from './utils.js';
+import { API_BASE, fetchJSON } from './utils.js';
 
 function stripEtColors(text) {
     if (!text) return '';
     return String(text).replace(/\^[0-9A-Za-z]/g, '');
+}
+
+/** Safe DOM element factory. Strings become text nodes; null/undefined children are skipped. */
+function _el(tag, className, ...children) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    for (const c of children) {
+        if (c == null) continue;
+        el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    }
+    return el;
 }
 
 // ── State ──────────────────────────────────────────────────────────────────────
@@ -27,10 +38,10 @@ const replayState = {
 
 // ── Event display config ───────────────────────────────────────────────────────
 const EVENT_ICONS = {
-    engagement:        '\u{1F480}', // 💀
-    spawn_timing_kill: '\u{1F489}', // 💉
-    trade_kill:        '\u26A1',    // ⚡
-    team_push:         '\u{1F6E1}', // 🛡
+    engagement:        '\u{1F480}', // skull
+    spawn_timing_kill: '\u{1F489}', // syringe
+    trade_kill:        '\u26A1',    // lightning
+    team_push:         '\u{1F6E1}', // shield
 };
 
 const EVENT_COLORS = {
@@ -81,15 +92,15 @@ function eventLabel(ev) {
     if (ev.type === 'engagement') {
         const outcome = ev.outcome === 'KILL' ? 'killed' : 'escaped';
         const name = stripEtColors(ev.victim_name || '???');
-        detail = `${escapeHtml(name)} ${outcome}`;
+        detail = `${name} ${outcome}`;
     } else if (ev.type === 'trade_kill') {
         const trader = stripEtColors(ev.trader_name || '???');
         const avenged = stripEtColors(ev.avenged_name || '???');
-        detail = `${escapeHtml(trader)} avenged ${escapeHtml(avenged)}`;
+        detail = `${trader} avenged ${avenged}`;
     } else if (ev.type === 'spawn_timing_kill') {
         const att = stripEtColors(ev.attacker_name || '???');
         const vic = stripEtColors(ev.victim_name || '???');
-        detail = `${escapeHtml(att)} \u2192 ${escapeHtml(vic)}`;
+        detail = `${att} \u2192 ${vic}`;
     } else if (ev.type === 'team_push') {
         const team = ev.team === 'AXIS' ? 'Axis' : 'Allies';
         detail = `${team} push (${ev.participants}p, q${(ev.quality || 0).toFixed(2)})`;
@@ -126,12 +137,11 @@ export async function loadReplayView() {
 
     const loadId = ++replayLoadId;
 
-    container.innerHTML = `
-        <div class="text-center py-12">
-            <div class="inline-block w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p class="text-slate-400 text-sm">Loading rounds...</p>
-        </div>
-    `;
+    container.textContent = '';
+    const loadingDiv = _el('div', 'text-center py-12');
+    loadingDiv.appendChild(_el('div', 'inline-block w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mb-4'));
+    loadingDiv.appendChild(_el('p', 'text-slate-400 text-sm', 'Loading rounds...'));
+    container.appendChild(loadingDiv);
 
     try {
         const [rounds] = await Promise.all([
@@ -146,7 +156,8 @@ export async function loadReplayView() {
     }
 
     if (replayState.rounds.length === 0) {
-        container.innerHTML = '<div class="text-center text-slate-500 py-12">No rounds available for replay.</div>';
+        container.textContent = '';
+        container.appendChild(_el('div', 'text-center text-slate-500 py-12', 'No rounds available for replay.'));
         return;
     }
 
@@ -163,66 +174,112 @@ export async function loadReplayView() {
 
 // ── Shell (static layout) ──────────────────────────────────────────────────────
 function renderShell(container) {
-    container.innerHTML = `
-        <!-- Round selector -->
-        <div class="flex items-center gap-3 mb-4">
-            <label class="text-xs text-slate-400 font-bold uppercase tracking-wider">Round:</label>
-            <select id="replay-round-select"
-                class="bg-slate-800 border border-white/10 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-purple-500/50 max-w-md">
-                ${replayState.rounds.map(r => {
-                    const label = `${escapeHtml(r.map_name || '???')} R${r.round_number || '?'} — ${escapeHtml(r.round_date || '')} (${r.player_count || 0}p)`;
-                    return `<option value="${r.id}">${label}</option>`;
-                }).join('')}
-            </select>
-        </div>
+    container.textContent = '';
 
-        <!-- Main dual-pane -->
-        <div class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-            <!-- Left: event feed -->
-            <div class="glass-panel rounded-xl border border-white/10 flex flex-col" style="max-height:680px">
-                <div class="px-3 py-2 border-b border-white/10">
-                    <span class="text-xs font-bold text-purple-400 uppercase tracking-widest">Event Feed</span>
-                    <span id="replay-event-count" class="ml-2 text-xs text-slate-500"></span>
-                </div>
-                <div id="replay-event-list" class="flex-1 overflow-y-auto px-1 py-1" style="min-height:200px">
-                    <div class="text-center text-slate-500 text-xs py-8">Select a round</div>
-                </div>
-            </div>
+    // Round selector row
+    const selectorRow = _el('div', 'flex items-center gap-3 mb-4');
+    selectorRow.appendChild(_el('label', 'text-xs text-slate-400 font-bold uppercase tracking-wider', 'Round:'));
 
-            <!-- Right: map canvas -->
-            <div class="glass-panel rounded-xl border border-white/10 p-4 flex flex-col items-center">
-                <div id="replay-map-status" class="text-xs text-slate-500 mb-2"></div>
-                <canvas id="replay-canvas" width="${CANVAS_W}" height="${CANVAS_H}"
-                    class="rounded-lg bg-slate-900/80 border border-white/5 max-w-full" style="image-rendering:auto"></canvas>
-                <div id="replay-map-legend" class="flex gap-4 mt-3 text-xs text-slate-400">
-                    <span><span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1"></span>Axis</span>
-                    <span><span class="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1"></span>Allies</span>
-                    <span><span class="inline-block w-2 h-2 rounded-full bg-slate-500 mr-1"></span>Dead</span>
-                </div>
-            </div>
-        </div>
+    const select = document.createElement('select');
+    select.id = 'replay-round-select';
+    select.className = 'bg-slate-800 border border-white/10 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-purple-500/50 max-w-md';
+    replayState.rounds.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = String(r.id);
+        opt.textContent = `${r.map_name || '???'} R${r.round_number || '?'} \u2014 ${r.round_date || ''} (${r.player_count || 0}p)`;
+        select.appendChild(opt);
+    });
+    selectorRow.appendChild(select);
+    container.appendChild(selectorRow);
 
-        <!-- Scrubber -->
-        <div class="mt-4 glass-panel rounded-xl border border-white/10 p-3">
-            <div class="flex items-center gap-3 mb-1">
-                <span id="replay-time-current" class="text-xs font-mono text-slate-300 w-12">0:00</span>
-                <div class="flex-1 relative h-6 cursor-pointer" id="replay-scrubber">
-                    <div class="absolute top-2 left-0 right-0 h-1 bg-slate-700 rounded"></div>
-                    <div id="replay-scrubber-fill" class="absolute top-2 left-0 h-1 bg-purple-500 rounded" style="width:0%"></div>
-                    <div id="replay-scrubber-ticks" class="absolute top-0 left-0 right-0 h-6"></div>
-                    <div id="replay-scrubber-thumb" class="absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-lg border-2 border-purple-500" style="left:0%"></div>
-                </div>
-                <span id="replay-time-total" class="text-xs font-mono text-slate-500 w-12 text-right">0:00</span>
-            </div>
-        </div>
-    `;
+    // Main dual-pane grid
+    const grid = _el('div', 'grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4');
+
+    // Left pane: event feed
+    const leftPane = _el('div', 'glass-panel rounded-xl border border-white/10 flex flex-col');
+    leftPane.style.maxHeight = '680px';
+
+    const feedHeader = _el('div', 'px-3 py-2 border-b border-white/10');
+    feedHeader.appendChild(_el('span', 'text-xs font-bold text-purple-400 uppercase tracking-widest', 'Event Feed'));
+    const eventCountSpan = _el('span', 'ml-2 text-xs text-slate-500');
+    eventCountSpan.id = 'replay-event-count';
+    feedHeader.appendChild(eventCountSpan);
+    leftPane.appendChild(feedHeader);
+
+    const eventList = _el('div', 'flex-1 overflow-y-auto px-1 py-1',
+        _el('div', 'text-center text-slate-500 text-xs py-8', 'Select a round')
+    );
+    eventList.id = 'replay-event-list';
+    eventList.style.minHeight = '200px';
+    leftPane.appendChild(eventList);
+    grid.appendChild(leftPane);
+
+    // Right pane: map canvas
+    const rightPane = _el('div', 'glass-panel rounded-xl border border-white/10 p-4 flex flex-col items-center');
+
+    const mapStatus = _el('div', 'text-xs text-slate-500 mb-2');
+    mapStatus.id = 'replay-map-status';
+    rightPane.appendChild(mapStatus);
+
+    const canvas = document.createElement('canvas');
+    canvas.id = 'replay-canvas';
+    canvas.width = CANVAS_W;
+    canvas.height = CANVAS_H;
+    canvas.className = 'rounded-lg bg-slate-900/80 border border-white/5 max-w-full';
+    canvas.style.imageRendering = 'auto';
+    rightPane.appendChild(canvas);
+
+    const legendDiv = _el('div', 'flex gap-4 mt-3 text-xs text-slate-400');
+    legendDiv.id = 'replay-map-legend';
+    const legendItem = (colorCls, text) => _el('span', null,
+        _el('span', `inline-block w-2 h-2 rounded-full ${colorCls} mr-1`),
+        text
+    );
+    legendDiv.appendChild(legendItem('bg-red-500', 'Axis'));
+    legendDiv.appendChild(legendItem('bg-blue-500', 'Allies'));
+    legendDiv.appendChild(legendItem('bg-slate-500', 'Dead'));
+    rightPane.appendChild(legendDiv);
+    grid.appendChild(rightPane);
+    container.appendChild(grid);
+
+    // Scrubber panel
+    const scrubberPanel = _el('div', 'mt-4 glass-panel rounded-xl border border-white/10 p-3');
+    const scrubberRow = _el('div', 'flex items-center gap-3 mb-1');
+
+    const timeCurrent = _el('span', 'text-xs font-mono text-slate-300 w-12', '0:00');
+    timeCurrent.id = 'replay-time-current';
+    scrubberRow.appendChild(timeCurrent);
+
+    const scrubberTrack = _el('div', 'flex-1 relative h-6 cursor-pointer');
+    scrubberTrack.id = 'replay-scrubber';
+
+    scrubberTrack.appendChild(_el('div', 'absolute top-2 left-0 right-0 h-1 bg-slate-700 rounded'));
+
+    const fill = _el('div', 'absolute top-2 left-0 h-1 bg-purple-500 rounded');
+    fill.id = 'replay-scrubber-fill';
+    fill.style.width = '0%';
+    scrubberTrack.appendChild(fill);
+
+    const ticks = _el('div', 'absolute top-0 left-0 right-0 h-6');
+    ticks.id = 'replay-scrubber-ticks';
+    scrubberTrack.appendChild(ticks);
+
+    const thumb = _el('div', 'absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-lg border-2 border-purple-500');
+    thumb.id = 'replay-scrubber-thumb';
+    thumb.style.left = '0%';
+    scrubberTrack.appendChild(thumb);
+    scrubberRow.appendChild(scrubberTrack);
+
+    const timeTotal = _el('span', 'text-xs font-mono text-slate-500 w-12 text-right', '0:00');
+    timeTotal.id = 'replay-time-total';
+    scrubberRow.appendChild(timeTotal);
+
+    scrubberPanel.appendChild(scrubberRow);
+    container.appendChild(scrubberPanel);
 
     // Wire events
-    const sel = document.getElementById('replay-round-select');
-    if (sel) sel.addEventListener('change', () => selectRound(parseInt(sel.value, 10)));
-
-    const scrubber = document.getElementById('replay-scrubber');
-    if (scrubber) scrubber.addEventListener('click', onScrubberClick);
+    select.addEventListener('change', () => selectRound(parseInt(select.value, 10)));
+    scrubberTrack.addEventListener('click', onScrubberClick);
 }
 
 // ── Round selection ────────────────────────────────────────────────────────────
@@ -235,14 +292,13 @@ async function selectRound(roundId) {
     replayState.mapImage = null;
     replayState.mapReady = false;
 
-    const eventList = document.getElementById('replay-event-list');
-    if (eventList) {
-        eventList.innerHTML = `
-            <div class="text-center py-8">
-                <div class="inline-block w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mb-2"></div>
-                <p class="text-slate-500 text-xs">Loading timeline...</p>
-            </div>
-        `;
+    const eventListEl = document.getElementById('replay-event-list');
+    if (eventListEl) {
+        eventListEl.textContent = '';
+        const spinner = _el('div', 'text-center py-8');
+        spinner.appendChild(_el('div', 'inline-block w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mb-2'));
+        spinner.appendChild(_el('p', 'text-slate-500 text-xs', 'Loading timeline...'));
+        eventListEl.appendChild(spinner);
     }
 
     const mapStatus = document.getElementById('replay-map-status');
@@ -277,7 +333,7 @@ async function selectRound(roundId) {
 
         if (mapStatus) {
             mapStatus.textContent = mapName
-                ? (replayState.mapImage ? escapeHtml(mapName) : `${escapeHtml(mapName)} (no map image)`)
+                ? (replayState.mapImage ? mapName : `${mapName} (no map image)`)
                 : '';
         }
 
@@ -289,48 +345,49 @@ async function selectRound(roundId) {
         }
     } catch (err) {
         if (loadId !== replayLoadId) return;
-        if (eventList) eventList.innerHTML = `<div class="text-center text-rose-400 text-xs py-8">Failed to load: ${escapeHtml(String(err.message || err))}</div>`;
+        if (eventListEl) {
+            eventListEl.textContent = '';
+            eventListEl.appendChild(_el('div', 'text-center text-rose-400 text-xs py-8', `Failed to load: ${String(err.message || err)}`));
+        }
         drawEmptyCanvas('Error loading data');
     }
 }
 
 // ── Event list rendering ───────────────────────────────────────────────────────
 function renderEventList() {
-    const eventList = document.getElementById('replay-event-list');
+    const eventListEl = document.getElementById('replay-event-list');
     const eventCount = document.getElementById('replay-event-count');
-    if (!eventList) return;
+    if (!eventListEl) return;
 
     const events = replayState.timeline?.events || [];
     if (eventCount) eventCount.textContent = `(${events.length})`;
 
     if (events.length === 0) {
-        eventList.innerHTML = '<div class="text-center text-slate-500 text-xs py-8">No events recorded</div>';
+        eventListEl.textContent = '';
+        eventListEl.appendChild(_el('div', 'text-center text-slate-500 text-xs py-8', 'No events recorded'));
         return;
     }
 
-    eventList.innerHTML = events.map((ev, idx) => {
+    eventListEl.textContent = '';
+    events.forEach((ev, idx) => {
         const { icon, color, label, detail } = eventLabel(ev);
         const time = fmtTime(ev.time);
-        return `
-            <button data-idx="${idx}"
-                class="replay-ev-btn w-full text-left px-2 py-1.5 rounded-lg hover:bg-white/5 transition flex items-start gap-2 group ${idx === replayState.selectedIdx ? 'bg-purple-500/20 border border-purple-500/40' : ''}"
-            >
-                <span class="text-[10px] font-mono text-slate-500 w-10 shrink-0 mt-0.5">${time}</span>
-                <span class="text-sm">${icon}</span>
-                <span class="flex-1 min-w-0">
-                    <span class="text-[11px] font-bold ${color}">${escapeHtml(label)}</span>
-                    <span class="text-[10px] text-slate-400 block truncate">${detail}</span>
-                </span>
-            </button>
-        `;
-    }).join('');
 
-    // Wire click events
-    eventList.querySelectorAll('.replay-ev-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const idx = parseInt(btn.dataset.idx, 10);
-            selectEvent(idx);
-        });
+        const btn = document.createElement('button');
+        btn.dataset.idx = String(idx);
+        btn.className = `replay-ev-btn w-full text-left px-2 py-1.5 rounded-lg hover:bg-white/5 transition flex items-start gap-2 group ${idx === replayState.selectedIdx ? 'bg-purple-500/20 border border-purple-500/40' : ''}`;
+
+        btn.appendChild(_el('span', 'text-[10px] font-mono text-slate-500 w-10 shrink-0 mt-0.5', time));
+        btn.appendChild(_el('span', 'text-sm', icon));
+
+        const content = _el('span', 'flex-1 min-w-0',
+            _el('span', `text-[11px] font-bold ${color}`, label),
+            _el('span', 'text-[10px] text-slate-400 block truncate', detail)
+        );
+        btn.appendChild(content);
+
+        btn.addEventListener('click', () => selectEvent(idx));
+        eventListEl.appendChild(btn);
     });
 }
 
@@ -507,11 +564,6 @@ function drawTracks(ctx, tracks, timeMs, transform) {
 }
 
 function drawEventMarker(ctx, ev, transform) {
-    // Try to find coordinates from event
-    // engagement events have start_x, start_y from combat_engagement
-    // For now, show a pulse circle at the event position if available
-    // The timeline API doesn't always include coords, so we show a notification area instead
-
     const icon = EVENT_ICONS[ev.type] || '\u2022';
     const { detail } = eventLabel(ev);
 
@@ -530,13 +582,7 @@ function drawEventMarker(ctx, ev, transform) {
 
     ctx.fillStyle = '#94a3b8';
     ctx.font = '11px Inter, sans-serif';
-    // Strip HTML entities from detail
-    const plainDetail = detail.replace(/&[^;]+;/g, m => {
-        const el = document.createElement('span');
-        el.innerHTML = m;
-        return el.textContent || '';
-    });
-    ctx.fillText(plainDetail.slice(0, 80), 12, boxY + 34);
+    ctx.fillText(detail.slice(0, 80), 12, boxY + 34);
 }
 
 // ── Scrubber ───────────────────────────────────────────────────────────────────
@@ -549,7 +595,9 @@ function renderScrubber() {
     if (!ticksEl || durationMs <= 0) return;
 
     const events = replayState.timeline?.events || [];
-    const ticks = events.map((ev, idx) => {
+    ticksEl.textContent = '';
+
+    events.forEach((ev, idx) => {
         const pct = Math.min(100, (ev.time / durationMs) * 100);
         const color = ({
             engagement: '#f43f5e',
@@ -558,17 +606,18 @@ function renderScrubber() {
             team_push: '#10b981',
         })[ev.type] || '#64748b';
         const h = ev.type === 'engagement' ? 12 : 8;
-        return `<div data-tick-idx="${idx}" class="absolute cursor-pointer" style="left:${pct}%;top:${(24 - h) / 2}px;width:2px;height:${h}px;background:${color};border-radius:1px;transform:translateX(-1px)" title="${fmtTime(ev.time)} ${EVENT_LABELS[ev.type] || ev.type}"></div>`;
-    });
-    ticksEl.innerHTML = ticks.join('');
 
-    // Wire tick clicks
-    ticksEl.querySelectorAll('[data-tick-idx]').forEach(tick => {
+        const tick = document.createElement('div');
+        tick.dataset.tickIdx = String(idx);
+        tick.className = 'absolute cursor-pointer';
+        tick.style.cssText = `left:${pct}%;top:${(24 - h) / 2}px;width:2px;height:${h}px;background:${color};border-radius:1px;transform:translateX(-1px)`;
+        tick.title = `${fmtTime(ev.time)} ${EVENT_LABELS[ev.type] || ev.type}`;
+
         tick.addEventListener('click', (e) => {
             e.stopPropagation();
-            const idx = parseInt(tick.dataset.tickIdx, 10);
             selectEvent(idx);
         });
+        ticksEl.appendChild(tick);
     });
 }
 
