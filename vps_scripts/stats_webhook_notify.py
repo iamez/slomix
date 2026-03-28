@@ -35,7 +35,7 @@ from pathlib import Path
 # Try to import watchdog (file system monitor)
 try:
     from watchdog.observers import Observer
-    from watchdog.events import FileSystemEventHandler, FileCreatedEvent
+    from watchdog.events import FileSystemEventHandler
     WATCHDOG_AVAILABLE = True
 except ImportError:
     WATCHDOG_AVAILABLE = False

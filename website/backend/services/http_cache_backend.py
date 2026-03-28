@@ -19,12 +19,25 @@ except ImportError:  # pragma: no cover - optional dependency fallback
 
 
 class CacheBackend(Protocol):
-    async def connect(self) -> None: ...
-    async def close(self) -> None: ...
-    async def get_namespace(self) -> str: ...
-    async def get(self, namespace: str, key: str) -> Optional[dict[str, Any]]: ...
-    async def set(self, namespace: str, key: str, value: dict[str, Any], ttl: int) -> None: ...
-    async def invalidate_all(self) -> None: ...
+    """Protocol defining the cache backend interface."""
+
+    async def connect(self) -> None:
+        """Establish connection to the cache."""
+
+    async def close(self) -> None:
+        """Close the cache connection."""
+
+    async def get_namespace(self) -> str:
+        """Return the current cache namespace."""
+
+    async def get(self, namespace: str, key: str) -> Optional[dict[str, Any]]:
+        """Retrieve a cached value."""
+
+    async def set(self, namespace: str, key: str, value: dict[str, Any], ttl: int) -> None:
+        """Store a value in cache with TTL."""
+
+    async def invalidate_all(self) -> None:
+        """Invalidate all cached entries."""
 
 
 class MemoryCacheBackend:
