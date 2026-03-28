@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -306,7 +306,10 @@ async def greatshot_spa_entry(demo_id: str | None = None):
 @app.get("/share/{upload_id}", include_in_schema=False)
 async def share_redirect(upload_id: str):
     """Redirect /share/{id} to the SPA upload detail view."""
+    import re as _re
     from fastapi.responses import RedirectResponse
+    if not _re.match(r'^[a-zA-Z0-9_-]+$', upload_id):
+        raise HTTPException(status_code=400, detail="Invalid upload ID")
     return RedirectResponse(url=f"/#/uploads/{upload_id}", status_code=302)
 
 
@@ -390,13 +393,13 @@ async def shutdown_event():
         try:
             await asyncio.wait_for(start_task, timeout=2.0)
         except asyncio.CancelledError:
-            pass
+            pass  # Expected during shutdown
         except Exception:
-            pass
+            pass  # Startup task may have already failed; nothing to clean up
     try:
         job_service = get_greatshot_job_service()
     except Exception:
-        job_service = None
+        job_service = None  # Service never initialised; nothing to stop
     if job_service is not None:
         await job_service.stop()
     await cache_backend.close()

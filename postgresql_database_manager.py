@@ -288,7 +288,6 @@ class PostgreSQLDatabaseManager:
 
         # Use pg_dump for backup
         import subprocess
-        import re
 
         # Validate hostname (defense in depth - config is already trusted)
         host = self.config.postgres_host.split(':')[0]

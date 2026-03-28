@@ -1648,7 +1648,7 @@ async def get_today_promotion_campaign(
     target_date: Optional[date] = Query(default=None, alias="date"),
     db=Depends(get_db),
 ):
-    _user = _require_user(request)
+    _require_user(request)
     campaign_date = target_date or await _current_db_date(db)
     row = await db.fetch_one(
         """
