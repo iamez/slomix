@@ -745,7 +745,6 @@ class StorytellingService:
             enemies = int(r[4] or 0)
             teammates = int(r[5] or 0)
             self_kills = int(r[10] or 0)
-            _team_kills = int(r[11] or 0)
 
             # 4★ base for contested objective, 5★ if solo (no teammates) or many enemies
             if enemies >= 3 or (enemies >= 2 and teammates == 0):
@@ -1421,10 +1420,8 @@ class StorytellingService:
         revives = stats.get("revives_given", 0)
         trades = stats.get("trade_kills", 0)
         crossfire = stats.get("crossfire_kills", 0)
-        _avg_impact = stats.get("avg_impact", 0)  # noqa: F841 — reserved for future archetype logic
         push_kills = stats.get("push_kills", 0)
         hs_pct = stats.get("headshot_pct", 0)
-        _avg_distance = stats.get("avg_kill_distance", 0)  # noqa: F841 — reserved for future archetype logic
         dpm = stats.get("dpm", 0)
         denied_time = stats.get("denied_time", 0)
         time_dead_pct = stats.get("time_dead_pct", 0)
