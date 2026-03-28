@@ -818,7 +818,7 @@ async def get_live_status(db: DatabaseAdapter = Depends(get_db)):
                 "updated_at": str(updated_at) if updated_at else None,
             }
     except Exception as e:
-        print(f"Error fetching voice channel status: {e}")
+        logger.error(f"Error fetching voice channel status: {e}")
         voice_result["error"] = True
 
     # ========== GAME SERVER STATUS (direct UDP query) ==========
@@ -1097,7 +1097,7 @@ async def get_current_voice_activity(db: DatabaseAdapter = Depends(get_db)):
             and "voice_members" in error_text.lower()
         )
         if not denied_voice_members:
-            print(f"Error fetching current voice activity: {e}")
+            logger.error(f"Error fetching current voice activity: {e}")
         # Fallback to live_status table
         try:
             query = """

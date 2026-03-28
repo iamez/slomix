@@ -649,7 +649,7 @@ class C0RNP0RN3StatsParser:
             try:
                 if float(r2_value) < float(r1_value):
                     dropped_fields.append(field_name)
-            except Exception:
+            except (ValueError, TypeError):
                 continue
 
         return dropped_fields
@@ -1201,13 +1201,13 @@ class C0RNP0RN3StatsParser:
                 def safe_int(lst, idx, default=0):
                     try:
                         return int(lst[idx])
-                    except Exception:
+                    except (ValueError, TypeError, IndexError):
                         return default
 
                 def safe_float(lst, idx, default=0.0):
                     try:
                         return float(lst[idx])
-                    except Exception:
+                    except (ValueError, TypeError, IndexError):
                         return default
 
                 # Populate additional_stats and objective_stats using safe accessors

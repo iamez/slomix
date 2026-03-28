@@ -11,14 +11,15 @@ Usage:
 import argparse
 import json
 import math
+import os
 import psycopg2
 
 DB_PARAMS = {
-    "host": "127.0.0.1",
-    "port": 5432,
-    "dbname": "etlegacy",
-    "user": "etlegacy_user",
-    "password": "etlegacy_secure_2025",
+    "host": os.getenv("DB_HOST", "127.0.0.1"),
+    "port": int(os.getenv("DB_PORT", "5432")),
+    "dbname": os.getenv("DB_NAME", "etlegacy"),
+    "user": os.getenv("DB_USER", "etlegacy_user"),
+    "password": os.getenv("DB_PASSWORD"),
 }
 
 SAMPLE_INTERVAL = 0.2  # 200ms
