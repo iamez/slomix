@@ -84,6 +84,10 @@ class _QualityBot:
     _is_endstats_round_already_processed = (
         UltimateETLegacyBot._is_endstats_round_already_processed
     )
+    _are_endstats_from_same_match = UltimateETLegacyBot._are_endstats_from_same_match
+    _parse_endstats_filename_timestamp = staticmethod(
+        UltimateETLegacyBot._parse_endstats_filename_timestamp
+    )
 
     def __init__(self, db_adapter):
         self.db_adapter = db_adapter
