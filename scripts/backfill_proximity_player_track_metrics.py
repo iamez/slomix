@@ -183,19 +183,19 @@ async def _get_rows(args) -> list[Any]:
         param_idx = 1
 
         if args.session_id is not None:
-            where_clauses.append(f"r.gaming_session_id = ${param_idx}")
+            where_clauses.append("r.gaming_session_id = $" + str(param_idx))
             params.append(args.session_id)
             param_idx += 1
         if args.session_date:
-            where_clauses.append(f"pt.session_date = CAST(${param_idx} AS DATE)")
+            where_clauses.append("pt.session_date = CAST($" + str(param_idx) + " AS DATE)")
             params.append(args.session_date)
             param_idx += 1
         if args.round_id is not None:
-            where_clauses.append(f"pt.round_id = ${param_idx}")
+            where_clauses.append("pt.round_id = $" + str(param_idx))
             params.append(args.round_id)
             param_idx += 1
         if args.player_guid:
-            where_clauses.append(f"pt.player_guid = ${param_idx}")
+            where_clauses.append("pt.player_guid = $" + str(param_idx))
             params.append(args.player_guid)
             param_idx += 1
 
@@ -207,7 +207,7 @@ async def _get_rows(args) -> list[Any]:
 
         limit_clause = ""
         if args.limit is not None:
-            limit_clause = f" LIMIT ${param_idx}"
+            limit_clause = " LIMIT $" + str(param_idx)
             params.append(args.limit)
 
         # where_clauses/limit_clause built from hardcoded column names + $N params (not user input)
@@ -258,7 +258,7 @@ async def _update_row(db, row_id: int, changes: dict[str, Any]) -> None:
     for idx, (column, value) in enumerate(changes.items(), start=1):
         if column not in _ALLOWED_TRACK_COLUMNS:
             raise ValueError(f"Invalid column for player_track update: {column}")
-        assignments.append(f"{column} = ${idx}")
+        assignments.append(column + " = $" + str(idx))
         params.append(value)
     params.append(row_id)
     set_clause = ", ".join(assignments)

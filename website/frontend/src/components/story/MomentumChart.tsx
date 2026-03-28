@@ -94,8 +94,10 @@ export function MomentumChart({ rounds }: Props) {
       c.lineJoin = 'round';
       c.beginPath();
       for (let i = 0; i < points.length; i++) {
-        const x = PAD_L + (points[i].t_ms / Math.max(maxT, 1)) * plotW;
-        const y = PAD_T + (1 - points[i][key] / 100) * plotH;
+        const pt = points[i];
+        const x = PAD_L + (pt.t_ms / Math.max(maxT, 1)) * plotW;
+        const val = key === 'axis' ? pt.axis : pt.allies;
+        const y = PAD_T + (1 - val / 100) * plotH;
         if (i === 0) c.moveTo(x, y);
         else c.lineTo(x, y);
       }
@@ -108,8 +110,10 @@ export function MomentumChart({ rounds }: Props) {
       c.lineWidth = 8;
       c.beginPath();
       for (let i = 0; i < points.length; i++) {
-        const x = PAD_L + (points[i].t_ms / Math.max(maxT, 1)) * plotW;
-        const y = PAD_T + (1 - points[i][key] / 100) * plotH;
+        const pt = points[i];
+        const x = PAD_L + (pt.t_ms / Math.max(maxT, 1)) * plotW;
+        const val = key === 'axis' ? pt.axis : pt.allies;
+        const y = PAD_T + (1 - val / 100) * plotH;
         if (i === 0) c.moveTo(x, y);
         else c.lineTo(x, y);
       }
