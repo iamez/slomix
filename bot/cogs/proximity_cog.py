@@ -415,16 +415,50 @@ class ProximityCog(commands.Cog, name="Proximity"):
                     failed += 1
                     continue
 
-                # Update all proximity tables that have round_id
-                # Use different WHERE clauses since not all tables have round_number/session_date
-                # Pre-built parameterized queries per table (no f-string SQL)
+                # Pre-built parameterized relink queries per table (no string concat in SQL)
                 _RELINK_PRIMARY = {
-                    t: "UPDATE " + t + " SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4"
-                    for t in self._PROXIMITY_ROUND_ID_TABLES
+                    "proximity_carrier_event": "UPDATE proximity_carrier_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_carrier_kill": "UPDATE proximity_carrier_kill SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_carrier_return": "UPDATE proximity_carrier_return SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_combat_position": "UPDATE proximity_combat_position SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_construction_event": "UPDATE proximity_construction_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_crossfire_opportunity": "UPDATE proximity_crossfire_opportunity SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_escort_credit": "UPDATE proximity_escort_credit SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_focus_fire": "UPDATE proximity_focus_fire SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_hit_region": "UPDATE proximity_hit_region SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_kill_outcome": "UPDATE proximity_kill_outcome SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_lua_trade_kill": "UPDATE proximity_lua_trade_kill SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_objective_focus": "UPDATE proximity_objective_focus SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_objective_run": "UPDATE proximity_objective_run SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_reaction_metric": "UPDATE proximity_reaction_metric SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_spawn_timing": "UPDATE proximity_spawn_timing SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_support_summary": "UPDATE proximity_support_summary SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_team_cohesion": "UPDATE proximity_team_cohesion SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_team_push": "UPDATE proximity_team_push SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_trade_event": "UPDATE proximity_trade_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_vehicle_progress": "UPDATE proximity_vehicle_progress SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
                 }
                 _RELINK_FALLBACK = {
-                    t: "UPDATE " + t + " SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3"
-                    for t in self._PROXIMITY_ROUND_ID_TABLES
+                    "proximity_carrier_event": "UPDATE proximity_carrier_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_carrier_kill": "UPDATE proximity_carrier_kill SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_carrier_return": "UPDATE proximity_carrier_return SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_combat_position": "UPDATE proximity_combat_position SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_construction_event": "UPDATE proximity_construction_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_crossfire_opportunity": "UPDATE proximity_crossfire_opportunity SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_escort_credit": "UPDATE proximity_escort_credit SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_focus_fire": "UPDATE proximity_focus_fire SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_hit_region": "UPDATE proximity_hit_region SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_kill_outcome": "UPDATE proximity_kill_outcome SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_lua_trade_kill": "UPDATE proximity_lua_trade_kill SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_objective_focus": "UPDATE proximity_objective_focus SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_objective_run": "UPDATE proximity_objective_run SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_reaction_metric": "UPDATE proximity_reaction_metric SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_spawn_timing": "UPDATE proximity_spawn_timing SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_support_summary": "UPDATE proximity_support_summary SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_team_cohesion": "UPDATE proximity_team_cohesion SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_team_push": "UPDATE proximity_team_push SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_trade_event": "UPDATE proximity_trade_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_vehicle_progress": "UPDATE proximity_vehicle_progress SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
                 }
                 for table in self._PROXIMITY_ROUND_ID_TABLES:
                     try:

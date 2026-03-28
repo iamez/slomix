@@ -310,17 +310,19 @@ class RoundCorrelationService:
         safe = dict(updates)
         deferred = {}
 
-        # Whitelist of allowed FK target tables for SQL interpolation safety
-        _ALLOWED_FK_TABLES = {'rounds', 'lua_round_teams'}
+        # Pre-built FK existence check queries (no string concat in SQL)
+        _FK_CHECK_QUERIES = {
+            ("rounds", "id"): "SELECT 1 FROM rounds WHERE id = ?",
+            ("lua_round_teams", "id"): "SELECT 1 FROM lua_round_teams WHERE id = ?",
+        }
         for col, val in fk_cols.items():
             if val is None:
                 continue
             table, pk = self._FK_COLUMNS[col]
-            if table not in _ALLOWED_FK_TABLES:
-                logger.warning("FK pre-check: table %s not in whitelist, skipping", table)
+            fk_query = _FK_CHECK_QUERIES.get((table, pk))
+            if not fk_query:
+                logger.warning("FK pre-check: table %s.%s not in whitelist, skipping", table, pk)
                 continue
-            # Pre-build query from whitelisted table+pk (no user input in SQL)
-            fk_query = "SELECT 1 FROM " + table + " WHERE " + pk + " = ?"
             try:
                 exists = await self.db.fetch_one(fk_query, (val,))
             except Exception as e:

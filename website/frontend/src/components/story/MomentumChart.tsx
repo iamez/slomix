@@ -14,7 +14,7 @@ export function MomentumChart({ rounds }: Props) {
   const [activeRound, setActiveRound] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const round = activeRound >= 0 && activeRound < rounds.length ? rounds[activeRound] : undefined;
+  const round = rounds.at(activeRound);
   const points = round?.points ?? [];
 
   useEffect(() => {
@@ -94,7 +94,7 @@ export function MomentumChart({ rounds }: Props) {
       c.lineJoin = 'round';
       c.beginPath();
       for (let i = 0; i < points.length; i++) {
-        const pt = points[i];
+        const pt = points.at(i)!;
         const x = PAD_L + (pt.t_ms / Math.max(maxT, 1)) * plotW;
         const val = key === 'axis' ? pt.axis : pt.allies;
         const y = PAD_T + (1 - val / 100) * plotH;
@@ -110,7 +110,7 @@ export function MomentumChart({ rounds }: Props) {
       c.lineWidth = 8;
       c.beginPath();
       for (let i = 0; i < points.length; i++) {
-        const pt = points[i];
+        const pt = points.at(i)!;
         const x = PAD_L + (pt.t_ms / Math.max(maxT, 1)) * plotW;
         const val = key === 'axis' ? pt.axis : pt.allies;
         const y = PAD_T + (1 - val / 100) * plotH;
