@@ -207,12 +207,11 @@ async def _get_rows(args) -> list[Any]:
 
         limit_clause = ""
         if args.limit is not None:
-            limit_clause = " LIMIT $" + str(param_idx)
+            limit_clause = "LIMIT ${}".format(param_idx)
             params.append(args.limit)
 
-        # where_clauses/limit_clause built from hardcoded column names + $N params (not user input)
         where_sql = " AND ".join(where_clauses)
-        query = (
+        query_parts = [
             "SELECT"
             " pt.id, pt.round_id, pt.player_guid, pt.player_name,"
             " pt.team, pt.player_class, pt.spawn_time_ms, pt.death_time_ms,"
@@ -221,10 +220,13 @@ async def _get_rows(args) -> list[Any]:
             " pt.sprint_percentage, pt.path"
             " FROM player_track pt"
             " LEFT JOIN rounds r ON r.id = pt.round_id"
-            " WHERE " + where_sql +
-            " ORDER BY pt.id"
-            + limit_clause
-        )
+            " WHERE",
+            where_sql,
+            "ORDER BY pt.id",
+        ]
+        if limit_clause:
+            query_parts.append(limit_clause)
+        query = " ".join(query_parts)
         return await db.fetch_all(query, tuple(params))
     return []
 
@@ -251,22 +253,23 @@ _ALLOWED_TRACK_COLUMNS = frozenset({
     "time_to_first_move_ms", "total_distance", "avg_speed", "sprint_percentage",
 })
 
+# Pre-built UPDATE queries per column (no string concat in SQL)
+_SINGLE_COLUMN_UPDATES = {
+    "sample_count": "UPDATE player_track SET sample_count = $1 WHERE id = $2",
+    "duration_ms": "UPDATE player_track SET duration_ms = $1 WHERE id = $2",
+    "first_move_time_ms": "UPDATE player_track SET first_move_time_ms = $1 WHERE id = $2",
+    "time_to_first_move_ms": "UPDATE player_track SET time_to_first_move_ms = $1 WHERE id = $2",
+    "total_distance": "UPDATE player_track SET total_distance = $1 WHERE id = $2",
+    "avg_speed": "UPDATE player_track SET avg_speed = $1 WHERE id = $2",
+    "sprint_percentage": "UPDATE player_track SET sprint_percentage = $1 WHERE id = $2",
+}
+
 
 async def _update_row(db, row_id: int, changes: dict[str, Any]) -> None:
-    assignments = []
-    params: list[Any] = []
-    for idx, (column, value) in enumerate(changes.items(), start=1):
+    for column, value in changes.items():
         if column not in _ALLOWED_TRACK_COLUMNS:
             raise ValueError(f"Invalid column for player_track update: {column}")
-        assignments.append(column + " = $" + str(idx))
-        params.append(value)
-    params.append(row_id)
-    set_clause = ", ".join(assignments)
-    query = (
-        "UPDATE player_track SET " + set_clause +
-        " WHERE id = $" + str(len(params))
-    )
-    await db.execute(query, tuple(params))
+        await db.execute(_SINGLE_COLUMN_UPDATES[column], (value, row_id))
 
 
 def _format_preview(row: Any, changes: dict[str, Any]) -> str:

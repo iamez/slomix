@@ -19,17 +19,22 @@ interface ArchetypeDef {
   border: string;
 }
 
-const ARCHETYPES: Record<PlayerArchetype, ArchetypeDef> = {
-  pressure_engine:      { icon: '\uD83D\uDD25', label: 'PRESSURE ENGINE',      color: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'border-rose-500/25' },
-  medic_anchor:         { icon: '\uD83D\uDC89', label: 'MEDIC ANCHOR',         color: 'text-emerald-400', bg: 'bg-emerald-500/10',  border: 'border-emerald-500/25' },
-  silent_assassin:      { icon: '\uD83C\uDFAF', label: 'SILENT ASSASSIN',      color: 'text-cyan-400',    bg: 'bg-cyan-500/10',     border: 'border-cyan-500/25' },
-  frontline_warrior:    { icon: '\u26A1',        label: 'FRONTLINE WARRIOR',    color: 'text-amber-400',   bg: 'bg-amber-500/10',    border: 'border-amber-500/25' },
-  wall_breaker:         { icon: '\uD83D\uDEE1\uFE0F', label: 'WALL BREAKER',   color: 'text-purple-400',  bg: 'bg-purple-500/10',   border: 'border-purple-500/25' },
-  objective_specialist: { icon: '\uD83D\uDD27', label: 'OBJECTIVE SPECIALIST', color: 'text-blue-400',    bg: 'bg-blue-500/10',     border: 'border-blue-500/25' },
-  trade_master:         { icon: '\uD83E\uDD1D', label: 'TRADE MASTER',         color: 'text-teal-400',    bg: 'bg-teal-500/10',     border: 'border-teal-500/25' },
-  survivor:             { icon: '\uD83C\uDFC3', label: 'SURVIVOR',             color: 'text-lime-400',    bg: 'bg-lime-500/10',     border: 'border-lime-500/25' },
-  chaos_agent:          { icon: '\uD83D\uDCA5', label: 'CHAOS AGENT',          color: 'text-orange-400',  bg: 'bg-orange-500/10',   border: 'border-orange-500/25' },
+const DEFAULT_DEF: ArchetypeDef = {
+  icon: '\u26A1', label: 'FRONTLINE WARRIOR',
+  color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/25',
 };
+
+const ARCHETYPES = new Map<PlayerArchetype, ArchetypeDef>([
+  ['pressure_engine',      { icon: '\uD83D\uDD25', label: 'PRESSURE ENGINE',      color: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'border-rose-500/25' }],
+  ['medic_anchor',         { icon: '\uD83D\uDC89', label: 'MEDIC ANCHOR',         color: 'text-emerald-400', bg: 'bg-emerald-500/10',  border: 'border-emerald-500/25' }],
+  ['silent_assassin',      { icon: '\uD83C\uDFAF', label: 'SILENT ASSASSIN',      color: 'text-cyan-400',    bg: 'bg-cyan-500/10',     border: 'border-cyan-500/25' }],
+  ['frontline_warrior',    { icon: '\u26A1',        label: 'FRONTLINE WARRIOR',    color: 'text-amber-400',   bg: 'bg-amber-500/10',    border: 'border-amber-500/25' }],
+  ['wall_breaker',         { icon: '\uD83D\uDEE1\uFE0F', label: 'WALL BREAKER',   color: 'text-purple-400',  bg: 'bg-purple-500/10',   border: 'border-purple-500/25' }],
+  ['objective_specialist', { icon: '\uD83D\uDD27', label: 'OBJECTIVE SPECIALIST', color: 'text-blue-400',    bg: 'bg-blue-500/10',     border: 'border-blue-500/25' }],
+  ['trade_master',         { icon: '\uD83E\uDD1D', label: 'TRADE MASTER',         color: 'text-teal-400',    bg: 'bg-teal-500/10',     border: 'border-teal-500/25' }],
+  ['survivor',             { icon: '\uD83C\uDFC3', label: 'SURVIVOR',             color: 'text-lime-400',    bg: 'bg-lime-500/10',     border: 'border-lime-500/25' }],
+  ['chaos_agent',          { icon: '\uD83D\uDCA5', label: 'CHAOS AGENT',          color: 'text-orange-400',  bg: 'bg-orange-500/10',   border: 'border-orange-500/25' }],
+]);
 
 interface ArchetypeBadgeProps {
   archetype: PlayerArchetype;
@@ -38,9 +43,7 @@ interface ArchetypeBadgeProps {
 }
 
 export function ArchetypeBadge({ archetype, className, size = 'md' }: ArchetypeBadgeProps) {
-  const def = Object.prototype.hasOwnProperty.call(ARCHETYPES, archetype)
-    ? ARCHETYPES[archetype]
-    : ARCHETYPES.frontline_warrior;
+  const def = ARCHETYPES.get(archetype) ?? DEFAULT_DEF;
 
   return (
     <span className={cn(
@@ -56,7 +59,5 @@ export function ArchetypeBadge({ archetype, className, size = 'md' }: ArchetypeB
 }
 
 export function getArchetypeDef(archetype: PlayerArchetype): ArchetypeDef {
-  return Object.prototype.hasOwnProperty.call(ARCHETYPES, archetype)
-    ? ARCHETYPES[archetype]
-    : ARCHETYPES.frontline_warrior;
+  return ARCHETYPES.get(archetype) ?? DEFAULT_DEF;
 }

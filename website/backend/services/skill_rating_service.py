@@ -58,32 +58,6 @@ def get_tier(rating: float) -> str:
             return name
     return "newcomer"
 
-# Shared SQL fragment for the 9 metrics aggregate
-_METRICS_SQL = """
-    COALESCE(AVG(dpm) FILTER (WHERE dpm IS NOT NULL AND dpm > 0), 0) as avg_dpm,
-    COALESCE(SUM(kills)::REAL / NULLIF(COUNT(*), 0), 0) as kpr,
-    COALESCE(SUM(deaths)::REAL / NULLIF(COUNT(*), 0), 0) as dpr,
-    COALESCE(SUM(revives_given)::REAL / NULLIF(COUNT(*), 0), 0) as revive_rate,
-    COALESCE(
-        (SUM(objectives_completed) + SUM(objectives_destroyed) + SUM(objectives_stolen) + SUM(objectives_returned))::REAL
-        / NULLIF(COUNT(*), 0), 0
-    ) as objective_rate,
-    COALESCE(AVG(
-        CASE WHEN time_played_seconds > 0
-        THEN (time_played_seconds - COALESCE(
-            CASE WHEN time_dead_minutes > 0 THEN time_dead_minutes * 60 ELSE 0 END, 0
-        ))::REAL / time_played_seconds
-        ELSE 0 END
-    ), 0) as survival_rate,
-    COALESCE(
-        SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
-    ) as useful_kill_rate,
-    COALESCE(
-        SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
-    ) as denied_playtime_pm,
-    COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
-"""
-
 
 def _row_to_stats(r, offset: int = 0) -> dict:
     """Extract 9 metrics from a DB row starting at the given column offset."""
@@ -106,9 +80,30 @@ async def compute_population_percentiles(db) -> dict:
     Query aggregate stats for all players with enough rounds,
     return sorted value lists for each metric (used for percentile lookup).
     """
-    # _METRICS_SQL is a module-level constant (not user input) — safe for f-string interpolation
-    rows = await db.fetch_all(
-        "SELECT player_guid, COUNT(*) as rounds, " + _METRICS_SQL + """
+    rows = await db.fetch_all("""
+        SELECT player_guid, COUNT(*) as rounds,
+        COALESCE(AVG(dpm) FILTER (WHERE dpm IS NOT NULL AND dpm > 0), 0) as avg_dpm,
+        COALESCE(SUM(kills)::REAL / NULLIF(COUNT(*), 0), 0) as kpr,
+        COALESCE(SUM(deaths)::REAL / NULLIF(COUNT(*), 0), 0) as dpr,
+        COALESCE(SUM(revives_given)::REAL / NULLIF(COUNT(*), 0), 0) as revive_rate,
+        COALESCE(
+            (SUM(objectives_completed) + SUM(objectives_destroyed) + SUM(objectives_stolen) + SUM(objectives_returned))::REAL
+            / NULLIF(COUNT(*), 0), 0
+        ) as objective_rate,
+        COALESCE(AVG(
+            CASE WHEN time_played_seconds > 0
+            THEN (time_played_seconds - COALESCE(
+                CASE WHEN time_dead_minutes > 0 THEN time_dead_minutes * 60 ELSE 0 END, 0
+            ))::REAL / time_played_seconds
+            ELSE 0 END
+        ), 0) as survival_rate,
+        COALESCE(
+            SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
+        ) as useful_kill_rate,
+        COALESCE(
+            SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
+        ) as denied_playtime_pm,
+        COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
         GROUP BY player_guid
         HAVING COUNT(*) >= $1
@@ -167,10 +162,31 @@ async def compute_all_ratings(db) -> list[dict]:
     Single query: percentiles + ratings computed from the same result set.
     """
     logger.info("Querying player aggregates (single pass)...")
-    # _METRICS_SQL is a module-level constant (not user input) — safe for string concat
-    rows = await db.fetch_all(
-        "SELECT player_guid, MAX(player_name) as display_name, "
-        "COUNT(*) as rounds, " + _METRICS_SQL + """
+    rows = await db.fetch_all("""
+        SELECT player_guid, MAX(player_name) as display_name,
+        COUNT(*) as rounds,
+        COALESCE(AVG(dpm) FILTER (WHERE dpm IS NOT NULL AND dpm > 0), 0) as avg_dpm,
+        COALESCE(SUM(kills)::REAL / NULLIF(COUNT(*), 0), 0) as kpr,
+        COALESCE(SUM(deaths)::REAL / NULLIF(COUNT(*), 0), 0) as dpr,
+        COALESCE(SUM(revives_given)::REAL / NULLIF(COUNT(*), 0), 0) as revive_rate,
+        COALESCE(
+            (SUM(objectives_completed) + SUM(objectives_destroyed) + SUM(objectives_stolen) + SUM(objectives_returned))::REAL
+            / NULLIF(COUNT(*), 0), 0
+        ) as objective_rate,
+        COALESCE(AVG(
+            CASE WHEN time_played_seconds > 0
+            THEN (time_played_seconds - COALESCE(
+                CASE WHEN time_dead_minutes > 0 THEN time_dead_minutes * 60 ELSE 0 END, 0
+            ))::REAL / time_played_seconds
+            ELSE 0 END
+        ), 0) as survival_rate,
+        COALESCE(
+            SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
+        ) as useful_kill_rate,
+        COALESCE(
+            SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
+        ) as denied_playtime_pm,
+        COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
         GROUP BY player_guid
         HAVING COUNT(*) >= $1
@@ -259,10 +275,31 @@ async def compute_session_ratings(db, player_guid: str, session_date: str,
         if not percentiles:
             return None
 
-    # _METRICS_SQL is a module-level constant (not user input) — safe for string concat
-    row = await db.fetch_one(
-        "SELECT COUNT(*) as rounds, "
-        "COUNT(DISTINCT map_name) as maps, " + _METRICS_SQL + """
+    row = await db.fetch_one("""
+        SELECT COUNT(*) as rounds,
+        COUNT(DISTINCT map_name) as maps,
+        COALESCE(AVG(dpm) FILTER (WHERE dpm IS NOT NULL AND dpm > 0), 0) as avg_dpm,
+        COALESCE(SUM(kills)::REAL / NULLIF(COUNT(*), 0), 0) as kpr,
+        COALESCE(SUM(deaths)::REAL / NULLIF(COUNT(*), 0), 0) as dpr,
+        COALESCE(SUM(revives_given)::REAL / NULLIF(COUNT(*), 0), 0) as revive_rate,
+        COALESCE(
+            (SUM(objectives_completed) + SUM(objectives_destroyed) + SUM(objectives_stolen) + SUM(objectives_returned))::REAL
+            / NULLIF(COUNT(*), 0), 0
+        ) as objective_rate,
+        COALESCE(AVG(
+            CASE WHEN time_played_seconds > 0
+            THEN (time_played_seconds - COALESCE(
+                CASE WHEN time_dead_minutes > 0 THEN time_dead_minutes * 60 ELSE 0 END, 0
+            ))::REAL / time_played_seconds
+            ELSE 0 END
+        ), 0) as survival_rate,
+        COALESCE(
+            SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
+        ) as useful_kill_rate,
+        COALESCE(
+            SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
+        ) as denied_playtime_pm,
+        COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
         WHERE player_guid = $1 AND round_date = $2
     """, (player_guid, session_date))
@@ -293,9 +330,30 @@ async def compute_session_map_ratings(db, player_guid: str, session_date: str,
         if not percentiles:
             return []
 
-    # _METRICS_SQL is a module-level constant (not user input) — safe for string concat
-    rows = await db.fetch_all(
-        "SELECT map_name, COUNT(*) as rounds, " + _METRICS_SQL + """
+    rows = await db.fetch_all("""
+        SELECT map_name, COUNT(*) as rounds,
+        COALESCE(AVG(dpm) FILTER (WHERE dpm IS NOT NULL AND dpm > 0), 0) as avg_dpm,
+        COALESCE(SUM(kills)::REAL / NULLIF(COUNT(*), 0), 0) as kpr,
+        COALESCE(SUM(deaths)::REAL / NULLIF(COUNT(*), 0), 0) as dpr,
+        COALESCE(SUM(revives_given)::REAL / NULLIF(COUNT(*), 0), 0) as revive_rate,
+        COALESCE(
+            (SUM(objectives_completed) + SUM(objectives_destroyed) + SUM(objectives_stolen) + SUM(objectives_returned))::REAL
+            / NULLIF(COUNT(*), 0), 0
+        ) as objective_rate,
+        COALESCE(AVG(
+            CASE WHEN time_played_seconds > 0
+            THEN (time_played_seconds - COALESCE(
+                CASE WHEN time_dead_minutes > 0 THEN time_dead_minutes * 60 ELSE 0 END, 0
+            ))::REAL / time_played_seconds
+            ELSE 0 END
+        ), 0) as survival_rate,
+        COALESCE(
+            SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
+        ) as useful_kill_rate,
+        COALESCE(
+            SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
+        ) as denied_playtime_pm,
+        COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
         WHERE player_guid = $1 AND round_date = $2
         GROUP BY map_name
@@ -351,10 +409,30 @@ async def get_player_session_history(db, player_guid: str,
             continue
 
         # Compute cumulative rating up to and including this date
-        # round_date is TEXT (ISO format), <= comparison works lexicographically
-        # _METRICS_SQL is a module-level constant (not user input) — safe for string concat
-        cum_row = await db.fetch_one(
-            "SELECT COUNT(*) as rounds, " + _METRICS_SQL + """
+        cum_row = await db.fetch_one("""
+            SELECT COUNT(*) as rounds,
+            COALESCE(AVG(dpm) FILTER (WHERE dpm IS NOT NULL AND dpm > 0), 0) as avg_dpm,
+            COALESCE(SUM(kills)::REAL / NULLIF(COUNT(*), 0), 0) as kpr,
+            COALESCE(SUM(deaths)::REAL / NULLIF(COUNT(*), 0), 0) as dpr,
+            COALESCE(SUM(revives_given)::REAL / NULLIF(COUNT(*), 0), 0) as revive_rate,
+            COALESCE(
+                (SUM(objectives_completed) + SUM(objectives_destroyed) + SUM(objectives_stolen) + SUM(objectives_returned))::REAL
+                / NULLIF(COUNT(*), 0), 0
+            ) as objective_rate,
+            COALESCE(AVG(
+                CASE WHEN time_played_seconds > 0
+                THEN (time_played_seconds - COALESCE(
+                    CASE WHEN time_dead_minutes > 0 THEN time_dead_minutes * 60 ELSE 0 END, 0
+                ))::REAL / time_played_seconds
+                ELSE 0 END
+            ), 0) as survival_rate,
+            COALESCE(
+                SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
+            ) as useful_kill_rate,
+            COALESCE(
+                SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
+            ) as denied_playtime_pm,
+            COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
             FROM player_comprehensive_stats
             WHERE player_guid = $1 AND round_date <= $2
         """, (player_guid, date_str))
