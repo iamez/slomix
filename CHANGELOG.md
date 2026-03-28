@@ -6,6 +6,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.1.1](https://github.com/iamez/slomix/compare/v1.1.0...v1.1.1) (2026-03-28)
+
+
+### Bug Fixes
+
+* **ci:** make slowapi optional with no-op stub for CI/test environments ([8114a6d](https://github.com/iamez/slomix/commit/8114a6d2507c96e79c010c073b9e87f133d9433f))
+* **diagnostics:** restore gaming_sessions query lost in merge ([2abed29](https://github.com/iamez/slomix/commit/2abed296bc111c9c2a9a73c84bbea4196fd0772b))
+* eliminate ALL SQL string concat + object bracket access for Codacy ([bd1ed13](https://github.com/iamez/slomix/commit/bd1ed137f355502f7970bea79e9d3ff4491ac3ef))
+* MomentumChart non-null assertion → guard check ([6d6e899](https://github.com/iamez/slomix/commit/6d6e8993ac06c6b5e6b8e880c47a6612691894cd))
+* remaining Codacy issues — Protocol stubs + health check stack trace ([e44ee2c](https://github.com/iamez/slomix/commit/e44ee2c909403dd28768ae0fcc82750715331a29))
+* resolve all 58 Codacy issues — XSS, TypeScript, SQL injection ([9086a13](https://github.com/iamez/slomix/commit/9086a134cd6e7b29bb739be83163c8334fbd05cc))
+* resolve all CI lint failures (ruff F821, F841, unused imports) ([795a4b1](https://github.com/iamez/slomix/commit/795a4b1fdaa4e4f6f41be2d7cdb5f79904184b44))
+* resolve all Codacy/CodeQL code scanning issues (no suppressions) ([ee168b3](https://github.com/iamez/slomix/commit/ee168b3c7e5f72efdb23de33b2188160c48a1be1))
+* resolve all remaining Codacy/CodeQL alerts (30 issues, 0 suppressed) ([5790019](https://github.com/iamez/slomix/commit/57900191cca897f29d2d8a578a2cba6c80a01ec5))
+* resolve final 17 Codacy issues — SQL concat, object injection, stack trace ([baef473](https://github.com/iamez/slomix/commit/baef473d1f32d1d7512ad4294024713ad41f04cb))
+* **tests:** remove stale players/discord_users assertions from diagnostics test ([9a4ef52](https://github.com/iamez/slomix/commit/9a4ef52f3dd6f2ed1431eea222b1c11e8827be6e))
+* **tests:** update mocks for endstats guard + diagnostics table rename ([7424857](https://github.com/iamez/slomix/commit/742485757adc9fa0df8bb17209fecc46d61bdf2e))
+
 ## [1.1.0](https://github.com/iamez/slomix/compare/v1.0.8...v1.1.0) (2026-03-25)
 
 
