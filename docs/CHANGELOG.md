@@ -12,6 +12,58 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.5.0] — 2026-03-28: Round Replay Timeline, Momentum Chart & Codacy Zero
+
+**Visual round analysis with event replay, momentum tracking, session narratives, expanded moment detectors, and full Codacy compliance — 53 commits, 58 issues resolved to zero.**
+
+*53 commits across website frontend/backend, bot services, and legacy JS modules. CI: 9/9 checks green (lint, tests, CodeQL, Docker, Codacy).*
+
+#### Round Replay Timeline — NEW
+- **Dual-pane viewer** (`/#/replay`): Event feed on the left, 2D map canvas on the right, synchronized scrubber bar for frame-by-frame navigation
+- **Player positions**: Sourced from `player_track.path` JSONB at 200ms precision — real-time player dots on map overlay
+- **420+ events per round**: Kills, deaths, revives, objectives, team actions rendered on interactive timeline
+- **2D map canvas**: ET:Legacy map backgrounds with player position markers and event annotations
+- **3 API endpoints**: Round event feed, player track positions, round metadata
+
+#### Momentum Chart — NEW
+- **30-second window momentum**: Rolling window scoring with 0.85 exponential decay factor
+- **Canvas 2D dual-line chart**: Axis vs Allies momentum curves rendered on HTML5 Canvas
+- **Per-round tabs**: Navigate between rounds within a session to compare momentum shifts
+
+#### Session Narrative — NEW
+- **Auto-generated paragraph**: Summarizes MVP, player archetype, defining moment, and team synergy comparison for each session
+- **Data-driven storytelling**: Pulls from KIS, archetypes, moments, and synergy scores to compose coherent match narratives
+
+#### Moment Detectors Expanded (11 total, was 5)
+- **New detectors**: Team wipe (5★), multikill (2-5★ scaled), objective secured, objective denied, objective run, multi-revive
+- **Objective-focused moments**: Carrier interception chains, contested engineer builds, dynamite defuses
+- **Rich kill-by-kill context**: Each moment includes weapon names (35-weapon mapping), timestamps, duration, and player display names
+
+#### Code Quality — Codacy 58 → 0 (Mandelbrot Audit)
+- **22 CRITICAL XSS**: ALL `innerHTML` assignments replaced with DOM API (`createElement` + `textContent`) across `story.js`, `rivalries.js`, `replay.js`
+- **12 HIGH TypeScript**: Non-null assertions replaced with guard checks, optional chains added, void arrow returns fixed, object bracket injection prevented
+- **7 SQL injection**: ALL f-string SQL eliminated — replaced with pre-built query dictionaries and column whitelists
+- **Protocol stubs**: Added missing protocol handler stubs
+- **Stack trace exposure**: Health check endpoints no longer leak stack traces to clients
+- **URL redirect validation**: Added origin validation on redirect endpoints
+- **Insecure randomness**: Replaced `Math.random()` with `crypto.getRandomValues()` where security-relevant
+- **Zero suppressions**: Every issue resolved properly — no `// eslint-disable` or `# noqa` workarounds
+- **CI**: 9/9 checks green (lint, tests, CodeQL, Docker build, Codacy quality gate)
+
+#### Data Truth Verification
+- **KIS push_multiplier**: Deflated from 99.8% → 11.9% after quality-gating (was over-counting non-push kills as push kills)
+- **Synergy groups**: Fixed for stopwatch team swaps — synergy now correctly tracks players through side changes
+- **Headshot% formula**: Confirmed corrected to `hs_hits / total_hits` (fix from v1.4.0)
+
+#### Bug Fixes
+- **MomentumChart non-null assertion → guard check**: Prevented crash when chart data is null during initial render
+- **Rivalries double /api/api/ prefix**: Fixed URL construction that produced broken API calls
+- **Narrative gaming_session_id query**: Fixed query pulling session ID from wrong table
+- **PUSH_MULTIPLIER import removed**: Cleaned up after quality-gating made the constant unused
+- **gaming_sessions diagnostic query restored**: Re-added diagnostic query lost during `--ours` merge resolution
+
+---
+
 ## [1.4.0] — 2026-03-27: Player Rivalries, Win Contribution & Smart Stats Phase 2
 
 **Full esports analytics upgrade: head-to-head rivalry engine, per-round win contribution scoring, 11 match moment detectors with rich context, 9 server-side archetypes, and 35-weapon name mapping.**
