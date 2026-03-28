@@ -106,8 +106,9 @@ async def compute_population_percentiles(db) -> dict:
     Query aggregate stats for all players with enough rounds,
     return sorted value lists for each metric (used for percentile lookup).
     """
-    rows = await db.fetch_all(f"""
-        SELECT player_guid, COUNT(*) as rounds, {_METRICS_SQL}
+    # _METRICS_SQL is a module-level constant (not user input) — safe for f-string interpolation
+    rows = await db.fetch_all(
+        "SELECT player_guid, COUNT(*) as rounds, " + _METRICS_SQL + """
         FROM player_comprehensive_stats
         GROUP BY player_guid
         HAVING COUNT(*) >= $1
@@ -166,9 +167,10 @@ async def compute_all_ratings(db) -> list[dict]:
     Single query: percentiles + ratings computed from the same result set.
     """
     logger.info("Querying player aggregates (single pass)...")
-    rows = await db.fetch_all(f"""
-        SELECT player_guid, MAX(player_name) as display_name,
-               COUNT(*) as rounds, {_METRICS_SQL}
+    # _METRICS_SQL is a module-level constant (not user input) — safe for string concat
+    rows = await db.fetch_all(
+        "SELECT player_guid, MAX(player_name) as display_name, "
+        "COUNT(*) as rounds, " + _METRICS_SQL + """
         FROM player_comprehensive_stats
         GROUP BY player_guid
         HAVING COUNT(*) >= $1
@@ -257,10 +259,10 @@ async def compute_session_ratings(db, player_guid: str, session_date: str,
         if not percentiles:
             return None
 
-    row = await db.fetch_one(f"""
-        SELECT COUNT(*) as rounds,
-               COUNT(DISTINCT map_name) as maps,
-               {_METRICS_SQL}
+    # _METRICS_SQL is a module-level constant (not user input) — safe for string concat
+    row = await db.fetch_one(
+        "SELECT COUNT(*) as rounds, "
+        "COUNT(DISTINCT map_name) as maps, " + _METRICS_SQL + """
         FROM player_comprehensive_stats
         WHERE player_guid = $1 AND round_date = $2
     """, (player_guid, session_date))
@@ -291,8 +293,9 @@ async def compute_session_map_ratings(db, player_guid: str, session_date: str,
         if not percentiles:
             return []
 
-    rows = await db.fetch_all(f"""
-        SELECT map_name, COUNT(*) as rounds, {_METRICS_SQL}
+    # _METRICS_SQL is a module-level constant (not user input) — safe for string concat
+    rows = await db.fetch_all(
+        "SELECT map_name, COUNT(*) as rounds, " + _METRICS_SQL + """
         FROM player_comprehensive_stats
         WHERE player_guid = $1 AND round_date = $2
         GROUP BY map_name
@@ -349,8 +352,9 @@ async def get_player_session_history(db, player_guid: str,
 
         # Compute cumulative rating up to and including this date
         # round_date is TEXT (ISO format), <= comparison works lexicographically
-        cum_row = await db.fetch_one(f"""
-            SELECT COUNT(*) as rounds, {_METRICS_SQL}
+        # _METRICS_SQL is a module-level constant (not user input) — safe for string concat
+        cum_row = await db.fetch_one(
+            "SELECT COUNT(*) as rounds, " + _METRICS_SQL + """
             FROM player_comprehensive_stats
             WHERE player_guid = $1 AND round_date <= $2
         """, (player_guid, date_str))

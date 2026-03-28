@@ -541,7 +541,10 @@ export const useMovementStats = (rangeDays = 30, playerGuid?: string) =>
 export function useStoryKillImpact(sessionDate: string | null) {
   return useQuery({
     queryKey: ['story-kill-impact', sessionDate],
-    queryFn: () => api.getStoryKillImpact(sessionDate!),
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryKillImpact(sessionDate);
+    },
     enabled: !!sessionDate,
   });
 }
@@ -549,7 +552,10 @@ export function useStoryKillImpact(sessionDate: string | null) {
 export function useStoryMoments(sessionDate: string | null) {
   return useQuery({
     queryKey: ['story-moments', sessionDate],
-    queryFn: () => api.getStoryMoments(sessionDate!),
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryMoments(sessionDate);
+    },
     enabled: !!sessionDate,
   });
 }
@@ -557,7 +563,10 @@ export function useStoryMoments(sessionDate: string | null) {
 export function useStoryMomentum(sessionDate: string | null) {
   return useQuery({
     queryKey: ['story-momentum', sessionDate],
-    queryFn: () => api.getStoryMomentum(sessionDate!),
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryMomentum(sessionDate);
+    },
     enabled: !!sessionDate,
     staleTime: 60_000,
   });
@@ -566,7 +575,10 @@ export function useStoryMomentum(sessionDate: string | null) {
 export function useStoryNarrative(sessionDate: string | null) {
   return useQuery({
     queryKey: ['story-narrative', sessionDate],
-    queryFn: () => api.getStoryNarrative(sessionDate!),
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryNarrative(sessionDate);
+    },
     enabled: !!sessionDate,
     staleTime: 60_000,
   });

@@ -63,7 +63,7 @@ export default function Story() {
 
   // Auto-select first session
   useEffect(() => {
-    if (!sessionDate && scopes?.sessions?.length) {
+    if (!sessionDate && scopes?.sessions.length) {
       setSessionDate(scopes.scope?.session_date ?? scopes.sessions[0].session_date);
     }
   }, [scopes, sessionDate]);
@@ -83,8 +83,8 @@ export default function Story() {
   const narrative = narrativeData?.narrative ?? '';
 
   // Current session metadata
-  const currentSession = scopes?.sessions?.find((s) => s.session_date === sessionDate);
-  const mapNames = currentSession?.maps?.map((m) => m.map_name) ?? [];
+  const currentSession = scopes?.sessions.find((s) => s.session_date === sessionDate);
+  const mapNames = currentSession?.maps.map((m) => m.map_name) ?? [];
 
   return (
     <>
@@ -113,11 +113,11 @@ export default function Story() {
           <label className="text-xs text-slate-500 uppercase tracking-wider font-bold">Session</label>
           <select
             value={sessionDate ?? ''}
-            onChange={(e) => setSessionDate(e.target.value || null)}
+            onChange={(e) => { setSessionDate(e.target.value || null); }}
             className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white backdrop-blur-sm focus:border-cyan-400/50 focus:outline-none"
           >
             {scopesLoading && <option value="">Loading...</option>}
-            {scopes?.sessions?.map((s) => (
+            {scopes?.sessions.map((s) => (
               <option key={s.session_date} value={s.session_date}>
                 {s.session_date} — {s.maps.length} map{s.maps.length !== 1 ? 's' : ''}
               </option>

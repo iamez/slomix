@@ -55,7 +55,7 @@ export function PlayerStoryCard({ entry, rank, archetype, className }: PlayerSto
 
       {/* Player name */}
       <button
-        onClick={() => navigateToPlayer(name)}
+        onClick={() => { navigateToPlayer(name); }}
         className="text-lg font-bold text-white hover:text-cyan-300 transition-colors truncate block w-full text-left"
       >
         {name}

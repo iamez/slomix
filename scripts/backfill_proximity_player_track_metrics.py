@@ -210,30 +210,21 @@ async def _get_rows(args) -> list[Any]:
             limit_clause = f" LIMIT ${param_idx}"
             params.append(args.limit)
 
-        query = f"""
-            SELECT
-                pt.id,
-                pt.round_id,
-                pt.player_guid,
-                pt.player_name,
-                pt.team,
-                pt.player_class,
-                pt.spawn_time_ms,
-                pt.death_time_ms,
-                pt.duration_ms,
-                pt.first_move_time_ms,
-                pt.time_to_first_move_ms,
-                pt.sample_count,
-                pt.total_distance,
-                pt.avg_speed,
-                pt.sprint_percentage,
-                pt.path
-            FROM player_track pt
-            LEFT JOIN rounds r ON r.id = pt.round_id
-            WHERE {" AND ".join(where_clauses)}
-            ORDER BY pt.id
-            {limit_clause}
-        """
+        # where_clauses/limit_clause built from hardcoded column names + $N params (not user input)
+        where_sql = " AND ".join(where_clauses)
+        query = (
+            "SELECT"
+            " pt.id, pt.round_id, pt.player_guid, pt.player_name,"
+            " pt.team, pt.player_class, pt.spawn_time_ms, pt.death_time_ms,"
+            " pt.duration_ms, pt.first_move_time_ms, pt.time_to_first_move_ms,"
+            " pt.sample_count, pt.total_distance, pt.avg_speed,"
+            " pt.sprint_percentage, pt.path"
+            " FROM player_track pt"
+            " LEFT JOIN rounds r ON r.id = pt.round_id"
+            " WHERE " + where_sql +
+            " ORDER BY pt.id"
+            + limit_clause
+        )
         return await db.fetch_all(query, tuple(params))
     return []
 
@@ -254,18 +245,27 @@ async def _apply_updates(args, updates: list[tuple[int, dict[str, Any]]]) -> Non
         return
 
 
+# Whitelist of columns allowed in player_track UPDATE (from _build_changes)
+_ALLOWED_TRACK_COLUMNS = frozenset({
+    "sample_count", "duration_ms", "first_move_time_ms",
+    "time_to_first_move_ms", "total_distance", "avg_speed", "sprint_percentage",
+})
+
+
 async def _update_row(db, row_id: int, changes: dict[str, Any]) -> None:
     assignments = []
     params: list[Any] = []
     for idx, (column, value) in enumerate(changes.items(), start=1):
+        if column not in _ALLOWED_TRACK_COLUMNS:
+            raise ValueError(f"Invalid column for player_track update: {column}")
         assignments.append(f"{column} = ${idx}")
         params.append(value)
     params.append(row_id)
-    query = f"""
-        UPDATE player_track
-        SET {", ".join(assignments)}
-        WHERE id = ${len(params)}
-    """
+    set_clause = ", ".join(assignments)
+    query = (
+        "UPDATE player_track SET " + set_clause +
+        " WHERE id = $" + str(len(params))
+    )
     await db.execute(query, tuple(params))
 
 
