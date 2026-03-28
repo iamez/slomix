@@ -23,18 +23,23 @@ class CacheBackend(Protocol):
 
     async def connect(self) -> None:
         """Establish connection to the cache."""
+        ...  # noqa: WPS428 — Protocol stub
 
     async def close(self) -> None:
         """Close the cache connection."""
+        ...  # noqa: WPS428 — Protocol stub
 
     async def get_namespace(self) -> str:
         """Return the current cache namespace."""
+        ...  # noqa: WPS428 — Protocol stub
 
     async def get(self, namespace: str, key: str) -> Optional[dict[str, Any]]:
         """Retrieve a cached value."""
+        ...  # noqa: WPS428 — Protocol stub
 
     async def set(self, namespace: str, key: str, value: dict[str, Any], ttl: int) -> None:
         """Store a value in cache with TTL."""
+        ...  # noqa: WPS428 — Protocol stub
 
     async def invalidate_all(self) -> None:
         """Invalidate all cached entries."""

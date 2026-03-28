@@ -322,12 +322,12 @@ async def health_check():
             raise RuntimeError("database pool not initialized")
         await asyncio.wait_for(db.fetch_one("SELECT 1"), timeout=2.0)
     except Exception as exc:
+        logger.error("Health check DB failure: %s", exc)
         return JSONResponse(
             status_code=503,
             content={
                 "status": "error",
                 "database": "unavailable",
-                "detail": str(exc),
             },
         )
     return {"status": "ok", "database": "ok"}
