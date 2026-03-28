@@ -288,7 +288,6 @@ class PostgreSQLDatabaseManager:
 
         # Use pg_dump for backup
         import subprocess
-        import re
 
         # Validate hostname (defense in depth - config is already trusted)
         host = self.config.postgres_host.split(':')[0]
@@ -1416,10 +1415,10 @@ class PostgreSQLDatabaseManager:
     # =========================================================================
     
     async def is_file_processed(self, filename: str) -> bool:
-        """Check if file has already been processed"""
+        """Check if file has already been SUCCESSFULLY processed"""
         async with self.pool.acquire() as conn:
             result = await conn.fetchval(
-                "SELECT COUNT(*) FROM processed_files WHERE filename = $1",
+                "SELECT COUNT(*) FROM processed_files WHERE filename = $1 AND success = TRUE",
                 filename
             )
             return result > 0

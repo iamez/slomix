@@ -145,7 +145,8 @@ class TeamManager:
         if isinstance(value, str):
             try:
                 return json.loads(value)
-            except Exception:
+            except Exception as e:
+                logger.warning("⚠️ Failed to deserialize team roster JSON: %s (value: %.100s)", e, value)
                 return []
         return list(value) if isinstance(value, tuple) else []
 

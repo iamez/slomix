@@ -155,12 +155,13 @@ async def upload_file(
         # Rollback file on DB failure
         try:
             storage.delete_upload(saved.stored_path)
-        except Exception:
-            pass
+        except Exception as cleanup_err:
+            logger.warning("⚠️ File rollback also failed (orphaned file): %s", cleanup_err)
         logger.error("Upload DB insert failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to save upload metadata") from e
 
     # Insert tags (normalize unicode, strip non-alphanumeric)
+    failed_tags: list[str] = []
     if tags.strip():
         import re
         import unicodedata
@@ -180,14 +181,24 @@ async def upload_file(
                     (saved.upload_id, tag),
                 )
             except Exception as e:
-                logger.warning("Tag insert failed for %s: %s", tag, e)
+                logger.warning(
+                    "Tag insert failed for upload %s, tag '%s': %s",
+                    saved.upload_id, tag, e,
+                )
+                failed_tags.append(tag)
+
+    if failed_tags:
+        logger.warning(
+            "Upload %s: %d/%d tags failed to save: %s",
+            saved.upload_id, len(failed_tags), len(tag_list), failed_tags,
+        )
 
     logger.info(
         "File uploaded: id=%s user=%s category=%s size=%d",
         saved.upload_id, discord_id, saved.category, saved.file_size_bytes,
     )
 
-    return {
+    response = {
         "upload_id": saved.upload_id,
         "filename": saved.original_filename,
         "title": safe_title,
@@ -195,6 +206,12 @@ async def upload_file(
         "file_size_bytes": saved.file_size_bytes,
         "share_url": f"/share/{saved.upload_id}",
     }
+
+    if failed_tags:
+        response["failed_tags"] = failed_tags
+        response["warning"] = f"{len(failed_tags)} tag(s) failed to save: {', '.join(failed_tags)}"
+
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -332,6 +349,7 @@ async def get_upload(upload_id: str, db=Depends(get_db)):
 @router.get("/{upload_id}/download")
 async def download_upload(
     upload_id: str,
+    force_download: bool = False,
     db=Depends(get_db),
     range: Optional[str] = Header(None),
 ):
@@ -367,7 +385,7 @@ async def download_upload(
             pass
 
     # For MP4, allow inline playback with Range request support for seeking
-    if extension.lower() == ".mp4":
+    if extension.lower() == ".mp4" and not force_download:
         file_size = resolved.stat().st_size
 
         base_headers = {

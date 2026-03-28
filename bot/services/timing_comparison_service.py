@@ -400,19 +400,19 @@ class TimingComparisonService:
                 try:
                     candidates.append(datetime.fromtimestamp(end_unix))
                 except (OSError, ValueError, TypeError):
-                    pass
+                    pass  # Invalid/out-of-range unix timestamp; skip
             if start_unix:
                 try:
                     candidates.append(datetime.fromtimestamp(start_unix))
                 except (OSError, ValueError, TypeError):
-                    pass
+                    pass  # Invalid/out-of-range unix timestamp; skip
             if captured_at:
                 if isinstance(captured_at, str):
                     try:
                         captured_dt = datetime.fromisoformat(captured_at.replace('Z', '+00:00'))
                         candidates.append(captured_dt.replace(tzinfo=None))
                     except ValueError:
-                        pass
+                        pass  # Malformed ISO string; skip
                 else:
                     candidates.append(captured_at.replace(tzinfo=None) if captured_at.tzinfo else captured_at)
 

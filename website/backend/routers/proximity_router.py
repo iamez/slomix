@@ -1,13 +1,16 @@
+import asyncio
+import time
 import math
 import json
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from collections import defaultdict
 from itertools import combinations
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
+from website.backend.rate_limit import limiter
 
 router = APIRouter()
 logger = get_app_logger("api.proximity")
@@ -126,7 +129,8 @@ async def _table_column_exists(db: DatabaseAdapter, table_name: str, column_name
                 (table_name, column_name),
             )
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("_table_column_exists check failed for %s.%s: %s", table_name, column_name, e)
         return False
 
 
@@ -555,6 +559,152 @@ def _compute_strafe_metrics(path: List[Dict[str, Any]], min_step: float = 5.0, a
         "turn_count": turn_count,
         "turn_rate": turn_rate,
         "events": turn_events,
+    }
+
+
+
+# ========================================
+# COMPOSITE DASHBOARD ENDPOINT
+# ========================================
+# Replaces 29+ individual HTTP calls with a single asyncio.gather.
+# Individual endpoints remain unchanged for backward compatibility.
+
+DASHBOARD_SECTION_GROUPS = {
+    "critical": ["summary", "engagements", "hotzones", "movers", "teamplay", "classes", "events"],
+    "combat": ["reactions", "trades_summary", "trades_events", "weapon_accuracy", "revives", "movement_stats"],
+    "teamplay_v5": ["spawn_timing", "cohesion", "crossfire_angles", "pushes", "lua_trades"],
+    "analytics": ["kill_outcomes", "kill_outcome_stats", "hit_regions", "headshot_rates"],
+    "objectives": ["carrier_events", "carrier_kills", "carrier_returns", "vehicle_progress", "escort_credits", "construction_events"],
+    "scoring": ["prox_scores", "prox_formula"],
+}
+DASHBOARD_ALL_SECTIONS = [s for g in DASHBOARD_SECTION_GROUPS.values() for s in g]
+
+
+async def _timed_section(name: str, coro):
+    """Wrap a section coroutine with timing and error handling."""
+    t0 = time.monotonic()
+    try:
+        result = await coro
+        ms = round((time.monotonic() - t0) * 1000, 1)
+        if isinstance(result, dict):
+            result["_timing_ms"] = ms
+        return result
+    except Exception as e:
+        ms = round((time.monotonic() - t0) * 1000, 1)
+        logger.warning("Dashboard section %s failed in %.1fms: %s", name, ms, e)
+        return {"_error": str(e), "status": "error", "_timing_ms": ms}
+
+
+@router.get("/proximity/dashboard")
+@limiter.limit("10/minute")
+async def get_proximity_dashboard(
+    request: Request,
+    sections: str = "all",
+    range_days: int = 30,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Composite endpoint: fetches multiple proximity sections in a single request.
+    Replaces 29+ individual HTTP calls with one asyncio.gather.
+
+    sections: "all", a group name (critical/combat/teamplay_v5/analytics/objectives/scoring),
+              or comma-separated section keys.
+    """
+    t0_total = time.monotonic()
+
+    # Parse requested sections
+    requested = set()
+    for part in sections.split(","):
+        part = part.strip()
+        if part == "all":
+            requested = set(DASHBOARD_ALL_SECTIONS)
+            break
+        elif part in DASHBOARD_SECTION_GROUPS:
+            requested.update(DASHBOARD_SECTION_GROUPS[part])
+        elif part in DASHBOARD_ALL_SECTIONS:
+            requested.add(part)
+
+    if not requested:
+        return {"status": "error", "detail": "No valid sections requested"}
+
+    # Pre-parse session_date so all downstream functions receive a date object.
+    parsed_date = _parse_iso_date(session_date)
+
+    # Full scope kwargs (for endpoints that accept all 5 scope params)
+    full = dict(range_days=range_days, session_date=parsed_date, map_name=map_name,
+                round_number=round_number, round_start_unix=round_start_unix)
+
+    # Section dispatchers
+    dispatchers = {
+        "summary": lambda: get_proximity_summary(**full, db=db),
+        "engagements": lambda: get_proximity_engagements(**full, db=db),
+        "hotzones": lambda: get_proximity_hotzones(**full, db=db),
+        "movers": lambda: get_proximity_movers(**full, db=db),
+        "teamplay": lambda: get_proximity_teamplay(**full, limit=6, db=db),
+        "classes": lambda: get_proximity_classes(**full, db=db),
+        "events": lambda: get_proximity_events(**full, limit=20, db=db),
+        "trades_summary": lambda: get_proximity_trades_summary(**full, db=db),
+        "trades_events": lambda: get_proximity_trade_events(**full, limit=10, db=db),
+        "spawn_timing": lambda: get_proximity_spawn_timing(**full, db=db),
+        "cohesion": lambda: get_proximity_cohesion(**full, db=db),
+        "crossfire_angles": lambda: get_proximity_crossfire_angles(**full, db=db),
+        "pushes": lambda: get_proximity_pushes(**full, db=db),
+        "lua_trades": lambda: get_proximity_lua_trades(**full, db=db),
+        "kill_outcomes": lambda: get_proximity_kill_outcomes(**full, db=db),
+        "hit_regions": lambda: get_proximity_hit_regions(**full, db=db),
+        "carrier_events": lambda: get_proximity_carrier_events(**full, db=db),
+        "carrier_kills": lambda: get_proximity_carrier_kills(**full, db=db),
+        "carrier_returns": lambda: get_proximity_carrier_returns(**full, db=db),
+        "vehicle_progress": lambda: get_proximity_vehicle_progress(**full, db=db),
+        "escort_credits": lambda: get_proximity_escort_credits(**full, db=db),
+        "construction_events": lambda: get_proximity_construction_events(**full, db=db),
+        "reactions": lambda: get_proximity_reactions(**full, limit=6, db=db),
+        "kill_outcome_stats": lambda: get_proximity_kill_outcomes_player_stats(
+            range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
+        "headshot_rates": lambda: get_proximity_hit_regions_headshot_rates(
+            range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
+        "movement_stats": lambda: get_proximity_movement_stats(
+            range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
+        "revives": lambda: get_proximity_revives(
+            range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
+        "weapon_accuracy": lambda: get_proximity_weapon_accuracy(
+            range_days=range_days, map_name=map_name, db=db),
+        "prox_scores": lambda: get_prox_scores(range_days=range_days, db=db),
+        "prox_formula": lambda: get_prox_scores_formula(),
+    }
+
+    keys = [s for s in DASHBOARD_ALL_SECTIONS if s in requested and s in dispatchers]
+    coros = [_timed_section(k, dispatchers[k]()) for k in keys]
+
+    results = await asyncio.gather(*coros, return_exceptions=True)
+
+    sections_dict = {}
+    ok_count = 0
+    err_count = 0
+    for key, result in zip(keys, results):
+        if isinstance(result, Exception):
+            sections_dict[key] = {"_error": str(result), "status": "error"}
+            err_count += 1
+        elif isinstance(result, dict) and result.get("status") == "error":
+            sections_dict[key] = result
+            err_count += 1
+        else:
+            sections_dict[key] = result
+            ok_count += 1
+
+    total_ms = round((time.monotonic() - t0_total) * 1000, 1)
+
+    return {
+        "status": "ok",
+        "sections_requested": len(keys),
+        "sections_ok": ok_count,
+        "sections_error": err_count,
+        "total_ms": total_ms,
+        "sections": sections_dict,
     }
 
 
@@ -3096,7 +3246,10 @@ async def get_proximity_weapon_accuracy(
 @router.get("/proximity/revives")
 async def get_proximity_revives(
     range_days: int = 30,
+    session_date: Optional[str] = None,
     map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
     player_guid: Optional[str] = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
@@ -3195,18 +3348,47 @@ async def get_proximity_session_scores(
 
 
 @router.get("/proximity/leaderboards")
+@limiter.limit("10/minute")
 async def get_proximity_leaderboards(
+    request: Request,
     category: str = "power",
     range_days: int = 30,
     limit: int = 10,
+    session_date: Optional[str] = None,
+    map_name: Optional[str] = None,
+    round_number: Optional[int] = None,
+    round_start_unix: Optional[int] = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
-    """Multi-category proximity leaderboards."""
+    """Multi-category proximity leaderboards. Supports scope filtering."""
     safe_limit = max(1, min(limit, 50))
-    since = datetime.utcnow().date() - timedelta(days=max(1, min(range_days, 3650)))
+    parsed_date = _parse_iso_date(session_date) if isinstance(session_date, str) else session_date
+    # When scope is specified, use it instead of range_days
+    if parsed_date:
+        since = parsed_date
+    else:
+        since = datetime.utcnow().date() - timedelta(days=max(1, min(range_days, 3650)))
+
+    # Build scope filter helper for leaderboard queries
+    def _lb_scope(table_alias: str = "", has_round_number: bool = False):
+        """Build WHERE clause fragments and params for leaderboard scope."""
+        prefix = f"{table_alias}." if table_alias else ""
+        clauses = [f"{prefix}session_date >= ${1}"]
+        params = [since]
+        idx = 2
+        if map_name:
+            clauses.append(f"{prefix}map_name = ${idx}")
+            params.append(map_name)
+            idx += 1
+        if has_round_number and round_number is not None:
+            clauses.append(f"{prefix}round_number = ${idx}")
+            params.append(round_number)
+            idx += 1
+        return " AND ".join(clauses), tuple(params), idx
 
     try:
         if category == "power":
+            scope_where, scope_params, _ = _lb_scope(has_round_number=True)
             # Composite radar score — batch queries (7 queries total, not per-player)
             # 1. Engagement stats + names per player
             eng_rows = await db.fetch_all(
@@ -3215,13 +3397,13 @@ async def get_proximity_leaderboards(
                        COUNT(*) AS total,
                        SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
                 FROM combat_engagement
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 5
                 ORDER BY COUNT(*) DESC
                 LIMIT 100
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             if not eng_rows:
                 return {"status": "ok", "category": "power", "entries": []}
@@ -3238,10 +3420,10 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(sprint_percentage)::numeric, 1) AS sp,
                        ROUND(AVG(avg_speed)::numeric, 1) AS spd
                 FROM player_track
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY player_guid
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             move_map: Dict[str, Tuple[float, float]] = {}
             for r in (move_rows or []):
@@ -3254,10 +3436,10 @@ async def get_proximity_leaderboards(
                 SELECT target_guid,
                        ROUND(AVG(dodge_reaction_ms)::numeric, 0) AS avg_dodge
                 FROM proximity_reaction_metric
-                WHERE dodge_reaction_ms IS NOT NULL AND session_date >= $1
+                WHERE dodge_reaction_ms IS NOT NULL AND {scope_where}
                 GROUP BY target_guid
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             dodge_map: Dict[str, int] = {}
             for r in (dodge_rows or []):
@@ -3270,16 +3452,16 @@ async def get_proximity_leaderboards(
                 SELECT guid, SUM(cnt) AS total FROM (
                     SELECT teammate1_guid AS guid, COUNT(*) AS cnt
                     FROM proximity_crossfire_opportunity
-                    WHERE was_executed = true AND session_date >= $1
+                    WHERE was_executed = true AND {scope_where}
                     GROUP BY teammate1_guid
                     UNION ALL
                     SELECT teammate2_guid AS guid, COUNT(*) AS cnt
                     FROM proximity_crossfire_opportunity
-                    WHERE was_executed = true AND session_date >= $1
+                    WHERE was_executed = true AND {scope_where}
                     GROUP BY teammate2_guid
                 ) sub GROUP BY guid
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             cf_map: Dict[str, int] = {}
             for r in (cf_rows or []):
@@ -3291,10 +3473,10 @@ async def get_proximity_leaderboards(
                 """
                 SELECT trader_guid, COUNT(*) AS cnt
                 FROM proximity_lua_trade_kill
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY trader_guid
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             trade_map: Dict[str, int] = {}
             for r in (trade_rows or []):
@@ -3308,10 +3490,10 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
                        COUNT(*) AS cnt
                 FROM proximity_spawn_timing
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY killer_guid
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             timing_map: Dict[str, Tuple[float, int]] = {}
             for r in (timing_rows or []):
@@ -3324,10 +3506,10 @@ async def get_proximity_leaderboards(
                 SELECT target_guid,
                        ROUND(AVG(return_fire_ms)::numeric, 0) AS avg_rf
                 FROM proximity_reaction_metric
-                WHERE return_fire_ms IS NOT NULL AND session_date >= $1
+                WHERE return_fire_ms IS NOT NULL AND {scope_where}
                 GROUP BY target_guid
-                """,
-                (since,),
+                """.format(scope_where=scope_where),
+                scope_params,
             )
             rf_map: Dict[str, int] = {}
             for r in (rf_rows or []):
@@ -3368,6 +3550,7 @@ async def get_proximity_leaderboards(
             return {"status": "ok", "category": "power", "entries": results[:safe_limit]}
 
         elif category == "spawn":
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT killer_guid, MAX(killer_name) AS name,
@@ -3375,13 +3558,13 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
                        ROUND(AVG(time_to_next_spawn)::numeric, 0) AS avg_denial_ms
                 FROM proximity_spawn_timing
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY killer_guid
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_score DESC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "spawn",
@@ -3393,26 +3576,39 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "crossfire":
+            scope_where, scope_params, next_idx = _lb_scope(table_alias="c", has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT guid, name, SUM(cnt) AS total, ROUND(AVG(avg_angle)::numeric, 1) AS avg_angle
                 FROM (
-                    SELECT teammate1_guid AS guid, MAX(teammate1_guid) AS name,
-                           COUNT(*) AS cnt, AVG(angular_separation) AS avg_angle
-                    FROM proximity_crossfire_opportunity
-                    WHERE was_executed = true AND session_date >= $1
-                    GROUP BY teammate1_guid
+                    SELECT c.teammate1_guid AS guid,
+                           COALESCE(MAX(ce.target_name), c.teammate1_guid) AS name,
+                           COUNT(*) AS cnt, AVG(c.angular_separation) AS avg_angle
+                    FROM proximity_crossfire_opportunity c
+                    LEFT JOIN LATERAL (
+                        SELECT target_name FROM combat_engagement
+                        WHERE target_guid = c.teammate1_guid
+                        ORDER BY session_date DESC LIMIT 1
+                    ) ce ON true
+                    WHERE c.was_executed = true AND {scope_where}
+                    GROUP BY c.teammate1_guid
                     UNION ALL
-                    SELECT teammate2_guid AS guid, MAX(teammate2_guid) AS name,
-                           COUNT(*) AS cnt, AVG(angular_separation) AS avg_angle
-                    FROM proximity_crossfire_opportunity
-                    WHERE was_executed = true AND session_date >= $1
-                    GROUP BY teammate2_guid
+                    SELECT c.teammate2_guid AS guid,
+                           COALESCE(MAX(ce.target_name), c.teammate2_guid) AS name,
+                           COUNT(*) AS cnt, AVG(c.angular_separation) AS avg_angle
+                    FROM proximity_crossfire_opportunity c
+                    LEFT JOIN LATERAL (
+                        SELECT target_name FROM combat_engagement
+                        WHERE target_guid = c.teammate2_guid
+                        ORDER BY session_date DESC LIMIT 1
+                    ) ce ON true
+                    WHERE c.was_executed = true AND {scope_where}
+                    GROUP BY c.teammate2_guid
                 ) sub GROUP BY guid, name
                 ORDER BY total DESC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "crossfire",
@@ -3424,19 +3620,20 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "trades":
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT trader_guid, MAX(trader_name) AS name,
                        COUNT(*) AS trades,
                        ROUND(AVG(delta_ms)::numeric, 0) AS avg_reaction
                 FROM proximity_lua_trade_kill
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY trader_guid
                 HAVING COUNT(*) >= 2
                 ORDER BY trades DESC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "trades",
@@ -3448,19 +3645,20 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "reactions":
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT target_guid, MAX(target_name) AS name,
                        ROUND(AVG(return_fire_ms)::numeric, 0) AS avg_rf,
                        COUNT(*) AS samples
                 FROM proximity_reaction_metric
-                WHERE return_fire_ms IS NOT NULL AND session_date >= $1
+                WHERE return_fire_ms IS NOT NULL AND {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_rf ASC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "reactions",
@@ -3472,6 +3670,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "survivors":
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT target_guid, MAX(target_name) AS name,
@@ -3480,13 +3679,13 @@ async def get_proximity_leaderboards(
                        COUNT(*) AS total_engagements,
                        ROUND(AVG(duration_ms)::numeric, 0) AS avg_duration
                 FROM combat_engagement
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 5
                 ORDER BY escape_pct DESC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "survivors",
@@ -3498,6 +3697,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "movement":
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT player_guid, MAX(player_name) AS name,
@@ -3506,13 +3706,13 @@ async def get_proximity_leaderboards(
                        SUM(total_distance)::int AS total_distance,
                        COUNT(*) AS tracks
                 FROM player_track
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY player_guid
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_speed DESC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "movement",
@@ -3525,6 +3725,7 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "focus_fire":
+            scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
                 """
                 SELECT target_guid, MAX(target_name) AS name,
@@ -3533,13 +3734,13 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(attacker_count)::numeric, 1) AS avg_attackers,
                        ROUND(AVG(total_damage)::numeric, 0) AS avg_damage
                 FROM proximity_focus_fire
-                WHERE session_date >= $1
+                WHERE {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 2
                 ORDER BY avg_score DESC
-                LIMIT $2
-                """,
-                (since, safe_limit),
+                LIMIT ${next_idx}
+                """.format(scope_where=scope_where, next_idx=next_idx),
+                scope_params + (safe_limit,),
             )
             return {
                 "status": "ok", "category": "focus_fire",
@@ -4177,7 +4378,7 @@ async def get_proximity_movement_stats(
     params: list = []
 
     if session_date:
-        params.append(_parse_iso_date(session_date))
+        params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
         where_parts.append(f"session_date = ${len(params)}")
     else:
         params.append(range_days)
@@ -4260,7 +4461,9 @@ async def get_proximity_movement_stats(
 # ===== PROXIMITY COMPOSITE SCORES (v5.2) =======================================
 
 @router.get("/proximity/prox-scores")
+@limiter.limit("15/minute")
 async def get_prox_scores(
+    request: Request,
     range_days: int = 30,
     player_guid: Optional[str] = None,
     limit: int = 50,
@@ -4311,7 +4514,7 @@ async def get_proximity_carrier_events(
     params: list = []
 
     if session_date:
-        params.append(_parse_iso_date(session_date))
+        params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
         where_parts.append(f"session_date = ${len(params)}")
     else:
         params.append(range_days)
@@ -4445,7 +4648,7 @@ async def get_proximity_carrier_kills(
     params: list = []
 
     if session_date:
-        params.append(_parse_iso_date(session_date))
+        params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
         where_parts.append(f"session_date = ${len(params)}")
     else:
         params.append(range_days)
@@ -4519,7 +4722,7 @@ async def get_proximity_carrier_returns(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(_parse_iso_date(session_date))
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -4608,7 +4811,7 @@ async def get_proximity_vehicle_progress(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(_parse_iso_date(session_date))
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -4663,7 +4866,7 @@ async def get_proximity_escort_credits(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(_parse_iso_date(session_date))
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -4728,7 +4931,7 @@ async def get_proximity_construction_events(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(_parse_iso_date(session_date))
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -4807,7 +5010,7 @@ async def get_proximity_objective_runs(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(_parse_iso_date(session_date))
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -4931,7 +5134,7 @@ async def get_proximity_focus_fire(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(_parse_iso_date(session_date))
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -5027,7 +5230,7 @@ async def get_proximity_objective_focus(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(_parse_iso_date(session_date))
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -5127,7 +5330,7 @@ async def get_proximity_support_summary(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(_parse_iso_date(session_date))
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)
@@ -5212,7 +5415,7 @@ async def get_proximity_combat_position_stats(
         where_parts: list = []
         params: list = []
         if session_date:
-            params.append(_parse_iso_date(session_date))
+            params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
             where_parts.append(f"session_date = ${len(params)}")
         else:
             params.append(range_days)

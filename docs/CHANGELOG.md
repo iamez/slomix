@@ -10,6 +10,208 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [1.5.0] — 2026-03-28: Round Replay Timeline, Momentum Chart & Codacy Zero
+
+**Visual round analysis with event replay, momentum tracking, session narratives, expanded moment detectors, and full Codacy compliance — 53 commits, 58 issues resolved to zero.**
+
+*53 commits across website frontend/backend, bot services, and legacy JS modules. CI: 9/9 checks green (lint, tests, CodeQL, Docker, Codacy).*
+
+#### Round Replay Timeline — NEW
+- **Dual-pane viewer** (`/#/replay`): Event feed on the left, 2D map canvas on the right, synchronized scrubber bar for frame-by-frame navigation
+- **Player positions**: Sourced from `player_track.path` JSONB at 200ms precision — real-time player dots on map overlay
+- **420+ events per round**: Kills, deaths, revives, objectives, team actions rendered on interactive timeline
+- **2D map canvas**: ET:Legacy map backgrounds with player position markers and event annotations
+- **3 API endpoints**: Round event feed, player track positions, round metadata
+
+#### Momentum Chart — NEW
+- **30-second window momentum**: Rolling window scoring with 0.85 exponential decay factor
+- **Canvas 2D dual-line chart**: Axis vs Allies momentum curves rendered on HTML5 Canvas
+- **Per-round tabs**: Navigate between rounds within a session to compare momentum shifts
+
+#### Session Narrative — NEW
+- **Auto-generated paragraph**: Summarizes MVP, player archetype, defining moment, and team synergy comparison for each session
+- **Data-driven storytelling**: Pulls from KIS, archetypes, moments, and synergy scores to compose coherent match narratives
+
+#### Moment Detectors Expanded (11 total, was 5)
+- **New detectors**: Team wipe (5★), multikill (2-5★ scaled), objective secured, objective denied, objective run, multi-revive
+- **Objective-focused moments**: Carrier interception chains, contested engineer builds, dynamite defuses
+- **Rich kill-by-kill context**: Each moment includes weapon names (35-weapon mapping), timestamps, duration, and player display names
+
+#### Code Quality — Codacy 58 → 0 (Mandelbrot Audit)
+- **22 CRITICAL XSS**: ALL `innerHTML` assignments replaced with DOM API (`createElement` + `textContent`) across `story.js`, `rivalries.js`, `replay.js`
+- **12 HIGH TypeScript**: Non-null assertions replaced with guard checks, optional chains added, void arrow returns fixed, object bracket injection prevented
+- **7 SQL injection**: ALL f-string SQL eliminated — replaced with pre-built query dictionaries and column whitelists
+- **Protocol stubs**: Added missing protocol handler stubs
+- **Stack trace exposure**: Health check endpoints no longer leak stack traces to clients
+- **URL redirect validation**: Added origin validation on redirect endpoints
+- **Insecure randomness**: Replaced `Math.random()` with `crypto.getRandomValues()` where security-relevant
+- **Zero suppressions**: Every issue resolved properly — no `// eslint-disable` or `# noqa` workarounds
+- **CI**: 9/9 checks green (lint, tests, CodeQL, Docker build, Codacy quality gate)
+
+#### Data Truth Verification
+- **KIS push_multiplier**: Deflated from 99.8% → 11.9% after quality-gating (was over-counting non-push kills as push kills)
+- **Synergy groups**: Fixed for stopwatch team swaps — synergy now correctly tracks players through side changes
+- **Headshot% formula**: Confirmed corrected to `hs_hits / total_hits` (fix from v1.4.0)
+
+#### Bug Fixes
+- **MomentumChart non-null assertion → guard check**: Prevented crash when chart data is null during initial render
+- **Rivalries double /api/api/ prefix**: Fixed URL construction that produced broken API calls
+- **Narrative gaming_session_id query**: Fixed query pulling session ID from wrong table
+- **PUSH_MULTIPLIER import removed**: Cleaned up after quality-gating made the constant unused
+- **gaming_sessions diagnostic query restored**: Re-added diagnostic query lost during `--ours` merge resolution
+
+---
+
+## [1.4.0] — 2026-03-27: Player Rivalries, Win Contribution & Smart Stats Phase 2
+
+**Full esports analytics upgrade: head-to-head rivalry engine, per-round win contribution scoring, 11 match moment detectors with rich context, 9 server-side archetypes, and 35-weapon name mapping.**
+
+*Multiple commits. New: rivalries cog + service, win contribution engine, Smart Stats Phase 2 moment detectors, weapon name mapping, archetype formula v2.*
+
+#### Player Rivalries System — NEW
+- **H2H stats engine**: Complete head-to-head record between any two players — kills, deaths, KD, accuracy, DPM per pairing
+- **Classification**: Nemesis (losing badly), Prey (winning handily), Rival (closely contested) — based on win rate and encounter count
+- **Weapon breakdown**: Per-rivalry weapon usage breakdown for each player in the matchup
+- **Per-map drill-down**: H2H breakdown split by map played
+- **Rivalry leaderboard**: Top rivalry pairs sorted by total encounters
+- **New page `/#/rivalries`**: Full rivalry dashboard with pair lookup, leaderboard, and H2H detail view
+- **Bug fixes**: GROUP BY clause fix in rivalries SQL; player encounter threshold adjusted for competitive play
+
+#### Win Contribution (PWC / WIS / WAA) — NEW
+- **Per-Round Win Contribution (PWC)**: 5-component formula — kills, damage dealt, objectives secured, revives given, survival time
+- **Dynamic weight redistribution**: When a round has zero objectives, objective component weight redistributes automatically to kills and damage proportionally
+- **Win Impact Score (WIS)**: avg(PWC in won rounds) − avg(PWC in lost rounds) — surfaces who actually shifts match outcomes
+- **Win Absolute Average (WAA)**: Cross-session baseline for fair WIS comparison
+- **MVP detection**: Highest WIS player flagged as session MVP per round set
+- **Stacked bar visualization**: Per-component breakdown for every player in every round
+
+#### Smart Stats Phase 2 — Match Moments & Archetypes
+- **11 moment detectors** (up from 5 in Phase 1):
+  - *Existing (enhanced)*: kill streak, trade chain, focus fire survival, team push success, carrier chain
+  - *New*: team wipe, multikill, objective secured, objective denied, objective run, multi-revive
+- **Rich moment context**: Each moment includes per-kill breakdown with weapon names, precise timestamps, duration, and player GUIDs resolved to display names
+- **Moment type diversity**: Score cap per moment type prevents single-category crowding in the timeline
+- **9 Player Archetypes v2**: Formula updated to use DPM + denied_time + headshot% + KD + trade rate + revive count (was KIS + combat position); relative thresholds for competitive server populations
+- **35-weapon name mapping**: Full ET:Legacy weapon ID→name lookup (Thompson, MP40, Sten, Panzerfaust, Panzer, Flamethrower, Mortar, Luger, Colt, etc.) applied across all moment and archetype displays
+
+#### Bug Fixes
+- **Headshot% formula**: Corrected to `hs_hits / total_hits` (was `hs_kills / kills` — significantly different for spray weapons)
+- **GUID mismatch**: Resolved 8-char vs 32-char GUID inconsistency across rivalries service, archetype service, and win contribution engine
+- **ET color code stripping**: Applied `^N` color code regex strip to all player name displays in rivalries and archetypes
+- **Rivalries SQL GROUP BY**: Fixed GROUP BY clause that caused query error on multi-round aggregation
+- **Rivalries threshold**: Player encounter minimum adjusted to surface meaningful competitive pairs
+
+---
+
+## [1.3.0] — 2026-03-27: Smart Storytelling Stats, Mandelbrot Audit & 45-Finding Resolution
+
+**Smart competitive narratives powered by contextual kill scoring, player archetypes, and team synergy — plus a full-stack Mandelbrot audit with 100% finding resolution.**
+
+*Multiple commits across 35+ files. 4 parallel Sonnet audit teams reviewed 32 changed files line-by-line.*
+
+#### Smart Storytelling Stats (Phase 1+2) — LIVE
+- **Kill Impact Score (KIS) engine**: Contextual kill scoring with 7 multipliers — carrier kills (3-5x), push kills (2x), crossfire assists (1.5x), spawn timing efficiency (1-2x), outcome weight (gib/revive/tap-out), class bonus (medic/engineer), distance factor
+- **Match Moments**: 5 detectors — kill streaks (3+ rapid kills), carrier interception chains (objective denial sequences), focus fire survival (surviving concentrated enemy fire), team push success (coordinated advances), trade kill chains (revenge kills within window)
+- **Player Archetypes**: 9 server-side types with full data access (KIS + stats + proximity + combat position) — Pressure Engine, Medic Anchor, Silent Assassin, Objective Demon, Trade Specialist, Support Fortress, Flanker, All-Rounder, Wildcard
+- **Team Synergy Score**: 5-axis per-faction comparison — crossfire rate, trade coverage, cohesion quality, push success rate, medic bonds
+- **Legacy `/#/story` page**: Cinematic hero section, player story cards with archetype badges, match moment timeline, KIS breakdown bars with multiplier visualization, team synergy radar panel
+- **Backend**: `storytelling_kill_impact` DB table, 4 API endpoints, storytelling service with full proximity/stats data pipeline
+
+#### Mandelbrot RCA Audit — 45 Findings, 45 Resolved
+- **Audit scope**: 4 parallel Sonnet teams reviewed all 32 changed files line-by-line across bot, website, proximity, and infrastructure
+- **Findings**: 2 CRITICAL, 11 HIGH, 16 MEDIUM, 16 LOW — all resolved across 3 fix commits
+- **CRITICAL**: Re-linker referenced non-existent columns (`proximity_revive`, `proximity_weapon_accuracy`); N+1 INSERT loop in storytelling import
+- **HIGH**: TOCTOU race condition in session processing (→ per-session `asyncio.Lock`); rate limiter blind to `X-Forwarded-For` behind proxy; leaderboard `round_number` filtering disabled; missing error propagation in 6 service methods
+- **MEDIUM/LOW**: 21 code quality improvements — unused imports, missing type hints, inconsistent error handling, docstring gaps
+
+#### Additional Post-Audit Fixes
+- **Re-linker column cleanup**: Removed `proximity_revive` + `proximity_weapon_accuracy` from re-linker table list (columns don't exist in schema)
+- **N+1 INSERT → executemany batch**: Storytelling kill impact inserts batched for performance
+- **TOCTOU race condition**: Per-session `asyncio.Lock` prevents concurrent processing of same session
+- **Rate limiter proxy awareness**: `X-Forwarded-For` header parsing for accurate client IP behind reverse proxy
+- **Leaderboard round filtering**: `round_number` filter parameter now functional in leaderboard queries
+- **21 LOW/INFO code quality improvements**: Resolved across bot, website, and proximity modules
+
+---
+
+## [1.2.0] — 2026-03-26: Deep RCA Audit, Proximity Pipeline Overhaul & Website Redesign
+
+**Mandelbrot-depth root cause analysis across the entire stack — 26 fixes, proximity pipeline redesign, and website overhaul.**
+
+*8 commits, 25+ files modified, ~800 lines changed. 17/21 tasks completed across 4 parallel agent teams.*
+
+#### Infrastructure Recovery
+- **Power outage filesystem recovery**: Recovered from corrupted `.git` objects caused by power failure
+- **Branch merge reconciliation**: Merged 17 divergent commits (9 local RCA audit + 8 remote Codacy/XSS fixes)
+- **Orphan branch cleanup**: Cleaned up 4 orphaned feature branches
+
+#### Proximity Pipeline Redesign
+- **STATS_READY webhook trigger**: Proximity import now fires on STATS_READY event instead of independent polling — eliminates 60% of historical linkage failures
+- **Re-linker background task**: New periodic task fixes NULL `round_id` references across 22 proximity tables
+- **Polling reduction**: Fallback polling reduced from 5min to 2min
+- **Root cause**: Two independent polling loops with no coordination (identified via Mandelbrot-depth RCA)
+
+#### Proximity Website — Complete Overhaul
+- **Default scope auto-selection**: First visit auto-selects last round (was showing empty state)
+- **Leaderboard scoping**: ALL 7 categories (Damage, KD, Efficiency, Headshots, Revives, Accuracy, Alive%) now respect session/map/round selection
+- **HTML render bug fixes**: Fixed double-escape in 3 panels (Focus Fire, Objective Focus, Weapon Accuracy)
+- **Crossfire GUID→name resolution**: LATERAL JOIN replaces raw GUIDs with player names
+- **Metric tooltips**: Added explanatory tooltips for Focus Fire, Objective Focus, Combat Positions
+- **Support Uptime rename**: "Support Uptime" → "Teammate Combat Support" (was incorrectly labeled medic-specific)
+- **Scope UX improvements**: Range buttons hidden when scope active, scope indicator badge displayed
+- **React Proximity.tsx scope fix**: KillOutcomes, HitRegions, HeadshotRates panels now pass scope params correctly
+
+#### Bug Fixes
+- **!last_session graph crash**: `Decimal * float` TypeError — applied 16 float conversions across graph generation
+- **Round correlation FK cascade**: Pre-validate FK references before insert; boolean completeness flags set independently
+- **Upload Library MP4 download**: Now forces `Content-Disposition: attachment` (was streaming inline)
+- **Skill Rating optimization**: Merged dual `GROUP BY` query in `compute_all_ratings` into single pass (~50% less DB load)
+- **API rate limiting**: Added slowapi rate limits on 3 heavy proximity endpoints
+- **Import column compatibility**: Fixed re-linker column name compatibility with schema changes
+
+#### Research & Design
+- **ET:Legacy competitive mechanics reference**: Game mechanics documentation for analytics context
+- **Lua (0,0,0) position audit**: Audited all proximity data — 0 bad rows found (latent risk documented)
+- **Kill Outcomes verification**: 4,503 rows across 54 rounds confirmed healthy
+- **Session 103 pipeline trace**: Full 21-round pipeline verification — all clean
+
+---
+
+### Fixed — 2026-03-26: Deep RCA Audit (Mandelbrot-depth root cause analysis)
+
+Full report: `docs/DEEP_RCA_AUDIT_RESULTS_2026-03-26.md`
+
+#### CRITICAL fixes
+- **Proximity.tsx corruption**: File was overwritten with Python coverage HTML; restored from `8bf2f6e`
+- **Endstats infinite retry loop**: Added max 5 attempts + DB marking; fixed `success=TRUE` filter in dedup check
+- **Phantom processed_files**: 361 entries with `success=TRUE` that were header-only; batch corrected
+- **Promise.allSettled masking**: Added rejection logging in `app.js` and `session-detail.js`
+- **file_tracker.py DB error masking**: `_is_in_processed_files_table` and `_session_exists_in_db` returned False on DB error with only DEBUG logging → upgraded to WARNING
+
+#### HIGH fixes
+- **Proximity date type bug**: 7 v6 endpoints crashed with asyncpg DataError; added `_parse_iso_date()` at all 11 locations
+- **session_teams GRANT**: `website_app` lacked DELETE/INSERT/UPDATE on `session_teams`; GRANT executed
+- **Webhook race condition**: Added `_in_flight` set with atomic check-and-claim under `_state_lock` in `stats_webhook_notify.py`
+- **Team manager silent deserialization failure**: Added warning log for JSON parse errors in `team_manager.py:148`
+- **`_is_admin` silent demotion**: Added warning log for DB errors in `availability.py` and `planning.py`
+
+#### MEDIUM fixes (20+)
+- Error masking audit: 20+ silent `except: pass/return []` patterns fixed with proper logging
+- `proximity_router.py`: Added logging for `_table_column_exists`, `_load_scoped_guid_name_map`, `_parse_json_field`, v5 table counts
+- `proximity.js`: Replaced 4 empty `.catch(() => {})` with `console.warn`
+- `session-detail.js`: Added 5-minute TTL to overview cache
+- `ultimate_bot.py`: Pass `error_msg` to `mark_processed` (was always NULL)
+- `round_linkage_anomaly_service.py`: Narrowed bare `except Exception` to specific types
+
+#### Performance
+- **Composite dashboard endpoint**: `GET /proximity/dashboard?sections=all` reduces 31 HTTP requests to 2-3 (90% reduction, ~467ms total)
+
+#### Infrastructure
+- Round linker cleanup: 329 → 14 unresolved (315 marked abandoned)
+- `!last_session` query verified at 0.4ms with existing indexes
+
 ### Added — 2026-03-24: Kill Outcomes, Hit Regions, Combat Heatmaps & Movement Analytics
 
 #### Kill Outcome Tracking (Feature 1 — requires Lua deploy)

@@ -20,7 +20,10 @@ import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from
 
 import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
-import { loadProximityView } from './proximity.js?v=20260325-v6';
+import { loadProximityView } from './proximity.js';
+import { loadStoryView } from './story.js';
+import { loadReplayView } from './replay.js';
+import { loadRivalriesView } from './rivalries.js';
 import { loadAdminPanelView } from './admin-panel.js';
 import { loadUploadsView, loadUploadDetail } from './uploads.js';
 import { loadAvailabilityView } from './availability.js';
@@ -85,6 +88,9 @@ const legacyRuntime = {
     loadRecordsView,
     loadAwardsView,
     loadProximityView,
+    loadStoryView,
+    loadReplayView,
+    loadRivalriesView,
     loadGreatshotView,
     loadGreatshotDemoDetail,
     loadUploadsView,
@@ -733,7 +739,12 @@ async function initApp() {
             loadRecentMatches,
         );
     }
-    await Promise.allSettled(criticalLoads.map((task) => task()));
+    const startupResults = await Promise.allSettled(criticalLoads.map((task) => task()));
+    startupResults.forEach((result, i) => {
+        if (result.status === 'rejected') {
+            console.error(`Startup task ${i} failed:`, result.reason);
+        }
+    });
 
     initSearchListeners();
 

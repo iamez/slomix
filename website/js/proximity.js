@@ -353,7 +353,9 @@ function getConfidenceFromSamples(sampleCount) {
     return 'Low';
 }
 
-function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data yet') {
+// XSS contract: htmlValues=true is safe ONLY when formatter() returns pre-escaped HTML
+// (e.g. formatNumber() output or escapeHtml()-wrapped strings). Never pass raw user data.
+function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data yet', { htmlValues = false } = {}) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
@@ -370,11 +372,12 @@ function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data ye
         const sampleMeta = sampleCount
             ? `n=${formatNumber(sampleCount)} • ${confidence || 'Low'}`
             : '';
+        const displayValue = htmlValues ? value : escapeHtml(value);
         return `
             <div class="flex items-center justify-between text-[11px] text-slate-300">
                 <span>${escapeHtml(label)}</span>
                 <span class="text-right">
-                    <span class="text-slate-500">${escapeHtml(value)}</span>
+                    <span class="text-slate-500">${displayValue}</span>
                     ${sampleMeta ? `<span class="block text-[10px] text-slate-600">${escapeHtml(sampleMeta)}</span>` : ''}
                 </span>
             </div>
@@ -1474,7 +1477,7 @@ function resetProximityValues() {
     updateHeatIntensityLabel();
 
     renderTimeline([]);
-    void renderHeatmap({ hotzones: [] }).catch(() => {});
+    void renderHeatmap({ hotzones: [] }).catch(err => console.warn('Proximity fetch failed:', err));
     renderEventList([]);
     renderTradeEvents([]);
     renderDuos([]);
@@ -1531,6 +1534,10 @@ async function loadScopeHierarchy() {
         if (!proximityScopeState.sessionDate) {
             proximityScopeState.sessionDate = data?.scope?.session_date || proximityScopeState.sessions[0]?.session_date || null;
         }
+        // Auto-select last round on first visit for better UX
+        if (!proximityScopeState.mapName && !proximityScopeState.roundNumber) {
+            autoSelectLastRound();
+        }
     } catch {
         proximityScopeState.sessions = [];
         proximityScopeState.sessionDate = null;
@@ -1539,6 +1546,23 @@ async function loadScopeHierarchy() {
         proximityScopeState.roundStartUnix = null;
     }
     renderScopeSelectors();
+}
+
+function autoSelectLastRound() {
+    const session = proximityScopeState.sessions.find(
+        (s) => s.session_date === proximityScopeState.sessionDate
+    );
+    if (!session?.maps?.length) return;
+
+    // Pick the last map (most recent) in the session
+    const lastMap = session.maps[session.maps.length - 1];
+    const rounds = lastMap.rounds || [];
+    if (rounds.length === 0) return;  // Don't set partial scope (mapName without a round)
+
+    proximityScopeState.mapName = lastMap.map_name;
+    const lastRound = rounds[rounds.length - 1];
+    proximityScopeState.roundNumber = lastRound.round_number;
+    proximityScopeState.roundStartUnix = lastRound.round_start_unix || null;
 }
 
 async function loadScopedProximityData() {
@@ -1790,6 +1814,8 @@ async function loadScopedProximityData() {
                 renderCombatPositionStats(combatPosStatsRes.value);
             }
             bindV52PanelEvents();
+            // Reload leaderboards with current scope
+            loadLeaderboardData();
         }
     } catch (e) {
         if (stateEl) {
@@ -2030,9 +2056,11 @@ function renderCrossfireAngles(data) {
 
     const duosEl = document.getElementById('crossfire-top-duos');
     if (duosEl && data.top_duos && data.top_duos.length) {
-        duosEl.innerHTML = '<ol class="list-decimal list-inside text-sm text-slate-300 space-y-1">' + data.top_duos.map(d =>
-            `<li>${d.teammate1_guid.substring(0,8)} + ${d.teammate2_guid.substring(0,8)} = ${d.executions} exec (avg ${d.avg_angle}&deg;)</li>`
-        ).join('') + '</ol>';
+        duosEl.innerHTML = '<ol class="list-decimal list-inside text-sm text-slate-300 space-y-1">' + data.top_duos.map(d => {
+            const name1 = d.name ? escapeHtml(stripEtColors(d.name)) : escapeHtml(d.teammate1_guid.substring(0, 8));
+            const name2 = d.partner_name ? escapeHtml(stripEtColors(d.partner_name)) : escapeHtml(d.teammate2_guid.substring(0, 8));
+            return `<li>${name1} + ${name2} = ${formatNumber(d.executions || 0)} exec (avg ${formatNumber(d.avg_angle || 0)}&deg;)</li>`;
+        }).join('') + '</ol>';
     }
 }
 
@@ -2486,7 +2514,7 @@ function renderDangerZones(mapName, classFilter) {
                 ctx.fillText(String(zone.deaths), nx, ny + 3);
             }
         }
-    }).catch(() => {});
+    }).catch(err => console.warn('Proximity fetch failed:', err));
 }
 
 /* ===== v5.2 Combat Heatmap ===== */
@@ -2529,7 +2557,7 @@ function renderCombatHeatmap(mapName, perspective) {
             ctx.strokeStyle = line.attacker_team === 'AXIS' ? 'rgba(239,68,68,0.15)' : 'rgba(96,165,250,0.15)';
             ctx.lineWidth = 1; ctx.stroke();
         }
-    }).catch(() => {});
+    }).catch(err => console.warn('Proximity fetch failed:', err));
 }
 
 /* ===== v5.2 Leaderboard Tabs ===== */
@@ -2567,8 +2595,33 @@ function loadLeaderboardData() {
     const contentEl = document.getElementById('leaderboard-content');
     if (!contentEl) return;
     contentEl.innerHTML = '<div class="text-[11px] text-slate-500">Loading...</div>';
-    const lbParams = buildScopeParams({ extra: { category: lbActiveTab, limit: 10 } });
-    lbParams.set('range_days', String(lbRangeDays));
+    const hasScope = proximityScopeState.mapName || proximityScopeState.roundNumber != null;
+
+    // Hide range buttons when scope is active (range is meaningless for scoped queries)
+    const rangeContainer = document.getElementById('lb-range-btns');
+    if (rangeContainer) rangeContainer.style.display = hasScope ? 'none' : '';
+
+    // Show scope indicator near leaderboard title when scope is active
+    let scopeIndicator = document.getElementById('lb-scope-indicator');
+    if (hasScope) {
+        const parts = [];
+        if (proximityScopeState.sessionDate) parts.push(proximityScopeState.sessionDate);
+        if (proximityScopeState.mapName) parts.push(proximityScopeState.mapName);
+        if (proximityScopeState.roundNumber != null) parts.push(`R${proximityScopeState.roundNumber}`);
+        const label = parts.join(' / ');
+        if (!scopeIndicator) {
+            scopeIndicator = document.createElement('span');
+            scopeIndicator.id = 'lb-scope-indicator';
+            scopeIndicator.className = 'text-[10px] px-2 py-1 rounded bg-brand-amber/10 text-brand-amber border border-brand-amber/30 ml-2';
+            const titleEl = rangeContainer?.parentElement?.querySelector('.text-sm.font-bold');
+            if (titleEl) titleEl.after(scopeIndicator);
+        }
+        scopeIndicator.textContent = label;
+    } else if (scopeIndicator) {
+        scopeIndicator.remove();
+    }
+    const lbParams = buildScopeParams({ includeRange: !hasScope, extra: { category: lbActiveTab, limit: 10 } });
+    if (!hasScope) lbParams.set('range_days', String(lbRangeDays));
     fetchJSON(`${API_BASE}/proximity/leaderboards?${lbParams}`).then(data => {
         const entries = data?.entries ?? [];
         if (entries.length === 0) {
@@ -2610,7 +2663,7 @@ function renderWeaponAccuracy(data) {
         const acc = row.accuracy != null ? `${row.accuracy}%` : '--';
         const detail = `${formatNumber(row.hits || 0)}/${formatNumber(row.shots || 0)} shots · ${formatNumber(row.kills || 0)}K · ${formatNumber(row.headshots || 0)}HS`;
         return `<span class="text-brand-amber">${acc}</span> <span class="text-slate-500 text-[10px]">${detail}</span>`;
-    }, 'No weapon accuracy data yet');
+    }, 'No weapon accuracy data yet', { htmlValues: true });
 }
 
 /* ===== v5.2 Revives ===== */
@@ -2686,7 +2739,7 @@ function bindV52PanelEvents() {
             scoreParams.set('range_days', btn.dataset.days);
             fetchJSON(`${API_BASE}/proximity/prox-scores?${scoreParams}`).then(d => {
                 fetchJSON(scopedUrl('/proximity/prox-scores/formula', { includeRange: false })).then(f => renderProxScores(d, f)).catch(() => renderProxScores(d, null));
-            }).catch(() => {});
+            }).catch(err => console.warn('Proximity fetch failed:', err));
         };
     });
 
@@ -3091,7 +3144,7 @@ function renderFocusFire(data) {
         const score = (row.avg_score != null) ? row.avg_score.toFixed(2) : '--';
         const dmg = formatNumber(row.total_damage_taken || 0);
         return `<span class="text-rose-400">${times}x focused</span> <span class="text-slate-500 text-[10px]">score ${score} · ${dmg} dmg</span>`;
-    }, 'No focus fire data yet');
+    }, 'No focus fire data yet', { htmlValues: true });
 
     const recentEl = document.getElementById('focus-fire-recent');
     if (recentEl && data.recent && data.recent.length > 0) {
@@ -3132,7 +3185,7 @@ function renderObjectiveFocus(data) {
         const dist = row.avg_dist != null ? `${formatNumber(Math.round(row.avg_dist))}u` : '';
         const objs = row.objectives_played || 0;
         return `<span class="text-cyan-400">${time}</span> <span class="text-slate-500 text-[10px]">${dist} avg · ${objs} obj</span>`;
-    }, 'No objective focus data yet');
+    }, 'No objective focus data yet', { htmlValues: true });
 
     const objEl = document.getElementById('obj-focus-objectives');
     if (objEl && data.objectives && data.objectives.length > 0) {

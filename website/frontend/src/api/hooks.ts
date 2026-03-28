@@ -336,6 +336,14 @@ export const useSkillFormula = () =>
     staleTime: 300_000,
   });
 
+export const useSkillHistory = (identifier: string, rangeDays = 30, sessionDate?: string) =>
+  useQuery({
+    queryKey: ['skill-history', identifier, rangeDays, sessionDate],
+    queryFn: () => api.getSkillHistory(identifier, rangeDays, sessionDate),
+    staleTime: 60_000,
+    enabled: !!identifier,
+  });
+
 // Sessions
 export const useSessions = (params?: { limit?: number; offset?: number; search?: string }) =>
   useQuery({
@@ -453,10 +461,10 @@ export const useProximityHitRegions = (params?: ProximityScope, weaponId?: numbe
     staleTime: 30_000,
   });
 
-export const useProximityHeadshotRates = (rangeDays = 30) =>
+export const useProximityHeadshotRates = (params?: ProximityScope) =>
   useQuery({
-    queryKey: ['proximity-headshot-rates', rangeDays],
-    queryFn: () => api.getProximityHeadshotRates(rangeDays),
+    queryKey: ['proximity-headshot-rates', params],
+    queryFn: () => api.getProximityHeadshotRates(params),
     staleTime: 30_000,
   });
 
@@ -483,10 +491,10 @@ export const useProximityKillOutcomes = (params?: ProximityScope) =>
     staleTime: 30_000,
   });
 
-export const useProximityKillOutcomePlayerStats = (rangeDays = 30, playerGuid?: string) =>
+export const useProximityKillOutcomePlayerStats = (params?: ProximityScope, playerGuid?: string) =>
   useQuery({
-    queryKey: ['proximity-kill-outcome-player-stats', rangeDays, playerGuid],
-    queryFn: () => api.getProximityKillOutcomePlayerStats(rangeDays, playerGuid),
+    queryKey: ['proximity-kill-outcome-player-stats', params, playerGuid],
+    queryFn: () => api.getProximityKillOutcomePlayerStats(params, playerGuid),
     staleTime: 30_000,
   });
 
@@ -528,3 +536,50 @@ export const useMovementStats = (rangeDays = 30, playerGuid?: string) =>
     queryFn: () => api.getMovementStats(rangeDays, playerGuid),
     staleTime: 60_000,
   });
+
+// Storytelling / Smart Stats
+export function useStoryKillImpact(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-kill-impact', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryKillImpact(sessionDate);
+    },
+    enabled: !!sessionDate,
+  });
+}
+
+export function useStoryMoments(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-moments', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryMoments(sessionDate);
+    },
+    enabled: !!sessionDate,
+  });
+}
+
+export function useStoryMomentum(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-momentum', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryMomentum(sessionDate);
+    },
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}
+
+export function useStoryNarrative(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-narrative', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryNarrative(sessionDate);
+    },
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}

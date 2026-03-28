@@ -496,7 +496,8 @@ async def get_link_status(request: Request, db: DatabaseAdapter = Depends(get_db
             if row:
                 linked_player_guid = row[0]
                 linked_player_name = row[1]
-        except Exception:
+        except Exception as e:
+            logger.warning("user_player_links query failed, falling back to legacy player_links: %s", e)
             # Backward-compatible fallback while migration rolls out.
             if discord_id:
                 row = await db.fetch_one(
@@ -564,7 +565,8 @@ async def search_players(q: str, db: DatabaseAdapter = Depends(get_db)):
 
     try:
         rows = await db.fetch_all(advanced_query, (like_query,))
-    except Exception:
+    except Exception as e:
+        logger.warning("Advanced player search query failed, falling back to simple query: %s", e)
         rows = await db.fetch_all(fallback_query, (like_query,))
 
     results = []
@@ -642,7 +644,8 @@ async def link_player(request: Request, db: DatabaseAdapter = Depends(get_db)):
             "SELECT player_guid, player_name FROM user_player_links WHERE user_id = $1 LIMIT 1",
             (int(website_user_id),),
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("user_player_links lookup for previous link failed, skipping: %s", e)
         previous = None
 
     existing_owner = None
@@ -651,7 +654,8 @@ async def link_player(request: Request, db: DatabaseAdapter = Depends(get_db)):
             "SELECT user_id FROM user_player_links WHERE player_guid = $1 LIMIT 1",
             (player_guid,),
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("user_player_links ownership check failed, skipping: %s", e)
         existing_owner = None
 
     if existing_owner and int(existing_owner[0]) != int(website_user_id):

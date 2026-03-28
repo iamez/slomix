@@ -1152,6 +1152,11 @@
             color: #3b82f6;
             background: rgba(59, 130, 246, 0.1);
         }
+        @keyframes storyGlow {
+            0% { border-color: rgba(255,255,255,0.1); }
+            50% { border-color: rgba(245,158,11,0.25); }
+            100% { border-color: rgba(255,255,255,0.1); }
+        }
     </style>
 
     <!-- Icons -->
@@ -1228,6 +1233,18 @@
                 <button id="link-skill-rating" data-click-action="navigateTo('skill-rating')"
                     class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition">
                     ET Rating
+                </button>
+                <button id="link-rivalries" data-click-action="navigateTo('rivalries')"
+                    class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 transition">
+                    Rivalries
+                </button>
+                <button id="link-story" data-click-action="navigateTo('story')"
+                    class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition">
+                    ⚡ Smart Stats
+                </button>
+                <button id="link-replay" data-click-action="navigateTo('replay')"
+                    class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-purple-500/40 text-purple-400 hover:bg-purple-500/10 transition">
+                    🎬 Replay
                 </button>
                 <button id="link-admin" data-click-action="navigateTo('admin')"
                     class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">
@@ -2810,7 +2827,7 @@
                         <div class="text-sm font-bold text-slate-400">Focus Fire</div>
                         <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-rose/10 text-brand-rose">v5.0</span>
                     </div>
-                    <div class="text-[11px] text-slate-500 mb-3">Coordinated multi-attacker damage bursts — who gets focused and by how many.</div>
+                    <div class="text-[11px] text-slate-500 mb-2">Coordinated attacks — how well you survive when 3+ enemies focus you simultaneously. Score 0-1 (higher = better survival).</div>
                     <div id="focus-fire-summary" class="grid grid-cols-3 gap-3 mb-4"></div>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div>
@@ -2834,7 +2851,7 @@
                         <div class="text-sm font-bold text-slate-400">Objective Focus</div>
                         <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">v4.0</span>
                     </div>
-                    <div class="text-[11px] text-slate-500 mb-3">Time players spend near objectives — who plays the objective vs who roams.</div>
+                    <div class="text-[11px] text-slate-500 mb-2">Time spent near map objectives (flags, documents, command posts). Shows which players play the objective.</div>
                     <div id="obj-focus-summary" class="grid grid-cols-3 gap-3 mb-4"></div>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div>
@@ -2855,10 +2872,10 @@
                 <!-- Support Summary -->
                 <div class="glass-panel p-6 rounded-xl">
                     <div class="flex items-center justify-between mb-4">
-                        <div class="text-sm font-bold text-slate-400">Support Uptime</div>
+                        <div class="text-sm font-bold text-slate-400">Teammate Combat Support</div>
                         <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-emerald/10 text-brand-emerald">v4.0</span>
                     </div>
-                    <div class="text-[11px] text-slate-500 mb-3">Medic support availability per round — how often teammates had nearby medic support.</div>
+                    <div class="text-[11px] text-slate-500 mb-2">Percentage of round time with a teammate within 600 game units during active combat. Not medic-specific.</div>
                     <div id="support-summary-cards" class="grid grid-cols-3 gap-3 mb-4"></div>
                     <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">By Map</div>
                     <div id="support-summary-maps" class="space-y-1 text-xs text-slate-300">
@@ -2872,7 +2889,7 @@
                         <div class="text-sm font-bold text-slate-400">Combat Positions</div>
                         <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-amber/10 text-brand-amber">v5.0</span>
                     </div>
-                    <div class="text-[11px] text-slate-500 mb-3">Kill distance statistics — how far players engage by class and map.</div>
+                    <div class="text-[11px] text-slate-500 mb-2">Average kill distances by class and map. Units: game units (u), where typical SMG range is 200-600u, sniper 800-2000u.</div>
                     <div id="combat-pos-summary" class="grid grid-cols-3 gap-3 mb-4"></div>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div>
@@ -2900,6 +2917,127 @@
 
         <!-- SKILL RATING (experimental) -->
         <div id="view-skill-rating" class="view-section hidden"></div>
+
+        <!-- RIVALRIES -->
+        <div id="view-rivalries" class="view-section hidden">
+          <div class="max-w-6xl mx-auto px-4 py-8">
+            <!-- Hero -->
+            <div class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-rose-950/20 to-slate-900 p-8 mb-6">
+              <div class="absolute inset-0 bg-gradient-to-r from-rose-500/5 via-transparent to-rose-500/5 pointer-events-none"></div>
+              <div class="relative z-10">
+                <div class="text-rose-400 text-xs font-bold tracking-[0.3em] uppercase mb-2">Player Rivalries</div>
+                <h2 class="text-3xl font-black text-white mb-2">Head-to-Head Analysis</h2>
+                <p class="text-slate-400 text-sm">Discover your nemesis, prey and rivals across all matches.</p>
+              </div>
+            </div>
+
+            <!-- Player Select -->
+            <div class="glass-panel rounded-xl border border-white/10 p-4 mb-6">
+              <label class="text-xs text-slate-400 uppercase tracking-wider font-bold mb-2 block">Select Player</label>
+              <select id="rivalries-player-select"
+                class="w-full md:w-80 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-rose-500/50">
+                <option value="">-- Select Player --</option>
+              </select>
+            </div>
+
+            <!-- Player Rivalries Panel -->
+            <div id="rivalries-player-panel" class="mb-6 hidden"></div>
+
+            <!-- H2H Detail Panel -->
+            <div id="rivalries-h2h-panel" class="mb-6 hidden"></div>
+
+            <!-- Leaderboard -->
+            <div id="rivalries-content"></div>
+          </div>
+        </div>
+
+        <!-- STORY / SMART STATS -->
+        <div id="view-story" class="view-section hidden">
+          <!-- Hero -->
+          <div id="story-hero" class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-amber-950/20 to-slate-900 p-8 mb-6" style="animation: storyGlow 6s ease-in-out infinite alternate">
+            <div class="absolute inset-0 bg-gradient-to-r from-amber-500/5 via-transparent to-amber-500/5 pointer-events-none"></div>
+            <div id="story-hero-content" class="relative z-10">
+              <div class="text-amber-400 text-xs font-bold tracking-[0.3em] uppercase mb-2">&#9889; Smart Stats</div>
+              <h2 id="story-title" class="text-3xl font-black text-white mb-2">Loading...</h2>
+              <div id="story-subtitle" class="text-slate-400 text-sm"></div>
+              <div id="story-stats-row" class="flex gap-6 mt-4 text-sm text-slate-300"></div>
+            </div>
+          </div>
+
+          <!-- Session selector -->
+          <div class="flex items-center gap-3 mb-6">
+            <label class="text-xs text-slate-400 font-bold uppercase tracking-wider">Session:</label>
+            <select id="story-session-select" class="bg-slate-800 border border-white/10 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-amber-500/50"></select>
+          </div>
+
+          <!-- Moments -->
+          <div class="mb-6">
+            <h3 class="text-sm font-bold text-amber-400 tracking-widest uppercase mb-3">&#9889; Key Moments</h3>
+            <div id="story-moments" class="flex gap-3 overflow-x-auto pb-2"></div>
+          </div>
+
+          <!-- Team Synergy -->
+          <div class="mb-6">
+            <h3 class="text-sm font-bold text-amber-400 tracking-widest uppercase mb-3">&#9876;&#65039; Team Synergy</h3>
+            <div id="story-team-synergy"></div>
+          </div>
+
+          <!-- Player cards grid -->
+          <div id="story-players" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"></div>
+
+          <!-- KIS Breakdown -->
+          <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+            <h3 class="text-sm font-bold text-white mb-4">Kill Impact Breakdown</h3>
+            <div id="story-kis-breakdown"></div>
+          </div>
+
+          <!-- Win Contribution -->
+          <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-6 mt-6">
+            <h3 class="text-sm font-bold text-amber-400 tracking-widest uppercase mb-4">&#9733; Player Win Contribution</h3>
+            <div id="story-win-contribution"></div>
+          </div>
+
+        </div>
+
+        <style>
+          @keyframes storyGlow {
+            0% { border-color: rgba(255,255,255,0.1); }
+            50% { border-color: rgba(245,158,11,0.25); }
+            100% { border-color: rgba(255,255,255,0.1); }
+          }
+          @keyframes momentFadeUp {
+            from { opacity: 0; transform: translateY(0.75rem); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+          }
+        </style>
+
+        <!-- REPLAY VIEW -->
+        <div id="view-replay" class="view-section hidden"
+            data-prototype="true"
+            data-prototype-title="Round Replay Beta"
+            data-prototype-message="Replay timeline is in active development. Track positions require proximity data."
+            data-prototype-tone="cyan">
+          <div class="max-w-7xl mx-auto px-6 py-8">
+            <div data-prototype-slot></div>
+            <!-- Hero -->
+            <div class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-purple-950/20 to-slate-900 p-8 mb-6">
+              <div class="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-transparent to-purple-500/5 pointer-events-none"></div>
+              <div class="relative z-10">
+                <div class="text-purple-400 text-xs font-bold tracking-[0.3em] uppercase mb-2">Round Replay</div>
+                <h2 class="text-3xl font-black text-white mb-2">Timeline Viewer</h2>
+                <p class="text-slate-400 text-sm">Watch round events unfold on the map. Select a round to explore kills, trades, pushes and player movement.</p>
+              </div>
+            </div>
+            <!-- Dynamic content injected by replay.js -->
+            <div id="replay-container"></div>
+          </div>
+        </div>
 
         <!-- GREATSHOT VIEW -->
         <div id="view-greatshot" class="view-section">
