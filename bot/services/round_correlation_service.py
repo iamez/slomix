@@ -319,10 +319,10 @@ class RoundCorrelationService:
             if table not in _ALLOWED_FK_TABLES:
                 logger.warning("FK pre-check: table %s not in whitelist, skipping", table)
                 continue
+            # Pre-build query from whitelisted table+pk (no user input in SQL)
+            fk_query = "SELECT 1 FROM " + table + " WHERE " + pk + " = ?"
             try:
-                exists = await self.db.fetch_one(
-                    f"SELECT 1 FROM {table} WHERE {pk} = ?", (val,)
-                )
+                exists = await self.db.fetch_one(fk_query, (val,))
             except Exception as e:
                 logger.warning(
                     "FK pre-check DB error for %s.%s=%s: %s (treating as deferred)",

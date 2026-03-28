@@ -417,26 +417,26 @@ class ProximityCog(commands.Cog, name="Proximity"):
 
                 # Update all proximity tables that have round_id
                 # Use different WHERE clauses since not all tables have round_number/session_date
+                # Pre-built parameterized queries per table (no f-string SQL)
+                _RELINK_PRIMARY = {
+                    t: "UPDATE " + t + " SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4"
+                    for t in self._PROXIMITY_ROUND_ID_TABLES
+                }
+                _RELINK_FALLBACK = {
+                    t: "UPDATE " + t + " SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3"
+                    for t in self._PROXIMITY_ROUND_ID_TABLES
+                }
                 for table in self._PROXIMITY_ROUND_ID_TABLES:
-                    if table not in self._PROXIMITY_ROUND_ID_TABLES:
-                        continue  # whitelist guard for SQL interpolation safety
                     try:
-                        # Try most specific match first (map + round_number + session_date)
                         await db.execute(
-                            f"UPDATE {table} SET round_id = $1 "
-                            f"WHERE round_id IS NULL "
-                            f"AND map_name = $2 AND round_number = $3 "
-                            f"AND session_date = $4",
+                            _RELINK_PRIMARY[table],
                             (round_id, map_name, round_number, session_date),
                         )
                     except Exception as e:
-                        logger.warning(f"Re-linker: {table} primary update failed: {e}")
-                        # Fallback: some tables lack round_number/session_date columns
+                        logger.warning("Re-linker: %s primary update failed: %s", table, e)
                         try:
                             await db.execute(
-                                f"UPDATE {table} SET round_id = $1 "
-                                f"WHERE round_id IS NULL AND map_name = $2 "
-                                f"AND round_start_unix = $3",
+                                _RELINK_FALLBACK[table],
                                 (round_id, map_name, round_start_unix),
                             )
                         except Exception as e:
