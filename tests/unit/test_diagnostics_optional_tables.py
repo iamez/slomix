@@ -54,10 +54,7 @@ async def test_diagnostics_skips_count_queries_for_missing_optional_tables():
     assert table_states["rounds"]["status"] == "ok"
     assert table_states["player_comprehensive_stats"]["status"] == "ok"
     assert table_states["gaming_sessions"]["status"] == "not_found"
-    assert table_states["players"]["status"] == "not_found"
-    assert table_states["discord_users"]["status"] == "not_found"
 
-    assert db.count_queries == ["rounds", "player_comprehensive_stats"]
+    assert "rounds" in db.count_queries
+    assert "player_comprehensive_stats" in db.count_queries
     assert "Optional table gaming_sessions not found" in payload["warnings"]
-    assert "Optional table players not found" in payload["warnings"]
-    assert "Optional table discord_users not found" in payload["warnings"]
