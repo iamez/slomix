@@ -371,7 +371,6 @@ export async function loadSessionDetailView({ sessionId, sessionDate } = {}) {
 
 function _renderSessionHeaderMapStrip(scoring = {}) {
     const matches = _getOverviewMatches();
-    const scoringMaps = Array.isArray(scoring.maps) ? scoring.maps : [];
     if (!matches.length) {
         return '<div class="text-xs text-slate-500">No maps available</div>';
     }

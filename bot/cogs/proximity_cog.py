@@ -398,7 +398,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
                             int(round_start_unix), tz=timezone.utc
                         ).replace(tzinfo=None)
                     except (ValueError, TypeError, OSError):
-                        pass
+                        pass  # Invalid timestamp format; fall back to date-based resolution
 
                 round_date_str = str(session_date) if session_date else None
 

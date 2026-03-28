@@ -234,12 +234,12 @@ async def main():
 
             if args.apply:
                 # Move awards
-                result = await db.execute(
+                await db.execute(
                     "UPDATE round_awards SET round_id = $1 WHERE round_id = $2",
                     (correct_id, wrong_id),
                 )
                 # Move vs_stats
-                result2 = await db.execute(
+                await db.execute(
                     "UPDATE round_vs_stats SET round_id = $1 WHERE round_id = $2",
                     (correct_id, wrong_id),
                 )

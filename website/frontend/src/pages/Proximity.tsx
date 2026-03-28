@@ -535,7 +535,6 @@ function KillOutcomesPanel({ scope }: { scope?: ProximityScope }) {
 
 // ── Hit Regions (v5.2) ──────────────────────────────────────────────────────
 
-const REGION_NAMES = ['Head', 'Arms', 'Body', 'Legs'] as const;
 const REGION_COLORS = ['#ef4444', '#60a5fa', '#22c55e', '#f59e0b']; // red, blue, green, amber
 
 function HitRegionsPanel({ scope }: { scope?: ProximityScope }) {

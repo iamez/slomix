@@ -48,8 +48,6 @@ function fmtMs(v: number | null | undefined) {
 function fmtPct(v: number | null | undefined) {
   return v != null ? `${v.toFixed(1)}%` : '--';
 }
-function stripColors(name: string): string { return name.replace(/\^[0-9a-zA-Z]/g, ''); }
-
 const REGION_NAMES = ['Head', 'Arms', 'Body', 'Legs'] as const;
 const REGION_COLORS = ['#ef4444', '#60a5fa', '#22c55e', '#f59e0b'];
 const WEAPON_NAMES: Record<number, string> = {
