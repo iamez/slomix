@@ -3,7 +3,7 @@
 > **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Version](https://img.shields.io/badge/version-1.4.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.5.0-blue)](CHANGELOG.md)
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_17-336791)](https://www.postgresql.org/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
@@ -16,16 +16,24 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ## 🔥 Recent Updates (March 2026)
 
-### **⚔️ v1.4.0: Player Rivalries, Win Contribution & Smart Stats Phase 2 (March 27)** 🆕
+### **🎬 v1.5.0: Round Replay Timeline, Momentum Chart & Codacy Zero (March 28)** 🆕
 
-**Full esports analytics upgrade — head-to-head rivalries, per-round win contribution scoring, 11 match moment detectors, 9 server-side archetypes, and 35-weapon name mapping.**
+**Visual round analysis, momentum tracking, session narratives, and full Codacy compliance — 53 commits, 58 issues → 0.**
 
-- ⚔️ **Player Rivalries System** — H2H stats for any player pair, nemesis/prey/rival classification, weapon breakdown, per-map drill-down, rivalry leaderboard, new page `/#/rivalries`
-- 🏆 **Win Contribution (PWC/WIS/WAA)** — Per-round 5-component formula (kills, damage, objectives, revives, survival), dynamic weight redistribution when objectives=0, Win Impact Score, MVP detection, stacked bar visualization
-- 🧠 **Smart Stats Phase 2** — 11 moment detectors (team wipe, multikill, kill streak, carrier chain, focus survival, push success, trade chain, objective secured/denied/run, multi-revive) with rich per-kill context (weapon names, timestamps, duration)
-- 🎭 **9 Player Archetypes** — Server-side classification using DPM + denied_time + headshot% + KD + trades + revives; 35-weapon ET:Legacy name mapping
-- 🔬 **Mandelbrot RCA Audit** — 4 parallel Sonnet teams, 32 files, 45 findings — all 45 resolved
-- 🐛 **Bug Fixes** — Headshot% formula corrected (hs_hits/total_hits), GUID 8-char vs 32-char mismatch resolved, ET color code stripping on all names, relative archetype thresholds, moment type diversity, rivalries GROUP BY + threshold fix
+- 🎬 **Round Replay Timeline** (`/#/replay`) — Dual-pane viewer with event feed + 2D map canvas + scrubber. 420+ events per round, player positions from `player_track.path` JSONB (200ms precision). 3 new API endpoints
+- 📈 **Momentum Chart** — 30-second window momentum with 0.85 decay, Canvas 2D dual-line chart (Axis vs Allies), per-round tabs
+- 📝 **Session Narrative** — Auto-generated paragraph summarizing MVP, archetype, defining moment, team synergy comparison
+- ⚡ **11 Moment Detectors** (was 5) — Added team wipe (5★), multikill (2-5★), objective secured/denied/run, multi-revive. Rich kill-by-kill context with 35-weapon mapping
+- 🎯 **Objective-Focused Moments** — Carrier interception chains, contested engineer builds, dynamite defuses
+- 🛡️ **58 Codacy Issues → 0** — 22 CRITICAL XSS (innerHTML → DOM API), 12 HIGH TypeScript, 7 SQL injection (f-string → whitelists), protocol stubs, stack trace exposure, url-redirect validation. Zero suppressions. CI: 9/9 checks green
+- 🐛 **Bug Fixes** — MomentumChart non-null guard, rivalries double `/api/api/` prefix, narrative `gaming_session_id` query fix, `PUSH_MULTIPLIER` import removed, restored `gaming_sessions` diagnostic query
+
+### **⚔️ v1.4.0: Player Rivalries, Win Contribution & Smart Stats Phase 2 (March 27)**
+
+- ⚔️ Player Rivalries — H2H stats, nemesis/prey/rival classification, weapon breakdown, per-map drill-down, rivalry leaderboard at `/#/rivalries`
+- 🏆 Win Contribution (PWC/WIS/WAA) — 5-component formula, dynamic weight redistribution, MVP detection
+- 🧠 Smart Stats Phase 2 — 11 moment detectors with rich per-kill context, 9 player archetypes, 35-weapon mapping
+- 🔬 Mandelbrot Audit — 45 findings, 45 resolved
 
 ### **🧠 v1.3.0: Smart Storytelling Stats, Proximity Pipeline & Deep RCA (March 26-27)**
 
@@ -174,6 +182,8 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 **Result:** Every data point verified at **multiple checkpoints** before commit.
 
+**Security:** Zero `innerHTML` in new code — all dynamic content uses DOM API (`createElement` + `textContent`). 58 Codacy issues resolved with zero suppressions.
+
 **[📖 Full Documentation: SAFETY_VALIDATION_SYSTEMS.md](docs/SAFETY_VALIDATION_SYSTEMS.md)**
 
 ### **Round 2 Differential Calculation**
@@ -258,6 +268,18 @@ A 9-metric percentile-based skill rating formula that captures the full picture 
 
 ---
 
+### **🎬 Round Replay Timeline** 🆕
+
+Relive every round with a full event replay viewer:
+
+- 🎥 **Dual-Pane Viewer** (`/#/replay`) — Event feed on the left, 2D map canvas on the right, synchronized scrubber bar
+- 📍 **Player Positions** — Sourced from `player_track.path` JSONB at 200ms precision — see exactly where every player was at every moment
+- ⚡ **420+ Events Per Round** — Kills, deaths, revives, objectives, team actions rendered on an interactive timeline
+- 🗺️ **2D Map Canvas** — ET:Legacy map overlay with real-time player position dots and event markers
+- 🔌 **3 API Endpoints** — Round event feed, player track positions, round metadata
+
+---
+
 ### **🧠 Smart Storytelling Stats** 🆕
 
 Transform raw numbers into compelling competitive narratives:
@@ -265,6 +287,8 @@ Transform raw numbers into compelling competitive narratives:
 - 💥 **Kill Impact Score (KIS)** — Contextual kill scoring with 7 multipliers: carrier kills (3-5x), push kills (2x), crossfire (1.5x), spawn timing (1-2x), outcome weight, class bonus, distance factor
 - 🎭 **9 Player Archetypes** — Server-side classification using DPM + denied_time + headshot% + KD + trades + revives: Pressure Engine, Medic Anchor, Silent Assassin, Objective Demon, Trade Specialist, Support Fortress, Flanker, All-Rounder, Wildcard
 - ⚡ **11 Match Moment Detectors** — Team wipe, multikill, kill streak, carrier chain, focus survival, push success, trade chain, objective secured, objective denied, objective run, multi-revive — each with per-kill breakdown (weapon names, timestamps, duration)
+- 📈 **Momentum Chart** — 30-second window momentum scoring with 0.85 decay factor, Canvas 2D dual-line chart (Axis vs Allies), per-round tab navigation
+- 📝 **Session Narrative** — Auto-generated paragraph summarizing MVP, player archetype, defining moment, and team synergy comparison
 - 🤝 **Team Synergy Score** — 5-axis per-faction comparison: crossfire rate, trade coverage, cohesion quality, push success, medic bonds
 - 🔫 **35-Weapon Name Mapping** — Full ET:Legacy weapon name lookup across all moment and archetype displays
 - 🎬 **Legacy Story Page** — Cinematic hero, player story cards, moment timeline, KIS breakdown bars, synergy panel at `/#/story`
