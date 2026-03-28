@@ -1089,6 +1089,16 @@ class UltimateETLegacyBot(commands.Bot):
                     await db_manager.disconnect()
 
                 if not success:
+                    # Mark parse failures as processed (with success=FALSE) to prevent
+                    # infinite retry loops on legitimately unparseable files (e.g. header-only)
+                    try:
+                        await self.file_tracker.mark_processed(
+                            filename, success=False, error_msg=message, file_path=local_path
+                        )
+                        self.processed_files.add(filename)
+                        logger.warning(f"Marked {filename} as failed (will not retry): {message}")
+                    except Exception as mark_err:
+                        logger.debug(f"Failed to mark {filename} as failed: {mark_err}")
                     raise Exception(f"Import failed: {message}")
 
                 # Parse file to get player count for return value
@@ -3548,7 +3558,7 @@ class UltimateETLegacyBot(commands.Bot):
         if filename in self.processed_endstats_files:
             return False
 
-        check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
+        check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
         result = await self.db_adapter.fetch_one(check_query, (filename,))
         if result:
             self.processed_endstats_files.add(filename)
@@ -4642,6 +4652,11 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     await self.round_publisher.publish_round_stats(filename, result)
                     webhook_logger.info(f"✅ Successfully processed: {filename}")
+                    # Trigger proximity scan after stats creates the round in DB
+                    self._safe_create_task(
+                        self._trigger_proximity_scan_after_stats(),
+                        name="proximity_post_stats_scan"
+                    )
                 except Exception as post_err:
                     webhook_logger.error(f"❌ Discord post FAILED for {filename}: {post_err}", exc_info=True)
                     await self.track_error("discord_posting", f"Failed to post {filename}: {post_err}", max_consecutive=2)
@@ -4655,6 +4670,35 @@ class UltimateETLegacyBot(commands.Bot):
             if added_processing_marker:
                 self.file_tracker.processed_files.discard(filename)
             webhook_logger.error(f"❌ Error fetching stats file: {e}", exc_info=True)
+
+    async def _trigger_proximity_scan_after_stats(self, round_id: int = None, delay_seconds: int = 5, max_retries: int = 3):
+        """Trigger proximity import after stats creates the round in DB.
+
+        Polls until the Proximity cog is available rather than sleeping a fixed duration.
+        """
+        for attempt in range(max_retries):
+            try:
+                await asyncio.sleep(delay_seconds)
+                proximity_cog = self.get_cog("Proximity")
+                if proximity_cog and hasattr(proximity_cog, '_scan_and_import'):
+                    webhook_logger.info(
+                        "🎯 Triggering proximity scan after stats import (attempt %d/%d, round_id=%s)",
+                        attempt + 1, max_retries, round_id,
+                    )
+                    await proximity_cog._scan_and_import(force=True)
+                    return
+                webhook_logger.debug(
+                    "Proximity cog not available (attempt %d/%d); retrying",
+                    attempt + 1, max_retries,
+                )
+            except Exception as e:
+                webhook_logger.warning(
+                    "Post-stats proximity scan failed on attempt %d/%d (non-fatal): %s",
+                    attempt + 1, max_retries, e,
+                )
+        webhook_logger.warning(
+            "Proximity scan: gave up after %d attempts (round_id=%s)", max_retries, round_id
+        )
 
     def _log_endstats_transition(
         self,
@@ -4685,6 +4729,30 @@ class UltimateETLegacyBot(commands.Bot):
         awards_count = len(awards) if isinstance(awards, list) else 0
         vs_count = len(vs_stats) if isinstance(vs_stats, list) else 0
         return (awards_count, vs_count)
+
+    @staticmethod
+    def _parse_endstats_filename_timestamp(filename: str) -> datetime | None:
+        """Extract datetime from endstats filename (YYYY-MM-DD-HHMMSS-...)."""
+        try:
+            return datetime.strptime(filename[:17], "%Y-%m-%d-%H%M%S")
+        except (ValueError, IndexError):
+            return None
+
+    def _are_endstats_from_same_match(
+        self, filename_a: str, filename_b: str, max_minutes: int = 45
+    ) -> bool:
+        """Check if two endstats filenames are from the same match.
+
+        Compares timestamps embedded in filenames. If the gap exceeds
+        max_minutes, they are from different plays of the same map and
+        must NOT supersede each other.
+        Returns True (assume same match) when either timestamp is unparseable.
+        """
+        ts_a = self._parse_endstats_filename_timestamp(filename_a)
+        ts_b = self._parse_endstats_filename_timestamp(filename_b)
+        if ts_a is None or ts_b is None:
+            return True  # Can't determine — safe default
+        return abs((ts_a - ts_b).total_seconds()) <= max_minutes * 60
 
     def _select_richest_endstats(
         self,
@@ -4890,6 +4958,28 @@ class UltimateETLegacyBot(commands.Bot):
             )
             return True
 
+        # Timestamp guard: prevent supersede across different plays of the same map.
+        # If the incoming file's timestamp is >45 min from the existing file,
+        # they belong to different matches — do NOT allow supersede.
+        if not self._are_endstats_from_same_match(filename, existing_filename):
+            self._log_endstats_transition(
+                log,
+                source,
+                "cross_match_supersede_blocked",
+                filename,
+                round_id=round_id,
+                detail=(
+                    f"existing_filename={existing_filename} "
+                    f"timestamps_too_far_apart_for_same_match"
+                ),
+                level="warning",
+            )
+            await self._mark_endstats_filename_handled(
+                filename,
+                f"cross_match_supersede_blocked_existing:{existing_filename}",
+            )
+            return True
+
         incoming_quality = self._summarize_endstats_quality(endstats_data)
         existing_quality = await self._get_round_endstats_quality(round_id)
         if self._is_endstats_quality_better(incoming_quality, existing_quality):
@@ -5084,7 +5174,7 @@ class UltimateETLegacyBot(commands.Bot):
                 f"🔄 Endstats retry attempt {attempt}/{self.endstats_retry_max_attempts} for {filename}"
             )
             # If already processed in DB, stop retrying
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
                 self._log_endstats_transition(
@@ -5228,6 +5318,26 @@ class UltimateETLegacyBot(commands.Bot):
                         round_id=round_id,
                         detail=f"existing_filename={existing_filename} processed_at={processed_at}",
                         level="warning",
+                    )
+                    return True
+
+                # Timestamp guard: block supersede across different plays of the same map.
+                if not self._are_endstats_from_same_match(filename, existing_filename):
+                    self._log_endstats_transition(
+                        log,
+                        source,
+                        "cross_match_supersede_blocked",
+                        filename,
+                        round_id=round_id,
+                        detail=(
+                            f"existing_filename={existing_filename} "
+                            f"timestamps_too_far_apart_for_same_match"
+                        ),
+                        level="warning",
+                    )
+                    await self._mark_endstats_filename_handled(
+                        filename,
+                        f"cross_match_supersede_blocked_existing:{existing_filename}",
                     )
                     return True
 
@@ -5555,7 +5665,7 @@ class UltimateETLegacyBot(commands.Bot):
                 return
 
             # Then check database table
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
                 self._log_endstats_transition(
@@ -5611,12 +5721,33 @@ class UltimateETLegacyBot(commands.Bot):
             )
 
             if not round_id:
+                # Track retry attempts to prevent infinite loop
+                attempt = self.endstats_retry_counts.get(filename, 0) + 1
+                self.endstats_retry_counts[filename] = attempt
+
+                if attempt > self.endstats_retry_max_attempts:
+                    logger.error(
+                        f"❌ Endstats polling retry limit reached ({self.endstats_retry_max_attempts}) "
+                        f"for {filename} — marking as failed"
+                    )
+                    try:
+                        await self.db_adapter.execute(
+                            "INSERT INTO processed_endstats_files (filename, success, error_message) "
+                            "VALUES ($1, FALSE, $2) ON CONFLICT (filename) DO NOTHING",
+                            (filename, f"round_id_unresolved_after_{self.endstats_retry_max_attempts}_attempts"),
+                        )
+                    except Exception as mark_err:
+                        logger.debug(f"Failed to mark endstats as failed: {mark_err}")
+                    self.endstats_retry_counts.pop(filename, None)
+                    # Keep in processed set so it won't be retried
+                    return
+
                 self._log_endstats_transition(
                     logger,
                     source,
                     "waiting_round_id",
                     filename,
-                    detail="round_id_unresolved_next_poll",
+                    detail=f"round_id_unresolved_poll_attempt_{attempt}/{self.endstats_retry_max_attempts}",
                     level="warning",
                 )
                 # Remove from in-memory set to allow retry on next polling cycle
@@ -5698,7 +5829,7 @@ class UltimateETLegacyBot(commands.Bot):
                 return
 
             # Then check database table
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1 AND success = TRUE"
+            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
                 self._log_endstats_transition(

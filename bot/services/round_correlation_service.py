@@ -289,6 +289,58 @@ class RoundCorrelationService:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    # Columns that have FK constraints and need pre-validation
+    _FK_COLUMNS = {
+        'r1_round_id': ('rounds', 'id'),
+        'r2_round_id': ('rounds', 'id'),
+        'summary_round_id': ('rounds', 'id'),
+        'r1_lua_teams_id': ('lua_round_teams', 'id'),
+        'r2_lua_teams_id': ('lua_round_teams', 'id'),
+    }
+
+    async def _validate_fk_references(self, updates: dict) -> tuple[dict, dict]:
+        """Split updates into safe (validated) and deferred (FK target missing).
+
+        Returns (safe_updates, deferred_updates).
+        """
+        fk_cols = {k: v for k, v in updates.items() if k in self._FK_COLUMNS}
+        if not fk_cols:
+            return updates, {}
+
+        safe = dict(updates)
+        deferred = {}
+
+        # Pre-built FK existence check queries (no string concat in SQL)
+        _FK_CHECK_QUERIES = {
+            ("rounds", "id"): "SELECT 1 FROM rounds WHERE id = ?",
+            ("lua_round_teams", "id"): "SELECT 1 FROM lua_round_teams WHERE id = ?",
+        }
+        for col, val in fk_cols.items():
+            if val is None:
+                continue
+            table, pk = self._FK_COLUMNS[col]
+            fk_query = _FK_CHECK_QUERIES.get((table, pk))
+            if not fk_query:
+                logger.warning("FK pre-check: table %s.%s not in whitelist, skipping", table, pk)
+                continue
+            try:
+                exists = await self.db.fetch_one(fk_query, (val,))
+            except Exception as e:
+                logger.warning(
+                    "FK pre-check DB error for %s.%s=%s: %s (treating as deferred)",
+                    table, pk, val, e,
+                )
+                exists = None
+
+            if not exists:
+                logger.warning(
+                    f"[CORRELATION] FK pre-check: {col}={val} not found in "
+                    f"{table}.{pk}, deferring"
+                )
+                deferred[col] = safe.pop(col)
+
+        return safe, deferred
+
     async def _upsert_correlation(self, correlation_id: str, match_id: str,
                                   map_name: str, updates: dict):
         """Create or update a correlation row, then recalculate completeness."""
@@ -303,10 +355,20 @@ class RoundCorrelationService:
                 (correlation_id, match_id, map_name),
             )
 
-            # Apply updates
+            # Validate FK references before UPDATE to avoid FK violations
+            # that would roll back the entire UPDATE (including boolean flags)
+            safe_updates, deferred = await self._validate_fk_references(updates)
+
+            if deferred:
+                logger.warning(
+                    f"[CORRELATION] {correlation_id}: deferred FK columns "
+                    f"{list(deferred.keys())} (targets not yet in DB)"
+                )
+
+            # Apply safe updates (boolean flags + validated FKs)
             set_clauses = []
             params = []
-            for col, val in updates.items():
+            for col, val in safe_updates.items():
                 set_clauses.append(f"{col} = ?")
                 params.append(val)
             params.append(correlation_id)

@@ -1366,8 +1366,10 @@ function autoDraftAvailabilityPlanningTeams() {
     if (!participants.length) return;
 
     const pool = participants.map((row) => Number(row?.user_id || 0)).filter((value) => value > 0);
+    const rngBuf = new Uint32Array(pool.length);
+    crypto.getRandomValues(rngBuf);
     for (let i = pool.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = rngBuf[i] % (i + 1);
         const tmp = pool[i];
         pool[i] = pool[j];
         pool[j] = tmp;

@@ -47,6 +47,11 @@ class DatabaseAdapter(ABC):
         pass
 
     @abstractmethod
+    async def executemany(self, query: str, params_list: List[Tuple]) -> None:
+        """Execute a query for each tuple in params_list (batch insert/update)."""
+        pass
+
+    @abstractmethod
     async def fetch_one(self, query: str, params: Optional[Tuple] = None) -> Optional[Any]:
         """Fetch a single row."""
         pass
@@ -268,6 +273,21 @@ class PostgreSQLAdapter(DatabaseAdapter):
             raise
         except Exception:
             logger.error("Query failed (%.100s)", query, exc_info=True)
+            raise
+
+    async def executemany(self, query: str, params_list: List[Tuple]) -> None:
+        """Batch execute a query for each tuple in params_list."""
+        if not params_list:
+            return
+        query = self._translate_placeholders(query)
+        start = time.monotonic()
+        try:
+            async with self.connection() as conn:
+                await conn.executemany(query, params_list)
+            duration_ms = (time.monotonic() - start) * 1000
+            logger.debug("executemany %d rows (%.0fms): %.100s", len(params_list), duration_ms, query)
+        except Exception:
+            logger.error("executemany failed (%d rows, %.100s)", len(params_list), query, exc_info=True)
             raise
 
     async def fetch_one(self, query: str, params: Optional[Tuple] = None) -> Optional[Any]:

@@ -50,6 +50,8 @@ import type {
   CombatHeatmapResponse,
   KillLinesResponse,
   DangerZonesResponse,
+  MomentumResponse,
+  NarrativeResponse,
 } from './types';
 
 const API_BASE = '/api';
@@ -202,10 +204,9 @@ export const api = {
   // Kill Outcomes (v5.2)
   getProximityKillOutcomes: (params?: ProximityScope) =>
     get<KillOutcomesResponse>(`/proximity/kill-outcomes${buildScopedQuery(params) ? `?${buildScopedQuery(params)}` : ''}`),
-  getProximityKillOutcomePlayerStats: (rangeDays = 30, playerGuid?: string) => {
-    const q = new URLSearchParams({ range_days: String(rangeDays) });
-    if (playerGuid) q.set('player_guid', playerGuid);
-    return get<KillOutcomePlayerStatsResponse>(`/proximity/kill-outcomes/player-stats?${q.toString()}`);
+  getProximityKillOutcomePlayerStats: (params?: ProximityScope, playerGuid?: string) => {
+    const q = buildScopedQuery(params, playerGuid ? { player_guid: playerGuid } : undefined);
+    return get<KillOutcomePlayerStatsResponse>(`/proximity/kill-outcomes/player-stats?${q}`);
   },
 
   // Hit Regions (v5.2)
@@ -219,8 +220,10 @@ export const api = {
   },
   getProximityHitRegionsByWeapon: (playerGuid: string, rangeDays = 30) =>
     get<WeaponHitRegionsResponse>(`/proximity/hit-regions/by-weapon?player_guid=${encodeURIComponent(playerGuid)}&range_days=${rangeDays}`),
-  getProximityHeadshotRates: (rangeDays = 30) =>
-    get<HeadshotRatesResponse>(`/proximity/hit-regions/headshot-rates?range_days=${rangeDays}`),
+  getProximityHeadshotRates: (params?: ProximityScope) => {
+    const q = buildScopedQuery(params);
+    return get<HeadshotRatesResponse>(`/proximity/hit-regions/headshot-rates${q ? `?${q}` : ''}`);
+  },
 
   // Combat Positions (v5.2)
   getCombatHeatmap: (mapName: string, opts?: { weaponId?: number; perspective?: string; victimClass?: string; team?: string; rangeDays?: number }) => {
@@ -418,6 +421,26 @@ export const api = {
     get<import('./types').SkillLeaderboardResponse>(`/skill/leaderboard?limit=${limit}`),
   getSkillFormula: () =>
     get<import('./types').SkillFormulaResponse>('/skill/formula'),
+  getSkillHistory: (identifier: string, rangeDays = 30, sessionDate?: string) => {
+    const params = new URLSearchParams({ range_days: String(rangeDays) });
+    if (sessionDate) params.set('session_date', sessionDate);
+    return get<import('./types').SkillHistoryResponse>(
+      `/skill/player/${encodeURIComponent(identifier)}/history?${params.toString()}`
+    );
+  },
+
+  // Storytelling / Smart Stats
+  getStoryKillImpact: (sessionDate: string, limit = 20) =>
+    get<import('./types').KillImpactResponse>(`/storytelling/kill-impact?session_date=${sessionDate}&limit=${limit}`),
+
+  getStoryMoments: (sessionDate: string, limit = 10) =>
+    get<import('./types').MomentsResponse>(`/storytelling/moments?session_date=${sessionDate}&limit=${limit}`),
+
+  getStoryMomentum: (sessionDate: string) =>
+    get<MomentumResponse>(`/storytelling/momentum?session_date=${sessionDate}`),
+
+  getStoryNarrative: (sessionDate: string) =>
+    get<NarrativeResponse>(`/storytelling/narrative?session_date=${sessionDate}`),
 
   // Auth
   getAuthMe: async (): Promise<AuthUser | null> => {

@@ -118,7 +118,8 @@ def _website_user_id_from_user(user: Dict[str, Any]) -> Optional[int]:
 def _promotion_timezone() -> ZoneInfo:
     try:
         return ZoneInfo(PROMOTION_TIMEZONE)
-    except Exception:
+    except Exception as e:
+        logger.warning("Invalid timezone '%s', falling back to UTC: %s", PROMOTION_TIMEZONE, e)
         return ZoneInfo("UTC")
 
 
@@ -275,8 +276,9 @@ async def _is_promoter_user(request: Request, db) -> bool:
         )
         if row and str(row[0] or "").lower() in {"root", "admin"}:
             return True
-    except Exception:
+    except Exception as e:
         # user_permissions might not exist in local/dev snapshots.
+        logger.warning("⚠️ _is_admin check failed (demoting to non-admin): %s", e)
         return False
     return False
 
@@ -1646,7 +1648,7 @@ async def get_today_promotion_campaign(
     target_date: Optional[date] = Query(default=None, alias="date"),
     db=Depends(get_db),
 ):
-    _user = _require_user(request)
+    _require_user(request)
     campaign_date = target_date or await _current_db_date(db)
     row = await db.fetch_one(
         """

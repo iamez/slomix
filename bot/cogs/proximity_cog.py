@@ -11,13 +11,14 @@ Features:
 - Completely isolated - errors here won't crash main bot
 """
 
+import asyncio
 import discord
 from discord.ext import commands, tasks
 import os
 import sys
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
 
@@ -62,6 +63,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
         self.import_count = 0
         self.error_count = 0
         self._startup_scan_completed = False
+        self._scan_lock = asyncio.Lock()
 
         # Check if proximity is enabled
         self.enabled = getattr(bot.config, 'proximity_enabled', False)
@@ -75,6 +77,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
         if self.enabled:
             logger.info("🎯 Proximity Tracker cog initialized (ENABLED)")
             self.scan_engagement_files.start()
+            self.relink_null_rounds.start()
         else:
             logger.info("🎯 Proximity Tracker cog initialized (DISABLED)")
 
@@ -226,6 +229,8 @@ class ProximityCog(commands.Cog, name="Proximity"):
         """Cleanup when cog is unloaded"""
         if self.scan_engagement_files.is_running():
             self.scan_engagement_files.cancel()
+        if self.relink_null_rounds.is_running():
+            self.relink_null_rounds.cancel()
 
     async def cog_command_error(self, ctx, error):
         """Handle errors without crashing bot"""
@@ -245,55 +250,60 @@ class ProximityCog(commands.Cog, name="Proximity"):
         if not force and not self.bot.config.proximity_auto_import:
             return
 
-        try:
-            self.last_scan_time = datetime.now()
+        if self._scan_lock.locked():
+            logger.debug("Proximity scan already in progress, skipping")
+            return
 
-            # Fetch new files from remote server if configured
-            await self._fetch_remote_files()
+        async with self._scan_lock:
+            try:
+                self.last_scan_time = datetime.now()
 
-            # Find all engagement files
-            stats_path = Path(self.local_dir)
-            if not stats_path.exists():
-                if self.debug_log:
-                    logger.debug(f"Stats directory not found: {stats_path}")
-                return
+                # Fetch new files from remote server if configured
+                await self._fetch_remote_files()
 
-            engagement_files = list(stats_path.glob("*_engagements.txt"))
+                # Find all engagement files
+                stats_path = Path(self.local_dir)
+                if not stats_path.exists():
+                    if self.debug_log:
+                        logger.debug(f"Stats directory not found: {stats_path}")
+                    return
 
-            # On startup, respect lookback to avoid replaying stale local files.
-            startup_cutoff = None
-            if (
-                not force
-                and not self._startup_scan_completed
-                and self.lookback_hours
-                and self.lookback_hours > 0
-            ):
-                startup_cutoff = int(datetime.now().timestamp() - (self.lookback_hours * 3600))
+                engagement_files = list(stats_path.glob("*_engagements.txt"))
 
-            new_files = [
-                f for f in engagement_files
-                if f.name not in self.processed_engagement_files
-            ]
+                # On startup, respect lookback to avoid replaying stale local files.
+                startup_cutoff = None
+                if (
+                    not force
+                    and not self._startup_scan_completed
+                    and self.lookback_hours
+                    and self.lookback_hours > 0
+                ):
+                    startup_cutoff = int(datetime.now().timestamp() - (self.lookback_hours * 3600))
 
-            if new_files and self.debug_log:
-                logger.info(f"🎯 Found {len(new_files)} new engagement files")
+                new_files = [
+                    f for f in engagement_files
+                    if f.name not in self.processed_engagement_files
+                ]
 
-            for filepath in sorted(new_files, key=lambda p: p.name):
-                if startup_cutoff is not None:
-                    ts = self._extract_timestamp(filepath.name)
-                    if ts and ts < startup_cutoff:
-                        self._mark_local_processed(filepath.name)
-                        continue
-                await self._import_engagement_file(filepath)
+                if new_files and self.debug_log:
+                    logger.info(f"🎯 Found {len(new_files)} new engagement files")
 
-        except Exception as e:
-            self.error_count += 1
-            logger.error(f"Error in engagement scan: {e}", exc_info=True)
-        finally:
-            if not self._startup_scan_completed:
-                self._startup_scan_completed = True
+                for filepath in sorted(new_files, key=lambda p: p.name):
+                    if startup_cutoff is not None:
+                        ts = self._extract_timestamp(filepath.name)
+                        if ts and ts < startup_cutoff:
+                            self._mark_local_processed(filepath.name)
+                            continue
+                    await self._import_engagement_file(filepath)
 
-    @tasks.loop(minutes=5)
+            except Exception as e:
+                self.error_count += 1
+                logger.error(f"Error in engagement scan: {e}", exc_info=True)
+            finally:
+                if not self._startup_scan_completed:
+                    self._startup_scan_completed = True
+
+    @tasks.loop(minutes=2)
     async def scan_engagement_files(self):
         """Periodically scan for new engagement files and import them"""
         await self._scan_and_import(force=False)
@@ -302,6 +312,191 @@ class ProximityCog(commands.Cog, name="Proximity"):
     async def before_scan(self):
         """Wait for bot to be ready before starting scan task"""
         await self.bot.wait_until_ready()
+
+    # =========================================================================
+    # RE-LINKER — fix NULL round_id in proximity tables
+    # =========================================================================
+
+    # Whitelist of proximity tables that have round_id columns (used in SQL interpolation)
+    _PROXIMITY_ROUND_ID_TABLES = frozenset({
+        "proximity_carrier_event",
+        "proximity_carrier_kill",
+        "proximity_carrier_return",
+        "proximity_combat_position",
+        "proximity_construction_event",
+        "proximity_crossfire_opportunity",
+        "proximity_escort_credit",
+        "proximity_focus_fire",
+        "proximity_hit_region",
+        "proximity_kill_outcome",
+        "proximity_lua_trade_kill",
+        "proximity_objective_focus",
+        "proximity_objective_run",
+        "proximity_reaction_metric",
+        # proximity_revive excluded: no round_number/round_start_unix/session_date columns
+        "proximity_spawn_timing",
+        "proximity_support_summary",
+        "proximity_team_cohesion",
+        "proximity_team_push",
+        "proximity_trade_event",
+        "proximity_vehicle_progress",
+        # proximity_weapon_accuracy excluded: no round_number/round_start_unix/session_date columns
+    })
+
+    async def _relink_null_round_ids(self) -> None:
+        """Find proximity rows with NULL round_id and attempt to resolve them."""
+        try:
+            from bot.core.round_linker import resolve_round_id
+
+            db = self.bot.db_adapter
+
+            # Find distinct unlinked proximity rounds across all tables that
+            # carry session_date + round_number + round_start_unix.
+            # Tables without those columns (proximity_revive, proximity_weapon_accuracy)
+            # are excluded; they rely on map_name + round_start_unix fallback only.
+            unlinked = await db.fetch_all(
+                "SELECT DISTINCT map_name, round_number, round_start_unix, session_date FROM ("
+                "  SELECT map_name, round_number, round_start_unix, session_date FROM proximity_reaction_metric WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_spawn_timing WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_team_cohesion WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_kill_outcome WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_carrier_event WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_carrier_kill WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_carrier_return WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_combat_position WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_construction_event WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_crossfire_opportunity WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_escort_credit WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_focus_fire WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_hit_region WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_lua_trade_kill WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_objective_focus WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_objective_run WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_support_summary WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_team_push WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_trade_event WHERE round_id IS NULL"
+                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_vehicle_progress WHERE round_id IS NULL"
+                ") sub ORDER BY session_date DESC LIMIT 50"
+            )
+
+            if not unlinked:
+                return
+
+            linked = 0
+            failed = 0
+
+            for row in unlinked:
+                map_name = row[0] if isinstance(row, (list, tuple)) else row.get('map_name') or row['map_name']
+                round_number = row[1] if isinstance(row, (list, tuple)) else row.get('round_number') or row['round_number']
+                round_start_unix = row[2] if isinstance(row, (list, tuple)) else row.get('round_start_unix') or row['round_start_unix']
+                session_date = row[3] if isinstance(row, (list, tuple)) else row.get('session_date') or row['session_date']
+
+                # Build target_dt from unix timestamp if available
+                target_dt = None
+                if round_start_unix:
+                    try:
+                        target_dt = datetime.fromtimestamp(
+                            int(round_start_unix), tz=timezone.utc
+                        ).replace(tzinfo=None)
+                    except (ValueError, TypeError, OSError):
+                        pass  # Invalid timestamp format; fall back to date-based resolution
+
+                round_date_str = str(session_date) if session_date else None
+
+                round_id = await resolve_round_id(
+                    db,
+                    map_name,
+                    round_number,
+                    target_dt=target_dt,
+                    round_date=round_date_str,
+                )
+
+                if round_id is None:
+                    failed += 1
+                    continue
+
+                # Pre-built parameterized relink queries per table (no string concat in SQL)
+                _RELINK_PRIMARY = {
+                    "proximity_carrier_event": "UPDATE proximity_carrier_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_carrier_kill": "UPDATE proximity_carrier_kill SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_carrier_return": "UPDATE proximity_carrier_return SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_combat_position": "UPDATE proximity_combat_position SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_construction_event": "UPDATE proximity_construction_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_crossfire_opportunity": "UPDATE proximity_crossfire_opportunity SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_escort_credit": "UPDATE proximity_escort_credit SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_focus_fire": "UPDATE proximity_focus_fire SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_hit_region": "UPDATE proximity_hit_region SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_kill_outcome": "UPDATE proximity_kill_outcome SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_lua_trade_kill": "UPDATE proximity_lua_trade_kill SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_objective_focus": "UPDATE proximity_objective_focus SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_objective_run": "UPDATE proximity_objective_run SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_reaction_metric": "UPDATE proximity_reaction_metric SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_spawn_timing": "UPDATE proximity_spawn_timing SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_support_summary": "UPDATE proximity_support_summary SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_team_cohesion": "UPDATE proximity_team_cohesion SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_team_push": "UPDATE proximity_team_push SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_trade_event": "UPDATE proximity_trade_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                    "proximity_vehicle_progress": "UPDATE proximity_vehicle_progress SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
+                }
+                _RELINK_FALLBACK = {
+                    "proximity_carrier_event": "UPDATE proximity_carrier_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_carrier_kill": "UPDATE proximity_carrier_kill SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_carrier_return": "UPDATE proximity_carrier_return SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_combat_position": "UPDATE proximity_combat_position SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_construction_event": "UPDATE proximity_construction_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_crossfire_opportunity": "UPDATE proximity_crossfire_opportunity SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_escort_credit": "UPDATE proximity_escort_credit SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_focus_fire": "UPDATE proximity_focus_fire SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_hit_region": "UPDATE proximity_hit_region SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_kill_outcome": "UPDATE proximity_kill_outcome SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_lua_trade_kill": "UPDATE proximity_lua_trade_kill SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_objective_focus": "UPDATE proximity_objective_focus SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_objective_run": "UPDATE proximity_objective_run SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_reaction_metric": "UPDATE proximity_reaction_metric SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_spawn_timing": "UPDATE proximity_spawn_timing SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_support_summary": "UPDATE proximity_support_summary SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_team_cohesion": "UPDATE proximity_team_cohesion SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_team_push": "UPDATE proximity_team_push SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_trade_event": "UPDATE proximity_trade_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                    "proximity_vehicle_progress": "UPDATE proximity_vehicle_progress SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
+                }
+                for table in self._PROXIMITY_ROUND_ID_TABLES:
+                    try:
+                        await db.execute(
+                            _RELINK_PRIMARY[table],
+                            (round_id, map_name, round_number, session_date),
+                        )
+                    except Exception as e:
+                        logger.warning("Re-linker: %s primary update failed: %s", table, e)
+                        try:
+                            await db.execute(
+                                _RELINK_FALLBACK[table],
+                                (round_id, map_name, round_start_unix),
+                            )
+                        except Exception as e:
+                            logger.warning(f"Re-linker: {table} fallback update failed: {e}")
+
+                linked += 1
+
+            if linked > 0 or failed > 0:
+                logger.info(
+                    f"🔗 Proximity re-linker: {linked} rounds linked, "
+                    f"{failed} unresolved (of {len(unlinked)} total)"
+                )
+
+        except Exception as e:
+            logger.error(f"Re-linker error: {e}", exc_info=True)
+
+    @tasks.loop(minutes=5)
+    async def relink_null_rounds(self):
+        """Periodically attempt to link NULL round_id rows in proximity tables."""
+        await self._relink_null_round_ids()
+
+    @relink_null_rounds.before_loop
+    async def before_relink(self):
+        """Wait for bot to be ready + 60s before starting re-linker."""
+        await self.bot.wait_until_ready()
+        await asyncio.sleep(60)
 
     # =========================================================================
     # IMPORT LOGIC
@@ -528,8 +723,8 @@ class ProximityCog(commands.Cog, name="Proximity"):
                 value="\n".join(v5_parts),
                 inline=False
             )
-        except Exception:
-            pass  # Tables may not exist yet
+        except Exception as e:
+            logger.debug("v5 teamplay data unavailable: %s", e)
 
         embed.set_footer(text="Proximity tracker runs independently of main stats")
 

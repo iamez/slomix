@@ -15,7 +15,7 @@ Matching strategy:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger("bot.core.round_linker")
@@ -118,7 +118,7 @@ async def resolve_round_id_with_reason(
 
     params: Tuple = (map_name, round_number)
     base_query = """
-        SELECT id, round_date, round_time, created_at
+        SELECT id, round_date, round_time, created_at, round_start_unix
         FROM rounds
         WHERE map_name = ?
           AND round_number = ?
@@ -190,9 +190,22 @@ async def resolve_round_id_with_reason(
         r_date = row[1] if len(row) > 1 else None
         r_time = row[2] if len(row) > 2 else None
         created_at = row[3] if len(row) > 3 else None
+        r_start_unix = row[4] if len(row) > 4 else None
         if round_id is None:
             continue
-        candidate_dt = _parse_round_datetime(r_date, r_time)
+
+        # Prefer round_start_unix (most accurate for same-map disambiguation)
+        candidate_dt = None
+        if r_start_unix and int(r_start_unix) > 0:
+            try:
+                candidate_dt = datetime.fromtimestamp(
+                    int(r_start_unix), tz=timezone.utc
+                ).replace(tzinfo=None)
+            except (ValueError, TypeError, OSError):
+                candidate_dt = None
+
+        if not candidate_dt:
+            candidate_dt = _parse_round_datetime(r_date, r_time)
 
         if not candidate_dt and created_at:
             if isinstance(created_at, str):

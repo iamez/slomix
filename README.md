@@ -3,8 +3,8 @@
 > **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Version](https://img.shields.io/badge/version-1.1.0-blue)](CHANGELOG.md)
-[![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_14-336791)](https://www.postgresql.org/)
+[![Version](https://img.shields.io/badge/version-1.5.0-blue)](CHANGELOG.md)
+[![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_17-336791)](https://www.postgresql.org/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
 [![Data Integrity](https://img.shields.io/badge/data%20integrity-6%20layers-blue)](docs/SAFETY_VALIDATION_SYSTEMS.md)
@@ -16,20 +16,32 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ## 🔥 Recent Updates (March 2026)
 
-### **📊 v1.1.0: Stats Accuracy Audit, React 19 Frontend & Proximity v5 (March 2026)** 🆕
+### **🎬 v1.5.0: Round Replay Timeline, Momentum Chart & Codacy Zero (March 28)** 🆕
 
-**Full stats accuracy audit — fixed critical data bugs, modernized frontend, expanded proximity analytics.**
+**Visual round analysis, momentum tracking, session narratives, and full Codacy compliance — 53 commits, 58 issues → 0.**
 
-- 🔍 **Stats Accuracy Audit** — Comprehensive review of every stat formula across API, bot, and parser
-- 🐛 **R0 Double-Counting Fix** — Match summary rows were inflating kills by 94% and DPM by 32% across 7+ API endpoints (profile, leaderboard, compare, records, maps, hall of fame, season leaders)
-- 🐛 **NULLIF KD Bug Fix** — `NULLIF(deaths, 1)` → `NULLIF(deaths, 0)` in all 10 leaderboard KD formulas
-- 🎯 **Accuracy Weighted Average** — Session graph stats now weighted by shots fired (not naive per-round average)
-- 💀 **Alive% Engine Value** — Now uses ET:Legacy `sess.time_played` (TAB[8]) which correctly excludes dead + limbo time. Backfilled 8,799 rows (99.9% coverage)
-- 🔧 **Headshot Leaderboard** — Changed from headshot hit events to headshot kills
-- ⚡ **React 19 + TypeScript 5.9** — Full frontend modernization: Vite 7, Tailwind CSS v4, Framer Motion
-- 🗺️ **Proximity v5.0** — Team pushes, trade kills, spawn timing, team cohesion, crossfire opportunities
-- 🌐 **3 New Proximity Pages** — ProximityPlayer, ProximityReplay, ProximityTeams
-- 🔧 **14 Bug Fixes** — await on sync methods, achievement help text, survival_rate formula, FragPotential hidden from displays
+- 🎬 **Round Replay Timeline** (`/#/replay`) — Dual-pane viewer with event feed + 2D map canvas + scrubber. 420+ events per round, player positions from `player_track.path` JSONB (200ms precision). 3 new API endpoints
+- 📈 **Momentum Chart** — 30-second window momentum with 0.85 decay, Canvas 2D dual-line chart (Axis vs Allies), per-round tabs
+- 📝 **Session Narrative** — Auto-generated paragraph summarizing MVP, archetype, defining moment, team synergy comparison
+- ⚡ **11 Moment Detectors** (was 5) — Added team wipe (5★), multikill (2-5★), objective secured/denied/run, multi-revive. Rich kill-by-kill context with 35-weapon mapping
+- 🎯 **Objective-Focused Moments** — Carrier interception chains, contested engineer builds, dynamite defuses
+- 🛡️ **58 Codacy Issues → 0** — 22 CRITICAL XSS (innerHTML → DOM API), 12 HIGH TypeScript, 7 SQL injection (f-string → whitelists), protocol stubs, stack trace exposure, url-redirect validation. Zero suppressions. CI: 9/9 checks green
+- 🐛 **Bug Fixes** — MomentumChart non-null guard, rivalries double `/api/api/` prefix, narrative `gaming_session_id` query fix, `PUSH_MULTIPLIER` import removed, restored `gaming_sessions` diagnostic query
+
+### **⚔️ v1.4.0: Player Rivalries, Win Contribution & Smart Stats Phase 2 (March 27)**
+
+- ⚔️ Player Rivalries — H2H stats, nemesis/prey/rival classification, weapon breakdown, per-map drill-down, rivalry leaderboard at `/#/rivalries`
+- 🏆 Win Contribution (PWC/WIS/WAA) — 5-component formula, dynamic weight redistribution, MVP detection
+- 🧠 Smart Stats Phase 2 — 11 moment detectors with rich per-kill context, 9 player archetypes, 35-weapon mapping
+- 🔬 Mandelbrot Audit — 45 findings, 45 resolved
+
+### **🧠 v1.3.0: Smart Storytelling Stats, Proximity Pipeline & Deep RCA (March 26-27)**
+
+- Kill Impact Score (7 context multipliers), 5 moment detectors, Team Synergy Score (5-axis), Proximity STATS_READY pipeline redesign, 45-finding audit with 100% resolution
+
+### **📊 v1.1.0: Stats Accuracy Audit, React 19 Frontend & Proximity v5 (March 2026)**
+
+- Full stats accuracy audit, R0 double-counting fix, React 19 + TypeScript 5.9, Proximity v5.0, ET Rating system
 
 **[📖 Full Changelog](CHANGELOG.md)**
 
@@ -60,8 +72,8 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 | **Damage Dealt** | 15.7 million |
 | **Revives Given** | 5,655 |
 | **Rounds Parsed** | 1,320 |
-| **Gaming Sessions** | 98 |
-| **Unique Players** | 33 |
+| **Gaming Sessions** | 103+ |
+| **Unique Players** | 40+ |
 | **Stats Per Player Per Round** | 57 fields |
 | **Discord Commands** | ~99 across 21 cogs |
 | **Database Tables** | 80 |
@@ -86,7 +98,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 │  ┌──────┴──────┐         │         ┌──────┴──────┐            │
 │  │ LUA WEBHOOK │         │         │  PROXIMITY  │            │
 │  │ (Real-time) │         │         │  TRACKER    │            │
-│  │  ✅ PROD    │         │         │  🔶 PROTO   │            │
+│  │  ✅ PROD    │         │         │  ✅ PROD    │            │
 │  └──────┬──────┘         │         └──────┬──────┘            │
 │         │                │                │                    │
 │         └────────────────┼────────────────┘                    │
@@ -104,7 +116,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 | **Website** (`/website/`) | ✅ Production | FastAPI + React 19/TypeScript SPA: profiles, sessions, leaderboards, proximity, greatshot |
 | **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, surrender timing fix, team capture |
 | **Greatshot** (`/greatshot/`) | ✅ Production | Demo upload, highlight detection, clip extraction, render pipeline |
-| **Proximity** (`/proximity/`) | ✅ Production | Lua v5.0 teamplay analytics — engagement, cohesion, crossfire, trade kills |
+| **Proximity** (`/proximity/`) | ✅ Production | Lua v6.01 teamplay analytics — engagement, cohesion, crossfire, trade kills, objective intelligence |
 
 ---
 
@@ -170,6 +182,8 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 **Result:** Every data point verified at **multiple checkpoints** before commit.
 
+**Security:** Zero `innerHTML` in new code — all dynamic content uses DOM API (`createElement` + `textContent`). 58 Codacy issues resolved with zero suppressions.
+
 **[📖 Full Documentation: SAFETY_VALIDATION_SYSTEMS.md](docs/SAFETY_VALIDATION_SYSTEMS.md)**
 
 ### **Round 2 Differential Calculation**
@@ -217,6 +231,93 @@ Upload ET:Legacy `.dm_84` demo files through the website. The system will:
 **All results stored in PostgreSQL** — analysis JSON, highlight metadata, clip paths, render status. Full API for listing, detail views, and downloads.
 
 **Based on [greatshot-web](https://github.com/mittermichal/greatshot-web) by Kimi (mittermichal).** We adapted his scanner/highlight/cutter/renderer architecture, integrated it with our auth system and PostgreSQL schema, and built UDT from source with [ET:Legacy protocol 84 support](https://github.com/mightycow/uberdemotools/pull/2).
+
+---
+
+### **🎯 Proximity Analytics — Teamplay Intelligence** 🆕
+
+Real-time Lua telemetry (v6.01) tracks every player position, engagement, and objective interaction on the game server. The data flows through a dedicated parser into 22+ database tables, powering deep teamplay analytics:
+
+- 📍 **Combat Engagements** — Every 1v1/NvN encounter with distance, duration, and outcome
+- 🔥 **Crossfire Detection** — LOS-verified crossfire angles with execution tracking
+- 👥 **Team Cohesion** — Periodic team shape snapshots (centroid, dispersion, buddy pairs)
+- ⚡ **Team Pushes** — Coordinated movement detection with objective orientation
+- 💀 **Trade Kills** — Server-side trade kill detection with reaction timing
+- ⏱️ **Spawn Timing** — Per-kill spawn wave efficiency scoring
+- 🎯 **Kill Outcomes** — Gib/revive/tap-out tracking with Kill Permanence Rate (KPR)
+- 🗺️ **Combat Heatmaps** — Grid-binned kill/death hotzones with map overlay
+- 🦴 **Hit Regions** — HEAD/ARMS/BODY/LEGS hit distribution per weapon
+- 🏗️ **Objective Intelligence** — Carrier tracking, construction events, vehicle progress
+
+**Pipeline:** STATS_READY webhook triggers proximity import → re-linker task fixes orphaned data → 2min fallback polling. Eliminates 60% of historical linkage failures.
+
+**Website:** Full React dashboard with scope filtering (session/map/round), 7 leaderboard categories, metric tooltips, and GUID→name resolution.
+
+---
+
+### **📈 ET Rating — Skill Rating System** 🆕
+
+A 9-metric percentile-based skill rating formula that captures the full picture of competitive ET:Legacy performance:
+
+- 🏅 **Percentile Formula** — Combines KD, DPM, accuracy, headshot%, revives, objectives, alive%, efficiency, damage per round
+- 📊 **Per-Session Drill-Down** — See how your rating changes across gaming sessions and maps
+- 🎯 **Confidence Indicator** — Low/Medium/High based on rounds played
+- 🏆 **Server-Side Tiers** — Bronze through Diamond rankings with auto-refresh when stale
+- 📈 **History Tracking** — Trend charts showing rating progression over time
+- 👥 **40 Players Rated** — Live leaderboard at `/api/skill/leaderboard`
+
+---
+
+### **🎬 Round Replay Timeline** 🆕
+
+Relive every round with a full event replay viewer:
+
+- 🎥 **Dual-Pane Viewer** (`/#/replay`) — Event feed on the left, 2D map canvas on the right, synchronized scrubber bar
+- 📍 **Player Positions** — Sourced from `player_track.path` JSONB at 200ms precision — see exactly where every player was at every moment
+- ⚡ **420+ Events Per Round** — Kills, deaths, revives, objectives, team actions rendered on an interactive timeline
+- 🗺️ **2D Map Canvas** — ET:Legacy map overlay with real-time player position dots and event markers
+- 🔌 **3 API Endpoints** — Round event feed, player track positions, round metadata
+
+---
+
+### **🧠 Smart Storytelling Stats** 🆕
+
+Transform raw numbers into compelling competitive narratives:
+
+- 💥 **Kill Impact Score (KIS)** — Contextual kill scoring with 7 multipliers: carrier kills (3-5x), push kills (2x), crossfire (1.5x), spawn timing (1-2x), outcome weight, class bonus, distance factor
+- 🎭 **9 Player Archetypes** — Server-side classification using DPM + denied_time + headshot% + KD + trades + revives: Pressure Engine, Medic Anchor, Silent Assassin, Objective Demon, Trade Specialist, Support Fortress, Flanker, All-Rounder, Wildcard
+- ⚡ **11 Match Moment Detectors** — Team wipe, multikill, kill streak, carrier chain, focus survival, push success, trade chain, objective secured, objective denied, objective run, multi-revive — each with per-kill breakdown (weapon names, timestamps, duration)
+- 📈 **Momentum Chart** — 30-second window momentum scoring with 0.85 decay factor, Canvas 2D dual-line chart (Axis vs Allies), per-round tab navigation
+- 📝 **Session Narrative** — Auto-generated paragraph summarizing MVP, player archetype, defining moment, and team synergy comparison
+- 🤝 **Team Synergy Score** — 5-axis per-faction comparison: crossfire rate, trade coverage, cohesion quality, push success, medic bonds
+- 🔫 **35-Weapon Name Mapping** — Full ET:Legacy weapon name lookup across all moment and archetype displays
+- 🎬 **Legacy Story Page** — Cinematic hero, player story cards, moment timeline, KIS breakdown bars, synergy panel at `/#/story`
+- 🗄️ **Backend** — `storytelling_kill_impact` DB table, 4 API endpoints, full data access pipeline
+
+---
+
+### **⚔️ Player Rivalries** 🆕
+
+Deep head-to-head competitive intelligence between any two players:
+
+- 📊 **H2H Stats** — Kills, deaths, KD ratio, accuracy, DPM head-to-head for any player pair
+- 🏷️ **Nemesis / Prey / Rival Classification** — Automatically determined from win rate and encounter count
+- 🔫 **Weapon Breakdown** — Which weapons each player uses most in this specific matchup
+- 🗺️ **Per-Map H2H Drill-Down** — See how the rivalry plays out map by map
+- 🏆 **Rivalry Leaderboard** — Top rivalry pairs ranked by total encounters
+- 🌐 **Dedicated Page** — Full rivalry dashboard at `/#/rivalries`
+
+---
+
+### **🏆 Win Contribution (PWC / WIS / WAA)** 🆕
+
+Quantify exactly how much each player contributed to a round win:
+
+- 📐 **Per-Round Win Contribution (PWC)** — 5-component formula: kills, damage dealt, objectives secured, revives given, survival time
+- ⚖️ **Dynamic Weight Redistribution** — When a round has zero objectives, objective weight redistributes automatically to kills and damage
+- 📈 **Win Impact Score (WIS)** — avg(PWC in won rounds) − avg(PWC in lost rounds): who actually moves the needle
+- 🥇 **MVP Detection** — Highest WIS player flagged as MVP per session
+- 📊 **Stacked Bar Visualization** — Per-component breakdown bars for every player in every round
 
 ---
 
@@ -369,8 +470,8 @@ See `.env.example` for all options.
 ### **📊 Sessions & Scoring**
 `!last_session` · `!last_session graphs` · `!sessions` · `!awards` · `!last_round`
 
-### **⚔️ Matchups & Predictions**
-`!matchup A vs B` · `!duo_perf p1 p2` · `!nemesis` · `!predictions` · `!prediction_stats` · `!prediction_trends` · `!prediction_leaderboard`
+### **⚔️ Matchups, Rivalries & Predictions**
+`!matchup A vs B` · `!duo_perf p1 p2` · `!nemesis` · `!rivalry <p1> <p2>` · `!rivalry_leaderboard` · `!predictions` · `!prediction_stats` · `!prediction_trends` · `!prediction_leaderboard`
 
 ### **🔗 Account Management**
 `!link` · `!unlink` · `!whoami` · `!set_display_name` · `!achievements`
@@ -424,10 +525,10 @@ slomix/
 │   ├── js/                          # Legacy JS fallback modules
 │   └── index.html                   # Main SPA entry point
 │
-├── 🎯 proximity/                    # Combat engagement tracker
-│   ├── lua/                         # Game server Lua mod
-│   ├── parser/                      # Engagement data parser
-│   └── schema/                      # Database schema
+├── 🎯 proximity/                    # Teamplay analytics engine (v6.01)
+│   ├── lua/                         # Game server Lua mod (positions, objectives, hit regions)
+│   ├── parser/                      # Engagement + objective data parser
+│   └── schema/                      # Database schema (22+ tables)
 │
 ├── 🔧 bin/                          # Compiled binaries (UDT_json, UDT_cutter)
 ├── 📜 vps_scripts/                  # Game server Lua scripts
@@ -448,7 +549,7 @@ slomix/
 | `bot/services/prediction_engine.py` | AI match prediction engine (4-factor algorithm) |
 | `website/backend/main.py` | FastAPI app with auth, routers, greatshot job workers |
 | `greatshot/scanner/api.py` | Demo analysis entry point (UDT → events → highlights) |
-| `vps_scripts/stats_discord_webhook.lua` | Game server Lua script (v1.6.0) |
+| `vps_scripts/stats_discord_webhook.lua` | Game server Lua script (v1.6.2) |
 
 ---
 

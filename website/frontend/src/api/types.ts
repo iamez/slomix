@@ -1018,6 +1018,8 @@ export interface RatedPlayer {
   games_rated: number;
   last_rated_at: string | null;
   components: Record<string, SkillComponent>;
+  confidence?: number;
+  tier?: string;
 }
 
 export interface SkillLeaderboardResponse {
@@ -1044,6 +1046,36 @@ export interface SkillFormulaResponse {
   metrics: Record<string, string>;
   normalization: string;
   range: string;
+}
+
+// Skill Rating History — session-scoped
+export interface SkillSessionEntry {
+  session_date: string;
+  rounds: number;
+  maps: number;
+  session_rating: number;
+  components: Record<string, SkillComponent>;
+  cumulative_rating: number | null;
+  delta: number | null;
+}
+
+export interface SkillMapEntry {
+  map_name: string;
+  rounds: number;
+  map_rating: number;
+  components: Record<string, SkillComponent>;
+}
+
+export interface SkillHistoryResponse {
+  status: string;
+  player_guid: string;
+  range_days?: number;
+  sessions?: SkillSessionEntry[];
+  total_sessions?: number;
+  // When session_date is specified (drill-down):
+  session_date?: string;
+  session_summary?: SkillSessionEntry | null;
+  maps?: SkillMapEntry[];
 }
 
 // Kill Outcomes (v5.2)
@@ -1296,4 +1328,90 @@ export interface MovementStatsResponse {
   status: string;
   scope: Record<string, unknown>;
   players: MovementStatsPlayer[];
+}
+
+// ── Storytelling / Smart Stats ──
+export interface KillImpactEntry {
+  guid: string;
+  name: string;
+  total_kis: number;
+  kills: number;
+  carrier_kills: number;
+  push_kills: number;
+  crossfire_kills: number;
+  avg_impact: number;
+  archetype?: string;
+}
+
+export interface KillImpactResponse {
+  status: string;
+  session_date: string;
+  entries: KillImpactEntry[];
+  total_kills: number;
+}
+
+// ── Match Moments ──
+export interface MatchMoment {
+  type: 'kill_streak' | 'carrier_chain' | 'focus_survival' | 'push_success' | 'trade_chain';
+  round_number: number;
+  map_name: string;
+  time_ms: number;
+  player: string;
+  narrative: string;
+  impact_stars: number;
+  detail: Record<string, unknown>;
+}
+
+export interface MomentsResponse {
+  status: string;
+  session_date: string;
+  moments: MatchMoment[];
+  total: number;
+}
+
+export interface KillImpactDetail {
+  kill_id: number;
+  killer_name: string;
+  victim_name: string;
+  round_number: number;
+  kill_time_ms: number;
+  total_impact: number;
+  base_impact: number;
+  distance_multiplier: number;
+  is_objective_area: boolean;
+  carrier_multiplier: number;
+  push_multiplier: number;
+  crossfire_multiplier: number;
+  spawn_multiplier: number;
+  outcome_multiplier: number;
+  class_multiplier: number;
+  is_carrier_kill: boolean;
+  is_during_push: boolean;
+  is_crossfire: boolean;
+}
+
+// ── Momentum Chart ──
+export interface MomentumPoint {
+  t_ms: number;
+  axis: number;
+  allies: number;
+}
+
+export interface MomentumRound {
+  round_number: number;
+  map_name: string;
+  points: MomentumPoint[];
+}
+
+export interface MomentumResponse {
+  status: string;
+  session_date: string;
+  rounds: MomentumRound[];
+}
+
+// ── Session Narrative ──
+export interface NarrativeResponse {
+  status: string;
+  session_date: string;
+  narrative: string;
 }

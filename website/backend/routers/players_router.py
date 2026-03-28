@@ -760,7 +760,8 @@ async def get_quick_leaders(
         try:
             xp_rows = await db.fetch_all(fallback_xp, (start_date, limit))
         except Exception as e:
-            errors.append(f"xp_query_failed: {e}")
+            logger.error("XP leaderboard fallback query failed: %s", e, exc_info=True)
+            errors.append("xp_query_failed")
             xp_rows = []
     xp_name_map = await batch_resolve_display_names(
         db, [(row[0], row[1] or "Unknown") for row in xp_rows]
