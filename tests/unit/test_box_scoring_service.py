@@ -8,17 +8,13 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock
 
-import pytest
-
 # Ensure project root is on sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from website.backend.services.box_scoring_service import (
     BOXScoringService,
-    MapScore,
     RoundResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

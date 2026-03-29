@@ -14,15 +14,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from website.backend.services.skill_rating_service import (
     CONSTANT,
-    MIN_ROUNDS,
-    TIERS,
     WEIGHTS,
     _percentile,
     _row_to_stats,
     calculate_et_rating,
     get_tier,
 )
-
 
 # ===========================================================================
 # _percentile
@@ -123,22 +120,20 @@ class TestCalculateEtRating:
 
     def _make_stats(self, **overrides):
         """Create a default stats dict with zeros, plus overrides."""
-        base = {k: 0.0 for k in WEIGHTS}
+        base = dict.fromkeys(WEIGHTS, 0.0)
         base.update(overrides)
         return base
 
     def _make_percentiles(self, n=10):
         """Create uniform percentile distributions for all metrics."""
         values = sorted([float(i) for i in range(n)])
-        return {metric: values for metric in WEIGHTS}
+        return dict.fromkeys(WEIGHTS, values)
 
     def test_average_player_near_constant(self):
         """All stats at exact median => each percentile ~0.5 => rating ≈ CONSTANT + sum(w*0.5)."""
-        stats = self._make_stats(**{k: 4.5 for k in WEIGHTS})
+        stats = self._make_stats(**dict.fromkeys(WEIGHTS, 4.5))
         percentiles = self._make_percentiles(n=10)
         rating, components = calculate_et_rating(stats, percentiles)
-        # Sum of all weights (including negative dpr) * 0.5 + CONSTANT
-        total_w = sum(abs(w) for w in WEIGHTS.values())
         # dpr is negative weight: -0.12, so contribution = -0.12 * ~0.5
         expected_approx = CONSTANT + sum(w * 0.5 for w in WEIGHTS.values())
         assert rating == pytest.approx(expected_approx, abs=0.05)
@@ -153,7 +148,7 @@ class TestCalculateEtRating:
 
     def test_top_percentile_all_metrics(self):
         """All metrics at 100th percentile => rating near max."""
-        stats = self._make_stats(**{k: 100.0 for k in WEIGHTS})
+        stats = self._make_stats(**dict.fromkeys(WEIGHTS, 100.0))
         percentiles = self._make_percentiles(n=10)
         rating, components = calculate_et_rating(stats, percentiles)
         # All percentiles = 1.0, rating = CONSTANT + sum(weights * 1.0)
@@ -163,7 +158,7 @@ class TestCalculateEtRating:
 
     def test_bottom_percentile_all_metrics(self):
         """All metrics below everyone => rating near CONSTANT + negative."""
-        stats = self._make_stats(**{k: -100.0 for k in WEIGHTS})
+        stats = self._make_stats(**dict.fromkeys(WEIGHTS, -100.0))
         percentiles = self._make_percentiles(n=10)
         rating, components = calculate_et_rating(stats, percentiles)
         # All percentiles = 0.0
@@ -180,7 +175,7 @@ class TestCalculateEtRating:
     def test_rating_clamped_at_1_5(self):
         """Rating should never exceed 1.5."""
         # Make all positive metrics at max percentile, huge values
-        stats = self._make_stats(**{k: 999.0 for k in WEIGHTS})
+        stats = self._make_stats(**dict.fromkeys(WEIGHTS, 999.0))
         percentiles = self._make_percentiles(n=2)
         rating, _ = calculate_et_rating(stats, percentiles)
         assert rating <= 1.5

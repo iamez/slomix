@@ -6,7 +6,7 @@ Tests pure scoring logic with mocked DB adapter. No database required.
 import sys
 from datetime import date
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -24,10 +24,8 @@ from website.backend.services.storytelling_service import (
     OUTCOME_REVIVED,
     OUTNUMBERED_MULTIPLIER,
     SOLO_CLUTCH_MULTIPLIER,
-    SOLO_CLUTCH_THRESHOLD,
     StorytellingService,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers — build kill tuples and context dicts for _score_kill
