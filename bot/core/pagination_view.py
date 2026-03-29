@@ -115,7 +115,8 @@ class PaginationView(View):
                     embed.set_footer(text="Navigation expired. Run the command again to continue.")
                 await self.message.edit(embed=embed, view=self)
             except Exception:
-                pass  # Message may have been deleted; safe to ignore
+                logger.debug("Could not disable pagination buttons (message likely deleted)")
+
 
     async def interaction_check(self, interaction: Interaction) -> bool:
         """
