@@ -127,7 +127,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
             try:
                 await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
-                pass  # Alias is optional
+                logger.debug("Failed to set up player_name alias (optional)", exc_info=True)
             # Step 1: Parse and normalize the date
             target_date = None
 

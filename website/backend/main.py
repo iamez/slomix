@@ -414,7 +414,7 @@ async def shutdown_event():
         except asyncio.CancelledError:
             pass  # Expected during shutdown
         except Exception:
-            pass  # Startup task may have already failed; nothing to clean up
+            logger.debug("Greatshot start task failed or already finished during shutdown", exc_info=True)
     try:
         job_service = get_greatshot_job_service()
     except Exception:

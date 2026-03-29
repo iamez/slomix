@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 from greatshot.contracts.profiles import etlegacy_main
 
@@ -20,7 +20,7 @@ class DemoProfile:
         return etlegacy_main.canonical_team(raw_value)
 
 
-def detect_profile(config_values: Dict[str, Any], match_stats: Dict[str, Any]) -> DemoProfile:
+def detect_profile(config_values: dict[str, Any], match_stats: dict[str, Any]) -> DemoProfile:
     """
     Detect parsing profile.
 

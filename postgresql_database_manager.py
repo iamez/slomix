@@ -23,16 +23,16 @@ Version: 1.0 - PostgreSQL Production Ready
 """
 
 import asyncio
-import asyncpg
 import hashlib
 import logging
 import os
 import re
-import time
 import sys
-from pathlib import Path
+import time
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Tuple
+from pathlib import Path
+
+import asyncpg
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -44,11 +44,11 @@ from bot.stats import StatsCalculator
 # Import comprehensive logging system
 try:
     from bot.logging_config import (
-        setup_logging,
+        get_logger,
         log_database_operation,
-        log_stats_import,
         log_performance_warning,
-        get_logger
+        log_stats_import,
+        setup_logging,
     )
     # Setup comprehensive logging
     setup_logging(logging.INFO)
@@ -78,23 +78,23 @@ except ImportError:
 class PostgreSQLDatabaseManager:
     """
     The ONE and ONLY PostgreSQL database management tool
-    
+
     Handles all database operations from creation to disaster recovery.
     """
-    
+
     def __init__(self, stats_dir: str = "local_stats"):
         self.config = load_config()
-        
+
         if self.config.database_type != 'postgresql':
             raise ValueError(
                 "❌ This tool requires PostgreSQL mode!\n"
                 "   Update bot_config.json: database_type = 'postgresql'"
             )
-        
+
         self.stats_dir = Path(stats_dir)
         self.parser = C0RNP0RN3StatsParser()
         self.pool = None
-        
+
         # Stats tracking
         self.stats = {
             'files_processed': 0,
@@ -104,7 +104,7 @@ class PostgreSQLDatabaseManager:
             'players_inserted': 0,
             'weapons_inserted': 0
         }
-        
+
         self.start_time = None
         self.last_progress_time = None
 
@@ -112,7 +112,7 @@ class PostgreSQLDatabaseManager:
     # DATA VALIDATION (Dec 2025 - Cross-field integrity checks)
     # =========================================================================
 
-    def validate_player_stats(self, player: Dict, filename: str = "") -> Tuple[Dict, list]:
+    def validate_player_stats(self, player: dict, filename: str = "") -> tuple[dict, list]:
         """
         Validate player stats and fix obvious errors.
 
@@ -194,12 +194,12 @@ class PostgreSQLDatabaseManager:
     # =========================================================================
     # CONNECTION MANAGEMENT
     # =========================================================================
-    
+
     async def connect(self):
         """Connect to PostgreSQL"""
         if self.pool:
             return
-        
+
         try:
             self.pool = await asyncpg.create_pool(
                 host=self.config.postgres_host.split(':')[0],
@@ -211,68 +211,68 @@ class PostgreSQLDatabaseManager:
                 max_size=20
             )
             logger.info(f"✅ Connected to PostgreSQL: {self.config.postgres_host}/{self.config.postgres_database}")
-            
+
             # Run schema migrations after connecting
             await self._migrate_schema_if_needed()
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to connect to PostgreSQL: {e}")
             raise
-    
+
     async def disconnect(self):
         """Disconnect from PostgreSQL"""
         if self.pool:
             await self.pool.close()
             self.pool = None
             logger.info("✅ Disconnected from PostgreSQL")
-    
+
     # =========================================================================
     # SCHEMA CREATION
     # =========================================================================
-    
+
     async def create_fresh_database(self, backup_existing: bool = True) -> bool:
         """
         Create a fresh database with correct PostgreSQL schema
-        
+
         This includes ALL PostgreSQL-specific fixes:
         - BIGINT for discord_id
         - BOOLEAN instead of INTEGER
         - TIMESTAMP instead of TEXT
         - ON CONFLICT for duplicate prevention
         - Proper indexes
-        
+
         Args:
             backup_existing: If True, backs up existing data first
-        
+
         Returns:
             True if successful
         """
         logger.info("=" * 70)
         logger.info("🏗️  DATABASE CREATION - Starting")
         logger.info("=" * 70)
-        
+
         try:
             # Create schema if it doesn't exist
             await self._create_schema_if_missing()
-            
+
             # Apply any schema migrations for existing databases
             await self._migrate_schema_if_needed()
-            
+
             # Backup if requested
             if backup_existing:
                 await self._backup_database()
-            
+
             # Wipe all tables
             logger.info("🧹 Wiping existing data...")
             await self._wipe_all_tables()
-            
+
             logger.info("✅ Fresh database ready!")
             return True
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to create database: {e}")
             return False
-    
+
     async def _backup_database(self):
         """
         Backup existing database to SQL dump
@@ -334,7 +334,7 @@ class PostgreSQLDatabaseManager:
             error_msg = "Backup timed out after 5 minutes"
             logger.error(f"   ❌ {error_msg}")
             raise RuntimeError(error_msg)
-    
+
     async def _create_schema_if_missing(self):
         """Create database schema if it doesn't exist (uses IF NOT EXISTS for all tables)"""
         async with self.pool.acquire() as conn:
@@ -999,61 +999,61 @@ class PostgreSQLDatabaseManager:
                 logger.info("   ✅ Seeded root user permission")
 
             logger.info("   ✅ Schema created successfully!")
-    
+
     async def _migrate_schema_if_needed(self):
         """Apply schema migrations for existing databases"""
         async with self.pool.acquire() as conn:
             # Check if player_aliases table exists
             table_exists = await conn.fetchval("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
                     AND table_name = 'player_aliases'
                 )
             """)
-            
+
             if not table_exists:
                 logger.info("   ⏭️  player_aliases table doesn't exist yet, skipping migrations")
                 return
-            
+
             logger.info("🔍 Checking for schema migrations...")
-            
+
             # Migration 1: Add first_seen column if missing
             has_first_seen = await conn.fetchval("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.columns 
-                    WHERE table_name = 'player_aliases' 
+                    SELECT FROM information_schema.columns
+                    WHERE table_name = 'player_aliases'
                     AND column_name = 'first_seen'
                 )
             """)
-            
+
             if not has_first_seen:
                 logger.info("   ➕ Adding 'first_seen' column to player_aliases...")
                 await conn.execute("""
-                    ALTER TABLE player_aliases 
+                    ALTER TABLE player_aliases
                     ADD COLUMN first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 """)
                 # Backfill existing rows
                 await conn.execute("""
-                    UPDATE player_aliases 
-                    SET first_seen = last_seen 
+                    UPDATE player_aliases
+                    SET first_seen = last_seen
                     WHERE first_seen IS NULL AND last_seen IS NOT NULL
                 """)
                 logger.info("   ✅ Added 'first_seen' column")
-            
+
             # Migration 2: Add times_seen column if missing
             has_times_seen = await conn.fetchval("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.columns 
-                    WHERE table_name = 'player_aliases' 
+                    SELECT FROM information_schema.columns
+                    WHERE table_name = 'player_aliases'
                     AND column_name = 'times_seen'
                 )
             """)
-            
+
             if not has_times_seen:
                 logger.info("   ➕ Adding 'times_seen' column to player_aliases...")
                 await conn.execute("""
-                    ALTER TABLE player_aliases 
+                    ALTER TABLE player_aliases
                     ADD COLUMN times_seen INTEGER DEFAULT 1
                 """)
                 logger.info("   ✅ Added 'times_seen' column")
@@ -1341,7 +1341,7 @@ class PostgreSQLDatabaseManager:
                 logger.info("   ✅ Ensured uq_processed_endstats_round_id")
 
             logger.info("   ✅ Schema migrations complete!")
-    
+
     async def _wipe_all_tables(self):
         """
         Wipe all game data from tables (keeps schema).
@@ -1386,34 +1386,33 @@ class PostgreSQLDatabaseManager:
 
         failed_tables = []
 
-        async with self.pool.acquire() as conn:
-            async with conn.transaction():
-                for table in tables:
-                    try:
-                        # Check if table exists before trying to wipe
-                        table_exists = await conn.fetchval("""
+        async with self.pool.acquire() as conn, conn.transaction():
+            for table in tables:
+                try:
+                    # Check if table exists before trying to wipe
+                    table_exists = await conn.fetchval("""
                             SELECT EXISTS (
                                 SELECT FROM information_schema.tables
                                 WHERE table_schema = 'public' AND table_name = $1
                             )
                         """, table)
-                        if not table_exists:
-                            logger.info(f"   ⏭️  Skipped {table} (does not exist)")
-                            continue
-                        await conn.execute(f"DELETE FROM {table}")
-                        logger.info(f"   ✅ Wiped {table}")
-                    except Exception as e:
-                        error_msg = f"Failed to wipe {table}: {e}"
-                        logger.error(f"   ❌ {error_msg}")
-                        raise RuntimeError(
-                            f"Table wipe aborted at {table}: {e}. "
-                            f"Transaction rolled back — database unchanged."
-                        )
-    
+                    if not table_exists:
+                        logger.info(f"   ⏭️  Skipped {table} (does not exist)")
+                        continue
+                    await conn.execute(f"DELETE FROM {table}")
+                    logger.info(f"   ✅ Wiped {table}")
+                except Exception as e:
+                    error_msg = f"Failed to wipe {table}: {e}"
+                    logger.error(f"   ❌ {error_msg}")
+                    raise RuntimeError(
+                        f"Table wipe aborted at {table}: {e}. "
+                        f"Transaction rolled back — database unchanged."
+                    )
+
     # =========================================================================
     # FILE PROCESSING
     # =========================================================================
-    
+
     async def is_file_processed(self, filename: str) -> bool:
         """Check if file has already been SUCCESSFULLY processed"""
         async with self.pool.acquire() as conn:
@@ -1423,7 +1422,7 @@ class PostgreSQLDatabaseManager:
             )
             return result > 0
 
-    async def find_processed_by_hash(self, file_hash: Optional[str]) -> Optional[str]:
+    async def find_processed_by_hash(self, file_hash: str | None) -> str | None:
         """Find an already-successfully-processed filename by content hash."""
         if not file_hash:
             return None
@@ -1439,7 +1438,7 @@ class PostgreSQLDatabaseManager:
                 file_hash,
             )
 
-    def _compute_file_hashes(self, file_path: Path) -> Tuple[str, str]:
+    def _compute_file_hashes(self, file_path: Path) -> tuple[str, str]:
         """
         Compute full-file hash and payload hash.
 
@@ -1459,7 +1458,7 @@ class PostgreSQLDatabaseManager:
         filename: str,
         success: bool = True,
         error_msg: str = None,
-        file_hash: Optional[str] = None,
+        file_hash: str | None = None,
     ):
         """Mark file as processed"""
         async with self.pool.acquire() as conn:
@@ -1475,8 +1474,8 @@ class PostgreSQLDatabaseManager:
                 """,
                 filename, file_hash, success, error_msg, datetime.now()
             )
-    
-    def _extract_date_time_from_filename(self, filename: str) -> Tuple[str, str]:
+
+    def _extract_date_time_from_filename(self, filename: str) -> tuple[str, str]:
         """Extract date and time from filename"""
         # Format: 2025-11-03-213554-supply-round-1.txt
         parts = filename.split('-')
@@ -1486,25 +1485,25 @@ class PostgreSQLDatabaseManager:
             logger.debug(f"🔍 Extracted from filename '{filename}': date={date}, time={time} (type: {type(time).__name__})")
             return date, time
         return None, None
-    
-    async def process_file(self, file_path: Path) -> Tuple[bool, str]:
+
+    async def process_file(self, file_path: Path) -> tuple[bool, str]:
         """
         Process a single stats file with COMPREHENSIVE VALIDATION
-        
+
         Pipeline:
         1. Parse file
         2. Extract expected data counts
         3. Write to database
         4. Verify what was written matches what was parsed
         5. Flag any discrepancies
-        
+
         Returns:
             (success: bool, message: str)
         """
         filename = file_path.name
         start_time = time.time()
         payload_hash = None
-        
+
         try:
             # Compute hash early so renamed duplicates are detectable.
             try:
@@ -1532,11 +1531,11 @@ class PostgreSQLDatabaseManager:
                     f"⏭️ Skipped duplicate payload file: {filename} (same payload as {duplicate_source})"
                 )
                 return True, f"Duplicate payload of {duplicate_source}"
-            
+
             # STEP 1: Parse file
             logger.debug(f"📖 Parsing file: {filename}")
             parsed_data = self.parser.parse_stats_file(str(file_path))
-            
+
             if not parsed_data or parsed_data.get('error'):
                 error = parsed_data.get('error', 'Unknown error') if parsed_data else 'No data'
                 self.stats['files_failed'] += 1
@@ -1549,16 +1548,16 @@ class PostgreSQLDatabaseManager:
                 logger.error(f"❌ Parse failed: {filename} - {error}")
                 log_stats_import(filename, error=error)
                 return False, f"Parse error: {error}"
-            
+
             # STEP 2: Extract expected counts from parsed data
             expected_players = len(parsed_data.get('players', []))
             # Parser uses 'weapon_stats' key, not 'weapons'
             expected_weapons = sum(len(p.get('weapon_stats', {}) or p.get('weapons', {})) for p in parsed_data.get('players', []))
             expected_total_kills = sum(p.get('kills', 0) for p in parsed_data.get('players', []))
             expected_total_deaths = sum(p.get('deaths', 0) for p in parsed_data.get('players', []))
-            
+
             logger.debug(f"📊 Parsed: {expected_players} players, {expected_weapons} weapons")
-            
+
             # Extract date/time from filename
             file_date, round_time = self._extract_date_time_from_filename(filename)
             if not file_date:
@@ -1571,7 +1570,7 @@ class PostgreSQLDatabaseManager:
                 )
                 logger.error(f"❌ Invalid filename format: {filename}")
                 return False, "Invalid filename format"
-            
+
             # STEP 3: Create round and insert stats
             async with self.pool.acquire() as conn:
                 async with conn.transaction():
@@ -1700,7 +1699,7 @@ class PostgreSQLDatabaseManager:
                     logger.warning(f"[CORRELATION] hook error (non-fatal): {corr_err}")
 
             return True, f"Processed: {player_count} players, {weapon_count} weapons{' (WITH WARNINGS)' if not validation_passed else ''}"
-        
+
         except Exception as e:
             self.stats['files_failed'] += 1
             error_msg = str(e)
@@ -2015,7 +2014,7 @@ class PostgreSQLDatabaseManager:
     async def _validate_round_data(self, conn, round_id: int,
                                    expected_players: int, expected_weapons: int,
                                    expected_kills: int, expected_deaths: int,
-                                   filename: str) -> Tuple[bool, str]:
+                                   filename: str) -> tuple[bool, str]:
         """
         SIMPLIFIED DATA VALIDATION
 
@@ -2052,21 +2051,21 @@ class PostgreSQLDatabaseManager:
         except Exception as e:
             logger.error(f"Validation check failed: {e}")
             return False, f"Validation error: {e}"
-    
-    async def _get_or_create_gaming_session_id(self, conn, file_date: str, round_time: str) -> Optional[int]:
+
+    async def _get_or_create_gaming_session_id(self, conn, file_date: str, round_time: str) -> int | None:
         """
         Calculate gaming_session_id for a new round using 60-minute gap logic.
-        
+
         Gaming session rules:
         - Group consecutive rounds into gaming sessions
         - If gap between rounds > 60 minutes → new gaming session
         - Handles midnight-crossing (same gaming session continues after midnight)
-        
+
         Returns:
             gaming_session_id to assign to this round (or None on error)
         """
         GAP_THRESHOLD_MINUTES = 60
-        
+
         try:
             # Get the most recent round with a gaming_session_id
             last_round = await conn.fetchrow(
@@ -2078,28 +2077,28 @@ class PostgreSQLDatabaseManager:
                 LIMIT 1
                 """
             )
-            
+
             if not last_round:
                 # First round ever - start with gaming_session_id = 1
                 return 1
-            
+
             last_gaming_session_id = last_round['gaming_session_id']
             last_date = last_round['round_date']
             last_time = last_round['round_time']
-            
+
             # Parse datetimes (handle both HHMMSS and HH:MM:SS formats from DB)
             current_datetime = datetime.strptime(f"{file_date} {round_time}", "%Y-%m-%d %H%M%S")
-            
+
             # Try parsing last_time - it might be stored as "HHMMSS" or "HH:MM:SS"
             try:
                 last_datetime = datetime.strptime(f"{last_date} {last_time}", "%Y-%m-%d %H%M%S")
             except ValueError:
                 # Fallback to format with colons
                 last_datetime = datetime.strptime(f"{last_date} {last_time}", "%Y-%m-%d %H:%M:%S")
-            
+
             # Calculate gap
             gap_minutes = (current_datetime - last_datetime).total_seconds() / 60
-            
+
             if gap_minutes > GAP_THRESHOLD_MINUTES:
                 # Start new gaming session
                 new_gaming_session_id = last_gaming_session_id + 1
@@ -2109,20 +2108,20 @@ class PostgreSQLDatabaseManager:
                 # Continue existing gaming session
                 logger.debug(f"Continuing gaming session #{last_gaming_session_id} (gap: {gap_minutes:.1f} min)")
                 return last_gaming_session_id
-                
+
         except Exception as e:
             logger.warning(f"Error calculating gaming_session_id: {e}. Using NULL.")
             return None
-    
-    async def _create_round_postgresql(self, conn, parsed_data: Dict, file_date: str, round_time: str, filename: str, is_match_summary: bool = False) -> Optional[int]:
+
+    async def _create_round_postgresql(self, conn, parsed_data: dict, file_date: str, round_time: str, filename: str, is_match_summary: bool = False) -> int | None:
         """
         Create round entry in PostgreSQL
-        
+
         Args:
             is_match_summary: If True, store as round_number=0 (match summary)
         """
         map_name = parsed_data.get('map_name', 'unknown')
-        
+
         # 🔧 CRITICAL FIX: Determine round_number from FILENAME, not parsed data
         # The file header always says round=1, but filename is authoritative
         if is_match_summary:
@@ -2137,13 +2136,13 @@ class PostgreSQLDatabaseManager:
             # Fallback to parser data (try both 'round_num' and 'round_number')
             round_number = parsed_data.get('round_num', parsed_data.get('round_number', 1))
             logger.debug(f"🔧 Using parser round_number: {round_number}")
-        
+
         time_limit = parsed_data.get('time_limit', '0')
         actual_time = parsed_data.get('actual_time', '0')
         winner = parsed_data.get('winner_team', 0)
         defender = parsed_data.get('defender_team', 0)
         round_outcome = parsed_data.get('round_outcome', '')
-        
+
         # Generate match_id as date-time only (shared by R1+R2 of the same match)
         # For R2: use R1's timestamp (parser attaches r1_filename to R2 results)
         r1_fn = parsed_data.get('r1_filename')
@@ -2167,12 +2166,12 @@ class PostgreSQLDatabaseManager:
         else:
             # R1 or orphan R2 - use own timestamp
             match_id = f"{file_date}-{round_time}"
-        
+
         # Calculate gaming_session_id
         gaming_session_id = await self._get_or_create_gaming_session_id(conn, file_date, round_time)
-        
+
         logger.debug(f"🔍 About to INSERT: round_date='{file_date}', round_time='{round_time}' (type: {type(round_time).__name__})")
-        
+
         try:
             round_id = await conn.fetchval(
                 """
@@ -2220,7 +2219,7 @@ class PostgreSQLDatabaseManager:
             return None
 
     @staticmethod
-    def _parse_round_datetime(round_date: str, round_time: str) -> Optional[datetime]:
+    def _parse_round_datetime(round_date: str, round_time: str) -> datetime | None:
         """Parse round date/time supporting both HHMMSS and HH:MM:SS formats."""
         if not round_date or not round_time:
             return None
@@ -2454,13 +2453,13 @@ class PostgreSQLDatabaseManager:
             logger.error(f"Error in restart detection: {e}")
             # Don't fail the import if restart detection fails
 
-    async def _insert_player_stats(self, conn, round_id: int, round_date: str, parsed_data: Dict) -> int:
+    async def _insert_player_stats(self, conn, round_id: int, round_date: str, parsed_data: dict) -> int:
         """Insert player stats - ALL 51 FIELDS with INSERT VERIFICATION"""
         players = parsed_data.get('players', [])
         map_name = parsed_data.get('map_name', 'unknown')
         round_number = parsed_data.get('round_num', parsed_data.get('round_number', 1))
         count = 0
-        
+
         for player in players:
             try:
                 # Validate and fix player stats before insertion
@@ -2472,7 +2471,7 @@ class PostgreSQLDatabaseManager:
                 clean_name = self.parser.strip_color_codes(name)
                 team = player.get('team', 0)
                 obj_stats = player.get('objective_stats', {})
-                
+
                 kills = player.get('kills', 0)
                 deaths = player.get('deaths', 0)
                 kd_ratio = StatsCalculator.calculate_kd(kills, deaths)
@@ -2482,7 +2481,7 @@ class PostgreSQLDatabaseManager:
                 dpm = player.get('dpm', 0.0)
                 efficiency = StatsCalculator.calculate_efficiency(kills, deaths)
                 accuracy = player.get('accuracy', 0.0)
-                
+
                 # Use parsed values directly from Lua output - DO NOT recalculate!
                 # The parser already handles R2 differential calculation correctly
                 time_dead_ratio = float(obj_stats.get('time_dead_ratio', 0) or 0)
@@ -2526,12 +2525,12 @@ class PostgreSQLDatabaseManager:
                         f"[TIME VALIDATION] {clean_name} denied_playtime > time_played: "
                         f"denied={denied_playtime:.0f}s played={time_seconds:.0f}s round_id={round_id}"
                     )
-                
+
                 # Sanity check: cap ratio at 100% (can't be dead longer than played)
                 if time_dead_ratio > 100.0:
                     time_dead_ratio = min(100.0, time_dead_ratio)
                     time_dead_minutes = min(time_dead_minutes, time_minutes)
-                
+
                 # ✅ INSERT with RETURNING clause for verification
                 player_stat_id = await conn.fetchval(
                     """
@@ -2643,14 +2642,14 @@ class PostgreSQLDatabaseManager:
                 logger.warning(f"Failed to insert player {player.get('name')}: {e}")
 
         return count
-    
-    async def _insert_weapon_stats(self, conn, round_id: int, round_date: str, parsed_data: Dict) -> int:
+
+    async def _insert_weapon_stats(self, conn, round_id: int, round_date: str, parsed_data: dict) -> int:
         """Insert weapon stats with INSERT VERIFICATION"""
         players = parsed_data.get('players', [])
         map_name = parsed_data.get('map_name', 'unknown')
         round_number = parsed_data.get('round_num', parsed_data.get('round_number', 1))
         count = 0
-        
+
         for player in players:
             # Parser returns 'weapon_stats' not 'weapons'!
             weapons = player.get('weapon_stats', {}) or player.get('weapons', {})
@@ -2660,7 +2659,7 @@ class PostgreSQLDatabaseManager:
                     shots = weapon_data.get('shots', 0)
                     hits = weapon_data.get('hits', 0)
                     accuracy = (hits / shots * 100) if shots > 0 else 0.0
-                    
+
                     # ✅ INSERT with RETURNING clause for verification
                     weapon_stat_id = await conn.fetchval(
                         """
@@ -2686,20 +2685,20 @@ class PostgreSQLDatabaseManager:
                     count += 1
                 except Exception as e:
                     logger.warning(f"Failed to insert weapon {weapon_name}: {e}")
-        
+
         return count
-    
+
     # =========================================================================
     # BULK OPERATIONS
     # =========================================================================
-    
-    async def import_all_files(self, year_filter: Optional[int] = None,
-                               start_date: Optional[str] = None,
-                               end_date: Optional[str] = None,
-                               limit: Optional[int] = None):
+
+    async def import_all_files(self, year_filter: int | None = None,
+                               start_date: str | None = None,
+                               end_date: str | None = None,
+                               limit: int | None = None):
         """
         Import all files from local_stats directory
-        
+
         Args:
             year_filter: Only import files from this year
             start_date: Only import files from this date onwards (YYYY-MM-DD)
@@ -2709,43 +2708,43 @@ class PostgreSQLDatabaseManager:
         logger.info("=" * 70)
         logger.info("📥 BULK IMPORT - Starting")
         logger.info("=" * 70)
-        
+
         # Find all stat files
         all_files = sorted(self.stats_dir.glob("*.txt"))
-        
+
         # Apply filters
         if year_filter:
             all_files = [f for f in all_files if f.name.startswith(str(year_filter))]
-        
+
         if start_date:
             all_files = [f for f in all_files if f.name[:10] >= start_date]
-        
+
         if end_date:
             all_files = [f for f in all_files if f.name[:10] <= end_date]
-        
+
         if limit:
             all_files = all_files[:limit]
-        
+
         logger.info(f"📊 Found {len(all_files)} files to process")
-        
+
         if not all_files:
             logger.warning("⚠️  No files found!")
             return
-        
+
         # Reset stats
-        self.stats = {k: 0 for k in self.stats}
+        self.stats = dict.fromkeys(self.stats, 0)
         self.start_time = time.time()
-        
+
         # Process files
         for i, file_path in enumerate(all_files, 1):
             success, msg = await self.process_file(file_path)
-            
+
             # Progress update every 10 files
             if i % 10 == 0 or i == len(all_files):
                 elapsed = time.time() - self.start_time
                 rate = i / elapsed if elapsed > 0 else 0
                 pct = (i / len(all_files)) * 100
-                
+
                 logger.info(
                     f"📊 Progress: [{i}/{len(all_files)}] {pct:.1f}% | "
                     f"Rate: {rate:.1f} files/sec | "
@@ -2753,7 +2752,7 @@ class PostgreSQLDatabaseManager:
                     f"Skipped: {self.stats['files_skipped']} | "
                     f"Failed: {self.stats['files_failed']}"
                 )
-        
+
         # Final summary
         elapsed = time.time() - self.start_time
         logger.info("=" * 70)
@@ -2766,57 +2765,57 @@ class PostgreSQLDatabaseManager:
         logger.info(f"🎮 Rounds created: {self.stats['rounds_created']}")
         logger.info(f"👤 Player stats: {self.stats['players_inserted']}")
         logger.info(f"🔫 Weapon stats: {self.stats['weapons_inserted']}")
-    
+
     async def rebuild_from_scratch(self, year: int = 2025,
-                                   start_date: Optional[str] = None,
-                                   end_date: Optional[str] = None,
+                                   start_date: str | None = None,
+                                   end_date: str | None = None,
                                    confirm: bool = False) -> bool:
         """
         Nuclear option: Wipe database and rebuild from scratch
-        
+
         BULLETPROOF OPERATION:
         1. Validates connection
         2. Creates backup
         3. Wipes data
         4. Imports files
         5. Validates result
-        
+
         Args:
             year: Year to import
             start_date: Start date for import (YYYY-MM-DD)
             end_date: End date for import (YYYY-MM-DD)
             confirm: Must be True to proceed
-        
+
         Returns:
             True if successful, False if any step fails
         """
         if not confirm:
             logger.error("❌ Rebuild requires confirm=True")
             return False
-        
+
         logger.info("=" * 70)
         logger.info("💥 REBUILD FROM SCRATCH - NUCLEAR OPTION")
         logger.info("=" * 70)
-        
+
         try:
             # Step 1: Verify connection
             logger.info("1️⃣  Verifying database connection...")
             async with self.pool.acquire() as conn:
                 await conn.fetchval("SELECT 1")
             logger.info("   ✅ Connection verified")
-            
+
             # Step 2: Create backup
             logger.info("2️⃣  Creating backup...")
             await self._backup_database()
             logger.info("   ✅ Backup complete")
-            
+
             # Step 3: Wipe database
             logger.info("3️⃣  Wiping existing data...")
             if not await self.create_fresh_database(backup_existing=False):
                 logger.error("   ❌ Failed to wipe database")
                 return False
             logger.info("   ✅ Database wiped")
-            
+
             # Step 4: Import files
             logger.info("4️⃣  Importing files...")
             await self.import_all_files(
@@ -2825,36 +2824,36 @@ class PostgreSQLDatabaseManager:
                 end_date=end_date
             )
             logger.info("   ✅ Import complete")
-            
+
             # Step 5: Validate
             logger.info("5️⃣  Validating rebuild...")
             results = await self.validate_database()
-            
+
             # Check if we have data
             if results.get('rounds', 0) == 0:
                 logger.error("   ❌ CRITICAL: No rounds imported!")
                 return False
-            
+
             if results.get('player_comprehensive_stats', 0) == 0:
                 logger.error("   ❌ CRITICAL: No player stats imported!")
                 return False
-            
+
             logger.info("   ✅ Validation passed")
-            
+
             logger.info("\n" + "=" * 70)
             logger.info("✅ REBUILD SUCCESSFUL!")
             logger.info("=" * 70)
             logger.info(f"📊 Imported {results['rounds']:,} rounds")
             logger.info(f"👤 Imported {results['player_comprehensive_stats']:,} player stats")
             logger.info(f"🔫 Imported {results['weapon_comprehensive_stats']:,} weapon stats")
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(f"❌ REBUILD FAILED: {e}")
             logger.error("💡 Your data is safe in the backup!")
             return False
-    
+
     async def fix_date_range(self, start_date: str, end_date: str) -> bool:
         """
         Surgical fix: Re-import specific date range
@@ -2877,84 +2876,83 @@ class PostgreSQLDatabaseManager:
 
         try:
             # Delete existing data in range
-            async with self.pool.acquire() as conn:
-                async with conn.transaction():
-                    # STEP 1: Get affected round IDs
-                    logger.info(f"🔍 Finding rounds in date range...")
-                    round_ids = await conn.fetch(
-                        "SELECT id FROM rounds WHERE round_date >= $1 AND round_date <= $2",
-                        start_date, end_date
+            async with self.pool.acquire() as conn, conn.transaction():
+                # STEP 1: Get affected round IDs
+                logger.info("🔍 Finding rounds in date range...")
+                round_ids = await conn.fetch(
+                    "SELECT id FROM rounds WHERE round_date >= $1 AND round_date <= $2",
+                    start_date, end_date
+                )
+
+                if not round_ids:
+                    logger.info("ℹ️  No rounds found in date range")
+                    return False
+
+                ids = [r['id'] for r in round_ids]
+                logger.info(f"📊 Found {len(ids)} rounds to delete")
+
+                # STEP 2: Delete CHILD records first (order matters!)
+                logger.info("🗑️  Deleting child records...")
+
+                # Delete weapon stats
+                weapon_result = await conn.execute(
+                    "DELETE FROM weapon_comprehensive_stats WHERE round_id = ANY($1)",
+                    ids
+                )
+                logger.info(f"   ✓ weapon_comprehensive_stats: {weapon_result}")
+
+                # Delete player stats
+                player_result = await conn.execute(
+                    "DELETE FROM player_comprehensive_stats WHERE round_id = ANY($1)",
+                    ids
+                )
+                logger.info(f"   ✓ player_comprehensive_stats: {player_result}")
+
+                # Delete lua round teams (uses match_id instead of round_id)
+                # Get match_ids from rounds table
+                match_ids = await conn.fetch(
+                    "SELECT DISTINCT match_id FROM rounds WHERE id = ANY($1)",
+                    ids
+                )
+                if match_ids:
+                    match_id_list = [r['match_id'] for r in match_ids]
+                    lua_result = await conn.execute(
+                        "DELETE FROM lua_round_teams WHERE match_id = ANY($1)",
+                        match_id_list
                     )
+                    logger.info(f"   ✓ lua_round_teams: {lua_result}")
+                else:
+                    logger.info("   ✓ lua_round_teams: (no matches to delete)")
 
-                    if not round_ids:
-                        logger.info("ℹ️  No rounds found in date range")
-                        return False
+                # Delete round awards
+                awards_result = await conn.execute(
+                    "DELETE FROM round_awards WHERE round_id = ANY($1)",
+                    ids
+                )
+                logger.info(f"   ✓ round_awards: {awards_result}")
 
-                    ids = [r['id'] for r in round_ids]
-                    logger.info(f"📊 Found {len(ids)} rounds to delete")
+                # STEP 3: Now safe to delete PARENT rounds
+                logger.info("🗑️  Deleting parent rounds...")
+                rounds_result = await conn.execute(
+                    "DELETE FROM rounds WHERE round_date >= $1 AND round_date <= $2",
+                    start_date, end_date
+                )
+                logger.info(f"   ✓ rounds: {rounds_result}")
 
-                    # STEP 2: Delete CHILD records first (order matters!)
-                    logger.info(f"🗑️  Deleting child records...")
-
-                    # Delete weapon stats
-                    weapon_result = await conn.execute(
-                        "DELETE FROM weapon_comprehensive_stats WHERE round_id = ANY($1)",
-                        ids
-                    )
-                    logger.info(f"   ✓ weapon_comprehensive_stats: {weapon_result}")
-
-                    # Delete player stats
-                    player_result = await conn.execute(
-                        "DELETE FROM player_comprehensive_stats WHERE round_id = ANY($1)",
-                        ids
-                    )
-                    logger.info(f"   ✓ player_comprehensive_stats: {player_result}")
-
-                    # Delete lua round teams (uses match_id instead of round_id)
-                    # Get match_ids from rounds table
-                    match_ids = await conn.fetch(
-                        "SELECT DISTINCT match_id FROM rounds WHERE id = ANY($1)",
-                        ids
-                    )
-                    if match_ids:
-                        match_id_list = [r['match_id'] for r in match_ids]
-                        lua_result = await conn.execute(
-                            "DELETE FROM lua_round_teams WHERE match_id = ANY($1)",
-                            match_id_list
-                        )
-                        logger.info(f"   ✓ lua_round_teams: {lua_result}")
-                    else:
-                        logger.info(f"   ✓ lua_round_teams: (no matches to delete)")
-
-                    # Delete round awards
-                    awards_result = await conn.execute(
-                        "DELETE FROM round_awards WHERE round_id = ANY($1)",
-                        ids
-                    )
-                    logger.info(f"   ✓ round_awards: {awards_result}")
-
-                    # STEP 3: Now safe to delete PARENT rounds
-                    logger.info(f"🗑️  Deleting parent rounds...")
-                    rounds_result = await conn.execute(
-                        "DELETE FROM rounds WHERE round_date >= $1 AND round_date <= $2",
-                        start_date, end_date
-                    )
-                    logger.info(f"   ✓ rounds: {rounds_result}")
-
-                    # STEP 4: Delete processed_files to allow re-import
-                    logger.info(f"🗑️  Clearing processed_files...")
-                    processed_result = await conn.execute(
-                        """
+                # STEP 4: Delete processed_files to allow re-import
+                logger.info("🗑️  Clearing processed_files...")
+                processed_result = await conn.execute(
+                    """
                         DELETE FROM processed_files
                         WHERE SUBSTRING(filename FROM 1 FOR 10) >= $1
                           AND SUBSTRING(filename FROM 1 FOR 10) <= $2
                         """,
-                        start_date,
-                        end_date,
-                    )
-                    logger.info(f"   ✓ processed_files: {processed_result}")
+                    start_date,
+                    end_date,
+                )
+                logger.info(f"   ✓ processed_files: {processed_result}")
 
-                    logger.info("✅ Deletion complete!")
+                logger.info("✅ Deletion complete!")
 
             # Re-import files in range
             logger.info(f"📥 Re-importing files from {start_date} to {end_date}...")
@@ -2968,24 +2966,24 @@ class PostgreSQLDatabaseManager:
         except Exception as e:
             logger.error(f"❌ Date range fix failed: {e}")
             return False
-    
+
     # =========================================================================
     # VALIDATION
     # =========================================================================
-    
-    async def validate_database(self) -> Dict:
+
+    async def validate_database(self) -> dict:
         """
         Validate database integrity and show statistics
-        
+
         Returns:
             Dict with validation results
         """
         logger.info("=" * 70)
         logger.info("🔍 DATABASE VALIDATION")
         logger.info("=" * 70)
-        
+
         results = {}
-        
+
         async with self.pool.acquire() as conn:
             # Table counts
             tables = {
@@ -2997,16 +2995,16 @@ class PostgreSQLDatabaseManager:
                 'session_teams': 'id',
                 'processed_files': 'id'
             }
-            
+
             logger.info("\n📊 Table Row Counts:")
             for table, _ in tables.items():
                 count = await conn.fetchval(f"SELECT COUNT(*) FROM {table}")
                 results[table] = count
                 logger.info(f"   {table:30s}: {count:,}")
-            
+
             # Check for orphaned data
             logger.info("\n🔗 Referential Integrity:")
-            
+
             # Players without rounds (rounds table uses 'id' not 'round_id')
             orphaned_players = await conn.fetchval(
                 """
@@ -3017,7 +3015,7 @@ class PostgreSQLDatabaseManager:
             )
             logger.info(f"   Orphaned player stats: {orphaned_players}")
             results['orphaned_players'] = orphaned_players
-            
+
             # Weapons without rounds
             orphaned_weapons = await conn.fetchval(
                 """
@@ -3028,7 +3026,7 @@ class PostgreSQLDatabaseManager:
             )
             logger.info(f"   Orphaned weapon stats: {orphaned_weapons}")
             results['orphaned_weapons'] = orphaned_weapons
-            
+
             # Date range
             logger.info("\n📅 Date Range:")
             date_range = await conn.fetchrow(
@@ -3039,7 +3037,7 @@ class PostgreSQLDatabaseManager:
                 logger.info(f"   Last round:  {date_range['max_date']}")
                 results['first_round'] = date_range['min_date']
                 results['last_round'] = date_range['max_date']
-            
+
             # Top players
             logger.info("\n👤 Top 5 Players (by total kills):")
             top_players = await conn.fetch(
@@ -3053,11 +3051,11 @@ class PostgreSQLDatabaseManager:
             )
             for i, player in enumerate(top_players, 1):
                 logger.info(f"   {i}. {player['player_name']:20s}: {player['total_kills']:,} kills ({player['rounds_played']} rounds)")
-        
+
         logger.info("\n" + "=" * 70)
         logger.info("✅ Validation complete!")
         logger.info("=" * 70)
-        
+
         return results
 
 
@@ -3067,11 +3065,11 @@ class PostgreSQLDatabaseManager:
 
 async def main():
     """Interactive database manager"""
-    
+
     # Check if running in pipe mode (non-interactive)
     import sys
     is_piped = not sys.stdin.isatty()
-    
+
     if not is_piped:
         # Interactive mode - show menu
         print("\n" + "=" * 70)
@@ -3086,23 +3084,23 @@ async def main():
         print("  5️⃣   Validate database")
         print("  6️⃣   Quick test (import 10 files)")
         print()
-    
+
     choice = input("Select option (1-6): ").strip()
-    
+
     manager = PostgreSQLDatabaseManager()
     await manager.connect()
-    
+
     try:
         if choice == "1":
             await manager.create_fresh_database(backup_existing=True)
-            
+
         elif choice == "2":
             print("\nImport options:")
             print("  1 - Full year (all 2025 files)")
             print("  2 - Last 30 days only")
             print("  3 - Custom date range")
             sub = input("Select [1]: ").strip() or "1"
-            
+
             if sub == "1":
                 year = input("Year to import [2025]: ").strip() or "2025"
                 await manager.import_all_files(year_filter=int(year))
@@ -3118,7 +3116,7 @@ async def main():
                 start = input("Start date (YYYY-MM-DD): ").strip()
                 end = input("End date (YYYY-MM-DD): ").strip()
                 await manager.import_all_files(start_date=start, end_date=end)
-            
+
         elif choice == "3":
             print("\n⚠️  WARNING: This will DELETE ALL DATA!")
             confirm = input("Type 'YES DELETE EVERYTHING' to confirm: ")
@@ -3128,7 +3126,7 @@ async def main():
                 print("  2 - Last 30 days only (RECOMMENDED)")
                 print("  3 - Custom date range")
                 sub = input("Select [2]: ").strip() or "2"
-                
+
                 if sub == "1":
                     year = input("Year to import [2025]: ").strip() or "2025"
                     await manager.rebuild_from_scratch(year=int(year), confirm=True)
@@ -3147,7 +3145,7 @@ async def main():
                     # The extra "3" is read here but ignored for compatibility
                     start = input("Start date (YYYY-MM-DD): ").strip()
                     end = input("End date (YYYY-MM-DD): ").strip()
-                    
+
                     logger.info(f"🔥 Rebuilding database from {start} to {end}")
                     await manager.rebuild_from_scratch(
                         year=int(start[:4]),
@@ -3155,28 +3153,28 @@ async def main():
                         end_date=end,
                         confirm=True
                     )
-                    
+
                     # Auto-validate after rebuild
                     logger.info("\n🔍 Validating rebuilt database...")
                     await manager.validate_database()
             else:
                 print("❌ Aborted")
-        
+
         elif choice == "4":
             start = input("Start date (YYYY-MM-DD) [2025-10-28]: ").strip() or "2025-10-28"
             end = input("End date (YYYY-MM-DD) [2025-10-30]: ").strip() or "2025-10-30"
             await manager.fix_date_range(start, end)
-        
+
         elif choice == "5":
             await manager.validate_database()
-        
+
         elif choice == "6":
             print("\n🧪 Quick test - importing 10 files...")
             await manager.import_all_files(year_filter=2025, limit=10)
-        
+
         else:
             print("❌ Invalid choice")
-    
+
     finally:
         await manager.disconnect()
 
