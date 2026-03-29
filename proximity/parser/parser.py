@@ -225,6 +225,8 @@ class SpawnTimingEvent:
     enemy_spawn_interval: int
     time_to_next_spawn: int
     spawn_timing_score: float
+    killer_reinf: float = 0.0
+    victim_reinf: float = 0.0
 
 
 @dataclass
@@ -370,6 +372,9 @@ class CombatPosition:
     victim_z: int
     weapon: int
     mod: int
+    killer_health: int = 0
+    axis_alive: int = 0
+    allies_alive: int = 0
 
 
 @dataclass
@@ -1912,6 +1917,8 @@ class ProximityParserV4:
                 enemy_spawn_interval=int(parts[7]),
                 time_to_next_spawn=int(parts[8]),
                 spawn_timing_score=float(parts[9]),
+                killer_reinf=float(parts[10]) if len(parts) > 10 else 0.0,
+                victim_reinf=float(parts[11]) if len(parts) > 11 else 0.0,
             ))
         except (ValueError, IndexError) as e:
             self.logger.debug(f"Skip spawn_timing line: {e}")
@@ -2191,6 +2198,9 @@ class ProximityParserV4:
                 victim_z=int(parts[15]),
                 weapon=int(parts[16]),
                 mod=int(parts[17]),
+                killer_health=int(parts[18]) if len(parts) > 18 else 0,
+                axis_alive=int(parts[19]) if len(parts) > 19 else 0,
+                allies_alive=int(parts[20]) if len(parts) > 20 else 0,
             ))
         except (ValueError, IndexError) as e:
             self.logger.debug(f"Skip combat_position line: {e}")
@@ -2389,6 +2399,10 @@ class ProximityParserV4:
                 cp.victim_x, cp.victim_y, cp.victim_z,
                 cp.weapon, cp.mod,
             ]
+            # Oksii adoption fields (optional — backward compatible)
+            if await self._table_has_column('proximity_combat_position', 'killer_health'):
+                columns.extend(["killer_health", "axis_alive", "allies_alive"])
+                values.extend([cp.killer_health, cp.axis_alive, cp.allies_alive])
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
@@ -2732,6 +2746,10 @@ class ProximityParserV4:
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
+            # Oksii adoption fields (optional — backward compatible)
+            if await self._table_has_column('proximity_spawn_timing', 'killer_reinf'):
+                columns.extend(["killer_reinf", "victim_reinf"])
+                values.extend([evt.killer_reinf, evt.victim_reinf])
             await self._append_round_link_columns("proximity_spawn_timing", columns, values)
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
