@@ -15,7 +15,7 @@ Matching strategy:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger("bot.core.round_linker")
@@ -198,9 +198,11 @@ async def resolve_round_id_with_reason(
         candidate_dt = None
         if r_start_unix and int(r_start_unix) > 0:
             try:
-                candidate_dt = datetime.fromtimestamp(
-                    int(r_start_unix), tz=timezone.utc
-                ).replace(tzinfo=None)
+                # Use fromtimestamp() WITHOUT tz to get LOCAL naive datetime,
+                # matching target_dt which is also local naive (from filename
+                # round_date+round_time or from datetime.fromtimestamp(unix)
+                # in _resolve_round_id_for_metadata).
+                candidate_dt = datetime.fromtimestamp(int(r_start_unix))
             except (ValueError, TypeError, OSError):
                 candidate_dt = None
 
@@ -214,7 +216,11 @@ async def resolve_round_id_with_reason(
                 except ValueError:
                     created_at = None
             if created_at:
-                candidate_dt = created_at.replace(tzinfo=None) if getattr(created_at, "tzinfo", None) else created_at
+                # Convert aware UTC to local naive to match target_dt convention
+                if getattr(created_at, "tzinfo", None):
+                    candidate_dt = created_at.astimezone().replace(tzinfo=None)
+                else:
+                    candidate_dt = created_at
 
         if not candidate_dt:
             continue
