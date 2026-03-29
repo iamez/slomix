@@ -496,11 +496,11 @@ async def get_proximity_summary(
 @router.get("/proximity/kill-outcomes")
 async def get_proximity_kill_outcomes(
     range_days: int = 30,
-    session_date=None,
-    map_name=None,
-    round_number=None,
-    round_start_unix=None,
-    player_guid=None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
     limit: int = 200,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -597,9 +597,9 @@ async def get_proximity_kill_outcomes(
 @router.get("/proximity/kill-outcomes/player-stats")
 async def get_proximity_kill_outcomes_player_stats(
     range_days: int = 30,
-    session_date=None,
-    map_name=None,
-    player_guid=None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    player_guid: str | None = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
