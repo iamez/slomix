@@ -5,8 +5,7 @@ Round contract helpers for side/winner confidence and end-reason normalization.
 from __future__ import annotations
 
 import math
-from typing import Any, Iterable, Optional
-
+from typing import Any, Iterable
 
 END_REASON_ENUM = {
     "NORMAL",
@@ -80,7 +79,7 @@ def normalize_side_value(value: Any, allow_unknown: bool = True) -> int:
 def score_confidence_state(
     defender_team: Any,
     winner_team: Any,
-    reasons: Optional[Iterable[str]] = None,
+    reasons: Iterable[str] | None = None,
     fallback_used: bool = False,
 ) -> str:
     """
@@ -123,7 +122,7 @@ def normalize_end_reason(value: Any) -> str:
     return "NORMAL"
 
 
-def parse_time_to_seconds(value: Any) -> Optional[int]:
+def parse_time_to_seconds(value: Any) -> int | None:
     """
     Parse time values (MM:SS / HH:MM:SS / decimal minutes / numeric seconds).
     """
@@ -191,7 +190,7 @@ def derive_stopwatch_contract(
 
 def derive_end_reason_display(
     end_reason: Any,
-    round_stopwatch_state: Optional[str] = None,
+    round_stopwatch_state: str | None = None,
 ) -> str:
     """
     Derive display classification for end-reason + stopwatch state.

@@ -17,22 +17,21 @@ from __future__ import annotations
 import argparse
 import asyncio
 import glob
+import logging
 import os
 import re
 import sqlite3
-from typing import Optional
 
-from bot.config import BotConfig
 from bot.community_stats_parser import C0RNP0RN3StatsParser
+from bot.config import BotConfig
 from bot.core.database_adapter import PostgreSQLAdapter
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 FILENAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(\d{6})-.*-round-(\d+)\.txt$")
 
 
-def iter_stat_files(stats_dir: str, limit: Optional[int] = None):
+def iter_stat_files(stats_dir: str, limit: int | None = None):
     files = sorted(glob.glob(os.path.join(stats_dir, "*.txt")))
     count = 0
     for path in files:
@@ -54,7 +53,7 @@ def parse_match_id_and_round(filename: str):
     return match_id, int(round_str)
 
 
-async def backfill_postgres(stats_dir: str, limit: Optional[int], dry_run: bool) -> int:
+async def backfill_postgres(stats_dir: str, limit: int | None, dry_run: bool) -> int:
     config = BotConfig()
     adapter = PostgreSQLAdapter(
         host=config.postgres_host,
@@ -127,7 +126,7 @@ async def backfill_postgres(stats_dir: str, limit: Optional[int], dry_run: bool)
     return 0
 
 
-def backfill_sqlite(stats_dir: str, limit: Optional[int], dry_run: bool, sqlite_path: str) -> int:
+def backfill_sqlite(stats_dir: str, limit: int | None, dry_run: bool, sqlite_path: str) -> int:
     if not os.path.exists(sqlite_path):
         raise RuntimeError(f"SQLite DB not found: {sqlite_path}")
 

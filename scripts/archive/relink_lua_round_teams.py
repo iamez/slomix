@@ -16,12 +16,12 @@ Environment:
 """
 
 import argparse
+import logging
 import os
 import sys
 from datetime import datetime
 from pathlib import Path
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 # Add project root to path
@@ -146,7 +146,7 @@ def main():
     db_params = get_db_params()
 
     print(f"{'=' * 70}")
-    print(f"Lua Round Teams Re-Linker")
+    print("Lua Round Teams Re-Linker")
     print(f"Mode: {'APPLY' if args.apply else 'DRY RUN'}")
     print(f"Database: {db_params['user']}@{db_params['host']}:{db_params['port']}/{db_params['dbname']}")
     if args.session:
@@ -235,7 +235,7 @@ def main():
         conn.rollback()
         print(f"\n⚠️  DRY RUN: {changed} records would be changed. Run with --apply to commit.")
     else:
-        print(f"\n✅ No changes needed.")
+        print("\n✅ No changes needed.")
 
     cursor.close()
     conn.close()

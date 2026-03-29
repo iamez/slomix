@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from tools.simple_bulk_import import SimpleBulkImporter
 from bot.community_stats_parser import C0RNP0RN3StatsParser
+from tools.simple_bulk_import import SimpleBulkImporter
 
 
 def _get_sample_file():

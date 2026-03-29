@@ -9,10 +9,11 @@ Commands:
 - !my_predictions - View predictions you participated in
 """
 
-import discord
-from discord.ext import commands
 import logging
 from datetime import datetime, timedelta
+
+import discord
+from discord.ext import commands
 
 logger = logging.getLogger('PredictionsCog')
 

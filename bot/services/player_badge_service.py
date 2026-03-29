@@ -24,7 +24,6 @@ Provides emoji badges based on player lifetime achievements:
 """
 
 import logging
-from typing import Dict, List, Optional
 
 logger = logging.getLogger("bot.services.player_badge_service")
 
@@ -184,7 +183,7 @@ class PlayerBadgeService:
             logger.error(f"Error fetching badges for {player_guid}: {e}", exc_info=True)
             return ""
 
-    def _get_highest_milestone(self, value: float, milestones: Dict[int, str]) -> Optional[str]:
+    def _get_highest_milestone(self, value: float, milestones: dict[int, str]) -> str | None:
         """
         Get the highest milestone achieved for a given value.
 
@@ -202,7 +201,7 @@ class PlayerBadgeService:
                 break
         return highest
 
-    def _format_badges_with_stacking(self, badges: List[str]) -> str:
+    def _format_badges_with_stacking(self, badges: list[str]) -> str:
         """
         Format badges with stacking notation for duplicates.
 
@@ -233,7 +232,7 @@ class PlayerBadgeService:
 
         return "".join(formatted)
 
-    async def get_player_badges_batch(self, player_guids: List[str]) -> Dict[str, str]:
+    async def get_player_badges_batch(self, player_guids: list[str]) -> dict[str, str]:
         """
         Get badges for multiple players in a single query.
 

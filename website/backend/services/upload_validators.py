@@ -6,7 +6,6 @@ OWASP-compliant file upload security.
 import re
 import unicodedata
 from pathlib import Path
-from typing import Optional
 
 # Category definitions
 CATEGORY_CONFIG = "config"
@@ -254,7 +253,7 @@ def get_size_limit(category: str) -> int:
     return SIZE_LIMITS[category]
 
 
-def detect_category(extension: str) -> Optional[str]:
+def detect_category(extension: str) -> str | None:
     """
     Detect category from file extension.
 

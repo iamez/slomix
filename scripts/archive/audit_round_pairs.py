@@ -16,21 +16,20 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import logging
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
-import re
-from typing import Dict, List, Optional, Set, Tuple
 
 from bot.community_stats_parser import C0RNP0RN3StatsParser
 from bot.config import BotConfig
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 FILENAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(\d{6})-(.+)-round-(\d)\.txt$")
 
 
-def parse_filename_dt(name: str) -> Optional[datetime]:
+def parse_filename_dt(name: str) -> datetime | None:
     match = FILENAME_RE.match(name)
     if not match:
         return None
@@ -38,7 +37,7 @@ def parse_filename_dt(name: str) -> Optional[datetime]:
     return datetime.strptime(date_str + time_str, "%Y-%m-%d%H%M%S")
 
 
-def iter_round_files(stats_dir: Path) -> List[Path]:
+def iter_round_files(stats_dir: Path) -> list[Path]:
     files = []
     for p in stats_dir.glob("*.txt"):
         name = p.name
@@ -70,8 +69,8 @@ def main() -> int:
     parser = C0RNP0RN3StatsParser(round_match_window_minutes=window_minutes)
 
     all_files = iter_round_files(stats_dir)
-    r1_files: List[Path] = []
-    r2_files: List[Path] = []
+    r1_files: list[Path] = []
+    r2_files: list[Path] = []
 
     for p in all_files:
         dt = parse_filename_dt(p.name)
@@ -82,8 +81,8 @@ def main() -> int:
         elif "-round-2.txt" in p.name:
             r2_files.append(p)
 
-    matched_r1: Set[str] = set()
-    missing_r1_for_r2: List[str] = []
+    matched_r1: set[str] = set()
+    missing_r1_for_r2: list[str] = []
 
     for r2 in sorted(r2_files):
         r1 = parser.find_corresponding_round_1_file(str(r2))

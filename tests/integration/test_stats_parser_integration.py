@@ -9,11 +9,11 @@ This is a critical-path test: if the parser breaks, all downstream
 data (database imports, Discord embeds, leaderboards) will be wrong.
 """
 
-import pytest
 from pathlib import Path
 
-from bot.community_stats_parser import C0RNP0RN3StatsParser
+import pytest
 
+from bot.community_stats_parser import C0RNP0RN3StatsParser
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "sample_stats_files"
 # Also check real stats files if available (local_stats has production data)

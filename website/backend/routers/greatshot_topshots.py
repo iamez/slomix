@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
 
@@ -26,7 +27,7 @@ def _require_user_id(request: Request) -> int:
         raise HTTPException(status_code=401, detail="Invalid session user") from exc
 
 
-def _safe_json_field(value: Any) -> Optional[Dict]:
+def _safe_json_field(value: Any) -> dict | None:
     """Parse JSON field, return None on error."""
     if value is None:
         return None

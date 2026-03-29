@@ -1,9 +1,10 @@
-import sys
 import os
 import pathlib
+import sys
 
 # Headless backend
 import matplotlib
+
 matplotlib.use('Agg')
 
 # Ensure project root on sys.path
@@ -11,10 +12,11 @@ ROOT = str(pathlib.Path(__file__).resolve().parents[1])
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from bot.retro_viz import create_round_visualization
-from bot.retro_text_stats import generate_text_stats
-
 import logging
+
+from bot.retro_text_stats import generate_text_stats
+from bot.retro_viz import create_round_visualization
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 

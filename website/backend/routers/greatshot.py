@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -22,7 +22,6 @@ from website.backend.services.greatshot_crossref import (
 from website.backend.services.greatshot_jobs import get_greatshot_job_service
 from website.backend.services.greatshot_store import get_greatshot_storage
 
-
 router = APIRouter()
 logger = get_app_logger("greatshot.api")
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -33,7 +32,7 @@ class RenderRequest(BaseModel):
     highlight_id: str
 
 
-def _require_user(request: Request) -> Dict[str, Any]:
+def _require_user(request: Request) -> dict[str, Any]:
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -196,7 +195,7 @@ async def list_greatshot(request: Request, db=Depends(get_db)):
         (user_id,),
     )
 
-    items: List[Dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
     for row in rows:
         (
             demo_id,

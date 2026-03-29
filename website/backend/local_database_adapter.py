@@ -4,8 +4,8 @@ Includes SQLite support for local development.
 """
 
 import logging
-from typing import Any, Optional, List, Tuple
 from contextlib import asynccontextmanager
+from typing import Any
 
 # Import base class from bot core
 from bot.core.database_adapter import DatabaseAdapter
@@ -55,7 +55,7 @@ class SQLiteAdapter(DatabaseAdapter):
         async with aiosqlite.connect(self.db_path) as conn:
             yield conn
 
-    async def execute(self, query: str, params: Optional[Tuple] = None):
+    async def execute(self, query: str, params: tuple | None = None):
         """Execute query on SQLite."""
         async with self.connection() as conn:
             await conn.execute(query, params or ())
@@ -70,27 +70,24 @@ class SQLiteAdapter(DatabaseAdapter):
             await conn.commit()
 
     async def fetch_one(
-        self, query: str, params: Optional[Tuple] = None
-    ) -> Optional[Any]:
+        self, query: str, params: tuple | None = None
+    ) -> Any | None:
         """Fetch single row from SQLite."""
-        async with self.connection() as conn:
-            async with conn.execute(query, params or ()) as cursor:
-                row = await cursor.fetchone()
-                return row
+        async with self.connection() as conn, conn.execute(query, params or ()) as cursor:
+            row = await cursor.fetchone()
+            return row
 
-    async def fetch_all(self, query: str, params: Optional[Tuple] = None) -> List[Any]:
+    async def fetch_all(self, query: str, params: tuple | None = None) -> list[Any]:
         """Fetch all rows from SQLite."""
-        async with self.connection() as conn:
-            async with conn.execute(query, params or ()) as cursor:
-                rows = await cursor.fetchall()
-                return rows
+        async with self.connection() as conn, conn.execute(query, params or ()) as cursor:
+            rows = await cursor.fetchall()
+            return rows
 
-    async def fetch_val(self, query: str, params: Optional[Tuple] = None) -> Any:
+    async def fetch_val(self, query: str, params: tuple | None = None) -> Any:
         """Fetch single value from SQLite."""
-        async with self.connection() as conn:
-            async with conn.execute(query, params or ()) as cursor:
-                row = await cursor.fetchone()
-                return row[0] if row else None
+        async with self.connection() as conn, conn.execute(query, params or ()) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else None
 
 
 def create_local_adapter(db_type: str = "sqlite", **kwargs) -> DatabaseAdapter:

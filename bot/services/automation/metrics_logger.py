@@ -14,13 +14,14 @@ Features:
 """
 
 import asyncio
-import aiosqlite
 import json
 import logging
 import os
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Any
+
+import aiosqlite
 
 logger = logging.getLogger("MetricsLogger")
 
@@ -50,9 +51,9 @@ class MetricsLogger:
         os.makedirs(log_dir, exist_ok=True)
 
         # In-memory metrics (for fast access)
-        self.events: List[Dict[str, Any]] = []
-        self.errors: List[Dict[str, Any]] = []
-        self.performance: List[Dict[str, Any]] = []
+        self.events: list[dict[str, Any]] = []
+        self.errors: list[dict[str, Any]] = []
+        self.performance: list[dict[str, Any]] = []
 
         # Counters
         self.event_counts = defaultdict(int)
@@ -71,7 +72,7 @@ class MetricsLogger:
         self._is_initialized = False
         self._init_lock = asyncio.Lock()
         self._db_lock = asyncio.Lock()
-        self._db_connection: Optional[aiosqlite.Connection] = None
+        self._db_connection: aiosqlite.Connection | None = None
 
         logger.info(
             f"📊 Metrics Logger initialized: log_dir={self.log_dir}, db={self.metrics_db_path}"
@@ -170,8 +171,8 @@ class MetricsLogger:
                 self._db_connection = None
         self._is_initialized = False
 
-    async def log_event(self, event_type: str, event_data: Optional[Dict] = None,
-                       duration_ms: Optional[float] = None, success: bool = True):
+    async def log_event(self, event_type: str, event_data: dict | None = None,
+                       duration_ms: float | None = None, success: bool = True):
         """
         Log an automation event.
 
@@ -220,7 +221,7 @@ class MetricsLogger:
             logger.error(f"❌ Failed to log event: {e}")
 
     async def log_error(self, error_type: str, error_message: str,
-                       stack_trace: Optional[str] = None, context: Optional[Dict] = None):
+                       stack_trace: str | None = None, context: dict | None = None):
         """
         Log an error with full context.
 
@@ -338,7 +339,7 @@ class MetricsLogger:
         except Exception as e:
             logger.error(f"❌ Failed to log health check: {e}")
 
-    async def generate_report(self, hours: int = 24) -> Dict[str, Any]:
+    async def generate_report(self, hours: int = 24) -> dict[str, Any]:
         """
         Generate comprehensive metrics report.
 
@@ -474,7 +475,7 @@ class MetricsLogger:
 
         return {}
 
-    async def export_to_json(self, filepath: Optional[str] = None) -> str:
+    async def export_to_json(self, filepath: str | None = None) -> str:
         """
         Export all metrics to JSON file.
 
@@ -507,7 +508,7 @@ class MetricsLogger:
             logger.error(f"❌ Failed to export metrics: {e}")
             return ""
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get quick summary of current metrics"""
         uptime = datetime.now() - self.start_time
 

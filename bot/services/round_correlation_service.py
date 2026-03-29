@@ -118,6 +118,7 @@ class RoundCorrelationService:
                 """
             )
         except Exception as e:
+            logger.error("Schema preflight query failed: %s", e, exc_info=True)
             return False, f"schema_preflight_query_failed:{type(e).__name__}"
 
         if not rows:

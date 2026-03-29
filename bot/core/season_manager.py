@@ -14,7 +14,6 @@ Quarters: Q1 (Jan-Mar), Q2 (Apr-Jun), Q3 (Jul-Sep), Q4 (Oct-Dec)
 
 import logging
 from datetime import datetime
-from typing import Tuple, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +63,7 @@ class SeasonManager:
         quarter = (now.month - 1) // 3 + 1
         return f"{now.year}-Q{quarter}"
 
-    def get_season_name(self, season_id: Optional[str] = None) -> str:
+    def get_season_name(self, season_id: str | None = None) -> str:
         """
         Get friendly season name.
 
@@ -88,7 +87,7 @@ class SeasonManager:
         season_name = self.season_names.get(quarter_num, f"Q{quarter_num}")
         return f"{year} {season_name} (Q{quarter_num})"
 
-    def get_season_dates(self, season_id: Optional[str] = None) -> Tuple[datetime, datetime]:
+    def get_season_dates(self, season_id: str | None = None) -> tuple[datetime, datetime]:
         """
         Get start and end dates for a season.
 
@@ -142,7 +141,7 @@ class SeasonManager:
 
         return start_date, end_date
 
-    def get_season_sql_filter(self, season_id: Optional[str] = None) -> str:
+    def get_season_sql_filter(self, season_id: str | None = None) -> str:
         """
         Get SQL WHERE clause for filtering by season.
 
@@ -190,7 +189,7 @@ class SeasonManager:
         current = self.get_current_season()
         return current != last_known_season
 
-    def get_all_seasons(self) -> List[str]:
+    def get_all_seasons(self) -> list[str]:
         """
         Get list of all available seasons for selection.
 

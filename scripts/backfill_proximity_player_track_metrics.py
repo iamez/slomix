@@ -31,7 +31,6 @@ if str(REPO_ROOT) not in sys.path:
 from proximity.parser.parser import PathPoint, PlayerTrack
 from website.backend.dependencies import close_db_pool, get_db
 
-
 TERMINAL_EVENTS = {
     "killed",
     "selfkill",
@@ -207,7 +206,7 @@ async def _get_rows(args) -> list[Any]:
 
         limit_clause = ""
         if args.limit is not None:
-            limit_clause = "LIMIT ${}".format(param_idx)
+            limit_clause = f"LIMIT ${param_idx}"
             params.append(args.limit)
 
         where_sql = " AND ".join(where_clauses)

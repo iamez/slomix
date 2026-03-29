@@ -5,21 +5,13 @@ Merges all proximity events into one chronological timeline per round,
 plus player positions from player_track.path JSONB.
 """
 import json
-import re
 from bisect import bisect_left
 from collections import defaultdict
-from typing import Optional
 
 from website.backend.logging_config import get_app_logger
+from website.backend.utils.et_constants import strip_et_colors
 
 logger = get_app_logger("service.replay")
-
-
-def _strip_et_colors(name: str) -> str:
-    """Remove ET color codes like ^1, ^p, etc."""
-    if not name:
-        return ""
-    return re.sub(r'\^[0-9a-zA-Z]', '', name)
 
 
 def _format_time(ms) -> str:
@@ -32,7 +24,7 @@ def _format_time(ms) -> str:
     return f"{minutes}:{seconds:02d}"
 
 
-def _safe_float(val) -> Optional[float]:
+def _safe_float(val) -> float | None:
     """Convert Decimal/numeric to float, or None."""
     if val is None:
         return None
@@ -53,7 +45,7 @@ def _ensure_path_list(path) -> list:
     return []
 
 
-def _find_position_at_time(path: list, target_ms: int) -> Optional[dict]:
+def _find_position_at_time(path: list, target_ms: int) -> dict | None:
     """Binary search path array for nearest sample to target time."""
     if not path:
         return None
@@ -104,10 +96,10 @@ async def get_round_timeline(db, round_id: int) -> dict:
         reviver_guid, reviver_raw = r[11], r[12]
         importance = _safe_float(r[13]) or 1.0
 
-        killer = _strip_et_colors(killer_raw)
-        victim = _strip_et_colors(victim_raw)
-        gibber = _strip_et_colors(gibber_raw)
-        reviver = _strip_et_colors(reviver_raw)
+        killer = strip_et_colors(killer_raw)
+        victim = strip_et_colors(victim_raw)
+        gibber = strip_et_colors(gibber_raw)
+        reviver = strip_et_colors(reviver_raw)
 
         # Kill event
         events.append({
@@ -182,8 +174,8 @@ async def get_round_timeline(db, round_id: int) -> dict:
     """, (round_id,))
 
     for r in trade_rows:
-        trader = _strip_et_colors(r[8])
-        orig_killer = _strip_et_colors(r[6])
+        trader = strip_et_colors(r[8])
+        orig_killer = strip_et_colors(r[6])
         events.append({
             "t_ms": r[1],
             "t_formatted": _format_time(r[1]),
@@ -246,7 +238,7 @@ async def get_round_timeline(db, round_id: int) -> dict:
     """, (round_id,))
 
     for r in carrier_rows:
-        carrier = _strip_et_colors(r[3])
+        carrier = strip_et_colors(r[3])
         outcome = r[6] or "unknown"
 
         # Pickup event
@@ -276,7 +268,7 @@ async def get_round_timeline(db, round_id: int) -> dict:
                 "killed":  ("carrier_killed",  "\U0001F3AF", 3.5),
             }
             etype, icon, imp = type_map.get(outcome, ("carrier_drop", "\U0001F4CD", 1.5))
-            killer = _strip_et_colors(r[11])
+            killer = strip_et_colors(r[11])
 
             if outcome == "killed" and killer:
                 label = f"{killer} kills carrier {carrier}"
@@ -317,7 +309,7 @@ async def get_round_timeline(db, round_id: int) -> dict:
     """, (round_id,))
 
     for r in build_rows:
-        player = _strip_et_colors(r[3])
+        player = strip_et_colors(r[3])
         event_type = r[1] or "build"
         etype = "build" if "build" in event_type.lower() else "destroy"
         icon = "\U0001F528" if etype == "build" else "\U0001F4A5"
@@ -414,7 +406,7 @@ async def get_player_positions(db, round_id: int, time_ms: int) -> dict:
             continue
 
         alive = active is not None
-        name = _strip_et_colors(track[1])
+        name = strip_et_colors(track[1])
         team = track[2]
         player_class = track[3]
         path = _ensure_path_list(track[6])
@@ -480,7 +472,7 @@ async def get_player_paths(db, round_id: int, from_ms: int, to_ms: int) -> dict:
 
         player_paths.append({
             "guid": t[0],
-            "name": _strip_et_colors(t[1]),
+            "name": strip_et_colors(t[1]),
             "team": t[2],
             "class": t[3],
             "spawn_time_ms": t[4],

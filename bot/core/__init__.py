@@ -10,8 +10,8 @@ Modules:
     achievement_system: Player achievement tracking and milestone notifications
 """
 
-from .stats_cache import StatsCache
-from .season_manager import SeasonManager
 from .achievement_system import AchievementSystem
+from .season_manager import SeasonManager
+from .stats_cache import StatsCache
 
 __all__ = ["StatsCache", "SeasonManager", "AchievementSystem"]

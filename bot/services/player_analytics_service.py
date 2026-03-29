@@ -10,9 +10,8 @@ Advanced player analytics beyond basic stats:
 """
 
 import logging
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
 import statistics
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +45,13 @@ class MapAffinityStats:
     overall_dpm: float = 0.0
 
     # Map -> stats
-    map_stats: Dict[str, Dict] = field(default_factory=dict)
+    map_stats: dict[str, dict] = field(default_factory=dict)
     # {map_name: {dpm, delta_percent, rounds, kills, deaths}}
 
-    best_map: Optional[str] = None
+    best_map: str | None = None
     best_map_delta: float = 0.0
 
-    worst_map: Optional[str] = None
+    worst_map: str | None = None
     worst_map_delta: float = 0.0
 
 
@@ -124,7 +123,7 @@ class PlayerAnalyticsService:
         player_guid: str,
         days_back: int = 30,
         min_rounds: int = 10
-    ) -> Optional[ConsistencyStats]:
+    ) -> ConsistencyStats | None:
         """
         Calculate a player's consistency score.
 
@@ -217,7 +216,7 @@ class PlayerAnalyticsService:
         player_guid: str,
         days_back: int = 90,
         min_rounds_per_map: int = 3
-    ) -> Optional[MapAffinityStats]:
+    ) -> MapAffinityStats | None:
         """
         Calculate player's performance delta by map.
 
@@ -315,7 +314,7 @@ class PlayerAnalyticsService:
         self,
         player_guid: str,
         days_back: int = 90
-    ) -> Optional[PlaystyleStats]:
+    ) -> PlaystyleStats | None:
         """
         Analyze player's attack vs defense performance.
 
@@ -419,7 +418,7 @@ class PlayerAnalyticsService:
         self,
         player_guid: str,
         gaming_session_id: int
-    ) -> Optional[SessionFatigueStats]:
+    ) -> SessionFatigueStats | None:
         """
         Analyze player's performance trend within a session.
 
@@ -494,8 +493,8 @@ class PlayerAnalyticsService:
 
     async def get_session_fun_awards(
         self,
-        session_ids: List[int]
-    ) -> List[FunAward]:
+        session_ids: list[int]
+    ) -> list[FunAward]:
         """
         Generate fun/celebratory awards for a session.
 
@@ -768,7 +767,7 @@ class PlayerAnalyticsService:
             f"• Defense: {stats.defense_dpm:.1f} DPM, {stats.defense_kd:.2f} K/D ({stats.defense_rounds} rounds)"
         )
 
-    def format_awards(self, awards: List[FunAward]) -> str:
+    def format_awards(self, awards: list[FunAward]) -> str:
         """Format awards for Discord embed."""
         if not awards:
             return "No awards this session"

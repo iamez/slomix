@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from bot.core.round_contract import (
+    derive_end_reason_display,
+    derive_stopwatch_contract,
+    normalize_end_reason,
     normalize_side_value,
     score_confidence_state,
-    normalize_end_reason,
-    derive_stopwatch_contract,
-    derive_end_reason_display,
 )
 
 

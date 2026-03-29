@@ -6,20 +6,22 @@ Extracted from api.py to reduce file size and improve maintainability.
 
 import math
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from website.backend.dependencies import get_db
-from website.backend.local_database_adapter import DatabaseAdapter
-from bot.core.utils import escape_like_pattern
+
 from bot.config import load_config
-from website.backend.services.website_session_data_service import (
-    WebsiteSessionDataService as SessionDataService,
-)
+from bot.core.utils import escape_like_pattern
 from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.stopwatch_scoring_service import StopwatchScoringService
+from website.backend.dependencies import get_db
+from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.routers.api_helpers import (
     normalize_map_name as _normalize_map_name,
+)
+from website.backend.services.website_session_data_service import (
+    WebsiteSessionDataService as SessionDataService,
 )
 
 router = APIRouter()
@@ -28,7 +30,7 @@ logger = get_app_logger("api.sessions")
 
 async def build_session_scoring(
     session_date: str,
-    session_ids: Optional[list],
+    session_ids: list | None,
     data_service: SessionDataService,
     scoring_service: StopwatchScoringService,
 ):
@@ -342,7 +344,7 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
 @router.get("/stats/session-leaderboard")
 async def get_session_leaderboard(
     limit: int = 5,
-    session_id: Optional[int] = None,
+    session_id: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Get the leaderboard for a specific session (or latest if not specified)"""
@@ -509,7 +511,7 @@ async def get_sessions_list(
     try:
         rows = await db.fetch_all(query, (limit, offset))
     except Exception as e:
-        print(f"Error fetching sessions list: {e}")
+        logger.error(f"Error fetching sessions list: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     sessions = []
@@ -598,7 +600,7 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
                     }
                 )
         except Exception as e:
-            print(f"Error fetching session leaderboard: {e}")
+            logger.error(f"Error fetching session leaderboard: {e}")
 
     # Scoring + team rosters
     scoring_service = StopwatchScoringService(db)
@@ -664,7 +666,7 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
 @router.get("/sessions/{date}/graphs")
 async def get_session_graph_stats(
     date: str,
-    gaming_session_id: Optional[int] = None,
+    gaming_session_id: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -729,7 +731,7 @@ async def get_session_graph_stats(
     try:
         rows = await db.fetch_all(query, params)
     except Exception as e:
-        print(f"Error fetching session graph stats: {e}")
+        logger.error(f"Error fetching session graph stats: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if not rows:
@@ -942,7 +944,7 @@ def _clamp_percentage(value: float | None) -> float | None:
 
 
 def _score_relative_metric(
-    value: Any, values: List[Any], invert: bool = False, neutral: float = 50.0
+    value: Any, values: list[Any], invert: bool = False, neutral: float = 50.0
 ) -> float:
     """Score a value relative to a set using percentile rank.
 
@@ -978,7 +980,7 @@ def _score_relative_metric(
     return _clamp_percentage(scaled) or neutral
 
 
-def _apply_session_aggression_model(players_data: List[Dict[str, Any]]) -> None:
+def _apply_session_aggression_model(players_data: list[dict[str, Any]]) -> None:
     if not players_data:
         return
 

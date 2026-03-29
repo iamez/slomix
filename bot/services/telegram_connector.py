@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 try:
     import httpx
@@ -37,7 +37,7 @@ class TelegramConnector:
         self.enabled = bool(enabled and self.bot_token)
         self._send_lock = asyncio.Lock()
         self._next_send_at = 0.0
-        self._client: Optional[Any] = None
+        self._client: Any | None = None
 
         if self.enabled and httpx is None:
             logger.warning("Telegram connector requested but httpx is not installed; disabling connector")
@@ -134,7 +134,7 @@ class TelegramConnector:
             await asyncio.sleep(self._next_send_at - now)
         self._next_send_at = time.monotonic() + self.min_interval_seconds
 
-    def _extract_retry_after(self, response: httpx.Response) -> Optional[float]:
+    def _extract_retry_after(self, response: httpx.Response) -> float | None:
         header_val = response.headers.get("Retry-After")
         if header_val:
             try:

@@ -12,15 +12,16 @@ Features:
 """
 
 import asyncio
-import discord
-from discord.ext import commands, tasks
-import os
-import sys
+import json
 import logging
+import os
 import re
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-import json
+
+import discord
+from discord.ext import commands, tasks
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -102,7 +103,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
         if not os.path.exists(index_path):
             return
         try:
-            with open(index_path, "r", encoding="utf-8") as handle:
+            with open(index_path, encoding="utf-8") as handle:
                 for line in handle:
                     filename = line.strip()
                     if filename:
@@ -125,7 +126,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
         if not os.path.exists(index_path):
             return
         try:
-            with open(index_path, "r", encoding="utf-8") as handle:
+            with open(index_path, encoding="utf-8") as handle:
                 for line in handle:
                     filename = line.strip()
                     if filename:

@@ -8,7 +8,6 @@ import threading
 import traceback
 import uuid
 from pathlib import Path
-from typing import Optional
 
 from greatshot.config import CONFIG as GREATSHOT_CONFIG
 from greatshot.cutter.api import build_clip_window, cut_demo
@@ -17,7 +16,6 @@ from greatshot.worker.runner import run_analysis_job
 from website.backend.logging_config import get_app_logger
 from website.backend.services.greatshot_crossref import find_matching_round
 from website.backend.services.greatshot_store import GreatshotStorageService
-
 
 logger = get_app_logger("greatshot.jobs")
 
@@ -101,7 +99,7 @@ class GreatshotJobService:
                             demo_id,
                             MAX_RETRIES + 1,
                         )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Don't retry timeouts - these are likely corrupted demos
                     logger.error("Analysis timeout for demo_id=%s - not retrying", demo_id)
                     break
@@ -176,26 +174,25 @@ class GreatshotJobService:
     async def _process_analysis_job(self, demo_id: str) -> bool:
         # F-05: Use FOR UPDATE inside a transaction to prevent concurrent
         # workers from processing the same demo simultaneously.
-        async with self.db.connection() as conn:
-            async with conn.transaction():
-                row = await conn.fetchrow(
-                    """
+        async with self.db.connection() as conn, conn.transaction():
+            row = await conn.fetchrow(
+                """
                     SELECT stored_path, extension
                     FROM greatshot_demos
                     WHERE id = $1 AND status NOT IN ('scanning', 'analyzed')
                     FOR UPDATE SKIP LOCKED
                     """,
-                    demo_id,
-                )
-                if not row:
-                    logger.warning("Analysis job skipped: demo %s not found or already being processed", demo_id)
-                    return True
+                demo_id,
+            )
+            if not row:
+                logger.warning("Analysis job skipped: demo %s not found or already being processed", demo_id)
+                return True
 
-                stored_path, _ = row["stored_path"], row["extension"]
-                demo_path = Path(stored_path)
+            stored_path, _ = row["stored_path"], row["extension"]
+            demo_path = Path(stored_path)
 
-                await conn.execute(
-                    """
+            await conn.execute(
+                """
                     UPDATE greatshot_demos
                     SET status = 'scanning',
                         error = NULL,
@@ -203,8 +200,8 @@ class GreatshotJobService:
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = $1
                     """,
-                    demo_id,
-                )
+                demo_id,
+            )
 
         try:
             artifacts_dir = self.storage.artifacts_dir(demo_id)
@@ -234,7 +231,7 @@ class GreatshotJobService:
                     asyncio.to_thread(_cancellable_analysis),
                     timeout=timeout_seconds
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Signal the worker thread to stop
                 cancel_event.set()
                 error_msg = f"Analysis timed out after {timeout_seconds}s"
@@ -441,38 +438,37 @@ class GreatshotJobService:
             # Hold a row lock for the full check/cut/update sequence.
             # This prevents concurrent workers from extracting the same clip at once.
             clip_demo_path = None
-            async with self.db.connection() as conn:
-                async with conn.transaction():
-                    locked_highlight = await conn.fetchrow(
-                        "SELECT clip_demo_path FROM greatshot_highlights WHERE id = $1 FOR UPDATE",
-                        highlight_id,
+            async with self.db.connection() as conn, conn.transaction():
+                locked_highlight = await conn.fetchrow(
+                    "SELECT clip_demo_path FROM greatshot_highlights WHERE id = $1 FOR UPDATE",
+                    highlight_id,
+                )
+
+                locked_clip_path = locked_highlight[0] if locked_highlight else None
+                clip_demo_path = str(locked_clip_path) if locked_clip_path else None
+                clip_missing = not clip_demo_path or not Path(clip_demo_path).is_file()
+
+                if clip_missing:
+                    clips_dir = self.storage.clips_dir(demo_id)
+                    clips_dir.mkdir(parents=True, exist_ok=True)
+                    clip_demo = clips_dir / f"{highlight_id}{extension}"
+
+                    await asyncio.to_thread(
+                        cut_demo,
+                        stored_path,
+                        clip_start,
+                        clip_end,
+                        clip_demo,
+                        None,
+                        GREATSHOT_CONFIG.cutter_timeout_seconds,
                     )
 
-                    locked_clip_path = locked_highlight[0] if locked_highlight else None
-                    clip_demo_path = str(locked_clip_path) if locked_clip_path else None
-                    clip_missing = not clip_demo_path or not Path(clip_demo_path).is_file()
-
-                    if clip_missing:
-                        clips_dir = self.storage.clips_dir(demo_id)
-                        clips_dir.mkdir(parents=True, exist_ok=True)
-                        clip_demo = clips_dir / f"{highlight_id}{extension}"
-
-                        await asyncio.to_thread(
-                            cut_demo,
-                            stored_path,
-                            clip_start,
-                            clip_end,
-                            clip_demo,
-                            None,
-                            GREATSHOT_CONFIG.cutter_timeout_seconds,
-                        )
-
-                        clip_demo_path = str(clip_demo)
-                        await conn.execute(
-                            "UPDATE greatshot_highlights SET clip_demo_path = $2 WHERE id = $1",
-                            highlight_id,
-                            clip_demo_path,
-                        )
+                    clip_demo_path = str(clip_demo)
+                    await conn.execute(
+                        "UPDATE greatshot_highlights SET clip_demo_path = $2 WHERE id = $1",
+                        highlight_id,
+                        clip_demo_path,
+                    )
 
             if not clip_demo_path:
                 raise RuntimeError(
@@ -524,7 +520,7 @@ class GreatshotJobService:
             return False
 
 
-_greatshot_jobs: Optional[GreatshotJobService] = None
+_greatshot_jobs: GreatshotJobService | None = None
 
 
 def set_greatshot_job_service(service: GreatshotJobService) -> None:

@@ -21,16 +21,17 @@ make it testable without the bot. The bot's own copy should be kept in sync.
 
 import re
 
+from bot.community_stats_parser import C0RNP0RN3StatsParser
+
 # Production imports - these are the REAL validators being tested
 from bot.core.utils import (
-    validate_stats_filename,
     escape_like_pattern,
     escape_like_pattern_for_query,
-    sanitize_error_message,
     normalize_player_name,
+    sanitize_error_message,
+    validate_stats_filename,
 )
 from bot.endstats_parser import validate_endstats_filename
-from bot.community_stats_parser import C0RNP0RN3StatsParser
 
 
 class TestFilenameValidation:

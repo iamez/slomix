@@ -10,10 +10,11 @@ This service manages:
 - Special awards embeds
 """
 
-import discord
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
+
+import discord
 
 logger = logging.getLogger("bot.services.session_embed_builder")
 
@@ -37,7 +38,7 @@ class SessionEmbedBuilder:
         return text[:max_chars - 4] + "\n..."
 
     @staticmethod
-    def _chunk_field_lines(lines: List[str], separator: str = "\n", max_chars: int = 1024) -> List[str]:
+    def _chunk_field_lines(lines: list[str], separator: str = "\n", max_chars: int = 1024) -> list[str]:
         """Split lines into chunks that fit within Discord's field value limit.
 
         Each individual line that exceeds max_chars is truncated.
@@ -82,7 +83,7 @@ class SessionEmbedBuilder:
     async def build_session_overview_embed(
         self,
         latest_date: str,
-        all_players: List,
+        all_players: list,
         maps_played: str,
         rounds_played: int,
         player_count: int,
@@ -91,13 +92,13 @@ class SessionEmbedBuilder:
         team_1_score: int,
         team_2_score: int,
         hardcoded_teams: bool,
-        scoring_result: Optional[Dict] = None,
-        player_badges: Optional[Dict[str, str]] = None,
+        scoring_result: dict | None = None,
+        player_badges: dict[str, str] | None = None,
         full_selfkills_available: bool = True,
-        bot_session_summary: Optional[Dict[str, Any]] = None,
-        timing_dual_by_guid: Optional[Dict[str, Dict[str, Any]]] = None,
-        timing_dual_meta: Optional[Dict[str, Any]] = None,
-        show_timing_dual: Optional[bool] = None,
+        bot_session_summary: dict[str, Any] | None = None,
+        timing_dual_by_guid: dict[str, dict[str, Any]] | None = None,
+        timing_dual_meta: dict[str, Any] | None = None,
+        show_timing_dual: bool | None = None,
     ) -> discord.Embed:
         """Build main session overview embed with all players and match score."""
         # Build description with match score
@@ -362,8 +363,8 @@ class SessionEmbedBuilder:
         return embed
 
     def _build_endstats_section(
-        self, endstats_data: Dict[str, Any]
-    ) -> Tuple[str, str]:
+        self, endstats_data: dict[str, Any]
+    ) -> tuple[str, str]:
         """Build compact endstats summary for embed.
 
         Args:
@@ -398,7 +399,7 @@ class SessionEmbedBuilder:
 
             # Sort categories by priority
             sorted_categories = sorted(
-                [c for c in awards_by_category.keys() if c in category_display],
+                [c for c in awards_by_category if c in category_display],
                 key=lambda c: category_display[c][1]
             )
 
@@ -474,8 +475,8 @@ class SessionEmbedBuilder:
         return f"{value:.1f}"
 
     async def build_session_endstats_embed(
-        self, latest_date: str, endstats_data: Dict[str, Any]
-    ) -> Optional[discord.Embed]:
+        self, latest_date: str, endstats_data: dict[str, Any]
+    ) -> discord.Embed | None:
         """Build a separate embed for cumulative session endstats.
 
         Args:
@@ -563,9 +564,9 @@ class SessionEmbedBuilder:
         latest_date: str,
         team_1_name: str,
         team_2_name: str,
-        team_stats: List,
-        team_1_mvp_stats: Optional[tuple],
-        team_2_mvp_stats: Optional[tuple],
+        team_stats: list,
+        team_1_mvp_stats: tuple | None,
+        team_2_mvp_stats: tuple | None,
         team_1_score: int,
         team_2_score: int,
         hardcoded_teams: bool
@@ -637,8 +638,8 @@ class SessionEmbedBuilder:
         latest_date: str,
         team_1_name: str,
         team_2_name: str,
-        team_1_players_list: List,
-        team_2_players_list: List,
+        team_1_players_list: list,
+        team_2_players_list: list,
         total_rounds: int,
         total_maps: int,
         unique_maps: int,
@@ -711,7 +712,7 @@ class SessionEmbedBuilder:
     async def build_dpm_analytics_embed(
         self,
         latest_date: str,
-        dpm_leaders: List
+        dpm_leaders: list
     ) -> discord.Embed:
         """Build DPM analytics embed with leaderboard and insights."""
         embed = discord.Embed(
@@ -750,8 +751,8 @@ class SessionEmbedBuilder:
     async def build_weapon_mastery_embed(
         self,
         latest_date: str,
-        player_weapons: List,
-        player_revives_raw: List
+        player_weapons: list,
+        player_revives_raw: list
     ) -> discord.Embed:
         """Build weapon mastery embed with per-player breakdown."""
         embed = discord.Embed(
@@ -800,7 +801,7 @@ class SessionEmbedBuilder:
 
     async def build_special_awards_embed(
         self,
-        chaos_awards_data: List
+        chaos_awards_data: list
     ) -> discord.Embed:
         """Build special awards embed with chaos stats."""
         embed = discord.Embed(

@@ -19,7 +19,7 @@ repos:
         exclude: '.env.example|docs/.*'
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.0
+    rev: v0.15.4
     hooks:
       - id: ruff
-        args: ['--select', 'E,F,W', '--ignore', 'E501,E402', '--fix']
+        args: ['--fix']

@@ -6,20 +6,29 @@ Extracted from api.py to reduce file size and improve maintainability.
 
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict, Any
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from bot.core.season_manager import SeasonManager
+from bot.core.utils import escape_like_pattern
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
-from bot.core.season_manager import SeasonManager
 from website.backend.logging_config import get_app_logger
 from website.backend.routers.api_helpers import (
-    normalize_weapon_key as _normalize_weapon_key,
     clean_weapon_name as _clean_weapon_name,
+)
+from website.backend.routers.api_helpers import (
     normalize_map_name as _normalize_map_name,
-    resolve_player_guid,
-    resolve_display_name,
+)
+from website.backend.routers.api_helpers import (
+    normalize_weapon_key as _normalize_weapon_key,
+)
+from website.backend.routers.api_helpers import (
     resolve_alias_guid_map,
+    resolve_display_name,
     resolve_name_guid_map,
+    resolve_player_guid,
 )
 
 router = APIRouter()
@@ -36,14 +45,14 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
         .strftime("%Y-%m-%d")
     )
 
-    async def safe_val(query: str, params: Optional[tuple] = None, default=0):
+    async def safe_val(query: str, params: tuple | None = None, default=0):
         try:
             return await db.fetch_val(query, params)
         except Exception as e:
             logger.warning("[overview] query failed: %s", e)
             return default
 
-    async def safe_one(query: str, params: Optional[tuple] = None):
+    async def safe_one(query: str, params: tuple | None = None):
         try:
             return await db.fetch_one(query, params)
         except Exception as e:
@@ -607,18 +616,18 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
     start_str = start_date.strftime("%Y-%m-%d")
     end_str = end_date.strftime("%Y-%m-%d")
 
-    async def safe_val(query: str, params: Optional[tuple] = None, default=0):
+    async def safe_val(query: str, params: tuple | None = None, default=0):
         try:
             return await db.fetch_val(query, params)
         except Exception as e:
-            print(f"[season_summary] query failed: {e}")
+            logger.error(f"[season_summary] query failed: {e}")
             return default
 
-    async def safe_one(query: str, params: Optional[tuple] = None):
+    async def safe_one(query: str, params: tuple | None = None):
         try:
             return await db.fetch_one(query, params)
         except Exception as e:
-            print(f"[season_summary] query failed: {e}")
+            logger.error(f"[season_summary] query failed: {e}")
             return None
 
     round_status_clause = "AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)"
@@ -693,7 +702,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             (start_str, end_str),
         )
     except Exception as e:
-        print(f"[season_summary] round_status filter failed, retrying fallback: {e}")
+        logger.warning(f"[season_summary] round_status filter failed, retrying fallback: {e}")
 
         rounds_count = await safe_val(
             """
@@ -1079,7 +1088,7 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
 
         return maps
     except Exception as e:
-        print(f"Error fetching map stats: {e}")
+        logger.error(f"Error fetching map stats: {e}")
         return []
 
 
@@ -1135,7 +1144,7 @@ async def get_weapon_stats(
     try:
         rows = await db.fetch_all(query, tuple(params))
     except Exception as e:
-        print(f"Error fetching weapon stats: {e}")
+        logger.error(f"Error fetching weapon stats: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if not rows:
@@ -1239,7 +1248,7 @@ async def get_weapon_hall_of_fame(
     try:
         rows = await db.fetch_all(query, tuple(params))
     except Exception as e:
-        print(f"Error fetching weapon hall of fame: {e}")
+        logger.error(f"Error fetching weapon hall of fame: {e}")
         return {"period": period, "leaders": {}}
 
     leaders = {}
@@ -1276,8 +1285,8 @@ async def get_weapon_stats_by_player(
     period: str = "all",
     player_limit: int = 25,
     weapon_limit: int = 5,
-    player_guid: Optional[str] = None,
-    gaming_session_id: Optional[int] = None,
+    player_guid: str | None = None,
+    gaming_session_id: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -1285,7 +1294,7 @@ async def get_weapon_stats_by_player(
     Useful for comprehensive weapon mastery views.
     """
     where_clause = "WHERE weapon_name IS NOT NULL"
-    params: List[Any] = []
+    params: list[Any] = []
     param_idx = 1
 
     # Session-scoped: filter to rounds in the given gaming session
@@ -1339,10 +1348,10 @@ async def get_weapon_stats_by_player(
     try:
         rows = await db.fetch_all(query, tuple(params))
     except Exception as e:
-        print(f"Error fetching weapon stats by player: {e}")
+        logger.error(f"Error fetching weapon stats by player: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
-    players: Dict[str, Dict[str, Any]] = {}
+    players: dict[str, dict[str, Any]] = {}
     for row in rows:
         guid = row[0]
         if not guid:
@@ -1483,7 +1492,7 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
     try:
         rows = await db.fetch_all(query, (round_date, map_name, round_number))
     except Exception as e:
-        print(f"Error fetching match details: {e}")
+        logger.error(f"Error fetching match details: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if not rows:
@@ -1657,7 +1666,7 @@ async def get_records(
                     for row in rows
                 ]
         except Exception as e:
-            print(f"Error fetching record for {key}: {e}")
+            logger.error(f"Error fetching record for {key}: {e}")
             results[key] = []
 
     return results
@@ -1886,8 +1895,8 @@ async def get_round_vs_stats(round_id: int, db: DatabaseAdapter = Depends(get_db
 async def get_player_vs_stats(
     guid: str,
     scope: str = "all",
-    round_id: Optional[int] = None,
-    session_id: Optional[int] = None,
+    round_id: int | None = None,
+    session_id: int | None = None,
     limit: int = Query(default=10, le=50),
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -2297,7 +2306,7 @@ async def list_awards(
             param_idx += 1
         else:
             where_clauses.append(f"ra.player_name ILIKE ${param_idx}")
-            params.append(f"%{player}%")
+            params.append(f"%{escape_like_pattern(player)}%")
             param_idx += 1
 
     if award_type:
@@ -2668,9 +2677,9 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
 @router.get("/hall-of-fame")
 async def get_hall_of_fame(
     period: str = "all_time",
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    season_id: Optional[int] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    season_id: int | None = None,
     limit: int = 10,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -2908,7 +2917,7 @@ async def get_stats_trends(
             date_list.append(current.strftime("%Y-%m-%d"))
             current += timedelta(days=1)
 
-        result: Dict[str, Any] = {"dates": date_list}
+        result: dict[str, Any] = {"dates": date_list}
 
         if "rounds" in requested or "active_players" in requested or "kills" in requested:
             query = """
@@ -2954,7 +2963,7 @@ async def get_stats_trends(
                 ORDER BY play_count DESC
             """
             map_rows = await db.fetch_all(map_query, (start_date, end_date))
-            map_distribution: Dict[str, int] = {}
+            map_distribution: dict[str, int] = {}
             for row in map_rows:
                 normalized_map_name = _normalize_map_name(row[0])
                 if not normalized_map_name:

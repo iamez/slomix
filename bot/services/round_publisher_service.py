@@ -10,11 +10,12 @@ This service handles:
 Extracted from ultimate_bot.py as part of Week 9-10 refactoring.
 """
 
-import discord
-from datetime import datetime
 import logging
+from datetime import datetime
 
-from bot.core.correlation_context import set_correlation_id, get_correlation_id
+import discord
+
+from bot.core.correlation_context import get_correlation_id, set_correlation_id
 
 logger = logging.getLogger('RoundPublisherService')
 

@@ -7,7 +7,7 @@ This module handles automated tasks like:
 - Stats import orchestration
 """
 
-from .ssh_handler import SSHHandler
 from .file_tracker import FileTracker
+from .ssh_handler import SSHHandler
 
 __all__ = ['SSHHandler', 'FileTracker']

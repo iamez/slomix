@@ -21,7 +21,6 @@ import shlex
 import socket
 import tempfile
 from datetime import datetime
-from typing import Tuple
 
 import discord
 import paramiko
@@ -121,7 +120,7 @@ class ETLegacyRCON:
             self.connect()
 
         # ET:Legacy RCON protocol: "\xFF\xFF\xFF\xFFrcon PASSWORD COMMAND"
-        packet = f"\xFF\xFF\xFF\xFFrcon {self.password} {command}".encode('utf-8')
+        packet = f"\xFF\xFF\xFF\xFFrcon {self.password} {command}".encode()
 
         try:
             self.socket.sendto(packet, (self.host, self.port))
@@ -220,7 +219,7 @@ class ServerControl(commands.Cog):
         )
         return ssh
 
-    def execute_ssh_command(self, command: str, timeout: int = 30) -> Tuple[str, str, int]:
+    def execute_ssh_command(self, command: str, timeout: int = 30) -> tuple[str, str, int]:
         """Execute SSH command and return (stdout, stderr, exit_code)"""
         ssh = self.get_ssh_client()
         try:
@@ -244,7 +243,7 @@ class ServerControl(commands.Cog):
         try:
             reaction, user = await self.bot.wait_for('reaction_add', timeout=timeout, check=check)
             return str(reaction.emoji) == '✅'
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await ctx.send("❌ Confirmation timeout - action cancelled")
             return False
 

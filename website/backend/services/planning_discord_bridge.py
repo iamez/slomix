@@ -22,7 +22,7 @@ class PlanningDiscordBridge:
     timeout_seconds: float = 10.0
 
     @classmethod
-    def from_env(cls) -> "PlanningDiscordBridge":
+    def from_env(cls) -> PlanningDiscordBridge:
         enabled = os.getenv("AVAILABILITY_PLANNING_DISCORD_CREATE_THREAD", "false").lower() == "true"
         bot_token = (
             os.getenv("AVAILABILITY_PLANNING_DISCORD_BOT_TOKEN", "").strip()

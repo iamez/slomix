@@ -6,7 +6,7 @@ from bot.community_stats_parser import C0RNP0RN3StatsParser
 
 def test_r2_differential_death_time():
     """Test that R2 death time is calculated by subtraction, not using cumulative ratio."""
-    
+
     # Test data simulating Round 1 and Round 2 with death time
     r1_player = {
         'name': 'qmr',
@@ -92,7 +92,7 @@ def test_r2_differential_death_time():
 
     # Verify
     all_pass = True
-    
+
     if abs(actual_time - expected_r2_time) > 0.01:
         print(f'❌ FAIL: time_played_minutes {actual_time} != expected {expected_r2_time}')
         all_pass = False
@@ -123,7 +123,7 @@ def test_r2_differential_death_time():
 
 def test_impossible_death_time_capped():
     """Test that impossible death times (>100%) are capped correctly."""
-    
+
     # Simulate the bug scenario: R2 cumulative has more death time than play time
     r1_player = {
         'name': 'buggy_player',
@@ -161,7 +161,7 @@ def test_impossible_death_time_capped():
 
     print()
     print('=== Edge Case: Near 100% Death Time ===')
-    
+
     parser = C0RNP0RN3StatsParser()
     r1_data = {
         'players': [r1_player],
@@ -206,67 +206,67 @@ def test_impossible_death_time_capped():
 def test_real_stats_file():
     """Test parsing an actual stats file that had the bug."""
     import os
-    
+
     print()
     print('=== Testing Real Stats File ===')
-    
+
     # Look for a stats file pair (R1 and R2)
     stats_dir = 'local_stats'
     if not os.path.exists(stats_dir):
         print('⚠️  SKIP: local_stats directory not found')
         return True
-    
+
     # Find any round-1 and round-2 pair
     files = os.listdir(stats_dir)
     round_1_files = [f for f in files if 'round-1' in f and f.endswith('.txt')]
-    
+
     if not round_1_files:
         print('⚠️  SKIP: No round-1 files found')
         return True
-    
+
     # Take the first one
     r1_file = round_1_files[0]
     r2_file = r1_file.replace('round-1', 'round-2')
-    
+
     r1_path = os.path.join(stats_dir, r1_file)
     r2_path = os.path.join(stats_dir, r2_file)
-    
+
     if not os.path.exists(r2_path):
         print(f'⚠️  SKIP: No matching round-2 file for {r1_file}')
         return True
-    
+
     print(f'Testing: {r1_file} + {r2_file}')
-    
+
     parser = C0RNP0RN3StatsParser()
-    
+
     # Parse both files
     r1_data = parser.parse_file(r1_path)
     r2_cumulative = parser.parse_file(r2_path)
-    
+
     if not r1_data.get('success') or not r2_cumulative.get('success'):
         print('⚠️  SKIP: Failed to parse stats files')
         return True
-    
+
     # Calculate R2 differential
     r2_only = parser.calculate_round_2_differential(r1_data, r2_cumulative)
-    
+
     # Check all players for impossible death ratios
     all_pass = True
     for player in r2_only['players']:
         ratio = player['objective_stats'].get('time_dead_ratio', 0)
         dead_mins = player['objective_stats'].get('time_dead_minutes', 0)
         played_mins = player['objective_stats'].get('time_played_minutes', 0)
-        
+
         if ratio > 100.0:
             print(f'❌ FAIL: {player["name"]} has {ratio:.1f}% death ratio (>{100}%)')
             all_pass = False
         elif dead_mins > played_mins and played_mins > 0:
             print(f'❌ FAIL: {player["name"]} dead {dead_mins:.1f} min > played {played_mins:.1f} min')
             all_pass = False
-    
+
     if all_pass:
         print(f'✅ PASS: All {len(r2_only["players"])} players have valid death times')
-    
+
     return all_pass
 
 
@@ -274,24 +274,24 @@ if __name__ == '__main__':
     print('=' * 60)
     print('DEATH TIME FIX TESTS')
     print('=' * 60)
-    
+
     results = []
-    
+
     results.append(('R2 Differential Calculation', test_r2_differential_death_time()))
     results.append(('100% Cap Test', test_impossible_death_time_capped()))
     results.append(('Real Stats File', test_real_stats_file()))
-    
+
     print()
     print('=' * 60)
     print('SUMMARY')
     print('=' * 60)
-    
+
     all_passed = True
     for name, passed in results:
         status = '✅ PASS' if passed else '❌ FAIL'
         print(f'{status}: {name}')
         if not passed:
             all_passed = False
-    
+
     print()
     print('OVERALL:', '✅ ALL TESTS PASSED' if all_passed else '❌ SOME TESTS FAILED')

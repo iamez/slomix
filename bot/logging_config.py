@@ -6,8 +6,8 @@ Implements rotating file handlers, multiple log levels, and structured logging
 import logging
 import logging.handlers
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # Create logs directory if it doesn't exist
 LOGS_DIR = Path(__file__).parent.parent / "logs"

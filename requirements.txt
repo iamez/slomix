@@ -20,3 +20,4 @@ trueskill==0.4.5
 redis==7.2.1
 prometheus-client==0.24.1
 prometheus-fastapi-instrumentator==7.1.0
+slowapi==0.1.9

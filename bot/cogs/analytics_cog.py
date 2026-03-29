@@ -9,7 +9,6 @@ Advanced player analytics commands:
 """
 
 import logging
-from typing import Optional
 
 import discord
 from discord.ext import commands
@@ -30,7 +29,7 @@ class AnalyticsCog(commands.Cog):
         self.analytics = PlayerAnalyticsService(bot.db_adapter)
         logger.info("AnalyticsCog initialized")
 
-    async def _resolve_player_guid(self, player_name: str) -> Optional[str]:
+    async def _resolve_player_guid(self, player_name: str) -> str | None:
         return await resolve_player_guid(self.bot.db_adapter, player_name)
 
     @commands.command(name="consistency", aliases=["reliable", "variance"])

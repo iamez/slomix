@@ -4,6 +4,7 @@ Player Rivalries API — Nemesis, Prey, Rival detection and H2H analysis.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.requests import Request
+
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger

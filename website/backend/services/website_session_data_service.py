@@ -1,5 +1,5 @@
-from typing import List, Dict
 from datetime import datetime
+
 from bot.services.session_data_service import SessionDataService
 
 
@@ -44,7 +44,7 @@ class WebsiteSessionDataService(SessionDataService):
         except Exception:
             return str(date_val)
 
-    async def get_recent_matches(self, limit: int = 10) -> List[Dict]:
+    async def get_recent_matches(self, limit: int = 10) -> list[dict]:
         """
         Get recent matches with both teams' players.
         Groups by gaming_session_id and map for a full match view.
@@ -101,14 +101,14 @@ class WebsiteSessionDataService(SessionDataService):
             rows = await self.db_adapter.fetch_all(fallback_query, (limit,))
 
         matches = []
-        session_round_ids: Dict[int, List[int]] = {}
+        session_round_ids: dict[int, list[int]] = {}
         for row in rows:
             gaming_session_id = row[7]
             if gaming_session_id is None:
                 continue
             session_round_ids.setdefault(gaming_session_id, []).append(row[0])
 
-        team_cache: Dict[int, Dict] = {}
+        team_cache: dict[int, dict] = {}
         for row in rows:
             round_id = row[0]
             map_name = row[1]
@@ -261,7 +261,7 @@ class WebsiteSessionDataService(SessionDataService):
         else:
             return f"{player_count // 2}v{player_count // 2}"
 
-    async def get_session_matches(self, date: str) -> List[Dict]:
+    async def get_session_matches(self, date: str) -> list[dict]:
         """
         Get all matches for a specific session date.
         """
@@ -292,7 +292,7 @@ class WebsiteSessionDataService(SessionDataService):
 
         return matches
 
-    async def get_session_matches_by_round_ids(self, session_ids: List[int]) -> List[Dict]:
+    async def get_session_matches_by_round_ids(self, session_ids: list[int]) -> list[dict]:
         """
         Get matches for a specific gaming session by round IDs.
 

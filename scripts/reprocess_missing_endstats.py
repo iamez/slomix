@@ -11,8 +11,8 @@ Safety:
   - Only processes files that have no existing endstats for the correct round
   - Resolves player GUIDs from player_aliases
 """
-import asyncio
 import argparse
+import asyncio
 import logging
 import os
 import sys
@@ -185,7 +185,7 @@ async def main():
         port=int(os.getenv("DB_PORT", "5432")),
         database=os.getenv("DB_NAME", "etlegacy"),
         user=os.getenv("DB_USER", "etlegacy_user"),
-        password=os.getenv("DB_PASSWORD", "etlegacy_secure_2025"),
+        password=os.getenv("DB_PASSWORD"),
         min_pool_size=1,
         max_pool_size=3,
     )

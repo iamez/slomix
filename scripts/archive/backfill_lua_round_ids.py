@@ -5,18 +5,17 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 from datetime import datetime
-from typing import Optional
 
 from bot.config import BotConfig
 from bot.core.database_adapter import PostgreSQLAdapter
 from bot.core.round_linker import resolve_round_id
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
-def _to_dt(unix_ts: Optional[int]) -> Optional[datetime]:
+def _to_dt(unix_ts: int | None) -> datetime | None:
     if not unix_ts:
         return None
     try:
@@ -25,7 +24,7 @@ def _to_dt(unix_ts: Optional[int]) -> Optional[datetime]:
         return None
 
 
-async def backfill(limit: Optional[int], dry_run: bool) -> int:
+async def backfill(limit: int | None, dry_run: bool) -> int:
     config = BotConfig()
     adapter = PostgreSQLAdapter(
         host=config.postgres_host,

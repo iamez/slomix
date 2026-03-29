@@ -11,14 +11,16 @@ Usage:
 import argparse
 import json
 import math
+import os
+
 import psycopg2
 
 DB_PARAMS = {
-    "host": "127.0.0.1",
-    "port": 5432,
-    "dbname": "etlegacy",
-    "user": "etlegacy_user",
-    "password": "etlegacy_secure_2025",
+    "host": os.getenv("DB_HOST", "127.0.0.1"),
+    "port": int(os.getenv("DB_PORT", "5432")),
+    "dbname": os.getenv("DB_NAME", "etlegacy"),
+    "user": os.getenv("DB_USER", "etlegacy_user"),
+    "password": os.getenv("DB_PASSWORD"),
 }
 
 SAMPLE_INTERVAL = 0.2  # 200ms
@@ -102,10 +104,7 @@ def main():
 
                 if not path:
                     # No path data — set zeros
-                    metrics = {k: 0.0 for k in [
-                        "peak_speed", "stance_standing_sec", "stance_crouching_sec",
-                        "stance_prone_sec", "sprint_sec", "post_spawn_distance",
-                    ]}
+                    metrics = dict.fromkeys(["peak_speed", "stance_standing_sec", "stance_crouching_sec", "stance_prone_sec", "sprint_sec", "post_spawn_distance"], 0.0)
                 else:
                     metrics = compute_metrics(path)
 

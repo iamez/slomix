@@ -24,7 +24,8 @@ import os
 import shlex
 from datetime import datetime, timedelta
 from pathlib import PurePosixPath
-from typing import Optional, Dict, Any, Tuple
+from typing import Any
+
 import discord
 
 # Import services for comprehensive stats display
@@ -69,10 +70,10 @@ class SSHMonitor:
         self.admin_channel_id = bot.admin_channel_id if hasattr(bot, 'admin_channel_id') else 0
 
         # Statistics (for monitoring health)
-        self.last_check_time: Optional[datetime] = None
+        self.last_check_time: datetime | None = None
         self.files_processed_count = 0
         self.errors_count = 0
-        self.last_error: Optional[str] = None
+        self.last_error: str | None = None
 
         # Monitoring state
         self.is_monitoring = False
@@ -95,7 +96,7 @@ class SSHMonitor:
         # Grace period: continue checking SSH for X minutes after players leave voice
         # (catches files that appear shortly after game ends)
         self.grace_period_minutes = bot.config.ssh_grace_period_minutes
-        self.last_voice_activity_time: Optional[datetime] = None
+        self.last_voice_activity_time: datetime | None = None
 
         logger.info("🔄 SSH Monitor service initialized")
         if self.voice_conditional:
@@ -284,7 +285,7 @@ class SSHMonitor:
 
         logger.info("🛑 Monitoring loop stopped")
 
-    def _parse_file_timestamp(self, filename: str) -> Optional[datetime]:
+    def _parse_file_timestamp(self, filename: str) -> datetime | None:
         """
         Parse timestamp from filename.
 
@@ -374,6 +375,7 @@ class SSHMonitor:
     def _list_remote_files_sync(self) -> list:
         """List files in remote SSH directory (synchronous - use in executor)"""
         import paramiko
+
         from bot.automation.ssh_handler import configure_ssh_host_key_policy
 
         ssh = None
@@ -471,10 +473,11 @@ class SSHMonitor:
             self.last_error = str(e)
             logger.error(f"❌ Error processing {filename}: {e}", exc_info=True)
 
-    def _download_file_sync(self, filename: str) -> Tuple[Optional[str], float]:
+    def _download_file_sync(self, filename: str) -> tuple[str | None, float]:
         """Download file from remote server (synchronous - use in executor)"""
         import paramiko
         from scp import SCPClient
+
         from bot.automation.ssh_handler import configure_ssh_host_key_policy
 
         download_start = datetime.now()
@@ -531,7 +534,7 @@ class SSHMonitor:
                     logger.debug(f"SSH close error during cleanup: {e}")
 
     @staticmethod
-    def _sanitize_stats_filename(filename: str) -> Optional[str]:
+    def _sanitize_stats_filename(filename: str) -> str | None:
         raw = (filename or "").strip()
         safe = os.path.basename(raw)
         if not safe or safe in {".", ".."}:
@@ -543,7 +546,7 @@ class SSHMonitor:
             return None
         return safe if len(safe) <= 255 else None
 
-    async def _download_file(self, filename: str) -> Optional[str]:
+    async def _download_file(self, filename: str) -> str | None:
         """Download file from remote server (async wrapper)"""
         loop = asyncio.get_running_loop()
         local_path, download_duration = await loop.run_in_executor(
@@ -611,7 +614,7 @@ class SSHMonitor:
         except Exception as e:
             logger.error(f"❌ Error posting stats: {e}", exc_info=True)
 
-    async def _get_latest_round_data(self) -> Optional[Dict[str, Any]]:
+    async def _get_latest_round_data(self) -> dict[str, Any] | None:
         """Get data for the most recently imported round"""
         try:
             # Get latest round from rounds table (exclude R0 match summaries)
@@ -698,7 +701,7 @@ class SSHMonitor:
             logger.error(f"❌ Error getting round data: {e}", exc_info=True)
             return None
 
-    async def _create_round_embed(self, data: Dict[str, Any], filename: str) -> discord.Embed:
+    async def _create_round_embed(self, data: dict[str, Any], filename: str) -> discord.Embed:
         """Create Discord embed for round stats with comprehensive 3-line format"""
         embed = discord.Embed(
             title=f"🎮 Round {data['round_num']} Complete!",
@@ -872,7 +875,7 @@ class SSHMonitor:
         except Exception as e:
             logger.error(f"❌ Error posting match summary: {e}", exc_info=True)
 
-    async def _get_match_summary_data(self, map_name: str) -> Optional[Dict[str, Any]]:
+    async def _get_match_summary_data(self, map_name: str) -> dict[str, Any] | None:
         """Get match summary data (round_number=0) from database"""
         try:
             # Get the match summary round (round_number = 0)
@@ -953,7 +956,7 @@ class SSHMonitor:
             logger.error(f"❌ Error getting match summary: {e}")
             return None
 
-    async def _create_match_summary_embed(self, data: Dict[str, Any], filename: str, map_name: str) -> discord.Embed:
+    async def _create_match_summary_embed(self, data: dict[str, Any], filename: str, map_name: str) -> discord.Embed:
         """Create Discord embed for match summary with comprehensive 3-line format"""
         embed = discord.Embed(
             title=f"🏆 Match Complete - {map_name}",
@@ -1106,7 +1109,7 @@ class SSHMonitor:
 
         return embed
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get monitoring statistics"""
         avg_check_time = sum(self.check_times) / len(self.check_times) if self.check_times else 0
         avg_download_time = sum(self.download_times) / len(self.download_times) if self.download_times else 0

@@ -7,12 +7,12 @@ Usage:
   python scripts/rcon_command.py "map_restart 0"
 """
 
+import logging
 import os
 import socket
 import sys
 from pathlib import Path
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ def load_env(path: Path) -> None:
 
 
 def send_rcon(host: str, port: int, password: str, command: str) -> str:
-    packet = f"\xFF\xFF\xFF\xFFrcon {password} {command}".encode("utf-8")
+    packet = f"\xFF\xFF\xFF\xFFrcon {password} {command}".encode()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(5.0)
     try:

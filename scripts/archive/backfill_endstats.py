@@ -17,17 +17,16 @@ from __future__ import annotations
 import argparse
 import asyncio
 import glob
+import logging
 import os
 import re
-from datetime import datetime
-from typing import Iterable, Optional, Tuple
+from typing import Iterable
 
 from bot.config import BotConfig
 from bot.core.database_adapter import PostgreSQLAdapter
 from bot.core.round_linker import resolve_round_id
 from bot.endstats_parser import parse_endstats_file
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 FILENAME_RE = re.compile(
@@ -38,10 +37,10 @@ FILENAME_RE = re.compile(
 def iter_endstats_files(
     stats_dir: str,
     *,
-    date_exact: Optional[str] = None,
-    date_since: Optional[str] = None,
-    date_until: Optional[str] = None,
-    limit: Optional[int] = None,
+    date_exact: str | None = None,
+    date_since: str | None = None,
+    date_until: str | None = None,
+    limit: int | None = None,
 ) -> Iterable[str]:
     files = sorted(glob.glob(os.path.join(stats_dir, "*-endstats.txt")))
     count = 0
@@ -80,10 +79,10 @@ def _parse_args() -> argparse.Namespace:
 async def backfill_postgres(
     stats_dir: str,
     *,
-    date_exact: Optional[str],
-    date_since: Optional[str],
-    date_until: Optional[str],
-    limit: Optional[int],
+    date_exact: str | None,
+    date_since: str | None,
+    date_until: str | None,
+    limit: int | None,
     dry_run: bool,
 ) -> int:
     config = BotConfig()

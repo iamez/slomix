@@ -13,7 +13,6 @@ This replaces the simple Round 1 seeding approach with a smarter algorithm.
 
 import json
 import logging
-from typing import Dict, Tuple
 from collections import defaultdict
 from dataclasses import dataclass
 
@@ -68,7 +67,7 @@ class AdvancedTeamDetector:
         self,
         session_date: str,
         use_historical: bool = True
-    ) -> Dict[str, Dict]:
+    ) -> dict[str, dict]:
         """
         Main detection method - combines all strategies
 
@@ -141,7 +140,7 @@ class AdvancedTeamDetector:
     async def _get_session_player_data(
         self,
         session_date: str
-    ) -> Dict[str, Dict]:
+    ) -> dict[str, dict]:
         """Get all player participation data for the session"""
         query = """
             SELECT
@@ -181,9 +180,9 @@ class AdvancedTeamDetector:
 
     async def _analyze_historical_patterns(
         self,
-        current_players: Dict[str, Dict],
+        current_players: dict[str, dict],
         session_date: str
-    ) -> Dict[str, PlayerTeamScore]:
+    ) -> dict[str, PlayerTeamScore]:
         """
         Analyze previous sessions to find recurring team patterns
 
@@ -288,8 +287,8 @@ class AdvancedTeamDetector:
     def _analyze_multi_round_consensus(
         self,
         session_date: str,
-        players_data: Dict[str, Dict]
-    ) -> Dict[str, PlayerTeamScore]:
+        players_data: dict[str, dict]
+    ) -> dict[str, PlayerTeamScore]:
         """
         Analyze all rounds to find consensus team assignments
 
@@ -362,7 +361,7 @@ class AdvancedTeamDetector:
                    f"{players_data[anchor_b]['name']} (play together {best_ratio:.1%} of time)")
 
         # Score all players based on co-occurrence with anchor_a
-        for guid in players_data.keys():
+        for guid in players_data:
             score = PlayerTeamScore(
                 player_guid=guid,
                 player_name=players_data[guid]['name']
@@ -408,8 +407,8 @@ class AdvancedTeamDetector:
     def _analyze_cooccurrence(
         self,
         session_date: str,
-        players_data: Dict[str, Dict]
-    ) -> Dict[str, PlayerTeamScore]:
+        players_data: dict[str, dict]
+    ) -> dict[str, PlayerTeamScore]:
         """
         Co-occurrence analysis (similar to existing method but improved)
 
@@ -466,7 +465,7 @@ class AdvancedTeamDetector:
             return component
 
         components = []
-        for guid in players_data.keys():
+        for guid in players_data:
             if guid not in visited:
                 comp = get_component(guid)
                 if len(comp) > 1:
@@ -483,7 +482,7 @@ class AdvancedTeamDetector:
 
         # Score players
         scores = {}
-        for guid in players_data.keys():
+        for guid in players_data:
             score = PlayerTeamScore(
                 player_guid=guid,
                 player_name=players_data[guid]['name']
@@ -514,11 +513,11 @@ class AdvancedTeamDetector:
 
     def _combine_strategies(
         self,
-        players_data: Dict[str, Dict],
-        historical: Dict[str, PlayerTeamScore],
-        consensus: Dict[str, PlayerTeamScore],
-        cooccurrence: Dict[str, PlayerTeamScore]
-    ) -> Dict[str, PlayerTeamScore]:
+        players_data: dict[str, dict],
+        historical: dict[str, PlayerTeamScore],
+        consensus: dict[str, PlayerTeamScore],
+        cooccurrence: dict[str, PlayerTeamScore]
+    ) -> dict[str, PlayerTeamScore]:
         """Combine all strategy scores with weighted average"""
 
         combined_scores = {}
@@ -565,8 +564,8 @@ class AdvancedTeamDetector:
 
     def _cluster_into_teams(
         self,
-        player_scores: Dict[str, PlayerTeamScore]
-    ) -> Tuple[Dict, Dict, Dict]:
+        player_scores: dict[str, PlayerTeamScore]
+    ) -> tuple[dict, dict, dict]:
         """Cluster players into two teams based on scores"""
 
         team_a = {'guids': [], 'names': [], 'confidence': 0.0}

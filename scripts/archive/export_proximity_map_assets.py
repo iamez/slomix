@@ -10,16 +10,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
+import logging
+import zipfile
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-import zipfile
 
 from PIL import Image
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -163,7 +162,7 @@ def main() -> int:
         "meta": {
             "manifest": str(manifest_path),
             "etmain_dir": str(etmain_dir),
-            "map_count": len({k for k in maps.keys() if k == k.lower()}),
+            "map_count": len({k for k in maps if k == k.lower()}),
             "failures": failures,
         },
         "maps": maps,

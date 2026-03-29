@@ -6,6 +6,7 @@ GET /api/replay/round/{round_id}/positions?t={time_ms}
 GET /api/replay/round/{round_id}/paths?from={from_ms}&to={to_ms}
 """
 from fastapi import APIRouter, Depends, Query, Request
+
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger

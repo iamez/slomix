@@ -16,10 +16,12 @@ Milestone Categories:
 
 import logging
 from datetime import datetime
-from typing import List, Dict, Any, Optional, Set
+from typing import Any
+
 import discord
-from bot.services.player_display_name_service import PlayerDisplayNameService
+
 from bot.core.database_adapter import ensure_player_name_alias
+from bot.services.player_display_name_service import PlayerDisplayNameService
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +97,7 @@ class AchievementSystem:
             spam but means achievements could be re-notified after restart.
         """
         self.bot = bot
-        self.notified_achievements: Set[str] = set()  # Track what we've already notified
+        self.notified_achievements: set[str] = set()  # Track what we've already notified
         self._persistent_ledger_enabled = True
         logger.info("🏆 AchievementSystem initialized")
 
@@ -139,8 +141,8 @@ class AchievementSystem:
     async def check_player_achievements(
         self,
         player_guid: str,
-        channel: Optional[discord.TextChannel] = None
-    ) -> List[Dict[str, Any]]:
+        channel: discord.TextChannel | None = None
+    ) -> list[dict[str, Any]]:
         """
         Check if player hit any milestones and notify if needed.
 
@@ -297,7 +299,7 @@ class AchievementSystem:
 
     async def _send_achievement_notification(
         self,
-        achievement: Dict[str, Any],
+        achievement: dict[str, Any],
         channel: discord.TextChannel
     ) -> None:
         """

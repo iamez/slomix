@@ -11,12 +11,12 @@ Safety:
   - Validates every match against CE kill matrix before writing
   - Logs all changes for audit trail
 """
-import asyncio
 import argparse
+import asyncio
 import logging
-import sys
 import os
 import re
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bot.core.database_adapter import PostgreSQLAdapter as DatabaseAdapter
@@ -312,7 +312,7 @@ async def main():
         port=int(os.getenv("DB_PORT", "5432")),
         database=os.getenv("DB_NAME", "etlegacy"),
         user=os.getenv("DB_USER", "etlegacy_user"),
-        password=os.getenv("DB_PASSWORD", "etlegacy_secure_2025"),
+        password=os.getenv("DB_PASSWORD"),
         min_pool_size=1,
         max_pool_size=3,
     )

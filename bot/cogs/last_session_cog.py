@@ -11,7 +11,7 @@ This cog handles the !last_session command by delegating to specialized services
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import discord
 from discord.ext import commands
@@ -20,17 +20,17 @@ from bot.core.checks import is_admin, is_admin_channel, is_public_channel
 from bot.core.database_adapter import ensure_player_name_alias
 from bot.core.endstats_pagination_view import EndstatsPaginationView
 from bot.core.utils import sanitize_error_message
-from bot.stats import StatsCalculator
-from bot.services.session_data_service import SessionDataService
-from bot.services.stopwatch_scoring_service import StopwatchScoringService
-from bot.services.session_stats_aggregator import SessionStatsAggregator
-from bot.services.session_embed_builder import SessionEmbedBuilder
-from bot.services.session_graph_generator import SessionGraphGenerator
-from bot.services.session_view_handlers import SessionViewHandlers
+from bot.services.endstats_aggregator import EndstatsAggregator
 from bot.services.player_badge_service import PlayerBadgeService
 from bot.services.player_display_name_service import PlayerDisplayNameService
-from bot.services.endstats_aggregator import EndstatsAggregator
+from bot.services.session_data_service import SessionDataService
+from bot.services.session_embed_builder import SessionEmbedBuilder
+from bot.services.session_graph_generator import SessionGraphGenerator
+from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.session_timing_shadow_service import SessionTimingShadowService
+from bot.services.session_view_handlers import SessionViewHandlers
+from bot.services.stopwatch_scoring_service import StopwatchScoringService
+from bot.stats import StatsCalculator
 
 logger = logging.getLogger("bot.cogs.last_session")
 
@@ -383,7 +383,7 @@ class LastSessionCog(commands.Cog):
 
             # Calculate maps info
             rounds_played = len(sessions)
-            unique_maps = len(set(s[1] for s in sessions))
+            unique_maps = len({s[1] for s in sessions})
 
             # Build maps played string - each map played ONCE even if it has R1+R2
             # Count how many times each unique map appears (considering both rounds as 1 play)
@@ -670,9 +670,9 @@ class LastSessionCog(commands.Cog):
                 f"❌ Error auditing endstats: {sanitize_error_message(e)}"
             )
 
-    def _group_map_matches_for_endstats(self, sessions: List[Tuple]) -> List[Dict[str, Any]]:
+    def _group_map_matches_for_endstats(self, sessions: list[tuple]) -> list[dict[str, Any]]:
         """Group session rounds into map matches (R1/R2 pairs) preserving order."""
-        map_matches: List[Dict[str, Any]] = []
+        map_matches: list[dict[str, Any]] = []
         i = 0
         while i < len(sessions):
             round_id, map_name, round_num, actual_time = sessions[i]
@@ -697,8 +697,8 @@ class LastSessionCog(commands.Cog):
         return map_matches
 
     async def _fetch_endstats_round_data(
-        self, session_ids: List[int]
-    ) -> Dict[int, List[Dict[str, Any]]]:
+        self, session_ids: list[int]
+    ) -> dict[int, list[dict[str, Any]]]:
         if not session_ids:
             return {}
 
@@ -712,7 +712,7 @@ class LastSessionCog(commands.Cog):
         """
         awards_rows = await self.bot.db_adapter.fetch_all(awards_query, tuple(session_ids))
 
-        awards_by_round: Dict[int, List[Dict[str, Any]]] = {}
+        awards_by_round: dict[int, list[dict[str, Any]]] = {}
         for round_id, award_name, player_name, award_value, award_numeric in awards_rows:
             awards_by_round.setdefault(round_id, []).append(
                 {
@@ -728,9 +728,9 @@ class LastSessionCog(commands.Cog):
     async def _build_endstats_pages(
         self,
         latest_date: str,
-        sessions: List[Tuple],
-        session_ids: List[int],
-    ) -> Tuple[List[discord.Embed], List[discord.Embed]]:
+        sessions: list[tuple],
+        session_ids: list[int],
+    ) -> tuple[list[discord.Embed], list[discord.Embed]]:
         """Build endstats embeds for map-level and round-level pagination."""
         awards_by_round = await self._fetch_endstats_round_data(session_ids)
         map_matches = self._group_map_matches_for_endstats(sessions)
@@ -738,14 +738,14 @@ class LastSessionCog(commands.Cog):
         if not map_matches:
             return [], []
 
-        map_counts: Dict[str, int] = {}
+        map_counts: dict[str, int] = {}
         for match in map_matches:
             map_name = match["map_name"]
             map_counts[map_name] = map_counts.get(map_name, 0) + 1
 
-        map_occurrence: Dict[str, int] = {}
-        map_pages: List[discord.Embed] = []
-        round_pages: List[discord.Embed] = []
+        map_occurrence: dict[str, int] = {}
+        map_pages: list[discord.Embed] = []
+        round_pages: list[discord.Embed] = []
 
         for map_index, match in enumerate(map_matches, start=1):
             map_name = match["map_name"]
