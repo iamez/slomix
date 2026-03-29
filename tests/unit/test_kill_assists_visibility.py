@@ -3,7 +3,6 @@ Tests for kill_assists visibility in session stats aggregator and session graph 
 """
 from __future__ import annotations
 
-
 import pytest
 
 from bot.services.session_stats_aggregator import SessionStatsAggregator

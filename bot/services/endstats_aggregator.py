@@ -13,7 +13,7 @@ This service:
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 # Import award categories from endstats parser
 from bot.endstats_parser import AWARD_CATEGORIES
@@ -44,7 +44,7 @@ class EndstatsAggregator:
         self.db = db_adapter
         logger.debug("EndstatsAggregator initialized")
 
-    async def check_endstats_available(self, session_ids: List[int]) -> Tuple[bool, int, int]:
+    async def check_endstats_available(self, session_ids: list[int]) -> tuple[bool, int, int]:
         """Check if endstats data exists for any round in the session.
 
         Args:
@@ -69,8 +69,8 @@ class EndstatsAggregator:
         return rounds_with_endstats > 0, rounds_with_endstats, total_rounds
 
     async def aggregate_session_awards(
-        self, session_ids: List[int], session_ids_str: str
-    ) -> Dict[str, List[Tuple[str, str, float, int]]]:
+        self, session_ids: list[int], session_ids_str: str
+    ) -> dict[str, list[tuple[str, str, float, int]]]:
         """Aggregate awards across session rounds.
 
         Groups awards by award_name, summing numeric values and counting wins.
@@ -108,7 +108,7 @@ class EndstatsAggregator:
         results = await self.db.fetch_all(query, tuple(session_ids))
 
         # Group by award name
-        awards_by_name: Dict[str, List[Tuple[str, str, float, int]]] = {}
+        awards_by_name: dict[str, list[tuple[str, str, float, int]]] = {}
         for row in results:
             award_name = row[0]
             player_guid = row[1] or "unknown"
@@ -123,8 +123,8 @@ class EndstatsAggregator:
         return awards_by_name
 
     async def aggregate_session_vs_stats(
-        self, session_ids: List[int], session_ids_str: str
-    ) -> List[Tuple[str, str, int, int]]:
+        self, session_ids: list[int], session_ids_str: str
+    ) -> list[tuple[str, str, int, int]]:
         """Aggregate VS stats (player vs player matchups) across session rounds.
 
         Args:
@@ -167,8 +167,8 @@ class EndstatsAggregator:
         return vs_stats
 
     def _categorize_awards(
-        self, awards_by_name: Dict[str, List[Tuple[str, str, float, int]]]
-    ) -> Dict[str, Dict[str, List[Tuple[str, str, float, int]]]]:
+        self, awards_by_name: dict[str, list[tuple[str, str, float, int]]]
+    ) -> dict[str, dict[str, list[tuple[str, str, float, int]]]]:
         """Categorize awards by their category from AWARD_CATEGORIES.
 
         Args:
@@ -177,7 +177,7 @@ class EndstatsAggregator:
         Returns:
             Dict of category -> award_name -> player data
         """
-        categorized: Dict[str, Dict[str, List[Tuple[str, str, float, int]]]] = {}
+        categorized: dict[str, dict[str, list[tuple[str, str, float, int]]]] = {}
 
         # Build reverse lookup: award_name -> category
         award_to_category = {}
@@ -233,10 +233,10 @@ class EndstatsAggregator:
 
     def build_round_awards_display(
         self,
-        awards: List[Dict[str, Any]],
+        awards: list[dict[str, Any]],
         *,
-        max_per_category: Optional[int] = 2,
-        max_total: Optional[int] = 30,
+        max_per_category: int | None = 2,
+        max_total: int | None = 30,
     ) -> str:
         """
         Build a readable per-round awards display.
@@ -255,20 +255,20 @@ class EndstatsAggregator:
             for award_name in award_list:
                 award_to_category[award_name] = category
 
-        categorized: Dict[str, List[Dict[str, Any]]] = {}
+        categorized: dict[str, list[dict[str, Any]]] = {}
         for award in awards:
             category = award_to_category.get(award.get("name"), "other")
             categorized.setdefault(category, []).append(award)
 
         # Sort categories by display priority, then "other" last
         ordered_categories = sorted(
-            [c for c in categorized.keys() if c in CATEGORY_DISPLAY],
+            [c for c in categorized if c in CATEGORY_DISPLAY],
             key=lambda c: CATEGORY_DISPLAY[c][1],
         )
         if "other" in categorized:
             ordered_categories.append("other")
 
-        lines: List[str] = []
+        lines: list[str] = []
         total_lines = 0
 
         for category in ordered_categories:
@@ -308,8 +308,8 @@ class EndstatsAggregator:
         return "\n".join(lines)
 
     async def aggregate_session_endstats(
-        self, session_ids: List[int], session_ids_str: str
-    ) -> Dict[str, Any]:
+        self, session_ids: list[int], session_ids_str: str
+    ) -> dict[str, Any]:
         """Aggregate all endstats data for a session.
 
         This is the main entry point for the LastSessionCog.
@@ -350,7 +350,7 @@ class EndstatsAggregator:
         }
 
     def build_awards_display(
-        self, awards_by_category: Dict[str, Dict[str, List[Tuple[str, str, float, int]]]],
+        self, awards_by_category: dict[str, dict[str, list[tuple[str, str, float, int]]]],
         max_categories: int = 4,
         max_awards_per_category: int = 2
     ) -> str:
@@ -399,7 +399,7 @@ class EndstatsAggregator:
 
         return "\n".join(lines)
 
-    def build_vs_stats_display(self, vs_stats: List[Tuple[str, str, int, int]]) -> str:
+    def build_vs_stats_display(self, vs_stats: list[tuple[str, str, int, int]]) -> str:
         """Build compact display string for VS stats.
 
         Args:

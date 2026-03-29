@@ -178,7 +178,8 @@ def test_parse_focus_fire_line_too_few_fields():
 
 def test_focus_fire_section_detection():
     """parse_file should detect # FOCUS_FIRE section and parse its lines."""
-    import tempfile, os
+    import os
+    import tempfile
     content = """# map=oasis
 # round=1
 # round_start_unix=1700000000

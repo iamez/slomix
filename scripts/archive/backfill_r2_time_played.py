@@ -40,9 +40,10 @@ from pathlib import Path
 # Add parent directory to path so we can import bot modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import logging
+
 from bot.core.database_adapter import DatabaseAdapter
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ class R2TimeFixer:
         These are the R2 rounds where the header's actual_time is inflated
         (cumulative server time instead of round duration).
         """
-        query = """
+        query = r"""
             SELECT
                 r.id,
                 r.map_name,

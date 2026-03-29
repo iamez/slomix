@@ -16,12 +16,11 @@ Commands:
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 import discord
 from discord.ext import commands
 
-from bot.core.checks import is_owner, is_admin
+from bot.core.checks import is_admin, is_owner
 
 logger = logging.getLogger("PermissionManagement")
 
@@ -35,7 +34,7 @@ class PermissionManagement(commands.Cog):
 
     @is_owner()
     @commands.command(name='admin_add', aliases=['perm_add'])
-    async def add_admin(self, ctx, user: discord.Member, tier: str, *, reason: Optional[str] = "No reason provided"):
+    async def add_admin(self, ctx, user: discord.Member, tier: str, *, reason: str | None = "No reason provided"):
         """➕ Add user to permission whitelist (Root only)
 
         Usage: !admin_add @user <tier> [reason]
@@ -108,7 +107,7 @@ class PermissionManagement(commands.Cog):
 
     @is_owner()
     @commands.command(name='admin_remove', aliases=['perm_remove'])
-    async def remove_admin(self, ctx, user: discord.Member, *, reason: Optional[str] = "No reason provided"):
+    async def remove_admin(self, ctx, user: discord.Member, *, reason: str | None = "No reason provided"):
         """➖ Remove user from permission whitelist (Root only)
 
         Usage: !admin_remove @user [reason]

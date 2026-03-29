@@ -10,7 +10,6 @@ Commands:
 """
 
 import logging
-from typing import List
 
 import discord
 from discord.ext import commands
@@ -31,7 +30,7 @@ class MatchupCog(commands.Cog):
         self.matchup_service = MatchupAnalyticsService(bot.db_adapter)
         logger.info("MatchupCog initialized")
 
-    async def _resolve_player_guids(self, player_names: List[str]) -> List[str]:
+    async def _resolve_player_guids(self, player_names: list[str]) -> list[str]:
         return await resolve_player_guids(self.bot.db_adapter, player_names)
 
     async def _get_player_name(self, guid: str) -> str:

@@ -6,7 +6,7 @@ without circular imports.
 """
 
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Any
 
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
@@ -213,7 +213,7 @@ def calculate_player_achievements(kills: int, games: int, kd: float) -> dict:
 async def resolve_player_guid(
     db: DatabaseAdapter,
     identifier: str,
-) -> Optional[str]:
+) -> str | None:
     """
     Resolve a player GUID from either a GUID or a player name/alias.
     Returns None if no match is found.
@@ -301,8 +301,8 @@ async def resolve_display_name(
 
 async def batch_resolve_display_names(
     db: DatabaseAdapter,
-    guid_fallback_pairs: List[Tuple[str, str]],
-) -> Dict[str, str]:
+    guid_fallback_pairs: list[tuple[str, str]],
+) -> dict[str, str]:
     """
     Batch-resolve display names for multiple GUIDs in minimal queries.
     Returns a dict mapping guid -> display_name.
@@ -312,7 +312,7 @@ async def batch_resolve_display_names(
 
     guids = [g for g, _ in guid_fallback_pairs]
     fallback_map = {g: f for g, f in guid_fallback_pairs}
-    result: Dict[str, str] = {}
+    result: dict[str, str] = {}
 
     # 1) Batch from player_links
     try:
@@ -378,8 +378,8 @@ async def batch_resolve_display_names(
 
 async def resolve_alias_guid_map(
     db: DatabaseAdapter,
-    names: List[str],
-) -> Dict[str, str]:
+    names: list[str],
+) -> dict[str, str]:
     """
     Resolve a map of lowercase alias -> guid for a list of player names.
     Uses player_aliases when available; returns empty dict on failure.
@@ -409,8 +409,8 @@ async def resolve_alias_guid_map(
 
 async def resolve_name_guid_map(
     db: DatabaseAdapter,
-    names: List[str],
-) -> Dict[str, str]:
+    names: list[str],
+) -> dict[str, str]:
     """
     Resolve a map of lowercase name -> guid using player_comprehensive_stats.
     Matches against both player_name and clean_name; prefers most recent rows.
@@ -433,7 +433,7 @@ async def resolve_name_guid_map(
             """,
             (lowered,),
         )
-        mapping: Dict[str, str] = {}
+        mapping: dict[str, str] = {}
         for guid, player_name, clean_name in rows:
             if player_name:
                 key = player_name.lower()

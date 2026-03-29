@@ -7,7 +7,6 @@ via dedicated helper functions.  Header upgraded from V5 to V6 in v6.01.
 from pathlib import Path
 
 
-
 def _lua_source() -> str:
     root = Path(__file__).resolve().parents[2]
     lua_path = root / "proximity" / "lua" / "proximity_tracker.lua"

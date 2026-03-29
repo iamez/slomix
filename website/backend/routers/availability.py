@@ -5,10 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import secrets
 import re
-from datetime import date, datetime, time as dt_time, timedelta, timezone
-from typing import Any, Dict, Optional
+import secrets
+from datetime import date, datetime, timedelta, timezone
+from datetime import time as dt_time
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -43,21 +44,21 @@ PROMOTION_JOB_TYPES = ("send_reminder_2045", "send_start_2100", "voice_check_210
 PROMOTION_PREFERRED_CHANNELS = ("discord", "telegram", "signal", "any")
 
 
-def _require_user(request: Request) -> Dict[str, Any]:
+def _require_user(request: Request) -> dict[str, Any]:
     user = request.session.get("user")
     if not user or "id" not in user:
         raise HTTPException(status_code=401, detail="Authentication required")
     return user
 
 
-def _optional_user(request: Request) -> Optional[Dict[str, Any]]:
+def _optional_user(request: Request) -> dict[str, Any] | None:
     user = request.session.get("user")
     if not user or "id" not in user:
         return None
     return user
 
 
-def _optional_user_id(request: Request) -> Optional[int]:
+def _optional_user_id(request: Request) -> int | None:
     user = _optional_user(request)
     if not user:
         return None
@@ -105,7 +106,7 @@ def _configured_promoter_ids() -> set[int]:
     return values
 
 
-def _website_user_id_from_user(user: Dict[str, Any]) -> Optional[int]:
+def _website_user_id_from_user(user: dict[str, Any]) -> int | None:
     for key in ("website_user_id", "id"):
         raw = user.get(key)
         try:
@@ -163,7 +164,7 @@ def _coerce_timezone(value: Any, *, default: str) -> str:
     return candidate
 
 
-def _normalize_quiet_hours(value: Any) -> Dict[str, Any]:
+def _normalize_quiet_hours(value: Any) -> dict[str, Any]:
     if value is None:
         return {}
     if not isinstance(value, dict):
@@ -200,7 +201,7 @@ def _normalize_date(value: Any) -> date:
     return date.fromisoformat(str(value)[:10])
 
 
-def _serialize_value(value: Any) -> Optional[str]:
+def _serialize_value(value: Any) -> str | None:
     if value is None:
         return None
     if hasattr(value, "isoformat"):
@@ -211,7 +212,7 @@ def _serialize_value(value: Any) -> Optional[str]:
     return str(value)
 
 
-def _as_utc_datetime(value: Any) -> Optional[datetime]:
+def _as_utc_datetime(value: Any) -> datetime | None:
     if not isinstance(value, datetime):
         return None
     if value.tzinfo is None:
@@ -225,7 +226,7 @@ def _coerce_bool(value: Any, *, default: bool) -> bool:
     return default
 
 
-def _coerce_json_object(value: Any) -> Dict[str, Any]:
+def _coerce_json_object(value: Any) -> dict[str, Any]:
     if value is None:
         return {}
     if isinstance(value, dict):
@@ -240,8 +241,8 @@ def _validate_range(from_date: date, to_date: date, *, max_days: int = MAX_RANGE
         raise HTTPException(status_code=400, detail=f"Date range cannot exceed {max_days} days")
 
 
-def _status_counts_template() -> Dict[str, int]:
-    return {status: 0 for status in STATUS_VALUES}
+def _status_counts_template() -> dict[str, int]:
+    return dict.fromkeys(STATUS_VALUES, 0)
 
 
 def _status_label(status: str) -> str:
@@ -283,7 +284,7 @@ async def _is_promoter_user(request: Request, db) -> bool:
     return False
 
 
-async def _is_discord_linked(user: Dict[str, Any], db) -> bool:
+async def _is_discord_linked(user: dict[str, Any], db) -> bool:
     if user.get("linked_player"):
         return True
 
@@ -312,7 +313,7 @@ async def _is_discord_linked(user: Dict[str, Any], db) -> bool:
     return row is not None
 
 
-async def _require_linked_user(request: Request, db) -> tuple[Dict[str, Any], int]:
+async def _require_linked_user(request: Request, db) -> tuple[dict[str, Any], int]:
     user = _require_user(request)
     try:
         user_id = int(user["id"])
@@ -325,7 +326,7 @@ async def _require_linked_user(request: Request, db) -> tuple[Dict[str, Any], in
     return user, user_id
 
 
-def _require_identity_user(request: Request) -> tuple[Dict[str, Any], int, int]:
+def _require_identity_user(request: Request) -> tuple[dict[str, Any], int, int]:
     user = _require_user(request)
     try:
         discord_user_id = int(user["id"])
@@ -371,8 +372,8 @@ def _channel_for_recipient(
     return None, None
 
 
-def _public_campaign_recipients(raw_recipients: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
-    sanitized: list[Dict[str, Any]] = []
+def _public_campaign_recipients(raw_recipients: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    sanitized: list[dict[str, Any]] = []
     for recipient in raw_recipients:
         if not isinstance(recipient, dict):
             continue
@@ -391,7 +392,7 @@ def _public_campaign_recipients(raw_recipients: list[Dict[str, Any]]) -> list[Di
     return sanitized
 
 
-async def _fetch_subscriptions_map(db, user_id: int) -> Dict[str, Dict[str, Any]]:
+async def _fetch_subscriptions_map(db, user_id: int) -> dict[str, dict[str, Any]]:
     rows = await db.fetch_all(
         """
         SELECT channel_type, enabled, channel_address, verified_at, preferences
@@ -402,7 +403,7 @@ async def _fetch_subscriptions_map(db, user_id: int) -> Dict[str, Dict[str, Any]
         (user_id,),
     )
 
-    result: Dict[str, Dict[str, Any]] = {
+    result: dict[str, dict[str, Any]] = {
         channel: {
             "channel_type": channel,
             "enabled": channel == "discord",
@@ -417,7 +418,7 @@ async def _fetch_subscriptions_map(db, user_id: int) -> Dict[str, Dict[str, Any]
         channel_type = str(row[0] or "").lower()
         if channel_type not in result:
             continue
-        preferences: Dict[str, Any] = {}
+        preferences: dict[str, Any] = {}
         raw_preferences = row[4]
         if isinstance(raw_preferences, dict):
             preferences = raw_preferences
@@ -440,7 +441,7 @@ async def _fetch_subscriptions_map(db, user_id: int) -> Dict[str, Dict[str, Any]
     return result
 
 
-async def _settings_payload(db, user_id: int) -> Dict[str, Any]:
+async def _settings_payload(db, user_id: int) -> dict[str, Any]:
     settings_row = await db.fetch_one(
         """
         SELECT sound_enabled, sound_cooldown_seconds, availability_reminders_enabled, timezone
@@ -507,8 +508,8 @@ async def get_availability_access(request: Request, db=Depends(get_db)):
 @router.get("")
 async def get_availability_range(
     request: Request,
-    from_date: Optional[date] = Query(default=None, alias="from"),
-    to_date: Optional[date] = Query(default=None, alias="to"),
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
     include_users: bool = Query(default=False),
     db=Depends(get_db),
 ):
@@ -529,7 +530,7 @@ async def get_availability_range(
         (range_start, range_end),
     )
 
-    counts_by_day: Dict[date, Dict[str, int]] = {}
+    counts_by_day: dict[date, dict[str, int]] = {}
     for row in counts_rows or []:
         entry_date = _normalize_date(row[0])
         status = str(row[1] or "").upper()
@@ -541,7 +542,7 @@ async def get_availability_range(
     user = _optional_user(request)
     user_id = _optional_user_id(request)
     linked_discord = False
-    my_statuses: Dict[date, str] = {}
+    my_statuses: dict[date, str] = {}
 
     if user is not None and user_id is not None:
         linked_discord = await _is_discord_linked(user, db)
@@ -560,7 +561,7 @@ async def get_availability_range(
             if status in STATUS_VALUES:
                 my_statuses[entry_date] = status
 
-    users_by_day: Dict[date, Dict[str, list[Dict[str, Any]]]] = {}
+    users_by_day: dict[date, dict[str, list[dict[str, Any]]]] = {}
     if include_users and user_id is not None:
         user_rows = await db.fetch_all(
             """
@@ -599,7 +600,7 @@ async def get_availability_range(
             counts.update(counts_by_day[cursor])
         total = sum(counts.values())
 
-        day_payload: Dict[str, Any] = {
+        day_payload: dict[str, Any] = {
             "date": cursor.isoformat(),
             "counts": counts,
             "total": total,
@@ -683,8 +684,8 @@ async def upsert_availability_entry(request: Request, db=Depends(get_db)):
 @router.get("/me")
 async def get_my_availability(
     request: Request,
-    from_date: Optional[date] = Query(default=None, alias="from"),
-    to_date: Optional[date] = Query(default=None, alias="to"),
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
     db=Depends(get_db),
 ):
     """Get the logged-in user's availability entries in a date range."""
@@ -769,7 +770,7 @@ async def upsert_settings(request: Request, db=Depends(get_db)):
         "telegram": body.get("telegram_notify"),
         "signal": body.get("signal_notify"),
     }
-    linked_channel_verified_at: Dict[str, Any] = {}
+    linked_channel_verified_at: dict[str, Any] = {}
     for channel_type, raw_enabled in channel_flags.items():
         if not isinstance(raw_enabled, bool):
             continue
@@ -1135,7 +1136,7 @@ async def _load_subscription_preference_row(db, website_user_id: int):
     )
 
 
-def _decode_json_dict(value: Any) -> Dict[str, Any]:
+def _decode_json_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     if isinstance(value, str):
@@ -1148,7 +1149,7 @@ def _decode_json_dict(value: Any) -> Dict[str, Any]:
     return {}
 
 
-def _decode_json_list(value: Any) -> list[Dict[str, Any]]:
+def _decode_json_list(value: Any) -> list[dict[str, Any]]:
     if isinstance(value, list):
         return [item for item in value if isinstance(item, dict)]
     if isinstance(value, str):
@@ -1167,7 +1168,7 @@ async def _collect_campaign_recipients(
     target_date: date,
     include_maybe: bool,
     include_available: bool,
-) -> tuple[list[Dict[str, Any]], Dict[str, int]]:
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
     rows = await db.fetch_all(
         """
         SELECT user_id, user_name, status
@@ -1186,8 +1187,8 @@ async def _collect_campaign_recipients(
         allowed_statuses.add("MAYBE")
 
     crypto = _contact_crypto()
-    recipients: list[Dict[str, Any]] = []
-    channels_summary: Dict[str, int] = {channel: 0 for channel in PROMOTION_CHANNEL_TYPES}
+    recipients: list[dict[str, Any]] = []
+    channels_summary: dict[str, int] = dict.fromkeys(PROMOTION_CHANNEL_TYPES, 0)
     seen: set[int] = set()
 
     for row in rows or []:
@@ -1267,7 +1268,7 @@ def _promotion_idempotency_key(
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
-async def _campaign_payload(db, campaign_id: int) -> Dict[str, Any]:
+async def _campaign_payload(db, campaign_id: int) -> dict[str, Any]:
     row = await db.fetch_one(
         """
         SELECT id,
@@ -1645,7 +1646,7 @@ async def create_promotion_campaign(request: Request, db=Depends(get_db)):
 @router.get("/promotions/campaign")
 async def get_today_promotion_campaign(
     request: Request,
-    target_date: Optional[date] = Query(default=None, alias="date"),
+    target_date: date | None = Query(default=None, alias="date"),
     db=Depends(get_db),
 ):
     _require_user(request)

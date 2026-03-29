@@ -11,7 +11,7 @@ File format (tab-separated):
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,7 @@ class EndStatsParser:
         """Initialize the endstats parser."""
         logger.debug("EndStatsParser initialized")
 
-    def parse_filename(self, filename: str) -> Optional[Dict[str, Any]]:
+    def parse_filename(self, filename: str) -> dict[str, Any] | None:
         """
         Parse endstats filename to extract metadata.
 
@@ -193,7 +193,7 @@ class EndStatsParser:
             'filename': basename,
         }
 
-    def parse_value(self, value_str: str) -> Tuple[str, Optional[float]]:
+    def parse_value(self, value_str: str) -> tuple[str, float | None]:
         """
         Parse award value string and extract numeric component.
 
@@ -227,7 +227,7 @@ class EndStatsParser:
 
         return (value_str, None)
 
-    def parse_file(self, filepath: str) -> Optional[Dict[str, Any]]:
+    def parse_file(self, filepath: str) -> dict[str, Any] | None:
         """
         Parse an endstats file and return structured data.
 
@@ -252,7 +252,7 @@ class EndStatsParser:
         current_subject_guid = None
 
         try:
-            with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+            with open(filepath, encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
         except Exception as e:
             logger.error(f"Failed to read endstats file {filepath}: {e}")
@@ -327,7 +327,7 @@ class EndStatsParser:
             'vs_stats': vs_stats,
         }
 
-    def categorize_awards(self, awards: List[Dict]) -> Dict[str, List[Dict]]:
+    def categorize_awards(self, awards: list[dict]) -> dict[str, list[dict]]:
         """
         Organize awards into categories for embed display.
 
@@ -337,7 +337,7 @@ class EndStatsParser:
         Returns:
             Dict mapping category name to list of awards in that category
         """
-        categorized = {cat: [] for cat in AWARD_CATEGORIES.keys()}
+        categorized = {cat: [] for cat in AWARD_CATEGORIES}
         uncategorized = []
 
         for award in awards:
@@ -361,7 +361,7 @@ class EndStatsParser:
         return {k: v for k, v in categorized.items() if v}
 
 
-def parse_endstats_file(filepath: str) -> Optional[Dict[str, Any]]:
+def parse_endstats_file(filepath: str) -> dict[str, Any] | None:
     """
     Convenience function to parse an endstats file.
 

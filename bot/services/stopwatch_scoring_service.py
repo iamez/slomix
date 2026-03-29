@@ -14,7 +14,7 @@ Map score = 1 point to the map winner (0-0 for tie).
 
 import json
 import logging
-from typing import Dict, Tuple, Optional, List, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class StopwatchScoringService:
         round1_time_limit: str,
         round1_actual_time: str,
         round2_actual_time: str
-    ) -> Tuple[int, int, str]:
+    ) -> tuple[int, int, str]:
         """
         Calculate map score using map-winner scoring.
 
@@ -126,8 +126,8 @@ class StopwatchScoringService:
     async def calculate_session_scores(
         self,
         session_date: str,
-        session_ids: Optional[List[int]] = None
-    ) -> Optional[Dict[str, Any]]:
+        session_ids: list[int] | None = None
+    ) -> dict[str, Any] | None:
         """
         Calculate total scores for a gaming session.
 
@@ -188,9 +188,9 @@ class StopwatchScoringService:
             # Group rounds by (gaming_session_id, map_name) for proper R1+R2
             # Handle repeated maps: pair each R1 with its subsequent R2
             # Rounds are ordered by gaming_session_id, map_name, round_number
-            maps_dict: Dict[str, Dict] = {}
-            pending_r1: Dict[str, str] = {}  # base_key -> map_key waiting for R2
-            map_play_count: Dict[str, int] = {}  # Plays per map in session
+            maps_dict: dict[str, dict] = {}
+            pending_r1: dict[str, str] = {}  # base_key -> map_key waiting for R2
+            map_play_count: dict[str, int] = {}  # Plays per map in session
 
             for row in rows:
                 (map_name, gaming_session_id, round_num, defender, winner,
@@ -404,9 +404,9 @@ class StopwatchScoringService:
 
     async def save_session_results(
         self,
-        scores: Dict[str, Any],
-        team1_names: Optional[List[str]] = None,
-        team2_names: Optional[List[str]] = None
+        scores: dict[str, Any],
+        team1_names: list[str] | None = None,
+        team2_names: list[str] | None = None
     ) -> bool:
         """
         Save session results to database.
@@ -529,14 +529,14 @@ class StopwatchScoringService:
 
     async def _record_matchup_analytics(
         self,
-        lineup_a_guids: List[str],
-        lineup_b_guids: List[str],
+        lineup_a_guids: list[str],
+        lineup_b_guids: list[str],
         session_date: str,
         gaming_session_id: int,
-        winner: Optional[str],
+        winner: str | None,
         lineup_a_score: int,
         lineup_b_score: int,
-        map_name: Optional[str] = None
+        map_name: str | None = None
     ):
         """
         Record matchup for analytics tracking.
@@ -602,9 +602,9 @@ class StopwatchScoringService:
     async def calculate_session_scores_with_teams(
         self,
         session_date: str,
-        session_ids: List[int],
-        team_rosters: Dict[str, List[str]]
-    ) -> Optional[Dict[str, Any]]:
+        session_ids: list[int],
+        team_rosters: dict[str, list[str]]
+    ) -> dict[str, Any] | None:
         """
         Calculate map scores and map side-winner to persistent teams.
 
@@ -667,9 +667,9 @@ class StopwatchScoringService:
                 return None
 
             # Group rounds into map pairs (R1 + R2)
-            maps_dict: Dict[str, Dict] = {}
-            pending_r1: Dict[str, str] = {}
-            map_play_count: Dict[str, int] = {}
+            maps_dict: dict[str, dict] = {}
+            pending_r1: dict[str, str] = {}
+            map_play_count: dict[str, int] = {}
 
             for row in rows:
                 (round_id, map_name, gaming_session_id, round_num,

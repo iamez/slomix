@@ -31,11 +31,12 @@ Author: ET:Legacy Stats Bot
 Date: November 7, 2025
 """
 
-import discord
-from discord.ui import View, Button
-from discord import ButtonStyle, Interaction
-from typing import Callable
 import logging
+from typing import Callable
+
+import discord
+from discord import ButtonStyle, Interaction
+from discord.ui import Button, View
 
 logger = logging.getLogger("bot.core.lazy_pagination_view")
 
@@ -183,7 +184,8 @@ class LazyPaginationView(View):
                     embed.set_footer(text="Navigation expired. Run the command again to continue.")
                 await self.message.edit(embed=embed, view=self)
             except Exception:
-                pass  # Message may have been deleted; safe to ignore
+                logger.debug("Could not disable pagination buttons (message likely deleted)")
+
 
     async def interaction_check(self, interaction: Interaction) -> bool:
         """

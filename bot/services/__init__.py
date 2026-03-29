@@ -39,32 +39,32 @@ Architecture Notes:
 """
 
 # Core session services
-from bot.services.session_data_service import SessionDataService
-from bot.services.session_stats_aggregator import SessionStatsAggregator
-from bot.services.session_embed_builder import SessionEmbedBuilder
-from bot.services.session_graph_generator import SessionGraphGenerator
-from bot.services.session_view_handlers import SessionViewHandlers
 from bot.services.endstats_aggregator import EndstatsAggregator
 
 # Player services
 from bot.services.player_badge_service import PlayerBadgeService
 from bot.services.player_display_name_service import PlayerDisplayNameService
 from bot.services.player_formatter import PlayerFormatter
+from bot.services.prediction_embed_builder import PredictionEmbedBuilder
 
 # Game services
 from bot.services.prediction_engine import PredictionEngine
-from bot.services.prediction_embed_builder import PredictionEmbedBuilder
-from bot.services.stopwatch_scoring_service import StopwatchScoringService
-from bot.services.voice_session_service import VoiceSessionService
-
-# Publishing services
-from bot.services.round_publisher_service import RoundPublisherService
-
-# Debug services
-from bot.services.timing_debug_service import TimingDebugService
 
 # Correlation services
 from bot.services.round_correlation_service import RoundCorrelationService
+
+# Publishing services
+from bot.services.round_publisher_service import RoundPublisherService
+from bot.services.session_data_service import SessionDataService
+from bot.services.session_embed_builder import SessionEmbedBuilder
+from bot.services.session_graph_generator import SessionGraphGenerator
+from bot.services.session_stats_aggregator import SessionStatsAggregator
+from bot.services.session_view_handlers import SessionViewHandlers
+from bot.services.stopwatch_scoring_service import StopwatchScoringService
+
+# Debug services
+from bot.services.timing_debug_service import TimingDebugService
+from bot.services.voice_session_service import VoiceSessionService
 
 __all__ = [
     # Session services

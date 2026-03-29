@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from website.backend.logging_config import get_app_logger
 
@@ -21,7 +21,7 @@ _WINNER_MAP = {
 }
 
 
-def _normalize_winner(value: Any) -> Optional[str]:
+def _normalize_winner(value: Any) -> str | None:
     if value is None:
         return None
     try:
@@ -31,7 +31,7 @@ def _normalize_winner(value: Any) -> Optional[str]:
     return _WINNER_MAP.get(normalized)
 
 
-def _extract_date_from_filename(filename: str) -> Optional[str]:
+def _extract_date_from_filename(filename: str) -> str | None:
     """Extract YYYY-MM-DD from demo filename if present.
 
     Examples:
@@ -87,7 +87,7 @@ async def _column_exists(db, column_name: str) -> bool:
     return bool(row)
 
 
-async def _resolve_kd_ratio_column(db) -> Optional[str]:
+async def _resolve_kd_ratio_column(db) -> str | None:
     for column in _KD_RATIO_COLUMN_CANDIDATES:
         if await _column_exists(db, column):
             return column
@@ -96,7 +96,7 @@ async def _resolve_kd_ratio_column(db) -> Optional[str]:
     return None
 
 
-async def _resolve_optional_stat_columns(db) -> Dict[str, bool]:
+async def _resolve_optional_stat_columns(db) -> dict[str, bool]:
     return {
         column: await _column_exists(db, column)
         for column in _OPTIONAL_STATS_COLUMNS
@@ -104,7 +104,7 @@ async def _resolve_optional_stat_columns(db) -> Dict[str, bool]:
 
 
 async def _calculate_player_overlap(
-    demo_player_names: List[str],
+    demo_player_names: list[str],
     round_id: int,
     db,
 ) -> float:
@@ -124,15 +124,15 @@ async def _calculate_player_overlap(
     if not db_result:
         return 0.0
 
-    db_players = set([str(row[0]).lower().strip() for row in db_result if row[0] is not None])
-    demo_players = set([str(name).lower().strip() for name in demo_player_names if name is not None])
+    db_players = {str(row[0]).lower().strip() for row in db_result if row[0] is not None}
+    demo_players = {str(name).lower().strip() for name in demo_player_names if name is not None}
 
     overlap_count = len(demo_players & db_players)
     return overlap_count / len(demo_players)
 
 
 async def _validate_stats_match(
-    demo_player_stats: Dict[str, Any],
+    demo_player_stats: dict[str, Any],
     round_id: int,
     db,
 ) -> float:
@@ -184,12 +184,12 @@ async def _validate_stats_match(
 
 async def _match_single_round(
     demo_map: str,
-    demo_round_data: Optional[Dict[str, Any]],
+    demo_round_data: dict[str, Any] | None,
     demo_filename: str,
-    demo_player_names: List[str],
-    demo_player_stats: Dict[str, Any],
+    demo_player_names: list[str],
+    demo_player_stats: dict[str, Any],
     db,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Try to match a single demo round to a database round.
 
     Args:
@@ -285,7 +285,7 @@ async def _match_single_round(
         ) = row
 
         confidence = 0.0
-        match_details: List[str] = []
+        match_details: list[str] = []
 
         # Map match (already filtered, base confidence)
         confidence += 30.0
@@ -364,10 +364,10 @@ async def _match_single_round(
 
 
 async def find_matching_round(
-    metadata: Dict[str, Any],
+    metadata: dict[str, Any],
     db,
-    demo_player_stats: Optional[Dict[str, Any]] = None,
-) -> Optional[Dict[str, Any]]:
+    demo_player_stats: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """Try to match a demo's metadata to a round in the database.
 
     Supports multi-round demos (e.g., R1+R2 in one file).
@@ -440,7 +440,7 @@ async def find_matching_round(
 async def enrich_with_db_stats(
     round_id: int,
     db,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch full player stats from player_comprehensive_stats for a matched round."""
     kd_column = await _resolve_kd_ratio_column(db)
     optional_columns = await _resolve_optional_stat_columns(db)
@@ -508,9 +508,9 @@ async def enrich_with_db_stats(
 
 
 async def build_comparison(
-    demo_player_stats: Dict[str, Dict[str, Any]],
-    db_player_stats: Dict[str, Dict[str, Any]],
-) -> List[Dict[str, Any]]:
+    demo_player_stats: dict[str, dict[str, Any]],
+    db_player_stats: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Compare demo-derived stats with DB stats for matched players."""
     comparisons = []
 

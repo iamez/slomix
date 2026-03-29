@@ -27,7 +27,6 @@ This module provides advanced player performance metrics:
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Tuple
 
 logger = logging.getLogger("bot.core.frag_potential")
 
@@ -247,7 +246,7 @@ class FragPotentialCalculator:
         session_avg_deaths: float = None,
         session_avg_revives: float = None,
         rounds_played: int = 1
-    ) -> Tuple[Playstyle, float]:
+    ) -> tuple[Playstyle, float]:
         """
         Determine a player's playstyle based on their metrics
 
@@ -260,7 +259,7 @@ class FragPotentialCalculator:
         Returns:
             Tuple of (Playstyle, confidence_score 0.0-1.0)
         """
-        scores = {style: 0.0 for style in Playstyle}
+        scores = dict.fromkeys(Playstyle, 0.0)
 
         fp = metrics.frag_potential
         kd = metrics.kd_ratio
@@ -384,9 +383,9 @@ class FragPotentialCalculator:
     async def analyze_session_players(
         cls,
         db_adapter,
-        session_ids: List[int],
+        session_ids: list[int],
         session_ids_str: str = None
-    ) -> List[PlayerMetrics]:
+    ) -> list[PlayerMetrics]:
         """
         Analyze all players in a session and return their metrics
 

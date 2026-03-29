@@ -9,8 +9,10 @@ Tests for parsing ET:Legacy stats files, including:
 - Edge cases
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from bot.community_stats_parser import C0RNP0RN3StatsParser, _parse_side_fields
 
 

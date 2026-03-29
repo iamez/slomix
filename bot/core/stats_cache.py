@@ -14,7 +14,7 @@ Original location: Line 121-190 of ultimate_bot.py
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger("UltimateBot.StatsCache")
 
@@ -44,12 +44,12 @@ class StatsCache:
         Args:
             ttl_seconds: How long cached values remain valid (default: 300 seconds = 5 minutes)
         """
-        self.cache: Dict[str, Any] = {}
-        self.timestamps: Dict[str, datetime] = {}
+        self.cache: dict[str, Any] = {}
+        self.timestamps: dict[str, datetime] = {}
         self.ttl: int = ttl_seconds
         logger.info(f"📦 StatsCache initialized (TTL: {ttl_seconds}s)")
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """
         Get cached value if still valid, None otherwise.
 
@@ -89,7 +89,7 @@ class StatsCache:
         self.timestamps.clear()
         logger.info(f"🗑️  Cache CLEARED: {count} keys removed")
 
-    def stats(self) -> Dict[str, int]:
+    def stats(self) -> dict[str, int]:
         """
         Get cache statistics.
 

@@ -10,14 +10,13 @@ and synergy_analytics with a single canonical lookup chain:
 """
 
 import logging
-from typing import Optional, List
 
 from bot.core.utils import escape_like_pattern
 
 logger = logging.getLogger(__name__)
 
 
-async def resolve_player_guid(db_adapter, identifier: str) -> Optional[str]:
+async def resolve_player_guid(db_adapter, identifier: str) -> str | None:
     """
     Resolve a player identifier (GUID or name) to a canonical GUID.
 
@@ -79,7 +78,7 @@ async def resolve_player_guid(db_adapter, identifier: str) -> Optional[str]:
     return None
 
 
-async def resolve_player_guids(db_adapter, names: List[str]) -> List[str]:
+async def resolve_player_guids(db_adapter, names: list[str]) -> list[str]:
     """
     Batch-resolve a list of player names to GUIDs.
     Returns only successfully resolved GUIDs (list may be shorter than input).

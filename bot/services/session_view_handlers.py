@@ -17,10 +17,11 @@ import asyncio
 import csv
 import inspect
 import io
-import discord
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
+
+import discord
 
 from bot.stats import StatsCalculator
 
@@ -103,7 +104,7 @@ class SessionViewHandlers:
         except Exception:
             return default
 
-    async def _call_service_method(self, method_name: str, *args, **kwargs) -> Tuple[bool, Any]:
+    async def _call_service_method(self, method_name: str, *args, **kwargs) -> tuple[bool, Any]:
         """Call timing shadow service method if it exists."""
         if not self.timing_shadow_service:
             return False, None
@@ -115,9 +116,9 @@ class SessionViewHandlers:
             result = await result
         return True, result
 
-    def _normalize_round_factor_payload(self, payload: Any) -> Dict[int, float]:
+    def _normalize_round_factor_payload(self, payload: Any) -> dict[int, float]:
         """Normalize service payload into round_id->factor mapping."""
-        factors: Dict[int, float] = {}
+        factors: dict[int, float] = {}
         if payload is None:
             return factors
 
@@ -159,7 +160,7 @@ class SessionViewHandlers:
 
         return factors
 
-    async def _get_round_timing_shadow(self, session_ids: List[int]) -> Dict[str, Any]:
+    async def _get_round_timing_shadow(self, session_ids: list[int]) -> dict[str, Any]:
         """
         Build round-level timing correction factors from shadow/comparison service.
 
@@ -172,7 +173,7 @@ class SessionViewHandlers:
               reason: str
             }
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "factors": {},
             "round_rows": {},
             "rounds_total": len(session_ids or []),
@@ -263,7 +264,7 @@ class SessionViewHandlers:
                     round_time = stats_data.get("round_time") or round_time
                     stats_seconds = int(stats_data.get("stats_duration_seconds") or stats_seconds or 0)
 
-            lua_seconds: Optional[int] = None
+            lua_seconds: int | None = None
             try:
                 lua_data = await self.timing_shadow_service._fetch_lua_data(
                     round_id,
@@ -283,7 +284,7 @@ class SessionViewHandlers:
                 except (TypeError, ValueError):
                     lua_seconds = None
 
-            diff_seconds: Optional[int] = None
+            diff_seconds: int | None = None
             if stats_seconds > 0 and lua_seconds and lua_seconds > 0:
                 factor = max(0.0, min(2.0, float(lua_seconds) / float(stats_seconds)))
                 result["factors"][round_id] = factor
@@ -309,9 +310,9 @@ class SessionViewHandlers:
         result["source"] = "compat_fetch"
         return result
 
-    async def get_session_timing_dual_by_guid(self, session_ids: List[int]) -> Dict[str, Any]:
+    async def get_session_timing_dual_by_guid(self, session_ids: list[int]) -> dict[str, Any]:
         """Build per-player old/new timing aggregates for dual-mode displays."""
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "players": {},
             "meta": {
                 "rounds_total": len(session_ids or []),
@@ -327,7 +328,7 @@ class SessionViewHandlers:
         # Preferred path: dedicated session shadow service
         called, shadow_result = await self._call_service_method("compare_session", session_ids)
         if called and shadow_result is not None:
-            players: Dict[str, Dict[str, Any]] = {}
+            players: dict[str, dict[str, Any]] = {}
             round_diagnostics = tuple(getattr(shadow_result, "round_diagnostics", ()) or ())
             rounds_total = len(round_diagnostics)
             rounds_with_telemetry = sum(
@@ -388,7 +389,7 @@ class SessionViewHandlers:
             return payload
 
         shadow = await self._get_round_timing_shadow(session_ids)
-        round_factors: Dict[int, float] = shadow.get("factors", {}) or {}
+        round_factors: dict[int, float] = shadow.get("factors", {}) or {}
         payload["meta"]["rounds_with_telemetry"] = int(shadow.get("rounds_with_telemetry") or 0)
         payload["meta"]["reason"] = shadow.get("reason", "")
         payload["meta"]["source"] = shadow.get("source", "none")
@@ -474,7 +475,7 @@ class SessionViewHandlers:
 
         return payload
 
-    async def get_timing_diff_summary(self, session_ids: List[int], top_n: int = 8) -> Dict[str, Any]:
+    async def get_timing_diff_summary(self, session_ids: list[int], top_n: int = 8) -> dict[str, Any]:
         """Return compact top-N round timing diffs for admin debug output."""
         top_n = max(1, min(int(top_n or 8), 20))
 
@@ -571,7 +572,7 @@ class SessionViewHandlers:
             self._player_stats_columns = set()
             return self._player_stats_columns
 
-    async def show_objectives_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
+    async def show_objectives_view(self, ctx, latest_date: str, session_ids: list, session_ids_str: str, player_count: int):
         """Show objectives & support stats only"""
         query = """
             SELECT clean_name, xp, kill_assists, objectives_stolen, objectives_returned,
@@ -669,7 +670,7 @@ class SessionViewHandlers:
         embed.set_footer(text=f"Round: {latest_date} • Use !last_round for full report")
         await ctx.send(embed=embed)
 
-    async def show_combat_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
+    async def show_combat_view(self, ctx, latest_date: str, session_ids: list, session_ids_str: str, player_count: int):
         """Show combat-focused stats only"""
         columns = await self._get_player_stats_columns()
         has_full_selfkills = "full_selfkills" in columns
@@ -736,7 +737,7 @@ class SessionViewHandlers:
         embed.set_footer(text=f"Round: {latest_date} • Use !last_round for full report")
         await ctx.send(embed=embed)
 
-    async def show_weapons_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
+    async def show_weapons_view(self, ctx, latest_date: str, session_ids: list, session_ids_str: str, player_count: int):
         """Show weapon mastery stats only"""
         query = """
             SELECT MAX(p.player_name) as player_name, w.weapon_name,
@@ -785,7 +786,7 @@ class SessionViewHandlers:
         embed.set_footer(text=f"Round: {latest_date} • Use !last_round for full report")
         await ctx.send(embed=embed)
 
-    async def show_support_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
+    async def show_support_view(self, ctx, latest_date: str, session_ids: list, session_ids_str: str, player_count: int):
         """Show support activity stats only"""
         columns = await self._get_player_stats_columns()
         has_full_selfkills = "full_selfkills" in columns
@@ -833,7 +834,7 @@ class SessionViewHandlers:
         embed.set_footer(text=f"Round: {latest_date}")
         await ctx.send(embed=embed)
 
-    async def show_sprees_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
+    async def show_sprees_view(self, ctx, latest_date: str, session_ids: list, session_ids_str: str, player_count: int):
         """Show killing sprees & multikills only"""
         query = """
             SELECT MAX(p.player_name) as player_name,
@@ -872,7 +873,7 @@ class SessionViewHandlers:
         embed.set_footer(text=f"Round: {latest_date}")
         await ctx.send(embed=embed)
 
-    async def show_top_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int, total_maps: int):
+    async def show_top_view(self, ctx, latest_date: str, session_ids: list, session_ids_str: str, player_count: int, total_maps: int):
         """Show all players ranked by kills"""
         query = """
             SELECT MAX(p.player_name) as player_name,
@@ -935,7 +936,7 @@ class SessionViewHandlers:
         embed.set_footer(text="💡 Use !last_round for full details")
         await ctx.send(embed=embed)
 
-    async def show_maps_view(self, ctx, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
+    async def show_maps_view(self, ctx, latest_date: str, sessions: list, session_ids: list, session_ids_str: str, player_count: int):
         """Show map summaries only - matches live round_publisher_service format"""
 
         # Group sessions into matches (R1 + R2 pairs)
@@ -1138,7 +1139,7 @@ class SessionViewHandlers:
             await ctx.send(embed=embed)
             await asyncio.sleep(3)
 
-    async def show_maps_full_view(self, ctx, latest_date: str, sessions: List, session_ids: List, session_ids_str: str, player_count: int):
+    async def show_maps_full_view(self, ctx, latest_date: str, sessions: list, session_ids: list, session_ids_str: str, player_count: int):
         """Show round-by-round breakdown for each map"""
 
         # Group into matches (R1 + R2 pairs) to handle duplicate maps
@@ -1197,7 +1198,7 @@ class SessionViewHandlers:
                 await self._send_round_stats(ctx, display_map_name, "Map Summary", rounds['all'], latest_date)
                 await asyncio.sleep(3)
 
-    async def _send_round_stats(self, ctx, map_name: str, round_label: str, round_session_ids: List, latest_date: str):
+    async def _send_round_stats(self, ctx, map_name: str, round_label: str, round_session_ids: list, latest_date: str):
         """
         Send round stats embed - matches live round_publisher_service format exactly
         """
@@ -1376,7 +1377,7 @@ class SessionViewHandlers:
         embed.set_footer(text=f"Session: {latest_date}")
         await ctx.send(embed=embed)
 
-    async def show_time_view(self, ctx, latest_date: str, session_ids: List, session_ids_str: str, player_count: int):
+    async def show_time_view(self, ctx, latest_date: str, session_ids: list, session_ids_str: str, player_count: int):
         """Audit time metrics (time played, time dead, denied playtime)."""
         query = """
             SELECT MAX(p.clean_name) as player_name,
@@ -1576,7 +1577,7 @@ class SessionViewHandlers:
 
         await ctx.send(embed=embed)
 
-    async def show_time_raw_export(self, ctx, latest_date: str, session_ids: List, session_ids_str: str):
+    async def show_time_raw_export(self, ctx, latest_date: str, session_ids: list, session_ids_str: str):
         """Export raw Lua timing fields without aggregation/capping."""
         query = """
             SELECT r.round_date,

@@ -11,10 +11,9 @@ Data is stored in PostgreSQL for the website to display historical charts.
 import asyncio
 import json
 import logging
-import sys
 import os
+import sys
 from datetime import datetime, timedelta
-from typing import Optional
 
 # Add project root to path for imports
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
@@ -44,7 +43,7 @@ class MonitoringService:
         self.server_task = None
         self.voice_task = None
         self.cleanup_task = None
-        self._db_user: Optional[str] = None
+        self._db_user: str | None = None
 
         # Server config
         self.server_host = getattr(config, "server_host", "puran.hehe.si")
@@ -201,6 +200,7 @@ class MonitoringService:
             row = await self.db.fetch_one(query, (table_name,))
             return bool(row)
         except Exception:
+            logger.warning("DB error checking table %s", table_name, exc_info=True)
             return False
 
     async def _index_exists(self, table_name: str, index_name: str) -> bool:
@@ -216,9 +216,10 @@ class MonitoringService:
             row = await self.db.fetch_one(query, (table_name, index_name))
             return bool(row)
         except Exception:
+            logger.warning("DB error checking index %s on %s", index_name, table_name, exc_info=True)
             return False
 
-    async def _table_owner(self, table_name: str) -> Optional[str]:
+    async def _table_owner(self, table_name: str) -> str | None:
         query = """
             SELECT tableowner
             FROM pg_tables
@@ -229,9 +230,10 @@ class MonitoringService:
             row = await self.db.fetch_one(query, (table_name,))
             return str(row[0]) if row and row[0] else None
         except Exception:
+            logger.warning("DB error checking owner of table %s", table_name, exc_info=True)
             return None
 
-    async def _current_db_user(self) -> Optional[str]:
+    async def _current_db_user(self) -> str | None:
         if self._db_user:
             return self._db_user
         try:
@@ -239,6 +241,7 @@ class MonitoringService:
             if row and row[0]:
                 self._db_user = str(row[0])
         except Exception:
+            logger.warning("DB error fetching current_user", exc_info=True)
             return None
         return self._db_user
 

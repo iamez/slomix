@@ -10,7 +10,6 @@ import shutil
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from fastapi import HTTPException, UploadFile
 
@@ -357,7 +356,7 @@ class UploadStorageService:
 
 
 # Module-level singleton
-_storage: Optional[UploadStorageService] = None
+_storage: UploadStorageService | None = None
 
 
 def get_upload_storage() -> UploadStorageService:

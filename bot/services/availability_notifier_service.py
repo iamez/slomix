@@ -8,7 +8,7 @@ import logging
 import secrets
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Iterable
 
 import discord
 
@@ -168,7 +168,7 @@ class UnifiedAvailabilityNotifier:
         self.tables_ensured = True
 
     @staticmethod
-    def build_event_key(event_type: str, event_date: date, qualifier: Optional[str] = None) -> str:
+    def build_event_key(event_type: str, event_date: date, qualifier: str | None = None) -> str:
         base = f"{event_type}:{event_date.isoformat()}"
         if qualifier:
             return f"{base}:{qualifier}"
@@ -216,7 +216,7 @@ class UnifiedAvailabilityNotifier:
         channel_type: str,
         token: str,
         channel_address: str,
-    ) -> Optional[int]:
+    ) -> int | None:
         """Resolve token from Telegram/Signal message and activate subscription."""
         await self.ensure_tables()
 
@@ -306,8 +306,8 @@ class UnifiedAvailabilityNotifier:
         event_key: str,
         message: str,
         user_ids: Iterable[int],
-        payload: Optional[Dict[str, Any]] = None,
-        announce_message: Optional[str] = None,
+        payload: dict[str, Any] | None = None,
+        announce_message: str | None = None,
     ) -> DeliveryResult:
         """Notify target users across all enabled channels (idempotent)."""
         await self.ensure_tables()
@@ -405,7 +405,7 @@ class UnifiedAvailabilityNotifier:
         channel_type: str,
         target: str,
         message: str,
-        payload: Optional[Dict[str, Any]] = None,
+        payload: dict[str, Any] | None = None,
     ) -> tuple[str, str | None]:
         """
         Idempotent one-shot send for promotion workflows.
@@ -447,7 +447,7 @@ class UnifiedAvailabilityNotifier:
         channel_id: int,
         event_key: str,
         message: str,
-        payload: Optional[Dict[str, Any]] = None,
+        payload: dict[str, Any] | None = None,
     ) -> tuple[str, str | None]:
         """
         Idempotent Discord channel send for campaign summaries/followups.
@@ -487,7 +487,7 @@ class UnifiedAvailabilityNotifier:
         event_key: str,
         event_type: str,
         message: str,
-        payload: Optional[Dict[str, Any]],
+        payload: dict[str, Any] | None,
     ) -> DeliveryResult:
         _ = event_type  # reserved for future formatting/routing
 
@@ -536,7 +536,7 @@ class UnifiedAvailabilityNotifier:
 
         return result
 
-    async def _subscription_map(self, user_id: int) -> Dict[str, Dict[str, Any]]:
+    async def _subscription_map(self, user_id: int) -> dict[str, dict[str, Any]]:
         rows = await self.db_adapter.fetch_all(
             """
             SELECT channel_type, enabled, channel_address
@@ -546,7 +546,7 @@ class UnifiedAvailabilityNotifier:
             (int(user_id),),
         )
 
-        mapping: Dict[str, Dict[str, Any]] = {}
+        mapping: dict[str, dict[str, Any]] = {}
         for row in rows or []:
             channel_type = str(row[0] or "").lower()
             mapping[channel_type] = {
@@ -568,7 +568,7 @@ class UnifiedAvailabilityNotifier:
         user_id: int,
         event_key: str,
         channel_type: str,
-        payload: Optional[Dict[str, Any]],
+        payload: dict[str, Any] | None,
         send_callable,
     ) -> str:
         existing = await self.db_adapter.fetch_one(

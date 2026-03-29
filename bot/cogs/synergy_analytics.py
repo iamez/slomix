@@ -5,22 +5,24 @@ Discord bot integration with safe error handling
 This cog is ISOLATED - errors here won't crash the main bot
 """
 
+import logging
+import os
+import sys
+from datetime import datetime
+
 import discord
 from discord.ext import commands, tasks
-import sys
-import os
-import logging
-from typing import Optional, List
-from datetime import datetime
+
 # import aiosqlite  # Removed - using database adapter
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from bot.core.checks import is_public_channel, is_moderator
-from bot.core.utils import sanitize_error_message
+from analytics.config import config, is_command_enabled, is_enabled
 from analytics.synergy_detector import SynergyMetrics
-from analytics.config import config, is_enabled, is_command_enabled
+
+from bot.core.checks import is_moderator, is_public_channel
+from bot.core.utils import sanitize_error_message
 from bot.services.player_formatter import PlayerFormatter
 
 logger = logging.getLogger(__name__)
@@ -220,8 +222,8 @@ class SynergyAnalytics(commands.Cog):
     async def synergy_command(
         self,
         ctx,
-        player1: Optional[str] = None,
-        player2: Optional[str] = None
+        player1: str | None = None,
+        player2: str | None = None
     ):
         """
         Show synergy analysis between two players
@@ -730,7 +732,7 @@ class SynergyAnalytics(commands.Cog):
     @is_public_channel()
     @commands.command(name='player_impact', aliases=['teammates', 'partners'])
     @commands.cooldown(1, 10, commands.BucketType.user)
-    async def player_impact_command(self, ctx, player: Optional[str] = None):
+    async def player_impact_command(self, ctx, player: str | None = None):
         """
         Show which teammates a player performs best/worst with
 
@@ -967,12 +969,12 @@ class SynergyAnalytics(commands.Cog):
 
         return players if len(players) == 2 else None
 
-    async def _get_player_guid(self, player_name: str) -> Optional[str]:
+    async def _get_player_guid(self, player_name: str) -> str | None:
         """Get player GUID from name."""
         from bot.services.player_resolver_service import resolve_player_guid
         return await resolve_player_guid(self.bot.db_adapter, player_name)
 
-    async def _optimize_teams(self, player_list: List[tuple]) -> dict:
+    async def _optimize_teams(self, player_list: list[tuple]) -> dict:
         """
         Optimize team split based on synergies
         Tries all combinations and finds most balanced split
@@ -1028,7 +1030,7 @@ class SynergyAnalytics(commands.Cog):
 
         return best_split
 
-    async def _optimize_teams_top_n(self, player_list: List[tuple], n: int = 3) -> List[dict]:
+    async def _optimize_teams_top_n(self, player_list: list[tuple], n: int = 3) -> list[dict]:
         """
         Generate top N diverse balanced team splits.
         Returns multiple options with different compositions.
@@ -1149,8 +1151,8 @@ class SynergyAnalytics(commands.Cog):
         return selected
 
     async def _add_predictions_to_options(
-        self, options: List[dict]
-    ) -> List[dict]:
+        self, options: list[dict]
+    ) -> list[dict]:
         """
         Add match predictions to each team option.
 
@@ -1191,7 +1193,7 @@ class SynergyAnalytics(commands.Cog):
 
         return options
 
-    async def _calculate_team_synergy(self, team: List[tuple]) -> float:
+    async def _calculate_team_synergy(self, team: list[tuple]) -> float:
         """Calculate average synergy within a team"""
         if len(team) < 2:
             return 0.0
@@ -1222,7 +1224,7 @@ class SynergyAnalytics(commands.Cog):
         # Return average synergy (or 0 if no synergies found)
         return sum(synergies) / len(synergies) if synergies else 0.0
 
-    async def _get_player_partners(self, player_guid: str) -> List[dict]:
+    async def _get_player_partners(self, player_guid: str) -> list[dict]:
         """Get all partners for a player with their synergy scores"""
         partners = []
 

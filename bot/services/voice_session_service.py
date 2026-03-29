@@ -12,14 +12,14 @@ Extracted from ultimate_bot.py as part of Week 7-8 refactoring.
 """
 
 import asyncio
-import discord
-from datetime import datetime, timedelta
-from typing import Set, Optional, Dict, List
 import logging
+from datetime import datetime, timedelta
+
+import discord
 
 from bot.services.session_data_service import SessionDataService
-from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.session_embed_builder import SessionEmbedBuilder
+from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.stopwatch_scoring_service import StopwatchScoringService
 
 logger = logging.getLogger('VoiceSessionService')
@@ -67,18 +67,18 @@ class VoiceSessionService:
 
         # Session State
         self.session_active: bool = False
-        self.session_start_time: Optional[datetime] = None
-        self.session_participants: Set[int] = set()  # Discord user IDs
-        self.session_end_timer: Optional[asyncio.Task] = None
+        self.session_start_time: datetime | None = None
+        self.session_participants: set[int] = set()  # Discord user IDs
+        self.session_end_timer: asyncio.Task | None = None
 
         # Team Split Detection (Phase 2: Competitive Analytics)
-        self.channel_distribution: Dict[int, Set[int]] = {}  # {channel_id: {user_ids}}
+        self.channel_distribution: dict[int, set[int]] = {}  # {channel_id: {user_ids}}
         self.team_split_detected: bool = False
-        self.team_a_channel_id: Optional[int] = None
-        self.team_b_channel_id: Optional[int] = None
-        self.team_a_guids: List[str] = []
-        self.team_b_guids: List[str] = []
-        self.last_split_time: Optional[datetime] = None
+        self.team_a_channel_id: int | None = None
+        self.team_b_channel_id: int | None = None
+        self.team_a_guids: list[str] = []
+        self.team_b_guids: list[str] = []
+        self.last_split_time: datetime | None = None
         self.prediction_cooldown_minutes: int = config.prediction_cooldown_minutes
 
         # Prediction Engine (Phase 3: Competitive Analytics)
@@ -98,10 +98,10 @@ class VoiceSessionService:
             self.prediction_embed_builder = None
 
         # Team Suggestion Auto-Trigger (Phase 5: Smart Team Building)
-        self.team_suggest_debounce_task: Optional[asyncio.Task] = None
+        self.team_suggest_debounce_task: asyncio.Task | None = None
         self.last_team_suggest_count: int = 0
         self.team_suggest_cooldown_seconds: int = 30
-        self.team_suggest_thresholds: List[int] = [4, 6, 8, 10]  # Trigger at these counts
+        self.team_suggest_thresholds: list[int] = [4, 6, 8, 10]  # Trigger at these counts
 
         logger.info("✅ VoiceSessionService initialized")
 
@@ -228,7 +228,7 @@ class VoiceSessionService:
             if hasattr(self.bot, 'track_error'):
                 await self.bot.track_error("voice_session", str(e), max_consecutive=5)
 
-    async def start_session(self, participants: Set[int]):
+    async def start_session(self, participants: set[int]):
         """
         Start a gaming session when threshold met.
 
@@ -274,7 +274,7 @@ class VoiceSessionService:
                     severity="error"
                 )
 
-    async def delayed_end(self, last_participants: Set[int]):
+    async def delayed_end(self, last_participants: set[int]):
         """
         Wait before ending session (allows bathroom breaks).
 
@@ -680,7 +680,7 @@ class VoiceSessionService:
             return f"{minutes}m"
 
     async def _maybe_trigger_team_suggestions(
-        self, player_count: int, participants: Set[int]
+        self, player_count: int, participants: set[int]
     ):
         """
         Auto-trigger team suggestions when even numbers gather.
@@ -709,7 +709,7 @@ class VoiceSessionService:
         )
 
     async def _debounced_team_suggest(
-        self, player_count: int, participants: Set[int]
+        self, player_count: int, participants: set[int]
     ):
         """
         Wait for debounce period then post team suggestion notification.
@@ -910,7 +910,7 @@ class VoiceSessionService:
         except Exception as e:
             logger.error(f"❌ Error checking team split: {e}", exc_info=True)
 
-    async def _detect_team_split(self) -> Optional[Dict]:
+    async def _detect_team_split(self) -> dict | None:
         """
         Detect when players split into two roughly equal team channels.
 
@@ -1001,8 +1001,8 @@ class VoiceSessionService:
 
     async def _resolve_discord_ids_to_guids(
         self,
-        discord_ids: List[int]
-    ) -> List[str]:
+        discord_ids: list[int]
+    ) -> list[str]:
         """
         Convert Discord user IDs to ET:Legacy player GUIDs.
 
@@ -1047,8 +1047,8 @@ class VoiceSessionService:
 
     async def _get_player_names(
         self,
-        guids: List[str]
-    ) -> Dict[str, str]:
+        guids: list[str]
+    ) -> dict[str, str]:
         """
         Get player names for given GUIDs.
 

@@ -10,6 +10,7 @@ This demonstrates the filename validation protection against:
 
 import re
 
+
 def validate_stats_filename(filename: str) -> bool:
     """
     Strict validation for stats filenames.
@@ -128,12 +129,12 @@ def main():
         print(f"\nTest: {description}")
         print(f"  Filename: {filename[:80]}")
         print(f"  Expected: {'PASS' if should_pass else 'FAIL'}")
-        print(f"  Result: ", end="")
+        print("  Result: ", end="")
 
         result = validate_stats_filename(filename)
 
         if result == should_pass:
-            print(f"  ✅ CORRECT")
+            print("  ✅ CORRECT")
             passed += 1
         else:
             print(f"  ❌ WRONG (expected {should_pass}, got {result})")

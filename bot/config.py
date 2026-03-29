@@ -4,10 +4,10 @@ Supports PostgreSQL (primary) with environment variables or config file.
 SQLite settings are retained for legacy/fallback compatibility only.
 Consolidates all configuration from environment variables into a single object.
 """
-import os
 import json
 import logging
-from typing import Optional, Dict, Any, List
+import os
+from typing import Any
 
 # Load .env file if it exists
 try:
@@ -47,7 +47,7 @@ class BotConfig:
     and services, eliminating scattered os.getenv() calls throughout the codebase.
     """
 
-    def __init__(self, config_file: Optional[str] = None):
+    def __init__(self, config_file: str | None = None):
         """
         Initialize bot configuration.
 
@@ -102,7 +102,7 @@ class BotConfig:
 
         # Admin channels (supports comma-separated list)
         admin_channels_str = self._get_config('ADMIN_CHANNEL_ID', '0')
-        self.admin_channels: List[int] = [
+        self.admin_channels: list[int] = [
             int(ch.strip()) for ch in admin_channels_str.split(",") if ch.strip().isdigit()
         ]
         self.admin_channel_id: int = self.admin_channels[0] if self.admin_channels else 0
@@ -116,14 +116,14 @@ class BotConfig:
 
         # Voice channels for monitoring (comma-separated)
         gaming_channels_str = self._get_config('GAMING_VOICE_CHANNELS', '')
-        self.gaming_voice_channels: List[int] = (
+        self.gaming_voice_channels: list[int] = (
             [int(ch.strip()) for ch in gaming_channels_str.split(",") if ch.strip()]
             if gaming_channels_str else []
         )
 
         # Bot command channels (comma-separated)
         bot_channels_str = self._get_config('BOT_COMMAND_CHANNELS', '')
-        self.bot_command_channels: List[int] = (
+        self.bot_command_channels: list[int] = (
             [int(ch.strip()) for ch in bot_channels_str.split(",") if ch.strip()]
             if bot_channels_str else []
         )
@@ -144,11 +144,11 @@ class BotConfig:
             self.live_achievement_mode = 'off'
 
         # Derived channel lists (computed from above)
-        self.public_channels: List[int] = [
+        self.public_channels: list[int] = [
             ch for ch in [self.production_channel_id, self.gather_channel_id, self.general_channel_id]
             if ch != 0
         ]
-        self.all_allowed_channels: List[int] = list(set(self.public_channels + self.admin_channels))
+        self.all_allowed_channels: list[int] = list(set(self.public_channels + self.admin_channels))
 
         # ==================== SESSION DETECTION ====================
         self.session_start_threshold: int = int(self._get_config('SESSION_START_THRESHOLD', '6'))
@@ -469,7 +469,7 @@ class BotConfig:
     def _load_config_file(self):
         """Load configuration from JSON file."""
         try:
-            with open(self.config_file, 'r') as f:
+            with open(self.config_file) as f:
                 self._config_data = json.load(f)
             logger.info(f"📄 Config file loaded: {self.config_file}")
         except Exception as e:
@@ -499,7 +499,7 @@ class BotConfig:
         # 3. Return default
         return default
 
-    def get_database_adapter_kwargs(self) -> Dict[str, Any]:
+    def get_database_adapter_kwargs(self) -> dict[str, Any]:
         """
         Get kwargs for creating database adapter.
 
@@ -570,7 +570,7 @@ class BotConfig:
 
         logger.info(f"📝 Example config saved: {output_path}")
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         """
         Validate configuration and return list of errors.
 
@@ -671,7 +671,7 @@ class BotConfig:
 
 
 # Convenience function for quick config loading
-def load_config(config_file: Optional[str] = None) -> BotConfig:
+def load_config(config_file: str | None = None) -> BotConfig:
     """
     Load bot configuration.
 

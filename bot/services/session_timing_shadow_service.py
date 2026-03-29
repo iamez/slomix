@@ -13,7 +13,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Sequence
 
 logger = logging.getLogger("bot.services.session_timing_shadow")
 
@@ -25,7 +25,7 @@ class ComputedShadowTiming:
     new_dead_seconds: int
     new_denied_playtime: int
     cap_limit_seconds: int
-    lua_dead_seconds_raw: Optional[int]
+    lua_dead_seconds_raw: int | None
     fallback_reason: str
 
 
@@ -47,9 +47,9 @@ class PlayerRoundTimingShadow:
     dead_diff_seconds: int
     denied_diff_seconds: int
     lua_spawn_row_count: int
-    lua_dead_seconds_raw: Optional[int]
+    lua_dead_seconds_raw: int | None
     lua_dead_cap_seconds: int
-    lua_round_duration_seconds: Optional[int]
+    lua_round_duration_seconds: int | None
     fallback_reason: str
 
 
@@ -70,7 +70,7 @@ class PlayerSessionTimingShadow:
     lua_spawn_rows: int
     rounds_with_lua: int
     coverage_percent: float
-    fallback_reason_counts: Dict[str, int] = field(default_factory=dict)
+    fallback_reason_counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -85,20 +85,20 @@ class RoundTimingShadowDiagnostics:
     lua_spawn_rows_total: int
     lua_spawn_rows_matched: int
     coverage_percent: float
-    fallback_reason_counts: Dict[str, int] = field(default_factory=dict)
+    fallback_reason_counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class SessionTimingShadowResult:
     """Complete shadow timing result for a list of session_ids (round IDs)."""
 
-    session_ids: Tuple[int, ...]
+    session_ids: tuple[int, ...]
     generated_at: datetime
-    player_rounds: Tuple[PlayerRoundTimingShadow, ...]
-    player_summaries: Tuple[PlayerSessionTimingShadow, ...]
-    round_diagnostics: Tuple[RoundTimingShadowDiagnostics, ...]
+    player_rounds: tuple[PlayerRoundTimingShadow, ...]
+    player_summaries: tuple[PlayerSessionTimingShadow, ...]
+    round_diagnostics: tuple[RoundTimingShadowDiagnostics, ...]
     overall_coverage_percent: float
-    artifact_path: Optional[str]
+    artifact_path: str | None
 
 
 @dataclass
@@ -115,7 +115,7 @@ class SessionTimingShadowService:
     def __init__(self, db_adapter, artifact_dir: str | Path = "logs/timing_shadow"):
         self.db_adapter = db_adapter
         self.artifact_dir = Path(artifact_dir)
-        self._cache: Dict[Tuple[int, ...], SessionTimingShadowResult] = {}
+        self._cache: dict[tuple[int, ...], SessionTimingShadowResult] = {}
 
     @staticmethod
     def _coerce_int(value: object) -> int:
@@ -135,7 +135,7 @@ class SessionTimingShadowService:
         return str(guid or "").strip().lower()[:8]
 
     @staticmethod
-    def _format_reason(parts: List[str]) -> str:
+    def _format_reason(parts: list[str]) -> str:
         clean = [p for p in parts if p and p != "none"]
         return "|".join(clean) if clean else "none"
 
@@ -145,8 +145,8 @@ class SessionTimingShadowService:
         time_played_seconds: int,
         old_dead_seconds: int,
         old_denied_playtime: int,
-        lua_dead_seconds: Optional[int],
-        lua_round_duration_seconds: Optional[int],
+        lua_dead_seconds: int | None,
+        lua_round_duration_seconds: int | None,
         lua_missing_reason: str = "lua_missing_for_guid_prefix",
     ) -> ComputedShadowTiming:
         """
@@ -174,8 +174,8 @@ class SessionTimingShadowService:
             lua_round_cap = max(SessionTimingShadowService._coerce_int(lua_round_duration_seconds), 0)
             cap_limit = min(cap_limit, lua_round_cap)
 
-        reasons: List[str] = []
-        raw_lua_dead: Optional[int] = None
+        reasons: list[str] = []
+        raw_lua_dead: int | None = None
 
         if lua_dead_seconds is None:
             reasons.append(lua_missing_reason or "lua_missing_for_guid_prefix")
@@ -251,7 +251,7 @@ class SessionTimingShadowService:
             lua_rows = []
             lua_query_error = True
 
-        round_meta: Dict[int, Tuple[str, int, Optional[int]]] = {}
+        round_meta: dict[int, tuple[str, int, int | None]] = {}
         for row in round_rows:
             rid, map_name, round_number, lua_duration = tuple(row)
             round_meta[self._coerce_int(rid)] = (
@@ -260,7 +260,7 @@ class SessionTimingShadowService:
                 None if lua_duration is None else self._coerce_int(lua_duration),
             )
 
-        lua_by_prefix: Dict[Tuple[int, str], _LuaPrefixAggregate] = defaultdict(_LuaPrefixAggregate)
+        lua_by_prefix: dict[tuple[int, str], _LuaPrefixAggregate] = defaultdict(_LuaPrefixAggregate)
         round_lua_rows_total: Counter[int] = Counter()
 
         for row in lua_rows:
@@ -276,11 +276,11 @@ class SessionTimingShadowService:
             bucket.row_count += 1
             round_lua_rows_total[round_id] += 1
 
-        player_rounds: List[PlayerRoundTimingShadow] = []
+        player_rounds: list[PlayerRoundTimingShadow] = []
         round_player_counts: Counter[int] = Counter()
         round_players_with_lua: Counter[int] = Counter()
         round_lua_rows_matched: Counter[int] = Counter()
-        round_fallbacks: Dict[int, Counter[str]] = defaultdict(Counter)
+        round_fallbacks: dict[int, Counter[str]] = defaultdict(Counter)
 
         for row in old_rows:
             (
@@ -421,7 +421,7 @@ class SessionTimingShadowService:
         self,
         result: SessionTimingShadowResult,
         player_guid: str,
-    ) -> Optional[PlayerSessionTimingShadow]:
+    ) -> PlayerSessionTimingShadow | None:
         """Lookup aggregated session timing for one player GUID (supports prefix match)."""
         needle = self._guid_prefix(player_guid)
         if not needle:
@@ -439,7 +439,7 @@ class SessionTimingShadowService:
         self,
         result: SessionTimingShadowResult,
         player_guid: str,
-    ) -> Tuple[PlayerRoundTimingShadow, ...]:
+    ) -> tuple[PlayerRoundTimingShadow, ...]:
         """Lookup all round rows for one player GUID (supports prefix match)."""
         needle = self._guid_prefix(player_guid)
         if not needle:
@@ -458,7 +458,7 @@ class SessionTimingShadowService:
         n: int = 5,
         metric: str = "dead_diff_seconds",
         absolute: bool = True,
-    ) -> List[PlayerSessionTimingShadow]:
+    ) -> list[PlayerSessionTimingShadow]:
         """Return top-N player summaries by requested diff metric."""
         if n <= 0:
             return []
@@ -467,7 +467,7 @@ class SessionTimingShadowService:
         if metric not in allowed:
             raise ValueError(f"Unsupported metric '{metric}'. Allowed: {sorted(allowed)}")
 
-        def sort_key(row: PlayerSessionTimingShadow) -> Tuple[float, str]:
+        def sort_key(row: PlayerSessionTimingShadow) -> tuple[float, str]:
             value = getattr(row, metric)
             score = abs(value) if absolute else value
             return score, row.player_guid
@@ -537,15 +537,15 @@ class SessionTimingShadowService:
     def _build_round_diagnostics(
         self,
         *,
-        session_ids: Tuple[int, ...],
-        round_meta: Dict[int, Tuple[str, int, Optional[int]]],
+        session_ids: tuple[int, ...],
+        round_meta: dict[int, tuple[str, int, int | None]],
         round_player_counts: Counter[int],
         round_players_with_lua: Counter[int],
         round_lua_rows_total: Counter[int],
         round_lua_rows_matched: Counter[int],
-        round_fallbacks: Dict[int, Counter[str]],
-    ) -> List[RoundTimingShadowDiagnostics]:
-        diagnostics: List[RoundTimingShadowDiagnostics] = []
+        round_fallbacks: dict[int, Counter[str]],
+    ) -> list[RoundTimingShadowDiagnostics]:
+        diagnostics: list[RoundTimingShadowDiagnostics] = []
         for round_id in session_ids:
             map_name, round_number, _ = round_meta.get(round_id, ("unknown", 0, None))
             player_count = round_player_counts.get(round_id, 0)
@@ -570,8 +570,8 @@ class SessionTimingShadowService:
     def _build_player_summaries(
         self,
         player_rows: Sequence[PlayerRoundTimingShadow],
-    ) -> List[PlayerSessionTimingShadow]:
-        accumulator: Dict[str, Dict[str, object]] = {}
+    ) -> list[PlayerSessionTimingShadow]:
+        accumulator: dict[str, dict[str, object]] = {}
 
         for row in player_rows:
             bucket = accumulator.get(row.player_guid)
@@ -607,7 +607,7 @@ class SessionTimingShadowService:
             if isinstance(fallback_counts, Counter):
                 fallback_counts[row.fallback_reason] += 1
 
-        summaries: List[PlayerSessionTimingShadow] = []
+        summaries: list[PlayerSessionTimingShadow] = []
         for player_guid, bucket in accumulator.items():
             rounds = int(bucket["rounds"])
             coverage = round((int(bucket["rounds_with_lua"]) / rounds) * 100.0, 2) if rounds else 0.0
@@ -638,11 +638,11 @@ class SessionTimingShadowService:
     def _write_debug_artifact(
         self,
         *,
-        session_ids: Tuple[int, ...],
+        session_ids: tuple[int, ...],
         player_rows: Sequence[PlayerRoundTimingShadow],
         round_diagnostics: Sequence[RoundTimingShadowDiagnostics],
         generated_at: datetime,
-    ) -> Optional[str]:
+    ) -> str | None:
         if not player_rows:
             return None
 

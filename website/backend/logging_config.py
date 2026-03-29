@@ -9,16 +9,15 @@ Industry-standard logging setup with:
 - Request correlation IDs
 """
 
-import os
-import re
-import sys
 import json
 import logging
 import logging.handlers
+import os
+import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-
 
 # =============================================================================
 # Configuration

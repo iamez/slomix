@@ -10,13 +10,12 @@ from fastapi import FastAPI, Request
 
 pytest.importorskip("itsdangerous")
 pytest.importorskip("httpx")
+from fastapi.testclient import TestClient
 from starlette.middleware.sessions import SessionMiddleware
 
 from website.backend.dependencies import get_db
 from website.backend.routers import greatshot as greatshot_router
 from website.backend.services.greatshot_store import GreatshotStorageService
-
-from fastapi.testclient import TestClient
 
 
 class _FakeJobService:

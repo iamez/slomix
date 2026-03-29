@@ -33,7 +33,7 @@ class _DiagnosticsDB:
             return 768
 
         # All other tables "do not exist"
-        raise Exception(f'relation "unknown_table" does not exist')
+        raise Exception('relation "unknown_table" does not exist')
 
     async def fetch_one(self, query: str, params=()):
         normalized = _normalize_sql(query)

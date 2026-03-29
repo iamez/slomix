@@ -5,18 +5,20 @@ Extracted from api.py to reduce file size and improve maintainability.
 """
 
 from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from website.backend.dependencies import get_db
-from website.backend.local_database_adapter import DatabaseAdapter
+
 from bot.core.season_manager import SeasonManager
 from bot.core.utils import escape_like_pattern
+from website.backend.dependencies import get_db
+from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.routers.api_helpers import (
-    calculate_player_achievements,
-    resolve_player_guid,
-    resolve_display_name,
     batch_resolve_display_names,
+    calculate_player_achievements,
+    resolve_display_name,
+    resolve_player_guid,
 )
 
 router = APIRouter()
@@ -193,7 +195,7 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
     try:
         row = await db.fetch_one(query, (identifier,))
     except Exception as e:
-        print(f"Error fetching player stats: {e}")
+        logger.error(f"Error fetching player stats: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if not row or not row[0]:  # No kills usually means no stats found
@@ -240,7 +242,7 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         else:
             favorite_weapon = None
     except Exception as e:
-        print(f"Error fetching favorite weapon for {player_name}: {e}")
+        logger.error(f"Error fetching favorite weapon for {player_name}: {e}")
         favorite_weapon = None
 
     # Get favorite map (most played)
@@ -258,7 +260,7 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         map_row = await db.fetch_one(map_query, (identifier,))
         favorite_map = map_row[0] if map_row else None
     except Exception as e:
-        print(f"Error fetching favorite map for {player_name}: {e}")
+        logger.error(f"Error fetching favorite map for {player_name}: {e}")
         favorite_map = None
 
     # Get highest and lowest DPM (single round)
@@ -276,7 +278,7 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         highest_dpm = int(dpm_row[0]) if dpm_row and dpm_row[0] else None
         lowest_dpm = int(dpm_row[1]) if dpm_row and dpm_row[1] else None
     except Exception as e:
-        print(f"Error fetching DPM records for {player_name}: {e}")
+        logger.error(f"Error fetching DPM records for {player_name}: {e}")
         highest_dpm = None
         lowest_dpm = None
 
@@ -296,7 +298,7 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
             alias_rows = []
         aliases = [row[0] for row in alias_rows] if alias_rows else []
     except Exception as e:
-        print(f"Error fetching aliases for {player_name}: {e}")
+        logger.error(f"Error fetching aliases for {player_name}: {e}")
         aliases = []
 
     # Check Discord link status
@@ -309,7 +311,7 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         discord_row = await db.fetch_one(discord_query, (identifier,))
         discord_linked = discord_row is not None
     except Exception as e:
-        print(f"Error checking Discord link for {player_name}: {e}")
+        logger.error(f"Error checking Discord link for {player_name}: {e}")
         discord_linked = False
 
     return {
@@ -394,7 +396,7 @@ async def compare_players(
     try:
         rows = await db.fetch_all(query, tuple(params))
     except Exception as e:
-        print(f"Error comparing players: {e}")
+        logger.error(f"Error comparing players: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if len(rows) < 2:
@@ -949,7 +951,7 @@ async def get_player_matches(
     try:
         rows = await db.fetch_all(query, (identifier, limit))
     except Exception as e:
-        print(f"Error fetching player matches: {e}")
+        logger.error(f"Error fetching player matches: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if not rows:
@@ -1020,7 +1022,7 @@ async def get_player_form(
     try:
         rows = await db.fetch_all(query, (identifier, limit))
     except Exception as e:
-        print(f"Error fetching player form: {e}")
+        logger.error(f"Error fetching player form: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if not rows:
@@ -1099,7 +1101,7 @@ async def get_player_rounds(
     try:
         rows = await db.fetch_all(query, (identifier, limit))
     except Exception as e:
-        print(f"Error fetching player rounds: {e}")
+        logger.error(f"Error fetching player rounds: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if not rows:

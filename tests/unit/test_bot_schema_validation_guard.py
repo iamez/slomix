@@ -6,7 +6,6 @@ import pytest
 
 from bot.ultimate_bot import UltimateETLegacyBot
 
-
 REQUIRED_COLUMNS = [
     "round_id",
     "player_guid",

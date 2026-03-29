@@ -18,7 +18,7 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +26,11 @@ logger = logging.getLogger(__name__)
 class TTLCache:
     """Simple TTL cache with max size."""
     def __init__(self, maxsize: int = 500, ttl_seconds: int = 3600):
-        self._cache: Dict[str, Tuple[Any, float]] = {}
+        self._cache: dict[str, tuple[Any, float]] = {}
         self._maxsize = maxsize
         self._ttl = ttl_seconds
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         import time
         if key in self._cache:
             value, timestamp = self._cache[key]
@@ -87,17 +87,17 @@ class MatchupResult:
     """Result of a single matchup instance."""
     session_date: str
     gaming_session_id: int
-    map_name: Optional[str] = None
+    map_name: str | None = None
 
     # Which lineup won (lineup_a_hash or lineup_b_hash)
-    winner_lineup_hash: Optional[str] = None
+    winner_lineup_hash: str | None = None
 
     # Score if available
     lineup_a_score: int = 0
     lineup_b_score: int = 0
 
     # Player stats for this match (guid -> stats dict)
-    player_stats: Dict[str, Dict] = field(default_factory=dict)
+    player_stats: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass
@@ -108,10 +108,10 @@ class MatchupStats:
     matchup_id: str  # Normalized: {lower_hash}:{higher_hash}
 
     # Lineup details
-    lineup_a_guids: List[str] = field(default_factory=list)
-    lineup_b_guids: List[str] = field(default_factory=list)
-    lineup_a_names: List[str] = field(default_factory=list)
-    lineup_b_names: List[str] = field(default_factory=list)
+    lineup_a_guids: list[str] = field(default_factory=list)
+    lineup_b_guids: list[str] = field(default_factory=list)
+    lineup_a_names: list[str] = field(default_factory=list)
+    lineup_b_names: list[str] = field(default_factory=list)
 
     # Aggregate stats
     total_matches: int = 0
@@ -124,22 +124,22 @@ class MatchupStats:
     lineup_b_winrate: float = 0.0
 
     # Per-player performance in this matchup
-    player_stats: Dict[str, PlayerMatchupStats] = field(default_factory=dict)
+    player_stats: dict[str, PlayerMatchupStats] = field(default_factory=dict)
 
     # Best/worst performers
-    top_performer_guid: Optional[str] = None
+    top_performer_guid: str | None = None
     top_performer_impact: float = 0.0
-    worst_performer_guid: Optional[str] = None
+    worst_performer_guid: str | None = None
     worst_performer_impact: float = 0.0
 
     # Map breakdown (if tracking by map)
-    map_stats: Dict[str, Dict] = field(default_factory=dict)
+    map_stats: dict[str, dict] = field(default_factory=dict)
 
     # Confidence level
     confidence: str = "low"  # low, medium, high
 
     # Last played
-    last_played: Optional[str] = None
+    last_played: str | None = None
 
 
 class MatchupAnalyticsService:
@@ -165,7 +165,7 @@ class MatchupAnalyticsService:
     # =========================================================================
 
     @staticmethod
-    def create_lineup_hash(player_guids: List[str]) -> str:
+    def create_lineup_hash(player_guids: list[str]) -> str:
         """
         Create a deterministic hash for a lineup.
 
@@ -230,7 +230,7 @@ class MatchupAnalyticsService:
         self,
         player_guid: str,
         days_back: int = 90
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Get a player's baseline (career average) statistics.
 
@@ -291,9 +291,9 @@ class MatchupAnalyticsService:
 
     async def get_player_baselines_batch(
         self,
-        player_guids: List[str],
+        player_guids: list[str],
         days_back: int = 90
-    ) -> Dict[str, Dict[str, float]]:
+    ) -> dict[str, dict[str, float]]:
         """
         Get baselines for multiple players efficiently.
 
@@ -315,15 +315,15 @@ class MatchupAnalyticsService:
 
     async def record_matchup(
         self,
-        lineup_a_guids: List[str],
-        lineup_b_guids: List[str],
+        lineup_a_guids: list[str],
+        lineup_b_guids: list[str],
         session_date: str,
         gaming_session_id: int,
-        winner_lineup: Optional[str] = None,  # 'a', 'b', or None for tie
+        winner_lineup: str | None = None,  # 'a', 'b', or None for tie
         lineup_a_score: int = 0,
         lineup_b_score: int = 0,
-        map_name: Optional[str] = None,
-        player_stats: Optional[Dict[str, Dict]] = None
+        map_name: str | None = None,
+        player_stats: dict[str, dict] | None = None
     ) -> bool:
         """
         Record a matchup result to the database.
@@ -399,11 +399,11 @@ class MatchupAnalyticsService:
 
     async def get_matchup_stats(
         self,
-        lineup_a_guids: List[str],
-        lineup_b_guids: List[str],
-        map_name: Optional[str] = None,
+        lineup_a_guids: list[str],
+        lineup_b_guids: list[str],
+        map_name: str | None = None,
         days_back: int = 365
-    ) -> Optional[MatchupStats]:
+    ) -> MatchupStats | None:
         """
         Get aggregated statistics for a specific matchup.
 
@@ -463,7 +463,7 @@ class MatchupAnalyticsService:
             )
 
             # Aggregate results
-            player_match_stats: Dict[str, List[Dict]] = {}  # guid -> list of match stats
+            player_match_stats: dict[str, list[dict]] = {}  # guid -> list of match stats
 
             for row in rows:
                 (session_date, gaming_session_id, row_map, winner_hash,
@@ -598,7 +598,7 @@ class MatchupAnalyticsService:
         player_guid: str,
         teammate_guid: str,
         days_back: int = 90
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Calculate synergy between two players when on the same team.
 
@@ -689,7 +689,7 @@ class MatchupAnalyticsService:
         player_guid: str,
         opponent_guid: str,
         days_back: int = 90
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Calculate anti-synergy (performance vs specific opponent).
 
@@ -837,7 +837,7 @@ class MatchupAnalyticsService:
 
     def format_synergy_summary(
         self,
-        synergy: Dict[str, Any],
+        synergy: dict[str, Any],
         player_name: str,
         teammate_name: str
     ) -> str:

@@ -76,10 +76,10 @@ def test_rate_limiting():
     timestamps[webhook_id].clear()
     allowed, wait = check_rate_limit(webhook_id, timestamps)
     if allowed:
-        print(f"  Request 1 (after reset): ✅ Allowed")
+        print("  Request 1 (after reset): ✅ Allowed")
         passed += 1
     else:
-        print(f"  Request 1 (after reset): ❌ Unexpected limit")
+        print("  Request 1 (after reset): ❌ Unexpected limit")
         failed += 1
 
     print("\nTest 4: Burst then wait (rapid fire 5, wait 60s, then 5 more)")
@@ -94,10 +94,10 @@ def test_rate_limiting():
             break
 
     if burst1_success:
-        print(f"  First burst: ✅ 5 requests allowed")
+        print("  First burst: ✅ 5 requests allowed")
         passed += 1
     else:
-        print(f"  First burst: ❌ Failed to allow all 5 requests")
+        print("  First burst: ❌ Failed to allow all 5 requests")
         failed += 1
 
     # Simulate 60s passing
@@ -112,10 +112,10 @@ def test_rate_limiting():
             break
 
     if burst2_success:
-        print(f"  Second burst: ✅ 5 requests allowed")
+        print("  Second burst: ✅ 5 requests allowed")
         passed += 1
     else:
-        print(f"  Second burst: ❌ Failed to allow all 5 requests")
+        print("  Second burst: ❌ Failed to allow all 5 requests")
         failed += 1
 
     print("\nTest 5: Multiple webhook IDs (isolation)")
@@ -134,10 +134,10 @@ def test_rate_limiting():
     allowed_2, wait = check_rate_limit(webhook_id_2, timestamps)
 
     if not allowed_1 and allowed_2:
-        print(f"  Webhook isolation: ✅ IDs are rate-limited independently")
+        print("  Webhook isolation: ✅ IDs are rate-limited independently")
         passed += 1
     else:
-        print(f"  Webhook isolation: ❌ Rate limits not properly isolated")
+        print("  Webhook isolation: ❌ Rate limits not properly isolated")
         failed += 1
 
     print()

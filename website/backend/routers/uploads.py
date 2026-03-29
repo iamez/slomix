@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
@@ -21,7 +21,7 @@ router = APIRouter()
 # Rate limiter (in-memory, resets on restart -- sufficient for single-process)
 # ---------------------------------------------------------------------------
 
-_rate_window: Dict[int, List[float]] = defaultdict(list)
+_rate_window: dict[int, list[float]] = defaultdict(list)
 _last_rate_cleanup: float = 0.0
 RATE_LIMIT_PER_HOUR = 10
 
@@ -50,7 +50,7 @@ def _check_rate_limit(discord_id: int) -> None:
 # Auth helper (mirrors greatshot pattern)
 # ---------------------------------------------------------------------------
 
-def _require_user(request: Request) -> Dict[str, Any]:
+def _require_user(request: Request) -> dict[str, Any]:
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -59,7 +59,7 @@ def _require_user(request: Request) -> Dict[str, Any]:
     return user
 
 
-def _optional_user(request: Request) -> Optional[Dict[str, Any]]:
+def _optional_user(request: Request) -> dict[str, Any] | None:
     user = request.session.get("user")
     if user and "id" in user:
         return user
@@ -220,10 +220,10 @@ async def upload_file(
 
 @router.get("")
 async def list_uploads(
-    category: Optional[str] = Query(None, max_length=20),
-    tag: Optional[str] = Query(None, max_length=50),
-    search: Optional[str] = Query(None, max_length=100),
-    uploader: Optional[int] = None,
+    category: str | None = Query(None, max_length=20),
+    tag: str | None = Query(None, max_length=50),
+    search: str | None = Query(None, max_length=100),
+    uploader: int | None = None,
     limit: int = Query(default=50, le=100, ge=1),
     offset: int = Query(default=0, ge=0),
     db=Depends(get_db),
@@ -351,7 +351,7 @@ async def download_upload(
     upload_id: str,
     force_download: bool = False,
     db=Depends(get_db),
-    range: Optional[str] = Header(None),
+    range: str | None = Header(None),
 ):
     """Download an uploaded file with safe headers. Supports Range requests for video seeking."""
     row = await db.fetch_one(

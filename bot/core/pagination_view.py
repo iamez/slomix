@@ -19,11 +19,11 @@ Author: ET:Legacy Stats Bot
 Date: November 7, 2025
 """
 
-import discord
-from discord.ui import View, Button
-from discord import ButtonStyle, Interaction
-from typing import List
 import logging
+
+import discord
+from discord import ButtonStyle, Interaction
+from discord.ui import Button, View
 
 logger = logging.getLogger("bot.core.pagination_view")
 
@@ -31,7 +31,7 @@ logger = logging.getLogger("bot.core.pagination_view")
 class PaginationView(View):
     """Interactive button-based pagination for Discord embeds"""
 
-    def __init__(self, ctx, pages: List[discord.Embed], timeout: int = 180):
+    def __init__(self, ctx, pages: list[discord.Embed], timeout: int = 180):
         """
         Initialize pagination view
 
@@ -115,7 +115,8 @@ class PaginationView(View):
                     embed.set_footer(text="Navigation expired. Run the command again to continue.")
                 await self.message.edit(embed=embed, view=self)
             except Exception:
-                pass  # Message may have been deleted; safe to ignore
+                logger.debug("Could not disable pagination buttons (message likely deleted)")
+
 
     async def interaction_check(self, interaction: Interaction) -> bool:
         """

@@ -14,6 +14,7 @@ Coverage:
 """
 
 import unittest
+
 from bot.community_stats_parser import C0RNP0RN3StatsParser
 
 

@@ -7,14 +7,12 @@ import os
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from fastapi import HTTPException, UploadFile
 
 from greatshot.config import CONFIG
 from greatshot.scanner.api import sniff_demo_header_bytes
 from website.backend.logging_config import get_app_logger
-
 
 logger = get_app_logger("greatshot.store")
 
@@ -37,7 +35,7 @@ class GreatshotStorageService:
 
         self.root = root
         self.max_upload_bytes = int(CONFIG.max_upload_bytes)
-        self.allowed_extensions = set(ext.lower() for ext in CONFIG.allow_extensions)
+        self.allowed_extensions = {ext.lower() for ext in CONFIG.allow_extensions}
         self.allowed_mime_types = {
             "application/octet-stream",
             "application/x-octet-stream",
@@ -179,7 +177,7 @@ class GreatshotStorageService:
             content_hash_sha256=digest.hexdigest(),
         )
 
-    def safe_relative(self, absolute_path: str | Path) -> Optional[str]:
+    def safe_relative(self, absolute_path: str | Path) -> str | None:
         try:
             resolved = Path(absolute_path).resolve()
             relative = resolved.relative_to(self.root)

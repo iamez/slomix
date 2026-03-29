@@ -3,22 +3,22 @@ Pytest Configuration and Shared Fixtures
 Provides test fixtures for database, Discord mocks, and async operations
 """
 
-import pytest
 import asyncio
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock
-from typing import Dict, Any
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 # Import bot modules
-from bot.core.database_adapter import DatabaseAdapter, PostgreSQLAdapter
 from bot.config import BotConfig
-
+from bot.core.database_adapter import DatabaseAdapter, PostgreSQLAdapter
 
 # ============================================
 # EVENT LOOP CONFIGURATION
@@ -43,7 +43,7 @@ def event_loop(event_loop_policy):
 # ============================================
 
 @pytest.fixture(scope="session")
-def test_db_config() -> Dict[str, Any]:
+def test_db_config() -> dict[str, Any]:
     """
     Test database configuration
 

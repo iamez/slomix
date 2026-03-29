@@ -12,7 +12,6 @@ import bisect
 import logging
 import math
 from datetime import date, timedelta
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +126,7 @@ def _compute_category_score(
     return round(score, 2), breakdown
 
 
-async def compute_prox_scores(db, range_days: int = 30, player_guid: Optional[str] = None):
+async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None = None):
     """
     Main entry point. Computes prox_combat, prox_team, prox_gamesense, prox_overall
     for all players (or one player) within range_days.

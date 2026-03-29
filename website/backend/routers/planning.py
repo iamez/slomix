@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from datetime import date, datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -17,24 +17,24 @@ router = APIRouter()
 
 PLANNING_COMMITTED_STATUSES = {"LOOKING", "AVAILABLE"}
 PLANNING_PARTICIPANT_STATUSES = {"LOOKING", "AVAILABLE", "MAYBE"}
-_fake_planning_rooms: dict[str, Dict[str, Any]] = {}
+_fake_planning_rooms: dict[str, dict[str, Any]] = {}
 
 
-def _require_user(request: Request) -> Dict[str, Any]:
+def _require_user(request: Request) -> dict[str, Any]:
     user = request.session.get("user")
     if not user or "id" not in user:
         raise HTTPException(status_code=401, detail="Authentication required")
     return user
 
 
-def _optional_user(request: Request) -> Optional[Dict[str, Any]]:
+def _optional_user(request: Request) -> dict[str, Any] | None:
     user = request.session.get("user")
     if not user or "id" not in user:
         return None
     return user
 
 
-def _optional_user_id(request: Request) -> Optional[int]:
+def _optional_user_id(request: Request) -> int | None:
     user = _optional_user(request)
     if not user:
         return None
@@ -44,7 +44,7 @@ def _optional_user_id(request: Request) -> Optional[int]:
         return None
 
 
-def _website_user_id_from_user(user: Dict[str, Any]) -> Optional[int]:
+def _website_user_id_from_user(user: dict[str, Any]) -> int | None:
     for key in ("website_user_id", "id"):
         raw = user.get(key)
         try:
@@ -101,7 +101,7 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _build_default_fake_room(target_date: date) -> Dict[str, Any]:
+def _build_default_fake_room(target_date: date) -> dict[str, Any]:
     date_iso = target_date.isoformat()
     now_iso = _now_iso()
     participants = [
@@ -150,7 +150,7 @@ def _build_default_fake_room(target_date: date) -> Dict[str, Any]:
     }
 
 
-def _ensure_fake_room(target_date: date) -> Dict[str, Any]:
+def _ensure_fake_room(target_date: date) -> dict[str, Any]:
     key = target_date.isoformat()
     room = _fake_planning_rooms.get(key)
     if room is None:
@@ -159,7 +159,7 @@ def _ensure_fake_room(target_date: date) -> Dict[str, Any]:
     return room
 
 
-def _display_name_for_session_user(user: Dict[str, Any], discord_user_id: int) -> str:
+def _display_name_for_session_user(user: dict[str, Any], discord_user_id: int) -> str:
     linked_player = user.get("linked_player")
     if isinstance(linked_player, str) and linked_player.strip():
         return linked_player.strip()
@@ -169,7 +169,7 @@ def _display_name_for_session_user(user: Dict[str, Any], discord_user_id: int) -
     return f"User {discord_user_id}"
 
 
-def _fake_room_participant_map(room: Dict[str, Any]) -> Dict[int, str]:
+def _fake_room_participant_map(room: dict[str, Any]) -> dict[int, str]:
     return {
         int(row["user_id"]): str(row.get("display_name") or f"User {row['user_id']}")
         for row in room.get("participants", [])
@@ -178,10 +178,10 @@ def _fake_room_participant_map(room: Dict[str, Any]) -> Dict[int, str]:
 
 
 def _fake_room_response(
-    room: Dict[str, Any],
+    room: dict[str, Any],
     *,
     request: Request,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     user = _optional_user(request)
     viewer_website_user_id = _website_user_id_from_user(user) if user else None
     viewer_linked = bool(user)
@@ -196,7 +196,7 @@ def _fake_room_response(
     ]
     participant_name_map = _fake_room_participant_map(room)
 
-    suggestions: list[Dict[str, Any]] = []
+    suggestions: list[dict[str, Any]] = []
     for row in room.get("suggestions", []):
         voter_ids = {int(value) for value in row.get("voter_ids", set())}
         suggestions.append(
@@ -212,7 +212,7 @@ def _fake_room_response(
         )
     suggestions.sort(key=lambda item: (-int(item["votes"]), str(item["name"]).lower(), int(item["id"])))
 
-    teams: Dict[str, Dict[str, Any]] = {}
+    teams: dict[str, dict[str, Any]] = {}
     for side in ("A", "B"):
         raw_team = room.get("teams", {}).get(side, {})
         captain_user_id = raw_team.get("captain_user_id")
@@ -269,7 +269,7 @@ def _fake_room_response(
     }
 
 
-def _maybe_fake_room_for_date(target_date: date) -> Optional[Dict[str, Any]]:
+def _maybe_fake_room_for_date(target_date: date) -> dict[str, Any] | None:
     if not _planning_fake_room_enabled():
         return None
     return _ensure_fake_room(target_date)
@@ -303,7 +303,7 @@ async def _is_promoter_user(request: Request, db) -> bool:
     return False
 
 
-async def _is_discord_linked(user: Dict[str, Any], db) -> bool:
+async def _is_discord_linked(user: dict[str, Any], db) -> bool:
     if user.get("linked_player"):
         return True
 
@@ -331,7 +331,7 @@ async def _is_discord_linked(user: Dict[str, Any], db) -> bool:
     return row is not None
 
 
-async def _require_linked_identity(request: Request, db) -> tuple[Dict[str, Any], int, int]:
+async def _require_linked_identity(request: Request, db) -> tuple[dict[str, Any], int, int]:
     user = _require_user(request)
     try:
         discord_user_id = int(user["id"])
@@ -377,7 +377,7 @@ async def _today_readiness(db, target_date: date) -> tuple[int, int, bool]:
     return threshold, looking_count, looking_count >= threshold
 
 
-async def _participants_for_date(db, target_date: date) -> list[Dict[str, Any]]:
+async def _participants_for_date(db, target_date: date) -> list[dict[str, Any]]:
     rows = await db.fetch_all(
         """
         SELECT ae.user_id,
@@ -392,7 +392,7 @@ async def _participants_for_date(db, target_date: date) -> list[Dict[str, Any]]:
         (target_date,),
     )
 
-    participants: list[Dict[str, Any]] = []
+    participants: list[dict[str, Any]] = []
     seen: set[int] = set()
     for row in rows or []:
         user_id = int(row[0])
@@ -425,7 +425,7 @@ async def _session_row_for_date(db, target_date: date):
     )
 
 
-async def _resolve_display_name(db, user_id: int, cache: Dict[int, str]) -> str:
+async def _resolve_display_name(db, user_id: int, cache: dict[int, str]) -> str:
     if user_id in cache:
         return cache[user_id]
 
@@ -441,7 +441,7 @@ async def _resolve_display_name(db, user_id: int, cache: Dict[int, str]) -> str:
     return name
 
 
-async def _session_payload(db, session_row, *, viewer_user_id: Optional[int], display_name_cache: Dict[int, str]) -> Dict[str, Any]:
+async def _session_payload(db, session_row, *, viewer_user_id: int | None, display_name_cache: dict[int, str]) -> dict[str, Any]:
     session_id = int(session_row[0])
 
     suggestion_rows = await db.fetch_all(
@@ -459,7 +459,7 @@ async def _session_payload(db, session_row, *, viewer_user_id: Optional[int], di
     )
 
     vote_counts: dict[int, int] = {}
-    my_vote_suggestion_id: Optional[int] = None
+    my_vote_suggestion_id: int | None = None
     for vote_row in vote_rows or []:
         suggestion_id = int(vote_row[0])
         voter_id = int(vote_row[1])
@@ -467,7 +467,7 @@ async def _session_payload(db, session_row, *, viewer_user_id: Optional[int], di
         if viewer_user_id is not None and voter_id == int(viewer_user_id):
             my_vote_suggestion_id = suggestion_id
 
-    suggestions: list[Dict[str, Any]] = []
+    suggestions: list[dict[str, Any]] = []
     for row in suggestion_rows or []:
         suggestion_id = int(row[0])
         suggester_id = int(row[2])
@@ -495,7 +495,7 @@ async def _session_payload(db, session_row, *, viewer_user_id: Optional[int], di
         (session_id,),
     )
 
-    teams: Dict[str, Dict[str, Any]] = {
+    teams: dict[str, dict[str, Any]] = {
         "A": {"side": "A", "captain_user_id": None, "captain_name": None, "members": []},
         "B": {"side": "B", "captain_user_id": None, "captain_name": None, "members": []},
     }
@@ -521,7 +521,7 @@ async def _session_payload(db, session_row, *, viewer_user_id: Optional[int], di
             """,
             (team_id,),
         )
-        members: list[Dict[str, Any]] = []
+        members: list[dict[str, Any]] = []
         for member_row in member_rows or []:
             member_user_id = int(member_row[0])
             members.append(
@@ -551,7 +551,7 @@ async def _planning_state(
     request: Request,
     target_date: date,
     session_row,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     user = _optional_user(request)
     viewer_website_user_id = _website_user_id_from_user(user) if user else None
     viewer_linked = bool(user and await _is_discord_linked(user, db))
@@ -594,7 +594,7 @@ async def _planning_state(
 @router.get("/today")
 async def get_today_planning_room(
     request: Request,
-    target_date: Optional[date] = Query(default=None, alias="date"),
+    target_date: date | None = Query(default=None, alias="date"),
     db=Depends(get_db),
 ):
     resolved_date = target_date or await _current_db_date(db)
