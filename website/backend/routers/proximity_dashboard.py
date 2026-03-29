@@ -542,6 +542,7 @@ async def get_proximity_kill_outcomes(
 
         # Recent events
         safe_limit = max(1, min(limit, 500))
+        limit_idx = len(params) + 1
         events = await db.fetch_all(
             f"""
             SELECT kill_time, victim_guid, victim_name, killer_guid, killer_name,
@@ -550,9 +551,9 @@ async def get_proximity_kill_outcomes(
                    session_date, map_name, round_number
             FROM proximity_kill_outcome {where_sql}
             ORDER BY session_date DESC, kill_time DESC
-            LIMIT {safe_limit}
+            LIMIT ${limit_idx}
             """,
-            query_params,
+            query_params + (safe_limit,),
         )
 
         return {
