@@ -299,7 +299,7 @@ async def _is_discord_linked(user: dict[str, Any], db) -> bool:
                 return True
         except Exception:
             # Rollout fallback: if new link table does not exist, legacy path below.
-            pass
+            logger.debug("user_player_links lookup failed, falling back to discord_id check", exc_info=True)
 
     try:
         discord_id = int(user["id"])

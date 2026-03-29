@@ -1019,7 +1019,7 @@ class UltimateETLegacyBot(commands.Bot):
                     try:
                         ssh.close()
                     except Exception:  # nosec B110
-                        pass  # SSH cleanup is best-effort
+                        logger.debug("SSH connection cleanup failed", exc_info=True)
 
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _list_files_sync)
@@ -3186,7 +3186,7 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     rcon.close()
                 except Exception:
-                    pass
+                    logger.debug("RCON cleanup failed during shutdown", exc_info=True)
             logger.info("Live status updater stopped (shutdown)")
             raise  # Re-raise to properly cancel the task
 
@@ -3196,7 +3196,7 @@ class UltimateETLegacyBot(commands.Bot):
                 try:
                     rcon.close()
                 except Exception:
-                    pass
+                    logger.debug("RCON cleanup failed after error", exc_info=True)
             logger.error(f"Live status update error: {e}", exc_info=True)
 
     @live_status_updater.before_loop
@@ -3587,7 +3587,7 @@ class UltimateETLegacyBot(commands.Bot):
                     f"user={author} embeds={embed_count} content={content!r}"
                 )
             except Exception:
-                pass
+                logger.debug("Failed to format webhook debug info", exc_info=True)
 
         # Check if webhook trigger is configured
         trigger_channel_id = self.config.webhook_trigger_channel_id

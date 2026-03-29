@@ -100,7 +100,7 @@ class LastSessionCog(commands.Cog):
             try:
                 await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
-                pass  # Alias is optional, continue without it
+                logger.debug("Failed to set up player_name alias (optional)", exc_info=True)
 
             # Phase 1: Get session data
             latest_date = await self.data_service.get_latest_session_date()

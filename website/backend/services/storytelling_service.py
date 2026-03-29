@@ -243,11 +243,11 @@ class StorytellingService:
         # Spawn timing bonus (1.0 + score, range 1.0-2.0)
         spawn_mult = 1.0
         if round_key in spawn_timings:
-            best_score = 0.0
-            for st_guid, st_time, st_score in spawn_timings[round_key]:
-                if st_guid == killer_guid and abs(st_time - kill_time) <= 2000:
-                    best_score = st_score
-                    break
+            best_score = max(
+                (st_score for st_guid, st_time, st_score in spawn_timings[round_key]
+                 if st_guid == killer_guid and abs(st_time - kill_time) <= 2000),
+                default=0.0,
+            )
             spawn_mult = 1.0 + best_score
 
         # Kill outcome multiplier
@@ -265,8 +265,11 @@ class StorytellingService:
         dist_mult = DISTANCE_NORMAL
 
         # Total impact = product of all multipliers
-        total = (1.0 * carrier_mult * push_mult * cf_mult
-                 * spawn_mult * outcome_mult * class_mult * dist_mult)
+        raw = (1.0 * carrier_mult * push_mult * cf_mult
+               * spawn_mult * outcome_mult * class_mult * dist_mult)
+        # Soft cap: linear compression above 5.0 (25% above threshold)
+        # Preserves ordering while preventing outlier dominance
+        total = raw if raw <= 5.0 else 5.0 + (raw - 5.0) * 0.25
 
         return {
             'kill_outcome_id': ko_id,
@@ -510,21 +513,24 @@ class StorytellingService:
             "SELECT round_start_unix, round_number, pickup_time FROM proximity_carrier_event "
             "WHERE session_date = $1", (sd,))
         for r in (rows or []):
-            result.setdefault((r[0], r[1]), []).append(r[2] or 0)
+            if r[2] and r[2] > 0:
+                result.setdefault((r[0], r[1]), []).append(r[2])
 
         # Objective runs (plants, constructions, defuses)
         rows = await self.db.fetch_all(
             "SELECT round_start_unix, round_number, action_time FROM proximity_objective_run "
             "WHERE session_date = $1", (sd,))
         for r in (rows or []):
-            result.setdefault((r[0], r[1]), []).append(r[2] or 0)
+            if r[2] and r[2] > 0:
+                result.setdefault((r[0], r[1]), []).append(r[2])
 
         # Construction events
         rows = await self.db.fetch_all(
             "SELECT round_start_unix, round_number, event_time FROM proximity_construction_event "
             "WHERE session_date = $1", (sd,))
         for r in (rows or []):
-            result.setdefault((r[0], r[1]), []).append(r[2] or 0)
+            if r[2] and r[2] > 0:
+                result.setdefault((r[0], r[1]), []).append(r[2])
 
         return result
 
@@ -2219,7 +2225,7 @@ class StorytellingService:
         worse_composite = 0.0
         best_axis_name = ""
         best_axis_val = 0.0
-        teams = synergy.get("teams", {})
+        teams = synergy.get("groups", {})
         if teams:
             composites = {t: d.get("composite", 0) for t, d in teams.items()}
             if composites:

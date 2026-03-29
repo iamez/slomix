@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
-
+from typing import Any
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -19,10 +18,10 @@ class DemoEvent:
     hit_region: str | None = None
     team: str | None = None
     message: str | None = None
-    meta: Dict[str, Any] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "t_ms": int(self.t_ms),
             "type": self.type,
         }
@@ -51,9 +50,9 @@ class Highlight:
     end_ms: int
     score: float
     explanation: str
-    meta: Dict[str, Any] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         payload = {
             "type": self.highlight_type,
             "player": self.player,
@@ -69,16 +68,16 @@ class Highlight:
 
 @dataclass
 class AnalysisResult:
-    metadata: Dict[str, Any]
-    players: List[Dict[str, Any]]
-    timeline: List[DemoEvent]
-    stats: Dict[str, Any]
-    highlights: List[Highlight] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    parser: Dict[str, Any] = field(default_factory=dict)
-    player_stats: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    metadata: dict[str, Any]
+    players: list[dict[str, Any]]
+    timeline: list[DemoEvent]
+    stats: dict[str, Any]
+    highlights: list[Highlight] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    parser: dict[str, Any] = field(default_factory=dict)
+    player_stats: dict[str, dict[str, Any]] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         result = {
             "schema_version": SCHEMA_VERSION,
             "metadata": self.metadata,

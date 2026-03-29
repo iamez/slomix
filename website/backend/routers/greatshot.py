@@ -49,7 +49,8 @@ def _parse_json_field(value: Any) -> Any:
     if isinstance(value, str):
         try:
             return json.loads(value)
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
+            logger.debug("Failed to parse JSON field: %.100s", value)
             return None
     return None
 

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Dict
-
 PROFILE_ID = "etlegacy_main"
 PROFILE_NAME = "ET:Legacy Main"
 
 # Cause-of-death values from parsed demos mapped to canonical identifiers.
-WEAPON_MAP: Dict[str, str] = {
+WEAPON_MAP: dict[str, str] = {
     "AKIMBO COLT": "akimbo_colt",
     "AKIMBO LUGER": "akimbo_luger",
     "ARTILLERY": "artillery",
@@ -47,7 +45,7 @@ WEAPON_MAP: Dict[str, str] = {
     "WATER": "water",
 }
 
-TEAM_MAP: Dict[str, str] = {
+TEAM_MAP: dict[str, str] = {
     "axis": "axis",
     "allies": "allies",
     "spectator": "spectator",
@@ -55,7 +53,7 @@ TEAM_MAP: Dict[str, str] = {
 }
 
 # g_gametype values observed in ET family servers.
-GAMETYPE_BY_ID: Dict[str, str] = {
+GAMETYPE_BY_ID: dict[str, str] = {
     "0": "ffa",
     "1": "1v1",
     "2": "objective",

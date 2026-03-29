@@ -7,7 +7,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from greatshot.config import CONFIG
 from greatshot.scanner.errors import ParseToolFailedError, ParseToolMissingError
@@ -38,15 +38,14 @@ def run_udt_json_parser(
     timeout_seconds: int,
     max_output_bytes: int,
     binary_path: str | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     parser_bin = find_udt_json_binary(binary_path)
     cmd = [parser_bin, "-q", "-c", str(demo_path)]
 
     try:
         proc = subprocess.run(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             check=False,
             timeout=timeout_seconds,
         )

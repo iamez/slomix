@@ -2581,6 +2581,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
                 (start_date_str, end_date_str),
             )
         except Exception:
+            logger.debug("DB query failed for date_field=%s", date_field, exc_info=True)
             return None
 
     async def _fetch_one_with_fallback(query: str):

@@ -157,7 +157,8 @@ class TelegramConnector:
     def _safe_json(response: httpx.Response) -> Any:
         try:
             return response.json()
-        except Exception:
+        except (ValueError, KeyError):
+            logger.debug("Failed to parse JSON from Telegram API response")
             return None
 
     def _response_detail(self, response: httpx.Response) -> str:

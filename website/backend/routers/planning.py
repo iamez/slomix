@@ -317,7 +317,7 @@ async def _is_discord_linked(user: dict[str, Any], db) -> bool:
             if row:
                 return True
         except Exception:  # noqa: BLE001 — fallthrough to discord_id check
-            pass
+            logger.debug("user_player_links lookup failed, falling back to discord_id check", exc_info=True)
 
     try:
         discord_id = int(user["id"])

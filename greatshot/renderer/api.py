@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from greatshot.config import CONFIG
-
-import shutil
 
 
 class _MissingValueDict(dict):
@@ -17,7 +16,7 @@ class _MissingValueDict(dict):
         raise KeyError(key)
 
 
-def check_render_dependencies() -> Dict[str, Any]:
+def check_render_dependencies() -> dict[str, Any]:
     ffmpeg_bin = shutil.which(CONFIG.ffmpeg_path or "ffmpeg")
     client_path = (
         Path(CONFIG.etlegacy_client_path).expanduser()
@@ -39,8 +38,7 @@ def _run_command(cmd: list[str], timeout_seconds: int) -> None:
     try:
         proc = subprocess.run(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             check=False,
             timeout=timeout_seconds,
@@ -61,9 +59,9 @@ def _build_render_command(
     template: str,
     demo_clip_path: Path,
     output_mp4_path: Path,
-    options: Dict[str, Any],
+    options: dict[str, Any],
 ) -> list[str]:
-    values: Dict[str, Any] = {
+    values: dict[str, Any] = {
         "input_demo": str(demo_clip_path),
         "demo_clip_path": str(demo_clip_path),
         "output_mp4": str(output_mp4_path),
@@ -124,7 +122,7 @@ def _transcode_to_mp4(
 def render_clip(
     demo_clip_path: str | Path,
     output_mp4_path: str | Path,
-    options: Dict[str, Any] | None = None,
+    options: dict[str, Any] | None = None,
 ) -> Path:
     """Render a cut demo to MP4 using a configured worker command or transcode."""
     opts = dict(options or {})

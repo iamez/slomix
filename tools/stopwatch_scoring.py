@@ -15,17 +15,16 @@ Correct Stopwatch scoring (independent round scoring):
 Map score = sum of the two round results (0, 1, or 2 points per team).
 """
 
-import sqlite3
 import json
-from typing import Dict, Tuple, Optional, List
+import sqlite3
 
 
 class StopwatchScoring:
     """Calculate Stopwatch mode map scores"""
-    
+
     def __init__(self, db_path: str = "bot/etlegacy_production.db"):
         self.db_path = db_path
-    
+
     def parse_time_to_seconds(self, time_str: str) -> int:
         """Convert MM:SS or M:SS to seconds"""
         try:
@@ -37,13 +36,13 @@ class StopwatchScoring:
             return int(float(time_str))
         except (ValueError, IndexError):
             return 0
-    
+
     def calculate_map_score(
         self,
         round1_time_limit: str,
         round1_actual_time: str,
         round2_actual_time: str
-    ) -> Tuple[int, int, str]:
+    ) -> tuple[int, int, str]:
         """
         Calculate map score using independent round scoring.
 
@@ -96,37 +95,37 @@ class StopwatchScoring:
 
         description = f"{r1_desc}; {r2_desc}"
         return (team1_points, team2_points, description)
-    
+
     def calculate_session_scores(
-        self, 
-        session_ids: Optional[List[int]] = None,
-        session_date: Optional[str] = None
-    ) -> Optional[Dict[str, int]]:
+        self,
+        session_ids: list[int] | None = None,
+        session_date: str | None = None
+    ) -> dict[str, int] | None:
         """
         Calculate total scores for a gaming session
-        
+
         NOTE: "sessions" table stores ROUNDS (one row per stats file).
               A MATCH = 2 rounds (R1+R2) linked by match_id.
               A GAMING SESSION = multiple matches played continuously (within 30min gaps).
-        
+
         Args:
             session_ids: List of session IDs for this gaming session (preferred)
             session_date: Session date (YYYY-MM-DD) - legacy fallback
-        
+
         Returns:
             Dict with team names as keys and total points as values
         """
-        
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
+
         # Get all rounds for this gaming session (grouped by match_id)
         # Use match_id to properly pair R1+R2 together
         if session_ids:
             # Use session_ids list (correct approach - filters to specific gaming session)
             placeholders = ','.join('?' * len(session_ids))
             cursor.execute(f'''
-                SELECT map_name, match_id, round_number, defender_team, 
+                SELECT map_name, match_id, round_number, defender_team,
                        winner_team, time_limit, actual_time
                 FROM rounds
                 WHERE id IN ({placeholders})
@@ -136,22 +135,22 @@ class StopwatchScoring:
         else:
             # Fallback to date query (may include multiple gaming sessions on same day!)
             cursor.execute('''
-                SELECT map_name, match_id, round_number, defender_team, 
+                SELECT map_name, match_id, round_number, defender_team,
                        winner_team, time_limit, actual_time
                 FROM rounds
                 WHERE substr(round_date, 1, 10) = ?
                 AND match_id IS NOT NULL
                 ORDER BY match_id, round_number
             ''', (session_date,))
-        
+
         rows = cursor.fetchall()
-        
+
         # Group rounds by match_id (proper R1+R2 pairs)
         maps_dict = {}
         for row in rows:
             map_name, match_id, round_num, defender, winner, \
                 time_limit, actual_time = row
-            
+
             if match_id not in maps_dict:
                 maps_dict[match_id] = {
                     'map_name': map_name,
@@ -159,38 +158,38 @@ class StopwatchScoring:
                     'round1': None,
                     'round2': None
                 }
-            
+
             round_data = {
                 'defender': defender,
                 'winner': winner,
                 'time_limit': time_limit,
                 'actual_time': actual_time
             }
-            
+
             if round_num == 1:
                 maps_dict[match_id]['round1'] = round_data
             elif round_num == 2:
                 maps_dict[match_id]['round2'] = round_data
-        
+
         # Filter to complete maps only (both R1 and R2)
         maps = [
             m for m in maps_dict.values()
             if m['round1'] is not None and m['round2'] is not None
         ]
-        
+
         # Get team assignments from session_teams (use DISTINCT to avoid duplicates)
         cursor.execute('''
             SELECT DISTINCT team_name, player_guids
             FROM session_teams
             WHERE substr(session_start_date, 1, 10) = ?
         ''', (session_date,))
-        
+
         team_rows = cursor.fetchall()
-        
+
         if not team_rows or len(team_rows) < 2:
             conn.close()
             return None
-        
+
         # Parse team assignments
         team_names_list = []
         team_guids_list = []
@@ -199,7 +198,7 @@ class StopwatchScoring:
             player_guids = json.loads(player_guids_json)
             team_names_list.append(team_name)
             team_guids_list.append(set(player_guids))
-        
+
         # Map game team numbers (1=Axis, 2=Allies) to actual team names
         # by checking which GUIDs were on which game team in Round 1
         cursor.execute('''
@@ -209,14 +208,14 @@ class StopwatchScoring:
             AND round_number = 1
             LIMIT 1
         ''', (session_date,))
-        
+
         sample_player = cursor.fetchone()
         if not sample_player:
             conn.close()
             return None
-        
+
         sample_guid, sample_team = sample_player
-        
+
         # Determine which actual team this GUID belongs to
         if sample_guid in team_guids_list[0]:
             # First team in session_teams = game team number sample_team
@@ -230,36 +229,36 @@ class StopwatchScoring:
                 team_mapping = {1: 1, 2: 0}
             else:
                 team_mapping = {1: 0, 2: 1}
-        
+
         teams = {
             1: {'name': team_names_list[team_mapping[1]], 'score': 0},
             2: {'name': team_names_list[team_mapping[2]], 'score': 0}
         }
-        
+
         # Calculate scores for each map pair
         map_results = []
         for map_data in maps:
             r1 = map_data['round1']
             r2 = map_data['round2']
-            
+
             # New simplified calculate_map_score only needs times
             team1_pts, team2_pts, desc = self.calculate_map_score(
                 r1['time_limit'], r1['actual_time'],
                 r2['actual_time']
             )
-            
+
             teams[1]['score'] += team1_pts
             teams[2]['score'] += team2_pts
-            
+
             map_results.append({
                 'map': map_data['map_name'],
                 'team1_points': team1_pts,
                 'team2_points': team2_pts,
                 'description': desc
             })
-        
+
         conn.close()
-        
+
         # Return team scores with names
         result = {
             teams[1]['name']: teams[1]['score'],
@@ -267,44 +266,44 @@ class StopwatchScoring:
             'maps': map_results,
             'total_maps': len(map_results)
         }
-        
+
         return result
 
 
 if __name__ == "__main__":
     import sys
-    
+
     if len(sys.argv) < 2:
         print("Usage: python stopwatch_scoring.py YYYY-MM-DD")
         sys.exit(1)
-    
+
     session_date = sys.argv[1]
-    
+
     scorer = StopwatchScoring()
     results = scorer.calculate_session_scores(session_date=session_date)
-    
+
     if not results:
         print(f"❌ No session_teams data found for {session_date}")
         print("Run: python tools/dynamic_team_detector.py {session_date}")
         sys.exit(1)
-    
+
     print("\n" + "="*60)
     print(f"🏆 STOPWATCH SCORING: {session_date}")
     print("="*60)
-    
-    team_names = [k for k in results.keys() if k not in ['maps', 'total_maps']]
+
+    team_names = [k for k in results if k not in ['maps', 'total_maps']]
     team1_name = team_names[0]
     team2_name = team_names[1]
-    
-    print(f"\n📊 Final Score:")
+
+    print("\n📊 Final Score:")
     print(f"   {team1_name}: {results[team1_name]} points")
     print(f"   {team2_name}: {results[team2_name]} points")
-    
+
     print(f"\n🗺️  Map-by-Map Breakdown ({results['total_maps']} maps):")
     for map_result in results['maps']:
         print(f"\n   {map_result['map']}:")
         print(f"      {team1_name}: {map_result['team1_points']}")
         print(f"      {team2_name}: {map_result['team2_points']}")
         print(f"      {map_result['description']}")
-    
+
     print("\n" + "="*60 + "\n")
