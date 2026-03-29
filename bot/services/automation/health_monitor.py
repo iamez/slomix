@@ -16,7 +16,8 @@ import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any
+
 import discord
 
 logger = logging.getLogger("HealthMonitor")
@@ -50,11 +51,11 @@ class HealthMonitor:
 
         # Health state
         self.start_time = datetime.now()
-        self.last_check_time: Optional[datetime] = None
+        self.last_check_time: datetime | None = None
         self.is_monitoring = False
 
         # Alert management
-        self.last_alert_time: Optional[datetime] = None
+        self.last_alert_time: datetime | None = None
         self.alert_cooldown = config.health_alert_cooldown if config else 300
 
         # Health thresholds
@@ -92,7 +93,7 @@ class HealthMonitor:
                 logger.error(f"❌ Health monitoring loop error: {e}", exc_info=True)
                 await asyncio.sleep(60)  # Wait 1 minute on error
 
-    async def perform_health_check(self) -> Dict[str, Any]:
+    async def perform_health_check(self) -> dict[str, Any]:
         """
         Perform comprehensive health check.
 
@@ -129,7 +130,7 @@ class HealthMonitor:
             logger.error(f"❌ Health check failed: {e}", exc_info=True)
             return {'status': 'error', 'error': str(e)}
 
-    async def _gather_health_data(self) -> Dict[str, Any]:
+    async def _gather_health_data(self) -> dict[str, Any]:
         """Gather all health metrics"""
         uptime = datetime.now() - self.start_time
 
@@ -185,7 +186,7 @@ class HealthMonitor:
 
         return health
 
-    def _analyze_health_data(self, health: Dict[str, Any]) -> list:
+    def _analyze_health_data(self, health: dict[str, Any]) -> list:
         """Analyze health data and return list of issues"""
         issues = []
 
@@ -212,7 +213,7 @@ class HealthMonitor:
 
         return issues
 
-    async def _send_health_alert(self, issues: list, health_data: Dict[str, Any]):
+    async def _send_health_alert(self, issues: list, health_data: dict[str, Any]):
         """Send health alert to Discord"""
         try:
             # Rate limiting

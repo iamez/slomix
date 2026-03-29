@@ -4,19 +4,21 @@ Diagnostics, monitoring, and live-status endpoints.
 Extracted from api.py to reduce file size and improve maintainability.
 """
 
-import os
 import json
+import os
 from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from website.backend.dependencies import get_db
-from website.backend.local_database_adapter import DatabaseAdapter
-from website.backend.services.game_server_query import query_game_server
+
 from bot.services.round_linkage_anomaly_service import assess_round_linkage_anomalies
-from website.backend.logging_config import get_app_logger
+from website.backend.dependencies import get_db
 from website.backend.env_utils import getenv_int
+from website.backend.local_database_adapter import DatabaseAdapter
+from website.backend.logging_config import get_app_logger
 from website.backend.routers.api_helpers import (
     normalize_monitoring_timestamp as _normalize_monitoring_timestamp,
 )
+from website.backend.services.game_server_query import query_game_server
 
 router = APIRouter()
 logger = get_app_logger("api.diagnostics")

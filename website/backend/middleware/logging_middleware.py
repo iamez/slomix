@@ -9,11 +9,11 @@ Logs all HTTP requests/responses with:
 - Error tracking
 """
 
+import ipaddress
+import logging
+import os
 import time
 import uuid
-import logging
-import ipaddress
-import os
 from typing import Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -21,7 +21,6 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from ..logging_config import get_access_logger, get_security_logger
-
 
 access_logger = get_access_logger()
 security_logger = get_security_logger()

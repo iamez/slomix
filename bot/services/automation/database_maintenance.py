@@ -16,7 +16,7 @@ import logging
 import os
 import shutil
 from datetime import datetime, timedelta
-from typing import Optional
+
 # import aiosqlite  # Removed - using database adapter
 
 logger = logging.getLogger("DBMaintenance")
@@ -25,7 +25,7 @@ logger = logging.getLogger("DBMaintenance")
 class DatabaseMaintenance:
     """Automated database maintenance system"""
 
-    def __init__(self, bot, db_path: Optional[str], admin_channel_id: int):
+    def __init__(self, bot, db_path: str | None, admin_channel_id: int):
         """
         Initialize database maintenance.
 
@@ -47,9 +47,9 @@ class DatabaseMaintenance:
         self.log_retention_days = 30
 
         # State
-        self.last_backup: Optional[datetime] = None
-        self.last_vacuum: Optional[datetime] = None
-        self.last_cleanup: Optional[datetime] = None
+        self.last_backup: datetime | None = None
+        self.last_vacuum: datetime | None = None
+        self.last_cleanup: datetime | None = None
 
         os.makedirs(self.backup_dir, exist_ok=True)
 

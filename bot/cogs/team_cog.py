@@ -5,13 +5,13 @@ Discord commands for managing teams, viewing lineups,
 and tracking team statistics. Fully async using PostgreSQL.
 """
 
-import discord
-from discord.ext import commands
 import logging
-from typing import Optional
 from datetime import datetime
 
-from bot.core.checks import is_public_channel, is_admin
+import discord
+from discord.ext import commands
+
+from bot.core.checks import is_admin, is_public_channel
 from bot.core.team_manager import TeamManager
 from bot.services.player_formatter import PlayerFormatter
 from bot.services.stopwatch_scoring_service import StopwatchScoringService
@@ -29,7 +29,7 @@ class TeamCog(commands.Cog):
         self.scorer = StopwatchScoringService(bot.db_adapter)
         self.player_formatter = PlayerFormatter(bot.db_adapter)
 
-    async def get_latest_session_date(self) -> Optional[str]:
+    async def get_latest_session_date(self) -> str | None:
         """Get the most recent session date from database"""
         result = await self.db_adapter.fetch_one(
             "SELECT DISTINCT SUBSTR(round_date, 1, 10) as date "
@@ -66,7 +66,7 @@ class TeamCog(commands.Cog):
 
     @is_public_channel()
     @commands.command(name="teams")
-    async def teams_command(self, ctx, date: Optional[str] = None):
+    async def teams_command(self, ctx, date: str | None = None):
         """Show team rosters for a session
 
         Usage:
@@ -201,8 +201,8 @@ class TeamCog(commands.Cog):
     async def lineup_changes_command(
         self,
         ctx,
-        current_date: Optional[str] = None,
-        previous_date: Optional[str] = None
+        current_date: str | None = None,
+        previous_date: str | None = None
     ):
         """Show lineup changes between two sessions
 
@@ -306,7 +306,7 @@ class TeamCog(commands.Cog):
 
     @is_public_channel()
     @commands.command(name="session_score")
-    async def session_score_command(self, ctx, date: Optional[str] = None):
+    async def session_score_command(self, ctx, date: str | None = None):
         """Show final score for a session
 
         Usage:
@@ -526,7 +526,7 @@ class TeamCog(commands.Cog):
     @is_admin()
     @is_public_channel()
     @commands.command(name="assign_teams")
-    async def assign_teams_command(self, ctx, date: Optional[str] = None):
+    async def assign_teams_command(self, ctx, date: str | None = None):
         """Randomly assign team names from pool to a session
 
         Usage:
@@ -739,7 +739,7 @@ class TeamCog(commands.Cog):
     @is_admin()
     @is_public_channel()
     @commands.command(name="add_team")
-    async def add_team_command(self, ctx, name: str, color_hex: Optional[str] = None):
+    async def add_team_command(self, ctx, name: str, color_hex: str | None = None):
         """Add a new team to the pool (requires permissions)
 
         Usage:

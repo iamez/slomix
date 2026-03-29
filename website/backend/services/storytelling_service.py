@@ -13,7 +13,7 @@ Computes contextual kill impact scores by combining:
 import asyncio
 import traceback
 from datetime import date, datetime
-from typing import Optional, Union
+
 from website.backend.logging_config import get_app_logger
 from website.backend.utils.et_constants import strip_et_colors, weapon_name
 
@@ -72,14 +72,14 @@ SYNERGY_WEIGHTS = {
 }
 COHESION_MAX_DISPERSION = 1500      # Game units; above this = 0 cohesion
 
-def _to_date(val: Union[str, date]) -> date:
+def _to_date(val: str | date) -> date:
     """Normalize to datetime.date for asyncpg DATE params (proximity tables use DATE type)."""
     if isinstance(val, date):
         return val
     return datetime.strptime(val, "%Y-%m-%d").date()
 
 
-def _to_date_str(val: Union[str, date]) -> str:
+def _to_date_str(val: str | date) -> str:
     """Normalize to YYYY-MM-DD string for TEXT columns (player_comprehensive_stats.round_date)."""
     if isinstance(val, date):
         return val.isoformat()
@@ -101,7 +101,7 @@ class StorytellingService:
     def __init__(self, db):
         self.db = db
 
-    async def compute_session_kis(self, session_date: Union[str, date], force: bool = False) -> dict:
+    async def compute_session_kis(self, session_date: str | date, force: bool = False) -> dict:
         """Compute KIS for all kills in a session. Returns summary stats."""
         sd = _to_date(session_date)
         lock_key = str(sd)
@@ -368,7 +368,7 @@ class StorytellingService:
 
     # ── Match Moments Detection ──
 
-    async def detect_moments(self, session_date: Union[str, date], limit: int = 10) -> list:
+    async def detect_moments(self, session_date: str | date, limit: int = 10) -> list:
         """Detect highlight-reel moments for a session across 11 detectors."""
         sd = _to_date(session_date)
         moments = []
@@ -1223,7 +1223,7 @@ class StorytellingService:
         moments.sort(key=lambda m: (-m["impact_stars"], m.get("time_ms", 0)))
         return moments[:20]
 
-    async def get_kis_leaderboard(self, session_date: Union[str, date], limit: int = 20) -> list:
+    async def get_kis_leaderboard(self, session_date: str | date, limit: int = 20) -> list:
         """Get KIS leaderboard for a session, including server-side archetype."""
         sd = _to_date(session_date)
         rows = await self.db.fetch_all("""
@@ -1462,7 +1462,7 @@ class StorytellingService:
 
     # ── Team Synergy Score ──────────────────────────────────────────
 
-    async def compute_team_synergy(self, session_date: Union[str, date]) -> dict:
+    async def compute_team_synergy(self, session_date: str | date) -> dict:
         """Compute Team Synergy Score (5 axes) per stable player group.
 
         In stopwatch mode teams swap sides between R1/R2, so aggregating
@@ -1529,7 +1529,7 @@ class StorytellingService:
             result[(r[0], r[1])] = 'AXIS' if r[2] == 1 else 'ALLIES'
         return result
 
-    async def _build_player_groups(self, sd: date) -> Optional[dict]:
+    async def _build_player_groups(self, sd: date) -> dict | None:
         """Identify stable player groups across stopwatch rounds.
 
         In stopwatch, teams swap sides between R1/R2.  Group A is defined
@@ -1578,9 +1578,9 @@ class StorytellingService:
 
         # Build round_map: (round_start_unix, faction) -> group key
         round_map: dict[tuple, str] = {}
-        round_start_set = set(r[4] for r in rows)
+        round_start_set = {r[4] for r in rows}
         for rsu in round_start_set:
-            axis_guids = set(r[0] for r in rows if r[4] == rsu and r[3] == 1)
+            axis_guids = {r[0] for r in rows if r[4] == rsu and r[3] == 1}
             a_overlap = len(axis_guids & group_a_guids)
             b_overlap = len(axis_guids & group_b_guids)
             if a_overlap >= b_overlap:
@@ -1754,7 +1754,7 @@ class StorytellingService:
     _PWC_W_REVIVES = 0.15
     _PWC_W_SURVIVAL = 0.15
 
-    async def compute_win_contribution(self, session_date: Union[str, date]) -> dict:
+    async def compute_win_contribution(self, session_date: str | date) -> dict:
         """Compute Player Win Contribution for every player in a session.
 
         Returns dict with 'mvp', 'players' list (sorted by total_pwc desc),
@@ -1965,7 +1965,7 @@ class StorytellingService:
 
     # ── Momentum Chart ──────────────────────────────────────────────
 
-    async def compute_momentum(self, session_date: Union[str, date]) -> dict:
+    async def compute_momentum(self, session_date: str | date) -> dict:
         """Compute per-round team momentum in 30-second windows.
 
         Momentum decays each window (×0.85) and gains from kills and objectives.
@@ -2161,7 +2161,7 @@ class StorytellingService:
 
     # ── Session Narrative ───────────────────────────────────────────
 
-    async def generate_narrative(self, session_date: Union[str, date]) -> dict:
+    async def generate_narrative(self, session_date: str | date) -> dict:
         """Generate a human-readable paragraph summarizing the session.
 
         Uses KIS, moments, synergy, archetypes, and PWC data.

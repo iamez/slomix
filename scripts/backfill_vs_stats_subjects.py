@@ -11,12 +11,12 @@ Safety:
   - Validates every match against CE kill matrix before writing
   - Logs all changes for audit trail
 """
-import asyncio
 import argparse
+import asyncio
 import logging
-import sys
 import os
 import re
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bot.core.database_adapter import PostgreSQLAdapter as DatabaseAdapter

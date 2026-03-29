@@ -238,10 +238,7 @@ def validate_stats_filename(filename: str) -> bool:
     hour = int(timestamp[0:2])
     minute = int(timestamp[2:4])
     second = int(timestamp[4:6])
-    if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
-        return False
-
-    return True
+    return 0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59
 
 
 def normalize_player_name(name: str) -> str:

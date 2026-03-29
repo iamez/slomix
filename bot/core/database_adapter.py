@@ -6,9 +6,9 @@ import asyncio
 import contextvars
 import logging
 import time
-from typing import Any, Optional, List, Tuple
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
+from typing import Any
 
 # PostgreSQL support
 try:
@@ -42,27 +42,27 @@ class DatabaseAdapter(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, query: str, params: Optional[Tuple] = None, *extra):
+    async def execute(self, query: str, params: tuple | None = None, *extra):
         """Execute a query without returning results."""
         pass
 
     @abstractmethod
-    async def executemany(self, query: str, params_list: List[Tuple]) -> None:
+    async def executemany(self, query: str, params_list: list[tuple]) -> None:
         """Execute a query for each tuple in params_list (batch insert/update)."""
         pass
 
     @abstractmethod
-    async def fetch_one(self, query: str, params: Optional[Tuple] = None) -> Optional[Any]:
+    async def fetch_one(self, query: str, params: tuple | None = None) -> Any | None:
         """Fetch a single row."""
         pass
 
     @abstractmethod
-    async def fetch_all(self, query: str, params: Optional[Tuple] = None) -> List[Any]:
+    async def fetch_all(self, query: str, params: tuple | None = None) -> list[Any]:
         """Fetch all rows."""
         pass
 
     @abstractmethod
-    async def fetch_val(self, query: str, params: Optional[Tuple] = None) -> Any:
+    async def fetch_val(self, query: str, params: tuple | None = None) -> Any:
         """Fetch a single value from first row."""
         pass
 
@@ -236,7 +236,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
             self._active_tx_conn.reset(token)
             await self.pool.release(conn)
 
-    async def execute(self, query: str, params: Optional[Tuple] = None, *extra):
+    async def execute(self, query: str, params: tuple | None = None, *extra):
         """Execute query on PostgreSQL."""
         # Translate ? placeholders to $1, $2, etc.
         if extra:
@@ -275,7 +275,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
             logger.error("Query failed (%.100s)", query, exc_info=True)
             raise
 
-    async def executemany(self, query: str, params_list: List[Tuple]) -> None:
+    async def executemany(self, query: str, params_list: list[tuple]) -> None:
         """Batch execute a query for each tuple in params_list."""
         if not params_list:
             return
@@ -290,7 +290,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
             logger.error("executemany failed (%d rows, %.100s)", len(params_list), query, exc_info=True)
             raise
 
-    async def fetch_one(self, query: str, params: Optional[Tuple] = None) -> Optional[Any]:
+    async def fetch_one(self, query: str, params: tuple | None = None) -> Any | None:
         """Fetch single row from PostgreSQL."""
         query = self._translate_placeholders(query)
         params = self._normalize_params(params)
@@ -312,7 +312,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
             logger.error("fetch_one failed (%.100s)", query, exc_info=True)
             raise
 
-    async def fetch_all(self, query: str, params: Optional[Tuple] = None) -> List[Any]:
+    async def fetch_all(self, query: str, params: tuple | None = None) -> list[Any]:
         """Fetch all rows from PostgreSQL."""
         query = self._translate_placeholders(query)
         params = self._normalize_params(params)
@@ -334,7 +334,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
             logger.error("fetch_all failed (%.100s)", query, exc_info=True)
             raise
 
-    async def fetch_val(self, query: str, params: Optional[Tuple] = None) -> Any:
+    async def fetch_val(self, query: str, params: tuple | None = None) -> Any:
         """Fetch single value from PostgreSQL."""
         query = self._translate_placeholders(query)
         params = self._normalize_params(params)
@@ -356,7 +356,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
             logger.error("fetch_val failed (%.100s)", query, exc_info=True)
             raise
 
-    def _normalize_params(self, params: Optional[Tuple]) -> Optional[Tuple]:
+    def _normalize_params(self, params: tuple | None) -> tuple | None:
         """
         Normalize query params for asyncpg.
         Keep native date/datetime objects intact so asyncpg can bind them correctly.

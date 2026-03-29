@@ -21,7 +21,7 @@ import asyncio
 import logging
 import re
 from datetime import datetime
-from typing import Optional, Callable, Awaitable
+from typing import Awaitable, Callable
 
 logger = logging.getLogger('WebSocketClient')
 
@@ -65,14 +65,14 @@ class StatsWebSocketClient:
         self.on_new_file = on_new_file
 
         # Connection state
-        self._ws: Optional[WebSocketClientProtocol] = None
-        self._task: Optional[asyncio.Task] = None
+        self._ws: WebSocketClientProtocol | None = None
+        self._task: asyncio.Task | None = None
         self._running = False
         self._connected = False
 
         # Stats
         self.files_received = 0
-        self.last_notification: Optional[datetime] = None
+        self.last_notification: datetime | None = None
         self.reconnect_count = 0
 
         # Build URI
@@ -169,7 +169,7 @@ class StatsWebSocketClient:
                 self._ws = None
                 logger.warning(f"🔌 WebSocket connection closed: {e.code} {e.reason}")
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._connected = False
                 self._ws = None
                 logger.warning("⏰ WebSocket connection timeout")

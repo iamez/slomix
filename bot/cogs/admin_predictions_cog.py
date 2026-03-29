@@ -10,10 +10,11 @@ Admin Commands:
 - !prediction_performance - View system performance metrics
 """
 
-import discord
-from discord.ext import commands
 import logging
 from datetime import datetime
+
+import discord
+from discord.ext import commands
 
 logger = logging.getLogger('AdminPredictionsCog')
 

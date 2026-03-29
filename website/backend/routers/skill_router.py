@@ -5,21 +5,21 @@ Completely isolated from existing routers - new /api/skill/* prefix.
 """
 
 import json
-from typing import Optional
 
 from fastapi import APIRouter, Depends
+
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.services.skill_rating_service import (
-    compute_and_store_ratings,
-    compute_session_ratings,
-    compute_session_map_ratings,
-    get_player_session_history,
-    get_tier,
-    WEIGHTS,
     CONSTANT,
     MIN_ROUNDS,
+    WEIGHTS,
+    compute_and_store_ratings,
+    compute_session_map_ratings,
+    compute_session_ratings,
+    get_player_session_history,
+    get_tier,
 )
 
 router = APIRouter()
@@ -177,7 +177,7 @@ async def get_player_skill(
 async def get_player_skill_history(
     identifier: str,
     range_days: int = 30,
-    session_date: Optional[str] = None,
+    session_date: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """

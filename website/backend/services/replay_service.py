@@ -7,7 +7,6 @@ plus player positions from player_track.path JSONB.
 import json
 from bisect import bisect_left
 from collections import defaultdict
-from typing import Optional
 
 from website.backend.logging_config import get_app_logger
 from website.backend.utils.et_constants import strip_et_colors
@@ -25,7 +24,7 @@ def _format_time(ms) -> str:
     return f"{minutes}:{seconds:02d}"
 
 
-def _safe_float(val) -> Optional[float]:
+def _safe_float(val) -> float | None:
     """Convert Decimal/numeric to float, or None."""
     if val is None:
         return None
@@ -46,7 +45,7 @@ def _ensure_path_list(path) -> list:
     return []
 
 
-def _find_position_at_time(path: list, target_ms: int) -> Optional[dict]:
+def _find_position_at_time(path: list, target_ms: int) -> dict | None:
     """Binary search path array for nearest sample to target time."""
     if not path:
         return None

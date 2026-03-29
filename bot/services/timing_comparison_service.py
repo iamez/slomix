@@ -21,7 +21,7 @@ NOTE: match_id linking issue exists:
 import logging
 import re
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Tuple, Any
+from typing import Any
 
 import discord
 
@@ -45,7 +45,7 @@ class TimingComparisonService:
         self.bot = bot
 
     @staticmethod
-    def _derive_player_side(axis_rows: Any, allies_rows: Any) -> Tuple[int, str, str]:
+    def _derive_player_side(axis_rows: Any, allies_rows: Any) -> tuple[int, str, str]:
         """
         Derive canonical side and display marker from aggregated team samples.
 
@@ -118,7 +118,7 @@ class TimingComparisonService:
             logger.error(f"Error posting timing comparison: {e}", exc_info=True)
             return False
 
-    async def _fetch_stats_file_data(self, round_id: int) -> Optional[Dict[str, Any]]:
+    async def _fetch_stats_file_data(self, round_id: int) -> dict[str, Any] | None:
         """
         Fetch stats file timing data for a round.
 
@@ -198,12 +198,12 @@ class TimingComparisonService:
 
     async def _fetch_lua_data(
         self,
-        round_id: Optional[int],
+        round_id: int | None,
         map_name: str,
         round_number: int,
         round_date: str,
         round_time: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Fetch Lua webhook timing data with fuzzy match.
 
@@ -488,7 +488,7 @@ class TimingComparisonService:
         )
         return None
 
-    def _parse_round_datetime(self, round_date: str, round_time: str) -> Optional[datetime]:
+    def _parse_round_datetime(self, round_date: str, round_time: str) -> datetime | None:
         """Parse round date/time from multiple known formats."""
         date_str = str(round_date).strip() if round_date is not None else ""
         time_str = str(round_time).strip() if round_time is not None else ""
@@ -525,8 +525,8 @@ class TimingComparisonService:
 
     def _build_comparison_embed(
         self,
-        stats_data: Dict[str, Any],
-        lua_data: Optional[Dict[str, Any]]
+        stats_data: dict[str, Any],
+        lua_data: dict[str, Any] | None
     ) -> discord.Embed:
         """
         Build Discord embed comparing stats file vs Lua timing.

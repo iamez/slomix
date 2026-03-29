@@ -31,11 +31,12 @@ Author: ET:Legacy Stats Bot
 Date: November 7, 2025
 """
 
-import discord
-from discord.ui import View, Button
-from discord import ButtonStyle, Interaction
-from typing import Callable
 import logging
+from typing import Callable
+
+import discord
+from discord import ButtonStyle, Interaction
+from discord.ui import Button, View
 
 logger = logging.getLogger("bot.core.lazy_pagination_view")
 

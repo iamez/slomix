@@ -17,19 +17,20 @@ Commands:
 
 import asyncio
 import json
+import logging
 import re
+from datetime import date as dt_date
+from datetime import datetime, timedelta, timezone
+from datetime import time as dt_time
+from zoneinfo import ZoneInfo
 
 import discord
 from discord.ext import commands, tasks
-import logging
-from datetime import datetime, date as dt_date, time as dt_time, timedelta, timezone
-from zoneinfo import ZoneInfo
-from typing import Optional, Set
 
 from bot.services.availability_notifier_service import (
-    UnifiedAvailabilityNotifier,
     EVENT_DAILY_REMINDER,
     EVENT_SESSION_READY,
+    UnifiedAvailabilityNotifier,
 )
 from website.backend.services.contact_handle_crypto import ContactHandleCrypto
 
@@ -92,11 +93,11 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
         self.notifier = UnifiedAvailabilityNotifier(self.bot, self.bot.db_adapter, self.bot.config)
 
         # Runtime state
-        self.active_poll_ids: Set[int] = set()  # Message IDs of active polls
-        self.last_check_minute: Optional[int] = None  # Prevent duplicate checks
+        self.active_poll_ids: set[int] = set()  # Message IDs of active polls
+        self.last_check_minute: int | None = None  # Prevent duplicate checks
         self.tables_ensured: bool = False
         self.channel_failures: int = 0  # Track consecutive channel fetch failures
-        self.last_daily_reminder_date: Optional[dt_date] = None
+        self.last_daily_reminder_date: dt_date | None = None
         self.telegram_update_offset: int = 0
 
         logger.info(f"📊 AvailabilityPollCog initialized (enabled={self.enabled})")
@@ -833,7 +834,7 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
         return bool(row)
 
     @staticmethod
-    def _normalize_status_input(raw_status: str) -> Optional[str]:
+    def _normalize_status_input(raw_status: str) -> str | None:
         if not raw_status:
             return None
         normalized = str(raw_status).strip().upper()
@@ -854,7 +855,7 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
         return mapping.get(normalized)
 
     @staticmethod
-    def _parse_date_arg(raw_date: str, now_date: dt_date) -> Optional[dt_date]:
+    def _parse_date_arg(raw_date: str, now_date: dt_date) -> dt_date | None:
         if not raw_date:
             return None
         lowered = raw_date.strip().lower()
@@ -868,7 +869,7 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
             return None
 
     @staticmethod
-    def _normalize_operation_input(raw_status: str) -> tuple[Optional[str], Optional[str]]:
+    def _normalize_operation_input(raw_status: str) -> tuple[str | None, str | None]:
         if not raw_status:
             return None, None
         normalized = (
@@ -886,7 +887,7 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
         return None, None
 
     @staticmethod
-    def _parse_availability_operation(args: list[str], now_date: dt_date) -> tuple[Optional[dt_date], Optional[str], Optional[str]]:
+    def _parse_availability_operation(args: list[str], now_date: dt_date) -> tuple[dt_date | None, str | None, str | None]:
         """
         Parse date + status/remove operation from command args.
 
@@ -918,7 +919,7 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
             return None, None, None
         return target_date, operation, status
 
-    async def _resolve_linked_user_from_channel(self, *, channel_type: str, channel_address: str) -> Optional[int]:
+    async def _resolve_linked_user_from_channel(self, *, channel_type: str, channel_address: str) -> int | None:
         row = await self.bot.db_adapter.fetch_one(
             """
             SELECT user_id
@@ -1579,7 +1580,7 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
                 )
         return sent, failed
 
-    def _promotion_target_for_recipient(self, recipient: dict, channel_type: str) -> Optional[str]:
+    def _promotion_target_for_recipient(self, recipient: dict, channel_type: str) -> str | None:
         if channel_type == "discord":
             user_id = int(recipient.get("user_id") or 0)
             return str(user_id) if user_id > 0 else None

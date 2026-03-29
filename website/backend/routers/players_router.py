@@ -5,18 +5,20 @@ Extracted from api.py to reduce file size and improve maintainability.
 """
 
 from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from website.backend.dependencies import get_db
-from website.backend.local_database_adapter import DatabaseAdapter
+
 from bot.core.season_manager import SeasonManager
 from bot.core.utils import escape_like_pattern
+from website.backend.dependencies import get_db
+from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.routers.api_helpers import (
-    calculate_player_achievements,
-    resolve_player_guid,
-    resolve_display_name,
     batch_resolve_display_names,
+    calculate_player_achievements,
+    resolve_display_name,
+    resolve_player_guid,
 )
 
 router = APIRouter()

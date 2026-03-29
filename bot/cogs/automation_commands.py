@@ -13,10 +13,11 @@ Commands:
 - !stop_monitoring - Stop SSH monitoring
 """
 
-import discord
-from discord.ext import commands
 import logging
 from datetime import datetime
+
+import discord
+from discord.ext import commands
 
 from bot.core.checks import is_admin
 from bot.core.utils import sanitize_error_message

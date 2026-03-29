@@ -12,9 +12,8 @@ roster changes throughout the session.
 """
 
 import logging
-from typing import Dict, List, Tuple, Set, Optional
-from dataclasses import dataclass
 from collections import defaultdict
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +25,8 @@ class PlayerActivity:
     player_name: str
     first_round: int
     last_round: int
-    rounds_played: Set[int]
-    game_teams: Dict[int, int]  # round -> game_team (1 or 2)
+    rounds_played: set[int]
+    game_teams: dict[int, int]  # round -> game_team (1 or 2)
 
     @property
     def is_full_session(self) -> bool:
@@ -52,10 +51,10 @@ class RosterChange:
     round_number: int
     change_type: str  # 'addition', 'substitution', 'departure'
     game_team: int  # 1 or 2
-    player_in: Optional[str] = None  # Player who joined
-    player_out: Optional[str] = None  # Player who left
-    guid_in: Optional[str] = None
-    guid_out: Optional[str] = None
+    player_in: str | None = None  # Player who joined
+    player_out: str | None = None  # Player who left
+    guid_in: str | None = None
+    guid_out: str | None = None
 
     def __str__(self):
         if self.change_type == 'addition':
@@ -85,7 +84,7 @@ class SubstitutionDetector:
     async def analyze_session_roster_changes(
         self,
         session_date: str
-    ) -> Dict:
+    ) -> dict:
         """
         Analyze roster changes throughout a session
 
@@ -160,7 +159,7 @@ class SubstitutionDetector:
     async def _get_player_activity(
         self,
         session_date: str
-    ) -> Dict[str, PlayerActivity]:
+    ) -> dict[str, PlayerActivity]:
         """Get detailed player activity for session"""
         query = """
             SELECT
@@ -198,7 +197,7 @@ class SubstitutionDetector:
     async def _get_round_rosters(
         self,
         session_date: str
-    ) -> Dict[int, Dict]:
+    ) -> dict[int, dict]:
         """Get rosters for each round"""
         query = """
             SELECT DISTINCT
@@ -232,9 +231,9 @@ class SubstitutionDetector:
 
     def _detect_roster_changes(
         self,
-        round_rosters: Dict[int, Dict],
-        player_activity: Dict[str, PlayerActivity]
-    ) -> List[RosterChange]:
+        round_rosters: dict[int, dict],
+        player_activity: dict[str, PlayerActivity]
+    ) -> list[RosterChange]:
         """Detect changes between rounds"""
         changes = []
 
@@ -277,8 +276,8 @@ class SubstitutionDetector:
 
     def _detect_substitutions(
         self,
-        roster_changes: List[RosterChange]
-    ) -> List[Tuple[str, str, int]]:
+        roster_changes: list[RosterChange]
+    ) -> list[tuple[str, str, int]]:
         """
         Detect likely substitutions (player leaves, another joins same round/next)
 
@@ -314,12 +313,12 @@ class SubstitutionDetector:
 
     def _generate_summary(
         self,
-        player_activity: Dict,
-        roster_changes: List[RosterChange],
-        full_session: List[str],
-        late_joiners: List[str],
-        early_leavers: List[str],
-        substitutions: List
+        player_activity: dict,
+        roster_changes: list[RosterChange],
+        full_session: list[str],
+        late_joiners: list[str],
+        early_leavers: list[str],
+        substitutions: list
     ) -> str:
         """Generate human-readable summary"""
         lines = []
@@ -350,9 +349,9 @@ class SubstitutionDetector:
 
     def adjust_team_detection_for_substitutions(
         self,
-        team_assignments: Dict[str, str],
-        substitution_analysis: Dict
-    ) -> Dict[str, str]:
+        team_assignments: dict[str, str],
+        substitution_analysis: dict
+    ) -> dict[str, str]:
         """
         Adjust team assignments based on substitution analysis
 

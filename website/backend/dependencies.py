@@ -3,15 +3,18 @@ import os
 import sys
 from typing import AsyncGenerator
 
+from bot.config import load_config
+
 # Import base class and Postgres adapter from bot core
 from bot.core.database_adapter import (
     DatabaseAdapter,
+)
+from bot.core.database_adapter import (
     create_adapter as create_postgres_adapter,
 )
 
 # Import local SQLite adapter
 from website.backend.local_database_adapter import create_local_adapter
-from bot.config import load_config
 
 # Add project root to sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))

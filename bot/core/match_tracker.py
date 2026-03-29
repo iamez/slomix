@@ -13,9 +13,8 @@ Date: November 7, 2025
 """
 
 import re
-from pathlib import Path
-from typing import Dict, List, Optional
 from datetime import datetime, timedelta
+from pathlib import Path
 
 
 class MatchTracker:
@@ -26,7 +25,7 @@ class MatchTracker:
     """
 
     @staticmethod
-    def extract_match_components(filename: str) -> Dict[str, str]:
+    def extract_match_components(filename: str) -> dict[str, str]:
         """
         Extract date, time, map, and round from filename.
 
@@ -85,7 +84,7 @@ class MatchTracker:
         return components['base_match_id']
 
     @staticmethod
-    def find_round_pair(target_file: str, all_files: List[str]) -> Optional[str]:
+    def find_round_pair(target_file: str, all_files: list[str]) -> str | None:
         """
         Find the paired round file (R1 for R2, or R2 for R1).
 
@@ -113,7 +112,7 @@ class MatchTracker:
         return None
 
     @staticmethod
-    def find_round_1_for_round_2(round_2_file: str, search_dir: Path) -> Optional[Path]:
+    def find_round_1_for_round_2(round_2_file: str, search_dir: Path) -> Path | None:
         """
         Find the Round 1 file for a given Round 2 file.
 

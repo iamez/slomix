@@ -10,11 +10,12 @@ Purpose: Validate that our Lua timing fixes (surrender bug, pause tracking)
 are working correctly by comparing against the "official" stats file timing.
 """
 
-import discord
-from datetime import datetime, timedelta
 import logging
 import re
-from typing import List, Optional, Any, Dict
+from datetime import datetime, timedelta
+from typing import Any
+
+import discord
 
 from bot.core.round_contract import normalize_end_reason
 
@@ -52,7 +53,7 @@ class TimingDebugService:
         else:
             logger.info("⏸️ TimingDebugService disabled")
 
-    def _parse_time_to_seconds(self, time_str: str) -> Optional[int]:
+    def _parse_time_to_seconds(self, time_str: str) -> int | None:
         """
         Parse time string (MM:SS or HH:MM:SS) to seconds.
 
@@ -79,7 +80,7 @@ class TimingDebugService:
         except (ValueError, AttributeError):
             return None
 
-    def _parse_round_datetime(self, round_date: str, round_time: str) -> Optional[datetime]:
+    def _parse_round_datetime(self, round_date: str, round_time: str) -> datetime | None:
         """Parse round date/time from multiple known formats."""
         date_str = str(round_date).strip() if round_date is not None else ""
         time_str = str(round_time).strip() if round_time is not None else ""
@@ -112,12 +113,12 @@ class TimingDebugService:
 
     async def _fetch_lua_data(
         self,
-        round_id: Optional[int],
+        round_id: int | None,
         map_name: str,
         round_number: int,
         round_date: str,
         round_time: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Fetch Lua webhook timing data with fuzzy match.
         """
@@ -263,7 +264,7 @@ class TimingDebugService:
 
         return best_match
 
-    def _get_diff_color(self, diff_seconds: Optional[int]) -> discord.Color:
+    def _get_diff_color(self, diff_seconds: int | None) -> discord.Color:
         """
         Get embed color based on timing difference.
 
@@ -282,7 +283,7 @@ class TimingDebugService:
         else:
             return discord.Color.red()
 
-    async def _get_channel(self) -> Optional[discord.TextChannel]:
+    async def _get_channel(self) -> discord.TextChannel | None:
         """Get the debug channel, or None if not configured/found."""
         if not self.debug_channel_id:
             return None
@@ -295,8 +296,8 @@ class TimingDebugService:
     async def post_round_timing_comparison(
         self,
         round_id: int,
-        match_id: Optional[str] = None,
-        round_number: Optional[int] = None
+        match_id: str | None = None,
+        round_number: int | None = None
     ) -> None:
         """
         Compare and post timing debug embed for a single round.
@@ -503,7 +504,7 @@ class TimingDebugService:
 
     async def post_session_timing_comparison(
         self,
-        session_ids: List[int]
+        session_ids: list[int]
     ) -> None:
         """
         Compare and post aggregated timing debug embed for a session.

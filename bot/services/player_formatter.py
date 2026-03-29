@@ -19,7 +19,6 @@ Usage in any command:
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger("bot.services.player_formatter")
 
@@ -44,7 +43,7 @@ class PlayerFormatter:
             badge_service = PlayerBadgeService(db_adapter)
         self.badge_service = badge_service
 
-    async def get_player_badges(self, player_guid: str, session_stats: Optional[Dict] = None) -> str:
+    async def get_player_badges(self, player_guid: str, session_stats: dict | None = None) -> str:
         """
         Get achievement badges for a player.
 
@@ -98,7 +97,7 @@ class PlayerFormatter:
         player_guid: str,
         player_name: str,
         include_badges: bool = True,
-        session_stats: Optional[Dict] = None
+        session_stats: dict | None = None
     ) -> str:
         """
         Format a single player name with custom name and badges
@@ -126,9 +125,9 @@ class PlayerFormatter:
 
     async def format_players_batch(
         self,
-        players: List[Tuple[str, str]],
+        players: list[tuple[str, str]],
         include_badges: bool = True
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """
         Format multiple players efficiently (batched queries)
 

@@ -6,10 +6,10 @@ Creates Discord embeds for match predictions
 Phase 4: Database Tables & Live Scoring
 """
 
-import discord
 import logging
-from typing import Dict, List, Optional
 from datetime import datetime
+
+import discord
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +31,9 @@ class PredictionEmbedBuilder:
 
     def build_prediction_embed(
         self,
-        prediction: Dict,
-        split_data: Dict,
-        player_names: Optional[Dict[str, str]] = None
+        prediction: dict,
+        split_data: dict,
+        player_names: dict[str, str] | None = None
     ) -> discord.Embed:
         """
         Build Discord embed for match prediction.
@@ -134,12 +134,12 @@ class PredictionEmbedBuilder:
 
     def build_prediction_result_embed(
         self,
-        prediction: Dict,
-        split_data: Dict,
+        prediction: dict,
+        split_data: dict,
         actual_winner: int,
         team_a_score: int,
         team_b_score: int,
-        player_names: Optional[Dict[str, str]] = None
+        player_names: dict[str, str] | None = None
     ) -> discord.Embed:
         """
         Build Discord embed for prediction result (after match completes).
@@ -230,8 +230,8 @@ class PredictionEmbedBuilder:
 
     def _format_team_roster(
         self,
-        guids: List[str],
-        player_names: Optional[Dict[str, str]] = None
+        guids: list[str],
+        player_names: dict[str, str] | None = None
     ) -> str:
         """
         Format team roster for display.
@@ -259,7 +259,7 @@ class PredictionEmbedBuilder:
 
         return ", ".join(names)
 
-    def _format_factor_breakdown(self, factors: Dict) -> str:
+    def _format_factor_breakdown(self, factors: dict) -> str:
         """
         Format factor breakdown for display.
 
@@ -321,7 +321,7 @@ class PredictionEmbedBuilder:
 
     def build_prediction_history_embed(
         self,
-        predictions: List[Dict],
+        predictions: list[dict],
         title: str = "📊 Prediction History"
     ) -> discord.Embed:
         """

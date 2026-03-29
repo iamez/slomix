@@ -26,16 +26,16 @@ from discord.ext import commands
 from bot.core.checks import is_public_channel
 from bot.core.database_adapter import ensure_player_name_alias
 from bot.core.utils import sanitize_error_message
+from bot.services.player_badge_service import PlayerBadgeService
+from bot.services.player_display_name_service import PlayerDisplayNameService
 
 # Import service layer
 from bot.services.session_data_service import SessionDataService
-from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.session_embed_builder import SessionEmbedBuilder
 from bot.services.session_graph_generator import SessionGraphGenerator
-from bot.services.session_view_handlers import SessionViewHandlers
-from bot.services.player_badge_service import PlayerBadgeService
-from bot.services.player_display_name_service import PlayerDisplayNameService
+from bot.services.session_stats_aggregator import SessionStatsAggregator
 from bot.services.session_timing_shadow_service import SessionTimingShadowService
+from bot.services.session_view_handlers import SessionViewHandlers
 
 # Import shared utilities
 from bot.stats import StatsCalculator
@@ -310,7 +310,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
             maps_set = set()
             for session in sessions:
                 maps_set.add(session[1])  # map_name is at index 1
-            maps_list = sorted(list(maps_set))
+            maps_list = sorted(maps_set)
 
             # Add maps played
             maps_text = ", ".join(maps_list)

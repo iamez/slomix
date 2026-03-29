@@ -8,7 +8,6 @@ Used by both the Discord bot (!psession) and the website API (/proximity/session
 """
 
 import logging
-from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -30,15 +29,15 @@ class ProximitySessionScoreService:
     def __init__(self, db_adapter):
         self.db = db_adapter
 
-    async def get_latest_session_date(self) -> Optional[str]:
+    async def get_latest_session_date(self) -> str | None:
         row = await self.db.fetch_one(
             "SELECT MAX(session_date)::TEXT FROM combat_engagement"
         )
         return row[0] if row and row[0] else None
 
-    async def compute_session_scores(self, session_date: str) -> List[Dict]:
-        names: Dict[str, str] = {}
-        scores: Dict[str, Dict] = {}  # guid -> {category: raw_value, ...}
+    async def compute_session_scores(self, session_date: str) -> list[dict]:
+        names: dict[str, str] = {}
+        scores: dict[str, dict] = {}  # guid -> {category: raw_value, ...}
 
         def ensure(guid, name=None):
             if guid not in scores:

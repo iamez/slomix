@@ -9,7 +9,6 @@ This service manages:
 """
 
 import logging
-from typing import Dict, List, Optional
 
 logger = logging.getLogger("bot.services.session_stats_aggregator")
 
@@ -50,7 +49,7 @@ class SessionStatsAggregator:
         columns = await self._get_player_stats_columns()
         return "full_selfkills" in columns
 
-    async def aggregate_all_player_stats(self, session_ids: List, session_ids_str: str):
+    async def aggregate_all_player_stats(self, session_ids: list, session_ids_str: str):
         """
         Aggregate ALL player stats across all rounds with weighted DPM
 
@@ -134,7 +133,7 @@ class SessionStatsAggregator:
         """
         return await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
-    async def aggregate_team_stats(self, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict] = None, name_to_team: Optional[Dict] = None):
+    async def aggregate_team_stats(self, session_ids: list, session_ids_str: str, hardcoded_teams: dict | None = None, name_to_team: dict | None = None):
         """
         Get aggregated team statistics
 
@@ -197,7 +196,7 @@ class SessionStatsAggregator:
 
         return result
 
-    async def calculate_session_scores(self, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict] = None) -> Dict[str, int]:
+    async def calculate_session_scores(self, session_ids: list, session_ids_str: str, hardcoded_teams: dict | None = None) -> dict[str, int]:
         """
         Calculate session score based on winner_team from rounds.
 
@@ -287,7 +286,7 @@ class SessionStatsAggregator:
 
         return await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
 
-    async def get_dpm_leaderboard(self, session_ids: List, session_ids_str: str, limit: int = 10):
+    async def get_dpm_leaderboard(self, session_ids: list, session_ids_str: str, limit: int = 10):
         """Get DPM leaderboard based on individual player playtime"""
         # Validate limit is a safe integer to prevent SQL injection
         limit = int(limit)  # Raises ValueError if not convertible

@@ -3,11 +3,10 @@ Game Server Query Service
 Queries ET:Legacy/Quake3 servers using UDP protocol (no password required)
 """
 
-import socket
-import re
 import logging
+import re
+import socket
 import time
-from typing import Optional, List
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -25,15 +24,15 @@ class Player:
 class ServerStatus:
     """Game server status"""
     online: bool
-    map_name: Optional[str] = None
-    hostname: Optional[str] = None
+    map_name: str | None = None
+    hostname: str | None = None
     player_count: int = 0
     max_players: int = 0
-    players: List[Player] = field(default_factory=list)
-    game_type: Optional[str] = None
-    version: Optional[str] = None
-    ping_ms: Optional[int] = None  # Response time in milliseconds
-    error: Optional[str] = None
+    players: list[Player] = field(default_factory=list)
+    game_type: str | None = None
+    version: str | None = None
+    ping_ms: int | None = None  # Response time in milliseconds
+    error: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON response"""
@@ -51,7 +50,7 @@ class ServerStatus:
         }
 
     @property
-    def clean_hostname(self) -> Optional[str]:
+    def clean_hostname(self) -> str | None:
         """Remove Quake3 color codes from hostname"""
         if not self.hostname:
             return None
@@ -136,7 +135,7 @@ def query_game_server(host: str, port: int = 27960, timeout: float = 3.0) -> Ser
             ping_ms=ping_ms,
         )
 
-    except socket.timeout:
+    except TimeoutError:
         logger.debug(f"Game server query timeout: {host}:{port}")
         return ServerStatus(online=False, error='Server not responding')
     except socket.gaierror as e:

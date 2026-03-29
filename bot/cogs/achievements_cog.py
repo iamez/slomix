@@ -8,10 +8,11 @@ Commands:
 - !achievements medals - Show full badge legend with descriptions
 """
 
-import discord
-from discord.ext import commands
 import logging
 from datetime import datetime
+
+import discord
+from discord.ext import commands
 
 from bot.core.checks import is_public_channel
 
