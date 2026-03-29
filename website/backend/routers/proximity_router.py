@@ -842,6 +842,7 @@ async def get_proximity_scopes(
             }
         )
     except Exception:
+        logger.exception("Proximity scopes query failed")
         payload.update(
             {
                 "status": "error",
@@ -938,6 +939,7 @@ async def get_proximity_summary(
                 query_params,
             )
         except Exception:
+            logger.exception("Failed to fetch player_track stats in summary")
             track_row = None
 
         duo_rows = await db.fetch_all(
@@ -962,6 +964,7 @@ async def get_proximity_summary(
                 )
                 v5_counts[tbl] = int(cnt or 0)
             except Exception:
+                logger.exception("Failed to count v5 table %s", tbl)
                 v5_counts[tbl] = 0
 
         payload.update(
@@ -1001,6 +1004,7 @@ async def get_proximity_summary(
             }
         )
     except Exception:
+        logger.exception("Proximity summary query failed")
         payload.update(
             {
                 "status": "error",
@@ -1067,6 +1071,7 @@ async def get_proximity_engagements(
             }
         )
     except Exception:
+        logger.exception("Proximity engagements query failed")
         payload.update(
             {
                 "status": "error",
@@ -1176,6 +1181,7 @@ async def get_proximity_hotzones(
             }
         )
     except Exception:
+        logger.exception("Proximity hotzones query failed")
         payload.update(
             {
                 "status": "error",
@@ -1236,6 +1242,7 @@ async def get_proximity_duos(
             }
         )
     except Exception:
+        logger.exception("Proximity duos query failed")
         payload.update(
             {
                 "status": "error",
@@ -1355,6 +1362,7 @@ async def get_proximity_movers(
             }
         )
     except Exception:
+        logger.exception("Proximity movers query failed")
         payload.update(
             {
                 "status": "error",
@@ -1428,6 +1436,7 @@ async def get_proximity_classes(
             }
         )
     except Exception:
+        logger.exception("Proximity classes query failed")
         payload.update(
             {
                 "status": "error",
@@ -1596,6 +1605,7 @@ async def get_proximity_reactions(
             }
         )
     except Exception:
+        logger.exception("Proximity reactions query failed")
         payload.update(
             {
                 "status": "error",
@@ -1666,6 +1676,7 @@ async def get_proximity_teamplay(
             }
         )
     except Exception:
+        logger.exception("Proximity teamplay query failed")
         payload.update(
             {
                 "status": "error",
@@ -1741,6 +1752,7 @@ async def get_proximity_trades_summary(
             }
         )
     except Exception:
+        logger.exception("Proximity trades summary query failed")
         payload.update(
             {
                 "status": "error",
@@ -1864,6 +1876,7 @@ async def get_proximity_trades_player_stats(
             "players": list(players_map.values()),
         })
     except Exception:
+        logger.exception("Proximity trades player-stats query failed")
         payload.update({
             "status": "error",
             "ready": False,
@@ -1990,6 +2003,7 @@ async def get_proximity_trade_events(
             }
         )
     except Exception:
+        logger.exception("Proximity trade events query failed")
         payload.update(
             {
                 "status": "error",
@@ -2509,6 +2523,7 @@ async def get_proximity_events(
             }
         )
     except Exception:
+        logger.exception("Proximity events query failed")
         payload.update(
             {
                 "status": "error",
@@ -2675,6 +2690,7 @@ async def get_proximity_event(event_id: int, db: DatabaseAdapter = Depends(get_d
                 "attacker": _compute_strafe_metrics(attacker_path or []),
             }
     except Exception:
+        logger.debug("Strafe metrics computation failed", exc_info=True)
         response["strafe"] = None
 
     return response

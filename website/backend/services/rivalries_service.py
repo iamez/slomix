@@ -8,43 +8,12 @@ Uses proximity_kill_outcome to find head-to-head pairs and classify them:
 - INSUFFICIENT_DATA: fewer than 5 total encounters
 """
 
-import re
 from website.backend.logging_config import get_app_logger
+from website.backend.utils.et_constants import strip_et_colors, weapon_name
 
 logger = get_app_logger("rivalries")
 
 MIN_ENCOUNTERS = 5
-
-# ET:Legacy kill_mod → weapon name mapping
-KILL_MOD_NAMES = {
-    3: "Knife", 4: "Luger", 5: "Colt", 6: "Luger", 7: "Colt",
-    8: "MP40", 9: "Thompson", 10: "Sten", 11: "Garand",
-    12: "Silenced", 13: "FG42", 14: "FG42 Scope", 15: "Panzerfaust",
-    16: "Grenade", 17: "Flamethrower", 18: "Grenade",
-    22: "Dynamite", 23: "Airstrike", 26: "Artillery",
-    37: "Carbine", 38: "K98", 39: "GPG40", 40: "M7",
-    41: "Landmine", 42: "Satchel", 44: "Mobile MG42",
-    45: "Silenced Colt", 46: "Garand Scope",
-    50: "K43", 51: "K43 Scope", 52: "Mortar",
-    53: "Akimbo Colt", 54: "Akimbo Luger",
-    55: "Akimbo Silenced Colt", 56: "Akimbo Silenced Luger",
-    60: "Sten",
-    66: "Backstab",
-}
-
-
-def _strip_et_colors(name: str) -> str:
-    """Remove ET:Legacy color codes (^0-^9, ^a-^z, ^A-^Z) from names."""
-    if not name:
-        return name
-    return re.sub(r'\^[0-9a-zA-Z]', '', name)
-
-
-def _weapon_name(kill_mod) -> str:
-    """Map kill_mod integer to human-readable weapon name."""
-    if kill_mod is None:
-        return "Unknown"
-    return KILL_MOD_NAMES.get(int(kill_mod), f"MOD_{kill_mod}")
 
 
 def _classify(win_rate: float, total: int) -> str:
@@ -99,7 +68,7 @@ class RivalriesService:
                 (SELECT MAX(victim_name) FROM proximity_kill_outcome WHERE victim_guid = $1)
             )
         """, (player_guid,))
-        player_name = _strip_et_colors((player_name_row[0] if player_name_row else None) or player_guid[:8])
+        player_name = strip_et_colors((player_name_row[0] if player_name_row else None) or player_guid[:8])
 
         # Build opponent map: guid -> {name, kills_by_player, kills_on_player}
         opponents = {}
@@ -107,7 +76,7 @@ class RivalriesService:
             guid = row[0]
             opponents[guid] = {
                 "guid": guid,
-                "name": _strip_et_colors(row[1] or guid[:8]),
+                "name": strip_et_colors(row[1] or guid[:8]),
                 "kills_by_player": row[2],
                 "kills_on_player": 0,
             }
@@ -117,13 +86,13 @@ class RivalriesService:
             if guid in opponents:
                 opponents[guid]["kills_on_player"] = row[2]
                 # Use the more recent name if available
-                name = _strip_et_colors(row[1] or guid[:8])
+                name = strip_et_colors(row[1] or guid[:8])
                 if name:
                     opponents[guid]["name"] = name
             else:
                 opponents[guid] = {
                     "guid": guid,
-                    "name": _strip_et_colors(row[1] or guid[:8]),
+                    "name": strip_et_colors(row[1] or guid[:8]),
                     "kills_by_player": 0,
                     "kills_on_player": row[2],
                 }
@@ -191,9 +160,9 @@ class RivalriesService:
         """, (guid2, guid1))
 
         p1_kills = p1_kills_row[0] if p1_kills_row else 0
-        p1_name = _strip_et_colors((p1_kills_row[1] if p1_kills_row else None) or guid1[:8])
+        p1_name = strip_et_colors((p1_kills_row[1] if p1_kills_row else None) or guid1[:8])
         p2_kills = p2_kills_row[0] if p2_kills_row else 0
-        p2_name = _strip_et_colors((p2_kills_row[1] if p2_kills_row else None) or guid2[:8])
+        p2_name = strip_et_colors((p2_kills_row[1] if p2_kills_row else None) or guid2[:8])
 
         # If p1 has no name from kills, try as victim
         if p1_name == guid1[:8]:
@@ -201,13 +170,13 @@ class RivalriesService:
                 "SELECT MAX(victim_name) FROM proximity_kill_outcome WHERE victim_guid = $1",
                 (guid1,))
             if fallback and fallback[0]:
-                p1_name = _strip_et_colors(fallback[0])
+                p1_name = strip_et_colors(fallback[0])
         if p2_name == guid2[:8]:
             fallback = await self.db.fetch_one(
                 "SELECT MAX(victim_name) FROM proximity_kill_outcome WHERE victim_guid = $1",
                 (guid2,))
             if fallback and fallback[0]:
-                p2_name = _strip_et_colors(fallback[0])
+                p2_name = strip_et_colors(fallback[0])
 
         total = p1_kills + p2_kills
         win_rate = p1_kills / total if total > 0 else 0.5
@@ -222,7 +191,7 @@ class RivalriesService:
         """, (guid1, guid2))
 
         p1_weapons = [
-            {"weapon": _weapon_name(r[0]), "kill_mod": r[0], "kills": r[1]}
+            {"weapon": weapon_name(r[0]), "kill_mod": r[0], "kills": r[1]}
             for r in (p1_weapons_rows or [])
         ]
 
@@ -235,7 +204,7 @@ class RivalriesService:
         """, (guid2, guid1))
 
         p2_weapons = [
-            {"weapon": _weapon_name(r[0]), "kill_mod": r[0], "kills": r[1]}
+            {"weapon": weapon_name(r[0]), "kill_mod": r[0], "kills": r[1]}
             for r in (p2_weapons_rows or [])
         ]
 
@@ -314,8 +283,8 @@ class RivalriesService:
         pairs = []
         for r in (rows or []):
             guid1, guid2 = r[0], r[1]
-            name1 = _strip_et_colors(r[2] or guid1[:8])
-            name2 = _strip_et_colors(r[3] or guid2[:8])
+            name1 = strip_et_colors(r[2] or guid1[:8])
+            name2 = strip_et_colors(r[3] or guid2[:8])
             kills_1to2 = r[4]
             kills_2to1 = r[5]
             total = kills_1to2 + kills_2to1

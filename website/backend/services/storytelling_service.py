@@ -11,11 +11,11 @@ Computes contextual kill impact scores by combining:
 """
 
 import asyncio
-import re
 import traceback
 from datetime import date, datetime
 from typing import Optional, Union
 from website.backend.logging_config import get_app_logger
+from website.backend.utils.et_constants import strip_et_colors, weapon_name
 
 logger = get_app_logger("storytelling")
 
@@ -72,24 +72,6 @@ SYNERGY_WEIGHTS = {
 }
 COHESION_MAX_DISPERSION = 1500      # Game units; above this = 0 cohesion
 
-# ── ET:Legacy kill_mod → weapon name mapping (from MOD_* constants) ──
-KILL_MOD_NAMES = {
-    3: "Knife", 4: "Luger", 5: "Colt", 6: "Luger", 7: "Colt",
-    8: "MP40", 9: "Thompson", 10: "Sten", 11: "Garand",
-    12: "Silenced", 13: "FG42", 14: "FG42 Scope", 15: "Panzerfaust",
-    16: "Grenade", 17: "Flamethrower", 18: "Grenade",
-    22: "Dynamite", 23: "Airstrike", 26: "Artillery",
-    37: "Carbine", 38: "K98", 39: "GPG40", 40: "M7",
-    41: "Landmine", 42: "Satchel", 44: "Mobile MG42",
-    45: "Silenced Colt", 46: "Garand Scope",
-    50: "K43", 51: "K43 Scope", 52: "Mortar",
-    53: "Akimbo Colt", 54: "Akimbo Luger",
-    55: "Akimbo Silenced Colt", 56: "Akimbo Silenced Luger",
-    60: "Sten",  # MOD_STEN_DMGBODY
-    66: "Backstab",
-}
-
-
 def _to_date(val: Union[str, date]) -> date:
     """Normalize to datetime.date for asyncpg DATE params (proximity tables use DATE type)."""
     if isinstance(val, date):
@@ -105,13 +87,6 @@ def _to_date_str(val: Union[str, date]) -> str:
     return val
 
 
-def _strip_et_colors(name: str) -> str:
-    """Remove ET:Legacy color codes (^0-^9, ^a-^z, ^A-^Z) from names."""
-    if not name:
-        return name
-    return re.sub(r'\^[0-9a-zA-Z]', '', name)
-
-
 def _format_time_ms(ms: int) -> str:
     """Format milliseconds from round start as MM:SS."""
     if not ms or ms <= 0:
@@ -120,11 +95,6 @@ def _format_time_ms(ms: int) -> str:
     minutes = total_seconds // 60
     seconds = total_seconds % 60
     return f"{minutes}:{seconds:02d}"
-
-
-def _weapon_name(kill_mod: int) -> str:
-    """Map kill_mod (means_of_death) integer to human-readable weapon name."""
-    return KILL_MOD_NAMES.get(kill_mod, f"MOD_{kill_mod}")
 
 
 class StorytellingService:
@@ -491,7 +461,7 @@ class StorytellingService:
             if key not in seen or streak > seen[key]["streak"]:
                 seen[key] = {
                     "killer_guid": killer_guid,
-                    "killer_name": _strip_et_colors(killer_name or killer_guid[:8]),
+                    "killer_name": strip_et_colors(killer_name or killer_guid[:8]),
                     "kill_time": kill_time,
                     "round_number": round_number,
                     "map_name": map_name,
@@ -576,8 +546,8 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            killer_name = _strip_et_colors(r[1] or r[0][:8])
-            returner_name = _strip_et_colors(r[4] or r[3][:8])
+            killer_name = strip_et_colors(r[1] or r[0][:8])
+            returner_name = strip_et_colors(r[4] or r[3][:8])
             delta_s = round((r[5] - r[2]) / 1000, 1)
             moments.append({
                 "type": "carrier_chain",
@@ -608,7 +578,7 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            name = _strip_et_colors(r[1] or r[0][:8])
+            name = strip_et_colors(r[1] or r[0][:8])
             attackers = int(r[2])
             score = float(r[3])
             stars = 3 if attackers == 3 else (4 if attackers == 4 else 5)
@@ -679,9 +649,9 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            trader_name = _strip_et_colors(r[1] or r[0][:8])
-            victim_name = _strip_et_colors(r[3] or r[2][:8])
-            avenger_target = _strip_et_colors(r[5] or r[4][:8])
+            trader_name = strip_et_colors(r[1] or r[0][:8])
+            victim_name = strip_et_colors(r[3] or r[2][:8])
+            avenger_target = strip_et_colors(r[5] or r[4][:8])
             delta_s = round(int(r[6]) / 1000, 1)
             stars = 4 if delta_s <= 2 else 3
             moments.append({
@@ -715,7 +685,7 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            name = _strip_et_colors(r[1] or r[0][:8])
+            name = strip_et_colors(r[1] or r[0][:8])
             duration_s = round((r[4] or 0) / 1000, 1)
             distance = int(r[6] or 0)
             efficiency = float(r[9] or 0)
@@ -754,7 +724,7 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            name = _strip_et_colors(r[1] or r[0][:8])
+            name = strip_et_colors(r[1] or r[0][:8])
             action = r[2] or 'objective'
             track = r[3] or 'the objective'
             enemies = int(r[4] or 0)
@@ -811,8 +781,8 @@ class StorytellingService:
         """, (sd,))
 
         for r in (carrier_rows or []):
-            carrier_name = _strip_et_colors(r[1] or r[0][:8])
-            killer_name = _strip_et_colors(r[3] or r[2][:8])
+            carrier_name = strip_et_colors(r[1] or r[0][:8])
+            killer_name = strip_et_colors(r[3] or r[2][:8])
             distance = int(r[4] or 0)
             duration_s = round((r[5] or 0) / 1000, 1)
             # 4★ base, 5★ if carrier had traveled far (close to scoring)
@@ -843,7 +813,7 @@ class StorytellingService:
         """, (sd,))
 
         for r in (defuse_rows or []):
-            name = _strip_et_colors(r[1] or r[0][:8])
+            name = strip_et_colors(r[1] or r[0][:8])
             track = r[2] or 'the dynamite'
             enemies = int(r[6] or 0)
             stars = 5 if enemies >= 2 else 4
@@ -900,7 +870,7 @@ class StorytellingService:
             if key not in seen or burst > seen[key]["burst"]:
                 seen[key] = {
                     "reviver_guid": reviver_guid,
-                    "reviver_name": _strip_et_colors(reviver_name or reviver_guid[:8]),
+                    "reviver_name": strip_et_colors(reviver_name or reviver_guid[:8]),
                     "outcome_time": outcome_time,
                     "round_number": round_number,
                     "map_name": map_name,
@@ -967,12 +937,12 @@ class StorytellingService:
             rkey = (r[10], r[8])  # (round_start_unix, round_number)
             kills_by_round.setdefault(rkey, []).append({
                 "time": r[0], "killer_guid": r[1],
-                "killer": _strip_et_colors(r[2] or r[1][:8]),
+                "killer": strip_et_colors(r[2] or r[1][:8]),
                 "killer_team": r[3],
                 "victim_guid": r[4],
-                "victim": _strip_et_colors(r[5] or r[4][:8]),
+                "victim": strip_et_colors(r[5] or r[4][:8]),
                 "victim_team": r[6],
-                "weapon": _weapon_name(r[7] or 0),
+                "weapon": weapon_name(r[7] or 0),
                 "kill_mod": r[7] or 0,
                 "round_number": r[8], "map_name": r[9],
                 "round_start_unix": r[10],
@@ -1122,12 +1092,12 @@ class StorytellingService:
             pkey = (r[1], r[10], r[8])  # (attacker_guid, round_start_unix, round_number)
             by_player_round.setdefault(pkey, []).append({
                 "time": r[0], "killer_guid": r[1],
-                "killer": _strip_et_colors(r[2] or r[1][:8]),
+                "killer": strip_et_colors(r[2] or r[1][:8]),
                 "killer_team": r[3],
                 "victim_guid": r[4],
-                "victim": _strip_et_colors(r[5] or r[4][:8]),
+                "victim": strip_et_colors(r[5] or r[4][:8]),
                 "victim_team": r[6],
-                "weapon": _weapon_name(r[7] or 0),
+                "weapon": weapon_name(r[7] or 0),
                 "kill_mod": r[7] or 0,
                 "round_number": r[8], "map_name": r[9],
                 "round_start_unix": r[10],
@@ -1273,7 +1243,7 @@ class StorytellingService:
 
         kis_entries = [
             {
-                "guid": r[0], "name": _strip_et_colors(r[1] or r[0][:8]),
+                "guid": r[0], "name": strip_et_colors(r[1] or r[0][:8]),
                 "total_kis": float(r[2] or 0), "kills": int(r[3] or 0),
                 "carrier_kills": int(r[4] or 0), "push_kills": int(r[5] or 0),
                 "crossfire_kills": int(r[6] or 0), "avg_impact": float(r[7] or 0),
@@ -1858,7 +1828,7 @@ class StorytellingService:
 
             for r in round_rows:
                 guid = r[0]
-                name = _strip_et_colors(r[1] or guid[:8])
+                name = strip_et_colors(r[1] or guid[:8])
                 t = r[4]
                 p_kills = int(r[6] or 0)
                 p_damage = int(r[7] or 0)
@@ -2211,11 +2181,11 @@ class StorytellingService:
         map_rows = await self.db.fetch_all(
             "SELECT DISTINCT map_name FROM proximity_kill_outcome WHERE session_date = $1",
             (sd,))
-        maps_played = ", ".join(_strip_et_colors(r[0]) for r in (map_rows or []) if r[0])
+        maps_played = ", ".join(strip_et_colors(r[0]) for r in (map_rows or []) if r[0])
 
         # 3. MVP (top KIS player)
         mvp = kis_board[0]
-        mvp_name = _strip_et_colors(mvp.get("name", "Unknown"))
+        mvp_name = strip_et_colors(mvp.get("name", "Unknown"))
         mvp_archetype = (archetypes.get(mvp["guid"], "frontline_warrior")).replace("_", " ")
         mvp_guid = mvp["guid"]
         mvp_stats = stats.get(mvp_guid, {})
@@ -2231,7 +2201,7 @@ class StorytellingService:
                 medic_revives = rev
                 # Find name from kis_board
                 entry = next((e for e in kis_board if e["guid"] == guid), None)
-                medic_name = _strip_et_colors(entry["name"]) if entry else guid[:8]
+                medic_name = strip_et_colors(entry["name"]) if entry else guid[:8]
 
         # 5. Top moment
         moments = await self.detect_moments(sd, limit=1)
@@ -2240,7 +2210,7 @@ class StorytellingService:
         if moments:
             m = moments[0]
             top_moment_time = m.get("time_formatted", "")
-            top_moment_narrative = _strip_et_colors(m.get("narrative", "an intense play"))
+            top_moment_narrative = strip_et_colors(m.get("narrative", "an intense play"))
 
         # 6. Team synergy
         synergy = await self.compute_team_synergy(sd)
